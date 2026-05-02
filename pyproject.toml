@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nz-coder"
+version = "0.1.0"
+description = "A terminal AI coding agent with tool use, permissions, memory, and context compaction."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "openai>=1.30.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "prompt_toolkit>=3.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+nz-coder = "nz_coder.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
