@@ -32,3 +32,12 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Evaluation and benchmark outputs
+eval/results/
+logs/
+.nz-coder-runs/
+nz-coder*.json
+
+# Local reference checkouts
+Claude-Code-main/

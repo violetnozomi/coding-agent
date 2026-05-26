@@ -1,6 +1,6 @@
 """Track agent-authored file changes for diff review and rollback."""
-
 from __future__ import annotations
+
 
 import difflib
 import json
@@ -26,12 +26,15 @@ class ChangeTracker:
     def record_before(self, rel_path: str, exists: bool, content: str = "") -> None:
         if not self.enabled:
             return
+        # FIXED: after_exists/after 初始化为 None，而非复制 before 的值。
+        # 若 record_after 未被调用（工具异常中断），None 明确表示「after 状态未知」，
+        # 而不是错误地沿用 before 的值。
         item = self._changes.setdefault(str(rel_path), {
             "path": str(rel_path),
             "before_exists": bool(exists),
             "before": content or "",
-            "after_exists": bool(exists),
-            "after": content or "",
+            "after_exists": None,
+            "after": None,
         })
         if "before" not in item:
             item["before_exists"] = bool(exists)
@@ -95,7 +98,9 @@ def render_change_diff(payload: dict) -> str:
     sections = [f"Change set: {payload.get('run_id', '-')}", f"Workspace: {payload.get('workspace', '-')}", ""]
     for change in payload["changes"]:
         before = change.get("before", "") if change.get("before_exists") else ""
-        after = change.get("after", "") if change.get("after_exists") else ""
+        # FIXED: after 为 None 表示工具中断、after 状态未记录，渲染为空字符串。
+        after_exists = change.get("after_exists")
+        after = (change.get("after") or "") if after_exists else ""
         diff = "".join(difflib.unified_diff(
             before.splitlines(keepends=True),
             after.splitlines(keepends=True),
@@ -122,8 +127,13 @@ def revert_change_file(path: Path | None) -> str:
         target = _safe_path(rel_path)
         current_exists = target.exists()
         current = target.read_text(encoding="utf-8", errors="replace") if current_exists else ""
-        expected_exists = change.get("after_exists", False)
-        expected = change.get("after", "") if expected_exists else ""
+        # FIXED: after_exists=None 表示中断，视为不满足 current state 匹配，拒绝回滚。
+        after_exists = change.get("after_exists")
+        if after_exists is None:
+            refused.append(f"{rel_path} (after state was never recorded — tool may have been interrupted)")
+            continue
+        expected_exists = bool(after_exists)
+        expected = change.get("after") or "" if expected_exists else ""
         if current_exists != expected_exists or current != expected:
             refused.append(f"{rel_path} (current content no longer matches tracked after-state)")
             continue
@@ -142,6 +152,8 @@ def revert_change_file(path: Path | None) -> str:
 
 def _safe_path(p: str) -> Path:
     path = (config.WORKDIR / p).resolve()
-    if not path.is_relative_to(config.WORKDIR.resolve()):
+    try:
+        path.relative_to(config.WORKDIR.resolve())
+    except ValueError:
         raise ValueError(f"Path escapes workspace: {p}")
     return path

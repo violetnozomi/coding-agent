@@ -15,6 +15,7 @@ Each task defines:
 The benchmark runs the agent in non-streaming auto-permission mode,
 captures all tool calls, and produces a structured report.
 """
+from __future__ import annotations
 
 import json
 import shutil
@@ -705,7 +706,10 @@ def run_task(task: BenchTask, verbose: bool = True) -> dict:
         }
 
     duration = time.time() - start
-    if run_status and run_status.get("status") != "completed":
+    # completed_unverified 是正常完成状态（验证门提示次数达上限），应继续走 task.verify()
+    # 只有 aborted / max_turns / error 才视为真正失败
+    _HARD_FAIL_STATUSES = {"aborted", "max_turns", "error"}
+    if run_status and run_status.get("status") in _HARD_FAIL_STATUSES:
         config.WORKDIR = original_workdir
         reason = f"Agent {run_status.get('status')}: {run_status.get('last_error') or run_status.get('errors')}"
         return {

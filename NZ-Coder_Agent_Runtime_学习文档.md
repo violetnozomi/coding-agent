@@ -1,919 +1,641 @@
-# NZ-Coder Agent Runtime 学习文档
+# NZ-Coder Agent Runtime 架构学习文档
 
-> 面向“对 Agent 一窍不通”的学习版。目标不是背代码，而是理解：一个 coding agent 为什么需要 loop、tool、权限、trace、session、diff、benchmark，以及这些模块在 NZ-Coder 里怎么配合。
-
----
-
-## 0. 先建立直觉：Agent 到底是什么？
-
-普通聊天机器人是：
-
-```text
-用户问一句 -> 模型答一句
-```
-
-Coding Agent 是：
-
-```text
-用户给目标
-  -> 模型判断下一步要做什么
-  -> 调工具读文件/搜代码/写文件/跑测试
-  -> 把工具结果再喂给模型
-  -> 模型继续决定下一步
-  -> 直到任务完成
-```
-
-所以 Agent 的核心不是“模型很聪明”，而是一个后端 runtime：
-
-```text
-LLM + Tool System + Permission + State + Recovery + Observability
-```
-
-NZ-Coder 今天新增的东西，基本都围绕这句话展开：
-
-- `benchmark.py`：证明 Agent 能力，不靠嘴说。
-- `trace.py`：记录 Agent 每一步做了什么，方便 debug。
-- `tests/test_loop_fake.py`：不用真实模型，也能测试 Agent Loop。
-- `changes.py`：记录 Agent 自己改了哪些文件，可 diff、可回滚。
-- `sessions.py`：保存和恢复对话。
-- `workspace.py`：让 Agent 了解当前项目和 git 状态。
-- CLI 命令：`/status`、`/diff`、`/revert-last`、`/save-session`、`/resume`。
+> 本文基于当前源码生成，目标是解释 NZ-Coder 为什么这样设计，而不是罗列 API。代码引用格式使用 `文件::符号名`，后续代码变动后可用 `rg -n` 重新核对行号。本文对应 `doc_generation_prompt.md` 的结构要求。
 
 ---
 
-## 1. 整体架构：一次对话在后端怎么跑？
+## 第一部分：全局架构总览
 
-核心入口：
+### 1. 系统定位
 
-- CLI：`nz_coder/cli.py`
-- Agent 主循环：`nz_coder/loop.py`
-- 工具注册：`nz_coder/tools/__init__.py`
+NZ-Coder 是一个从零实现的终端 Coding Agent，对标 Claude Code、Cursor Agent、Aider 这一类工具。它不是普通聊天机器人，也不是 LangChain/LlamaIndex 这类 Agent 框架上的二次封装，而是一个手写 runtime：模型负责判断下一步，runtime 负责把判断转成工具执行、权限检查、事务回滚、验证、状态注入和 trace。
 
-完整流程：
+项目有两个核心使用场景：
 
-```text
-用户输入自然语言
-  -> cli.py 把输入追加到 history
-  -> AgentLoop.run(history)
-  -> 调 LLM
-  -> LLM 返回文本或 tool_calls
-  -> 如果有 tool_calls：
-       PermissionManager 检查权限
-       dispatch 找到本地工具函数
-       工具执行，返回 tool result
-       tool result 追加到 history
-       继续调 LLM
-  -> 如果没有 tool_calls：
-       输出最终回答
-       本轮结束
+- SWE-bench Lite：给定真实开源 issue，在仓库中定位 bug，做最小 patch，并用低噪音验证证明 patch 至少语法/编译层面成立。
+- 交互式开发：用户在终端中多轮要求修 bug、加功能、写测试、解释设计或重构，agent 能在同一个工作区里持续行动。
+
+类比一下：LLM 像驾驶员，`AgentLoop` 像驾驶舱，工具系统像方向盘和踏板，`RuntimeState` 像仪表盘，`PermissionManager` 像交通规则和限速器，`VerificationManager` 像到站前的安全检查。一个可用 coding agent 的关键不是“模型会说代码”，而是 runtime 能持续感知工作区、限制危险动作、记录状态、在错误后恢复。
+
+### 2. 核心循环
+
+一次用户请求进入 `nz_coder/loop.py::AgentLoop.run` 后，大致流程如下：
+
+```mermaid
+sequenceDiagram
+    participant U as User/CLI
+    participant L as AgentLoop
+    participant C as Context Builder
+    participant M as LLM Provider
+    participant E as ToolExecutor
+    participant T as Tool Registry
+    participant S as Runtime/Verification
+
+    U->>L: messages + callbacks
+    L->>L: _init_run(), restore RuntimeState
+    L->>L: _maybe_generate_plan()
+    loop each turn
+        L->>C: _build_api_messages()
+        C-->>L: system + sanitized messages
+        L->>M: chat.completions.create(tools=get_specs())
+        M-->>L: LLMResult
+        alt API client error
+            L->>L: inject diagnostic as user message
+        else no tool calls
+            L->>S: _check_verification_gate()
+            S-->>L: completed / continue / completed_unverified
+        else tool calls
+            L->>E: _execute_tools()
+            E->>T: dispatch(name,args)
+            T-->>E: output string
+            E-->>L: ToolExecutionResult
+            L->>S: observe tool result
+            L->>L: persist RuntimeState, maybe replan
+        end
+    end
+    L-->>U: status dict
 ```
 
-这里最关键的数据结构是 `history`：
+它仍然是 ReAct 的骨架：模型推理后选择 action，工具结果再回到模型。但 NZ-Coder 在 ReAct 外面加了工程化护栏：planning/replanning、state-as-message、verification gate、事务、权限、trace 和 context compaction。也就是说，它不是“模型自己一直想”，而是 runtime 每轮把客观事实重新摆到模型面前。
 
-```python
-[
-    {"role": "user", "content": "帮我修复 bug"},
-    {"role": "assistant", "content": "", "tool_calls": [...]},
-    {"role": "tool", "tool_call_id": "call_xxx", "content": "文件内容..."},
-    {"role": "assistant", "content": "已修复，并通过测试。"},
-]
+### 3. 模块地图
+
+```mermaid
+graph TD
+    CLI[cli.py] --> LOOP[loop.py AgentLoop]
+    PROMPT[prompt.py] --> LOOP
+    LOOP --> EXEC[tool_executor.py]
+    EXEC --> PERM[permissions.py]
+    PERM --> CMD[command_policy.py]
+    EXEC --> REG[tools/__init__.py registry]
+    REG --> FILES[tools/files.py]
+    REG --> BASH[tools/bash.py]
+    REG --> SEARCH[tools/search.py]
+    REG --> INTEL[tools/repo_intel.py]
+    REG --> SP[tools/scratchpad.py]
+    REG --> MEM[memory.py]
+    REG --> SUB[subagent.py]
+    LOOP --> CTX[context.py]
+    LOOP --> RS[runtime_state.py]
+    LOOP --> VM[verification.py]
+    LOOP --> TXN[transaction.py]
+    LOOP --> TRACE[trace.py]
+    LOOP --> CHG[changes.py]
+    RS --> POLICY[task_policy.py]
+    INTEL --> POLICY
+    BASH --> POLICY
+    SUB --> TXN
 ```
 
-你可以把 `history` 理解成 Agent 的短期记忆。模型每一轮都看这个列表，然后决定下一步。
+| 模块 | 一句话定位 |
+|---|---|
+| `loop.py` | Agent 主循环，负责调度上下文、LLM、工具、验证和退出路径。 |
+| `tool_executor.py` | 单个 tool call 的 JSON 解析、权限检查、dispatch 和结果分类。 |
+| `tools/__init__.py` | 工具注册表，工具模块通过副作用 import 调用 `register()`。 |
+| `permissions.py` | deny → mode → allow → ask 的权限管线。 |
+| `command_policy.py` | bash 命令 dangerous/mutating/read-only 分类。 |
+| `context.py` | token 估算、micro compact、大输出落盘、auto compact。 |
+| `runtime_state.py` | 运行时客观状态，按 state-as-message 注入模型。 |
+| `memory.py` | 跨 session 持久记忆，负责 recall、保存、合并、prompt 注入。 |
+| `tools/scratchpad.py` | session 内工作记忆，保存假设、失败、发现和 plan。 |
+| `tools/repo_intel.py` | 高信号仓库工具：diff、验证、符号读取、智能搜索、调用者查找。 |
+| `subagent.py` | 隔离上下文的子 agent。 |
+| `verification.py` | 写后验证状态和 verification gate。 |
+| `task_policy.py` | 语言无关的任务模式、文件分类、测试命令分类。 |
+| `transaction.py` | 多文件写入事务，失败时恢复备份。 |
+| `changes.py` | Agent-authored diff/revert 变更追踪。 |
+| `trace.py` | JSONL 运行事件记录。 |
+| `recovery.py` | API 重试、工具失败诊断、验证失败摘要。 |
+
+### 4. 三层记忆架构
+
+```mermaid
+graph LR
+    C[Context 当前对话] -->|micro/auto compact| C2[摘要继续]
+    S[Scratchpad session 工作记忆] -->|build_prompt_block| L[LLM 输入]
+    M[Memory 跨 session 持久记忆] -->|recall/build_prompt_block| L
+    R[RuntimeState 客观状态] -->|system-reminder| L
+```
+
+| 层 | 代码 | 生命周期 | 存储位置 | 注入方式 | 解决的问题 |
+|---|---|---|---|---|---|
+| Scratchpad | `tools/scratchpad.py::Scratchpad` | 单次 run/session | 内存 | `Scratchpad.build_prompt_block()` | 防止同一任务重复失败、遗忘计划。 |
+| Memory | `memory.py::MemoryManager` | 跨 session | `.nz-coder/memory/*.md` | `MemoryManager.build_prompt_block()` | 保存用户偏好、项目事实、重复反馈。 |
+| Context | `context.py` + `messages` | 当前对话 | messages / transcripts | API messages | 保存完整交互，但可压缩。 |
+
+Scratchpad 像桌面便签，Memory 像团队 Wiki，Context 像会议记录，RuntimeState 像仪表盘。便签可以写“我怀疑 A”，Wiki 应只写稳定事实，会议记录可以很长但需要归档，仪表盘必须每轮准确。
+
+### 5. 关键设计原则
+
+- **state-as-message**：状态不靠模型自己记，而是 `RuntimeState.build_prompt_block()` 每轮注入。没有它，模型容易忘记已经有 diff、已经验证失败或只剩几轮。
+- **graceful degradation**：planning、LLM memory extract、LLM rerank 都是增强项，失败不阻断主任务。
+- **deny-first security**：`PermissionManager.check()` 先看 deny 和 dangerous bash，再看 allow。安全像门禁，黑名单优先于通行证。
+- **读并发、写串行**：`_execute_concurrent()` 只在全读工具时并发；写工具共享文件系统、事务和 change tracker，必须串行。
+- **低噪音验证**：`verify_changed_files()` 优先 py_compile/typecheck/go compile/cargo check，而不是无差别全量测试。
+- **隔离优先的 subagent**：子 agent 不共享父 messages，减少父上下文噪音，只接收父 RuntimeState/scratchpad 摘要。
+- **无框架、可测试**：核心都是普通 Python 类和函数，可以用 Fake client 测试，不依赖 Agent 框架。
 
 ---
 
-## 2. 今天新增能力一：Benchmark 扩展和结果报告
+## 第二部分：逐模块深度解说
 
-文件：
+### A. `loop.py` — Agent 主循环
 
-- `nz_coder/benchmark.py`
-- `docs/evaluation.md`
+#### 解决什么问题
 
-### 2.1 为什么 Agent 需要 benchmark？
+`loop.py` 把 LLM 从“回答文本”变成“能行动的 agent”。模型返回 tool calls 后，loop 要负责权限检查、工具执行、追加 tool result、判断是否继续、验证是否通过、出错是否重试。没有这个 loop，模型最多只能给建议，不能可靠地读写仓库。
 
-如果你面试时只说：
+#### 核心设计思路
 
-> 我的 Agent 可以写代码。
+当前 `AgentLoop.run()` 是瘦循环，主要调用 `_init_run()`、`_compact_if_needed()`、`_build_api_messages()`、`_call_llm()`、`_check_verification_gate()`、`_execute_tools()`、`_finalize()`。拆分前的一个大方法把 15 个关注点混在一起；拆分后像机场调度塔，只负责安排流程，安检、登机、维修、日志分别由专业模块完成。
 
-面试官很难相信。更好的说法是：
+关键代码：
 
-> 我设计了 13 个自动化任务，覆盖 bugfix、测试修复、多文件编辑、CLI 修改、JSON 编辑、重构和文档更新，并用可执行验证统计 pass rate、工具调用数和失败原因。
+- `loop.py::LLMResult`：用 dataclass 表达正常结果、客户端错误诊断、不可恢复 abort。
+- `loop.py::AgentLoop.run`：主循环骨架。
+- `loop.py::_init_run`：reset、恢复 RuntimeState、解析 turn budget、clear scratchpad。
+- `loop.py::_build_api_messages`：构建 stable system 和 dynamic context。
+- `loop.py::_execute_tools`：执行工具并观察结果。
+- `loop.py::_finalize`：统一退出。
+- `loop.py::_sanitize_messages`：API 消息兼容性清洗。
 
-这就是 benchmark 的价值：**把 Agent 能力变成可量化结果**。
+#### 关键实现细节
 
-### 2.2 当前 benchmark 覆盖什么？
+`_build_context_layers()` 把 `system_prompt + memory_block` 放在 stable system，把 `state_block + scratch_block` 作为 dynamic context 注入首条 user 消息。这样 system prompt 前缀不因 turn count、scratchpad 变化而每轮变动，更利于 prompt caching。类比：公司章程和团队 Wiki 不该每分钟改，今日仪表盘可以贴在当天会议纪要前。
 
-当前有 13 个任务，类型包括：
+预算守卫通过 `SYSTEM_CONTEXT_BUDGET_TOKENS` 限制 system 相关上下文总量。超过预算时先截 scratch，再截 memory，最后才截 state。因为 scratch 是主观、可重建、最容易膨胀；state 是客观安全信号，价值最高。
 
-| 类型 | 例子 | 验证方式 |
-|------|------|----------|
-| 文件创建 | 创建 FizzBuzz 文件 | 运行 Python，检查输出 |
-| Bugfix | 修复 sum_list / 边界条件 | import 或 subprocess 验证 |
-| 功能添加 | 添加 factorial 函数 | assert 行为 |
-| 测试生成 | 为字符串工具写 pytest | 运行 pytest |
-| 测试修复 | 根据失败测试修代码 | 跑 pytest |
-| 多文件修改 | app.py + helpers.py | 运行入口脚本 |
-| CLI 行为 | 增加 `--name` 参数 | subprocess 检查输出 |
-| JSON 编辑 | 修改 settings.json | json.loads + 字段检查 |
-| 重构 | 保留 public API | import + assert |
-| 文档更新 | README_TASK.md | 文本检查 |
+工具执行策略是读并发、写串行。`_dispatch_tool_calls()` 只有在本批没有写工具且不含 `task` 时才调用 `_execute_concurrent()`，最多 4 个线程。写工具如果并发，会让事务、变更追踪和文件状态难以保证一致。
 
-### 2.3 Benchmark 的代码结构
+四个退出路径都进入 `_finalize()`：`completed`、`completed_unverified`、`max_turns`、`aborted`。这样保存 learnings、persist runtime state、trace run_end 不会分散在多个 return 分支里。
 
-每个任务都是一个类：
+API 错误分流：`_is_client_error()` 识别 400/422/invalid_request_error 后注入诊断，让模型修正工具参数；5xx/超时走 `RecoveryState` backoff。客户端错误通常是请求格式错，重试同一个 payload 没意义。
 
-```python
-class BenchTask:
-    task_id = ""
-    description = ""
-    difficulty = "easy"
-    task_type = "general"
+`_sanitize_messages()` 做六类清洗：剥离 provider 不支持字段、填 assistant 空 content、过滤纯空 assistant、合并连续 user、剥离孤立 tool result、处理内部 timestamp。它像出境安检，不改变目的地，但保证请求格式能上飞机。
 
-    def setup(self):
-        pass
+#### 模块交互
 
-    def verify(self):
-        return {"passed": False, "reason": "Not implemented"}
+`AgentLoop.__init__()` 创建 `PermissionManager`、`RecoveryState`、`TransactionManager`、`TraceRecorder`、`ChangeTracker`、`VerificationManager` 和 `ToolExecutor`。它通过 `tools.files.set_txn_manager()` 和 `set_change_tracker()` 做依赖注入，避免文件工具自己持有不可替换的全局事务对象。
 
-    def cleanup(self):
-        pass
-```
+#### 取舍与局限
 
-三阶段：
+- `config.BLOCK_BROAD_TESTS` 是全局可变状态，多 AgentLoop 并发会相互影响。
+- `_is_client_error()` 的字符串 fallback 可能误判包含 “400” 的非客户端错误。
+- planning/replan 当前没有结构化输出校验。
 
-```text
-setup()   -> 准备测试文件
-agent.run -> 让 Agent 解决问题
-verify()  -> 用程序验证结果是否正确
-cleanup() -> 清理文件
-```
+### B. `runtime_state.py` — 运行时状态跟踪
 
-### 2.4 结果报告
+#### 解决什么问题
 
-运行：
+长任务里，模型可能忘记自己有没有改文件、跑没跑验证、剩多少轮、是不是已经空转。`RuntimeState` 记录这些客观事实，并以 `<system-reminder>` 形式注入模型。
 
-```bash
-python -m nz_coder.benchmark
-python -m nz_coder.benchmark --report
-```
+#### 核心设计思路
 
-会生成：
+`RuntimeState` 是 state-as-message。它不存“我觉得 bug 在 X”这种主观推理，那属于 Scratchpad；它只存可观察事实：turn、diff、changed files、tests_modified、verification_attempts、env_noise_seen、task_mode、wants_tests、plan_text 等。
 
-```text
-.nz-coder/benchmark/report.json
-.nz-coder/benchmark/report.md
-.nz-coder/benchmark/runs/*.jsonl
-```
+关键代码：
 
-报告包含：
+- `runtime_state.py::RuntimeState`：状态 dataclass。
+- `runtime_state.py::reset`：每次 run 初始化。
+- `runtime_state.py::set_acceptance_criteria_from_text`：提取任务模式和验收标准。
+- `runtime_state.py::task_complexity`：L0-L3 分级。
+- `runtime_state.py::observe_tool`：根据工具结果更新状态。
+- `runtime_state.py::build_prompt_block`：生成 reminder。
+- `runtime_state.py::save/load/restore`：JSON 持久化。
+- `runtime_state.py::extract_acceptance_criteria`：启发式 L1 验收标准。
 
-- 总 pass rate
-- 平均 turns
-- 平均 tool calls
-- 平均耗时
-- 按难度统计
-- 按任务类型统计
-- 失败原因分类
-- 每个任务的 trace 路径
+#### 关键实现细节
 
-面试时可以这样说：
+`task_complexity()` 用 diff/edit 规模分 L0-L3：无编辑是 L0；一次小改是 L1；几文件中等改是 L2；更大是 L3。这不是学术分类，而是流程控制：L1 可以少提醒，L3 要更强调验证和收敛。
 
-> 我没有只做 demo，而是实现了 benchmark harness。每个任务都有 setup/verify/cleanup，并且 verify 尽量使用可执行验证，比如运行 pytest 或 import 后 assert，避免只看字符串。
+空转检测通过 `turn_count - last_edit_turn`。但 `task_mode == "discuss"` 时不催促编辑，因为讨论方案时没有编辑是正常行为。这个设计把 SWE-bench 的“必须尽快 patch”策略扩展为通用 coding agent 的多模式策略。
+
+`observe_tool()` 解析 `diff_status` 的文本输出，而不是直接拿 dict。原因是工具协议统一返回字符串，既给模型看，也给 CLI 展示。代价是 `_parse_changed_files()` 对输出格式敏感。
+
+持久化使用 JSON 而不是 pickle，因为 JSON 可读、可审计、跨版本更安全。`restore()` 只恢复当前类已有字段，旧版本多余字段会被跳过。
+
+#### 模块交互
+
+`AgentLoop` 每轮设置 `runtime_state.turn_count`，工具执行后调用 `observe_tool()`，构建上下文时调用 `build_prompt_block()`。`subagent.py::_parent_context_block()` 读取 `.nz-coder/runtime_state.json`，把父 agent 的关键状态传给子 agent。
+
+#### 取舍与局限
+
+- `extract_acceptance_criteria()` 是启发式，短句如 “Fix timezone-aware datetime comparison bug” 可能提不出标准。
+- `observe_tool()` 与 `diff_status` 文本格式耦合。
+- 环境噪音模式可能误判真实项目 import 错误。
+
+### C. `context.py` — 上下文压缩
+
+#### 解决什么问题
+
+工具输出可能非常大，尤其 grep、测试日志、traceback。如果全部塞进 messages，请求会越来越贵，甚至超过上下文窗口。`context.py` 提供三种压缩：大输出落盘、micro compact、auto compact。
+
+关键代码：
+
+- `context.py::estimate_tokens`：ASCII/CJK token 估算。
+- `context.py::persist_large_output`：超 30000 字符输出写入 `.nz-coder/tool-results/`。
+- `context.py::micro_compact`：压缩旧 tool result。
+- `context.py::_try_time_based_compact`：空闲 30 分钟后清旧结果。
+- `context.py::auto_compact`：LLM 摘要并写 transcript。
+
+#### 关键实现细节
+
+`estimate_tokens()` 对 ASCII 用 `//4`，非 ASCII 按 1 字/token。这修复了中文 JSON 估算偏大的问题。类比英文四个字母一拍，中文一个字就是一拍。
+
+`micro_compact()` 保护最近 N 条和含 traceback/FAILURES 的结果，然后按大小降序压缩旧结果。为什么按大小？压缩 50KB 输出比压缩 500B 输出收益大得多。
+
+`persist_large_output()` 超阈值时只把 preview 放上下文，并告诉模型完整输出路径。这样用户如果说“看完整 traceback”，模型仍可 `read_file` 那个落盘路径。
+
+`auto_compact()` 会把原始 transcript 写到 `.nz-coder/transcripts/`，再用最近 80000 字符做摘要，并附上 `git diff --stat`。diff stat 很重要，因为摘要如果漏掉已改文件，后续 agent 可能重复改或忘记验证。
+
+#### 取舍与局限
+
+- auto compact 质量依赖 LLM，可能漏关键信息。
+- 30 分钟 time-based compact 假设 provider cache TTL 较长，不同 provider 需要不同阈值。
+- 大输出落盘后模型只看 preview，必须主动读完整文件。
+
+### D. `memory.py` — 持久化记忆
+
+#### 解决什么问题
+
+跨 session 的用户偏好和项目事实不能靠当前 messages 保存。`memory.py` 把这些事实保存为 markdown 文件，并在后续任务按相关性注入。没有它，用户每次都要重复“这个项目用 Poetry”“不要用 async view”。
+
+关键代码：
+
+- `memory.py::MemoryManager`。
+- `memory.py::recall`：多信号召回。
+- `memory.py::build_prompt_block`：用户偏好优先注入。
+- `memory.py::save`：保存和去重合并。
+- `memory.py::_find_merge_target` / `_merge_memory`。
+- `memory.py::extract_session_learnings`：规则 + LLM 提取。
+- `memory.py::_tokenize`：代码感知 token。
+- `memory.py::_relevance_score`：coverage/jaccard/exact/freshness。
+- `memory.py::rerank_memories`：可选 LLM rerank。
+
+#### 关键实现细节
+
+`recall()` 的分数为 coverage 0.55 + jaccard 0.20 + exact 0.15 + freshness 0.10。coverage 权重大，因为 coding query 通常短，query 里的符号、路径、错误词是否被覆盖比整体集合相似更重要。freshness 只做微调，避免最近访问但无关的 memory 顶上来。
+
+`_tokenize()` 会拆 snake_case、camelCase、路径片段，做轻量词干和别名。例如 `parse_http_date` 会拆成 `parse`、`http`、`date`、`parse_http`、`http_date` 等，能把“HTTP 日期解析 bug”和 `parse_http_date timezone handling` 关联起来。
+
+`save()` 会先检查同名更新，再用 `_find_merge_target()` 找近重复。`_memory_similarity()` 使用 Jaccard 和 min coverage 的最大值，但加了 `_SIMILARITY_MIN_TOKENS_FOR_MERGE=5`，避免超短记忆“use pytest”误触发 1.0 相似度。
+
+`build_prompt_block()` 始终优先放最多 3 条 `user` 类型 memory。用户偏好像操作系统默认设置，不一定和当前 query 有词面重合，但应该稳定存在；当然当前用户消息仍然优先。
+
+`extract_session_learnings()` 默认规则提取：显式 remember/note/记住，以及重复失败。开启 `MEMORY_LLM_EXTRACT` 后会用 LLM 抽取隐式长期事实，并请求 JSON mode；不支持时 fallback。
+
+#### 取舍与局限
+
+- 不是向量库，语义召回依赖代码 token 和可选 LLM rerank。
+- `cleanup()` 有实现但没有自动调度或注册工具。
+- LLM 提取失败会静默回退，trace 粒度还可更细。
+
+### E. `tools/scratchpad.py` — Session 内工作记忆
+
+#### 解决什么问题
+
+同一任务里，agent 可能几轮后忘记已经试过的错误路径。Scratchpad 是短期便签，记录 hypothesis、attempt、failure、finding、plan。
+
+关键代码：
+
+- `scratchpad.py::CATEGORIES`。
+- `scratchpad.py::Scratchpad.update`。
+- `scratchpad.py::Scratchpad.replace_category`。
+- `scratchpad.py::Scratchpad.build_prompt_block`。
+- `scratchpad.py::Scratchpad.clear`。
+
+#### 关键实现细节
+
+普通条目最多 500 字符，plan 最多 2000 字符，总条目最多 20。`build_prompt_block()` 总预算 2000 字符，其中 plan 有 1200 字符优先预算，再倒序选择最新其他条目。这样 plan 不会被失败日志挤掉，失败日志也不会无限膨胀。
+
+`replace_category()` 主要服务 plan/replan。直接 update 会让旧 plan、新 plan、replan 同时出现，模型可能不知道听哪个。replace 保证当前只有一个 plan。
+
+Scratchpad 每次 run 开始 clear，不持久化。因为里面是临时推理，不应污染下个任务；稳定事实应进入 Memory。
+
+#### 取舍与局限
+
+- 当前 scratchpad 是模块级全局实例，多 AgentLoop 并发会共享。
+- 没有任务 ID 隔离，适合本地单用户串行使用。
+
+### F. `permissions.py` — 权限系统
+
+#### 解决什么问题
+
+Coding Agent 能执行 shell 和写文件，权限系统是安全边界。没有它，模型可能误执行危险命令、污染环境或写错文件。
+
+关键代码：
+
+- `permissions.py::PermissionManager.check`。
+- `permissions.py::PermissionRule.matches`。
+- `permissions.py::ask_user`。
+- `command_policy.py::classify_bash`。
+- `command_policy.py::is_known_read_only_command`。
+
+#### 核心设计
+
+权限管线是 deny → bash classification/mode → safe read allow → allow rules → ask rules → mode fallback。deny 最高优先级，因为安全规则不应被后面的 allow 覆盖。
+
+四种模式：
+
+- `default`：读工具自动允许，写工具和未知/mutating bash 询问。
+- `auto`：大多自动允许，但 dangerous bash 仍阻止。
+- `plan`：写操作阻止，只允许读和只读 shell。
+- `acceptEdits`：允许文件编辑，但 bash 仍按风险判断。
+
+`classify_bash()` 区分 dangerous 和 mutating。`sudo apt-get install` dangerous，因为涉及系统权限；`pip install` mutating，因为改环境，默认还受 `ALLOW_BASH_PACKAGE_INSTALLS` 控制。
+
+#### 取舍与局限
+
+- prefix allow 粒度粗，`bash(prefix:git )` 会允许 `git push --force`。
+- read-only 白名单保守，`python3 -c 'print(1)'` 不算 read-only，因为 Python 可执行任意代码。
+
+### G. `tools/repo_intel.py` — 仓库智能工具集
+
+#### 解决什么问题
+
+基础 grep/read_file 太低层。Repo intel 工具把常见探索动作结构化，减少盲目搜索。
+
+五个工具：
+
+- `diff_status()`：当前 diff、文件、语言、测试文件、下一步建议。
+- `verify_changed_files()`：对改动源码做低噪音检查。
+- `read_symbol()`：AST 读取/列出 Python 符号。
+- `smart_search()`：从 issue/test/traceback 抽 token，grep-first 后 TF-IDF 排名。
+- `find_symbol_callers()`：AST 查 Python 符号引用。
+
+#### 关键实现细节
+
+`smart_search()` 先用 `git grep -l` 对 top 5 token 找候选文件，再读候选做精排。评分用 `log1p(count) * idf * file_weight`，避免大文件因重复出现 token 线性膨胀。AST parse 缓存在 `parsed_trees`，评分和摘要复用，避免重复 parse。
+
+`read_symbol()` 的 `_collect_symbols(tree, max_depth=40)` 递归收集嵌套类、方法和内部函数，深度上限防止极端生成代码触发递归问题。
+
+`verify_changed_files()` 已从 Python-only 扩展到多语言：Python 用 py_compile，JS/TS 用 `npm run typecheck` 或本地 `tsc --noEmit`，Go 用 `go test <pkg> -run '^$'` 做包编译检查，Rust 用 `cargo check`。找不到 checker 返回 WARN，避免通用项目卡死在 gate。
+
+`find_symbol_callers()` 用 NodeVisitor 控制遍历。旧的 `ast.walk` 会让 `obj.foo()` 同时匹配 Call 和 Attribute，同一行重复；现在 call 优先，`visit_Call()` 不再访问 func，只访问 args/keywords。
+
+#### 取舍与局限
+
+- `smart_search` include 支持非 Python，但 AST summary 只对 Python 有效。
+- Go 的 `go test -run '^$'` 不跑普通测试函数，但仍可能执行 init 或编译测试文件；不是完全等价于 py_compile。
+- `diff_status` 是文本工具，RuntimeState 解析依赖格式稳定。
+
+### H. `subagent.py` — 子 Agent
+
+#### 解决什么问题
+
+父 agent 长对话会有大量噪音。子 agent 用 fresh messages 和有限工具集处理子任务，只返回摘要，重点是隔离上下文。
+
+关键代码：
+
+- `subagent.py::_completion_with_timeout`。
+- `subagent.py::_subagent_tools`。
+- `subagent.py::_parent_context_block`。
+- `subagent.py::_run_allowed_tool`。
+- `subagent.py::run_subagent`。
+
+#### 关键实现细节
+
+工具集分层：explore/review 只读；test 可跑 bash 检查但不写；general 可写并可调用 verify_changed_files。工具 specs 从共享 registry 取，所以子 agent 可以用 `smart_search/read_symbol/find_symbol_callers/diff_status`。
+
+父子上下文传递通过 `_parent_context_block()`：读取 `.nz-coder/runtime_state.json` 和父 scratchpad 前 2000 字符。它不会复制父 messages，因为复制会把父 agent 的十几轮试错噪音带过去。类比请外部专家会诊：给病历摘要和关键检查结果，不给整段会议录音。
+
+超时保护有两层：主线程用 SIGALRM；非主线程或不支持信号时用 ThreadPoolExecutor future timeout。子 agent 还有总 deadline 和 max_turns。
+
+general 模式如果写了文件，结束前自动跑 verify_changed_files；失败则 rollback 子 agent 独立事务。
+
+#### 取舍与局限
+
+- test 模式当前没有直接暴露 verify_changed_files，只能通过 bash 做检查。
+- `.nz-coder/subagent-scratch/` 没有自动清理。
+- 父子并发改同一文件没有锁，当前默认串行。
+
+### I. `verification.py` — 验证状态管理
+
+#### 解决什么问题
+
+模型写完代码可能直接说“完成”。`VerificationManager` 是提交前审稿：只要写过实质文件且没有通过验证，就在模型无工具响应时拦住它。
+
+关键代码：
+
+- `verification.py::mark_write`。
+- `verification.py::observe_bash`。
+- `verification.py::observe_verify_changed_files`。
+- `verification.py::should_gate`。
+- `verification.py::make_gate_message`。
+- `verification.py::_is_verification_command`。
+- `verification.py::_is_env_import_error`。
+- `verification.py::_is_scratch_file_write`。
+
+#### 关键实现细节
+
+`mark_write()` 对真正写代码的工具设置 `_needed=True`，但根目录 scratch 文档和临时测试文件不触发 gate。`observe_bash()` 判断命令是否像验证命令，再根据退出码和失败输出更新 gate。环境噪音如缺依赖、显示后端问题、pytest 配置错误会被跳过，避免覆盖已有的低噪音通过结果。
+
+`observe_verify_changed_files()` 把 OK 视为 passed，把 WARN 视为 skipped 但允许结束。通用 coding agent 里很多项目没有 typecheck 脚本，WARN 继续 gate 会导致无法收工。
+
+#### 取舍与局限
+
+- `_is_verification_command()` 是启发式，可能漏掉项目自定义 checker。
+- 环境噪音过滤保守但仍可能误判。
+
+### J. `task_policy.py` — 任务策略
+
+#### 解决什么问题
+
+早期策略偏 SWE-bench/Python。`task_policy.py` 把语言、测试文件、任务模式、测试命令范围抽成共享规则，供 runtime、bash、repo_intel 复用。
+
+关键代码：
+
+- `task_policy.py::language_for_path`。
+- `task_policy.py::is_source_file`。
+- `task_policy.py::is_test_file`。
+- `task_policy.py::detect_task_mode`。
+- `task_policy.py::task_wants_tests`。
+- `task_policy.py::estimate_text_complexity`。
+- `task_policy.py::is_exact_test_command`。
+- `task_policy.py::is_broad_test_command`。
+
+`detect_task_mode()` 优先级是 test > refactor > feature > bugfix > discuss > general。例如 “add a test for login endpoint” 同时命中 test 和 feature，但测试意图更具体，所以返回 test。
+
+`estimate_text_complexity()` 在 planning 前使用，因为那时还没有 diff/edit。它看文件引用、列表结构、then/finally、文本长度、多文件/迁移关键词，返回 simple/moderate/complex。
+
+#### 取舍与局限
+
+- 短但大的任务如“重构 auth 模块”可能被低估。
+- 文件语言覆盖常见语言，但没有框架级策略。
+
+### K. Planning + Replanning — 规划层
+
+#### 解决什么问题
+
+纯 ReAct 容易“走一步看一步”。复杂 feature/refactor/test 需要先拆路线；如果中途空转或验证失败，还需要重新规划。
+
+关键代码：
+
+- `config.py::PLANNING_ENABLED`，默认关闭。
+- `loop.py::_maybe_generate_plan`。
+- `loop.py::_call_planning_llm`。
+- `loop.py::_should_replan`。
+- `loop.py::_maybe_replan`。
+- `loop.py::_call_replan_llm`。
+- `scratchpad.py::replace_category`。
+- `runtime_state.py` 的 `plan_generated/plan_text/replan_count/initial_plan_complexity` 字段。
+
+planning 触发条件是 task_mode 在 feature/refactor/test，或文本复杂度 moderate/complex。Bugfix 默认不触发，因为很多 bugfix 需要先搜索定位，过早规划容易编故事；复杂 bugfix 仍可能因文本复杂度触发。
+
+plan prompt 限制最多 5 步，并要求最后一步 verification。这是 prompt-level 约束，代码不强制校验。失败不阻断主流程，只写 trace。
+
+replan 三个触发：连续无编辑、验证多次失败、实际 diff 复杂度比初始预估高。恢复时 `_init_run()` 会把 RuntimeState 的 `plan_text` hydrate 回 scratchpad，因为 scratchpad 不持久化。
+
+#### 取舍与局限
+
+- plan/replan 没有 structured output 校验。
+- simple/moderate/complex 和 L0-L3 是两套量纲，当前只是启发式映射。
+- 默认关闭保证测试兼容和成本可控。
 
 ---
 
-## 3. 今天新增能力二：Trace Logging
+## 第三部分：数据流与生命周期
 
-文件：
+### 1. 一次完整 run() 的时序图
 
-- `nz_coder/trace.py`
-- `nz_coder/loop.py`
-- CLI 命令：`/trace`
-
-### 3.1 Trace 是什么？
-
-Trace 就是 Agent 的运行日志，但它不是普通 print，而是结构化 JSONL。
-
-每一行是一个事件：
-
-```json
-{"event": "run_start", "run_id": "...", "message_count": 1}
-{"event": "llm_request", "token_estimate": 2034}
-{"event": "llm_response", "tool_calls": 1}
-{"event": "tool_call", "name": "read_file", "status": "ok"}
-{"event": "run_end", "status": "completed"}
+```mermaid
+flowchart TD
+    A[_init_run] --> B[_maybe_generate_plan]
+    B --> C{turn < max_turns}
+    C --> D[_compact_if_needed]
+    D --> E[_build_api_messages]
+    E --> F[_call_llm]
+    F --> G{aborted?}
+    G -->|yes| Z[_finalize aborted]
+    G -->|no| H{diagnostic?}
+    H -->|yes| I[inject diagnostic]
+    I --> C
+    H -->|no| J[append assistant]
+    J --> K{tool_calls?}
+    K -->|no| L[_check_verification_gate]
+    L -->|continue| C
+    L -->|done| Y[_finalize]
+    K -->|yes| M[_execute_tools]
+    M --> N[persist RuntimeState]
+    N --> O[_maybe_replan]
+    O --> C
+    C -->|no| X[_finalize max_turns]
 ```
 
-### 3.2 为什么 Agent 需要 trace？
-
-Agent 的失败经常不是一句报错能解释的，比如：
-
-- 模型没有调用工具。
-- 工具参数 JSON 坏了。
-- shell 命令失败了。
-- 文件改了，但测试没跑。
-- 上下文压缩后丢了关键信息。
-
-Trace 可以回答：
+### 2. 上下文注入流程
 
 ```text
-这一轮模型看到了多少消息？
-模型返回了几个 tool call？
-调用了哪个工具？
-工具返回多长输出？
-是否发生 API retry？
-是否触发 transaction rollback？
+system_prompt + memory_block        -> stable_system
+state_block + scratch_block         -> dynamic_context
+messages                            -> _sanitize_messages
+first user message gets context     -> _inject_dynamic_context
+[system stable_system] + messages   -> API request
 ```
 
-### 3.3 TraceRecorder 的核心设计
+固定层是 `system_prompt` 和工具规格，半固定层是 memory，任务层是 scratchpad/plan，动态层是 messages/tool results/RuntimeState。分层的核心目的是预算和缓存：稳定前缀不要频繁变，动态状态不要膨胀 system。
 
-```python
-class TraceRecorder:
-    def __init__(self, run_id=None, trace_dir=None, enabled=True):
-        self.run_id = run_id or timestamp + uuid
-        self.path = trace_dir / f"{run_id}.jsonl"
-
-    def log(self, event, **payload):
-        row = {
-            "ts": time.time(),
-            "run_id": self.run_id,
-            "event": event,
-            **payload,
-        }
-        append_jsonl(row)
-```
-
-关键点：
-
-- JSONL 适合追加写入。
-- 每个 run 一个 `run_id`。
-- 大字段会截断，避免 trace 文件爆炸。
-- CLI 可以用 `/trace` 展示最近一次摘要。
-
-### 3.4 loop.py 里记录了哪些事件？
+### 3. 工具调用生命周期
 
 ```text
-run_start
-llm_request
-llm_response
-tool_call
-transaction_rollback
-compact
-api_error
-run_end
+LLM tool_calls
+  -> ToolExecutor.execute_one
+     -> JSON parse
+     -> PermissionManager.check
+     -> dispatch(name,args)
+     -> ToolExecutionResult
+  -> AgentLoop._record_tool_result
+     -> VerificationManager observe
+     -> RuntimeState observe
+     -> Scratchpad failure note
+     -> TraceRecorder log
+  -> persist_large_output
+  -> append role=tool message
 ```
 
-这就是可观测性。面试时这点很加分，因为它体现你不是只写功能，还考虑 debug 和线上排障。
+`dispatch_failed` 表示工具本身失败或被拒绝；`command_failed` 表示 bash 命令非零退出。测试失败通常是 `command_failed`，不触发事务 rollback，因为它是修复反馈。
+
+### 4. 记忆生命周期
+
+```mermaid
+flowchart LR
+    U[用户/工具对话] --> S[Scratchpad 临时记录]
+    U --> E[extract_session_learnings]
+    E --> C[候选 memories]
+    C -->|save 合并去重| M[.nz-coder/memory/*.md]
+    M -->|下一次 recall| P[Prompt 注入]
+```
+
+记忆系统的目标不是保存越多越好，而是保存稳定、跨任务有用、不会污染未来判断的事实。
+
+### 5. 中断恢复流程
+
+如果 agent 在 assistant tool_calls 后、tool result 追加前被中断，下次 `_inject_missing_tool_results()` 会为缺失 tool call 注入 `<interrupted>` 合成结果，修复 API 消息合法性。随后 `_init_run()` 从 `.nz-coder/runtime_state.json` 恢复 active 状态，并把 `plan_text` hydrate 回 scratchpad。文件系统已经写入的内容不会因进程 SIGKILL 自动回滚，需要后续 `diff_status` 重新感知。
 
 ---
 
-## 4. 今天新增能力三：Fake LLM Loop Tests
+## 第四部分：设计决策速查表
 
-文件：
-
-- `tests/test_loop_fake.py`
-
-### 4.1 为什么要 Fake LLM？
-
-真实 LLM 有几个问题：
-
-- 调用要钱。
-- 输出不稳定。
-- 网络可能失败。
-- 测试速度慢。
-
-但是 Agent Loop 又必须测试。解决方案是：写一个假的 OpenAI-compatible client。
-
-### 4.2 FakeClient 模拟什么？
-
-真实 OpenAI SDK 调用长这样：
-
-```python
-client.chat.completions.create(...)
-```
-
-测试里 FakeClient 也提供同样接口：
-
-```python
-class FakeClient:
-    def __init__(self, items):
-        self.chat = FakeChat(FakeCompletions(items))
-```
-
-然后可以预设模型返回：
-
-```python
-fake = FakeClient([
-    FakeResponse(FakeMessage(tool_calls=[
-        FakeToolCall("write_file", {"path": "hello.txt", "content": "hello"})
-    ])),
-    FakeResponse(FakeMessage("done")),
-])
-```
-
-这表示：
-
-```text
-第一次模型返回：我要调用 write_file
-第二次模型返回：任务完成
-```
-
-### 4.3 现在测了哪些核心行为？
-
-```text
-1. LLM 返回 tool_call -> Agent 执行工具 -> 再调 LLM -> final answer
-2. LLM 返回坏 JSON -> Agent 把错误作为 tool result 反馈
-3. API 前两次失败 -> Recovery retry -> 第三次成功
-4. Trace 文件包含 run_start / llm_response / run_end
-```
-
-面试话术：
-
-> 我把 AgentLoop 和真实模型解耦，注入 FakeClient 来做确定性测试。这样可以验证 tool loop、错误恢复、trace 等 runtime 行为，而不依赖外部 API。
+| 决策 | 选择 | 替代方案 | 选择原因 |
+|---|---|---|---|
+| Agent 编排 | 手写 `AgentLoop` | LangChain/LangGraph | 机制透明、可测试、符合项目展示目标。 |
+| 主循环 | ReAct + planning/replan | 纯 planner-executor | 保留工具反馈驱动，同时能处理复杂任务。 |
+| run 结构 | 瘦循环 + helpers | 250 行大方法 | 单一职责，新增状态逻辑更容易。 |
+| LLM 返回 | `LLMResult` dataclass | tuple | 语义清楚，避免长度判断。 |
+| 上下文分层 | stable system + dynamic user | 全拼 system | 提升 prompt caching，降低动态扰动。 |
+| 系统预算 | `SYSTEM_CONTEXT_BUDGET_TOKENS` | 只看 messages 总量 | 防止 memory/scratch/state 膨胀。 |
+| 大输出 | 落盘 + preview | 全塞上下文 | 保留可追溯性，节省 token。 |
+| micro compact | 压缩最大旧结果 | 简单删最旧 | 最大化收益，保留最近信息。 |
+| auto compact | LLM 摘要 + transcript | 直接截断 | 保留连续性和审计记录。 |
+| RuntimeState | state-as-message | 模型自记状态 | 客观、可恢复、可测试。 |
+| 持久化格式 | JSON | pickle | 可读、跨版本、安全。 |
+| Scratchpad | 不持久化 | 跨 session 保存 | 避免临时猜测污染未来任务。 |
+| Memory 检索 | 代码 token 多信号 | 向量数据库 | 零依赖，符号/路径匹配强。 |
+| Memory 合并 | 相似阈值 + 最小 token | 永远追加 | 防重复事实膨胀。 |
+| 用户偏好 | user memory 前 3 slot | 全按相关性 | 偏好是稳定默认。 |
+| 权限策略 | deny-first | allow-first | 安全规则必须优先。 |
+| bash 分类 | dangerous/mutating/read-only | 全询问或全允许 | 平衡安全和效率。 |
+| 事务 | 批次 begin/commit/rollback | 单文件写 | 多文件失败保持一致。 |
+| bash 非零 | 不 rollback | 视为工具失败 | 测试失败是修复反馈。 |
+| 验证 gate | 写后必须验证 | 模型说完成就完成 | 提高 patch 可信度。 |
+| WARN 验证 | 允许结束 | 一直 gate | 通用项目可能无 checker。 |
+| 搜索评分 | grep-first + TF-IDF | 全仓逐行计数 | 快，避免大文件膨胀。 |
+| 子 agent | 独立上下文 | 共享父 messages | 隔离探索噪音。 |
+| planning 默认 | 关闭 | 默认开启 | 测试兼容、成本可控。 |
+| Go 验证 | `go test pkg -run '^$'` | `go test ./...` | 降低执行测试噪音。 |
 
 ---
 
-## 5. 今天新增能力四：Change Tracking、Diff 和 Revert
-
-文件：
-
-- `nz_coder/changes.py`
-- `nz_coder/tools/files.py`
-- CLI 命令：`/diff`、`/revert-last`
-
-### 5.1 为什么需要 Change Tracking？
-
-Coding Agent 最危险的地方是：它会改你的代码。
-
-如果没有追踪，你不知道：
-
-- 它改了哪些文件。
-- 每个文件改了什么。
-- 能不能只撤销 Agent 的改动。
-- 用户后续又改了文件时，是否还能安全回滚。
-
-所以我们增加了 `ChangeTracker`。
-
-### 5.2 ChangeTracker 记录什么？
-
-每个被 Agent 修改的文件，会记录：
-
-```json
-{
-  "path": "app.py",
-  "before_exists": true,
-  "before": "原始内容",
-  "after_exists": true,
-  "after": "修改后内容"
-}
-```
-
-保存位置：
-
-```text
-.nz-coder/changes/{run_id}.json
-```
-
-### 5.3 它怎么接入文件工具？
-
-在 `AgentLoop.__init__()` 中创建：
-
-```python
-self.change_tracker = ChangeTracker(run_id=self.tracer.run_id)
-set_change_tracker(self.change_tracker)
-```
-
-然后文件工具在写入前后记录：
-
-```python
-_track_before(path, fp, before, existed)
-fp.write_text(content)
-_track_after(path, content, True)
-```
-
-### 5.4 `/diff` 做什么？
-
-`/diff` 读取 change set，用 `difflib.unified_diff` 生成统一 diff：
-
-```diff
---- a/app.py
-+++ b/app.py
-@@
-- total = 1
-+ total = 0
-```
-
-这让用户能审查 Agent 的真实改动。
-
-### 5.5 `/revert-last` 为什么是安全回滚？
-
-回滚前会检查当前文件是否仍然等于 Agent 写入后的内容：
-
-```text
-当前文件内容 == tracked after
-  -> 可以回滚到 before
-当前文件内容 != tracked after
-  -> 拒绝回滚，避免覆盖用户后续改动
-```
-
-这个设计很重要，因为用户可能在 Agent 修改后又手动改了文件。如果直接回滚，会覆盖用户的新修改。
-
-面试话术：
-
-> 我实现了 agent-authored change set，记录每个文件的 before/after。回滚时不是盲目写回 before，而是先确认当前内容仍等于 tracked after-state，避免覆盖用户后续手动修改。
-
----
-
-## 6. 今天新增能力五：Session Save / Resume
-
-文件：
-
-- `nz_coder/sessions.py`
-- CLI 命令：`/save-session`、`/sessions`、`/resume`
-
-### 6.1 为什么需要 Session？
-
-Agent 对话可能很长。用户可能：
-
-- 中途关闭终端。
-- 想明天继续。
-- 想保存某次任务上下文。
-- 想恢复最近一次 autosave。
-
-所以需要把 `history` 持久化。
-
-### 6.2 Session 保存了什么？
-
-```json
-{
-  "session_id": "demo",
-  "timestamp": "2026-05-01 12:00:00",
-  "workspace": "C:/.../nz-coder",
-  "model": "qwen-plus",
-  "mode": "default",
-  "messages": [...]
-}
-```
-
-保存位置：
-
-```text
-.nz-coder/sessions/{session_id}.json
-.nz-coder/sessions/latest.json
-```
-
-### 6.3 CLI 怎么用？
-
-```text
-/save-session demo
-/sessions
-/resume demo
-```
-
-REPL 每轮完成后也会自动保存：
-
-```python
-save_session(history, mode=agent.permissions.mode, session_id="autosave")
-```
-
-`save_session()` 还会同步写 `latest.json`，所以 `/resume` 默认可以恢复最近会话。
-
-### 6.4 为什么恢复时检查 workspace？
-
-如果 session 是在 A 项目保存的，却在 B 项目恢复，就很危险。模型会以为自己在旧项目里，可能乱读乱改。
-
-所以 CLI 恢复时检查：
-
-```python
-if payload["workspace"] != str(config.WORKDIR):
-    refuse_resume()
-```
-
----
-
-## 7. 今天新增能力六：Workspace / Git Awareness
-
-文件：
-
-- `nz_coder/workspace.py`
-- CLI 命令：`/status`
-- 文件工具中的 git dirty warning
-
-### 7.1 为什么 Agent 要知道 workspace 状态？
-
-真实 coding agent 不能只会改文件，还要知道：
-
-- 当前项目是什么类型？
-- 是不是 git repo？
-- 哪些文件已经 dirty？
-- 最近一次 trace 在哪里？
-- 最近一次 change set 在哪里？
-
-否则它可能覆盖用户已有改动。
-
-### 7.2 `/status` 输出什么？
-
-`status_report()` 会展示：
-
-```text
-Version
-Model
-Workspace
-Permission mode
-Conversation messages
-Latest trace
-Latest change set
-Project profile
-Git dirty files
-```
-
-### 7.3 Project Profile 怎么判断？
-
-```python
-if pyproject.toml exists -> Python project
-if requirements.txt exists -> Python dependencies
-if package.json exists -> Node project
-if Cargo.toml exists -> Rust project
-if go.mod exists -> Go module
-```
-
-这很简单，但足够作为第一版项目感知。
-
-### 7.4 Git dirty warning
-
-文件工具写入前会调用：
-
-```python
-git status --short -- path
-```
-
-如果目标文件已有 git 改动，工具输出会带 warning：
-
-```text
-Warning: app.py already has git changes: M app.py
-```
-
-这不是强制阻止，但能提醒 Agent 和用户：这个文件已经不干净。
-
----
-
-## 8. 今天新增能力七：Patch 和 Shell 加固
-
-文件：
-
-- `nz_coder/tools/files.py`
-- `nz_coder/tools/bash.py`
-- `nz_coder/command_policy.py`
-
-### 8.1 apply_patch 现在支持什么？
-
-原来只支持 exact replacement。现在支持：
-
-```text
-replace: 精确替换
-create: 创建文件
-delete: 删除文件
-dry_run: 只预览 diff，不落盘
-```
-
-示例：
-
-```json
-{
-  "changes": [
-    {
-      "op": "replace",
-      "path": "app.py",
-      "old_text": "total = 1",
-      "new_text": "total = 0"
-    },
-    {
-      "op": "create",
-      "path": "README_TASK.md",
-      "content": "# Task"
-    }
-  ],
-  "dry_run": false
-}
-```
-
-### 8.2 为什么先完整预检再写？
-
-多文件 patch 最大的问题是：
-
-```text
-第 1 个文件改成功
-第 2 个文件 old_text 找不到
-```
-
-如果不预检，代码库就处于半修改状态。
-
-现在逻辑是：
-
-```text
-先检查所有 change 是否合法
-所有 old_text 是否唯一匹配
-所有 create/delete 是否可执行
-全部通过后才写文件
-```
-
-再配合 transaction，可以进一步减少半失败风险。
-
-### 8.3 bash 加固
-
-`bash` 现在会：
-
-- 通过 `classify_bash()` 判断危险命令。
-- read-only 子代理阻止 mutating shell。
-- 支持 timeout 参数。
-- 返回非 0 exit code。
-
-面试时可以强调：
-
-> 我没有只靠 prompt 告诉模型“不要执行危险命令”，而是在执行层加了 command policy。模型即使请求危险命令，也会被代码拦截。
-
----
-
-## 9. Hard Refactor 失败案例：怎么一步步工程化解决？
-
-这次 `refactor_class` benchmark 很适合学习 Agent 工程，因为它不是简单语法 bug，而是典型的 coding agent 难点：
-
-```text
-任务要求：
-1. 从 UserManager.create_user 里提取 email 校验逻辑
-2. 新增模块级函数 validate_email(email)
-3. create_user 必须调用 validate_email
-4. 原始行为不能变
-```
-
-### 9.1 第一次失败：只看最终错误
-
-benchmark 报错：
-
-```text
-ImportError: cannot import name 'validate_email' from 'user_manager'
-```
-
-这说明最终文件里没有导出模块级 `validate_email`。但这只是表象，不能只修 verify。工程上第一步应该看 trace/tool log：
-
-```text
-read_file -> apply_patch old_text not found
-read_file -> apply_patch old_text not found
-edit_file -> old_text not found
-write_file -> 覆盖文件
-最终 import validate_email 失败
-```
-
-结论：模型不是完全不会重构，而是被“字符串精确编辑”卡住了。
-
-### 9.2 根因一：exact text patch 对 refactor 太脆
-
-`edit_file` / `apply_patch` 要求：
-
-```text
-old_text 必须在文件中唯一匹配
-```
-
-这个设计很安全，但重构类任务容易失败，因为模型经常写出“差一点一样”的 old_text，比如空格、引号、上下文行不完全一致。于是工具返回：
-
-```text
-Error: old_text not found
-```
-
-我们先做了一个小修复：当 old_text 找不到时，工具返回 nearby context。这样模型至少能看到附近真实代码，而不是盲猜。
-
-### 9.3 根因二：只检查符号不等于行为正确
-
-后来模型能生成 `validate_email`，但出现过这类错误：
-
-```python
-return email and "@" in email and "." in email.split("@")[-1]
-```
-
-它对有效邮箱返回 `True`，但对空字符串返回 `""`，不是严格的 `False`。所以 hard refactor 的验证不能只看：
-
-```text
-有没有 validate_email？
-create_user 有没有调用它？
-```
-
-还必须跑行为测试：
-
-```bash
-python -c "from user_manager import UserManager, validate_email; assert validate_email('') is False; ..."
-```
-
-这就是为什么 benchmark 描述里加入了“必须运行 exact behavior check”。
-
-### 9.4 新增 AST 符号检查工具
-
-文件：`nz_coder/tools/python_ast.py`
-
-新增：
-
-```text
-python_symbol_check
-```
-
-它用 Python `ast` 解析源码，检查：
-
-```text
-模块级函数：validate_email
-类：UserManager
-类方法：UserManager.create_user
-调用关系：UserManager.create_user -> validate_email
-```
-
-这比字符串搜索更可靠，因为它理解 Python 结构。
-
-### 9.5 关键修复：新增结构化编辑工具
-
-真正解决 repeated `old_text not found` 的，是：
-
-```text
-python_structural_edit
-```
-
-它不是靠 old_text 猜位置，而是：
-
-```text
-1. ast.parse(source)
-2. 找到目标 symbol 的 lineno / end_lineno
-3. 按行号替换整个函数或方法
-4. 可以在某个模块级 symbol 前插入新函数
-5. 写回文件并返回 diff
-```
-
-对 `refactor_class`，理想工具调用是：
-
-```json
-{
-  "path": "user_manager.py",
-  "insertions": [{
-    "before_symbol": "UserManager",
-    "code": "def validate_email(email):\n    return bool(email and \"@\" in email and \".\" in email.split(\"@\")[-1])\n"
-  }],
-  "replacements": [{
-    "target": "UserManager.create_user",
-    "code": "def create_user(self, name, email):\n    if not validate_email(email):\n        raise ValueError(f\"Invalid email: {email}\")\n    ..."
-  }]
-}
-```
-
-这里的工程思想是：**简单编辑用字符串 patch，结构化 Python 重构用 AST 定位**。
-
-### 9.6 接入时必须改哪些地方？
-
-新增一个工具函数还不够，Agent runtime 里至少要接四处：
-
-```text
-1. tools/python_ast.py 注册 tool spec 和 handler
-2. loop.py import 该模块，触发工具注册
-3. permissions.py 把 python_structural_edit 加入 WRITE_TOOLS
-4. loop.py 的 has_write 判断加入 python_structural_edit，确保事务覆盖
-5. prompt.py 告诉模型：Python 函数/方法级重构优先用 python_structural_edit
-6. benchmark.py 在 refactor_class 描述中明确推荐该工具，并要求行为验证
-```
-
-如果只做第 1 步，模型可能根本不知道怎么用；如果忘了第 3/4 步，权限和事务语义就不完整。
-
-### 9.7 如何验证修复？
-
-这次验证分两层。
-
-第一层是普通测试：
-
-```bash
-python -m pytest -q
-```
-
-结果：
-
-```text
-23 passed
-```
-
-第二层是 fake LLM loop 测试。真实 API 会受网络、余额、模型随机性影响，所以我们新增了一个离线测试：
-
-```text
-Fake LLM -> tool_call(python_structural_edit)
-         -> tool_call(python_symbol_check)
-         -> final response
-```
-
-测试会真正生成 `user_manager.py`，执行结构化编辑，然后用 `exec` 检查：
-
-```text
-validate_email("a@b.c") is True
-validate_email("") is False
-validate_email("noat") is False
-UserManager().create_user(...) 行为正确
-```
-
-这保证了 runtime 链路本身是可靠的。
-
-### 9.8 为什么这次真实 benchmark 没重新得到 PASS？
-
-我们重新跑了：
-
-```bash
-python -m nz_coder.benchmark --task refactor_class
-```
-
-但 API 返回：
-
-```text
-Arrearage: Access denied, please make sure your account is in good standing.
-```
-
-也就是账号欠费/不可用，Agent 没有进入模型推理阶段。所以这次不能声称“真实 benchmark 已通过”，只能说：
-
-```text
-代码层修复已完成；
-离线 fake loop 回归测试已覆盖；
-真实 benchmark 需要 API 恢复后再跑。
-```
-
-这也是工程表达上很重要的一点：不要把外部服务失败伪装成模型能力通过。
-
----
-
-## 10. 这些模块之间怎么配合？
-
-一次“修 bug”的完整后端链路：
-
-```text
-1. 用户输入：修复 bug
-2. cli.py 追加 user message 到 history
-3. AgentLoop 记录 run_start trace
-4. LLM 返回 read_file tool call
-5. PermissionManager 放行读操作
-6. read_file 返回文件内容
-7. TraceRecorder 记录 tool_call
-8. LLM 返回 apply_patch
-9. PermissionManager 检查写权限
-10. TransactionManager begin
-11. ChangeTracker record_before
-12. apply_patch 预检并写入
-13. ChangeTracker record_after
-14. Transaction commit
-15. LLM 返回最终回答
-16. TraceRecorder 记录 run_end
-17. sessions.py 自动保存 autosave/latest
-18. 用户可用 /diff 查看改动，用 /revert-last 回滚
-```
-
-这就是一个比较完整的 coding-agent runtime。
-
----
-
-## 11. 面试回答模板
-
-### Q1：你的 Agent 后端架构怎么设计？
-
-可以答：
-
-> NZ-Coder 是同步 terminal agent runtime。核心是 AgentLoop，维护 conversation history，每轮调用 OpenAI-compatible function calling API。如果模型返回 tool_calls，就经过权限检查后 dispatch 到本地工具，把 tool result 追加回 history，再继续下一轮。围绕这个 loop，我做了 transaction、trace、session、change tracking、benchmark 等工程化模块。
-
-### Q2：为什么不用协程？
-
-可以答：
-
-> 目前是单用户 terminal 场景，主要阻塞点是模型调用和本地工具执行，同步架构更容易保证状态一致性、事务回滚和 trace 顺序。未来如果服务化成 WebSocket 多用户后端，可以把 AgentRun 放到后台任务，模型 streaming 用 async，阻塞工具放线程池。
-
-### Q3：你怎么证明 Agent 不是 demo？
-
-可以答：
-
-> 我做了 benchmark harness，目前 13 个任务，覆盖 bugfix、测试修复、多文件修改、CLI、JSON 编辑、重构和文档更新。每个任务都有 setup/verify/cleanup，并尽量用可执行验证。同时我用 Fake LLM 测 AgentLoop，不依赖真实 API，也能测试 tool loop、坏 JSON、API retry 和 trace。
-
-### Q4：Agent 改坏代码怎么办？
-
-可以答：
-
-> 有两层保护。第一层是 transaction：同一轮多文件写入只要有工具失败就回滚。第二层是 change tracking：记录 agent-authored before/after，用户可以 `/diff` 审查，也可以 `/revert-last` 回滚。回滚前会检查当前内容仍然等于 tracked after-state，避免覆盖用户后续改动。
-
-### Q5：你做了哪些安全设计？
-
-可以答：
-
-> 文件路径用 `resolve + is_relative_to(WORKDIR)` 防路径穿越。shell 命令先由 `command_policy` 分类，危险命令直接拒绝，plan 模式禁止写操作和 unknown/mutating shell。写文件返回 unified diff，dirty git 文件会 warning。记忆内容也被标记为 untrusted context，避免把 memory 当高优先级指令。
-
----
-
-## 12. 学习路线建议
-
-如果你刚开始学 Agent，建议按这个顺序看代码：
-
-1. `tools/__init__.py`：先理解工具注册和 dispatch。
-2. `tools/files.py`：理解工具函数如何读写文件。
-3. `loop.py`：理解 user -> model -> tool -> model 的主循环。
-4. `permissions.py` + `command_policy.py`：理解为什么不能让模型直接执行一切。
-5. `transaction.py` + `changes.py`：理解写代码时怎么保证可回滚。
-6. `trace.py`：理解怎么 debug Agent。
-7. `sessions.py`：理解对话状态怎么持久化。
-8. `benchmark.py`：理解怎么评估 Agent 能力。
-9. `tests/test_loop_fake.py`：理解怎么在不调用模型的情况下测试 Agent。
-
-看完这些，你对 coding agent runtime 的理解会比“只会调用 ChatGPT API”高很多。
+## 第五部分：术语表
+
+| 术语 | 定义 |
+|---|---|
+| Agent Loop | 模型调用、工具执行、结果回灌的主循环。 |
+| ReAct | Reasoning + Acting，边推理边行动的 agent 范式。 |
+| Planning | 复杂任务开始前生成执行计划。 |
+| Replanning | 空转、验证失败或复杂度升级后修订计划。 |
+| state-as-message | 把运行状态以消息形式注入给模型。 |
+| RuntimeState | 系统自动维护的客观运行状态。 |
+| Scratchpad | 当前 session 的短期推理便签。 |
+| Memory | 跨 session 的持久化记忆。 |
+| Context | 当前对话历史和工具输出。 |
+| Stable system | 不频繁变化的 system prompt 前缀。 |
+| Dynamic context | 每轮变化的状态/工作记忆注入。 |
+| Prompt caching | provider 对相同 prompt 前缀复用缓存。 |
+| micro_compact | 对旧工具结果做轻量占位压缩。 |
+| auto_compact | 用 LLM 摘要长对话并重建 continuation message。 |
+| persisted-output | 大工具输出落盘后的预览块。 |
+| verification gate | 写文件后未验证时阻止结束的闸门。 |
+| broad test | 大范围测试命令，如 `pytest`、`npm test`。 |
+| exact test | 聚焦到文件/测试名/过滤器的窄测试。 |
+| env noise | 缺依赖、显示后端、连接失败等环境问题。 |
+| dispatch_failed | 工具解析、权限或 handler 层失败。 |
+| command_failed | bash 命令非零退出。 |
+| hydrate | 从持久状态恢复内存态内容。 |
+| acceptance_criteria | 从用户任务中提取的验收标准。 |
+| task_mode | bugfix/feature/refactor/test/discuss/general 等任务模式。 |
+| TF-IDF | 搜索中降低常见词、提升稀有词的评分方法。 |
+| file_weight | smart_search 对不同文件类型的权重调整。 |
+| TransactionManager | 写前备份、失败恢复的事务管理器。 |
+| ChangeTracker | 记录 agent 修改前后 diff 的模块。 |
+| TraceRecorder | 写 JSONL 运行事件的追踪器。 |
+| Subagent | 独立上下文和工具权限的子 agent。 |

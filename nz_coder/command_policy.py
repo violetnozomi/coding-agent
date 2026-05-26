@@ -1,38 +1,40 @@
 """Shared shell-command safety classification."""
-
 from __future__ import annotations
+
 
 import re
 
 
 _DANGEROUS_PATTERNS: list[tuple[str, str]] = [
-    (r"\bsudo\b", "sudo"),
-    (r"\bshutdown\b|\breboot\b|\bpoweroff\b", "system shutdown"),
-    (r"\bmkfs(?:\.\w+)?\b", "format disk"),
-    (r"\bdd\s+if=", "disk dump"),
-    (r">\s*/dev/", "write to device"),
-    (r"\bdiskpart\b", "disk partitioning"),
-    (r"\bformat\b\s+[a-z]:", "format drive"),
-    (r"\breg\s+delete\b", "registry delete"),
-    (r"\brm\s+[^&|;\n]*-[^\s]*[rf][^\s]*\s+[/\\]?\s*(?:$|[&|;\n])", "recursive root delete"),
-    (r"\bRemove-Item\b[^&|;\n]*(?:-Recurse|-Force)[^&|;\n]*(?:[/\\]\s*)?(?:$|[&|;\n])", "recursive forced delete"),
+    # IMPROVED: 每条规则旁附示例，方便维护时快速理解匹配场景。
+    (r"\bsudo\b",                                                            "sudo"),             # sudo rm -rf /
+    (r"\bshutdown\b|\breboot\b|\bpoweroff\b",                               "system shutdown"),  # shutdown -h now
+    (r"\bmkfs(?:\.\w+)?\b",                                                 "format disk"),      # mkfs.ext4 /dev/sda1
+    (r"\bdd\s+if=",                                                          "disk dump"),        # dd if=/dev/zero of=/dev/sda
+    (r">\s*/dev/",                                                           "write to device"),  # echo 1 > /dev/sda
+    (r"\bdiskpart\b",                                                        "disk partitioning"),# diskpart (Windows)
+    (r"\bformat\b\s+[a-z]:",                                                "format drive"),     # format C: (Windows)
+    (r"\breg\s+delete\b",                                                    "registry delete"),  # reg delete HKLM\...
+    (r"\brm\s+[^&|;\n]*-[^\s]*[rf][^\s]*\s+[/\\]?\s*(?:$|[&|;\n])",       "recursive root delete"),  # rm -rf /
+    (r"\bRemove-Item\b[^&|;\n]*(?:-Recurse|-Force)[^&|;\n]*(?:[/\\]\s*)?(?:$|[&|;\n])", "recursive forced delete"),  # Remove-Item -Recurse -Force /
 ]
 
 _SEGMENT_PREFIX = r"(?:^|(?:&&|\|\||[|;\n])\s*)"
 
 _MUTATING_PATTERNS: list[tuple[str, str]] = [
-    (r"(?<![<>])>>?(?![>])", "shell redirection"),
-    (r"\|\s*(?:tee|out-file|set-content|add-content)\b", "write pipeline"),
-    (rf"{_SEGMENT_PREFIX}(?:rm|del|erase|rmdir|remove-item)\b", "delete"),
-    (rf"{_SEGMENT_PREFIX}(?:mv|move|ren|rename-item)\b", "move or rename"),
-    (rf"{_SEGMENT_PREFIX}(?:cp|copy|copy-item|xcopy|robocopy)\b", "copy"),
-    (rf"{_SEGMENT_PREFIX}(?:mkdir|md|new-item|ni|touch)\b", "create file or directory"),
-    (rf"{_SEGMENT_PREFIX}(?:set-content|add-content|out-file)\b", "write file"),
-    (rf"{_SEGMENT_PREFIX}(?:pip|pip3)\s+install\b", "package install"),
-    (rf"{_SEGMENT_PREFIX}python\s+-m\s+pip\s+install\b", "package install"),
-    (rf"{_SEGMENT_PREFIX}(?:npm|pnpm|yarn)\s+(?:install|i|add|remove|uninstall)\b", "package manager write"),
-    (rf"{_SEGMENT_PREFIX}(?:cargo|go)\s+(?:add|get|install)\b", "package manager write"),
-    (rf"{_SEGMENT_PREFIX}git\s+(?:add|am|apply|checkout|cherry-pick|clean|commit|merge|pull|push|rebase|reset|restore|stash|switch)\b", "git write operation"),
+    # IMPROVED: 每条规则旁附示例，方便维护时快速理解匹配场景。
+    (r"(?<![<>])>>?(?![>])",                                                "shell redirection"),    # echo foo > out.txt
+    (r"\|\s*(?:tee|out-file|set-content|add-content)\b",                   "write pipeline"),       # cmd | tee file.txt
+    (rf"{_SEGMENT_PREFIX}(?:rm|del|erase|rmdir|remove-item)\b",            "delete"),               # rm foo.py
+    (rf"{_SEGMENT_PREFIX}(?:mv|move|ren|rename-item)\b",                   "move or rename"),       # mv a.py b.py
+    (rf"{_SEGMENT_PREFIX}(?:cp|copy|copy-item|xcopy|robocopy)\b",          "copy"),                 # cp src dst
+    (rf"{_SEGMENT_PREFIX}(?:mkdir|md|new-item|ni|touch)\b",                "create file or directory"),  # mkdir build
+    (rf"{_SEGMENT_PREFIX}(?:set-content|add-content|out-file)\b",          "write file"),           # Set-Content file.txt value
+    (rf"{_SEGMENT_PREFIX}(?:pip|pip3)\s+install\b",                        "package install"),      # pip install requests
+    (rf"{_SEGMENT_PREFIX}python(?:3(?:\.\d+)?)?\s+-m\s+pip\s+install\b",   "package install"),      # python3 -m pip install foo
+    (rf"{_SEGMENT_PREFIX}(?:npm|pnpm|yarn)\s+(?:install|i|add|remove|uninstall)\b", "package manager write"),  # npm install
+    (rf"{_SEGMENT_PREFIX}(?:cargo|go)\s+(?:add|get|install)\b",            "package manager write"),# cargo add serde
+    (rf"{_SEGMENT_PREFIX}git\s+(?:add|am|apply|checkout|cherry-pick|clean|commit|merge|pull|push|rebase|reset|restore|stash|switch)\b", "git write operation"),  # git commit -m "..."
 ]
 
 _READ_ONLY_COMMANDS = {

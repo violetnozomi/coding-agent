@@ -1,4 +1,5 @@
 """Tools: read_file, write_file, edit_file, list_directory."""
+from __future__ import annotations
 
 import difflib
 from pathlib import Path
@@ -36,7 +37,9 @@ def _get_change_tracker():
 
 def _safe_path(p: str) -> Path:
     path = (config.WORKDIR / p).resolve()
-    if not path.is_relative_to(config.WORKDIR.resolve()):
+    try:
+        path.relative_to(config.WORKDIR.resolve())
+    except ValueError:
         raise ValueError(f"Path escapes workspace: {p}")
     return path
 
@@ -51,7 +54,7 @@ def _format_diff(path: str, before: str, after: str) -> str:
         tofile=f"b/{path}",
     ))
     if len(diff) > config.CONTEXT_TRUNCATE_CHARS:
-        return diff[:config.CONTEXT_TRUNCATE_CHARS] + "\n... (diff truncated)"
+        return _truncate_output(diff, config.CONTEXT_TRUNCATE_CHARS)
     return diff
 
 
@@ -125,6 +128,19 @@ def _track_after(path: str, content: str, exists: bool) -> None:
         tracker.record_after(path, exists, content)
 
 
+def _truncate_output(text: str, limit: int) -> str:
+    """Middle-truncate large outputs preserving both head and tail."""
+    if len(text) <= limit:
+        return text
+    half = limit // 2
+    omitted = len(text) - limit
+    return (
+        text[:half]
+        + f"\n\n... [{omitted} characters omitted] ...\n\n"
+        + text[-half:]
+    )
+
+
 def read_file(path: str, offset: int = None, limit: int = None) -> str:
     try:
         fp = _safe_path(path)
@@ -187,6 +203,48 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
         _track_after(path, updated, True)
         diff = _format_diff(path, content, updated)
         return f"{warning}Edited {path} (replaced 1 occurrence)\n\nDiff:\n{diff}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> str:
+    """Replace a 1-based inclusive line range in a file."""
+    try:
+        if not isinstance(new_text, str):
+            return "Error: new_text must be a string"
+        # Normalize literal \n sequences that LLMs sometimes emit instead of real newlines.
+        # In JSON function arguments, a real newline is encoded as \n (which Python parses to
+        # chr(10)). But some models write \\n (which parses to backslash+n). Detect and fix.
+        if "\\n" in new_text and "\n" not in new_text:
+            new_text = new_text.replace("\\n", "\n")
+        try:
+            start = int(start_line)
+            end = int(end_line)
+        except (TypeError, ValueError):
+            return "Error: start_line and end_line must be integers"
+        if start < 1 or end < start:
+            return "Error: line range must satisfy 1 <= start_line <= end_line"
+
+        fp = _safe_path(path)
+        content = fp.read_text(encoding="utf-8")
+        lines = content.splitlines(keepends=True)
+        if end > len(lines):
+            return f"Error: line range {start}-{end} exceeds {path} length {len(lines)}"
+
+        warning = _dirty_warning(path)
+        _track_before(path, fp, content, True)
+        replacement = new_text.splitlines(keepends=True)
+        if new_text and not new_text.endswith(("\n", "\r")):
+            replacement[-1] = replacement[-1] + "\n"
+        updated = "".join(lines[: start - 1] + replacement + lines[end:])
+
+        txn = _get_txn()
+        if txn and txn.active:
+            txn.track(path)
+        fp.write_text(updated, encoding="utf-8")
+        _track_after(path, updated, True)
+        diff = _format_diff(path, content, updated)
+        return f"{warning}Replaced lines {start}-{end} in {path}\n\nDiff:\n{diff}"
     except Exception as e:
         return f"Error: {e}"
 
@@ -397,6 +455,25 @@ register(
         "required": ["changes"],
     },
     handler=apply_patch,
+)
+
+register(
+    name="replace_lines",
+    description=(
+        "Replace a 1-based inclusive line range in a file. Use after read_file "
+        "shows exact line numbers, especially when exact-text edits are brittle."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Relative path from workspace root."},
+            "start_line": {"type": "integer", "description": "First line to replace, 1-based."},
+            "end_line": {"type": "integer", "description": "Last line to replace, 1-based inclusive."},
+            "new_text": {"type": "string", "description": "Replacement text for the line range."},
+        },
+        "required": ["path", "start_line", "end_line", "new_text"],
+    },
+    handler=replace_lines,
 )
 
 register(

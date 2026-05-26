@@ -22,8 +22,24 @@ MAX_CONTEXT_TOKENS = int(get("MAX_CONTEXT_TOKENS", "100000"))
 LOG_LEVEL = get("LOG_LEVEL", "INFO")
 MAX_AGENT_TURNS = int(get("MAX_AGENT_TURNS", "50"))
 MAX_TOOL_CALLS_PER_RESPONSE = int(get("MAX_TOOL_CALLS_PER_RESPONSE", "20"))
+MAX_VERIFICATION_GATE_PROMPTS = int(get("MAX_VERIFICATION_GATE_PROMPTS", "2"))
 BASH_TIMEOUT_SECONDS = int(get("BASH_TIMEOUT_SECONDS", "120"))
 TRACE_ENABLED = get("TRACE_ENABLED", "0").lower() in ("1", "true", "yes", "on")
+ALLOW_BASH_PACKAGE_INSTALLS = get("ALLOW_BASH_PACKAGE_INSTALLS", "0").lower() in ("1", "true", "yes", "on")
+MEMORY_LLM_RERANK = get("MEMORY_LLM_RERANK", "0").lower() in ("1", "true", "yes", "on")
+MEMORY_LLM_EXTRACT = get("MEMORY_LLM_EXTRACT", "0").lower() in ("1", "true", "yes", "on")
+MEMORY_ASYNC_WRITE = get("MEMORY_ASYNC_WRITE", "0").lower() in ("1", "true", "yes", "on")
+SYSTEM_CONTEXT_BUDGET_TOKENS = int(get("SYSTEM_CONTEXT_BUDGET_TOKENS", "6000"))
+RUNTIME_STATE_PERSIST = get("RUNTIME_STATE_PERSIST", "1").lower() in ("1", "true", "yes", "on")
+SUBAGENT_MAX_TURNS = int(get("SUBAGENT_MAX_TURNS", "12"))
+SUBAGENT_TIMEOUT_SECONDS = int(get("SUBAGENT_TIMEOUT_SECONDS", "180"))
+
+# Planning / Replanning. 默认关闭，避免改变现有测试和基准行为。
+PLANNING_ENABLED = get("NZ_PLANNING_ENABLED", "").lower() in ("1", "true", "yes", "on")
+PLANNING_TASK_MODES = {"feature", "refactor", "test"}
+REPLAN_IDLE_TURNS = int(get("NZ_REPLAN_IDLE_TURNS", "5"))
+REPLAN_MAX_ATTEMPTS = int(get("NZ_REPLAN_MAX_ATTEMPTS", "2"))
+PLANNING_MAX_TOKENS = int(get("NZ_PLANNING_MAX_TOKENS", "1500"))
 
 # Workspace is the current working directory when the agent starts
 WORKDIR = Path.cwd()

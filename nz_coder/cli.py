@@ -109,6 +109,7 @@ def handle_command(cmd: str, history: list, agent: AgentLoop) -> bool:
             "[bold]/compact[/]  - Compress conversation context\n"
             "[bold]/todo[/]     - Show current task list\n"
             "[bold]/memory[/]   - Show saved memories\n"
+            "[bold]/profile[/]  - Show project profile\n"
             "[bold]/mode[/] <m> - Switch permission mode (default/auto/plan)\n"
             "[bold]/status[/]   - Show workspace, git, trace, and session status\n"
             "[bold]/trace[/]    - Show recent agent trace events\n"
@@ -140,6 +141,11 @@ def handle_command(cmd: str, history: list, agent: AgentLoop) -> bool:
 
     if command == "/memory":
         console.print(memory_mgr.list_memories())
+        return True
+
+    if command == "/profile":
+        from nz_coder.project_profile import project_profile
+        console.print(project_profile(save=True, rebuild=True))
         return True
 
     if command == "/status":
@@ -193,6 +199,7 @@ def handle_command(cmd: str, history: list, agent: AgentLoop) -> bool:
 
     if command == "/clear":
         history.clear()
+        agent.clear_scratchpad()
         console.print("[success]Conversation cleared.[/success]")
         return True
 
@@ -206,8 +213,11 @@ def main():
 
     # Initialize
     memory_mgr.load_all()
+    # Initial system prompt contains only a brief memory hint (no content).
+    # The agent loop injects relevant memories dynamically each turn based on
+    # the current user message query.
     system_prompt = build(
-        memory_block=memory_mgr.build_prompt_block(),
+        memory_block=memory_mgr.build_prompt_block(max_items=5, max_chars=1500),
         skill_descriptions=skill_loader.descriptions(),
     )
     agent = AgentLoop(system_prompt)
@@ -243,6 +253,12 @@ def main():
             on_token=renderer.on_token,
             stream=True,
         )
+        # Nudge agent to save learnings after substantial runs
+        if agent.tool_calls_this_run >= 3 and not agent.used_save_memory:
+            history.append({"role": "user", "content":
+                "<reminder>This was a substantial task. If you learned anything worth "
+                "remembering (user preferences, project constraints, pitfalls), "
+                "consider using save_memory.</reminder>"})
         save_session(history, mode=agent.permissions.mode, session_id="autosave")
         console.print()
 

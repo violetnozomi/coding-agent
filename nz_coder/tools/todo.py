@@ -1,4 +1,5 @@
 """Tool: todo - Session planning with task checklist."""
+from __future__ import annotations
 
 from nz_coder.tools import register
 

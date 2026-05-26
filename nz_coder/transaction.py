@@ -11,6 +11,7 @@ This gives the agent a safety net: if a multi-file edit partially fails,
 all changes revert to the state before the transaction began.
 """
 
+import hashlib
 import shutil
 import tempfile
 from pathlib import Path
@@ -50,12 +51,11 @@ class TransactionManager:
 
         source = Path(abs_path)
         if source.exists():
-            backup = self._backup_dir / source.name
-            # Handle name collisions
-            counter = 0
-            while backup.exists():
-                counter += 1
-                backup = self._backup_dir / f"{source.stem}_{counter}{source.suffix}"
+            # FIXED: 用绝对路径的 MD5 hash 前缀 + 文件名组合生成备份名，
+            # 替代手动 counter 逻辑，彻底避免 src/utils.py 与 tests/utils.py
+            # 同名文件在同一备份目录中产生命名冲突。
+            path_hash = hashlib.md5(abs_path.encode()).hexdigest()[:12]
+            backup = self._backup_dir / f"{path_hash}_{source.name}"
             shutil.copy2(str(source), str(backup))
             self._backups[abs_path] = str(backup)
         else:
@@ -79,7 +79,10 @@ class TransactionManager:
         report_lines = []
         for abs_path, backup_path in self._backups.items():
             target = Path(abs_path)
-            rel = target.relative_to(config.WORKDIR) if target.is_relative_to(config.WORKDIR) else target
+            try:
+                rel = target.relative_to(config.WORKDIR)
+            except ValueError:
+                rel = target
             if backup_path is None:
                 # File didn't exist before — delete it
                 if target.exists():

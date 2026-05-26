@@ -18,6 +18,11 @@ dependencies = [
 
 [project.scripts]
 nz-coder = "nz_coder.cli:main"
+nz-swebench-lite = "nz_coder.swebench_lite:main"
+nz-aider-benchmark = "nz_coder.aider_benchmark:main"
+
+[tool.setuptools.packages.find]
+include = ["nz_coder*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

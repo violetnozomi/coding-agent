@@ -1,4 +1,5 @@
 """Tools for Python AST-level structure checks."""
+from __future__ import annotations
 
 import ast
 import difflib
@@ -10,7 +11,9 @@ from nz_coder.tools import register
 
 def _safe_path(p: str) -> Path:
     path = (config.WORKDIR / p).resolve()
-    if not path.is_relative_to(config.WORKDIR.resolve()):
+    try:
+        path.relative_to(config.WORKDIR.resolve())
+    except ValueError:
         raise ValueError(f"Path escapes workspace: {p}")
     return path
 

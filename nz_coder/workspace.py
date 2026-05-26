@@ -1,6 +1,6 @@
 """Workspace and git status helpers for CLI/user visibility."""
-
 from __future__ import annotations
+
 
 import subprocess
 from pathlib import Path

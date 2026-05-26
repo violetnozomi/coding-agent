@@ -1,0 +1,512 @@
+"""RuntimeState — Claude Code 风格的 state-as-message 机制。
+
+在每个 agent loop 迭代中跟踪客观事实状态（turn、diff、验证、空转），
+并在每轮 LLM 调用前注入 <system-reminder> 状态块，让模型基于当前状态
+做出更合理的探索/收敛决策。
+
+与 scratchpad 的区分：
+  - scratchpad = agent 主观推理笔记（agent 自己写）
+  - RuntimeState = 系统自动跟踪的客观事实（工具调用后自动更新）
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import time
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+from nz_coder.task_policy import (
+    detect_task_mode,
+    is_broad_test_command,
+    is_exact_test_command,
+    task_wants_tests,
+)
+
+
+# ── 环境噪音检测 — 帮助 agent 识别"不是我的 patch 导致的错误" ────────────────
+
+ENV_NOISE_PATTERNS = (
+    "ModuleNotFoundError",
+    "ImportError",
+    "No module named",
+    "cannot import",
+    "DISPLAY",
+    "cannot connect to",
+    "Could not connect",
+    "connection refused",
+    "Permission denied",
+    "No such file or directory",
+    "cgi module is deprecated",
+    "requires a display",
+    "no display",
+    "DISPLAY environment variable",
+    "Wayland",
+    "XCB",
+    "cannot open display",
+    "qt.qpa",
+    "tkinter",
+    "TclError",
+    "_tkinter",
+)
+
+
+def _has_env_noise(output: str) -> bool:
+    """检测输出是否包含环境噪音（依赖缺失、显示后端、DB连接等）。"""
+    return any(pattern in output for pattern in ENV_NOISE_PATTERNS)
+
+
+# ── Broad test runner 检测 — 识别"跑全套测试"的行为 ──────────────────────────
+
+def _is_broad_test_command(command: str) -> bool:
+    """向后兼容包装：实际规则在 task_policy 中维护。"""
+    return is_broad_test_command(command)
+
+
+def _is_exact_test(command: str) -> bool:
+    """向后兼容包装：实际规则在 task_policy 中维护。"""
+    return is_exact_test_command(command)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RuntimeState
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class RuntimeState:
+    """Agent 运行时客观状态，由系统在每轮工具调用后自动更新。
+
+    所有字段都是客观事实（工具调用记录），不包含 agent 的主观判断。
+    """
+
+    # ── Turn / Time ──────────────────────────────────────────────────────────
+    turn_count: int = 0
+    max_turns: int = 80
+    started_at: float = 0.0
+    timeout_seconds: int = 0
+
+    # ── Edit tracking ────────────────────────────────────────────────────────
+    last_edit_turn: int = 0           # 最后一轮做了源码编辑的 turn 号
+    edits_this_run: int = 0           # 本次 run 共做了多少次编辑
+
+    # ── Diff status（由 diff_status 工具调用更新）─────────────────────────────
+    has_diff: bool = False
+    diff_chars: int = 0
+    changed_files: list[str] = field(default_factory=list)
+    tests_modified: bool = False
+
+    # ── L1 acceptance criteria ───────────────────────────────────────────────
+    acceptance_criteria: list[str] = field(default_factory=list)
+    task_mode: str = "general"
+    wants_tests: bool = False
+
+    # ── Planning tracking ───────────────────────────────────────────────────
+    plan_generated: bool = False
+    plan_text: str = ""
+    replan_count: int = 0
+    initial_task_text: str = ""
+    initial_plan_complexity: str = ""
+
+    # ── Verification tracking ────────────────────────────────────────────────
+    verification_attempts: int = 0    # 总验证尝试次数
+    py_compile_ok: bool = False      # 兼容旧字段：最近一次 verify_changed_files 是否可接受
+    changed_files_verified: bool = False
+    broad_test_attempts: int = 0     # 跑了多少次 broad test runner
+    exact_test_attempts: int = 0     # 跑了多少次精确测试
+    env_noise_seen: bool = False     # 是否在验证输出中看到环境噪音
+
+    # ── Search / Read tracking（检测空转）─────────────────────────────────────
+    searched_patterns: list[str] = field(default_factory=list)
+    read_files: list[str] = field(default_factory=list)
+
+    # ── Transition ────────────────────────────────────────────────────────────
+    # 上轮做了什么，用于判断当前应该收敛还是继续探索
+    # "edited_source" | "ran_broad_test" | "ran_exact_test" | "searched" | "read" | ""
+    transition: str = ""
+
+    # ── 标志 ──────────────────────────────────────────────────────────────────
+    _state_block_emitted: bool = False
+    _diff_seen_from_tool: bool = False   # diff_status 被调用过
+
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def reset(self, max_turns: int = 80, timeout_seconds: int = 0):
+        """在每次 run() 开始时调用。"""
+        self.turn_count = 0
+        self.max_turns = max_turns
+        self.started_at = time.time()
+        self.timeout_seconds = timeout_seconds
+
+        self.last_edit_turn = 0
+        self.edits_this_run = 0
+
+        self.has_diff = False
+        self.diff_chars = 0
+        self.changed_files = []
+        self.tests_modified = False
+        self.acceptance_criteria = []
+        self.task_mode = "general"
+        self.wants_tests = False
+
+        self.plan_generated = False
+        self.plan_text = ""
+        self.replan_count = 0
+        self.initial_task_text = ""
+        self.initial_plan_complexity = ""
+
+        self.verification_attempts = 0
+        self.py_compile_ok = False
+        self.changed_files_verified = False
+        self.broad_test_attempts = 0
+        self.exact_test_attempts = 0
+        self.env_noise_seen = False
+
+        self.searched_patterns = []
+        self.read_files = []
+
+        self.transition = ""
+        self._state_block_emitted = False
+        self._diff_seen_from_tool = False
+
+    def set_acceptance_criteria_from_text(self, text: str, limit: int = 5) -> None:
+        """从用户任务文本中提取轻量 L1 验收标准。"""
+        self.acceptance_criteria = extract_acceptance_criteria(text, limit=limit)
+        self.task_mode = detect_task_mode(text)
+        self.wants_tests = task_wants_tests(text)
+
+    def task_complexity(self) -> str:
+        """按当前 diff/edit 规模给任务分级：L0/L1/L2/L3。"""
+        changed_count = len(self.changed_files)
+        if self.edits_this_run == 0 and self.diff_chars == 0:
+            return "L0"
+        if self.edits_this_run <= 1 and self.diff_chars <= 1200 and changed_count <= 1:
+            return "L1"
+        if self.edits_this_run <= 3 and self.diff_chars <= 6000 and changed_count <= 4:
+            return "L2"
+        return "L3"
+
+    def to_dict(self, active: bool = True) -> dict:
+        """序列化 RuntimeState，用于中断恢复。"""
+        data = asdict(self)
+        data["active"] = active
+        data["saved_at"] = time.time()
+        return data
+
+    def restore(self, data: dict) -> bool:
+        """从 dict 恢复字段；返回是否恢复成功。"""
+        if not isinstance(data, dict) or not data.get("active"):
+            return False
+        for key, value in data.items():
+            if key in {"active", "saved_at"}:
+                continue
+            if hasattr(self, key):
+                setattr(self, key, value)
+        return True
+
+    def save(self, path: Path, active: bool = True) -> None:
+        """把 RuntimeState 写入磁盘。"""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.to_dict(active=active), ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def load(self, path: Path) -> bool:
+        """从磁盘恢复 active 状态。"""
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        return self.restore(data)
+
+    # ── Observation ───────────────────────────────────────────────────────────
+
+    def observe_tool(self, name: str, tool_input: dict | None, output: str):
+        """根据工具调用更新状态。
+
+        由 AgentLoop 在每次工具执行后调用。
+        """
+        tool_input = tool_input or {}
+        output = output or ""
+
+        # ── grep_search ──────────────────────────────────────────────────────
+        if name == "grep_search":
+            pattern = tool_input.get("pattern", "")
+            if pattern and pattern not in self.searched_patterns:
+                self.searched_patterns.append(pattern)
+                if len(self.searched_patterns) > 30:
+                    self.searched_patterns = self.searched_patterns[-20:]
+            self.transition = "searched"
+
+        # ── read_file / read_symbol ───────────────────────────────────────────
+        elif name in ("read_file", "read_symbol"):
+            path = tool_input.get("path", "")
+            if path and path not in self.read_files:
+                self.read_files.append(path)
+                if len(self.read_files) > 40:
+                    self.read_files = self.read_files[-25:]
+            self.transition = "read"
+
+        # ── 源码编辑（write_file, edit_file, apply_patch, replace_lines,
+        #     python_structural_edit）──────────────────────────────────────────
+        elif name in ("write_file", "edit_file", "apply_patch", "replace_lines",
+                      "python_structural_edit"):
+            self.last_edit_turn = self.turn_count
+            self.edits_this_run += 1
+            self.transition = "edited_source"
+
+        # ── diff_status ──────────────────────────────────────────────────────
+        elif name == "diff_status":
+            self._diff_seen_from_tool = True
+            # 解析 diff_status 输出中的关键字段
+            if "has_non_empty_diff: true" in output:
+                self.has_diff = True
+            elif "has_non_empty_diff: false" in output:
+                self.has_diff = False
+
+            # 提取 diff_chars
+            import re
+            m = re.search(r"diff_chars:\s*(\d+)", output)
+            if m:
+                self.diff_chars = int(m.group(1))
+
+            # 提取 changed_files
+            in_files = False
+            self.changed_files = []
+            for line in output.splitlines():
+                stripped = line.strip()
+                if stripped == "Changed files:":
+                    in_files = True
+                    continue
+                if in_files:
+                    if stripped.startswith("- ") or stripped.startswith("  - "):
+                        continue  # still in changed files section
+                    if stripped == "(none)":
+                        in_files = False
+                    elif stripped and not stripped.startswith("R"):
+                        in_files = False
+                # Actually read the changed files from the "  path" format
+            self.changed_files = self._parse_changed_files(output)
+
+            if "tests_modified: true" in output:
+                self.tests_modified = True
+            elif "tests_modified: false" in output:
+                self.tests_modified = False
+
+            self.transition = "checked_diff"
+
+        # ── verify_changed_files ──────────────────────────────────────────────
+        elif name == "verify_changed_files":
+            self.verification_attempts += 1
+            if output.startswith(("OK:", "WARN:")):
+                self.py_compile_ok = True
+                self.changed_files_verified = True
+            elif output.startswith("FAIL:"):
+                self.py_compile_ok = False
+                self.changed_files_verified = False
+            self.transition = "verified"
+
+        # ── bash ──────────────────────────────────────────────────────────────
+        elif name == "bash":
+            command = tool_input.get("command", "")
+            if _is_broad_test_command(command):
+                self.verification_attempts += 1
+                self.broad_test_attempts += 1
+                self.transition = "ran_broad_test"
+            elif _is_exact_test(command):
+                self.verification_attempts += 1
+                self.exact_test_attempts += 1
+                self.transition = "ran_exact_test"
+
+            if _has_env_noise(output):
+                self.env_noise_seen = True
+
+        # ── smart_search ──────────────────────────────────────────────────────
+        elif name == "smart_search":
+            query = tool_input.get("query", "")
+            if query and query not in self.searched_patterns:
+                self.searched_patterns.append(query)
+            self.transition = "searched"
+
+    def _parse_changed_files(self, output: str) -> list[str]:
+        """从 diff_status 输出中解析 changed files 列表。
+
+        diff_status 输出格式:
+          Changed files:
+            path/to/file.py
+            ...
+          空行或关键词结束文件列表。
+        """
+        files = []
+        in_section = False
+        for line in output.splitlines():
+            stripped = line.strip()
+            if stripped in ("Changed files:", "Changed files"):
+                in_section = True
+                continue
+            if not in_section:
+                continue
+            # 空行结束文件列表
+            if not stripped:
+                break
+            # 元数据行结束文件列表
+            if ":" in stripped and not stripped.startswith(("  ", "- ")):
+                if any(kw in stripped.lower() for kw in ("has_non_empty", "diff_char",
+                        "changed_files", "python_files", "tests_mod", "source_only",
+                        "recommendation", "git status")):
+                    break
+            # 跳过 "(none)"
+            if stripped == "(none)":
+                continue
+            # 文件路径：以空格开头且不含冒号（避免匹配 "has_non_empty_diff: true"）
+            if line.startswith("  ") and ":" not in stripped:
+                fname = stripped
+                if fname and not fname.startswith("has_") and not fname.startswith("diff_"):
+                    files.append(fname)
+        return files
+
+    # ── State block generation ────────────────────────────────────────────────
+
+    def build_prompt_block(self) -> str:
+        """返回 <system-reminder> 状态块，注入到 system prompt 末尾。
+
+        仅在状态有意义时才返回非空字符串（有 diff、接近限制、在空转等）。
+        空字符串表示当前不需要注入状态提醒。
+        """
+        reminders: list[str] = []
+
+        t_now = time.time()
+        elapsed = int(t_now - self.started_at) if self.started_at else 0
+        turns_remaining = max(0, self.max_turns - self.turn_count)
+        time_remaining = max(0, self.timeout_seconds - elapsed) if self.timeout_seconds else 0
+        complexity = self.task_complexity()
+
+        # ── 1. Turn / Time budget ────────────────────────────────────────────
+        if complexity != "L0" or turns_remaining <= 10 or (time_remaining and time_remaining <= 120):
+            budget_lines = [
+                f"Turn {self.turn_count}/{self.max_turns}",
+                f"task_complexity={complexity}",
+                f"task_mode={self.task_mode}",
+            ]
+            if self.timeout_seconds:
+                budget_lines.append(f"Time {elapsed}s/{self.timeout_seconds}s")
+            budget_lines.append(f"{turns_remaining} turns remaining" +
+                               (f", {time_remaining}s" if self.timeout_seconds else ""))
+            reminders.append(" | ".join(budget_lines))
+
+        # ── 2. Acceptance criteria（L1 定义层）───────────────────────────────
+        if self.acceptance_criteria and (self.has_diff or self.verification_attempts == 0):
+            criteria = "; ".join(self.acceptance_criteria[:3])
+            reminders.append(f"Acceptance criteria: {criteria}")
+
+        # ── 3. Diff status（如果有 diff，这是最重要的信息）───────────────────
+        if self.has_diff:
+            nc = self.diff_chars
+            nf = len(self.changed_files)
+            if self.tests_modified and (self.wants_tests or self.task_mode == "test"):
+                test_note = " Includes test updates requested by the task; ensure they cover the change."
+            elif self.tests_modified:
+                test_note = " Includes test files; confirm this matches the user request."
+            else:
+                test_note = ""
+            reminders.append(
+                f"DIFF EXISTS: {nc} chars across {nf} file(s).{test_note} "
+                "Run verify_changed_files or the narrowest relevant project check before finalizing."
+            )
+
+        # ── 4. Diminishing returns: 连续多轮没有编辑 ─────────────────────────
+        no_edit_turns = (self.turn_count - self.last_edit_turn) if self.last_edit_turn else self.turn_count
+        if self.task_mode != "discuss":
+            if self.task_mode in {"feature", "refactor", "test"}:
+                edit_hint = "Move from exploration to the next concrete implementation or test update."
+            else:
+                edit_hint = "Stop broad exploration and make the smallest relevant code change."
+            if self.turn_count >= 10 and no_edit_turns >= 8:
+                reminders.append(
+                    f"WARNING: No source edit in the last {no_edit_turns} turns. {edit_hint}"
+                )
+            elif self.turn_count >= 5 and no_edit_turns >= 5:
+                reminders.append(f"No source edit in {no_edit_turns} turns. {edit_hint}")
+
+        # ── 5. Verification budget ────────────────────────────────────────────
+        if self.broad_test_attempts >= 3:
+            reminders.append(
+                f"STOP: {self.broad_test_attempts} broad test runs attempted. "
+                "Do NOT run broad test runners again. Use verify_changed_files or a narrow targeted check."
+            )
+        elif self.broad_test_attempts >= 1 and self.env_noise_seen:
+            reminders.append(
+                "Test output shows environment noise (missing modules, display, "
+                "database). Do NOT run more broad tests. Use verify_changed_files or a narrow targeted check."
+            )
+
+        # ── 6. Env noise seen during verification ─────────────────────────────
+        if self.env_noise_seen and not self.has_diff:
+            reminders.append(
+                "Environment noise detected in test output. "
+                "Test failures may NOT be caused by your patch. "
+                "Focus on the requested change and use verify_changed_files or a narrow project-specific check."
+            )
+
+        # ── 7. Low budget warning ─────────────────────────────────────────────
+        if turns_remaining <= 5 and self.has_diff:
+            reminders.append(
+                f"CRITICAL: Only {turns_remaining} turns remaining. "
+                "Finalize your patch NOW. Do not start new explorations."
+            )
+        elif turns_remaining <= 10 and self.has_diff:
+            reminders.append(
+                f"Low budget: {turns_remaining} turns remaining. "
+                "Verify and finalize your patch."
+            )
+        elif (time_remaining and time_remaining <= 60 and self.has_diff):
+            reminders.append(
+                f"CRITICAL: Less than 60s remaining. Finalize your patch NOW."
+            )
+
+        # ── 8. Verification passed but still going ────────────────────────────
+        if self.py_compile_ok and self.has_diff and self.verification_attempts >= 1:
+            if no_edit_turns <= 2:
+                reminders.append(
+                    "verify_changed_files passed. Diff exists. You should FINALIZE now."
+                )
+
+        if not reminders:
+            return ""
+
+        block = "<system-reminder>\n" + "\n".join(f"- {r}" for r in reminders) + "\n</system-reminder>"
+        return block
+
+
+def extract_acceptance_criteria(text: str, limit: int = 5) -> list[str]:
+    """从 issue/user 文本中提取轻量验收标准。
+
+    只做保守启发式，不调用模型：优先保留精确测试、FAILED 行、should/must
+    句子和中文“应/必须”句子。
+    """
+    if not isinstance(text, str) or not text.strip():
+        return []
+    criteria: list[str] = []
+    patterns = (
+        r"[\w./\-]+\.py(?:::[\w.\-]+)+",
+        r"FAILED\s+[^\n]+",
+    )
+    for pattern in patterns:
+        for match in re.findall(pattern, text):
+            _append_unique(criteria, match.strip(), limit)
+
+    for sentence in re.split(r"(?<=[.!?。！？])\s+|\n+", text):
+        stripped = sentence.strip(" -\t")
+        if not stripped:
+            continue
+        lowered = stripped.lower()
+        if any(marker in lowered for marker in (" should ", " must ", " expected ", " fails ", " failing ")):
+            _append_unique(criteria, stripped[:180], limit)
+        elif any(marker in stripped for marker in ("应该", "必须", "期望", "失败", "报错")):
+            _append_unique(criteria, stripped[:180], limit)
+        if len(criteria) >= limit:
+            break
+    return criteria
+
+
+def _append_unique(items: list[str], value: str, limit: int) -> None:
+    if value and value not in items and len(items) < limit:
+        items.append(value)
