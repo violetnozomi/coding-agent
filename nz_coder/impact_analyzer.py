@@ -20,6 +20,22 @@ _SENSITIVE_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 
+_EXCLUDED_PARTS = {
+    ".git", ".nz-coder", ".nz-coder-runs", "node_modules",
+    "build", "dist", "__pycache__",
+}
+
+
+def _include_changed_file(path: str) -> bool:
+    parts = Path(path).parts
+    return bool(path) and not any(part in _EXCLUDED_PARTS for part in parts)
+
+
+def _add_unique_path(items: list[str], path: str) -> None:
+    path = path.strip()
+    if _include_changed_file(path) and path not in items:
+        items.append(path)
+
 
 def _git_diff_text() -> str:
     try:
@@ -36,19 +52,32 @@ def _git_diff_text() -> str:
 
 
 def _git_changed_files() -> list[str]:
+    files: list[str] = []
     try:
-        result = subprocess.run(
+        tracked = subprocess.run(
             ["git", "diff", "--name-only", "--", ".", ":!.nz-coder", ":!.nz-coder-runs"],
             cwd=config.WORKDIR,
             capture_output=True,
             text=True,
             timeout=5,
         )
+        if tracked.returncode in (0, 1):
+            for line in tracked.stdout.splitlines():
+                _add_unique_path(files, line)
+
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            cwd=config.WORKDIR,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if untracked.returncode in (0, 1):
+            for line in untracked.stdout.splitlines():
+                _add_unique_path(files, line)
     except (OSError, subprocess.TimeoutExpired):
-        return []
-    if result.returncode not in (0, 1):
-        return []
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        return files
+    return files
 
 
 def _signature_changed(diff_text: str) -> bool:

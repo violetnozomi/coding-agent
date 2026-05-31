@@ -98,7 +98,7 @@ class RuntimeState:
 
     # ── L1 acceptance criteria ───────────────────────────────────────────────
     acceptance_criteria: list[str] = field(default_factory=list)
-    task_mode: str = "general"
+    task_mode: str = "unknown"
     wants_tests: bool = False
 
     # ── Planning tracking ───────────────────────────────────────────────────
@@ -146,7 +146,7 @@ class RuntimeState:
         self.changed_files = []
         self.tests_modified = False
         self.acceptance_criteria = []
-        self.task_mode = "general"
+        self.task_mode = "unknown"
         self.wants_tests = False
 
         self.plan_generated = False
@@ -248,7 +248,7 @@ class RuntimeState:
         # ── 源码编辑（write_file, edit_file, apply_patch, replace_lines,
         #     python_structural_edit）──────────────────────────────────────────
         elif name in ("write_file", "edit_file", "apply_patch", "replace_lines",
-                      "python_structural_edit"):
+                      "python_structural_edit", "scaffold_project", "write_files_batch"):
             self.last_edit_turn = self.turn_count
             self.edits_this_run += 1
             self.transition = "edited_source"
@@ -294,7 +294,7 @@ class RuntimeState:
             self.transition = "checked_diff"
 
         # ── verify_changed_files ──────────────────────────────────────────────
-        elif name == "verify_changed_files":
+        elif name in ("verify_changed_files", "verify_project_build"):
             self.verification_attempts += 1
             if output.startswith(("OK:", "WARN:")):
                 self.py_compile_ok = True
@@ -397,25 +397,43 @@ class RuntimeState:
             criteria = "; ".join(self.acceptance_criteria[:3])
             reminders.append(f"Acceptance criteria: {criteria}")
 
+        if self.task_mode == "project_creation":
+            reminders.append(
+                "PROJECT CREATION MODE: start with analyze_project_requirements -> create_project_blueprint -> "
+                "scaffold_project. If the scaffold still misses requested business logic, use write_files_batch. "
+                "Then run plan_project_acceptance -> verify_project_build. Do not start with grep_search or "
+                "smart_search unless you are intentionally reusing local code."
+            )
+            if not self.has_diff and self.turn_count >= 3 and self.edits_this_run == 0:
+                reminders.append(
+                    "No project files created yet. Move from planning to scaffold_project or write_files_batch now."
+                )
+
         # ── 3. Diff status（如果有 diff，这是最重要的信息）───────────────────
         if self.has_diff:
             nc = self.diff_chars
             nf = len(self.changed_files)
-            if self.tests_modified and (self.wants_tests or self.task_mode == "test"):
+            if self.tests_modified and (self.wants_tests or self.task_mode in {"test", "project_creation"}):
                 test_note = " Includes test updates requested by the task; ensure they cover the change."
             elif self.tests_modified:
                 test_note = " Includes test files; confirm this matches the user request."
             else:
                 test_note = ""
+            verify_hint = (
+                "Run plan_project_acceptance or verify_project_build before finalizing."
+                if self.task_mode == "project_creation"
+                else "Run verify_changed_files or the narrowest relevant project check before finalizing."
+            )
             reminders.append(
-                f"DIFF EXISTS: {nc} chars across {nf} file(s).{test_note} "
-                "Run verify_changed_files or the narrowest relevant project check before finalizing."
+                f"DIFF EXISTS: {nc} chars across {nf} file(s).{test_note} {verify_hint}"
             )
 
         # ── 4. Diminishing returns: 连续多轮没有编辑 ─────────────────────────
         no_edit_turns = (self.turn_count - self.last_edit_turn) if self.last_edit_turn else self.turn_count
         if self.task_mode != "discuss":
-            if self.task_mode in {"feature", "refactor", "test"}:
+            if self.task_mode == "project_creation":
+                edit_hint = "Move from requirements and blueprint work to concrete scaffold creation or batch file writing."
+            elif self.task_mode in {"feature", "refactor", "test"}:
                 edit_hint = "Move from exploration to the next concrete implementation or test update."
             else:
                 edit_hint = "Stop broad exploration and make the smallest relevant code change."

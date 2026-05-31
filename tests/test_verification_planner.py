@@ -31,3 +31,16 @@ def test_plan_verification_node_uses_typecheck_without_broad_default():
     plan = plan_verification_commands(changed_files=["src/app.ts"], project_profile=profile)
     assert [item["command"] for item in plan["recommended"]] == ["pnpm typecheck"]
     assert "pnpm test" in [item["command"] for item in plan["fallback"]]
+
+
+def test_plan_verification_quotes_paths_with_spaces():
+    from nz_coder.verification_planner import plan_verification_commands
+
+    plan = plan_verification_commands(
+        changed_files=["src/my file.py"],
+        failing_tests=["tests/test my file.py::test_case"],
+        project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
+    )
+    commands = [item["command"] for item in plan["recommended"]]
+    assert "python -m py_compile 'src/my file.py'" in commands
+    assert "pytest 'tests/test my file.py::test_case'" in commands

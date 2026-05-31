@@ -29,4 +29,5 @@ def test_detect_task_mode_distinguishes_discussion_and_creation():
     assert detect_task_mode("Add a REST endpoint for users") == "feature"
     assert detect_task_mode("fix traceback in parser") == "bugfix"
     assert detect_task_mode("add unit tests for parser") == "test"
+    assert detect_task_mode("帮我创建一个 FastAPI todo API 项目") == "project_creation"
     assert task_wants_tests("please add unit tests") is True

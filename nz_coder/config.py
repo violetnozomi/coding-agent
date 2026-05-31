@@ -36,10 +36,13 @@ SUBAGENT_TIMEOUT_SECONDS = int(get("SUBAGENT_TIMEOUT_SECONDS", "180"))
 
 # Planning / Replanning. 默认关闭，避免改变现有测试和基准行为。
 PLANNING_ENABLED = get("NZ_PLANNING_ENABLED", "").lower() in ("1", "true", "yes", "on")
-PLANNING_TASK_MODES = {"feature", "refactor", "test"}
+PLANNING_TASK_MODES = {"feature", "refactor", "test", "project_creation"}
 REPLAN_IDLE_TURNS = int(get("NZ_REPLAN_IDLE_TURNS", "5"))
 REPLAN_MAX_ATTEMPTS = int(get("NZ_REPLAN_MAX_ATTEMPTS", "2"))
 PLANNING_MAX_TOKENS = int(get("NZ_PLANNING_MAX_TOKENS", "1500"))
+WRITE_BATCH_MAX_FILE_BYTES = int(get("NZ_WRITE_BATCH_MAX_FILE_BYTES", "100000"))
+WRITE_BATCH_MAX_TOTAL_BYTES = int(get("NZ_WRITE_BATCH_MAX_TOTAL_BYTES", "500000"))
+PROJECT_VERIFY_TIMEOUT_SECONDS = int(get("NZ_PROJECT_VERIFY_TIMEOUT_SECONDS", "60"))
 
 # Workspace is the current working directory when the agent starts
 WORKDIR = Path.cwd()

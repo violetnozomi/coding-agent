@@ -28,8 +28,12 @@ _SUB_READ_TOOLS = {
     "project_profile",
     "plan_verification",
     "analyze_impact",
+    "analyze_project_requirements",
+    "create_project_blueprint",
+    "plan_project_acceptance",
+    "verify_project_build",
 }
-_SUB_GENERAL_EXTRA_TOOLS = {"write_file", "edit_file", "verify_changed_files"}
+_SUB_GENERAL_EXTRA_TOOLS = {"write_file", "edit_file", "verify_changed_files", "write_files_batch", "scaffold_project"}
 
 
 class SubagentTimeout(Exception):
@@ -79,6 +83,11 @@ def _ensure_subagent_tool_registry() -> None:
     import nz_coder.project_profile  # noqa: F401
     import nz_coder.verification_planner  # noqa: F401
     import nz_coder.impact_analyzer  # noqa: F401
+    import nz_coder.project_creation.requirement_analyzer  # noqa: F401
+    import nz_coder.project_creation.blueprint  # noqa: F401
+    import nz_coder.project_creation.templates  # noqa: F401
+    import nz_coder.project_creation.acceptance_planner  # noqa: F401
+    import nz_coder.project_creation.verifier  # noqa: F401
     import nz_coder.tools.search  # noqa: F401
 
 

@@ -25,10 +25,17 @@ WRITE_TOOLS = {
     "apply_patch",
     "replace_lines",
     "python_structural_edit",
+    "write_files_batch",
+    "scaffold_project",
     "save_memory",
     "delete_memory",
 }
-READ_TOOLS = {"read_file", "list_directory", "grep_search", "glob_search", "list_memories", "project_profile", "plan_verification", "analyze_impact"}
+READ_TOOLS = {
+    "read_file", "list_directory", "grep_search", "glob_search", "list_memories",
+    "project_profile", "plan_verification", "analyze_impact",
+    "analyze_project_requirements", "create_project_blueprint",
+    "plan_project_acceptance", "verify_project_build",
+}
 
 
 class PermissionRule(NamedTuple):

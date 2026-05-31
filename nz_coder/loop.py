@@ -30,6 +30,11 @@ import nz_coder.tools.repo_intel  # noqa: F401
 import nz_coder.project_profile   # noqa: F401
 import nz_coder.verification_planner  # noqa: F401
 import nz_coder.impact_analyzer   # noqa: F401
+import nz_coder.project_creation.requirement_analyzer  # noqa: F401
+import nz_coder.project_creation.blueprint  # noqa: F401
+import nz_coder.project_creation.templates  # noqa: F401
+import nz_coder.project_creation.acceptance_planner  # noqa: F401
+import nz_coder.project_creation.verifier  # noqa: F401
 import nz_coder.subagent          # noqa: F401
 import nz_coder.memory            # noqa: F401
 import nz_coder.skills            # noqa: F401
@@ -364,6 +369,7 @@ class AgentLoop:
             "- For bugfix: locate -> understand -> fix -> verify. Usually 3 steps.\n"
             "- For feature: design -> implement -> test -> verify. Usually 4 steps.\n"
             "- For refactor: identify scope -> rename/restructure -> verify no breakage. Usually 3 steps.\n"
+            "- For project_creation: requirements -> blueprint -> scaffold -> fill missing logic -> verify. Usually 5 steps.\n"
             "- Do NOT include 'read the task' or 'understand requirements' as a step.\n"
             "- Be specific about file paths when possible; say 'need to search' when not.\n"
             "- Last step should always be verification.\n"
@@ -540,7 +546,7 @@ class AgentLoop:
         return any(tc["function"]["name"] in WRITE_TOOLS for tc in will_execute)
 
     def _dispatch_tool_calls(self, tool_calls_raw: list, has_write: bool) -> list:
-        """读工具批量并发，写工具或 task 串行。"""
+        """只分发本轮允许执行的工具调用前缀。"""
         will_execute = tool_calls_raw[:config.MAX_TOOL_CALLS_PER_RESPONSE]
         non_concurrent_tools = {"task"}
         all_read_only = (
@@ -549,8 +555,8 @@ class AgentLoop:
             and not any(tc["function"]["name"] in non_concurrent_tools for tc in will_execute)
         )
         if all_read_only:
-            return _execute_concurrent(self.executor, tool_calls_raw)
-        return [(i, tc, self.executor.execute_one(tc, i)) for i, tc in enumerate(tool_calls_raw)]
+            return _execute_concurrent(self.executor, will_execute)
+        return [(i, tc, self.executor.execute_one(tc, i)) for i, tc in enumerate(will_execute)]
 
     def _record_tool_result(self, result_r) -> bool:
         """观察工具结果并更新 verification/scratchpad/runtime 状态。"""

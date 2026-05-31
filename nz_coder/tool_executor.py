@@ -28,6 +28,8 @@ WRITE_TOOLS: frozenset[str] = frozenset({
     "apply_patch",
     "replace_lines",
     "python_structural_edit",
+    "write_files_batch",
+    "scaffold_project",
 })
 
 

@@ -6,6 +6,7 @@ heuristic by design and prefer low-noise checks before broad test runners.
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -13,6 +14,10 @@ from nz_coder import config
 from nz_coder.project_profile import build_project_profile, load_project_profile
 from nz_coder.task_policy import is_test_file, language_for_path
 from nz_coder.tools import register
+
+
+def _q(value: str) -> str:
+    return shlex.quote(str(value))
 
 
 def _add_command(items: list[dict], command: str, reason: str, level: str) -> None:
@@ -119,18 +124,18 @@ def plan_verification_commands(
     py_files = [f for f in changed if language_for_path(f) == "python"]
     py_source = [f for f in py_files if not is_test_file(f)]
     for rel in py_source[:8]:
-        _add_command(recommended, f"python -m py_compile {rel}", "changed Python source file sanity check", "L0")
+        _add_command(recommended, f"python -m py_compile {_q(rel)}", "changed Python source file sanity check", "L0")
 
     for test in failing[:6]:
         if test.endswith(".py") or ".py::" in test or "::" in test or test.startswith(("tests/", "test/")):
-            _add_command(recommended, f"pytest {test}", "exact failing test provided", "L1")
+            _add_command(recommended, f"pytest {_q(test)}", "exact failing test provided", "L1")
         elif language_for_path(test) == "rust":
-            _add_command(recommended, f"cargo test {Path(test).stem}", "failing Rust test provided", "L1")
+            _add_command(recommended, f"cargo test {_q(Path(test).stem)}", "failing Rust test provided", "L1")
 
     if py_source and ("pytest" in profile.get("test_commands", []) or profile.get("test_roots")):
         for rel in py_source[:4]:
             for candidate in _python_related_tests(rel, profile)[:2]:
-                _add_command(recommended, f"pytest {candidate}", f"related test candidate for {rel}", "L2")
+                _add_command(recommended, f"pytest {_q(candidate)}", f"related test candidate for {rel}", "L2")
         if include_broad:
             _add_command(recommended, "pytest", "broad Python test requested", "L4")
         else:
@@ -149,16 +154,16 @@ def plan_verification_commands(
 
     go_dirs = sorted({_go_package(f) for f in changed if language_for_path(f) == "go"})
     for pkg in go_dirs:
-        _add_command(recommended, f"go test {pkg} -run '^$'", "changed Go package compile check", "L0")
+        _add_command(recommended, f"go test {_q(pkg)} -run '^$'", "changed Go package compile check", "L0")
         target = recommended if include_broad else fallback
-        _add_command(target, f"go test {pkg}", "changed Go package tests", "L2" if include_broad else "L3")
+        _add_command(target, f"go test {_q(pkg)}", "changed Go package tests", "L2" if include_broad else "L3")
 
     rust_files = [f for f in changed if language_for_path(f) == "rust"]
     if rust_files:
         _add_command(recommended, "cargo check", "changed Rust files; cargo check sanity", "L0")
         for test in failing[:4]:
             if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", test):
-                _add_command(recommended, f"cargo test {test}", "exact Rust failing test provided", "L1")
+                _add_command(recommended, f"cargo test {_q(test)}", "exact Rust failing test provided", "L1")
         target = recommended if include_broad else fallback
         _add_command(target, "cargo test", "broad Rust tests", "L4")
 

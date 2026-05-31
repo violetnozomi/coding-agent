@@ -14,6 +14,14 @@ def test_imports():
     assert config.WORKDIR
 
 
+def test_agent_loop_import_registers_eval_tools():
+    import nz_coder.loop  # noqa: F401
+    from nz_coder.tools import get_specs
+
+    names = {spec["function"]["name"] for spec in get_specs()}
+    assert {"project_profile", "plan_verification", "analyze_impact", "analyze_project_requirements", "create_project_blueprint", "scaffold_project", "plan_project_acceptance", "verify_project_build"}.issubset(names)
+
+
 def test_tool_registration():
     from nz_coder.tools import get_specs, TOOL_HANDLERS
 
@@ -27,6 +35,11 @@ def test_tool_registration():
     import nz_coder.project_profile   # noqa
     import nz_coder.verification_planner  # noqa
     import nz_coder.impact_analyzer   # noqa
+    import nz_coder.project_creation.requirement_analyzer  # noqa
+    import nz_coder.project_creation.blueprint  # noqa
+    import nz_coder.project_creation.templates  # noqa
+    import nz_coder.project_creation.acceptance_planner  # noqa
+    import nz_coder.project_creation.verifier  # noqa
     import nz_coder.subagent          # noqa
     import nz_coder.memory            # noqa
     import nz_coder.skills            # noqa
@@ -34,12 +47,13 @@ def test_tool_registration():
     specs = get_specs()
     names = [s["function"]["name"] for s in specs]
 
-    expected = ["bash", "read_file", "write_file", "edit_file",
+    expected = ["bash", "read_file", "write_file", "write_files_batch", "edit_file",
                 "apply_patch", "replace_lines", "python_symbol_check", "python_structural_edit",
                 "list_directory", "grep_search", "glob_search",
                 "todo", "task", "save_memory", "list_memories",
                 "delete_memory", "project_profile", "plan_verification",
-                "analyze_impact", "load_skill"]
+                "analyze_impact", "analyze_project_requirements", "create_project_blueprint",
+                "scaffold_project", "plan_project_acceptance", "verify_project_build", "load_skill"]
     for e in expected:
         assert e in names, f"Missing tool: {e}"
         assert e in TOOL_HANDLERS, f"Missing handler: {e}"
@@ -118,6 +132,8 @@ def test_prompt_builder():
     assert "NZ-Coder" in prompt
     assert "Test memory" in prompt
     assert "test-skill" in prompt
+    assert "analyze_project_requirements" in prompt
+    assert "do not start with grep_search or smart_search" in prompt.lower()
     print("OK: prompt builder works")
 
 

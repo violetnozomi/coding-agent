@@ -44,6 +44,136 @@ def _safe_path(p: str) -> Path:
     return path
 
 
+
+_BLOCKED_WRITE_FILENAMES = {".env", ".env.local", ".env.production", "id_rsa", "id_dsa", "known_hosts", "credentials"}
+_BLOCKED_WRITE_DIRS = {".ssh"}
+
+
+def _blocked_write_reason(path: str) -> str:
+    p = Path(path)
+    name = p.name.lower()
+    parts = {part.lower() for part in p.parts}
+    if name.startswith(".env") or name in _BLOCKED_WRITE_FILENAMES:
+        return "writing .env or credential-like files is blocked"
+    if parts & _BLOCKED_WRITE_DIRS:
+        return "writing SSH or credential directories is blocked"
+    if name.endswith((".pem", ".key", ".p12")):
+        return "writing private-key-like files is blocked"
+    return ""
+
+
+def _begin_local_txn():
+    txn = _get_txn()
+    manage_locally = False
+    if txn is None:
+        from nz_coder.transaction import TransactionManager
+        txn = TransactionManager()
+        manage_locally = True
+    elif not txn.active:
+        manage_locally = True
+    if manage_locally:
+        txn.begin()
+    return txn, manage_locally
+
+
+def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
+    if not isinstance(files, list) or not files:
+        raise ValueError("files must be a non-empty list")
+    if len(files) > 50:
+        raise ValueError("max 50 files per batch")
+
+    prepared: list[dict] = []
+    seen_paths: set[str] = set()
+    total_bytes = 0
+    for i, item in enumerate(files):
+        if not isinstance(item, dict):
+            raise ValueError(f"file {i} must be an object")
+        path = str(item.get("path", "")).strip()
+        content = item.get("content")
+        if not path:
+            raise ValueError(f"file {i} requires path")
+        if not isinstance(content, str):
+            raise ValueError(f"file {i} requires string content")
+        blocked = _blocked_write_reason(path)
+        if blocked:
+            raise ValueError(f"{path}: {blocked}")
+        fp = _safe_path(path)
+        key = str(fp)
+        if key in seen_paths:
+            raise ValueError(f"duplicate path in batch: {path}")
+        seen_paths.add(key)
+        existed = fp.exists()
+        if existed and not overwrite:
+            raise ValueError(f"target already exists and overwrite=false: {path}")
+        content_bytes = len(content.encode("utf-8"))
+        if content_bytes > config.WRITE_BATCH_MAX_FILE_BYTES:
+            raise ValueError(f"file too large ({content_bytes} bytes > {config.WRITE_BATCH_MAX_FILE_BYTES}): {path}")
+        total_bytes += content_bytes
+        if total_bytes > config.WRITE_BATCH_MAX_TOTAL_BYTES:
+            raise ValueError(
+                f"batch too large ({total_bytes} bytes > {config.WRITE_BATCH_MAX_TOTAL_BYTES})"
+            )
+        before = fp.read_text(encoding="utf-8", errors="replace") if existed else ""
+        prepared.append({
+            "path": path,
+            "fp": fp,
+            "before": before,
+            "content": content,
+            "existed": existed,
+            "purpose": str(item.get("purpose", "")).strip(),
+        })
+
+    txn, manage_locally = _begin_local_txn()
+    created: list[str] = []
+    updated: list[str] = []
+    skipped: list[str] = []
+    try:
+        for item in prepared:
+            _track_before(item["path"], item["fp"], item["before"], item["existed"])
+            txn.track(item["path"])
+            item["fp"].parent.mkdir(parents=True, exist_ok=True)
+            item["fp"].write_text(item["content"], encoding="utf-8")
+            _track_after(item["path"], item["content"], True)
+            if item["existed"]:
+                updated.append(item["path"])
+            else:
+                created.append(item["path"])
+        if manage_locally:
+            txn.commit()
+    except Exception:
+        if manage_locally:
+            txn.rollback()
+        raise
+
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "failed": [],
+        "total_bytes": total_bytes,
+    }
+
+
+
+
+def write_files_batch(files: list[dict], overwrite: bool = False) -> str:
+    try:
+        result = _write_files_batch_impl(files, overwrite=overwrite)
+    except Exception as e:
+        return f"Error: {e}"
+
+    touched = len(result["created"]) + len(result["updated"])
+    lines = [
+        f"Batch write completed ({touched} files, {result['total_bytes']} bytes)",
+        f"Created: {len(result['created'])}",
+    ]
+    lines.extend(f"- {path}" for path in result["created"][:20])
+    lines.append(f"Updated: {len(result['updated'])}")
+    lines.extend(f"- {path}" for path in result["updated"][:20])
+    lines.append(f"Skipped: {len(result['skipped'])}")
+    lines.append(f"Failed: {len(result['failed'])}")
+    return "\n".join(lines)
+
 def _format_diff(path: str, before: str, after: str) -> str:
     if before == after:
         return "(no changes)"
@@ -407,6 +537,36 @@ register(
         "required": ["path", "content"],
     },
     handler=write_file,
+)
+
+
+register(
+    name="write_files_batch",
+    description=(
+        "Write multiple files atomically. Validates every path before writing, blocks "
+        "credential-like files, and fails the entire batch if any file conflicts."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "files": {
+                "type": "array",
+                "description": "List of file payloads.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Relative path from workspace root."},
+                        "content": {"type": "string", "description": "Full file content."},
+                        "purpose": {"type": "string", "description": "Optional short description for the file."},
+                    },
+                    "required": ["path", "content"],
+                },
+            },
+            "overwrite": {"type": "boolean", "description": "Allow overwriting existing files. Default: false."},
+        },
+        "required": ["files"],
+    },
+    handler=write_files_batch,
 )
 
 register(

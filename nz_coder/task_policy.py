@@ -73,21 +73,31 @@ def is_test_file(path: str) -> bool:
     return name.startswith("test_") or name.endswith(_TEST_SUFFIXES)
 
 
+
+
 def detect_task_mode(text: str) -> str:
     """从用户文本粗略识别任务模式。
 
-    匹配优先级是 test > refactor > feature > bugfix > discuss > general。
-    例如 "add a test for the login endpoint" 会归为 test，因为测试意图
-    比 endpoint 创建意图更具体。
+    匹配优先级是 project_creation > test > refactor > feature > bugfix > discuss > unknown。
+    例如 “创建一个 FastAPI Todo API，带 pytest 测试” 会归为 project_creation，
+    因为“创建项目”的意图比“包含测试”更基础也更关键。
     """
     lowered = (text or "").lower()
     if not lowered.strip():
-        return "general"
+        return "unknown"
+
+    project_creation_markers = (
+        "from scratch", "build a new project", "scaffold", "project skeleton",
+        "create a fastapi project", "create a fastapi app", "create a cli tool",
+        "完整 demo", "从零创建", "从 0 创建", "从0创建", "搭一个项目",
+        "生成一个 fastapi 项目", "生成一个项目", "创建项目骨架", "做一个 cli 工具",
+        "帮我搭一个项目", "帮我创建一个项目", "实现一个完整 demo",
+    )
     test_markers = ("add test", "unit test", "pytest", "coverage", "测试", "单元测试")
     refactor_markers = ("refactor", "rename", "migrate", "migration", "重构", "迁移", "改名")
     feature_markers = (
         "add ", "implement", "create", "new ", "endpoint", "feature",
-        "scaffold", "初始化", "新建", "创建", "实现", "添加", "加一个",
+        "初始化", "新建", "创建", "实现", "添加", "加一个",
     )
     bug_markers = (
         "fix", "bug", "traceback", "error", "failing", "failed", "regression",
@@ -98,6 +108,13 @@ def detect_task_mode(text: str) -> str:
         "解释", "为什么", "怎么设计", "如何设计",
     )
 
+    if any(marker in lowered for marker in project_creation_markers):
+        return "project_creation"
+    if (
+        any(word in lowered for word in ("create", "build", "generate", "scaffold", "创建", "生成", "搭", "做一个"))
+        and any(word in lowered for word in (" project", "项目", " demo", "cli", "package", "fastapi", "service", "脚手架"))
+    ):
+        return "project_creation"
     if any(marker in lowered for marker in test_markers):
         return "test"
     if any(marker in lowered for marker in refactor_markers):
@@ -108,7 +125,7 @@ def detect_task_mode(text: str) -> str:
         return "bugfix"
     if any(marker in lowered for marker in discuss_markers) or "?" in lowered or "？" in lowered:
         return "discuss"
-    return "general"
+    return "unknown"
 
 
 def task_wants_tests(text: str) -> bool:

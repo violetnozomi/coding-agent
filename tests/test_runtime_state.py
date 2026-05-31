@@ -85,3 +85,17 @@ def test_runtime_state_tests_modified_is_neutral_when_requested():
     assert "task_mode=test" in block
     assert "test updates requested" in block
     assert "confirm this matches" not in block
+
+
+def test_runtime_state_project_creation_guides_greenfield_flow():
+    from nz_coder.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    state.reset(max_turns=20)
+    state.set_acceptance_criteria_from_text("帮我创建一个 FastAPI todo API 项目")
+    state.turn_count = 6
+
+    block = state.build_prompt_block()
+
+    assert "analyze_project_requirements -> create_project_blueprint -> scaffold_project" in block
+    assert "Do not start with grep_search or smart_search" in block

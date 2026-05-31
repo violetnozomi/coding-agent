@@ -311,8 +311,8 @@ def test_loop_can_complete_hard_refactor_with_structural_edit():
 
 # ── 新增测试 ──────────────────────────────────────────────────────────────────
 
-def test_tool_call_limit():
-    """超过 MAX_TOOL_CALLS_PER_RESPONSE 的工具调用应返回错误消息。"""
+def test_tool_call_limit_read_only_dispatches_only_prefix():
+    """超过 MAX_TOOL_CALLS_PER_RESPONSE 的只读工具只执行前缀，不再绕过 loop 限额。"""
     from nz_coder import config
     from nz_coder.loop import AgentLoop
 
@@ -320,7 +320,6 @@ def test_tool_call_limit():
     old_limit = config.MAX_TOOL_CALLS_PER_RESPONSE
     config.MAX_TOOL_CALLS_PER_RESPONSE = 2
     try:
-        # 构造 3 个工具调用，第 3 个超出限制
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall("bash", {"command": "echo a"}, call_id="c1"),
@@ -334,9 +333,41 @@ def test_tool_call_limit():
         agent.run(messages, stream=False)
 
         tool_msgs = [m for m in messages if m.get("role") == "tool"]
-        # 第 3 个应包含 "Too many tool calls" 错误
-        assert len(tool_msgs) == 3
-        assert "Too many tool calls" in tool_msgs[2]["content"]
+        assert [m["tool_call_id"] for m in tool_msgs] == ["c1", "c2"]
+        assert all("Too many tool calls" not in m["content"] for m in tool_msgs)
+        assert agent.tool_calls_this_run == 2
+    finally:
+        config.MAX_TOOL_CALLS_PER_RESPONSE = old_limit
+        _restore_workdir(old, tmp)
+
+
+def test_tool_call_limit_write_dispatches_only_prefix():
+    """写工具批次也只能执行前缀，不能在串行分支绕过上限。"""
+    from nz_coder import config
+    from nz_coder.loop import AgentLoop
+
+    old, tmp = _tmp_workdir()
+    old_limit = config.MAX_TOOL_CALLS_PER_RESPONSE
+    config.MAX_TOOL_CALLS_PER_RESPONSE = 2
+    try:
+        fake = FakeClient([
+            FakeResponse(FakeMessage(tool_calls=[
+                FakeToolCall("write_file", {"path": "a.py", "content": "a = 1\n"}, call_id="c1"),
+                FakeToolCall("write_file", {"path": "b.py", "content": "b = 1\n"}, call_id="c2"),
+                FakeToolCall("write_file", {"path": "c.py", "content": "c = 1\n"}, call_id="c3"),
+            ])),
+            FakeResponse(FakeMessage("done")),
+        ])
+        messages = [{"role": "user", "content": "write files"}]
+        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
+        agent.run(messages, stream=False)
+
+        assert (tmp / "a.py").exists()
+        assert (tmp / "b.py").exists()
+        assert not (tmp / "c.py").exists()
+        tool_msgs = [m for m in messages if m.get("role") == "tool"]
+        assert [m["tool_call_id"] for m in tool_msgs] == ["c1", "c2"]
+        assert agent.tool_calls_this_run == 2
     finally:
         config.MAX_TOOL_CALLS_PER_RESPONSE = old_limit
         _restore_workdir(old, tmp)
