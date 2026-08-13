@@ -126,6 +126,22 @@ def _wait_for_pending(fetch):
     raise AssertionError("interaction request did not become pending")
 
 
+def _next_product_event(stream):
+    """Read the next journaled event while ignoring transport heartbeats."""
+    event = next(stream)
+    while event["type"] == "server.heartbeat":
+        event = next(stream)
+    return event
+
+
+def _product_events_through(stream, terminal_type: str) -> list[dict]:
+    """Collect journaled events through one terminal event type."""
+    events = []
+    while terminal_type not in [event["type"] for event in events]:
+        events.append(_next_product_event(stream))
+    return events
+
+
 @pytest.fixture
 def local_service(tmp_path):
     with scoped_workdir(tmp_path):
@@ -542,8 +558,9 @@ def test_run_continues_after_first_remote_client_detaches(local_service):
     session_id = first.create_session("auto")["id"]
     stream = first.events(session_id, replay=0)
     assert next(stream)["type"] == "server.connected"
+    time.sleep(local_service.heartbeat_seconds * 2)
     first.run(session_id, "hello after detach")
-    assert next(stream)["type"] == "session.run.started"
+    assert _next_product_event(stream)["type"] == "session.run.started"
     stream.close()
 
     second = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
@@ -1611,18 +1628,13 @@ def test_two_attached_clients_receive_same_events_and_one_permission_effect(loca
     assert next(first_events)["type"] == "server.connected"
     assert next(second_events)["type"] == "server.connected"
 
+    time.sleep(local_service.heartbeat_seconds * 2)
     first.run(session_id, "permission")
     try:
-        def next_product_event(stream):
-            event = next(stream)
-            while event["type"] == "server.heartbeat":
-                event = next(stream)
-            return event
-
-        first_started = next_product_event(first_events)
-        first_asked = next_product_event(first_events)
-        second_started = next_product_event(second_events)
-        second_asked = next_product_event(second_events)
+        first_started = _next_product_event(first_events)
+        first_asked = _next_product_event(first_events)
+        second_started = _next_product_event(second_events)
+        second_asked = _next_product_event(second_events)
         assert first_started["meta"]["event_id"] == second_started["meta"]["event_id"]
         assert first_asked["type"] == second_asked["type"] == "permission.asked"
         assert first_asked["meta"]["event_id"] == second_asked["meta"]["event_id"]
@@ -1633,12 +1645,8 @@ def test_two_attached_clients_receive_same_events_and_one_permission_effect(loca
             second.reply_permission(session_id, request_id, "reject")
         assert already_resolved.value.code == "interaction_not_found"
 
-        first_tail = []
-        second_tail = []
-        while "session.run.settled" not in [event["type"] for event in first_tail]:
-            first_tail.append(next(first_events))
-        while "session.run.settled" not in [event["type"] for event in second_tail]:
-            second_tail.append(next(second_events))
+        first_tail = _product_events_through(first_events, "session.run.settled")
+        second_tail = _product_events_through(second_events, "session.run.settled")
         assert [event["meta"]["event_id"] for event in first_tail] == [
             event["meta"]["event_id"] for event in second_tail
         ]
