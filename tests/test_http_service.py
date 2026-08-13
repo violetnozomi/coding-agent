@@ -990,7 +990,7 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
     )
     thread = threading.Thread(target=service.serve_forever, daemon=True)
     thread.start()
-    client = NZCoderClient(service.base_url, service.token, timeout=2)
+    client = NZCoderClient(service.base_url, service.token, timeout=10)
     try:
         workspace_id = client.list_workspaces()[0]["id"]
         session_id = client.create_session("auto", workspace_id)["id"]

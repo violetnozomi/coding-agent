@@ -74,14 +74,15 @@ def test_conpty_adapter_start_read_write_resize_and_ctrl_c(tmp_path: Path):
 
     assert isinstance(backend, ConPtyBackend)
     assert backend.tty is True
-    assert _FakeFactory.spawned[0] == [
+    assert _FakeFactory.spawned[0][:5] == [
         r"C:\PowerShell\pwsh.exe",
         "-NoLogo",
         "-NoProfile",
         "-NonInteractive",
         "-Command",
-        "python -i",
     ]
+    assert "python -i" in _FakeFactory.spawned[0][-1]
+    assert "exit $global:LASTEXITCODE" in _FakeFactory.spawned[0][-1]
     assert _FakeFactory.spawned[1]["dimensions"] == (24, 80)
     assert backend.read_bytes(1024) == b"READY\r\n"
     backend.write_bytes("中文\n".encode())
@@ -99,7 +100,11 @@ def test_conpty_adapter_start_read_write_resize_and_ctrl_c(tmp_path: Path):
 
 def test_conpty_answers_terminal_device_queries_before_next_read():
     process = _FakePtyProcess()
-    process.reads = ["\x1b[c\x1b[?1004h\x1b[?9001h", "READY"]
+    process.reads = [
+        "\x1b[c\x1b[?1004h\x1b[?9001h",
+        "\x1b]0;Administrator: PowerShell\x1b\\",
+        "READY",
+    ]
     backend = ConPtyBackend(process, rows=24, cols=80)
 
     assert backend.read_bytes(1024) == b"READY"

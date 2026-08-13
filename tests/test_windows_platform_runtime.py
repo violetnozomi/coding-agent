@@ -22,10 +22,13 @@ def test_windows_shell_prefers_pwsh_then_windows_powershell_then_cmd():
     cmd = select_shell(os_name="nt", which=_which({"cmd.exe": r"C:\Windows\cmd.exe"}))
 
     assert pwsh.kind is ShellKind.POWERSHELL
-    assert pwsh.argv("git status") == (
+    pwsh_argv = pwsh.argv("git status")
+    assert pwsh_argv[:5] == (
         r"C:\Program Files\PowerShell\pwsh.exe",
-        "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "git status",
+        "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
     )
+    assert "git status" in pwsh_argv[-1]
+    assert "exit $global:LASTEXITCODE" in pwsh_argv[-1]
     assert powershell.kind is ShellKind.POWERSHELL
     assert cmd.kind is ShellKind.CMD
     assert cmd.argv("python -m pytest") == (
@@ -38,9 +41,19 @@ def test_powershell_invokes_a_quoted_executable_with_call_operator():
 
     shell = ShellSpec(ShellKind.POWERSHELL, r"C:\Program Files\PowerShell\pwsh.exe")
 
-    assert shell.argv(r'"C:\Program Files\Python\python.exe" -u -i')[-1] == (
-        r'& "C:\Program Files\Python\python.exe" -u -i'
-    )
+    command = shell.argv(r'"C:\Program Files\Python\python.exe" -u -i')[-1]
+    assert r'& "C:\Program Files\Python\python.exe" -u -i' in command
+    assert "exit $global:LASTEXITCODE" in command
+
+
+def test_powershell_propagates_native_command_exit_status():
+    from nz_coder.runtime.platform_runtime import ShellKind, ShellSpec
+
+    shell = ShellSpec(ShellKind.POWERSHELL, "pwsh.exe")
+
+    command = shell.argv("python crash.py")[-1]
+    assert command.startswith("$global:LASTEXITCODE = 0; python crash.py;")
+    assert "if ($global:LASTEXITCODE -ne 0)" in command
 
 
 def test_posix_shell_is_explicit_bash_or_sh_argv():

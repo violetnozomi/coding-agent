@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import nturl2path
 import os
 import queue
 import subprocess
@@ -9,8 +10,8 @@ import threading
 from collections import deque
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
-from urllib.request import pathname2url
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 from nz_coder import config
 from nz_coder.runtime.platform_runtime import executable_argv, terminate_process_tree
@@ -34,15 +35,21 @@ class LSPResponseError(LSPError):
 
 def path_to_uri(path: Path) -> str:
     """Convert an absolute path to a standards-compliant file URI."""
-    return "file://" + pathname2url(str(path.resolve()))
+    return path.resolve().as_uri()
 
 
-def uri_to_path(uri: str) -> Path | None:
+def uri_to_path(uri: str, *, os_name: str | None = None) -> Path | None:
     """Convert a file URI to a local path."""
     parsed = urlparse(uri)
     if parsed.scheme != "file" or parsed.netloc not in ("", "localhost"):
         return None
-    return Path(unquote(parsed.path))
+    selected_os = os.name if os_name is None else os_name
+    value = (
+        nturl2path.url2pathname(parsed.path)
+        if selected_os == "nt"
+        else url2pathname(parsed.path)
+    )
+    return Path(value)
 
 
 class LSPClient:

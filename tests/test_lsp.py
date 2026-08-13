@@ -167,6 +167,15 @@ def test_windows_lsp_override_preserves_backslashes_and_quoted_paths():
     )
 
 
+def test_windows_file_uri_roundtrip_removes_uri_drive_prefix():
+    from nz_coder.lsp.client import uri_to_path
+
+    assert uri_to_path(
+        "file:///C:/Users/Runner%20Admin/repo/app.py",
+        os_name="nt",
+    ) == Path(r"C:\Users\Runner Admin\repo\app.py")
+
+
 def _write_fake_server(tmp_path):
     path = tmp_path / "fake_lsp.py"
     path.write_text(textwrap.dedent(_FAKE_SERVER), encoding="utf-8")

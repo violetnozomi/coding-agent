@@ -8,6 +8,7 @@ from __future__ import annotations
 import errno
 import os
 from pathlib import Path
+import re
 import struct
 import subprocess
 import time
@@ -212,12 +213,20 @@ class ConPtyBackend:
         visible = combined
         for sequence in self._HEADLESS_HOST_SEQUENCES:
             visible = visible.replace(sequence, "")
+        # PowerShell emits OSC window-title frames when hosted by ConPTY. They
+        # are terminal metadata, not process output for the Agent transcript.
+        visible = re.sub(r"\x1b\][^\x07]*(?:\x07|\x1b\\)", "", visible)
+        osc_start = visible.rfind("\x1b]")
+        if osc_start >= 0:
+            self._terminal_control_tail = visible[osc_start:]
+            visible = visible[:osc_start]
+        else:
+            self._terminal_control_tail = ""
         prefixes = {
             sequence[:length]
             for sequence in self._HEADLESS_HOST_SEQUENCES
             for length in range(1, len(sequence))
         }
-        self._terminal_control_tail = ""
         for length in range(min(len(visible), 7), 0, -1):
             suffix = visible[-length:]
             if suffix in prefixes:

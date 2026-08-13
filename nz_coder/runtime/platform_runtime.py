@@ -44,6 +44,14 @@ class ShellSpec:
                     + "& "
                     + stripped
                 )
+            selected_command = (
+                "$global:LASTEXITCODE = 0; "
+                f"{selected_command}; "
+                "$nzCoderSuccess = $?; "
+                "if ($global:LASTEXITCODE -ne 0) { "
+                "exit $global:LASTEXITCODE }; "
+                "if (-not $nzCoderSuccess) { exit 1 }"
+            )
             return (
                 self.executable,
                 "-NoLogo",

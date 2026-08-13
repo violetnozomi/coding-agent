@@ -350,9 +350,13 @@ def test_service_close_kills_spawned_descendant_process_group(tmp_path):
         status_path = Path(f"/proc/{child_pid}/status")
         if not status_path.exists():
             break
+        try:
+            status_text = status_path.read_text(errors="replace")
+        except FileNotFoundError:
+            break
         state = next(
             (
-                line for line in status_path.read_text(errors="replace").splitlines()
+                line for line in status_text.splitlines()
                 if line.startswith("State:")
             ),
             "",
@@ -384,11 +388,12 @@ def test_naturally_exited_shell_sweeps_daemonized_child(tmp_path):
             status_path = Path(f"/proc/{child_pid}/status")
             if not status_path.exists():
                 break
+            try:
+                status_text = status_path.read_text(errors="replace")
+            except FileNotFoundError:
+                break
             state = next(
-                (
-                    line for line in status_path.read_text(errors="replace").splitlines()
-                    if line.startswith("State:")
-                ),
+                (line for line in status_text.splitlines() if line.startswith("State:")),
                 "",
             )
             if "Z (zombie)" in state:
