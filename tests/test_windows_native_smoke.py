@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -190,10 +191,19 @@ def test_persistent_process_and_conpty_repl_and_ctrl_c(tmp_path):
             owner_session_id="windows", tty=True,
         )
         service.write(handle.process_id, "print('READY-中文')\n", owner_session_id="windows")
-        output = service.read(
-            handle.process_id, owner_session_id="windows", cursor=0, wait_seconds=3,
-        )
-        assert "READY-中文" in output.output
+        cursor = 0
+        observed = ""
+        deadline = time.monotonic() + 3
+        while "READY-中文" not in observed and time.monotonic() < deadline:
+            output = service.read(
+                handle.process_id,
+                owner_session_id="windows",
+                cursor=cursor,
+                wait_seconds=min(0.5, max(0.0, deadline - time.monotonic())),
+            )
+            observed += output.output
+            cursor = output.next_cursor
+        assert "READY-中文" in observed
         service.write(handle.process_id, "\x03", owner_session_id="windows")
         assert service.get(handle.process_id, owner_session_id="windows").tty is True
     finally:

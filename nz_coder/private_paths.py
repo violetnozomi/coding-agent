@@ -399,7 +399,12 @@ def _private_dacl_sddl(sddl: str, current_sid: str) -> bool:
     if not entries:
         return False
     system = {"SY", "S-1-5-18"}
-    allowed = {current} | system
+    current_trustees = {current}
+    if current.endswith("-500"):
+        # Windows renders the well-known local Administrator RID as ``LA``
+        # even when the equivalent numeric SID was supplied to the DACL.
+        current_trustees.add("LA")
+    allowed = current_trustees | system
     if any(trustee not in allowed for _kind, _rights, trustee in entries):
         return False
     full_allow = {
@@ -407,7 +412,7 @@ def _private_dacl_sddl(sddl: str, current_sid: str) -> bool:
         for kind, rights, trustee in entries
         if kind == "A" and rights in {"FA", "GA"}
     }
-    return current in full_allow and bool(full_allow & system)
+    return bool(full_allow & current_trustees) and bool(full_allow & system)
 
 
 __all__ = [

@@ -137,6 +137,19 @@ def test_windows_dacl_parser_requires_protected_full_control_for_user_and_system
     ) is False
 
 
+def test_windows_dacl_parser_accepts_local_administrator_alias_only_for_rid_500():
+    from nz_coder.private_paths import _private_dacl_sddl
+
+    assert _private_dacl_sddl(
+        "D:PAI(A;;FA;;;SY)(A;;FA;;;LA)",
+        "S-1-5-21-100-200-300-500",
+    ) is True
+    assert _private_dacl_sddl(
+        "D:PAI(A;;FA;;;SY)(A;;FA;;;LA)",
+        "S-1-5-21-100-200-300-1001",
+    ) is False
+
+
 def test_windows_private_path_failure_reports_redacted_observed_dacl(tmp_path: Path):
     from nz_coder.private_paths import inspect_private_path
 
