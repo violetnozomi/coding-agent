@@ -189,16 +189,19 @@ class ConPtyBackend:
         )
 
     def read_bytes(self, size: int) -> bytes:
-        try:
-            value = self.process.read(size)
-        except EOFError:
-            return b""
-        text = (
-            value.decode("utf-8", errors="replace")
-            if isinstance(value, bytes)
-            else str(value)
-        )
-        return self._consume_terminal_controls(text).encode("utf-8")
+        while True:
+            try:
+                value = self.process.read(size)
+            except EOFError:
+                return b""
+            text = (
+                value.decode("utf-8", errors="replace")
+                if isinstance(value, bytes)
+                else str(value)
+            )
+            visible = self._consume_terminal_controls(text)
+            if visible:
+                return visible.encode("utf-8")
 
     def _consume_terminal_controls(self, value: str) -> str:
         """Answer and hide the VT startup handshake owned by a headless host."""
