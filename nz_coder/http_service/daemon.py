@@ -616,27 +616,60 @@ def _process_identity(pid: int) -> str:
         except (OSError, subprocess.SubprocessError):
             pass
     else:
-        # PowerShell is available on supported Windows installations and gives
-        # us a stable creation-time fence without adding psutil as a core
-        # dependency.  An empty marker remains fail-closed for stop/status.
-        try:
-            value = subprocess.check_output(
-                [
-                    "powershell",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-Command",
-                    f"(Get-Process -Id {int(pid)}).StartTime.ToFileTimeUtc()",
-                ],
-                text=True,
-                stderr=subprocess.DEVNULL,
-                timeout=1,
-            ).strip()
-            if value:
-                return f"windows:{pid}:{value}"
-        except (OSError, subprocess.SubprocessError):
-            pass
+        value = _windows_process_start_time(pid)
+        if value:
+            return f"windows:{pid}:{value}"
     return ""
+
+
+def _windows_process_start_time(pid: int, *, kernel32=None) -> str:
+    """Read one Windows process creation time without spawning a shell."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        selected_kernel = kernel32 or ctypes.WinDLL("kernel32", use_last_error=True)
+        if kernel32 is None:
+            selected_kernel.OpenProcess.argtypes = [
+                wintypes.DWORD,
+                wintypes.BOOL,
+                wintypes.DWORD,
+            ]
+            selected_kernel.OpenProcess.restype = wintypes.HANDLE
+            selected_kernel.GetProcessTimes.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(wintypes.FILETIME),
+                ctypes.POINTER(wintypes.FILETIME),
+                ctypes.POINTER(wintypes.FILETIME),
+                ctypes.POINTER(wintypes.FILETIME),
+            ]
+            selected_kernel.GetProcessTimes.restype = wintypes.BOOL
+            selected_kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+            selected_kernel.CloseHandle.restype = wintypes.BOOL
+        handle = selected_kernel.OpenProcess(0x1000, False, int(pid))
+        if not handle:
+            return ""
+        try:
+            creation = wintypes.FILETIME()
+            exit_time = wintypes.FILETIME()
+            kernel_time = wintypes.FILETIME()
+            user_time = wintypes.FILETIME()
+            if not selected_kernel.GetProcessTimes(
+                handle,
+                ctypes.byref(creation),
+                ctypes.byref(exit_time),
+                ctypes.byref(kernel_time),
+                ctypes.byref(user_time),
+            ):
+                return ""
+            value = (int(creation.dwHighDateTime) << 32) | int(
+                creation.dwLowDateTime
+            )
+            return str(value) if value else ""
+        finally:
+            selected_kernel.CloseHandle(handle)
+    except (AttributeError, OSError, TypeError, ValueError):
+        return ""
 
 
 def _wait_for_process_identity(pid: int) -> str:

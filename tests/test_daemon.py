@@ -21,6 +21,35 @@ from nz_coder.runtime.workdir import scoped_workdir
 from nz_coder.sessions import save_session
 
 
+def test_windows_process_identity_uses_native_creation_time_without_shell():
+    from nz_coder.http_service.daemon import _windows_process_start_time
+
+    class Kernel32:
+        def __init__(self):
+            self.closed = []
+
+        def OpenProcess(self, access, inherit, pid):
+            assert (access, inherit, pid) == (0x1000, False, 4242)
+            return 73
+
+        def GetProcessTimes(self, handle, creation, exit_time, kernel, user):
+            assert handle == 73
+            creation._obj.dwHighDateTime = 0x12345678
+            creation._obj.dwLowDateTime = 0x9ABCDEF0
+            return 1
+
+        def CloseHandle(self, handle):
+            self.closed.append(handle)
+            return 1
+
+    kernel32 = Kernel32()
+
+    marker = _windows_process_start_time(4242, kernel32=kernel32)
+
+    assert marker == str((0x12345678 << 32) | 0x9ABCDEF0)
+    assert kernel32.closed == [73]
+
+
 def test_daemon_private_writer_hardens_directory_and_final_file(tmp_path, monkeypatch):
     """Removing either final-path hardening call would leave Windows inheritance."""
     import nz_coder.http_service.daemon as daemon

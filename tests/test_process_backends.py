@@ -74,7 +74,14 @@ def test_conpty_adapter_start_read_write_resize_and_ctrl_c(tmp_path: Path):
 
     assert isinstance(backend, ConPtyBackend)
     assert backend.tty is True
-    assert "pwsh.exe" in _FakeFactory.spawned[0]
+    assert _FakeFactory.spawned[0] == [
+        r"C:\PowerShell\pwsh.exe",
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "python -i",
+    ]
     assert _FakeFactory.spawned[1]["dimensions"] == (24, 80)
     assert backend.read_bytes(1024) == b"READY\r\n"
     backend.write_bytes("中文\n".encode())

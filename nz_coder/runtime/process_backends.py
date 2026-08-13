@@ -261,9 +261,8 @@ def create_process_backend(
             except ImportError:
                 module = False
         if module:
-            command_line = subprocess.list2cmdline(list(argv))
             process = module.PtyProcess.spawn(
-                command_line,
+                list(argv),
                 cwd=str(cwd),
                 env=env,
                 dimensions=(selected_rows, selected_cols),

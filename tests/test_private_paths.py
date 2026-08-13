@@ -135,3 +135,23 @@ def test_windows_dacl_parser_requires_protected_full_control_for_user_and_system
         f"D:(A;;FA;;;SY)(A;;FA;;;{current})",
         current,
     ) is False
+
+
+def test_windows_private_path_failure_reports_redacted_observed_dacl(tmp_path: Path):
+    from nz_coder.private_paths import inspect_private_path
+
+    class ObservedACL(_FakeWindowsACL):
+        observed_sddl = "D:PAI(A;;FA;;;SY)(A;;0x1200A9;;;S-1-5-21-123-456-789-1001)"
+
+        def inspect(self, path: Path) -> bool:
+            return False
+
+    token = tmp_path / "daemon.token"
+    token.write_text("secret", encoding="utf-8")
+
+    result = inspect_private_path(token, os_name="nt", windows_api=ObservedACL())
+
+    assert "D:PAI" in result.detail
+    assert "0x1200A9" in result.detail
+    assert "S-1-5-21-123-456-789-1001" not in result.detail
+    assert "<SID>" in result.detail

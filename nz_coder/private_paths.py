@@ -100,7 +100,7 @@ def inspect_private_path(
         "A" if private else "B",
         "protected current-user-and-SYSTEM DACL"
         if private
-        else "path does not have the protected current-user-and-SYSTEM DACL",
+        else _windows_dacl_failure_detail(api),
     )
 
 
@@ -126,6 +126,15 @@ def _bounded_error(error: BaseException) -> str:
     return value[:240]
 
 
+def _windows_dacl_failure_detail(api: Any) -> str:
+    detail = "path does not have the protected current-user-and-SYSTEM DACL"
+    observed = str(getattr(api, "observed_sddl", "") or "").strip()
+    if not observed:
+        return detail
+    redacted = re.sub(r"S-\d+(?:-\d+)+", "<SID>", observed, flags=re.IGNORECASE)
+    return f"{detail}; observed={redacted[:160]}"
+
+
 class _WindowsPrivateACL:
     """Lazy ctypes adapter for protected Windows file DACLs."""
 
@@ -142,6 +151,7 @@ class _WindowsPrivateACL:
         self.wintypes = wintypes
         self.advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
         self.kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self.observed_sddl = ""
         self._configure()
 
     def is_available(self) -> bool:
@@ -240,6 +250,7 @@ class _WindowsPrivateACL:
                 raise ctypes.WinError(ctypes.get_last_error())
             try:
                 sddl = str(rendered.value or "")
+                self.observed_sddl = sddl
             finally:
                 self.kernel32.LocalFree(ctypes.cast(rendered, ctypes.c_void_p))
         finally:
