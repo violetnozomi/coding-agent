@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import subprocess
 import time
 import pytest
 
@@ -48,6 +49,26 @@ def test_windows_process_identity_uses_native_creation_time_without_shell():
 
     assert marker == str((0x12345678 << 32) | 0x9ABCDEF0)
     assert kernel32.closed == [73]
+
+
+def test_windows_terminate_pid_uses_identity_scoped_taskkill(monkeypatch):
+    import nz_coder.http_service.daemon as daemon
+
+    alive = True
+    calls = []
+
+    def run(argv, **kwargs):
+        nonlocal alive
+        calls.append((argv, kwargs))
+        alive = False
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(daemon, "_pid_alive", lambda _pid: alive)
+
+    daemon._terminate_pid(4242, timeout=0.1, os_name="nt", runner=run)
+
+    assert calls[0][0] == ["taskkill", "/PID", "4242", "/T", "/F"]
+    assert calls[0][1]["shell"] is False
 
 
 def test_daemon_private_writer_hardens_directory_and_final_file(tmp_path, monkeypatch):

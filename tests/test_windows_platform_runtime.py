@@ -33,6 +33,16 @@ def test_windows_shell_prefers_pwsh_then_windows_powershell_then_cmd():
     )
 
 
+def test_powershell_invokes_a_quoted_executable_with_call_operator():
+    from nz_coder.runtime.platform_runtime import ShellKind, ShellSpec
+
+    shell = ShellSpec(ShellKind.POWERSHELL, r"C:\Program Files\PowerShell\pwsh.exe")
+
+    assert shell.argv(r'"C:\Program Files\Python\python.exe" -u -i')[-1] == (
+        r'& "C:\Program Files\Python\python.exe" -u -i'
+    )
+
+
 def test_posix_shell_is_explicit_bash_or_sh_argv():
     from nz_coder.runtime.platform_runtime import ShellKind, select_shell
 

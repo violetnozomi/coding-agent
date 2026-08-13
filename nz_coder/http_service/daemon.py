@@ -681,18 +681,40 @@ def _wait_for_process_identity(pid: int) -> str:
     raise RuntimeError("could not establish daemon process identity")
 
 
-def _terminate_pid(pid: int, *, timeout: float) -> None:
+def _terminate_pid(
+    pid: int,
+    *,
+    timeout: float,
+    os_name: str | None = None,
+    runner=subprocess.run,
+) -> None:
+    selected_os = os.name if os_name is None else os_name
+    if selected_os == "nt":
+        try:
+            completed = runner(
+                ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=max(1.0, float(timeout)),
+                check=False,
+                shell=False,
+            )
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            raise RuntimeError(f"failed to terminate daemon PID {pid}: {exc}") from exc
+        if completed.returncode != 0 and _pid_alive(pid):
+            raise RuntimeError(
+                f"failed to terminate daemon PID {pid}: taskkill exit {completed.returncode}"
+            )
+        return
     try:
-        if os.name == "nt":
-            os.kill(pid, signal.SIGTERM)
-        else:
-            os.kill(pid, signal.SIGTERM)
+        os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
         return
     deadline = time.monotonic() + max(0.1, timeout)
     while time.monotonic() < deadline and _pid_alive(pid):
         time.sleep(0.05)
-    if _pid_alive(pid) and os.name != "nt":
+    if _pid_alive(pid):
         try:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:

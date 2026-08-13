@@ -36,13 +36,21 @@ class ShellSpec:
 
     def argv(self, command: str) -> tuple[str, ...]:
         if self.kind is ShellKind.POWERSHELL:
+            selected_command = command
+            stripped = selected_command.lstrip()
+            if stripped.startswith(('"', "'")):
+                selected_command = (
+                    selected_command[: len(selected_command) - len(stripped)]
+                    + "& "
+                    + stripped
+                )
             return (
                 self.executable,
                 "-NoLogo",
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
-                command,
+                selected_command,
             )
         if self.kind is ShellKind.CMD:
             return (self.executable, "/d", "/s", "/c", command)
