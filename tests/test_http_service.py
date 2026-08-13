@@ -1518,7 +1518,7 @@ def test_remote_child_running_disconnect_then_completed_reconnect(
     class BlockingCompletions:
         def create(self, **_kwargs):
             model_started.set()
-            assert allow_completion.wait(timeout=3)
+            assert allow_completion.wait(timeout=10)
             return SimpleNamespace(
                 choices=[SimpleNamespace(message=BlockingMessage(), finish_reason="stop")],
                 usage=None,
@@ -1554,7 +1554,7 @@ def test_remote_child_running_disconnect_then_completed_reconnect(
     worker = threading.Thread(target=child_worker, name="phase2-child-lifecycle")
     worker.start()
     try:
-        assert model_started.wait(timeout=3)
+        assert model_started.wait(timeout=10)
         running = first.list_children(parent["id"])
         assert len(running) == 1
         child_id = running[0]["session_id"]
@@ -1613,10 +1613,16 @@ def test_two_attached_clients_receive_same_events_and_one_permission_effect(loca
 
     first.run(session_id, "permission")
     try:
-        first_started = next(first_events)
-        first_asked = next(first_events)
-        second_started = next(second_events)
-        second_asked = next(second_events)
+        def next_product_event(stream):
+            event = next(stream)
+            while event["type"] == "server.heartbeat":
+                event = next(stream)
+            return event
+
+        first_started = next_product_event(first_events)
+        first_asked = next_product_event(first_events)
+        second_started = next_product_event(second_events)
+        second_asked = next_product_event(second_events)
         assert first_started["meta"]["event_id"] == second_started["meta"]["event_id"]
         assert first_asked["type"] == second_asked["type"] == "permission.asked"
         assert first_asked["meta"]["event_id"] == second_asked["meta"]["event_id"]

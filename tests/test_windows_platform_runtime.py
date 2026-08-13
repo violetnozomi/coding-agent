@@ -148,6 +148,20 @@ def test_process_output_uses_native_windows_ansi_and_oem_candidates(monkeypatch)
     assert platform_runtime.decode_process_output(text.encode("cp932")) == text
 
 
+def test_explicit_utf8_does_not_guess_a_lossy_native_code_page(monkeypatch):
+    import nz_coder.runtime.platform_runtime as platform_runtime
+
+    monkeypatch.setattr(
+        platform_runtime,
+        "_windows_code_page_encodings",
+        lambda: ("cp437",),
+    )
+
+    assert platform_runtime.decode_process_output(
+        b"prefix\x81suffix", preferred_encoding="utf-8"
+    ) == "prefix\ufffdsuffix"
+
+
 def test_posix_workspace_containment_uses_resolved_path_boundary(tmp_path: Path):
     from nz_coder.runtime.platform_runtime import is_within_workspace
 

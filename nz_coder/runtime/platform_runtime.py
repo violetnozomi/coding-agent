@@ -119,9 +119,10 @@ def decode_process_output(data: bytes | str, *, preferred_encoding: str | None =
     encodings: list[str] = ["utf-8"]
     if preferred_encoding:
         encodings.append(preferred_encoding)
-    encodings.extend(_windows_code_page_encodings())
+    else:
+        encodings.extend(_windows_code_page_encodings())
     system_encoding = locale.getpreferredencoding(False)
-    if system_encoding:
+    if system_encoding and not preferred_encoding:
         encodings.append(system_encoding)
     tried: set[str] = set()
     for encoding in encodings:

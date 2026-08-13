@@ -159,6 +159,15 @@ class ConPtyBackend:
         "\x1b[5n": "\x1b[0n",
         "\x1b[6n": "\x1b[1;1R",
     }
+    _HEADLESS_HOST_SEQUENCES = (
+        "\x1b[1t",
+        "\x1b[c",
+        "\x1b[0c",
+        "\x1b[5n",
+        "\x1b[6n",
+        "\x1b[?1004h",
+        "\x1b[?9001h",
+    )
 
     def __init__(
         self,
@@ -172,7 +181,7 @@ class ConPtyBackend:
         self.pid = int(process.pid)
         self._windows_job = windows_job
         self._rows, self._cols = _size(rows, cols)
-        self._terminal_query_tail = ""
+        self._terminal_control_tail = ""
         self.lifecycle_mode = (
             "windows-job-object"
             if windows_job is not None
@@ -180,32 +189,39 @@ class ConPtyBackend:
         )
 
     def read_bytes(self, size: int) -> bytes:
-        value = self.process.read(size)
+        try:
+            value = self.process.read(size)
+        except EOFError:
+            return b""
         text = (
             value.decode("utf-8", errors="replace")
             if isinstance(value, bytes)
             else str(value)
         )
-        self._answer_terminal_queries(text)
-        return text.encode("utf-8")
+        return self._consume_terminal_controls(text).encode("utf-8")
 
-    def _answer_terminal_queries(self, value: str) -> None:
-        """Provide the small VT handshake a headless ConPTY host must own."""
-        combined = self._terminal_query_tail + value
+    def _consume_terminal_controls(self, value: str) -> str:
+        """Answer and hide the VT startup handshake owned by a headless host."""
+        combined = self._terminal_control_tail + value
         for query, response in self._TERMINAL_QUERY_RESPONSES.items():
             for _ in range(combined.count(query)):
                 self.process.write(response)
+        visible = combined
+        for sequence in self._HEADLESS_HOST_SEQUENCES:
+            visible = visible.replace(sequence, "")
         prefixes = {
-            query[:length]
-            for query in self._TERMINAL_QUERY_RESPONSES
-            for length in range(1, len(query))
+            sequence[:length]
+            for sequence in self._HEADLESS_HOST_SEQUENCES
+            for length in range(1, len(sequence))
         }
-        self._terminal_query_tail = ""
-        for length in range(min(len(combined), 3), 0, -1):
-            suffix = combined[-length:]
+        self._terminal_control_tail = ""
+        for length in range(min(len(visible), 7), 0, -1):
+            suffix = visible[-length:]
             if suffix in prefixes:
-                self._terminal_query_tail = suffix
+                self._terminal_control_tail = suffix
+                visible = visible[:-length]
                 break
+        return visible
 
     def write_bytes(self, data: bytes) -> None:
         value = data.decode("utf-8", errors="replace")

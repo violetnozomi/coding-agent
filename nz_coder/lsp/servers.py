@@ -1,6 +1,7 @@
 """Discover installed language servers without downloading dependencies."""
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
 from dataclasses import dataclass
@@ -179,6 +180,20 @@ def _resolve_executable(command: tuple[str, ...], root: Path) -> tuple[str, ...]
     return (found, *expanded[1:])
 
 
+def _split_override(value: str, *, os_name: str | None = None) -> tuple[str, ...]:
+    """Split a configured command without destroying native Windows paths."""
+    selected_os = os.name if os_name is None else os_name
+    parts = shlex.split(value, posix=selected_os != "nt")
+    if selected_os == "nt":
+        parts = [
+            part[1:-1]
+            if len(part) >= 2 and part[0] == part[-1] and part[0] in {'"', "'"}
+            else part
+            for part in parts
+        ]
+    return tuple(parts)
+
+
 def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
     """Resolve the first installed server matching ``path``."""
     spec = _spec_for_path(path)
@@ -186,7 +201,7 @@ def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
         return None
     root = _find_root(path, workspace, spec.root_markers)
     override = config.get(f"NZ_LSP_{spec.language.upper()}_COMMAND", "").strip()
-    commands = (tuple(shlex.split(override)),) if override else spec.commands
+    commands = (_split_override(override),) if override else spec.commands
     for command in commands:
         if not command:
             continue

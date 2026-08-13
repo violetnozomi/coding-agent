@@ -154,6 +154,19 @@ while True:
 """
 
 
+def test_windows_lsp_override_preserves_backslashes_and_quoted_paths():
+    from nz_coder.lsp.servers import _split_override
+
+    assert _split_override(
+        r'"C:\Program Files\Python\python.exe" -u C:\repo\fake_server.py',
+        os_name="nt",
+    ) == (
+        r"C:\Program Files\Python\python.exe",
+        "-u",
+        r"C:\repo\fake_server.py",
+    )
+
+
 def _write_fake_server(tmp_path):
     path = tmp_path / "fake_lsp.py"
     path.write_text(textwrap.dedent(_FAKE_SERVER), encoding="utf-8")

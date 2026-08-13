@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import subprocess
 import sys
 import threading
 import time
@@ -21,7 +22,8 @@ from nz_coder.runtime.process_service import (
 
 
 def _python(script: Path, *args: str) -> str:
-    return " ".join([shlex.quote(sys.executable), "-u", shlex.quote(str(script)), *map(shlex.quote, args)])
+    argv = [sys.executable, "-u", str(script), *args]
+    return subprocess.list2cmdline(argv) if os.name == "nt" else shlex.join(argv)
 
 
 def _wait_status(

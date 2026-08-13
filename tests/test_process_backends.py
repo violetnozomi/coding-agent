@@ -99,12 +99,25 @@ def test_conpty_adapter_start_read_write_resize_and_ctrl_c(tmp_path: Path):
 
 def test_conpty_answers_terminal_device_queries_before_next_read():
     process = _FakePtyProcess()
-    process.reads = ["\x1b[c", "READY"]
+    process.reads = ["\x1b[c\x1b[?1004h\x1b[?9001h", "READY"]
     backend = ConPtyBackend(process, rows=24, cols=80)
 
-    assert backend.read_bytes(1024) == b"\x1b[c"
+    assert backend.read_bytes(1024) == b""
     assert process.writes == ["\x1b[?1;2c"]
     assert backend.read_bytes(1024) == b"READY"
+
+
+def test_conpty_closed_pty_is_a_normal_end_of_stream():
+    process = _FakePtyProcess()
+    process.reads = []
+
+    def closed(_size):
+        raise EOFError("Pty is closed")
+
+    process.read = closed
+    backend = ConPtyBackend(process)
+
+    assert backend.read_bytes(1024) == b""
 
 
 def test_windows_tty_falls_back_to_pipe_when_winpty_is_missing(tmp_path, monkeypatch):

@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import stat
 
+import pytest
+
 
 class _FakeWindowsACL:
     def __init__(self, *, available: bool = True, applies: bool = True) -> None:
@@ -25,6 +27,7 @@ class _FakeWindowsACL:
         return path.resolve() in self.private
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Windows filesystems do not expose POSIX modes")
 def test_posix_private_path_applies_owner_only_modes(tmp_path: Path):
     from nz_coder.private_paths import harden_private_path
 
