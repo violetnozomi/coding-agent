@@ -2,43 +2,88 @@
 from __future__ import annotations
 
 import difflib
+import html
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 from nz_coder import config
-from nz_coder.tools import register
+from nz_coder.attachments import (
+    MAX_IMAGE_BYTES,
+    make_image_attachment,
+    sniff_image_mime,
+)
+from nz_coder.runtime.workdir import current_workdir
+from nz_coder.documents import (
+    DOCX_MIME,
+    PDF_MIME,
+    detect_document_mime,
+    read_document_file,
+)
+from nz_coder.sessions import active_session_id
+from nz_coder.tools import ToolOutput, current_tool_cancel_event, register
+from nz_coder.tools.read_support import (
+    DEFAULT_READ_LIMIT,
+    MAX_READ_BYTES,
+    SAMPLE_BYTES,
+    directory_entries,
+    is_binary_file,
+    missing_path_message,
+    read_text_lines,
+    warm_lsp,
+)
 from nz_coder.workspace import git_file_status
 
-# Lazy import to avoid circular dependency at module load time
-_txn_manager = None
-_change_tracker = None
+# Context-local bindings avoid cross-talk between concurrent agent runs.
+_txn_manager: ContextVar[object | None] = ContextVar(
+    "nz_coder_file_txn_manager", default=None,
+)
+_change_tracker: ContextVar[object | None] = ContextVar(
+    "nz_coder_file_change_tracker", default=None,
+)
 
 
 def _get_txn():
-    global _txn_manager
-    return _txn_manager
+    return _txn_manager.get()
 
 
 def set_txn_manager(txn):
-    """Called by AgentLoop to inject the transaction manager."""
-    global _txn_manager
-    _txn_manager = txn
+    """Bind the transaction manager to the current execution context."""
+    _txn_manager.set(txn)
 
 
 def set_change_tracker(tracker):
-    """Called by AgentLoop to inject the change tracker."""
-    global _change_tracker
-    _change_tracker = tracker
+    """Bind the change tracker to the current execution context."""
+    _change_tracker.set(tracker)
 
 
 def _get_change_tracker():
-    global _change_tracker
-    return _change_tracker
+    return _change_tracker.get()
+
+
+@contextmanager
+def bind_tool_state(txn=None, change_tracker=None):
+    """Temporarily bind file-tool state to the current execution context."""
+    txn_token = None
+    tracker_token = None
+    if txn is not None:
+        txn_token = _txn_manager.set(txn)
+    if change_tracker is not None:
+        tracker_token = _change_tracker.set(change_tracker)
+    try:
+        yield
+    finally:
+        if tracker_token is not None:
+            _change_tracker.reset(tracker_token)
+        if txn_token is not None:
+            _txn_manager.reset(txn_token)
 
 
 def _safe_path(p: str) -> Path:
-    path = (config.WORKDIR / p).resolve()
+    root = current_workdir()
+    path = (root / p).resolve()
     try:
-        path.relative_to(config.WORKDIR.resolve())
+        path.relative_to(root)
     except ValueError:
         raise ValueError(f"Path escapes workspace: {p}")
     return path
@@ -271,25 +316,172 @@ def _truncate_output(text: str, limit: int) -> str:
     )
 
 
-def read_file(path: str, offset: int = None, limit: int = None) -> str:
+def read_file(
+    path: str,
+    offset: int = None,
+    limit: int = None,
+    pages: str = None,
+) -> str:
     try:
         fp = _safe_path(path)
-        lines = fp.read_text(encoding="utf-8", errors="replace").splitlines()
-        total = len(lines)
-        start = (offset or 1) - 1
-        start = max(0, min(start, total))
-        if limit:
-            end = start + limit
+        if not fp.exists():
+            return f"Error: {missing_path_message(fp, path)}"
+        read_offset = _read_offset(offset)
+        read_limit = _read_limit(limit)
+        if fp.is_dir():
+            entries = directory_entries(fp)
+            start = read_offset - 1
+            selected = entries[start:start + read_limit]
+            truncated = start + len(selected) < len(entries)
+            suffix = (
+                f"\n(Showing {len(selected)} of {len(entries)} entries. Use 'offset' "
+                f"parameter to read beyond entry {read_offset + len(selected)})"
+                if truncated
+                else f"\n({len(entries)} entries)"
+            )
+            output = "\n".join([
+                f"<path>{html.escape(str(fp), quote=True)}</path>",
+                "<type>directory</type>",
+                "<entries>",
+                "\n".join(selected) + suffix,
+                "</entries>",
+            ])
+            return ToolOutput(
+                output,
+                title=f"Read {path}",
+                metadata={
+                    "preview": "\n".join(selected[:20]),
+                    "truncated": truncated,
+                    "loaded": [],
+                },
+            )
+        if not fp.is_file():
+            return f"Error: Path is not a regular file: {path}"
+        with fp.open("rb") as handle:
+            sample = handle.read(SAMPLE_BYTES)
+        image_mime = sniff_image_mime(sample)
+        if image_mime:
+            size = fp.stat().st_size
+            if size >= MAX_IMAGE_BYTES:
+                raise ValueError(
+                    f"Image size must be less than "
+                    f"{MAX_IMAGE_BYTES // 1024 // 1024} MB ({size} bytes)."
+                )
+            data = fp.read_bytes()
+            attachment = make_image_attachment(data, image_mime, filename=fp.name)
+            return ToolOutput(
+                "Image read successfully",
+                title=f"Read {fp.name}",
+                metadata={"preview": "Image read successfully", "truncated": False},
+                attachments=[attachment],
+            )
+        document_mime = detect_document_mime(fp)
+        if document_mime in {PDF_MIME, DOCX_MIME}:
+            result = read_document_file(
+                path,
+                workspace=current_workdir(),
+                session_id=active_session_id() or "default",
+                pages=pages,
+                offset=read_offset,
+                limit=read_limit,
+                cancel_event=current_tool_cancel_event(),
+            )
+            body = result.text
+            if result.status == "error":
+                body = f"Document read failed: {result.error}"
+            elif result.more:
+                first = read_offset
+                last = first + result.read_lines - 1
+                body += (
+                    f"\n\n(Showing lines {first}-{last} of {result.total_lines}. "
+                    f"Use offset={last + 1} to continue.)"
+                )
+            output = (
+                f'<document_read filename="{html.escape(fp.name, quote=True)}" '
+                f'path="{html.escape(path, quote=True)}">\n'
+                f"{body}\n"
+                "</document_read>"
+            )
+            return ToolOutput(
+                output,
+                title=f"Read {fp.name}",
+                metadata={
+                    "preview": result.text[:500],
+                    "truncated": result.more,
+                    "document_read": {
+                        "status": result.status,
+                        "error": result.error,
+                        "total_lines": result.total_lines,
+                        "read_lines": result.read_lines,
+                        "total_pages": result.total_pages,
+                        "read_pages": result.read_pages,
+                    },
+                },
+            )
+        if is_binary_file(fp, sample):
+            return f"Error: Cannot read binary file: {path}"
+        result = read_text_lines(fp, offset=read_offset, limit=read_limit)
+        if result.count < read_offset and not (
+            result.count == 0 and read_offset == 1
+        ):
+            return (
+                f"Error: Offset {read_offset} is out of range for this file "
+                f"({result.count} lines)"
+            )
+        output = "\n".join([
+            f"<path>{html.escape(str(fp), quote=True)}</path>",
+            "<type>file</type>",
+            "<content>",
+        ])
+        output += "\n" + "\n".join(
+            f"{index + read_offset}: {line}"
+            for index, line in enumerate(result.lines)
+        )
+        last = read_offset + len(result.lines) - 1
+        next_offset = last + 1
+        truncated = result.more or result.cut
+        if result.cut:
+            output += (
+                f"\n\n(Output capped at {MAX_READ_BYTES // 1024} KB. Showing lines "
+                f"{read_offset}-{last}. Use offset={next_offset} to continue.)"
+            )
+        elif result.more:
+            output += (
+                f"\n\n(Showing lines {read_offset}-{last} of {result.count}. "
+                f"Use offset={next_offset} to continue.)"
+            )
         else:
-            end = total
-        selected = lines[start:end]
-        header = f"[{fp.name}: lines {start+1}-{min(end, total)} of {total}]"
-        content = "\n".join(f"{start+1+i:4d} | {line}" for i, line in enumerate(selected))
-        if end < total:
-            content += f"\n... ({total - end} more lines)"
-        return f"{header}\n{content}"
+            output += f"\n\n(End of file - total {result.count} lines)"
+        output += "\n</content>"
+        warm_lsp(fp, current_workdir())
+        return ToolOutput(
+            output,
+            title=f"Read {path}",
+            metadata={
+                "preview": "\n".join(result.lines[:20]),
+                "truncated": truncated,
+                "loaded": [],
+                "encoding": result.encoding,
+            },
+        )
     except Exception as e:
         return f"Error: {e}"
+
+
+def _read_offset(value: int | None) -> int:
+    if value is None or value == 0:
+        return 1
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("offset must be a non-negative integer")
+    return value
+
+
+def _read_limit(value: int | None) -> int:
+    if value is None:
+        return DEFAULT_READ_LIMIT
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("limit must be a non-negative integer")
+    return value
 
 
 def write_file(path: str, content: str) -> str:
@@ -512,17 +704,29 @@ def _walk(base: Path, current: Path, lines: list, level: int, max_depth: int):
 # Register tools
 register(
     name="read_file",
-    description="Read file contents with line numbers. Use offset/limit to read specific portions of large files.",
+    description=(
+        "Read file contents with line numbers. Use offset/limit for large text "
+        "or converted PDF/DOCX files. PDF page ranges use pages=\"5\" or "
+        "pages=\"1-10\" with at most 20 pages per request."
+    ),
     parameters={
         "type": "object",
         "properties": {
             "path": {"type": "string", "description": "Relative path from workspace root."},
             "offset": {"type": "integer", "description": "Start line number (1-based). Default: 1."},
-            "limit": {"type": "integer", "description": "Number of lines to read. Default: all."},
+            "limit": {"type": "integer", "description": "Number of lines to read. Default: 2000."},
+            "pages": {
+                "type": "string",
+                "description": (
+                    'PDF page range, for example "5" or "1-10". '
+                    "Maximum 20 pages per request."
+                ),
+            },
         },
         "required": ["path"],
     },
     handler=read_file,
+    execution="read",
 )
 
 register(
@@ -537,6 +741,7 @@ register(
         "required": ["path", "content"],
     },
     handler=write_file,
+    execution="write",
 )
 
 
@@ -567,6 +772,7 @@ register(
         "required": ["files"],
     },
     handler=write_files_batch,
+    execution="write",
 )
 
 register(
@@ -582,6 +788,7 @@ register(
         "required": ["path", "old_text", "new_text"],
     },
     handler=edit_file,
+    execution="write",
 )
 
 register(
@@ -615,6 +822,7 @@ register(
         "required": ["changes"],
     },
     handler=apply_patch,
+    execution="write",
 )
 
 register(
@@ -634,6 +842,7 @@ register(
         "required": ["path", "start_line", "end_line", "new_text"],
     },
     handler=replace_lines,
+    execution="write",
 )
 
 register(
@@ -647,4 +856,5 @@ register(
         },
     },
     handler=list_directory,
+    execution="read",
 )

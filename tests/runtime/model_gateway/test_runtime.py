@@ -1,0 +1,135 @@
+"""Tests for resolved Provider/model runtime ownership."""
+from __future__ import annotations
+
+import asyncio
+
+from nz_coder.providers.capabilities import ModelCapabilities
+from nz_coder.providers.registry import ModelPricing, RegistryModel
+from nz_coder.runtime.model_gateway.runtime import (
+    ModelSelectionRequest,
+    resolve_model_runtime,
+)
+
+
+class _Client:
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+class _AsyncClient:
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    async def aclose(self) -> None:
+        self.close_calls += 1
+
+
+class _Provider:
+    name = "example"
+
+    def __init__(self, client=None) -> None:
+        self.client = client or _Client()
+        self.create_calls = 0
+
+    def create_client(self):
+        self.create_calls += 1
+        return self.client
+
+    def capabilities(self, model_id: str) -> ModelCapabilities:
+        return ModelCapabilities(
+            provider=self.name,
+            model_id=model_id,
+            context_tokens=321_000,
+        )
+
+
+def _registry(provider: str, model_id: str, workspace=None):
+    assert provider == "example"
+    assert model_id == "logical-model"
+    return RegistryModel(
+        provider=provider,
+        model_id=model_id,
+        name="Logical model",
+        release_date="",
+        api_model_id="wire-model-2026-08",
+        pricing=ModelPricing(input=1.0, output=2.0),
+    )
+
+
+def test_resolver_separates_logical_and_wire_identity() -> None:
+    provider = _Provider()
+    runtime = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            variant="high",
+            provider=provider,
+            client=provider.client,
+        ),
+        registry_resolver=_registry,
+    )
+
+    assert runtime.provider_id == "example"
+    assert runtime.model_id == "logical-model"
+    assert runtime.request_model_id == "wire-model-2026-08"
+    assert runtime.capabilities.context_tokens == 321_000
+    assert runtime.pricing == ModelPricing(input=1.0, output=2.0)
+    assert runtime.variant == "high"
+    assert runtime.owns_client is False
+
+
+def test_injected_client_is_never_closed_by_runtime() -> None:
+    client = _Client()
+    runtime = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=_Provider(client),
+            client=client,
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+
+    runtime.close()
+    runtime.close()
+
+    assert client.close_calls == 0
+
+
+def test_created_client_is_owned_and_closed_once() -> None:
+    provider = _Provider()
+    runtime = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=provider,
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+
+    runtime.close()
+    runtime.close()
+
+    assert provider.create_calls == 1
+    assert provider.client.close_calls == 1
+
+
+def test_async_created_client_is_closed_once() -> None:
+    client = _AsyncClient()
+    provider = _Provider(client)
+    runtime = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=provider,
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+
+    asyncio.run(runtime.aclose())
+    asyncio.run(runtime.aclose())
+
+    assert client.close_calls == 1

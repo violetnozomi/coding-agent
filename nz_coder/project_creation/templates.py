@@ -512,4 +512,5 @@ register(
         "required": ["project_name", "project_type"],
     },
     handler=scaffold_project,
+    execution="write",
 )

@@ -8,7 +8,7 @@ class _SleepingAgent:
     def __init__(self, *args, **kwargs):
         pass
 
-    def run(self, *args, **kwargs):
+    async def run(self, *args, **kwargs):
         time.sleep(5)
         return {"status": "completed"}
 
@@ -17,10 +17,41 @@ class _NoopAgent:
     def __init__(self, *args, **kwargs):
         pass
 
-    def run(self, messages, on_tool=None, stream=False):
+    async def run(self, messages, on_tool=None, stream=False):
         if on_tool:
             on_tool("bash", "ok")
         return {"status": "completed"}
+
+
+class _LargeToolOutputAgent:
+    """Exercise the real multiprocessing result channel above pipe capacity."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def run(self, messages, on_tool=None, stream=False):
+        if on_tool:
+            for index in range(24):
+                on_tool("read_file", f"event-{index}:" + ("x" * 3990))
+        return {"status": "completed", "events": 24}
+
+
+class _RaisingAgent:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def run(self, *args, **kwargs):
+        raise ValueError("child boom")
+
+
+class _AbruptExitAgent:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def run(self, *args, **kwargs):
+        import os
+
+        os._exit(7)
 
 
 # ── FailureFeedback / adapter / feedback formatting ───────────────────────────
@@ -309,7 +340,7 @@ def test_should_apply_previous_patch_without_structural_regression_risk():
 def test_previous_attempt_prompt_marks_unapplied_patch_as_anti_example():
     from nz_coder.swebench.adapter import SWEBenchAdapter
     from nz_coder.swebench.guardrail import PatchGuardrail
-    from nz_coder.swebench.models import FailureFeedback, RetryPlan
+    from nz_coder.swebench.models import RetryPlan
     from nz_coder.swebench.orchestrator import RetryOrchestrator
 
     previous_patch = (
@@ -786,6 +817,145 @@ def test_run_agent_attempt_replays_child_tool_events():
 
     assert status == {"status": "completed"}
     assert events == [("bash", "ok")]
+
+
+def test_run_agent_attempt_drains_large_child_result_before_joining():
+    """A completed child must not be timed out while its Queue feeder is blocked."""
+    from nz_coder.swebench.orchestrator import _run_agent_attempt
+
+    events = []
+    status = _run_agent_attempt(
+        _LargeToolOutputAgent,
+        "system",
+        None,
+        [{"role": "user", "content": "work"}],
+        lambda name, output: events.append((name, output)),
+        timeout=2,
+    )
+
+    assert status == {"status": "completed", "events": 24}
+    assert len(events) == 24
+    assert events[0][0] == "read_file"
+    assert events[-1][1].startswith("event-23:")
+
+
+def test_run_agent_attempt_surfaces_child_exception():
+    from nz_coder.swebench.orchestrator import _run_agent_attempt
+
+    try:
+        _run_agent_attempt(
+            _RaisingAgent,
+            "system",
+            None,
+            [{"role": "user", "content": "work"}],
+            lambda name, output: None,
+            timeout=2,
+        )
+    except RuntimeError as exc:
+        assert "ValueError('child boom')" in str(exc)
+    else:
+        raise AssertionError("expected child exception")
+
+
+def test_run_agent_attempt_reports_abrupt_child_exit():
+    from nz_coder.swebench.orchestrator import _run_agent_attempt
+
+    try:
+        _run_agent_attempt(
+            _AbruptExitAgent,
+            "system",
+            None,
+            [{"role": "user", "content": "work"}],
+            lambda name, output: None,
+            timeout=1,
+        )
+    except RuntimeError as exc:
+        assert "exitcode=7" in str(exc)
+    else:
+        raise AssertionError("expected abrupt child exit")
+
+
+def test_strict_policy_rejection_is_a_process_warning_not_patch_risk():
+    from nz_coder.swebench.orchestrator import (
+        _agent_status_risk_labels,
+        _classify_tool_log_status,
+    )
+
+    output = "Error: shell executable 'cd' is not allowed in SWE-bench strict mode"
+    status = _classify_tool_log_status(output)
+    labels = _agent_status_risk_labels(
+        {"status": "completed", "verification_needed": False},
+        [{"name": "bash", "status": status, "output": output}],
+    )
+
+    assert status == "policy_rejected"
+    assert labels == []
+
+
+def test_real_bash_dispatch_error_remains_patch_run_risk():
+    from nz_coder.swebench.orchestrator import (
+        _agent_status_risk_labels,
+        _classify_tool_log_status,
+    )
+
+    output = "Error: workdir escapes workspace"
+    status = _classify_tool_log_status(output)
+    labels = _agent_status_risk_labels(
+        {"status": "completed", "verification_needed": False},
+        [{"name": "bash", "status": status, "output": output}],
+    )
+
+    assert status == "error"
+    assert labels == ["tool_errors"]
+
+
+def test_recovered_write_error_from_older_generation_is_not_final_patch_risk():
+    from nz_coder.swebench.orchestrator import _agent_status_risk_labels
+
+    labels = _agent_status_risk_labels(
+        {
+            "status": "completed",
+            "verification_needed": False,
+            "runtime": {"mutation_generation": 1},
+        },
+        [
+            {"name": "apply_patch", "status": "error", "output": "Error: exact text missing", "generation": 0},
+            {"name": "apply_patch", "status": "ok", "output": "Done", "generation": 1},
+        ],
+    )
+
+    assert labels == []
+
+
+def test_recovered_write_error_is_preserved_as_bounded_process_warning():
+    """Catches hiding recovered execution trouble after removing final risk."""
+    from nz_coder.swebench.orchestrator import _agent_status_process_warnings
+
+    warnings = _agent_status_process_warnings(
+        {"runtime": {"mutation_generation": 2}},
+        [
+            {"name": "edit_file", "status": "error", "generation": 0},
+            {"name": "apply_patch", "status": "error", "generation": 1},
+            {"name": "edit_file", "status": "ok", "generation": 2},
+        ],
+    )
+
+    assert warnings == ["recovered_tool_errors:2"]
+
+
+def test_write_error_in_final_generation_remains_patch_run_risk():
+    from nz_coder.swebench.orchestrator import _agent_status_risk_labels
+
+    labels = _agent_status_risk_labels(
+        {
+            "status": "completed",
+            "verification_needed": False,
+            "runtime": {"mutation_generation": 1},
+        },
+        [{"name": "edit_file", "status": "error", "output": "Error: write failed", "generation": 1}],
+    )
+
+    assert labels == ["tool_errors"]
 
 
 def test_run_returns_completed_process_on_timeout(tmp_path, monkeypatch):

@@ -1,0 +1,270 @@
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import signal
+import time
+import pytest
+
+from io import StringIO
+
+from nz_coder.http_service.client import NZCoderClient, NZCoderHTTPError
+from nz_coder.http_service.daemon import (
+    daemon_main,
+    daemon_paths,
+    daemon_status,
+    start_daemon,
+    stop_daemon,
+)
+from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.sessions import save_session
+
+
+def test_daemon_private_writer_hardens_directory_and_final_file(tmp_path, monkeypatch):
+    """Removing either final-path hardening call would leave Windows inheritance."""
+    import nz_coder.http_service.daemon as daemon
+
+    hardened = []
+    monkeypatch.setattr(
+        daemon,
+        "harden_private_path",
+        lambda path: hardened.append(Path(path)),
+    )
+    target = tmp_path / "daemon" / "token"
+
+    daemon._atomic_private_text(target, "secret\n")
+
+    assert target.read_text(encoding="utf-8") == "secret\n"
+    assert target.parent in hardened
+    assert target in hardened
+
+
+def test_daemon_start_status_stop_owns_pid_and_private_token(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    state_root = tmp_path / "state"
+    state = start_daemon(
+        state_root=state_root,
+        port=0,
+        workspaces=[str(workspace)],
+        startup_timeout=20,
+    )
+    try:
+        assert state["running"] is True
+        assert state["endpoint"].startswith("http://127.0.0.1:")
+        assert state["pid"] > 0
+        assert state["nonce"]
+        assert daemon_status(state_root=state_root)["reason"] == "ready"
+        second = start_daemon(state_root=state_root, port=0)
+        assert second["already_running"] is True
+        assert second["pid"] == state["pid"]
+        assert second["nonce"] == state["nonce"]
+        token_path = Path(state["token_path"])
+        assert token_path.exists()
+        if os.name != "nt":
+            assert token_path.stat().st_mode & 0o077 == 0
+        else:
+            from nz_coder.private_paths import inspect_private_path
+
+            assert inspect_private_path(token_path).hardened is True
+            assert inspect_private_path(token_path.parent).hardened is True
+        log_text = Path(state["log_path"]).read_text(encoding="utf-8")
+        assert state["nonce"] not in log_text
+    finally:
+        result = stop_daemon(state_root=state_root)
+        assert result["stopped"] is True
+    assert daemon_status(state_root=state_root)["running"] is False
+    assert not Path(state["token_path"]).exists()
+    assert not Path(state["state"]).exists()
+
+
+def test_daemon_start_accepts_option_like_nonce(tmp_path: Path, monkeypatch):
+    """A generated nonce beginning with '-' must remain one argv value."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    state_root = tmp_path / "state"
+    values = iter([
+        "-nonce-that-used-to-confuse-argparse",
+        "token-long-enough-for-authentication",
+    ])
+    monkeypatch.setattr(
+        "nz_coder.http_service.daemon.secrets.token_urlsafe",
+        lambda _size: next(values),
+    )
+
+    state = start_daemon(
+        state_root=state_root,
+        port=0,
+        workspaces=[str(workspace)],
+        startup_timeout=20,
+    )
+    try:
+        assert state["running"] is True
+        assert state["nonce"] == "-nonce-that-used-to-confuse-argparse"
+    finally:
+        stop_daemon(state_root=state_root)
+
+
+def test_daemon_restart_preserves_workspace_sessions_and_rotates_token(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    state_root = tmp_path / "state"
+    completed_id = "daemon-completed"
+    with scoped_workdir(workspace):
+        save_session(
+            [
+                {"role": "user", "content": "done"},
+                {"role": "assistant", "content": "complete"},
+            ],
+            mode="default",
+            session_id=completed_id,
+            activate=False,
+            run_status="completed",
+            require_aliases=False,
+            title="Completed survivor",
+        )
+    state = start_daemon(
+        state_root=state_root,
+        port=0,
+        workspaces=[str(workspace)],
+        startup_timeout=20,
+    )
+    paths = daemon_paths(state_root=state_root)
+    old_token = paths.token.read_text(encoding="utf-8").strip()
+    old_client = NZCoderClient(state["endpoint"], old_token, timeout=2)
+    session = old_client.create_session("default")
+    old_client.rename_session(session["id"], "Restart survivor")
+    output = StringIO()
+    try:
+        assert daemon_main([
+            "restart",
+            "--state-root", str(state_root),
+            "--startup-timeout", "20",
+        ], output=output) == 0
+        restarted = daemon_status(state_root=state_root)
+        assert restarted["running"] is True
+        assert restarted["workspaces"] == [str(workspace)]
+        new_token = paths.token.read_text(encoding="utf-8").strip()
+        assert new_token != old_token
+        new_client = NZCoderClient(restarted["endpoint"], new_token, timeout=2)
+        restored = next(
+            item for item in new_client.list_sessions() if item["id"] == session["id"]
+        )
+        assert restored["title"] == "Restart survivor"
+        assert restored["status"] == "idle"
+        completed = next(
+            item for item in new_client.list_sessions() if item["id"] == completed_id
+        )
+        assert completed["title"] == "Completed survivor"
+        assert completed["status"] == "completed"
+        with pytest.raises(NZCoderHTTPError) as stale:
+            old_client.list_sessions()
+        assert stale.value.status == 401
+    finally:
+        stop_daemon(state_root=state_root)
+
+
+def test_daemon_start_marks_unsettled_persisted_run_interrupted(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    state_root = tmp_path / "state"
+    session_id = "daemon-interrupted"
+    with scoped_workdir(workspace):
+        path = save_session(
+            [{"role": "user", "content": "accepted before crash"}],
+            mode="default",
+            session_id=session_id,
+            activate=False,
+            run_status="running",
+            require_aliases=False,
+            title="Interrupted run",
+        )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["run_status"] == "running"
+
+    state = start_daemon(
+        state_root=state_root,
+        port=0,
+        workspaces=[str(workspace)],
+        startup_timeout=20,
+    )
+    try:
+        token = Path(state["token_path"]).read_text(encoding="utf-8").strip()
+        client = NZCoderClient(state["endpoint"], token, timeout=2)
+        restored = client.get_session(session_id)
+        assert restored["status"] == "interrupted"
+        assert restored["runtime_status"] == "interrupted"
+        assert restored["running"] is False
+        assert client.messages(session_id) == [
+            {"role": "user", "content": "accepted before crash"}
+        ]
+    finally:
+        stop_daemon(state_root=state_root)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="SIGKILL crash recovery is POSIX-specific")
+def test_daemon_forced_termination_restores_active_marker_as_interrupted(tmp_path: Path):
+    """A real daemon crash must not leave a durable Session claiming RUNNING."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    state_root = tmp_path / "state"
+    state = start_daemon(
+        state_root=state_root,
+        port=0,
+        workspaces=[str(workspace)],
+        startup_timeout=20,
+    )
+    restarted = None
+    try:
+        token = Path(state["token_path"]).read_text(encoding="utf-8").strip()
+        client = NZCoderClient(state["endpoint"], token, timeout=2)
+        workspace_id = next(
+            item["id"]
+            for item in client.list_workspaces()
+            if Path(item["path"]) == workspace
+        )
+        session = client.create_session("default", workspace_id)
+        with scoped_workdir(workspace):
+            save_session(
+                [{"role": "user", "content": "accepted before daemon crash"}],
+                mode="default",
+                session_id=session["id"],
+                activate=False,
+                run_status="running",
+                require_aliases=False,
+                title="Crash recovery",
+            )
+
+        live = daemon_status(state_root=state_root)
+        assert live["running"] is True
+        assert live["pid"] == state["pid"]
+        os.kill(state["pid"], signal.SIGKILL)
+        try:
+            os.waitpid(state["pid"], 0)
+        except ChildProcessError:
+            pass
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            crashed = daemon_status(state_root=state_root)
+            if not crashed.get("running"):
+                break
+            time.sleep(0.05)
+        assert crashed["running"] is False
+
+        restarted = start_daemon(
+            state_root=state_root,
+            port=0,
+            workspaces=[str(workspace)],
+            startup_timeout=20,
+        )
+        assert restarted["pid"] != state["pid"]
+        new_token = Path(restarted["token_path"]).read_text(encoding="utf-8").strip()
+        restored = NZCoderClient(restarted["endpoint"], new_token, timeout=2).get_session(
+            session["id"]
+        )
+        assert restored["status"] == "interrupted"
+        assert restored["runtime_status"] == "interrupted"
+        assert restored["running"] is False
+    finally:
+        stop_daemon(state_root=state_root)

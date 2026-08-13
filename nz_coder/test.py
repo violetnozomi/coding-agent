@@ -18,6 +18,6 @@ def solve():
     S = S / sum
     Y = np.dot(S ,V)
     sum = np.sum(Y)
-    result = int(np.round(sum))
+    _result = int(np.round(sum))
 if __name__ == '__main__':
     solve()

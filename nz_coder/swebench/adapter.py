@@ -21,9 +21,10 @@ import sys
 from pathlib import Path
 
 from nz_coder.swebench.models import FailureFeedback
+from nz_coder.swebench.profiles import DEFAULT_PROFILE, get_profile
 
 
-DATASET_NAME = "princeton-nlp/SWE-bench_Lite"
+DATASET_NAME = get_profile(DEFAULT_PROFILE).dataset
 
 
 class SWEBenchAdapter:
@@ -38,10 +39,13 @@ class SWEBenchAdapter:
     format_instance_prompt(instance) → str
     """
 
+    def __init__(self, profile: str = DEFAULT_PROFILE):
+        self.profile = get_profile(profile)
+
     # ── Environment / readiness ───────────────────────────────────────────────
 
     def check_environment(self) -> int:
-        """Print readiness checks for running SWE-bench Lite locally."""
+        """Print readiness checks for running SWE-bench locally."""
         rows = [
             self._check_python(),
             self._check_module("swebench"),
@@ -49,13 +53,13 @@ class SWEBenchAdapter:
             self._check_executable("git"),
             self._check_docker(),
         ]
-        print("# SWE-bench Lite readiness\n")
+        print("# SWE-bench readiness\n")
         for ok, name, detail in rows:
             status = "OK" if ok else "MISSING"
             print(f"- [{status}] {name}: {detail}")
 
         if all(ok for ok, _, _ in rows):
-            print("\nReady: local Docker-based SWE-bench Lite evaluation can be attempted.")
+            print("\nReady: local Docker-based SWE-bench evaluation can be attempted.")
             return 0
 
         print("\nNot ready: install the missing dependencies and make Docker daemon accessible before evaluation.")
@@ -97,7 +101,7 @@ class SWEBenchAdapter:
             "-m",
             "swebench.harness.run_evaluation",
             "--dataset_name",
-            DATASET_NAME,
+            get_profile(getattr(args, "profile", DEFAULT_PROFILE)).dataset,
             "--predictions_path",
             str(predictions_path),
             "--max_workers",
@@ -185,20 +189,16 @@ class SWEBenchAdapter:
 
     # ── Instance prompt ───────────────────────────────────────────────────────
 
-    @staticmethod
-    def format_instance_prompt(instance: dict) -> str:
+    def format_instance_prompt(self, instance: dict) -> str:
         """Build the initial user message for a SWE-bench instance."""
         parts = [
-            f"Solve SWE-bench Lite instance `{instance['instance_id']}`.",
+            f"Solve SWE-bench {self.profile.name.title()} instance `{instance['instance_id']}`.",
             f"Repository: {instance.get('repo')}",
             f"Base commit: {instance.get('base_commit')}",
             "",
             "Problem statement:",
             instance.get("problem_statement", "").strip(),
         ]
-        hints = (instance.get("hints_text") or "").strip()
-        if hints:
-            parts.extend(["", "Hints:", hints])
         parts.extend(["", "When finished, leave the repository with only the intended source-code changes."])
         return "\n".join(parts)
 

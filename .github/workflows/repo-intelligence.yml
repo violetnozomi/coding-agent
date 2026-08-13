@@ -1,0 +1,37 @@
+name: Repo Intelligence
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  parser-production-tier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Verify installed parser tiers
+        run: |
+          nz-coder doctor --repo-intelligence-only --json
+          python -m pytest -q \
+            tests/test_repo_intelligence_closure.py::test_production_registry_selects_tree_sitter_when_declared_wheels_exist \
+            tests/test_repo_intelligence_closure.py::test_typescript_namespace_and_alias_calls_resolve_by_import_identity \
+            tests/test_repo_intelligence_closure.py::test_javascript_require_and_dynamic_member_are_not_name_bound \
+            tests/test_repo_intelligence_closure.py::test_go_package_call_resolves_and_unknown_receiver_stays_unresolved
+
+  parser-fallback-tier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pip uninstall -y tree-sitter tree-sitter-typescript tree-sitter-javascript tree-sitter-go
+      - name: Verify honest lexical fallback
+        run: python -m pytest -q tests/test_repo_intelligence_closure.py::test_registry_honestly_reports_lexical_fallback_without_tree_sitter

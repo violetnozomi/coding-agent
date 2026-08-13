@@ -14,15 +14,35 @@ dependencies = [
     "rich>=13.0.0",
     "prompt_toolkit>=3.0.0",
     "pyyaml>=6.0",
+    "tree-sitter>=0.25,<0.27",
+    "tree-sitter-javascript>=0.23",
+    "tree-sitter-typescript>=0.23",
+    "tree-sitter-go>=0.25",
+    "watchfiles>=1,<2",
+    "pywinpty>=2.0.13; platform_system == 'Windows'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7,<9",
+    "ruff==0.15.10",
+]
+semantic-experiment = [
+    "sentence-transformers>=3,<6",
 ]
 
 [project.scripts]
-nz-coder = "nz_coder.cli:main"
-nz-swebench-lite = "nz_coder.swebench_lite:main"
-nz-aider-benchmark = "nz_coder.aider_benchmark:main"
+nz-coder = "nz_coder.interface.cli:main"
+nz-swebench-lite = "nz_coder.evaluation.swebench_lite:main"
+nz-swebench = "nz_coder.swebench.cli:main"
+nz-aider-benchmark = "nz_coder.evaluation.aider_benchmark:main"
+nz-provider-smoke = "nz_coder.evaluation.provider_smoke:main"
 
 [tool.setuptools.packages.find]
 include = ["nz_coder*"]
+
+[tool.setuptools.package-data]
+nz_coder = ["bundled_skills/*/SKILL.md", "bundled_commands/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

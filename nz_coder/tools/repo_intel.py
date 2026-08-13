@@ -1,5 +1,5 @@
 """Repository intelligence tools for SWE-bench: diff_status, verify_changed_files,
-read_symbol, smart_search.
+read_symbol, find_symbol_callers.
 
 These tools reduce exploration round-trips and verification noise — the two
 biggest sources of agent timeout in SWE-bench Lite.
@@ -15,7 +15,7 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
-from nz_coder import config
+from nz_coder.runtime.workdir import current_workdir
 from nz_coder.task_policy import (
     is_source_file,
     is_test_file as _policy_is_test_file,
@@ -48,7 +48,7 @@ STOPWORDS = frozenset({
 
 
 def _safe_path(p: str = ".") -> Path:
-    wd = Path(config.WORKDIR)
+    wd = Path(current_workdir())
     path = (wd / (p or ".")).resolve()
     try:
         path.relative_to(wd.resolve())
@@ -60,7 +60,7 @@ def _safe_path(p: str = ".") -> Path:
 def _run_git(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args],
-        cwd=str(config.WORKDIR),
+        cwd=str(current_workdir()),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -138,7 +138,7 @@ def diff_status() -> str:
         untracked_chars = 0
         for rel in untracked_files:
             try:
-                untracked_chars += (config.WORKDIR / rel).stat().st_size
+                untracked_chars += (current_workdir() / rel).stat().st_size
             except OSError:
                 pass
 
@@ -211,19 +211,32 @@ def _changed_files_for_verification(include_tests: bool) -> list[str]:
 
 def _package_json_scripts() -> dict:
     try:
-        data = json.loads((config.WORKDIR / "package.json").read_text(encoding="utf-8"))
+        data = json.loads((current_workdir() / "package.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
     scripts = data.get("scripts", {}) if isinstance(data, dict) else {}
     return scripts if isinstance(scripts, dict) else {}
 
 
+def _node_package_manager() -> str:
+    if (current_workdir() / "pnpm-lock.yaml").exists():
+        return "pnpm"
+    if (current_workdir() / "yarn.lock").exists():
+        return "yarn"
+    return "npm"
+
+
 def _node_typecheck_command() -> list[str] | None:
     scripts = _package_json_scripts()
     if "typecheck" in scripts:
+        manager = _node_package_manager()
+        if manager == "pnpm":
+            return ["pnpm", "run", "typecheck"]
+        if manager == "yarn":
+            return ["yarn", "typecheck"]
         return ["npm", "run", "-s", "typecheck"]
-    local_tsc = config.WORKDIR / "node_modules" / ".bin" / "tsc"
-    if local_tsc.exists() and (config.WORKDIR / "tsconfig.json").exists():
+    local_tsc = current_workdir() / "node_modules" / ".bin" / "tsc"
+    if local_tsc.exists() and (current_workdir() / "tsconfig.json").exists():
         return [str(local_tsc), "--noEmit"]
     return None
 
@@ -237,7 +250,7 @@ def _run_verifier(label: str, cmd: list[str], timeout: int) -> tuple[bool, str]:
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
-            cwd=config.WORKDIR,
+            cwd=current_workdir(),
         )
     except FileNotFoundError:
         return False, f"FAIL {label}\ncommand not found: {cmd[0]}"
@@ -268,10 +281,9 @@ def verify_changed_files(include_tests: bool = False, timeout: int = 30) -> str:
 
         py_files = [f for f in files if language_for_path(f) == "python"]
         for rel in py_files:
-            fp = config.WORKDIR / rel
+            fp = current_workdir() / rel
             if not fp.exists():
-                ok = False
-                rows.append(f"FAIL: {rel} (file not found)")
+                rows.append(f"SKIP {rel} (deleted file)")
                 continue
             passed, row = _run_verifier(rel, ["python3", "-m", "py_compile", str(fp)], timeout)
             ok = ok and passed
@@ -291,17 +303,25 @@ def verify_changed_files(include_tests: bool = False, timeout: int = 30) -> str:
                 )
 
         go_dirs = sorted({str(Path(f).parent) or "." for f in files if language_for_path(f) == "go"})
-        for rel_dir in go_dirs:
-            pkg = "." if rel_dir in {"", "."} else "./" + rel_dir.replace("\\", "/")
-            passed, row = _run_verifier(
-                f"go compile {pkg}", ["go", "test", pkg, "-run", "^$"], timeout
+        has_go_metadata = any(
+            (current_workdir() / name).exists() for name in ("go.mod", "go.work")
+        )
+        if go_dirs and not has_go_metadata:
+            warnings.append(
+                "WARN go: changed Go files but no root go.mod or go.work was found."
             )
-            ok = ok and passed
-            rows.append(row)
+        else:
+            for rel_dir in go_dirs:
+                pkg = "." if rel_dir in {"", "."} else "./" + rel_dir.replace("\\", "/")
+                passed, row = _run_verifier(
+                    f"go compile {pkg}", ["go", "test", pkg, "-run", "^$"], timeout
+                )
+                ok = ok and passed
+                rows.append(row)
 
         rust_files = [f for f in files if language_for_path(f) == "rust"]
         if rust_files:
-            if (config.WORKDIR / "Cargo.toml").exists():
+            if (current_workdir() / "Cargo.toml").exists():
                 passed, row = _run_verifier("cargo check", ["cargo", "check"], timeout)
                 ok = ok and passed
                 rows.append(row)
@@ -374,7 +394,13 @@ def _symbol_type(node: ast.AST) -> str:
     return type(node).__name__
 
 
-def read_symbol(path: str, symbol: str = "", context_lines: int = 8, mode: str = "read") -> str:
+def read_symbol(
+    path: str,
+    symbol: str = "",
+    context_lines: int = 8,
+    mode: str = "read",
+    max_depth: int = 40,
+) -> str:
     """Read/locate Python symbols via AST.
 
     Modes:
@@ -389,7 +415,7 @@ def read_symbol(path: str, symbol: str = "", context_lines: int = 8, mode: str =
         source = fp.read_text(encoding="utf-8", errors="replace")
         lines = source.splitlines()
         tree = ast.parse(source, filename=str(fp))
-        symbols = _collect_symbols(tree)
+        symbols = _collect_symbols(tree, max_depth=max_depth)
 
         # ── List mode ────────────────────────────────────────────────────────
         if mode == "list":
@@ -450,7 +476,7 @@ def read_symbol(path: str, symbol: str = "", context_lines: int = 8, mode: str =
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Tool 4: smart_search
+# Legacy helper: smart_search (not registered as a tool)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _MAX_FILES_TO_SCAN = 2000
@@ -498,6 +524,8 @@ def _file_weight(rel: str) -> float:
 
 
 def _parse_python_source(source: str, fp: Path) -> ast.AST | None:
+    if fp.suffix != ".py":
+        return None
     try:
         return ast.parse(source, filename=str(fp))
     except (SyntaxError, ValueError):
@@ -534,7 +562,7 @@ def _git_grep_pathspecs(base: Path, include: str) -> list[str]:
     """Return git-grep pathspecs for a safe workspace path and include glob."""
     include = include or "*.py"
     try:
-        rel = str(base.relative_to(config.WORKDIR)).replace("\\", "/")
+        rel = str(base.relative_to(current_workdir())).replace("\\", "/")
     except ValueError:
         rel = "."
     if base.is_file():
@@ -585,7 +613,7 @@ def smart_search(
             try:
                 result = subprocess.run(
                     ["git", "grep", "-l", "-e", token, "--", *pathspecs],
-                    cwd=str(config.WORKDIR),
+                    cwd=str(current_workdir()),
                     capture_output=True, text=True,
                     encoding="utf-8", errors="replace",
                     timeout=15,
@@ -594,7 +622,7 @@ def smart_search(
                 if result.returncode not in (0, 1):
                     continue
                 for line in result.stdout.splitlines():
-                    line = line.replace(str(config.WORKDIR) + "/", "").replace(str(config.WORKDIR) + "\\", "")
+                    line = line.replace(str(current_workdir()) + "/", "").replace(str(current_workdir()) + "\\", "")
                     if line and not _is_excluded(line):
                         candidate_paths.add(line)
             except Exception:
@@ -602,7 +630,7 @@ def smart_search(
 
         # If grep found candidates, use them; otherwise fall back to scanning
         if candidate_paths:
-            files = [config.WORKDIR / p for p in candidate_paths if (config.WORKDIR / p).is_file()]
+            files = [current_workdir() / p for p in candidate_paths if (current_workdir() / p).is_file()]
         else:
             files = []
             if base.is_file():
@@ -614,12 +642,12 @@ def smart_search(
                         break
                     if not fp.is_file():
                         continue
-                    if _is_excluded(str(fp.relative_to(config.WORKDIR))):
+                    if _is_excluded(str(fp.relative_to(current_workdir()))):
                         continue
                     files.append(fp)
 
         if not files:
-            return f"No Python files found under {path!r}"
+            return f"No files matching {include!r} found under {path!r}"
 
         # ── score candidate files ─────────────────────────────────────────────
         scores: dict[str, float] = defaultdict(float)
@@ -631,10 +659,10 @@ def smart_search(
         token_lowers = [(t, t.lower()) for t in tokens]
         readable_files = 0
 
-        files = sorted(files, key=lambda item: str(item.relative_to(config.WORKDIR)))
+        files = sorted(files, key=lambda item: str(item.relative_to(current_workdir())))
 
         for fp in files:
-            rel = str(fp.relative_to(config.WORKDIR))
+            rel = str(fp.relative_to(current_workdir()))
             rel_low = rel.lower()
 
             try:
@@ -710,12 +738,12 @@ def smart_search(
 
         out = [
             f"Tokens: {', '.join(tokens[:30])}",
-            f"Grep found {len(files)} candidate(s), returning top {len(ranked)}:",
+            f"Search considered {len(files)} candidate file(s), returning top {len(ranked)}:",
             "",
         ]
 
         for idx, (rel, score) in enumerate(ranked, 1):
-            fp = config.WORKDIR / rel
+            fp = current_workdir() / rel
             ast_items = _ast_summary(fp, tree=parsed_trees.get(rel))
             reason_lines: list[str] = []
             seen: set[str] = set()
@@ -875,7 +903,7 @@ def find_symbol_callers(
                     break
                 if not fp.is_file():
                     continue
-                rel = str(fp.relative_to(config.WORKDIR))
+                rel = str(fp.relative_to(current_workdir()))
                 if _is_excluded(rel):
                     continue
                 if source_only and _is_test_file(rel):
@@ -888,7 +916,7 @@ def find_symbol_callers(
         all_refs: list[dict] = []
         skipped_files: list[str] = []
         for fp in files:
-            rel = str(fp.relative_to(config.WORKDIR))
+            rel = str(fp.relative_to(current_workdir()))
             try:
                 source = fp.read_text(encoding="utf-8", errors="replace")
                 tree = ast.parse(source, filename=str(fp))
@@ -938,6 +966,7 @@ register(
     ),
     parameters={"type": "object", "properties": {}},
     handler=diff_status,
+    execution="read",
 )
 
 register(
@@ -992,10 +1021,15 @@ register(
                 "enum": ["read", "list"],
                 "description": "Mode: 'read' returns source for a symbol (default), 'list' returns all symbols.",
             },
+            "max_depth": {
+                "type": "integer",
+                "description": "Max nested symbol depth to collect. Default: 40.",
+            },
         },
         "required": ["path"],
     },
     handler=read_symbol,
+    execution="read",
 )
 
 register(
@@ -1033,46 +1067,5 @@ register(
         "required": ["path", "symbol"],
     },
     handler=find_symbol_callers,
-)
-
-register(
-    name="smart_search",
-    description=(
-        "High-signal repository search. Extracts tokens from issue text, "
-        "failing tests, and traceback; ranks candidate files by relevance; "
-        "returns symbol summaries for Python hits when available. Replaces multiple "
-        "rounds of grep_search + read_file for initial exploration."
-    ),
-    parameters={
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Issue text, problem statement, or search query.",
-            },
-            "failing_tests": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Failing test names from local or official feedback.",
-            },
-            "traceback": {
-                "type": "string",
-                "description": "Traceback or test output excerpt.",
-            },
-            "path": {
-                "type": "string",
-                "description": "Directory to search. Default: workspace root.",
-            },
-            "include": {
-                "type": "string",
-                "description": "Glob for files. Default: '*.py'; use patterns like '*.ts', '*.go', or '*.rs' for non-Python projects.",
-            },
-            "max_files": {
-                "type": "integer",
-                "description": "Max candidate files to return. Default: 8, max: 20.",
-            },
-        },
-        "required": ["query"],
-    },
-    handler=smart_search,
+    execution="read",
 )

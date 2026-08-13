@@ -3,7 +3,7 @@
   "task_type": "project_creation",
   "repo": "examples/project_creation_repos/fastapi_todo_api",
   "project_root": "todo_api",
-  "prompt": "创建一个名为 todo_api 的 FastAPI Todo API 项目，支持 CRUD、SQLite、pytest 测试和 README",
+  "prompt": "创建一个名为 todo_api 的 FastAPI Todo API 项目，支持 CRUD、pytest 测试和 README",
   "expected_files": [
     "todo_api/app/main.py",
     "todo_api/tests/test_api.py",

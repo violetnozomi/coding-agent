@@ -34,6 +34,24 @@ Run Greenfield tasks:
 python -m nz_coder.eval_runner --tasks examples/project_creation_tasks --limit 3
 ```
 
+Run the production-model reliability matrices (each comparison uses at least
+three repetitions):
+
+```bash
+python scripts/benchmark_agent_behavior.py --driver production --verification-matrix
+python scripts/benchmark_agent_behavior.py --driver production --process-matrix
+python scripts/benchmark_agent_behavior.py --driver production --web-search-matrix
+python scripts/benchmark_agent_behavior.py --driver production --reference-baseline
+```
+
+The process matrix runs dev-server, watch-mode, REPL, cursor-based log reading,
+crash diagnosis, and two-process isolation cases. It records start/read/write/
+status/resize/kill counts and treats any surviving fixture process as a failure.
+
+The web matrix compares discovery OFF/ON across current API, migration, obscure
+runtime error, GitHub issue, and local-only cases. Search snippets are discovery
+hints; the Agent is expected to fetch a primary source before relying on them.
+
 Force dry-run:
 
 ```bash
@@ -55,6 +73,8 @@ The runner writes a `summary` object to JSON and a `## Summary` block to Markdow
 - Final agent status
 - Last verification state
 - Whether a repo stayed dirty after tracked rollback
+- Optional run evidence summary when the agent recorded structured evidence
+Evidence review is currently optional/read-only and not part of pass/fail scoring.
 
 Each run writes:
 
@@ -103,3 +123,71 @@ Modules that directly support evaluation quality:
 - Stronger template coverage for Node/TS services.
 - Optional Docker or bubblewrap sandbox for live eval runs.
 - Structured memory folding and cleanup policies.
+
+## 8. SWE-bench Official Leaderboard Workflow
+
+NZ-Coder's reportable benchmark profile is SWE-bench Verified: all 500 test
+instances, strict pass@1, and the official containerized harness. SWE-bench
+Lite is limited to development smoke checks.
+
+Strict inference guarantees enforced by the runner:
+
+- prompts contain the public problem statement but never `hints_text`,
+  `FAIL_TO_PASS`, `PASS_TO_PASS`, gold patches, or official test output;
+- each instance has one append-only attempt record; empty patches are scored as
+  empty rather than retried;
+- the sole attempt is durably claimed before repository setup/Agent start; a
+  crash can be resumed for collection but never launches that instance again;
+- the checked-out base tree is reinitialized as a one-commit local repository,
+  so fixes added later in upstream Git history are not available to the Agent;
+- model-visible tools are restricted to local repository inspection/editing;
+  web fetch, MCP, memory, skills, workflows, and child agents are unavailable;
+- Bash rejects network clients, remote Git operations, and common Python
+  networking APIs during inference; only a small local command grammar is
+  admitted, so shell/path/alias encodings do not bypass a denylist;
+- every attempt exports a sanitized inference-time JSONL trajectory.
+
+Install the official dependencies and verify Docker:
+
+```bash
+python -m pip install swebench datasets
+nz-coder swebench check
+```
+
+Run the main benchmark. Resume is enabled by default and skips already
+committed IDs without starting a second attempt:
+
+```bash
+nz-coder swebench run-agent \
+  --profile verified \
+  --model-name nz-coder-deepseek-v4-flash \
+  --output .nz-coder/swebench/predictions-verified.jsonl
+```
+
+Run the official harness. For a complete Verified run, successful evaluation
+automatically builds the validated public submission directory:
+
+```bash
+nz-coder swebench run-eval \
+  --profile verified \
+  --predictions-path .nz-coder/swebench/predictions-verified.jsonl \
+  --run-id nz_coder_deepseek_v4_flash_verified
+```
+
+If official logs were written elsewhere, pass `--eval-log-dir`. Use
+`--submission-output` to choose the bundle destination. The same packager can
+be invoked explicitly with `nz-coder swebench package`.
+
+Lite smoke example:
+
+```bash
+nz-coder swebench run-agent --profile lite --max-instances 10 \
+  --output .nz-coder/swebench/lite-smoke.jsonl
+```
+
+`retry-agent` consumes official feedback and is therefore diagnostic only. Its
+manifest sets `leaderboard_eligible` to false and the strict packager rejects
+it. Public leaderboard acceptance also depends on the current SWE-bench
+publication, affiliation, and open-method policies; a locally valid official
+run does not by itself guarantee that an upstream submission PR will be
+accepted.

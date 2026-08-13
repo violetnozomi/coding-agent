@@ -41,3 +41,22 @@ nz-coder*.json
 
 # Local reference checkouts
 Claude-Code-main/
+infcode-dev/
+references/
+mewcode/
+
+# Local development sandboxes and service state
+.dodo-server/
+conflict-workspace/
+large-workspace/
+workspace/
+
+# Generated evidence and one-off run output
+docs/evidence/
+core-capability-report.json
+trajectory.jsonl
+sources/
+
+# Merge/editor recovery files
+*.orig
+*.rej

@@ -1,0 +1,134 @@
+"""Session-centric open, checkpoint, and finalization orchestration."""
+from __future__ import annotations
+
+import copy
+
+from nz_coder.message_schema import MESSAGE_ID_KEY
+from nz_coder.runtime.core.request import RunRequest
+from nz_coder.runtime.core.result import RunStatus
+from nz_coder.runtime.core.run_context import RunContext
+from nz_coder.runtime.session.model import Session, SessionIdentity, SessionStatus
+from nz_coder.runtime.session.store import SessionStore
+
+
+class SessionRuntime:
+    """Create one RunContext around a durable Session and persist its boundaries."""
+
+    def __init__(self, store: SessionStore) -> None:
+        if not isinstance(store, SessionStore):
+            raise TypeError("SessionRuntime store must implement SessionStore")
+        self.store = store
+
+    async def open(self, request: RunRequest) -> RunContext:
+        """Load or create a Session, begin a new run, and reconcile request input."""
+        if not isinstance(request, RunRequest):
+            raise TypeError("SessionRuntime.open requires RunRequest")
+        parent_session_id = _parent_session_id(request.metadata)
+        identity = SessionIdentity(request.session_id, parent_session_id)
+        session = await self.store.load(identity, request.workspace)
+        open_state = "resumed" if session is not None else "created"
+        if session is None:
+            session = Session.create(
+                request.session_id,
+                request.messages,
+                workspace=request.workspace,
+                parent_session_id=parent_session_id,
+                metadata=_session_metadata(request),
+            )
+        else:
+            _merge_session_metadata(session, request)
+            _reconcile_transcript(session, list(request.messages))
+        session.begin_run()
+        metadata = copy.deepcopy(request.metadata)
+        metadata["session_open"] = open_state
+        return RunContext(
+            request=request,
+            session=session,
+            active_agent=request.agent.name,
+            metadata=metadata,
+        )
+
+    async def checkpoint(
+        self,
+        context: RunContext,
+        status: SessionStatus | str = SessionStatus.RUNNING,
+    ) -> None:
+        """Persist one settled non-terminal state from the live RunContext."""
+        self._validate_context(context)
+        normalized = _session_status(status)
+        context.session.record_status(normalized)
+        await self.store.save(context.session)
+
+    async def finalize(self, context: RunContext, status: RunStatus) -> None:
+        """Persist one terminal run state exactly once."""
+        self._validate_context(context)
+        context.finish(status)
+        context.session.usage = context.session.usage.add(context.usage)
+        context.session.finish(SessionStatus(status.value))
+        await self.store.save(context.session)
+        context.finalized = True
+
+    @staticmethod
+    def _validate_context(context: RunContext) -> None:
+        if not isinstance(context, RunContext):
+            raise TypeError("SessionRuntime requires RunContext")
+
+
+def _parent_session_id(metadata: dict) -> str | None:
+    value = metadata.get("parent_session_id")
+    return value if isinstance(value, str) and value else None
+
+
+def _session_metadata(request: RunRequest) -> dict:
+    return {
+        key: copy.deepcopy(value)
+        for key, value in request.metadata.items()
+        if key != "parent_session_id"
+    }
+
+
+def _merge_session_metadata(session: Session, request: RunRequest) -> None:
+    for key, value in _session_metadata(request).items():
+        session.metadata[key] = value
+
+
+def _reconcile_transcript(session: Session, requested: list[dict]) -> None:
+    durable = session.transcript
+    if requested and len(requested) <= len(durable):
+        if durable[-len(requested):] == requested:
+            return
+    common = 0
+    for stored, incoming in zip(durable, requested):
+        if stored != incoming:
+            break
+        common += 1
+    if common == len(requested):
+        return
+    if common == len(durable):
+        for message in requested[common:]:
+            session.append(message)
+        return
+    if _is_new_activation(requested):
+        for message in requested:
+            session.append(message)
+        return
+    if requested:
+        raise ValueError(
+            "RunRequest transcript conflicts with the durable Session history"
+        )
+
+
+def _is_new_activation(messages: list[dict]) -> bool:
+    return bool(
+        messages
+        and messages[0].get("role") == "user"
+        and all(not message.get(MESSAGE_ID_KEY) for message in messages)
+    )
+
+
+def _session_status(value: SessionStatus | str) -> SessionStatus:
+    try:
+        status = value if isinstance(value, SessionStatus) else SessionStatus(str(value))
+    except ValueError as error:
+        raise ValueError(f"Unknown Session checkpoint status: {value}") from error
+    return status

@@ -1,12 +1,29 @@
-"""Tool: bash - Run shell commands."""
+"""Tool: bash - Run shell commands with durable execution progress."""
 
+import os
+import queue
 import re
 import subprocess
+import threading
+import time
+from pathlib import Path
 
 from nz_coder import config
+from nz_coder.runtime.execution_context import broad_tests_blocked, strict_local_tools
+from nz_coder.runtime.platform_runtime import (
+    decode_process_output,
+    select_shell,
+    terminate_process_tree,
+)
+from nz_coder.runtime.workdir import current_workdir
 from nz_coder.command_policy import classify_bash, is_known_read_only_command
-from nz_coder.runtime_state import _is_broad_test_command, _is_exact_test
-from nz_coder.tools import register
+from nz_coder.runtime_state import _is_broad_test_command
+from nz_coder.tools import (
+    ToolOutput,
+    current_tool_cancel_event,
+    register,
+    report_tool_metadata,
+)
 
 
 def _truncate_output(text: str, limit: int) -> str:
@@ -20,6 +37,17 @@ def _truncate_output(text: str, limit: int) -> str:
         + f"\n\n... [{omitted} characters omitted] ...\n\n"
         + text[-half:]
     )
+
+
+def _command_title(command: str) -> str:
+    """Return a compact single-line description for Session consumers."""
+    compact = " ".join(str(command).split())
+    return compact[:120] + ("…" if len(compact) > 120 else "")
+
+
+def _stop_process(process: subprocess.Popen) -> None:
+    """Best-effort terminate the shell and its child process group."""
+    terminate_process_tree(process, force=True)
 
 
 # ── sed -i interception ───────────────────────────────────────────────────────
@@ -84,10 +112,9 @@ def _apply_sed_via_edit(command: str) -> str | None:
 
     file_path, pattern, replacement, global_flag = parsed
 
-    from pathlib import Path
-    fp = (config.WORKDIR / file_path).resolve()
+    fp = (current_workdir() / file_path).resolve()
     try:
-        fp.relative_to(config.WORKDIR.resolve())
+        fp.relative_to(current_workdir().resolve())
     except ValueError:
         return None  # path escapes workspace, let bash handle (and block) it
 
@@ -115,12 +142,43 @@ def _apply_sed_via_edit(command: str) -> str | None:
 
     # Delegate to edit_file to get diff output + change tracking
     from nz_coder.tools.files import write_file
-    rel = str(fp.relative_to(config.WORKDIR))
+    rel = str(fp.relative_to(current_workdir()))
     result = write_file(rel, new_content)
     return f"[sed intercepted → edit_file]\n{result}"
 
 
-def run_bash(command: str, read_only: bool = False, timeout: int = None) -> str:
+def _resolve_bash_workdir(workdir: str | None) -> tuple[Path | None, str]:
+    """Resolve an optional command cwd without permitting workspace escape."""
+    workspace = current_workdir().resolve()
+    value = str(workdir or "").strip()
+    candidate = Path(value) if value else workspace
+    if not candidate.is_absolute():
+        candidate = workspace / candidate
+    candidate = candidate.resolve()
+    try:
+        candidate.relative_to(workspace)
+    except ValueError:
+        return None, "Error: workdir escapes workspace"
+    if not candidate.exists():
+        return None, f"Error: workdir does not exist: {workdir}"
+    if not candidate.is_dir():
+        return None, f"Error: workdir is not a directory: {workdir}"
+    return candidate, ""
+
+
+def run_bash(
+    command: str,
+    read_only: bool = False,
+    timeout: int = None,
+    workdir: str | None = None,
+) -> str:
+    if strict_local_tools():
+        from nz_coder.swebench.policy import strict_bash_guidance, strict_bash_violation
+
+        violation = strict_bash_violation(command)
+        if violation:
+            guidance = strict_bash_guidance(command, violation)
+            return f"Error: {violation}. {guidance}"
     # Block sed -i: it silently writes files, bypassing transaction tracking,
     # verification gate, and RuntimeState edit counting.  Force the model to
     # use edit_file or replace_lines instead.
@@ -142,7 +200,7 @@ def run_bash(command: str, read_only: bool = False, timeout: int = None) -> str:
             "py_compile, or a narrower in-repo verification command instead."
         )
     # ── Broad test blocking（当已有 source diff 时阻止跑全套测试）───────────
-    if _is_broad_test_command(command) and getattr(config, "BLOCK_BROAD_TESTS", False):
+    if _is_broad_test_command(command) and broad_tests_blocked():
         return (
             "Error: Broad test runner blocked. A source diff already exists. "
             "Use verify_changed_files or run an exact/narrow test command "
@@ -157,29 +215,146 @@ def run_bash(command: str, read_only: bool = False, timeout: int = None) -> str:
         return "Error: timeout must be an integer"
     if timeout_seconds < 1 or timeout_seconds > config.BASH_TIMEOUT_SECONDS:
         return f"Error: timeout must be between 1 and {config.BASH_TIMEOUT_SECONDS}s"
+    resolved_workdir, workdir_error = _resolve_bash_workdir(workdir)
+    if workdir_error:
+        return workdir_error
+    assert resolved_workdir is not None
+    title = _command_title(command)
+    description = title
     try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            cwd=config.WORKDIR,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout_seconds,
+        shell = select_shell()
+    except RuntimeError as exc:
+        return f"Error: {exc}"
+    progress_limit = min(4000, config.CONTEXT_TRUNCATE_CHARS)
+    report_tool_metadata(
+        title=title,
+        metadata={
+            "output": "",
+            "description": description,
+            "workdir": str(resolved_workdir),
+            "shell_kind": shell.kind.value,
+        },
+    )
+
+    try:
+        process = subprocess.Popen(
+            shell.argv(command),
+            shell=False,
+            cwd=resolved_workdir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            start_new_session=(os.name != "nt"),
+            creationflags=(
+                getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                if os.name == "nt"
+                else 0
+            ),
         )
-    except subprocess.TimeoutExpired:
-        return f"Error: Command timed out ({timeout_seconds}s)"
     except (FileNotFoundError, OSError) as e:
         return f"Error: {e}"
 
-    output = (result.stdout + result.stderr).strip()
-    if result.returncode != 0:
-        prefix = f"Command exited with code {result.returncode}"
+    output_queue: queue.Queue = queue.Queue()
+    finished = object()
+
+    def read_output() -> None:
+        try:
+            if process.stdout is not None:
+                for line in process.stdout:
+                    output_queue.put(line)
+        finally:
+            output_queue.put(finished)
+
+    reader = threading.Thread(target=read_output, name="nz-bash-output", daemon=True)
+    reader.start()
+    chunks: list[bytes] = []
+    deadline = time.monotonic() + timeout_seconds
+    last_report = 0.0
+    timed_out = False
+    cancelled = False
+    cancel_event = current_tool_cancel_event()
+    while True:
+        if cancel_event is not None and cancel_event.is_set():
+            cancelled = True
+            _stop_process(process)
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            timed_out = True
+            _stop_process(process)
+            break
+        try:
+            item = output_queue.get(timeout=min(0.1, remaining))
+        except queue.Empty:
+            if process.poll() is not None and not reader.is_alive():
+                break
+            continue
+        if item is finished:
+            break
+        # Production ``Popen`` is binary.  Keep compatibility with lightweight
+        # embedders/tests that inject a text stream without weakening the real
+        # raw-byte decoding contract.
+        chunk = item if isinstance(item, bytes) else str(item).encode("utf-8")
+        chunks.append(chunk)
+        now = time.monotonic()
+        if now - last_report >= 0.1:
+            decoded = decode_process_output(
+                b"".join(chunks),
+                preferred_encoding=config.PROCESS_OUTPUT_ENCODING,
+            )
+            preview = _truncate_output(decoded.strip(), progress_limit)
+            report_tool_metadata(
+                title=title,
+                metadata={
+                    "output": preview,
+                    "description": description,
+                    "workdir": str(resolved_workdir),
+                    "shell_kind": shell.kind.value,
+                },
+            )
+            last_report = now
+
+    try:
+        process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        _stop_process(process)
+        process.wait()
+    reader.join(timeout=1)
+    while True:
+        try:
+            item = output_queue.get_nowait()
+        except queue.Empty:
+            break
+        if item is not finished:
+            chunks.append(bytes(item))
+
+    if timed_out:
+        return f"Error: Command timed out ({timeout_seconds}s)"
+    if cancelled:
+        return "Error: Command cancelled"
+
+    output = decode_process_output(
+        b"".join(chunks),
+        preferred_encoding=config.PROCESS_OUTPUT_ENCODING,
+    ).strip()
+    if process.returncode != 0:
+        prefix = f"Command exited with code {process.returncode}"
         output = f"{prefix}\n{output}" if output else prefix
     if not output:
         output = f"({command.split()[0] if command.split() else 'bash'} completed with no output)"
-    return _truncate_output(output, config.CONTEXT_TRUNCATE_CHARS)
+    truncated = len(output) > config.CONTEXT_TRUNCATE_CHARS
+    visible = _truncate_output(output, config.CONTEXT_TRUNCATE_CHARS)
+    return ToolOutput(
+        visible,
+        title=title,
+        metadata={
+            "output": _truncate_output(output, progress_limit),
+            "exit": int(process.returncode or 0),
+            "description": description,
+            "workdir": str(resolved_workdir),
+            "shell_kind": shell.kind.value,
+            "truncated": truncated,
+        },
+    )
 
 
 register(
@@ -195,6 +370,13 @@ register(
             "timeout": {
                 "type": "integer",
                 "description": f"Timeout in seconds, 1-{config.BASH_TIMEOUT_SECONDS}. Default: {config.BASH_TIMEOUT_SECONDS}.",
+            },
+            "workdir": {
+                "type": "string",
+                "description": (
+                    "Workspace-relative directory in which to run the command. "
+                    "Use this instead of cd. Defaults to the workspace root."
+                ),
             },
         },
         "required": ["command"],

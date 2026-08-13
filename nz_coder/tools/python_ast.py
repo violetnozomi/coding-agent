@@ -5,14 +5,14 @@ import ast
 import difflib
 from pathlib import Path
 
-from nz_coder import config
+from nz_coder.runtime.workdir import current_workdir
 from nz_coder.tools import register
 
 
 def _safe_path(p: str) -> Path:
-    path = (config.WORKDIR / p).resolve()
+    path = (current_workdir() / p).resolve()
     try:
-        path.relative_to(config.WORKDIR.resolve())
+        path.relative_to(current_workdir().resolve())
     except ValueError:
         raise ValueError(f"Path escapes workspace: {p}")
     return path
@@ -218,6 +218,7 @@ register(
         "required": ["path"],
     },
     handler=python_symbol_check,
+    execution="read",
 )
 
 register(
@@ -255,4 +256,5 @@ register(
         "required": ["path"],
     },
     handler=python_structural_edit,
+    execution="write",
 )

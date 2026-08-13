@@ -1,5 +1,4 @@
 """Tests for ProjectProfile detection and tool output."""
-from pathlib import Path
 
 
 def test_project_profile_detects_python_pytest(tmp_path, monkeypatch):

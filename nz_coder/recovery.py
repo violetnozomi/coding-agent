@@ -2,9 +2,62 @@
 from __future__ import annotations
 
 
+import json
 import re
 import time
 import traceback
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+
+def _status_code(error: Exception | None) -> int | None:
+    for owner in (error, getattr(error, "response", None)):
+        for key in ("status_code", "status"):
+            value = getattr(owner, key, None)
+            if isinstance(value, int) and not isinstance(value, bool):
+                return value
+    return None
+
+
+def _response_headers(error: Exception | None) -> dict[str, object]:
+    candidates = (
+        getattr(error, "headers", None),
+        getattr(error, "response_headers", None),
+        getattr(getattr(error, "response", None), "headers", None),
+    )
+    for value in candidates:
+        if value is None:
+            continue
+        try:
+            return {str(key).lower(): item for key, item in dict(value).items()}
+        except (TypeError, ValueError):
+            continue
+    return {}
+
+
+def is_context_overflow_error(error: Exception | str) -> bool:
+    """Recognize provider-specific context-window rejection messages.
+
+    OpenAI-compatible providers commonly report this as a generic HTTP 400,
+    either with a named error code or prose.  Keep this narrower than the
+    generic client-error classifier so invalid tool JSON remains recoverable
+    through the normal diagnostic path.
+    """
+    text = str(error).lower()
+    markers = (
+        "context_length_exceeded",
+        "context window exceeded",
+        "context window is exceeded",
+        "maximum context length",
+        "max context length",
+        "context length overflow",
+        "context overflow",
+        "prompt is too long",
+        "input is too long",
+        "input exceeds context window",
+        "too many tokens",
+        "token limit exceeded",
+    )
+    return any(marker in text for marker in markers)
 
 
 class RecoveryState:
@@ -13,6 +66,11 @@ class RecoveryState:
         self.last_error = None
         self.max_retries = 3
         self.backoff_base = 2.0
+        self._last_tool_signature: str | None = None
+        self._last_tool_name: str | None = None
+        self.repeated_tool_calls = 0
+        self.tool_streak_resets = 0
+        self._pending_tool_streak_event: dict | None = None
 
     def record_success(self):
         self.consecutive_errors = 0
@@ -22,20 +80,147 @@ class RecoveryState:
         self.consecutive_errors += 1
         self.last_error = str(error)
         tb = traceback.format_exception(type(error), error, error.__traceback__)
+        retryable = self.is_retryable(error)
         return {
             "count": self.consecutive_errors,
             "error": str(error),
             "traceback": "".join(tb[-3:]),
-            "should_retry": self.consecutive_errors <= self.max_retries,
-            "should_abort": self.consecutive_errors > self.max_retries,
+            "should_retry": retryable and self.consecutive_errors <= self.max_retries,
+            "should_abort": (not retryable) or self.consecutive_errors > self.max_retries,
         }
 
-    def backoff_wait(self):
+    def backoff_wait(self, error: Exception | None = None) -> float:
         if self.consecutive_errors <= 0:
-            return
-        wait = min(self.backoff_base ** self.consecutive_errors, 30)
+            return 0.0
+        wait = self.backoff_seconds(error)
         print(f"  [recovery] Waiting {wait:.0f}s before retry ({self.consecutive_errors}/{self.max_retries})...")
         time.sleep(wait)
+        return wait
+
+    def backoff_seconds(self, error: Exception | None = None) -> float:
+        """Return the current provider-aware delay without sleeping."""
+        header_wait = self.retry_after_seconds(error) if error is not None else None
+        if header_wait is not None:
+            return header_wait
+        return min(self.backoff_base ** max(1, self.consecutive_errors), 30)
+
+    @staticmethod
+    def is_retryable(error: Exception) -> bool:
+        """Apply InfCode-style transient classification before backoff."""
+        status = _status_code(error)
+        text = str(error).lower()
+        if status in {400, 401, 403, 404, 422}:
+            return False
+        if is_context_overflow_error(error):
+            return False
+        if any(word in text for word in ("freeusagelimiterror", "invalid api key", "authentication")):
+            return False
+        if status in {408, 409, 425, 429} or (status is not None and status >= 500):
+            return True
+        if isinstance(error, (TimeoutError, ConnectionError)):
+            return True
+        return any(word in text for word in (
+            "temporary", "timeout", "timed out", "connection", "overloaded",
+            "unavailable", "rate limit", "too many requests", "try again",
+        ))
+
+    @staticmethod
+    def retry_after_seconds(error: Exception | None) -> float | None:
+        """Read Retry-After-Ms or Retry-After seconds/date from SDK errors."""
+        headers = _response_headers(error)
+        milliseconds = headers.get("retry-after-ms")
+        if milliseconds is not None:
+            try:
+                return max(0.0, float(milliseconds) / 1000.0)
+            except (TypeError, ValueError):
+                pass
+        retry_after = headers.get("retry-after")
+        if retry_after is None:
+            return None
+        try:
+            return max(0.0, float(retry_after))
+        except (TypeError, ValueError):
+            pass
+        try:
+            parsed = parsedate_to_datetime(str(retry_after))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return max(0.0, (parsed - datetime.now(timezone.utc)).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+    def reset_tool_call_history(self, reason: str = "manual") -> None:
+        """Reset consecutive identical-tool tracking and describe why."""
+        if self._last_tool_signature is not None:
+            self._record_tool_streak_reset(reason=reason, next_tool=None)
+        self._last_tool_signature = None
+        self._last_tool_name = None
+        self.repeated_tool_calls = 0
+
+    def start_tool_call_run(self) -> None:
+        """Start per-run streak accounting without carrying previous-run statistics."""
+        self._last_tool_signature = None
+        self._last_tool_name = None
+        self.repeated_tool_calls = 0
+        self.tool_streak_resets = 0
+        self._pending_tool_streak_event = None
+
+    def consume_tool_streak_event(self) -> dict | None:
+        """Return and clear the latest streak reset event for trace emission."""
+        event = self._pending_tool_streak_event
+        self._pending_tool_streak_event = None
+        return event
+
+    def _record_tool_streak_reset(self, *, reason: str, next_tool: str | None) -> None:
+        self.tool_streak_resets += 1
+        self._pending_tool_streak_event = {
+            "reason": reason,
+            "previous_tool": self._last_tool_name,
+            "previous_count": self.repeated_tool_calls,
+            "next_tool": next_tool,
+            "reset_count": self.tool_streak_resets,
+        }
+
+    def observe_tool_call(
+        self,
+        tool_name: str,
+        tool_input: object,
+        *,
+        threshold: int,
+    ) -> dict:
+        """Track consecutive calls with the same tool name and arguments.
+
+        Arguments are canonicalized so JSON key order does not bypass the guard.
+        A non-positive threshold disables the guard.
+        """
+        if threshold <= 0:
+            self.reset_tool_call_history(reason="guard_disabled")
+            return {"count": 0, "should_block": False}
+
+        encoded = json.dumps(
+            tool_input,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        signature = f"{tool_name}\0{encoded}"
+        same_as_previous = signature == self._last_tool_signature
+        if same_as_previous:
+            self.repeated_tool_calls += 1
+        else:
+            if self._last_tool_signature is not None:
+                reason = "tool_changed" if tool_name != self._last_tool_name else "arguments_changed"
+                self._record_tool_streak_reset(reason=reason, next_tool=tool_name)
+            self._last_tool_signature = signature
+            self._last_tool_name = tool_name
+            self.repeated_tool_calls = 1
+        effective_threshold = max(2, threshold)
+        consecutive_block = self.repeated_tool_calls >= effective_threshold
+        return {
+            "count": self.repeated_tool_calls,
+            "should_block": consecutive_block,
+        }
 
     # FIXED: 删除 inject_diagnostic —— 该方法在 loop.py 中从未被调用（死代码），
     # 且与 loop.py 里已有的 _make_client_error_diag / tool_failure_diagnostic 职责重叠。
@@ -45,13 +230,25 @@ class RecoveryState:
         """Return a targeted diagnostic for common coding-agent tool failures."""
         text = output or ""
         lower = text.lower()
+        if "doom loop detected" in lower:
+            return (
+                "<doom-loop-diagnostic>\n"
+                f"Tool `{tool_name}` was not executed because the identical call repeated "
+                "without any intervening change.\n"
+                "Do not submit the same call again. Treat the existing tool output and current "
+                "workspace as ground truth, then change the approach or use narrower parameters. "
+                "For code repair, preserve public APIs, already-passing behavior, and unrelated "
+                "files; widen the edit scope only when new evidence requires it. Make the smallest "
+                "evidence-backed change and run the most specific relevant check.\n"
+                "</doom-loop-diagnostic>"
+            )
         if "old_text not found" in lower:
             return (
                 "<tool-failure-diagnostic>\n"
                 f"Tool `{tool_name}` could not find the exact old_text.\n"
                 "Do not retry from memory. Re-read the target file around the nearby context, "
                 "copy the exact current snippet, then retry a smaller edit. For Python symbol-level "
-                "changes, prefer `python_structural_edit` over repeated exact-text edits.\n"
+                "changes, load the `python_ast` optional pack first, then prefer `python_structural_edit` over repeated exact-text edits.\n"
                 "</tool-failure-diagnostic>"
             )
         if "old_text matches" in lower:

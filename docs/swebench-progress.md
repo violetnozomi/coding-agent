@@ -684,3 +684,281 @@ search-and-verification protocol）后，对之前 failed/timeout 实例重新�
 - **Django 是强项**：改进后 Django resolved 率 ~80%，非 Django ~25%
 - **主要瓶颈**：非 Django repo 的 git clone 依赖网络，需要 pre-warm repo cache
 - **仍有 8 个实例未通过**：需要人工分析具体失败原因（可能是 patch 方向不对，而非搜索/验证问题）
+
+---
+
+## 2026-08-09：DeepSeek V4 Flash 严格 Lite 300
+
+本节是新的、与历史定向 retry 数据完全分开的可复现实验。Lite 300 仅作为
+Verified 500 正式主榜前的开发阶段冒烟，不把结果表述为 Verified 榜单成绩。
+
+| 项目 | 固定值 |
+|---|---|
+| Run ID | `lite300-dsv4flash-20260809-r3` |
+| 数据集 | `princeton-nlp/SWE-bench_Lite`，test split，固定 300 题 |
+| 模型 | `deepseek-v4-flash`（OpenAI-compatible，`https://api.deepseek.com`） |
+| 策略 | strict pass@1；每题只允许一次推理；禁止 hints、官方测试知识、答案联网、retry |
+| Agent 上限 | 80 turns；单题 900 秒；clone 600 秒 |
+| 证据 | append-only attempt journal、逐题公开脱敏 trajectory、原子生成 predictions |
+| 磁盘策略 | 每题先归档 raw trace/session/input 诊断包，再删除 checkout；18GiB 预警、20GiB 在下一题 claim 前暂停，人工分析记录后清到 15GiB 再恢复 |
+| 启动前磁盘 | `/` 可用约 84GB（787GB 总量，使用率 89%） |
+| 当前状态 | 更换 DeepSeek key 后已恢复：108/300 已持久化，正在执行第 109 题；尚无官方分数 |
+
+启动审计：最初的 `lite300-dsv4flash-20260809` 在前两题暴露了两项本地运行时
+缺陷，已中止且不计分。第一次启动在任何推理前发现相对 checkout 路径被重复解析；
+修复并重启后，第 1 题的并行工具批次中，失败诊断被插入两个 `tool` result 之间，
+DeepSeek 因非法消息顺序连续返回 400。该题记录为空 patch；第 2 题在调查时中断。
+两题的 claim/result 与脱敏轨迹保留用于审计，中断 checkout 已删除。修复后增加了相对
+checkout 和“并行 tool result 必须连续”回归测试。因为 Agent 源码发生变化，旧 manifest
+不再恢复，改用新 run ID 从 300 题完整重跑，绝不混合两个运行的 predictions。
+
+`lite300-dsv4flash-20260809-r2` 随后成功持久化 5 个非空 patch，在第 6 题已 claim、
+未形成 result 时，用户确认把 raw trace 保留预算调整为 20GiB。为避免同一 manifest
+中途改变证据生命周期，r2 主动中止且不计作 300 题结果。r2 的 5 条 predictions、
+journal、manifest 和公开轨迹继续保留；当时仍只有 84GB 可用空间。
+
+生成命令：
+
+```bash
+python -m nz_coder.swebench run-agent \
+  --profile lite \
+  --max-instances 300 \
+  --run-id lite300-dsv4flash-20260809-r3 \
+  --model-name nz-coder-deepseek-v4-flash-lite300 \
+  --output .nz-coder/swebench-lite/predictions-lite300-dsv4flash-20260809-r3.jsonl \
+  --work-root .nz-coder/swebench-lite/runs/lite300-dsv4flash-20260809-r3 \
+  --strict \
+  --resume \
+  --cleanup-worktrees \
+  --trace-budget-gib 20 \
+  --trace-warning-gib 18 \
+  --trace-cleanup-target-gib 15
+```
+
+结果文件约定：
+
+- `predictions-lite300-dsv4flash-20260809-r3.jsonl`：官方 predictions 输入。
+- `predictions-lite300-dsv4flash-20260809-r3.attempts.jsonl`：严格 pass@1 claim/result 日志。
+- `predictions-lite300-dsv4flash-20260809-r3-trajs/`：公开脱敏轨迹，永久保留。
+- `predictions-lite300-dsv4flash-20260809-r3-raw-traces/`：20GiB 预算内的原始诊断包。
+- `predictions-lite300-dsv4flash-20260809-r3.manifest.json`：模型、数据集、实例顺序与运行参数。
+- `predictions-lite300-dsv4flash-20260809-r3.report.json`：Agent 阶段汇总；长跑结束或预算暂停时生成。
+
+最终成绩只接受官方 Docker harness 的 `resolved / unresolved / errors` 汇总。运行中的
+`completed` 只表示 Agent 生成了可提交 patch，不代表实例通过官方测试。
+
+旧 r2 里程碑（2026-08-09，策略变更后中止）：
+
+| 指标 | 数值 |
+|---|---:|
+| 已 claim | 6 |
+| 已持久化 prediction / trajectory | 5 |
+| 非空 patch | 5 |
+| Agent `risky` | 5（均由 strict Bash 拒绝产生，patch 仍提交） |
+| Agent `empty_patch` / `setup_failed` | 0 / 0 |
+| 已清理 checkout | 6（含中断题） |
+| 当前 checkout | 0 |
+| 磁盘可用 | 约 84GB |
+
+r2 前五题 patch 长度分别为 500、1151、471、696 和 569 字符；这些仍只是生成
+阶段证据，不能提前换算为 resolved，也不会混入 r3 的官方评测。
+
+r3 首题 Trace 生命周期实测（2026-08-09，Asia/Shanghai）：prediction、attempt result、
+公开 trajectory、raw trace、public inference input 和 3 个 session JSON 均已落盘，随后
+该题 checkout 被删除。首个诊断包约 48MB，归档总量远低于 18GiB 预警线；当前执行题的
+checkout 约 145MB，磁盘可用约 83GB。manifest 已固定精确阈值
+`15GiB < 18GiB < 20GiB`，改变任一阈值后恢复都会被拒绝。
+
+成本暂停记录（2026-08-10，Asia/Shanghai）：进程组经 `SIGINT` 未及时响应后使用
+`SIGTERM` 完整停止，确认无残留 runner/子进程。停止时 journal 为 108 claims、107
+results，predictions 为 107 行；第 108 题 `django__django-16229` 已 claim 但没有 result，
+严格 pass@1 下不允许重跑。raw trace 归档约 11GB，暂停题 checkout 约 252MB，磁盘剩余
+约 40GB。若只更换同一 DeepSeek 服务的 API key，可恢复 r3；若 provider、endpoint、
+模型或模型版本变化，则必须使用新的 run ID 和 manifest，不能混入 r3。
+
+恢复记录（2026-08-10，Asia/Shanghai）：用户放弃受 Cloudflare Challenge 阻断的第三方
+GPT endpoint，切回同一 `deepseek-v4-flash` provider/model，仅替换 API key。最小真实
+text smoke 成功。第 108 题中断 trace、公开轨迹和 session 已归档，journal 记录为空
+prediction并删除遗留 checkout；随后原 manifest 验证通过，从第 109 题
+`django__django-16255` 继续，未重跑前 108 题。
+
+### 运行中 Trace 流程审计（2026-08-10）
+
+本次审计只分析 Agent 生成过程，不把 patch 生成状态当作官方 resolved。审计期间 r3
+仍在后台继续运行；以下是 raw trace 归档达到 112 题时的固定快照。
+
+| 指标 | 数值 |
+|---|---:|
+| 已归档诊断包 | 112 |
+| `completed` / `risky` / `agent_failed` / 中断 | 24 / 59 / 28 / 1 |
+| 非空 / 空 patch | 107 / 5 |
+| raw trace 归档占用 | 约 12GB |
+| LLM request / tool call | 约 2,547 / 3,000+ |
+| Bash dispatch error / nonzero | 443 / 33（111 题快照） |
+| `agent_failed` 中 trace 已正常 `run_end=completed` | 22 / 28 |
+
+#### P0：批处理器存在确定的“假超时”死锁
+
+`_run_agent_attempt_in_subprocess()` 先调用 `process.join(timeout)`，子进程却通过
+`multiprocessing.Queue` 一次性返回 `agent_status` 和最多每条 4,000 字符的全部工具输出；
+父进程只有在 join 完成后才 `queue.get()`。工具日志超过 pipe buffer 后，子进程的 Queue
+feeder 无法排空并退出，父进程又等待子进程退出，最终在 900 秒处误报超时。
+
+证据非常一致：28 个 `agent_failed` 中，22 个 raw trace 已出现正常
+`run_end(status=completed)`，22 个都有非空 patch；其估算 Queue 工具输出为 63--151KB。
+正常返回组的工具输出上限约 61KB。最明显的例子是 `django__django-14667`：Agent 在
+约 301 秒已经完成并留下 515 字符 patch，却仍被父进程等到 900 秒后标为
+`agent_failed`。这 22 个 patch 又因 `agent_failed` 分支被强制写为空 prediction，造成
+真实结果丢失。这不是模型能力问题，而是进程间结果传输顺序错误。
+
+#### P0：搜索阶段缺少可执行的硬收敛机制
+
+prompt 要求“最多检查 3 个候选文件后进行首次编辑”，但实际上首次写入前的调查工具
+中位数为：`completed=4`、`risky=7`、`agent_failed=34`；28 个 `agent_failed` 全部超过
+10 次调查调用。4 个真正超时的失败题在 48--61 次工具调用后仍然没有任何写入。
+`django__django-16400` 是典型轨迹：约 873 秒内进行了 61 次调用（大量 grep/read），
+始终没有形成补丁。当前 doom-loop 只对“相同工具参数重复”敏感，换关键词或文件就会
+重置，所以无法识别语义上持续探索、没有决策进展的循环。
+
+#### P1：strict Bash 策略与 Agent 可见协议不匹配
+
+111 题快照中有 443 次 Bash dispatch error，其中主要是：172 次间接 shell 语法、
+70 次 `cd`、70 次 Git history/remote、61 次任意 Python、47 次 quoting。fail-closed
+策略本身符合禁止联网的目标，但 prompt 没有列出精确允许语法；模型持续尝试 `cd`、
+重定向、环境变量前缀、`python3 -c`、`git log` 等必然被拒绝的命令，随后再由诊断消息
+纠正，浪费轮次和 token。
+
+因此当前 `risky` 标签也混合了两种不同含义：59 个 risky 均有非空 patch 且均成功
+调用过 `verify_changed_files`，其中许多只是出现过 strict shell 拒绝，并不能据此判断
+patch 本身高风险。过程违规风险和补丁语义风险需要分开统计。
+
+#### P1：验证成功后的停止条件执行不稳定
+
+105 个至少成功调用一次 `verify_changed_files` 的实例中，最后一次成功验证后仍继续调用
+工具的情况很普遍：`completed` 4/24、`risky` 53/59、假超时组 20/22。后续主要又是
+Bash、read、grep、diff 和 impact 分析。正常 completed 组通常在验证后立即停止，而长轨迹
+组会重新进入搜索或重复确认；最严重的实例在最后一次成功验证后又调用 15 个工具。
+这既增加成本，也放大前述 Queue 假超时概率。
+
+#### P1：已实现的结构化代码理解工具没有进入主路径
+
+快照中 `grep_search=958`、`read_file=766`，但 `read_symbol=81`、
+`find_symbol_callers=4`、`analyze_impact=16`，`repo_map` 和 `code_references` 为 0。
+也就是说 Agent 核心路径仍然是 grep + 整文件阅读；源码中虽然存在 Repo Map、引用和影响
+分析能力，模型并没有稳定使用它们。上下文没有出现压缩失败或 API 错误，当前更直接的
+瓶颈是工具选择和阶段控制，而不是 provider 协议或 context overflow。
+
+#### 当前判断
+
+简单、定位明确的题已经能形成有效闭环，例如 `django__django-11049` 只用了 2 次 grep、
+2 次读取、1 次编辑、`diff_status` 和 `verify_changed_files`，约 32 秒结束。问题集中在复杂题：
+调查不收敛、strict 命令反复碰壁、验证后不停止，以及批处理 Queue 把已完成任务误杀。
+在修复 P0 假超时前，当前 predictions 不能用来公平衡量 Agent 的实际 patch 生成能力；
+在官方 Docker harness 跑完前，也不能从这些 trace 推导 SWE-bench resolved 分数。
+
+#### 优化落地与暂停状态（2026-08-10）
+
+r3随后按用户要求安全暂停，未删除已有patch、trace、trajectory或prediction。暂停后现场为：
+115行prediction、115个公开trajectory、113个已归档raw-trace目录，整个
+`.nz-coder/swebench-lite`约12GB；后台不再有`nz_coder.swebench run-agent`进程。
+这批数据继续只用于Agent流程诊断，不重新运行，也不作为官方成绩。
+
+对应A224已完成以下修复：
+
+1. 父进程先从Queue接收有界终态再join子进程，>64KB工具事件不会再制造假超时；完整输出继续落trace。
+2. strict Bash增加workspace内`workdir`，模型能看到精确允许语法和拒绝后的替代命令。
+3. 调查阶段按mutation generation设置12次soft nudge与20次hard gate，同批读取也计入预算。
+4. `diff_status`确认source-only非空diff后，`verify_changed_files`成功会直接触发runtime terminal。
+5. strict命令policy rejection归入过程warning，不再与补丁语义risk混为同一个`tool_errors`。
+
+离线验证为227项聚焦回归与1394项完整回归全部通过，修改模块`py_compile`和Ruff通过。
+没有恢复Lite推理、没有调用付费Provider，也没有运行官方Docker harness，因此本节仍不报告
+resolved率或推断分数。下一次若继续体验，应先用少量全新实例观察首写调用数、20次硬门命中率、
+验证terminal命中率和真实patch质量，再决定是否恢复大批量运行。
+
+#### A224后续：20题真实Trace审计（2026-08-10）
+
+没有重新运行r3已尝试的题。由于A224修复后源码指纹已从
+`e75998ccc030e65ef18f5d294a2d18eaefb001865c9859d12584f60e7455eaa6`变为
+`db67837f8e2bb8c2e684ed0269b82d04f96a64bc5568cf177c27bfb6caf493ec`，原r3 manifest按设计
+拒绝把不同代码版本混入同一run。为保留旧证据，选择r3之后20个未尝试实例建立独立诊断续片
+`lite20-dsv4flash-20260810-r3-cont-a224`，并新增`--max-new-instances 20`：只有claim、结果、
+prediction、公开trajectory、raw trace归档和checkout清理全部持久化后才计数和自动暂停。
+
+本次得到20条持久结果：15 `completed`、3 `risky`、2 `setup_failed`。18个进入Agent的实例
+全部生成非空patch，443次工具调用的中位数为23，运行时长中位数为245.55秒；18份raw trace
+均以`run_end=completed`结束，未出现`agent_failed`、假timeout、Provider API错误、Provider重试或
+context compaction。2个setup失败均未进入Agent，分别是Git clone的GnuTLS decode/early EOF和
+TLS连接非正常关闭，属于网络/仓库准备故障，不能计作模型失败。当前续片raw trace约2.0GB，
+整个`.nz-coder/swebench-lite`约14GB，仍低于用户指定的20GB分析阈值；因此本轮不清理trace。
+
+真实轨迹证明A224的IPC修复有效，也证明简单题已能形成短闭环：例如
+`django__django-16873`和`matplotlib__matplotlib-23964`均为4次工具调用完成
+定位、编辑、diff和静态验证。但同时确认以下流程问题：
+
+1. hard gate只统计结构化read/search工具，模型可以改用只读Bash继续调查；长实例首写前仍出现
+   7--14次Bash，说明20次调查上限可被语义等价路径绕过。
+2. 8个实例累计出现24次`strict_progress_blocked`；同类阻断可以重复反馈，没有进入有界的
+   “必须编辑、验证或声明阻塞”降级终态。
+3. 4个实例在首次非空diff前调用过`verify_changed_files`。当前terminal依赖diff/verify的
+   事件顺序，而不是“同一mutation generation已同时具备diff与成功验证”这一事实。
+4. 3个risky标签包含已恢复的历史错误：一次宽泛测试被policy拒绝、一次早期`apply_patch`
+   精确文本失败，以及一次早期非零测试/临时scratch文件。它们最终均有source-only diff和成功
+   静态验证，说明risk仍按整段历史累计，而非按最终mutation/verification generation结算。
+5. 18个Agent实例出现50次strict Bash policy rejection；常见触发包括环境变量前缀、重定向、
+   `find`/`rm`/`sed`和Git history。目标checkout里又缺少`rg`，使提示中的首选搜索命令与真实
+   command availability不一致。
+6. 结构化代码理解仍未成为主路径：`grep_search=152`、`read_file=98`、Bash=101，而
+   `repo_map`、`code_references`、`analyze_impact`均为0，`find_symbol_callers`仅1次。
+
+因此下一步不应扩大付费样本，而应先修复：统一结构化工具与只读Bash的调查预算；对重复hard gate
+设置确定性降级上限；以mutation generation无关顺序地结算diff+verification；把已恢复的过程错误
+从最终patch risk剥离；让strict prompt/doctor反映checkout内真实可用命令。上述20题只是Agent流程
+诊断，不运行官方Docker harness，也不报告resolved率。
+
+#### A226 Agent Core纠偏完成（2026-08-10，未恢复评测）
+
+针对上述20题审计暴露的问题，生产链已完成以下纠偏：
+
+1. 同一mutation generation的成功diff与verification按事实结算，调用顺序不再影响terminal；
+   新mutation会使旧证据失效。
+2. 最终patch risk只消费最终generation的显著工具错误；旧代已恢复错误改记为
+   `recovered_tool_errors:N`过程告警。真实`agent_status.runtime`和`run_end` trace均已输出三个
+   generation字段，避免只在测试fixture中生效。
+3. 只读Bash源码调查纳入12/20预算；第一次hard gate反馈后若模型仍只调查，第二次生成
+   `strict_terminal_blocker`并结束，不再无限烧轮次。
+4. InfCode-dev连续三次完全相同调用继续即时走doom-loop权限；InfCodeX的20-call窗口检测独立接入
+   异步L2：携带最近16条tool-use/tool-result transcript，触发调用不等待，下一次工具前消费一次性
+   nudge。异常、非法结构和5秒超时均fail-open。
+5. run、自动compaction、手动compaction会清空stall历史；epoch阻止压缩前迟到verdict污染新上下文。
+6. strict generation stop consumer已进入默认runtime组装，在自然文本结束而证据未结算时最多返工两次。
+
+离线验证：205项Agent Core/SWE相关组合与1417项全量测试通过，Ruff、`py_compile`和diff检查通过。
+另以provider-free响应驱动真实Agent在临时Git仓库完成
+`read_file → edit_file → verify_changed_files → diff_status`，4次Provider响应后直接completed，三个
+generation均为1，61条trace的`run_end.runtime`与返回状态一致，文件修改真实落盘。
+
+本次没有恢复此前Lite进度，没有调用DeepSeek或其他付费Provider，也没有运行官方Docker harness。
+这些结果证明生命周期和可观测性闭环，不能替代patch语义质量或SWE resolved率；下一步应先用少量
+新实例观察真实模型是否降低首写前调查数、hard-gate重复率和验证后多余调用，再决定是否扩大运行。
+
+#### A227 Main Agent Sidecar Verifier完成（2026-08-10，未恢复评测）
+
+此前Main Agent只有StopHook机制和SWE strict consumer；Workflow Sidecar不审核普通coding runtime的
+自然文本终止。本轮按InfCodeX源码补齐通用LLM Judge与Main Agent Sidecar：最近24条第三方视角
+transcript、当前真实用户请求、ChangeTracker实际文件证据、FEATURE_196调用门、单一强制
+`emit_sidecar_verdict`、accept/revise/blocked、最多两次返工、15秒timeout、caller cancellation、
+异常/非法响应fail-open，以及默认继承Main Provider/model和成对环境变量覆盖。
+
+Sidecar作为第一个异步StopHook进入统一`AgentRuntimeAssembly → AgentLoop`生产构造链，所以CLI、HTTP、
+本地评测与SWE使用同一语义；trivial observed work会跳过额外调用，risky/plan/长run/多文件/大修改和
+无客观证据的完成声明会触发。trace新增gate/start/finish事件与fire/skip/verdict统计。显式注入client的
+测试宿主默认不产生隐藏模型调用，生产自建client默认启用。
+
+离线验证为28项Sidecar/StopHook聚焦测试与1440项全量测试通过，修改模块`compileall`和diff检查通过；
+真实`AgentLoop`离线执行Main请求后确实发起第二个隔离Verifier请求并accept，Verifier请求中只有自己的
+system/user消息和单一强制report tool，trace包含完整gate/start/finish链。
+
+本次没有恢复旧Lite进度，没有调用付费Provider，也没有运行官方Docker harness；因此只证明Verifier
+生命周期和源码语义进入SWE生产入口，不报告也不推断resolved率。下一次继续诊断样本前，应先做用户
+批准的真实Provider forced-tool兼容冒烟，或直接按既定每20题trace审计策略恢复进度。

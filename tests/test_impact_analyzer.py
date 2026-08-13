@@ -47,3 +47,193 @@ def test_impact_analyzer_includes_untracked_files(tmp_path):
         assert ".nz-coder/runtime_state.json" not in changed
     finally:
         config.WORKDIR = old
+
+
+def test_deleted_public_symbols_require_conservative_replan():
+    from nz_coder.impact_analyzer import analyze_patch_impact
+
+    diff = """--- a/pkg/api.py
++++ b/pkg/api.py
+@@ -1,8 +1,2 @@
+-def public_api(value):
+-    return value
+-
+-def _private_helper(value):
+-    return value
+-
+-class PublicClient:
+-    pass
++VALUE = 1
+"""
+
+    report = analyze_patch_impact(
+        changed_files=["pkg/api.py"],
+        diff_text=diff,
+        project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
+        task_mode="bugfix",
+    )
+
+    signals = {item["category"]: item for item in report["risk_signals"]}
+    assert report["requires_replan"] is True
+    assert "deleted_public_symbols" in signals
+    assert "public_api" in signals["deleted_public_symbols"]["detail"]
+    assert "PublicClient" in signals["deleted_public_symbols"]["detail"]
+    assert "_private_helper" not in signals["deleted_public_symbols"]["detail"]
+
+
+def test_public_signature_change_is_not_misreported_as_deletion():
+    from nz_coder.impact_analyzer import analyze_patch_impact
+
+    diff = """--- a/pkg/api.py
++++ b/pkg/api.py
+@@ -1,2 +1,2 @@
+-def public_api(value):
++def public_api(value, strict=False):
+     return value
+"""
+
+    report = analyze_patch_impact(
+        changed_files=["pkg/api.py"],
+        diff_text=diff,
+        project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
+        task_mode="feature",
+    )
+
+    categories = {item["category"] for item in report["risk_signals"]}
+    assert "public_signature_change" in categories
+    assert "deleted_public_symbols" not in categories
+
+
+def test_body_only_edit_does_not_trigger_public_api_replan():
+    from nz_coder.impact_analyzer import analyze_patch_impact
+
+    diff = """--- a/pkg/api.py
++++ b/pkg/api.py
+@@ -1,2 +1,2 @@
+ def public_api(value):
+-    return value
++    return value + 1
+"""
+
+    report = analyze_patch_impact(
+        changed_files=["pkg/api.py"],
+        diff_text=diff,
+        project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
+        task_mode="bugfix",
+    )
+
+    categories = {item["category"] for item in report["risk_signals"]}
+    assert "public_signature_change" not in categories
+    assert "deleted_public_symbols" not in categories
+    assert report["requires_replan"] is False
+
+
+def test_source_change_outside_user_named_path_requires_replan():
+    from nz_coder.impact_analyzer import analyze_patch_impact
+
+    report = analyze_patch_impact(
+        changed_files=["pkg/target.py", "pkg/unrelated.py", "tests/test_target.py"],
+        diff_text="",
+        project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
+        requested_paths=["pkg/target.py"],
+        task_mode="bugfix",
+    )
+
+    signal = next(
+        item for item in report["risk_signals"]
+        if item["category"] == "requested_scope_expansion"
+    )
+    assert report["requires_replan"] is True
+    assert signal["detail"] == "pkg/unrelated.py"
+    assert "tests/test_target.py" not in signal["detail"]
+
+
+def test_project_creation_does_not_treat_broad_scope_as_replan_signal():
+    from nz_coder.impact_analyzer import analyze_patch_impact
+
+    files = [f"src/module_{index}.py" for index in range(6)]
+    report = analyze_patch_impact(
+        changed_files=files,
+        diff_text="",
+        project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
+        requested_paths=["src/main.py"],
+        task_mode="project_creation",
+    )
+
+    assert report["risk"] == "high"
+    assert report["requires_replan"] is False
+    assert report["risk_signals"] == []
+
+
+def test_impact_report_exposes_fingerprint_and_replan_signal():
+    from nz_coder.impact_analyzer import analyze_patch_impact, format_impact_report
+
+    report = analyze_patch_impact(
+        changed_files=["pkg/other.py"],
+        diff_text="",
+        project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
+        requested_paths=["pkg/target.py"],
+        task_mode="bugfix",
+    )
+    output = format_impact_report(report)
+
+    assert "Risk fingerprint:" in output
+    assert "Requires replan: true" in output
+    assert "[replan] requested_scope_expansion" in output
+
+
+def test_explicit_empty_change_list_does_not_fall_back_to_git(monkeypatch):
+    import nz_coder.intelligence.impact_analyzer as analyzer
+
+    monkeypatch.setattr(
+        analyzer,
+        "_git_changed_files",
+        lambda: ["unrelated/from-parent-repo.py"],
+    )
+    report = analyzer.analyze_patch_impact(
+        changed_files=[],
+        diff_text="",
+        project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
+    )
+
+    assert report["affected_files"] == []
+    assert report["requires_replan"] is False
+
+
+def test_legacy_positional_arguments_keep_requested_paths_and_task_mode():
+    from nz_coder.impact_analyzer import analyze_patch_impact
+
+    report = analyze_patch_impact(
+        ["pkg/other.py"],
+        "",
+        {"test_roots": ["tests"], "test_commands": ["pytest"]},
+        False,
+        0,
+        ["pkg/target.py"],
+        "bugfix",
+    )
+
+    assert any(
+        item["category"] == "requested_scope_expansion"
+        for item in report["risk_signals"]
+    )
+
+
+def test_structural_changed_scope_enriches_impact_and_verification_risk():
+    from nz_coder.impact_analyzer import analyze_patch_impact
+
+    report = analyze_patch_impact(
+        changed_files=["helpers.py"],
+        diff_text="",
+        project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
+        structural_scope={
+            "changed_symbols": ["normalize"],
+            "impacted_callers": ["service.py:handle", "cli.py:main"],
+            "related": ["tests/test_service.py"],
+        },
+    )
+
+    assert report["structural_impact"]["changed_symbols"] == ["normalize"]
+    assert report["structural_impact"]["impacted_callers"] == ["service.py:handle", "cli.py:main"]
+    assert "tests/test_service.py" in report["likely_tests"]
+    assert any("2 structural callers" in reason for reason in report["reasons"])

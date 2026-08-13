@@ -8,7 +8,6 @@ RetryPlan        — orchestrator's decision for one retry instance
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 
 
 # ── FailureFeedback ───────────────────────────────────────────────────────────

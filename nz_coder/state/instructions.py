@@ -1,0 +1,633 @@
+"""Load bounded global and project instructions for each model request.
+
+This mirrors InfCode's durable instruction surface: root ``AGENTS.md`` and
+``CLAUDE.md`` files plus first-level Markdown rules.  It is intentionally
+separate from semantic memory: instruction files are authoritative project
+context, while recalled memories are fallible background notes.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import tempfile
+import threading
+from dataclasses import dataclass
+from pathlib import Path
+
+
+PER_SOURCE_MAX_BYTES = 20 * 1024
+TOTAL_MAX_BYTES = 32 * 1024
+_PER_FILE_NOTICE = (
+    "[NZ-Coder notice: This rule file was truncated due to the per-file size limit.]"
+)
+_TOTAL_TRUNCATED_NOTICE = (
+    "[NZ-Coder notice: This rule file was truncated due to the cumulative rules size limit.]"
+)
+_TOTAL_OMITTED_NOTICE = (
+    "[NZ-Coder notice: This rule file was omitted due to the cumulative rules size limit.]"
+)
+_TRACKED_CACHE: dict[tuple[str, str, int], bool] = {}
+_TRACKED_LOCK = threading.Lock()
+_STATE_LOCK = threading.RLock()
+_STATE_FILENAME = "instruction-file-state.json"
+_STATE_MAX_BYTES = 64_000
+INSTRUCTION_FILENAMES = ("AGENTS.md", "CLAUDE.md")
+INSTRUCTION_SCOPES = ("global", "project")
+
+
+@dataclass(frozen=True)
+class InstructionFileInfo:
+    """One root instruction file exposed through the control plane."""
+
+    id: str
+    scope: str
+    filename: str
+    path: str
+    enabled: bool
+
+    def as_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "scope": self.scope,
+            "filename": self.filename,
+            "path": self.path,
+            "enabled": self.enabled,
+        }
+
+
+@dataclass(frozen=True)
+class InstructionFileWarning:
+    """Non-fatal instruction control-plane warning."""
+
+    path: str
+    message: str
+
+    def as_dict(self) -> dict:
+        return {"path": self.path, "message": self.message}
+
+
+@dataclass(frozen=True)
+class InstructionFileListResult:
+    """Existing root instruction files and state-loading warnings."""
+
+    files: tuple[InstructionFileInfo, ...]
+    warnings: tuple[InstructionFileWarning, ...]
+
+    def as_dict(self) -> dict:
+        return {
+            "files": [item.as_dict() for item in self.files],
+            "warnings": [item.as_dict() for item in self.warnings],
+        }
+
+
+@dataclass(frozen=True)
+class InstructionSource:
+    """One discovered instruction source with deterministic budget priority."""
+
+    path: Path
+    scope: str
+    kind: str
+    order: float
+    priority: int
+
+
+@dataclass(frozen=True)
+class InstructionBundle:
+    """Rendered instructions plus observable budget metadata."""
+
+    reminder: str
+    source_count: int
+    included_count: int
+    truncated_count: int
+    per_file_truncated_count: int
+    total_truncated_count: int
+    omitted_count: int
+    included_bytes: int
+    paths: tuple[str, ...]
+    disabled_count: int = 0
+    warnings: tuple[str, ...] = ()
+
+
+def _validate_scope(scope: str) -> str:
+    if scope not in INSTRUCTION_SCOPES:
+        raise ValueError("instruction scope must be 'global' or 'project'")
+    return scope
+
+
+def _validate_filename(filename: str) -> str:
+    if filename not in INSTRUCTION_FILENAMES:
+        raise ValueError("instruction filename must be AGENTS.md or CLAUDE.md")
+    return filename
+
+
+def _roots(
+    workspace: str | Path,
+    home: str | Path | None,
+) -> tuple[Path, Path]:
+    project = Path(workspace).resolve()
+    user_home = (
+        Path(home).expanduser().resolve()
+        if home is not None
+        else Path.home().resolve()
+    )
+    return project, user_home / ".config" / "nz-coder"
+
+
+def _instruction_file_path(
+    workspace: str | Path,
+    scope: str,
+    filename: str,
+    *,
+    home: str | Path | None = None,
+) -> Path:
+    selected_scope = _validate_scope(scope)
+    selected_filename = _validate_filename(filename)
+    project, global_root = _roots(workspace, home)
+    root = global_root if selected_scope == "global" else project
+    path = (root / selected_filename).resolve()
+    path.relative_to(root.resolve())
+    return path
+
+
+def _instruction_state_path(
+    workspace: str | Path,
+    scope: str,
+    *,
+    home: str | Path | None = None,
+) -> Path:
+    selected_scope = _validate_scope(scope)
+    project, global_root = _roots(workspace, home)
+    root = global_root if selected_scope == "global" else project / ".nz-coder"
+    path = (root / _STATE_FILENAME).resolve()
+    path.relative_to(root.resolve())
+    return path
+
+
+def _read_enabled_state(path: Path) -> tuple[dict[str, bool], str | None]:
+    try:
+        size = path.stat().st_size
+        if size > _STATE_MAX_BYTES:
+            raise ValueError(f"state exceeds {_STATE_MAX_BYTES} bytes")
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("version") != 1:
+            raise ValueError("state must be a version 1 object")
+        raw_enabled = payload.get("enabled", {})
+        if not isinstance(raw_enabled, dict):
+            raise ValueError("enabled state must be an object")
+        enabled: dict[str, bool] = {}
+        for filename, value in raw_enabled.items():
+            if filename not in INSTRUCTION_FILENAMES or not isinstance(value, bool):
+                raise ValueError("enabled state contains an invalid entry")
+            enabled[filename] = value
+        return enabled, None
+    except FileNotFoundError:
+        return {}, None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        return {}, f"Failed to load instruction file enabled state: {error}"
+
+
+def _write_enabled_state(path: Path, enabled: dict[str, bool]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.chmod(0o700)
+    except OSError:
+        pass
+    descriptor, temp_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(
+                {"version": 1, "enabled": enabled},
+                handle,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        temp_path.chmod(0o600)
+        temp_path.replace(path)
+        path.chmod(0o600)
+    except Exception:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        temp_path.unlink(missing_ok=True)
+        raise
+
+
+def _delete_enabled_row(path: Path, filename: str) -> None:
+    with _STATE_LOCK:
+        enabled, warning = _read_enabled_state(path)
+        if warning:
+            # A corrupt two-key state file is recoverable. Replacing it avoids
+            # making create/delete permanently unusable.
+            enabled = {}
+        enabled.pop(filename, None)
+        if not enabled:
+            path.unlink(missing_ok=True)
+            return
+        _write_enabled_state(path, enabled)
+
+
+def list_instruction_files(
+    workspace: str | Path,
+    scope: str = "project",
+    *,
+    home: str | Path | None = None,
+) -> InstructionFileListResult:
+    """List existing root AGENTS.md/CLAUDE.md files and enabled state."""
+    selected_scope = _validate_scope(scope)
+    state_path = _instruction_state_path(workspace, selected_scope, home=home)
+    with _STATE_LOCK:
+        enabled, warning = _read_enabled_state(state_path)
+    files: list[InstructionFileInfo] = []
+    warnings: list[InstructionFileWarning] = []
+    state_warning_added = False
+    for filename in INSTRUCTION_FILENAMES:
+        path = _instruction_file_path(
+            workspace,
+            selected_scope,
+            filename,
+            home=home,
+        )
+        try:
+            if not path.is_file():
+                continue
+        except OSError as error:
+            warnings.append(InstructionFileWarning(str(path), str(error)))
+            continue
+        if warning and not state_warning_added:
+            warnings.append(InstructionFileWarning(str(state_path), warning))
+            state_warning_added = True
+        files.append(InstructionFileInfo(
+            id=f"{selected_scope}:{filename}",
+            scope=selected_scope,
+            filename=filename,
+            path=str(path),
+            enabled=enabled.get(filename, True),
+        ))
+    return InstructionFileListResult(tuple(files), tuple(warnings))
+
+
+def set_instruction_file_enabled(
+    workspace: str | Path,
+    scope: str,
+    filename: str,
+    enabled: bool,
+    *,
+    home: str | Path | None = None,
+) -> InstructionFileInfo:
+    """Persist one root instruction file's enabled state atomically."""
+    selected_scope = _validate_scope(scope)
+    selected_filename = _validate_filename(filename)
+    if not isinstance(enabled, bool):
+        raise ValueError("enabled must be a boolean")
+    state_path = _instruction_state_path(workspace, selected_scope, home=home)
+    with _STATE_LOCK:
+        state, warning = _read_enabled_state(state_path)
+        if warning:
+            raise ValueError(warning)
+        state[selected_filename] = enabled
+        _write_enabled_state(state_path, state)
+    path = _instruction_file_path(
+        workspace,
+        selected_scope,
+        selected_filename,
+        home=home,
+    )
+    return InstructionFileInfo(
+        id=f"{selected_scope}:{selected_filename}",
+        scope=selected_scope,
+        filename=selected_filename,
+        path=str(path),
+        enabled=enabled,
+    )
+
+
+def create_instruction_file(
+    workspace: str | Path,
+    scope: str = "project",
+    *,
+    home: str | Path | None = None,
+) -> InstructionFileInfo:
+    """Create the scope's AGENTS.md exclusively and reset its state row."""
+    selected_scope = _validate_scope(scope)
+    filename = "AGENTS.md"
+    path = _instruction_file_path(
+        workspace,
+        selected_scope,
+        filename,
+        home=home,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8"):
+        pass
+    try:
+        _delete_enabled_row(
+            _instruction_state_path(workspace, selected_scope, home=home),
+            filename,
+        )
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return InstructionFileInfo(
+        id=f"{selected_scope}:{filename}",
+        scope=selected_scope,
+        filename=filename,
+        path=str(path),
+        enabled=True,
+    )
+
+
+def delete_instruction_file(
+    workspace: str | Path,
+    scope: str,
+    filename: str,
+    *,
+    home: str | Path | None = None,
+) -> None:
+    """Delete one supported root instruction file and its enabled row."""
+    selected_scope = _validate_scope(scope)
+    selected_filename = _validate_filename(filename)
+    path = _instruction_file_path(
+        workspace,
+        selected_scope,
+        selected_filename,
+        home=home,
+    )
+    path.unlink(missing_ok=True)
+    _delete_enabled_row(
+        _instruction_state_path(workspace, selected_scope, home=home),
+        selected_filename,
+    )
+
+
+def _rule_files(root: Path) -> list[Path]:
+    if not root.is_dir():
+        return []
+    try:
+        return sorted(
+            path for path in root.iterdir()
+            if path.is_file() and path.suffix.lower() == ".md"
+        )
+    except OSError:
+        return []
+
+
+def discover_instruction_sources(
+    workspace: str | Path,
+    *,
+    home: str | Path | None = None,
+) -> list[InstructionSource]:
+    """Discover the same global/project instruction classes used by InfCode."""
+    sources, _warnings, _disabled_count = _discover_instruction_sources_result(
+        workspace,
+        home=home,
+    )
+    return sources
+
+
+def _discover_instruction_sources_result(
+    workspace: str | Path,
+    *,
+    home: str | Path | None = None,
+) -> tuple[list[InstructionSource], tuple[str, ...], int]:
+    project, global_root = _roots(workspace, home)
+
+    result: list[InstructionSource] = []
+    for index, path in enumerate(_rule_files(global_root / "rules")):
+        result.append(InstructionSource(path, "global", "rule", index / 1000, 10))
+    warnings: list[str] = []
+    disabled_count = 0
+    for listed in (
+        list_instruction_files(project, "global", home=home),
+        list_instruction_files(project, "project", home=home),
+    ):
+        warnings.extend(item.message for item in listed.warnings)
+        for item in listed.files:
+            if not item.enabled:
+                disabled_count += 1
+                continue
+            if item.scope == "global":
+                order, priority = (
+                    (1.0, 20) if item.filename == "CLAUDE.md" else (2.0, 30)
+                )
+            else:
+                order, priority = (
+                    (4.0, 50) if item.filename == "CLAUDE.md" else (5.0, 60)
+                )
+            kind = "claude" if item.filename == "CLAUDE.md" else "agents"
+            result.append(InstructionSource(
+                Path(item.path), item.scope, kind, order, priority
+            ))
+
+    for index, path in enumerate(_rule_files(project / ".nz-coder" / "rules")):
+        result.append(InstructionSource(path, "project", "rule", 3.0 + index / 1000, 40))
+    return (
+        sorted(result, key=lambda item: (item.order, str(item.path))),
+        tuple(warnings),
+        disabled_count,
+    )
+
+
+def _decode_prefix(data: bytes, max_bytes: int) -> tuple[str, int, bool]:
+    selected = data[:max(0, max_bytes)]
+    while selected:
+        try:
+            return selected.decode("utf-8"), len(selected), len(selected) < len(data)
+        except UnicodeDecodeError as error:
+            selected = selected[:error.start]
+    return "", 0, bool(data)
+
+
+def _strip_rule_frontmatter(text: str) -> str:
+    """Strip recognized rule metadata without treating ordinary `---` as YAML."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return text
+    try:
+        close = next(index for index, line in enumerate(lines[1:], 1) if line.strip() == "---")
+    except StopIteration:
+        return text
+    metadata = "\n".join(lines[1:close]).lower()
+    if not any(f"{key}:" in metadata for key in ("name", "description", "trigger")):
+        return text
+    return "\n".join(lines[close + 1:])
+
+
+def _read_source(source: InstructionSource) -> bytes:
+    try:
+        data = source.path.read_bytes()
+    except OSError:
+        return b""
+    if source.kind != "rule":
+        return data
+    text = _strip_rule_frontmatter(data.decode("utf-8", errors="replace"))
+    return text.encode("utf-8")
+
+
+def _escape_reminder(text: str) -> str:
+    return re.sub(
+        r"</?\s*system-reminder\b",
+        lambda match: match.group(0).replace("<", "&lt;", 1),
+        text,
+        flags=re.IGNORECASE,
+    )
+
+
+def _is_checked_in(project: Path, path: Path) -> bool:
+    """Best-effort cached equivalent of InfCode's project instruction label."""
+    try:
+        relative = path.resolve().relative_to(project.resolve()).as_posix()
+        mtime_ns = path.stat().st_mtime_ns
+    except (OSError, ValueError):
+        return False
+    key = (str(project.resolve()), relative, mtime_ns)
+    with _TRACKED_LOCK:
+        cached = _TRACKED_CACHE.get(key)
+    if cached is not None:
+        return cached
+    try:
+        completed = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", relative],
+            cwd=project,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+            check=False,
+        )
+        tracked = completed.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        tracked = False
+    with _TRACKED_LOCK:
+        _TRACKED_CACHE[key] = tracked
+    return tracked
+
+
+def _scope_label(source: InstructionSource, project: Path) -> str:
+    if source.scope == "global":
+        return "user's private global instructions for all projects"
+    if _is_checked_in(project, source.path):
+        return "project instructions, checked into the codebase"
+    return "user's private project instructions, not checked in"
+
+
+def load_instruction_context(
+    workspace: str | Path,
+    *,
+    home: str | Path | None = None,
+) -> InstructionBundle:
+    """Read, prioritize, budget, and render durable instruction files."""
+    project = Path(workspace).resolve()
+    sources, warnings, disabled_count = _discover_instruction_sources_result(
+        workspace,
+        home=home,
+    )
+    prepared: dict[Path, tuple[str, int, bool, bool, bool]] = {}
+    remaining = TOTAL_MAX_BYTES
+    per_file_truncated_count = 0
+    total_truncated_count = 0
+    omitted_count = 0
+
+    # Higher-priority project sources win cumulative budget, while final
+    # rendering still follows global-to-project order.
+    for source in sorted(sources, key=lambda item: (-item.priority, item.order, str(item.path))):
+        data = _read_source(source)
+        file_content, file_used, decode_truncated = _decode_prefix(
+            data,
+            min(PER_SOURCE_MAX_BYTES, len(data)),
+        )
+        file_truncated = decode_truncated or file_used < len(data)
+        content_bytes = file_content.encode("utf-8")
+        content, used, total_decode_truncated = _decode_prefix(
+            content_bytes,
+            min(remaining, len(content_bytes)),
+        )
+        omitted = bool(content_bytes) and remaining <= 0
+        total_truncated = (
+            not omitted
+            and (total_decode_truncated or used < len(content_bytes))
+        )
+        if file_truncated:
+            per_file_truncated_count += 1
+        if total_truncated:
+            total_truncated_count += 1
+        if omitted:
+            omitted_count += 1
+        prepared[source.path] = (
+            content,
+            used,
+            file_truncated,
+            total_truncated,
+            omitted,
+        )
+        remaining -= used
+
+    entries: list[str] = []
+    included_paths: list[str] = []
+    included_bytes = 0
+    for source in sources:
+        content, used, file_truncated, total_truncated, omitted = prepared.get(
+            source.path,
+            ("", 0, False, False, False),
+        )
+        if not content and not (file_truncated or total_truncated or omitted):
+            continue
+        notice = (
+            _TOTAL_OMITTED_NOTICE
+            if omitted
+            else _TOTAL_TRUNCATED_NOTICE
+            if total_truncated
+            else _PER_FILE_NOTICE
+            if file_truncated
+            else ""
+        )
+        body = "\n\n".join(part for part in (notice, content) if part)
+        label = _scope_label(source, project)
+        entries.append(f"Contents of {source.path} ({label}):\n\n{body}")
+        included_paths.append(str(source.path))
+        included_bytes += used
+
+    if entries:
+        body = "\n\n".join(_escape_reminder(entry) for entry in entries)
+        reminder = (
+            "<system-reminder>\n"
+            "As you answer the user's questions, you can use the following context:\n"
+            "Codebase and user instructions are shown below. Be sure to adhere to these "
+            "instructions. IMPORTANT: These instructions OVERRIDE any default behavior "
+            "and you MUST follow them exactly as written.\n\n"
+            f"{body}\n\n"
+            "      IMPORTANT: this context may or may not be relevant to your tasks. "
+            "You should not respond to this context unless it is highly relevant to your task.\n"
+            "</system-reminder>"
+        )
+    else:
+        reminder = ""
+
+    return InstructionBundle(
+        reminder=reminder,
+        source_count=len(sources),
+        included_count=len(entries),
+        truncated_count=sum(
+            1
+            for _content, _used, file_cut, total_cut, omitted in prepared.values()
+            if file_cut or total_cut or omitted
+        ),
+        per_file_truncated_count=per_file_truncated_count,
+        total_truncated_count=total_truncated_count,
+        omitted_count=omitted_count,
+        included_bytes=included_bytes,
+        paths=tuple(included_paths),
+        disabled_count=disabled_count,
+        warnings=warnings,
+    )

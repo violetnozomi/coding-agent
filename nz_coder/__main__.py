@@ -2,4 +2,4 @@
 
 from nz_coder.cli import main
 
-main()
+raise SystemExit(main())

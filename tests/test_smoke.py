@@ -1,7 +1,9 @@
 """Smoke test: verify imports and tool registration."""
 
-import sys
+import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 # Add project root to path
@@ -19,7 +21,7 @@ def test_agent_loop_import_registers_eval_tools():
     from nz_coder.tools import get_specs
 
     names = {spec["function"]["name"] for spec in get_specs()}
-    assert {"project_profile", "plan_verification", "analyze_impact", "analyze_project_requirements", "create_project_blueprint", "scaffold_project", "plan_project_acceptance", "verify_project_build"}.issubset(names)
+    assert {"project_profile", "plan_verification", "analyze_impact", "analyze_project_requirements", "create_project_blueprint", "scaffold_project", "inspect_generated_project", "check_project_completeness", "plan_project_acceptance", "verify_project_build", "review_run_evidence"}.issubset(names)
 
 
 def test_tool_registration():
@@ -28,16 +30,19 @@ def test_tool_registration():
     # Force tool imports
     import nz_coder.tools.bash       # noqa
     import nz_coder.tools.files      # noqa
-    import nz_coder.tools.python_ast  # noqa
     import nz_coder.tools.search     # noqa
     import nz_coder.tools.todo       # noqa
+    import nz_coder.tools.question   # noqa
     import nz_coder.tools.repo_intel  # noqa
     import nz_coder.project_profile   # noqa
     import nz_coder.verification_planner  # noqa
     import nz_coder.impact_analyzer   # noqa
+    import nz_coder.reviewer          # noqa
     import nz_coder.project_creation.requirement_analyzer  # noqa
     import nz_coder.project_creation.blueprint  # noqa
     import nz_coder.project_creation.templates  # noqa
+    import nz_coder.project_creation.inspector  # noqa
+    import nz_coder.project_creation.completeness  # noqa
     import nz_coder.project_creation.acceptance_planner  # noqa
     import nz_coder.project_creation.verifier  # noqa
     import nz_coder.subagent          # noqa
@@ -48,17 +53,48 @@ def test_tool_registration():
     names = [s["function"]["name"] for s in specs]
 
     expected = ["bash", "read_file", "write_file", "write_files_batch", "edit_file",
-                "apply_patch", "replace_lines", "python_symbol_check", "python_structural_edit",
-                "list_directory", "grep_search", "glob_search",
-                "todo", "task", "save_memory", "list_memories",
+                "apply_patch", "replace_lines", "list_directory", "grep_search", "glob_search",
+                "todo", "question", "task", "save_memory", "list_memories",
                 "delete_memory", "project_profile", "plan_verification",
                 "analyze_impact", "analyze_project_requirements", "create_project_blueprint",
-                "scaffold_project", "plan_project_acceptance", "verify_project_build", "load_skill"]
+                "scaffold_project", "inspect_generated_project", "check_project_completeness",
+                "plan_project_acceptance", "verify_project_build", "review_run_evidence",
+                "load_optional_tools", "load_skill"]
     for e in expected:
         assert e in names, f"Missing tool: {e}"
         assert e in TOOL_HANDLERS, f"Missing handler: {e}"
+    assert "smart_search" not in names
 
     print(f"OK: {len(specs)} tools registered: {names}")
+
+
+def test_optional_tool_loader_registers_python_ast_pack():
+    from nz_coder.tools import dispatch, get_specs
+
+    code = (
+        "import json\n"
+        "import nz_coder.loop\n"
+        "from nz_coder.tools import get_specs\n"
+        "print(json.dumps(sorted(spec['function']['name'] for spec in get_specs())))\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).resolve().parents[1]),
+    )
+    assert proc.returncode == 0, proc.stderr
+    names_before = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert "load_optional_tools" in names_before
+    assert "smart_search" not in names_before
+    assert "python_symbol_check" not in names_before
+    assert "python_structural_edit" not in names_before
+
+    result = dispatch("load_optional_tools", {"packs": ["python_ast"]})
+    names_after = [spec["function"]["name"] for spec in get_specs()]
+    assert "python_ast" in result
+    assert "python_symbol_check" in names_after
+    assert "python_structural_edit" in names_after
 
 
 def test_tool_dispatch():
@@ -93,7 +129,7 @@ def test_tool_dispatch_ignores_extra_arguments():
 
 
 def test_todo():
-    from nz_coder.tools.todo import todo_update, render, has_open_items
+    from nz_coder.tools.todo import todo_update, has_open_items
 
     result = todo_update([
         {"content": "Step 1", "status": "completed"},
@@ -104,7 +140,7 @@ def test_todo():
     assert "[>]" in result
     assert "[ ]" in result
     assert has_open_items()
-    print(f"OK: todo system works")
+    print("OK: todo system works")
 
 
 def test_permissions():
@@ -133,12 +169,16 @@ def test_prompt_builder():
     assert "Test memory" in prompt
     assert "test-skill" in prompt
     assert "analyze_project_requirements" in prompt
-    assert "do not start with grep_search or smart_search" in prompt.lower()
+    assert "load_optional_tools" in prompt
+    assert "do not start with grep_search unless you are intentionally reusing local code" in prompt.lower()
+    assert "same-basename file in a different directory" in prompt
+    assert "Missing requested tests means the task is not complete." in prompt
+    assert "Before finalizing a code-changing task, call review_run_evidence" in prompt
     print("OK: prompt builder works")
 
 
 def test_transaction_commit():
-    import tempfile, os
+    import tempfile
     from nz_coder.transaction import TransactionManager
     from nz_coder import config
 
@@ -301,6 +341,7 @@ def test_command_policy():
     assert is_known_read_only_command("git status")
     assert not classify_bash("rg copy")["mutating"]
     assert classify_bash("echo hi > x.txt")["mutating"]
+    assert not classify_bash("python -m pytest >/dev/null")["dangerous"]
     assert classify_bash("python3 -m pip install legacy-cgi")["reason"] == "package install"
     assert classify_bash("sudo rm -rf /")["dangerous"]
     print("OK: command policy works")
@@ -433,6 +474,27 @@ def test_session_save_load():
         print("OK: session save/load works")
     finally:
         config.SESSION_DIR = old_session_dir
+        shutil.rmtree(str(tmpdir), ignore_errors=True)
+
+
+
+def test_session_artifact_paths_are_isolated_by_session_id():
+    import tempfile
+    import shutil
+    from nz_coder import config
+    from nz_coder.sessions import activate_session, active_session_id, session_runtime_state_path, session_subagent_dir
+
+    old_workdir = config.WORKDIR
+    tmpdir = Path(tempfile.mkdtemp())
+    config.WORKDIR = tmpdir
+    try:
+        activate_session("session-one")
+        activate_session("session-two")
+        assert active_session_id() == "session-two"
+        assert session_runtime_state_path("session-one") != session_runtime_state_path("session-two")
+        assert session_subagent_dir("session-one") != session_subagent_dir("session-two")
+    finally:
+        config.WORKDIR = old_workdir
         shutil.rmtree(str(tmpdir), ignore_errors=True)
 
 
@@ -594,6 +656,343 @@ def test_external_benchmark_helpers_parse_args():
     print("OK: external benchmark helpers parse args")
 
 
+
+class _FakeLive:
+    def __init__(
+        self,
+        renderable,
+        console=None,
+        auto_refresh=False,
+        screen=False,
+        transient=False,
+        vertical_overflow=None,
+    ):
+        self.renderable = renderable
+        self.console = console
+        self.auto_refresh = auto_refresh
+        self.screen = screen
+        self.transient = transient
+        self.vertical_overflow = vertical_overflow
+        self.is_started = False
+        self.start_calls = 0
+        self.stop_calls = 0
+        self.update_calls = []
+
+    def start(self):
+        self.is_started = True
+        self.start_calls += 1
+
+    def stop(self):
+        self.is_started = False
+        self.stop_calls += 1
+
+    def update(self, renderable, refresh=False):
+        self.renderable = renderable
+        plain = getattr(renderable, "plain", str(renderable))
+        self.update_calls.append((plain, refresh))
+
+
+class _FakeConsole:
+    def __init__(self, printer=None):
+        self.is_terminal = True
+        self.size = type("_Size", (), {"height": 24})()
+        self._printer = printer or (lambda *args, **kwargs: None)
+        self.width = 100
+
+    def print(self, *args, **kwargs):
+        self._printer(*args, **kwargs)
+
+
+def test_surface_console_falls_back_to_rich_after_terminal_boundary_failure():
+    from nz_coder.interface.cli import _SurfaceConsole
+
+    projected = []
+    printed = []
+    surface = type("_Surface", (), {"append_output": projected.append})()
+    output = _SurfaceConsole(
+        _FakeConsole(lambda *args, **kwargs: printed.append((args, kwargs))),
+        surface,
+    )
+
+    output.print("inside")
+    output.disable_surface()
+    output.print("fallback", markup=False)
+
+    assert projected and "inside" in projected[0]
+    assert printed == [(('fallback',), {'markup': False})]
+
+
+class _FakeRenderer:
+    def __init__(self):
+        self.calls = []
+
+    def pause(self):
+        self.calls.append("pause")
+
+    def resume(self):
+        self.calls.append("resume")
+
+
+class _StubClient:
+    class _Chat:
+        class _Completions:
+            def create(self, **kwargs):
+                raise AssertionError("LLM should not be called in this test")
+
+        def __init__(self):
+            self.completions = self._Completions()
+
+    def __init__(self):
+        self.chat = self._Chat()
+
+
+def test_streaming_renderer_updates_live_in_place(monkeypatch):
+    from nz_coder.interface import cli as cli_mod
+
+    printed = []
+    monkeypatch.setattr(cli_mod, "Live", _FakeLive)
+    ticks = iter([0.1, 0.1, 0.2, 0.2])
+    monkeypatch.setattr(cli_mod.time, "monotonic", lambda: next(ticks))
+    renderer = cli_mod.StreamingRenderer(
+        live_console=_FakeConsole(lambda *args, **kwargs: printed.append((args, kwargs)))
+    )
+    renderer.start()
+    live = renderer._live
+
+    assert live is not None
+    renderer.on_token("hello")
+    renderer.on_token(" world")
+    renderer.on_token(None)
+
+    assert live.update_calls[0] == ("hello", True)
+    assert live.update_calls[-1] == ("hello world", True)
+    assert live.stop_calls == 1
+    assert len(printed) == 1
+
+
+def test_streaming_renderer_resume_restores_buffer(monkeypatch):
+    from nz_coder.interface import cli as cli_mod
+
+    monkeypatch.setattr(cli_mod, "Live", _FakeLive)
+    renderer = cli_mod.StreamingRenderer(live_console=_FakeConsole())
+    renderer.start()
+    first_live = renderer._live
+
+    assert first_live is not None
+    renderer.on_token("hello")
+
+    renderer.pause()
+    renderer.pause()
+    assert first_live.stop_calls == 1
+    assert renderer._live is None
+
+    renderer.resume()
+    assert renderer._live is None
+
+    renderer.resume()
+    second_live = renderer._live
+
+    assert second_live is not None
+    assert second_live is not first_live
+    assert second_live.start_calls == 1
+    assert second_live.update_calls[-1] == ("hello", True)
+    renderer.finish()
+    assert second_live.stop_calls == 1
+
+
+def test_streaming_renderer_status_is_transient(monkeypatch):
+    from nz_coder.interface import cli as cli_mod
+
+    printed = []
+    monkeypatch.setattr(cli_mod, "Live", _FakeLive)
+    renderer = cli_mod.StreamingRenderer(
+        live_console=_FakeConsole(lambda *args, **kwargs: printed.append((args, kwargs)))
+    )
+    renderer.start()
+    renderer.set_status(("⠋ bash · pytest -q", "  12 passed"))
+    renderer.on_token("final answer")
+    renderer._refresh()
+    live = renderer._live
+    assert live is not None
+    assert "bash · pytest -q" in live.update_calls[-1][0]
+    assert "final answer" in live.update_calls[-1][0]
+
+    renderer.finish()
+
+    assert len(printed) == 1
+    assert "bash · pytest -q" not in str(printed[0])
+
+
+def test_cli_drains_multiline_paste():
+    from io import StringIO
+    from nz_coder.interface.cli import _drain_pasted_lines
+
+    stream = StringIO("1. add validation\n2. add tests\n")
+    assert _drain_pasted_lines(stdin=stream, is_ready=lambda timeout: True) == [
+        "1. add validation",
+        "2. add tests",
+    ]
+
+def test_permission_manager_pauses_renderer_around_input(monkeypatch):
+    import builtins
+    from nz_coder.permissions import PermissionManager
+
+    renderer = _FakeRenderer()
+    monkeypatch.setattr(builtins, "input", lambda prompt: "y")
+
+    pm = PermissionManager("default", renderer=renderer)
+    assert pm.ask_user("write_file", {"path": "app.py", "content": "print(\"ok\")\n"}) is True
+    assert renderer.calls == ["pause", "resume"]
+
+
+def test_permission_manager_uses_renderer_console_input(monkeypatch):
+    import builtins
+    from nz_coder.permissions import PermissionManager
+
+    class _RendererWithConsole:
+        def __init__(self):
+            self.console = _FakeConsole()
+            self.calls = []
+
+        def pause(self):
+            self.calls.append("pause")
+
+        def resume(self):
+            self.calls.append("resume")
+
+    renderer = _RendererWithConsole()
+    console_calls = []
+    renderer.console.input = lambda prompt, markup=False: console_calls.append((prompt, markup)) or "y"
+
+    def _unexpected_input(prompt):
+        raise AssertionError("builtins.input should not be used when renderer.console.input is available")
+
+    monkeypatch.setattr(builtins, "input", _unexpected_input)
+
+    pm = PermissionManager("default", renderer=renderer)
+    assert pm.ask_user("write_file", {"path": "app.py", "content": "print(\"ok\")\n"}) is True
+    assert renderer.calls == ["pause", "resume"]
+    assert console_calls == [("  Allow? (y/n/a=always/p=always-prefix): ", False)]
+
+
+def test_permission_manager_retries_blank_input(monkeypatch):
+    import builtins
+    from nz_coder.permissions import PermissionManager
+
+    answers = iter(["", "y"])
+    monkeypatch.setattr(builtins, "input", lambda prompt: next(answers))
+    monkeypatch.setattr(PermissionManager, "_tty_input", lambda self, prompt: (_ for _ in ()).throw(AssertionError("tty fallback should not run for blank input retry")))
+
+    pm = PermissionManager("default")
+    assert pm.ask_user("write_file", {"path": "app.py", "content": "print(\"ok\")\n"}) is True
+
+
+
+def test_permission_manager_retries_invalid_input(monkeypatch):
+    import builtins
+    from nz_coder.permissions import PermissionManager
+
+    answers = iter(["1. leftover pasted requirement", "y"])
+    monkeypatch.setattr(builtins, "input", lambda prompt: next(answers))
+    monkeypatch.setattr(PermissionManager, "_tty_input", lambda self, prompt: (_ for _ in ()).throw(EOFError()))
+
+    pm = PermissionManager("default")
+    assert pm.ask_user("write_file", {"path": "app.py", "content": "print(\"ok\")\n"}) is True
+
+def test_permission_manager_falls_back_after_console_eof(monkeypatch):
+    import builtins
+    from nz_coder.permissions import PermissionManager
+
+    class _RendererWithConsole:
+        def __init__(self):
+            self.console = _FakeConsole()
+            self.calls = []
+
+        def pause(self):
+            self.calls.append("pause")
+
+        def resume(self):
+            self.calls.append("resume")
+
+    renderer = _RendererWithConsole()
+    renderer.console.input = lambda prompt, markup=False: (_ for _ in ()).throw(EOFError())
+    monkeypatch.setattr(builtins, "input", lambda prompt: "y")
+
+    pm = PermissionManager("default", renderer=renderer)
+    assert pm.ask_user("write_file", {"path": "app.py", "content": "print(\"ok\")\n"}) is True
+    assert renderer.calls == ["pause", "resume"]
+
+
+def test_permission_manager_resumes_renderer_after_eof(monkeypatch):
+    import builtins
+    from nz_coder.permissions import PermissionManager
+
+    renderer = _FakeRenderer()
+
+    def _raise_eof(prompt):
+        raise EOFError
+
+    monkeypatch.setattr(builtins, "input", _raise_eof)
+    monkeypatch.setattr(PermissionManager, "_tty_input", lambda self, prompt: (_ for _ in ()).throw(EOFError()))
+
+    pm = PermissionManager("default", renderer=renderer)
+    assert pm.ask_user("write_file", {"path": "app.py", "content": "print(\"ok\")\n"}) is False
+    assert renderer.calls == ["pause", "resume"]
+
+
+
+def test_agent_loop_keeps_renderer_reference():
+    from nz_coder.loop import AgentLoop
+
+    renderer = _FakeRenderer()
+    agent = AgentLoop("test", permission_mode="auto", client=_StubClient(), trace_enabled=False, renderer=renderer)
+
+    assert agent.renderer is renderer
+    assert agent.permissions._renderer is renderer
+
+
+def test_glob_search_recurses_into_subdirectories(tmp_path):
+    from nz_coder import config
+    from nz_coder.tools.search import glob_search
+
+    old = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        nested = tmp_path / "test"
+        nested.mkdir()
+        (nested / "demo.py").write_text("print(1)\n", encoding="utf-8")
+
+        result = glob_search("**/*.py")
+
+        assert "test/demo.py" in result
+    finally:
+        config.WORKDIR = old
+
+
+def test_list_directory_includes_subdirectories(tmp_path):
+    from nz_coder import config
+    from nz_coder.tools.files import list_directory
+
+    old = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        (tmp_path / "test").mkdir()
+        result = list_directory(".", depth=1)
+        assert "test/" in result
+        assert "(empty)" not in result
+    finally:
+        config.WORKDIR = old
+
+
+def test_prompt_forbids_bash_redirection_for_file_writes():
+    from nz_coder.prompt import build
+
+    prompt = build()
+
+    assert "always use write_file or write_files_batch" in prompt
+    assert "cat > file" in prompt
+    assert "echo ... > file" in prompt
+
 if __name__ == "__main__":
     test_imports()
     test_tool_registration()
@@ -616,3 +1015,115 @@ if __name__ == "__main__":
     test_benchmark_tasks_defined()
     test_external_benchmark_helpers_parse_args()
     print("\nAll smoke tests passed!")
+
+
+def test_session_runtime_dirs_are_isolated():
+    import tempfile
+    import shutil
+    from nz_coder import config
+    from nz_coder.sessions import (
+        activate_session,
+        session_change_dir,
+        session_tool_results_dir,
+        session_trace_dir,
+        session_transcript_dir,
+    )
+
+    old_workdir = config.WORKDIR
+    tmpdir = Path(tempfile.mkdtemp())
+    config.WORKDIR = tmpdir
+    try:
+        activate_session("session-one")
+        one_trace = session_trace_dir()
+        one_change = session_change_dir()
+        one_tools = session_tool_results_dir()
+        one_transcripts = session_transcript_dir()
+
+        activate_session("session-two")
+        assert session_trace_dir() != one_trace
+        assert session_change_dir() != one_change
+        assert session_tool_results_dir() != one_tools
+        assert session_transcript_dir() != one_transcripts
+    finally:
+        config.WORKDIR = old_workdir
+        shutil.rmtree(str(tmpdir), ignore_errors=True)
+
+
+def test_scratchpad_isolated_by_session_id():
+    import tempfile
+    import shutil
+    from nz_coder import config
+    from nz_coder.sessions import activate_session
+    from nz_coder.tools.scratchpad import scratchpad
+
+    old_workdir = config.WORKDIR
+    tmpdir = Path(tempfile.mkdtemp())
+    config.WORKDIR = tmpdir
+    try:
+        activate_session("session-one")
+        scratchpad.clear()
+        scratchpad.update("finding", "one")
+
+        activate_session("session-two")
+        scratchpad.clear()
+        assert scratchpad.read() == "Scratchpad is empty."
+        scratchpad.update("finding", "two")
+
+        activate_session("session-one")
+        assert "one" in scratchpad.read()
+        assert "two" not in scratchpad.read()
+    finally:
+        activate_session("session-one")
+        scratchpad.clear()
+        activate_session("session-two")
+        scratchpad.clear()
+        config.WORKDIR = old_workdir
+        shutil.rmtree(str(tmpdir), ignore_errors=True)
+
+
+def test_todo_isolated_by_session_id():
+    import tempfile
+    import shutil
+    from nz_coder import config
+    from nz_coder.sessions import activate_session
+    from nz_coder.tools.todo import render, todo_update
+
+    old_workdir = config.WORKDIR
+    tmpdir = Path(tempfile.mkdtemp())
+    config.WORKDIR = tmpdir
+    try:
+        activate_session("session-one")
+        todo_update([{"content": "first", "status": "in_progress"}])
+
+        activate_session("session-two")
+        assert render() == "No todos."
+        todo_update([{"content": "second", "status": "pending"}])
+
+        activate_session("session-one")
+        assert "first" in render()
+        assert "second" not in render()
+    finally:
+        config.WORKDIR = old_workdir
+        shutil.rmtree(str(tmpdir), ignore_errors=True)
+
+
+def test_persist_large_output_uses_active_session_runtime_dir():
+    import tempfile
+    import shutil
+    from nz_coder import config
+    from nz_coder.context import persist_large_output
+    from nz_coder.sessions import activate_session, session_tool_results_dir
+
+    old_workdir = config.WORKDIR
+    old_trigger = config.PERSIST_OUTPUT_TRIGGER
+    tmpdir = Path(tempfile.mkdtemp())
+    config.WORKDIR = tmpdir
+    try:
+        activate_session("session-output")
+        result = persist_large_output("call_test", "x" * (old_trigger + 1))
+        expected = session_tool_results_dir("session-output") / "call_test.txt"
+        assert expected.exists()
+        assert str(expected.relative_to(tmpdir)) in result
+    finally:
+        config.WORKDIR = old_workdir
+        shutil.rmtree(str(tmpdir), ignore_errors=True)

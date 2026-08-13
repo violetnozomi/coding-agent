@@ -75,6 +75,27 @@ def test_verify_changed_files_checks_untracked_python_file(tmp_path):
         config.WORKDIR = old_workdir
 
 
+def test_verify_changed_files_skips_deleted_python_file(tmp_path, monkeypatch):
+    from nz_coder import config
+    from nz_coder.tools import repo_intel
+
+    old_workdir = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        monkeypatch.setattr(
+            repo_intel,
+            "_changed_files_for_verification",
+            lambda include_tests: ["deleted.py"],
+        )
+
+        result = repo_intel.verify_changed_files()
+
+        assert result.startswith("OK:")
+        assert "SKIP deleted.py (deleted file)" in result
+    finally:
+        config.WORKDIR = old_workdir
+
+
 def test_smart_search_uses_log_tf_idf_instead_of_linear_line_count(tmp_path):
     from nz_coder import config
     from nz_coder.tools.repo_intel import smart_search
@@ -270,6 +291,7 @@ def test_verify_changed_files_go_compile_does_not_run_tests(tmp_path, monkeypatc
     old_workdir = config.WORKDIR
     config.WORKDIR = tmp_path
     try:
+        (tmp_path / "go.mod").write_text("module example.com/demo\n", encoding="utf-8")
         target = tmp_path / "pkg" / "server.go"
         target.parent.mkdir(parents=True)
         target.write_text("package pkg\nfunc Value() int { return 1 }\n", encoding="utf-8")
@@ -290,5 +312,110 @@ def test_verify_changed_files_go_compile_does_not_run_tests(tmp_path, monkeypatc
 
         assert result.startswith("OK: changed files verification")
         assert args_path.read_text(encoding="utf-8").splitlines() == ["test", "./pkg", "-run", "^$"]
+    finally:
+        config.WORKDIR = old_workdir
+
+
+def test_verify_changed_files_warns_for_go_without_module_metadata(tmp_path, monkeypatch):
+    from nz_coder import config
+    from nz_coder.tools import repo_intel
+
+    _init_repo(tmp_path)
+    old_workdir = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        target = tmp_path / "pkg" / "server.go"
+        target.parent.mkdir(parents=True)
+        target.write_text("package pkg\n", encoding="utf-8")
+        monkeypatch.setattr(
+            repo_intel,
+            "_run_verifier",
+            lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not run")),
+        )
+
+        result = repo_intel.verify_changed_files()
+
+        assert result.startswith("WARN: changed files verification incomplete")
+        assert "no root go.mod or go.work" in result
+    finally:
+        config.WORKDIR = old_workdir
+
+
+def test_node_typecheck_command_prefers_pnpm_lockfile(tmp_path):
+    from nz_coder import config
+    from nz_coder.tools.repo_intel import _node_typecheck_command
+
+    old_workdir = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        (tmp_path / "package.json").write_text(
+            '{"scripts":{"typecheck":"tsc --noEmit"}}',
+            encoding="utf-8",
+        )
+        (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: 9\n", encoding="utf-8")
+
+        assert _node_typecheck_command() == ["pnpm", "run", "typecheck"]
+    finally:
+        config.WORKDIR = old_workdir
+
+
+def test_node_typecheck_command_prefers_yarn_lockfile(tmp_path):
+    from nz_coder import config
+    from nz_coder.tools.repo_intel import _node_typecheck_command
+
+    old_workdir = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        (tmp_path / "package.json").write_text(
+            '{"scripts":{"typecheck":"tsc --noEmit"}}',
+            encoding="utf-8",
+        )
+        (tmp_path / "yarn.lock").write_text("# yarn lockfile\n", encoding="utf-8")
+
+        assert _node_typecheck_command() == ["yarn", "typecheck"]
+    finally:
+        config.WORKDIR = old_workdir
+
+
+def test_read_symbol_respects_max_depth_parameter(tmp_path):
+    from nz_coder import config
+    from nz_coder.tools.repo_intel import read_symbol
+
+    old_workdir = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        (tmp_path / "nested.py").write_text(
+            "class Outer:\n"
+            "    class Inner:\n"
+            "        def method(self):\n"
+            "            return 1\n"
+            "\n"
+            "    def method(self):\n"
+            "        def helper():\n"
+            "            return 2\n"
+            "        return helper()\n",
+            encoding="utf-8",
+        )
+
+        listed = read_symbol("nested.py", mode="list", max_depth=1)
+
+        assert "Outer" in listed
+        assert "Outer.Inner" in listed
+        assert "Outer.Inner.method" not in listed
+        assert "Outer.method.helper" not in listed
+    finally:
+        config.WORKDIR = old_workdir
+
+
+def test_smart_search_no_files_message_is_include_aware(tmp_path):
+    from nz_coder import config
+    from nz_coder.tools.repo_intel import smart_search
+
+    old_workdir = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        result = smart_search("widget token", include="*.ts")
+
+        assert "No files matching '*.ts' found under '.'" in result
     finally:
         config.WORKDIR = old_workdir

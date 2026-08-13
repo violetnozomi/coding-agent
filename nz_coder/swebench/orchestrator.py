@@ -10,13 +10,14 @@ RetryOrchestrator is the only component that:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import multiprocessing
 import os
+import queue as queue_module
 import shutil
 import signal
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -25,6 +26,16 @@ from typing import TYPE_CHECKING
 from nz_coder.swebench.adapter import SWEBenchAdapter, _safe_name
 from nz_coder.swebench.guardrail import PatchGuardrail
 from nz_coder.swebench.models import FailureFeedback, PatchRiskReport, RetryPlan
+from nz_coder.runtime.execution_context import scoped_runtime_overrides
+from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.swebench.artifacts import AttemptJournal, export_public_trajectory
+from nz_coder.swebench.policy import STRICT_ALLOWED_TOOLS
+from nz_coder.swebench.trace_budget import (
+    TraceBudget,
+    archive_instance_diagnostics,
+    evaluate_trace_budget,
+    write_trace_budget_report,
+)
 
 if TYPE_CHECKING:
     pass
@@ -36,6 +47,41 @@ DEFAULT_REPO_CACHE_DIR = DEFAULT_BENCH_DIR / "repo-cache"
 
 class AgentRunTimeout(TimeoutError):
     """Raised when a single agent instance exceeds the configured timeout."""
+
+
+def _strict_agent_protocol() -> str:
+    """Return the model-visible local-only execution contract for strict runs."""
+    return (
+        "\n\nStrict local tool protocol:\n"
+        "- bash never changes directory with cd. Set bash.workdir to a workspace-relative "
+        "subdirectory instead.\n"
+        "- Allowed direct local commands: cat, cmp, cut, diff, file, grep, head, ls, pwd, "
+        "rg, sort, stat, tail, tr, tree, uniq, wc.\n"
+        "- Allowed Git subcommands: git diff | grep | ls-files | rev-parse | status. "
+        "Git history, remotes, and network access are forbidden.\n"
+        "- Allowed Python verification: python3 -m py_compile | compileall | pytest. "
+        "Do not use python3 -c, scripts, package installation, redirects, command "
+        "substitution, or URLs.\n"
+        "Structured navigation decisions:\n"
+        "- Before reading 3 or more files in one module, call repo_map on the smallest "
+        "relevant directory.\n"
+        "- When the known function, class, or method name is available, call read_symbol "
+        "instead of reading the whole file.\n"
+        "- Before changing a shared symbol, use find_symbol_callers or code_references; "
+        "use analyze_impact to inspect affected callers and tests.\n"
+    )
+
+
+def _classify_tool_log_status(output: str) -> str:
+    """Separate strict process-policy feedback from execution failures."""
+    value = str(output or "")
+    if value.startswith(("Error:", "Denied")):
+        if "SWE-bench strict mode" in value:
+            return "policy_rejected"
+        return "error"
+    if value.startswith("Command exited with code"):
+        return "nonzero"
+    return "ok"
 
 
 class RetryOrchestrator:
@@ -193,6 +239,7 @@ class RetryOrchestrator:
         clone_timeout: int,
         agent_timeout: int,
         empty_patch_retries: int = 0,
+        strict: bool = False,
     ) -> dict:
         """Clone repo, run agent, collect diff. Returns result dict.
 
@@ -205,7 +252,12 @@ class RetryOrchestrator:
         print(f"\n[{instance_id}]")
 
         # ── Repo setup ────────────────────────────────────────────────────────
-        clone = _prepare_repo(instance, repo_dir, clone_timeout)
+        clone = _prepare_repo(
+            instance,
+            repo_dir,
+            clone_timeout,
+            sanitize_history=strict,
+        )
         if clone["returncode"] != 0:
             return {
                 "instance_id": instance_id,
@@ -231,74 +283,116 @@ class RetryOrchestrator:
                 }
 
         # ── Agent setup ───────────────────────────────────────────────────────
-        original_workdir = config.WORKDIR
-        had_agent_timeout = hasattr(config, "AGENT_TIMEOUT_SECONDS")
-        original_agent_timeout = getattr(config, "AGENT_TIMEOUT_SECONDS", None)
-        config.WORKDIR = repo_dir
         trace_dir = repo_dir / ".nz-coder-runs"
         tracer = trace_cls(trace_dir=trace_dir, enabled=True)
         tool_log: list[dict] = []
+        tool_generation = 0
 
         def log_tool(name: str, output: str) -> None:
-            if output.startswith(("Error:", "Denied")):
-                status = "error"
-            elif output.startswith("Command exited with code"):
-                status = "nonzero"
-            else:
-                status = "ok"
-            tool_log.append({"tool": name, "name": name, "status": status, "output_len": len(output)})
+            nonlocal tool_generation
+            status = _classify_tool_log_status(output)
+            if status == "ok" and name in {
+                "write_file", "edit_file", "apply_patch", "replace_lines",
+                "python_structural_edit", "scaffold_project", "write_files_batch",
+            }:
+                tool_generation += 1
+            tool_log.append({
+                "tool": name,
+                "name": name,
+                "status": status,
+                "generation": tool_generation,
+                "output_len": len(output),
+                "output": output[:512],
+            })
             preview = output.replace("\n", " ")[:160]
             print(f"  {name}: {status} {preview}")
 
-        system_prompt = build_prompt() + (
-            "\n\nYou are solving a SWE-bench Lite task in a checked-out repository. "
-            "Make the minimal source-code change needed to satisfy the issue. "
-            "Do not edit tests unless the issue explicitly requires it. "
-            "IMPORTANT: Always use 'python3' (not 'python') to run Python code. "
-            "IMPORTANT: Do NOT create any new files in the repository. "
-            "Clean up any scratch files before finishing. "
-            "IMPORTANT: This is a raw source checkout - the package is NOT installed. "
-            "Do NOT try `from <package> import ...` to verify your fix; "
-            "it will often fail with ModuleNotFoundError. "
-            "\n"
-            "Search and verification protocol:\n"
-            "1. Start with smart_search using the issue statement, failing tests, "
-            "and traceback if available.\n"
-            "2. Inspect at most 3 candidate files before making the first edit.\n"
-            "3. Prefer read_symbol over read_file when a candidate "
-            "function/class/method is known.\n"
-            "4. After any source edit, call diff_status.\n"
-            "5. If diff_status shows a non-empty source-only diff, call "
-            "verify_changed_files.\n"
-            "6. Do NOT run pytest, tox, or full test suites after a source diff "
-            "exists — they often fail due to missing dependencies, import errors, "
-            "display backend issues, database setup, or package installation "
-            "problems that are NOT caused by your patch.\n"
-            "7. If verify_changed_files passes, finalize the patch.\n"
-            "8. If local tests fail due to environment issues (missing modules, "
-            "import errors, database config, display backends), stop verifying "
-            "and leave the source patch for official SWE-bench evaluation.\n"
-            "9. A plausible non-empty source patch is better than no patch."
-        )
+        with scoped_workdir(repo_dir):
+            system_prompt = build_prompt() + (
+                f"\n\nYou are solving a SWE-bench {self.adapter.profile.name.title()} task "
+                "in a checked-out repository. "
+                "Make the minimal source-code change needed to satisfy the issue. "
+                "Do not edit tests unless the issue explicitly requires it. "
+                "IMPORTANT: Always use 'python3' (not 'python') to run Python code. "
+                "IMPORTANT: Do NOT create any new files in the repository. "
+                "Clean up any scratch files before finishing. "
+                "IMPORTANT: This is a raw source checkout - the package is NOT installed. "
+                "Do NOT try `from <package> import ...` to verify your fix; "
+                "it will often fail with ModuleNotFoundError. "
+                "\n"
+                "Search and verification protocol:\n"
+                "1. Start with grep_search using key issue tokens, failing test names, "
+                "and traceback clues if available.\n"
+                "2. Inspect at most 3 candidate files before making the first edit.\n"
+                "3. Prefer read_symbol over read_file when a candidate "
+                "function/class/method is known.\n"
+                "4. After any source edit, call diff_status.\n"
+                "5. If diff_status shows a non-empty source-only diff, call "
+                "verify_changed_files.\n"
+                "6. Do NOT run pytest, tox, or full test suites after a source diff "
+                "exists — they often fail due to missing dependencies, import errors, "
+                "display backend issues, database setup, or package installation "
+                "problems that are NOT caused by your patch.\n"
+                "7. If verify_changed_files passes, finalize the patch.\n"
+                "8. If local tests fail due to environment issues (missing modules, "
+                "import errors, database config, display backends), stop verifying "
+                "and leave the source patch for official SWE-bench evaluation.\n"
+                "9. A plausible non-empty source patch is better than no patch."
+            )
+            if strict:
+                system_prompt += _strict_agent_protocol()
 
         # Build message list
         if plan is not None:
             messages = self.build_initial_messages(instance, plan)
         else:
             messages = [{"role": "user", "content": self.adapter.format_instance_prompt(instance)}]
+        public_input_path = trace_dir / "public-inference-input.json"
+        public_input_path.write_text(json.dumps({
+            "event": "benchmark_instance",
+            "instance_id": instance_id,
+            "benchmark_profile": self.adapter.profile.name,
+            "prompt": messages[0]["content"],
+            "strict": bool(strict),
+            "attempts": 1,
+        }, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+        tracer.log(
+            "benchmark_instance",
+            instance_id=instance_id,
+            benchmark_profile=self.adapter.profile.name,
+            prompt=messages[0]["content"],
+            strict=bool(strict),
+            attempts=1,
+        )
 
         # ── Agent run ─────────────────────────────────────────────────────────
-        # Let RuntimeState know about the SWE-bench time budget
-        if agent_timeout > 0:
-            config.AGENT_TIMEOUT_SECONDS = agent_timeout
-
         feedback_str = plan.failure_feedback.to_agent_prompt(plan.previous_patch) if (plan and plan.failure_feedback) else None
         effective_retries = plan.empty_patch_retries if plan else empty_patch_retries
 
+        def run_attempt() -> dict:
+            with (
+                scoped_workdir(repo_dir),
+                scoped_runtime_overrides(
+                    agent_timeout_seconds=agent_timeout,
+                    strict_local_tools=strict,
+                ),
+            ):
+                return _run_agent_attempt(
+                    agent_cls,
+                    system_prompt,
+                    tracer,
+                    messages,
+                    log_tool,
+                    agent_timeout,
+                    agent_kwargs=(
+                        {"tool_allowlist": STRICT_ALLOWED_TOOLS}
+                        if strict
+                        else None
+                    ),
+                )
+
         try:
-            agent_status = _run_agent_attempt(
-                agent_cls, system_prompt, tracer, messages, log_tool, agent_timeout
-            )
+            agent_status = run_attempt()
             model_patch = _collect_diff(repo_dir)
             empty_retry_count = 0
             while _should_retry_empty_patch(
@@ -312,9 +406,7 @@ class RetryOrchestrator:
                     "role": "user",
                     "content": _format_empty_patch_retry_feedback(empty_retry_count, effective_retries),
                 })
-                agent_status = _run_agent_attempt(
-                    agent_cls, system_prompt, tracer, messages, log_tool, agent_timeout
-                )
+                agent_status = run_attempt()
                 model_patch = _collect_diff(repo_dir)
 
             # Risk analysis on the final patch
@@ -342,14 +434,7 @@ class RetryOrchestrator:
             model_patch = ""
             status = "agent_failed"
             summary = str(exc)
-            risk_reasons = [f"agent_status:exception"]
-        finally:
-            config.WORKDIR = original_workdir
-            if had_agent_timeout:
-                config.AGENT_TIMEOUT_SECONDS = original_agent_timeout
-            elif hasattr(config, "AGENT_TIMEOUT_SECONDS"):
-                delattr(config, "AGENT_TIMEOUT_SECONDS")
-
+            risk_reasons = ["agent_status:exception"]
         return {
             "instance_id": instance_id,
             "repo": instance.get("repo"),
@@ -362,9 +447,14 @@ class RetryOrchestrator:
             "duration": round(time.time() - started, 1),
             "tool_calls": len(tool_log),
             "tool_errors": sum(1 for row in tool_log if row["status"] == "error"),
+            "policy_rejections": sum(
+                1 for row in tool_log if row["status"] == "policy_rejected"
+            ),
+            "process_warnings": _agent_status_process_warnings(agent_status, tool_log),
             "risk_reasons": risk_reasons,
             "empty_patch_retries": locals().get("empty_retry_count", 0),
             "model_patch": model_patch,
+            "public_input": str(locals().get("public_input_path", "")),
         }
 
     # ── Batch helpers (used by cli.py) ────────────────────────────────────────
@@ -384,11 +474,38 @@ class RetryOrchestrator:
         empty_patch_retries: int,
         pred_file,
         model_name: str,
+        strict: bool = False,
+        attempt_journal: AttemptJournal | None = None,
+        predictions_path: Path | None = None,
+        public_trajectories_dir: Path | None = None,
+        cleanup_worktrees: bool = False,
+        trace_budget: TraceBudget | None = None,
+        max_new_instances: int | None = None,
     ) -> list[dict]:
         """First-pass: run agent on each instance without previous predictions."""
         results = []
+        attempted_ids = attempt_journal.attempted_ids() if attempt_journal else set()
         for index, instance in enumerate(instances, start=1):
+            if instance["instance_id"] in attempted_ids:
+                print(f"[RESUME] {instance['instance_id']}: pass@1 attempt already claimed; never rerunning.")
+                continue
+            if trace_budget is not None:
+                pressure = evaluate_trace_budget(trace_budget)
+                if pressure.hard_limit_reached:
+                    report_path = write_trace_budget_report(trace_budget, pressure)
+                    print(
+                        "[TRACE BUDGET] Hard limit reached before next pass@1 "
+                        f"claim: {pressure.used_bytes} bytes; report={report_path}"
+                    )
+                    break
+                if pressure.warning:
+                    print(
+                        "[TRACE BUDGET] Warning threshold reached: "
+                        f"{pressure.used_bytes}/{trace_budget.hard_limit_bytes} bytes"
+                    )
             print(f"\n[{index}/{len(instances)}] {instance['instance_id']}")
+            if attempt_journal is not None:
+                attempt_journal.claim(instance["instance_id"])
             result = self.run_instance(
                 instance,
                 plan=None,
@@ -401,10 +518,99 @@ class RetryOrchestrator:
                 clone_timeout=clone_timeout,
                 agent_timeout=agent_timeout,
                 empty_patch_retries=empty_patch_retries,
+                strict=strict,
             )
             results.append(result)
-            _write_prediction(pred_file, instance["instance_id"], model_name, result)
+            if attempt_journal is not None:
+                trajectory = ""
+                if public_trajectories_dir is not None:
+                    trajectory_path = Path(public_trajectories_dir) / f"{instance['instance_id']}.jsonl"
+                    trace_path = Path(str(result.get("trace") or ""))
+                    if trace_path.is_file():
+                        export_public_trajectory(
+                            trace_path,
+                            trajectory_path,
+                            workspace=Path(result.get("workdir") or work_root),
+                            preamble_path=Path(str(result.get("public_input") or "")),
+                        )
+                    else:
+                        trajectory_path.parent.mkdir(parents=True, exist_ok=True)
+                        trajectory_path.write_text(json.dumps({
+                            "event": "inference_not_started",
+                            "instance_id": instance["instance_id"],
+                            "status": result.get("status"),
+                            "summary": result.get("summary", ""),
+                        }, ensure_ascii=False) + "\n", encoding="utf-8")
+                    trajectory = str(trajectory_path)
+                model_patch = result.get("model_patch", "")
+                if result.get("status") == "agent_failed":
+                    model_patch = ""
+                attempt_journal.record({
+                    "instance_id": instance["instance_id"],
+                    "attempt": 1,
+                    "status": result.get("status"),
+                    "trajectory": trajectory,
+                    "prediction": {
+                        "instance_id": instance["instance_id"],
+                        "model_name_or_path": model_name,
+                        "model_patch": model_patch,
+                    },
+                })
+                if predictions_path is not None:
+                    attempt_journal.write_predictions(predictions_path)
+            elif pred_file is not None:
+                _write_prediction(pred_file, instance["instance_id"], model_name, result)
+            if trace_budget is not None:
+                trace_path = Path(str(result.get("trace") or ""))
+                workdir = Path(str(result.get("workdir") or ""))
+                if trace_path.is_file() and str(result.get("workdir") or ""):
+                    archived = archive_instance_diagnostics(
+                        instance_id=str(instance["instance_id"]),
+                        workdir=workdir,
+                        run_root=work_root,
+                        trace_path=trace_path,
+                        public_input_path=(
+                            Path(str(result["public_input"]))
+                            if result.get("public_input")
+                            else None
+                        ),
+                        metadata={
+                            "status": result.get("status"),
+                            "summary": result.get("summary", ""),
+                            "patch_chars": len(str(result.get("model_patch") or "")),
+                            "trace": str(trace_path),
+                        },
+                        budget=trace_budget,
+                    )
+                    result["trace_archive"] = str(archived.bundle_path)
+                    result["trace_archive_bytes"] = archived.used_bytes
+                    if archived.warning:
+                        print(
+                            "[TRACE BUDGET] Warning threshold reached after "
+                            f"{instance['instance_id']}: "
+                            f"{archived.used_bytes}/{trace_budget.hard_limit_bytes} bytes"
+                        )
+                    if archived.hard_limit_reached:
+                        write_trace_budget_report(
+                            trace_budget,
+                            evaluate_trace_budget(trace_budget),
+                        )
+                else:
+                    result["trace_archive_skipped"] = "raw trace unavailable"
+            if cleanup_worktrees:
+                if result.get("workdir"):
+                    _cleanup_completed_worktree(
+                        Path(str(result["workdir"])),
+                        work_root,
+                    )
+                    result["workdir_cleaned"] = True
             print(f"[{result['status'].upper()}] {instance['instance_id']}: {result.get('summary', '')}")
+            if max_new_instances is not None and len(results) >= max_new_instances:
+                print(
+                    "[PAUSE] Reached this invocation's durable-result limit: "
+                    f"{len(results)}/{max_new_instances}."
+                )
+                break
         return results
 
     def retry_batch(
@@ -474,12 +680,18 @@ class RetryOrchestrator:
 
 # ── Agent execution helpers ───────────────────────────────────────────────────
 
-def _run_agent_attempt(agent_cls, system_prompt: str, tracer, messages: list[dict], log_tool, timeout: int) -> dict:
+def _run_agent_attempt(
+    agent_cls, system_prompt: str, tracer, messages: list[dict], log_tool,
+    timeout: int, agent_kwargs: dict | None = None,
+) -> dict:
     if timeout > 0 and hasattr(os, "fork"):
         return _run_agent_attempt_in_subprocess(
-            agent_cls, system_prompt, tracer, messages, log_tool, timeout
+            agent_cls, system_prompt, tracer, messages, log_tool, timeout,
+            agent_kwargs=agent_kwargs,
         )
-    agent = agent_cls(system_prompt, permission_mode="auto", tracer=tracer)
+    agent = agent_cls(
+        system_prompt, permission_mode="auto", tracer=tracer, **(agent_kwargs or {})
+    )
     return _run_agent_with_timeout(agent, messages, log_tool, timeout=timeout)
 
 
@@ -490,42 +702,74 @@ def _run_agent_attempt_in_subprocess(
     messages: list[dict],
     log_tool,
     timeout: int,
+    agent_kwargs: dict | None = None,
 ) -> dict:
     ctx = multiprocessing.get_context("fork")
-    queue = ctx.Queue()
+    result_queue = ctx.Queue()
     process = ctx.Process(
         target=_agent_attempt_worker,
-        args=(agent_cls, system_prompt, tracer, messages, queue),
+        args=(agent_cls, system_prompt, tracer, messages, result_queue, agent_kwargs),
     )
     process.start()
-    process.join(timeout)
-    if process.is_alive():
-        process.terminate()
+    try:
+        # Drain the result before joining.  multiprocessing.Queue writes from a
+        # feeder thread, so joining first deadlocks once the payload exceeds the
+        # OS pipe buffer: the child waits for the feeder while the parent waits
+        # for the child.  Full tool output already lives in the trace artifact;
+        # this channel carries only the bounded result projection below.
+        try:
+            payload = result_queue.get(timeout=timeout)
+        except queue_module.Empty:
+            if process.is_alive():
+                _stop_agent_process(process)
+                raise AgentRunTimeout(f"agent timed out after {timeout}s")
+            process.join()
+            raise RuntimeError(
+                "agent subprocess exited without a result "
+                f"(exitcode={process.exitcode})"
+            )
+
         process.join(5)
         if process.is_alive():
-            process.kill()
-            process.join(5)
-        raise AgentRunTimeout(f"agent timed out after {timeout}s")
-
-    if queue.empty():
-        raise RuntimeError(f"agent subprocess exited without a result (exitcode={process.exitcode})")
-    payload = queue.get()
-    for event in payload.get("tool_events", []):
-        log_tool(event["name"], event.get("output", ""))
-    if not payload.get("ok"):
-        raise RuntimeError(payload.get("error", "agent subprocess failed"))
-    return payload["agent_status"]
+            _stop_agent_process(process)
+            raise RuntimeError("agent subprocess returned a result but did not exit")
+        for event in payload.get("tool_events", []):
+            log_tool(event["name"], event.get("output", ""))
+        if not payload.get("ok"):
+            raise RuntimeError(payload.get("error", "agent subprocess failed"))
+        return payload["agent_status"]
+    finally:
+        result_queue.close()
+        result_queue.join_thread()
 
 
-def _agent_attempt_worker(agent_cls, system_prompt: str, tracer, messages: list[dict], queue) -> None:
+def _stop_agent_process(process) -> None:
+    """Terminate one benchmark Agent child without leaving a live process."""
+    if not process.is_alive():
+        process.join()
+        return
+    process.terminate()
+    process.join(5)
+    if process.is_alive():
+        process.kill()
+        process.join(5)
+
+
+def _agent_attempt_worker(
+    agent_cls, system_prompt: str, tracer, messages: list[dict], queue,
+    agent_kwargs: dict | None = None,
+) -> None:
     tool_events: list[dict] = []
 
     def child_log_tool(name: str, output: str) -> None:
-        tool_events.append({"name": name, "output": output[:4000]})
+        tool_events.append({"name": name, "output": output[:512]})
 
     try:
-        agent = agent_cls(system_prompt, permission_mode="auto", tracer=tracer)
-        agent_status = agent.run(messages, on_tool=child_log_tool, stream=False)
+        agent = agent_cls(
+            system_prompt, permission_mode="auto", tracer=tracer,
+            **(agent_kwargs or {}),
+        )
+        agent_status = asyncio.run(agent.run(messages, on_tool=child_log_tool, stream=False))
         queue.put({"ok": True, "agent_status": agent_status, "tool_events": tool_events})
     except BaseException as exc:
         queue.put({"ok": False, "error": repr(exc), "tool_events": tool_events})
@@ -533,9 +777,9 @@ def _agent_attempt_worker(agent_cls, system_prompt: str, tracer, messages: list[
 
 def _run_agent_with_timeout(agent, messages: list[dict], log_tool, *, timeout: int) -> dict:
     if timeout <= 0:
-        return agent.run(messages, on_tool=log_tool, stream=False)
+        return asyncio.run(agent.run(messages, on_tool=log_tool, stream=False))
     if not hasattr(signal, "SIGALRM"):
-        return agent.run(messages, on_tool=log_tool, stream=False)
+        return asyncio.run(agent.run(messages, on_tool=log_tool, stream=False))
 
     def _handle_timeout(signum, frame):
         raise AgentRunTimeout(f"agent timed out after {timeout}s")
@@ -543,7 +787,7 @@ def _run_agent_with_timeout(agent, messages: list[dict], log_tool, *, timeout: i
     old_handler = signal.signal(signal.SIGALRM, _handle_timeout)
     old_alarm = signal.alarm(timeout)
     try:
-        return agent.run(messages, on_tool=log_tool, stream=False)
+        return asyncio.run(agent.run(messages, on_tool=log_tool, stream=False))
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old_handler)
@@ -608,10 +852,20 @@ def _agent_status_risk_labels(agent_status: dict, tool_log: list[dict]) -> list[
         out = row.get("output", "") or ""
         return any(pattern in out for pattern in ignorable_error_patterns)
 
+    runtime = (agent_status or {}).get("runtime") or {}
+    final_generation = runtime.get("mutation_generation")
+
+    def _belongs_to_final_generation(row: dict) -> bool:
+        generation = row.get("generation")
+        if not isinstance(final_generation, int) or not isinstance(generation, int):
+            return True
+        return generation == final_generation
+
     if any(
         row["status"] == "error"
         and (row.get("name") or row.get("tool")) in significant_error_tools
         and not _is_ignorable(row)
+        and _belongs_to_final_generation(row)
         for row in tool_log
     ):
         reasons.append("tool_errors")
@@ -623,9 +877,49 @@ def _agent_status_risk_labels(agent_status: dict, tool_log: list[dict]) -> list[
     return reasons
 
 
+def _agent_status_process_warnings(
+    agent_status: dict,
+    tool_log: list[dict],
+) -> list[str]:
+    """Keep recovered execution defects visible without poisoning final risk."""
+    warnings: list[str] = []
+    policy_rejections = sum(
+        1 for row in tool_log if row.get("status") == "policy_rejected"
+    )
+    if policy_rejections:
+        warnings.append(f"strict_policy_rejections:{policy_rejections}")
+
+    final_generation = ((agent_status or {}).get("runtime") or {}).get(
+        "mutation_generation"
+    )
+    significant_error_tools = frozenset({
+        "bash", "apply_patch", "write_file", "edit_file",
+        "replace_lines", "python_structural_edit",
+    })
+    recovered_errors = sum(
+        1
+        for row in tool_log
+        if row.get("status") == "error"
+        and (row.get("name") or row.get("tool")) in significant_error_tools
+        and isinstance(final_generation, int)
+        and isinstance(row.get("generation"), int)
+        and row["generation"] < final_generation
+    )
+    if recovered_errors:
+        warnings.append(f"recovered_tool_errors:{recovered_errors}")
+    return warnings
+
+
 # ── Repo management helpers ───────────────────────────────────────────────────
 
-def _prepare_repo(instance: dict, repo_dir: Path, timeout: int) -> dict:
+def _prepare_repo(
+    instance: dict,
+    repo_dir: Path,
+    timeout: int,
+    *,
+    sanitize_history: bool = False,
+) -> dict:
+    repo_dir = Path(repo_dir).resolve()
     if repo_dir.exists():
         shutil.rmtree(repo_dir)
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -642,8 +936,33 @@ def _prepare_repo(instance: dict, repo_dir: Path, timeout: int) -> dict:
     checkout = _run(["git", "checkout", "--quiet", instance["base_commit"]], cwd=repo_dir, timeout=timeout)
     if checkout.returncode != 0:
         return _process_result(checkout, f"git checkout failed for {instance['base_commit']}")
+    if sanitize_history:
+        sanitized = _reinitialize_repo_at_base(repo_dir, timeout)
+        if sanitized.returncode != 0:
+            return _process_result(sanitized, "failed to sanitize post-base Git history")
     _run(["git", "status", "--short"], cwd=repo_dir, timeout=30)
     return {"returncode": 0, "summary": "repo ready"}
+
+
+def _reinitialize_repo_at_base(repo_dir: Path, timeout: int) -> subprocess.CompletedProcess:
+    """Replace cloned history with one local base snapshot so gold fixes are absent."""
+    git_dir = repo_dir / ".git"
+    if not git_dir.is_dir() or git_dir.parent != repo_dir:
+        return subprocess.CompletedProcess([], 2, "", "invalid benchmark Git directory")
+    shutil.rmtree(git_dir)
+    commands = (
+        ["git", "init", "--quiet"],
+        ["git", "config", "user.name", "NZ-Coder Benchmark"],
+        ["git", "config", "user.email", "benchmark@localhost"],
+        ["git", "add", "-A"],
+        ["git", "commit", "--quiet", "-m", "SWE-bench base snapshot"],
+    )
+    last = subprocess.CompletedProcess([], 0, "", "")
+    for command in commands:
+        last = _run(list(command), cwd=repo_dir, timeout=timeout)
+        if last.returncode != 0:
+            return last
+    return last
 
 
 def _repo_cache_dir(repo: str) -> Path:
@@ -669,6 +988,21 @@ def _collect_diff(repo_dir: Path) -> str:
     _run(["git", "add", "-N", ".", ":!.nz-coder", ":!.nz-coder-runs"], cwd=repo_dir, timeout=30)
     result = _run(["git", "diff", "--", ".", ":!.nz-coder", ":!.nz-coder-runs"], cwd=repo_dir, timeout=30)
     return result.stdout
+
+
+def _cleanup_completed_worktree(workdir: Path, work_root: Path) -> None:
+    """Remove one completed checkout without allowing a broad delete target."""
+    root = Path(work_root).resolve()
+    candidate = Path(workdir).resolve()
+    if candidate.parent != root:
+        raise ValueError(
+            f"refusing cleanup outside a direct child of work root: {candidate}"
+        )
+    if not candidate.exists():
+        return
+    if not candidate.is_dir():
+        raise ValueError(f"refusing cleanup of non-directory worktree: {candidate}")
+    shutil.rmtree(candidate)
 
 
 def _cleanup_scratch_files(repo_dir: Path) -> None:

@@ -1,0 +1,94 @@
+name: Windows Product RC
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-product:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Install product and release tools
+        run: python -m pip install -e ".[dev]" build
+      - name: Verify default Windows ConPTY dependency
+        run: python -c "import winpty; print(winpty.__file__)"
+      - name: Install native Windows LSP acceptance servers
+        shell: pwsh
+        run: |
+          python -m pip install basedpyright
+          npm install --global typescript typescript-language-server
+          go install golang.org/x/tools/gopls@latest
+          "$(go env GOPATH)\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Verify native parser wheels
+        run: python -c "import tree_sitter, tree_sitter_javascript, tree_sitter_typescript, tree_sitter_go"
+      - name: Platform and doctor evidence
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          nz-coder platform --json | Out-File artifacts/platform.json -Encoding utf8
+          nz-coder doctor --json | Out-File artifacts/doctor.json -Encoding utf8
+      - name: W1-W15 native Windows acceptance
+        run: python scripts/run_rc_acceptance.py --suite windows --output artifacts/windows-w1-w15.json
+      - name: Shell path process daemon attach Session LSP MCP and TUI contracts
+        run: >-
+          python -m pytest -q
+          tests/test_windows_platform_runtime.py
+          tests/test_windows_shell_runtime.py
+          tests/test_windows_native_smoke.py
+          tests/test_windows_crash_cleanup.py
+          tests/test_private_paths.py
+          tests/test_process_backends.py
+          tests/test_process_service.py
+          tests/test_http_service.py
+          tests/test_daemon.py
+          tests/test_terminal_backend.py
+          tests/test_tui_product_frames.py
+          tests/test_fullscreen.py
+          tests/test_lsp.py
+          tests/test_mcp.py
+      - name: Wheel sdist fresh-install daemon and startup smoke
+        run: python scripts/release_smoke.py
+      - name: Release R1-R12 evidence
+        run: python scripts/run_rc_acceptance.py --suite release --platform windows --output artifacts/windows-r1-r12.json
+      - name: TUI performance evidence
+        run: python scripts/benchmark_tui_rc.py --output artifacts/windows-tui-performance.json
+      - name: Upload Windows RC evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-rc-evidence
+          path: artifacts/
+
+  linux-product-sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev]" build
+      - run: mkdir -p artifacts
+      - run: python scripts/benchmark_terminal_product_final.py --output artifacts/linux-t1-t20.json
+      - run: python scripts/run_rc_acceptance.py --suite tui --output artifacts/linux-u1-u14.json
+      - run: python scripts/run_rc_acceptance.py --suite release --platform linux --output artifacts/linux-r1-r12.json
+      - run: python scripts/benchmark_tui_rc.py --output artifacts/linux-tui-performance.json
+      - name: Upload Linux product evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-product-evidence
+          path: artifacts/
