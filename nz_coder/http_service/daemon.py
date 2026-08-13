@@ -572,8 +572,10 @@ def _remove_runtime_files(paths: DaemonPaths, *, keep_log: bool) -> None:
 def _pid_alive(pid: int) -> bool:
     if os.name == "nt":
         native = _windows_pid_alive(pid)
-        if native is not None:
-            return native
+        # Windows does not implement the POSIX signal-0 probe.  An unknown
+        # native result is conservatively treated as alive, avoiding both a
+        # false stale-state cleanup and ``os.kill(pid, 0)`` raising WinError 87.
+        return True if native is None else native
     proc_stat = Path(f"/proc/{pid}/stat")
     try:
         value = proc_stat.read_text(encoding="utf-8")
@@ -619,6 +621,14 @@ def _windows_pid_alive(pid: int, *, kernel32=None) -> bool | None:
             selected_kernel.CloseHandle.restype = wintypes.BOOL
         handle = selected_kernel.OpenProcess(0x00100000, False, int(pid))
         if not handle:
+            if kernel32 is not None and hasattr(selected_kernel, "GetLastError"):
+                error = int(selected_kernel.GetLastError())
+            else:
+                error = int(ctypes.get_last_error())
+            if error == 87:  # ERROR_INVALID_PARAMETER: PID does not exist.
+                return False
+            if error == 5:  # ERROR_ACCESS_DENIED: process exists but is protected.
+                return True
             return None
         try:
             result = int(selected_kernel.WaitForSingleObject(handle, 0))

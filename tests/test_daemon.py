@@ -80,6 +80,37 @@ def test_windows_pid_liveness_uses_waitable_process_handle():
     assert exited.closed == [91]
 
 
+def test_windows_pid_liveness_classifies_missing_and_inaccessible_processes():
+    from nz_coder.http_service.daemon import _windows_pid_alive
+
+    class Kernel32:
+        def __init__(self, error):
+            self.error = error
+
+        def OpenProcess(self, _access, _inherit, _pid):
+            return 0
+
+        def GetLastError(self):
+            return self.error
+
+    assert _windows_pid_alive(4242, kernel32=Kernel32(87)) is False
+    assert _windows_pid_alive(4242, kernel32=Kernel32(5)) is True
+
+
+def test_windows_pid_liveness_never_falls_back_to_posix_kill(monkeypatch):
+    import nz_coder.http_service.daemon as daemon
+
+    monkeypatch.setattr(daemon.os, "name", "nt")
+    monkeypatch.setattr(daemon, "_windows_pid_alive", lambda _pid: None)
+    monkeypatch.setattr(
+        daemon.os,
+        "kill",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("must not call os.kill")),
+    )
+
+    assert daemon._pid_alive(4242) is True
+
+
 def test_windows_terminate_pid_uses_identity_scoped_taskkill(monkeypatch):
     import nz_coder.http_service.daemon as daemon
 

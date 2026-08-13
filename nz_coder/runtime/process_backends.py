@@ -153,10 +153,26 @@ class ConPtyBackend:
 
     tty = True
 
-    def __init__(self, process, *, windows_job=None) -> None:  # noqa: ANN001
+    _TERMINAL_QUERY_RESPONSES = {
+        "\x1b[c": "\x1b[?1;2c",
+        "\x1b[0c": "\x1b[?1;2c",
+        "\x1b[5n": "\x1b[0n",
+        "\x1b[6n": "\x1b[1;1R",
+    }
+
+    def __init__(
+        self,
+        process,  # noqa: ANN001
+        *,
+        windows_job=None,  # noqa: ANN001
+        rows: int = 24,
+        cols: int = 80,
+    ) -> None:
         self.process = process
         self.pid = int(process.pid)
         self._windows_job = windows_job
+        self._rows, self._cols = _size(rows, cols)
+        self._terminal_query_tail = ""
         self.lifecycle_mode = (
             "windows-job-object"
             if windows_job is not None
@@ -165,7 +181,31 @@ class ConPtyBackend:
 
     def read_bytes(self, size: int) -> bytes:
         value = self.process.read(size)
-        return value if isinstance(value, bytes) else str(value).encode("utf-8")
+        text = (
+            value.decode("utf-8", errors="replace")
+            if isinstance(value, bytes)
+            else str(value)
+        )
+        self._answer_terminal_queries(text)
+        return text.encode("utf-8")
+
+    def _answer_terminal_queries(self, value: str) -> None:
+        """Provide the small VT handshake a headless ConPTY host must own."""
+        combined = self._terminal_query_tail + value
+        for query, response in self._TERMINAL_QUERY_RESPONSES.items():
+            for _ in range(combined.count(query)):
+                self.process.write(response)
+        prefixes = {
+            query[:length]
+            for query in self._TERMINAL_QUERY_RESPONSES
+            for length in range(1, len(query))
+        }
+        self._terminal_query_tail = ""
+        for length in range(min(len(combined), 3), 0, -1):
+            suffix = combined[-length:]
+            if suffix in prefixes:
+                self._terminal_query_tail = suffix
+                break
 
     def write_bytes(self, data: bytes) -> None:
         value = data.decode("utf-8", errors="replace")
@@ -174,6 +214,7 @@ class ConPtyBackend:
 
     def resize(self, *, rows: int, cols: int) -> None:
         selected_rows, selected_cols = _size(rows, cols)
+        self._rows, self._cols = selected_rows, selected_cols
         self.process.setwinsize(selected_rows, selected_cols)
 
     def poll(self) -> int | None:
@@ -272,6 +313,8 @@ def create_process_backend(
             return ConPtyBackend(
                 process,
                 windows_job=_WindowsJob.bind(int(process.pid), os_name=selected_os),
+                rows=selected_rows,
+                cols=selected_cols,
             )
 
     if tty and selected_os != "nt":

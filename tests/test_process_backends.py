@@ -97,6 +97,16 @@ def test_conpty_adapter_start_read_write_resize_and_ctrl_c(tmp_path: Path):
     assert _FakeFactory.process.closed is True
 
 
+def test_conpty_answers_terminal_device_queries_before_next_read():
+    process = _FakePtyProcess()
+    process.reads = ["\x1b[c", "READY"]
+    backend = ConPtyBackend(process, rows=24, cols=80)
+
+    assert backend.read_bytes(1024) == b"\x1b[c"
+    assert process.writes == ["\x1b[?1;2c"]
+    assert backend.read_bytes(1024) == b"READY"
+
+
 def test_windows_tty_falls_back_to_pipe_when_winpty_is_missing(tmp_path, monkeypatch):
     class _Pipe:
         pid = 7
