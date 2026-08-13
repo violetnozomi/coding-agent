@@ -85,10 +85,11 @@ def test_conpty_adapter_start_read_write_resize_and_ctrl_c(tmp_path: Path):
     assert _FakeFactory.spawned[1]["dimensions"] == (24, 80)
     assert backend.read_bytes(1024) == b"READY\r\n"
     backend.write_bytes("中文\n".encode())
+    backend.write_bytes(b"already\r\n")
     backend.write_bytes(b"\x03")
     backend.resize(rows=40, cols=120)
     backend.resize(rows=60, cols=200)
-    assert _FakeFactory.process.writes[-2:] == ["中文\n", "\x03"]
+    assert _FakeFactory.process.writes[-3:] == ["中文\r\n", "already\r\n", "\x03"]
     assert _FakeFactory.process.sizes == [(40, 120), (60, 200)]
     backend.terminate_tree(grace_seconds=0)
     backend.close()

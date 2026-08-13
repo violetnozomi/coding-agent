@@ -51,6 +51,35 @@ def test_windows_process_identity_uses_native_creation_time_without_shell():
     assert kernel32.closed == [73]
 
 
+def test_windows_pid_liveness_uses_waitable_process_handle():
+    from nz_coder.http_service.daemon import _windows_pid_alive
+
+    class Kernel32:
+        def __init__(self, wait_result):
+            self.wait_result = wait_result
+            self.closed = []
+
+        def OpenProcess(self, access, inherit, pid):
+            assert (access, inherit, pid) == (0x00100000, False, 4242)
+            return 91
+
+        def WaitForSingleObject(self, handle, timeout):
+            assert (handle, timeout) == (91, 0)
+            return self.wait_result
+
+        def CloseHandle(self, handle):
+            self.closed.append(handle)
+            return 1
+
+    running = Kernel32(0x00000102)
+    exited = Kernel32(0x00000000)
+
+    assert _windows_pid_alive(4242, kernel32=running) is True
+    assert _windows_pid_alive(4242, kernel32=exited) is False
+    assert running.closed == [91]
+    assert exited.closed == [91]
+
+
 def test_windows_terminate_pid_uses_identity_scoped_taskkill(monkeypatch):
     import nz_coder.http_service.daemon as daemon
 

@@ -168,7 +168,9 @@ class ConPtyBackend:
         return value if isinstance(value, bytes) else str(value).encode("utf-8")
 
     def write_bytes(self, data: bytes) -> None:
-        self.process.write(data.decode("utf-8", errors="replace"))
+        value = data.decode("utf-8", errors="replace")
+        value = value.replace("\r\n", "\n").replace("\n", "\r\n")
+        self.process.write(value)
 
     def resize(self, *, rows: int, cols: int) -> None:
         selected_rows, selected_cols = _size(rows, cols)

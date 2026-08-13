@@ -570,6 +570,10 @@ def _remove_runtime_files(paths: DaemonPaths, *, keep_log: bool) -> None:
 
 
 def _pid_alive(pid: int) -> bool:
+    if os.name == "nt":
+        native = _windows_pid_alive(pid)
+        if native is not None:
+            return native
     proc_stat = Path(f"/proc/{pid}/stat")
     try:
         value = proc_stat.read_text(encoding="utf-8")
@@ -590,6 +594,43 @@ def _pid_alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def _windows_pid_alive(pid: int, *, kernel32=None) -> bool | None:
+    """Query one Windows PID through a waitable handle; ``None`` means unknown."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        selected_kernel = kernel32 or ctypes.WinDLL("kernel32", use_last_error=True)
+        if kernel32 is None:
+            selected_kernel.OpenProcess.argtypes = [
+                wintypes.DWORD,
+                wintypes.BOOL,
+                wintypes.DWORD,
+            ]
+            selected_kernel.OpenProcess.restype = wintypes.HANDLE
+            selected_kernel.WaitForSingleObject.argtypes = [
+                wintypes.HANDLE,
+                wintypes.DWORD,
+            ]
+            selected_kernel.WaitForSingleObject.restype = wintypes.DWORD
+            selected_kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+            selected_kernel.CloseHandle.restype = wintypes.BOOL
+        handle = selected_kernel.OpenProcess(0x00100000, False, int(pid))
+        if not handle:
+            return None
+        try:
+            result = int(selected_kernel.WaitForSingleObject(handle, 0))
+            if result == 0x00000102:
+                return True
+            if result == 0x00000000:
+                return False
+            return None
+        finally:
+            selected_kernel.CloseHandle(handle)
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
 
 
 def _process_identity(pid: int) -> str:
