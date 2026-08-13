@@ -89,12 +89,14 @@ def test_clipboard_image_missing_helper_bad_mime_and_oversize_fail_soft():
 
 def test_clipboard_image_persistence_is_private_and_workspace_local(tmp_path):
     from nz_coder.interface.clipboard import ClipboardImage, persist_image
+    from nz_coder.private_paths import inspect_private_path
 
     relative = persist_image(tmp_path, ClipboardImage(PNG, "image/png", "test"))
     path = tmp_path / relative
     assert path.read_bytes() == PNG
     assert path.resolve().is_relative_to(tmp_path.resolve())
-    assert os.stat(path).st_mode & 0o777 == 0o600
+    assert inspect_private_path(path).hardened is True
+    assert inspect_private_path(path.parent).hardened is True
 
 
 def test_clipboard_image_hardens_cache_and_final_attachment(tmp_path, monkeypatch):
@@ -171,6 +173,14 @@ def test_plain_file_drop_becomes_attachments_without_absolute_path_leak(tmp_path
     assert [item.path for item in attachments] == ["one.py", "two file.txt"]
     assert str(tmp_path) not in text
     assert "Please inspect the attached file(s)." in text
+
+
+def test_windows_file_drop_tokenizer_preserves_backslashes_and_removes_quotes():
+    from nz_coder.interface.terminal_input import _split_dropped_paths
+
+    assert _split_dropped_paths(
+        r"C:\repo\one.py 'C:\repo\two file.txt'", os_name="nt",
+    ) == (r"C:\repo\one.py", r"C:\repo\two file.txt")
 
 
 def test_file_drop_rejects_outside_and_symlink_paths(tmp_path):

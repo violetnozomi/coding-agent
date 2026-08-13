@@ -71,6 +71,20 @@ _MAX_CLIPBOARD_CHARS = 200_000
 _DOUBLE_CTRL_C_SECONDS = 1.0
 
 
+def _split_dropped_paths(text: str, *, os_name: str | None = None) -> tuple[str, ...]:
+    """Split a path-only submission using the host shell's quoting rules."""
+    selected_os = os.name if os_name is None else os_name
+    values = shlex.split(str(text), posix=selected_os != "nt")
+    if selected_os != "nt":
+        return tuple(values)
+    return tuple(
+        value[1:-1]
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}
+        else value
+        for value in values
+    )
+
+
 @dataclass(frozen=True)
 class TerminalInputAction:
     """An input-surface action emitted without submitting user text."""
@@ -520,7 +534,7 @@ class TerminalInput:
         if not self.attachments_enabled:
             return ()
         try:
-            values = shlex.split(str(text), posix=os.name != "nt")
+            values = _split_dropped_paths(text)
         except ValueError:
             return ()
         if not values or len(values) > _MAX_ATTACHMENTS:
