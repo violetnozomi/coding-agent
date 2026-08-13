@@ -50,6 +50,50 @@ def test_windows_workflow_installs_all_required_lsp_families():
     assert "tree_sitter" in workflow
 
 
+def test_windows_workflow_runs_doctor_with_non_secret_ci_credential():
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "windows-product-rc.yml"
+    ).read_text(encoding="utf-8")
+
+    doctor_step = workflow.split("- name: Platform and doctor evidence", 1)[1]
+    doctor_step = doctor_step.split("- name:", 1)[0]
+    assert "API_KEY: nz-coder-ci-doctor-placeholder" in doctor_step
+
+
+def test_product_workflow_installs_backend_for_non_isolated_release_builds():
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "windows-product-rc.yml"
+    ).read_text(encoding="utf-8")
+
+    install_commands = [
+        line.strip()
+        for line in workflow.splitlines()
+        if "pip install" in line and '".[dev]"' in line
+    ]
+    assert len(install_commands) == 2
+    assert all('"setuptools>=68"' in command for command in install_commands)
+    assert all(" wheel" in command for command in install_commands)
+
+
+def test_windows_workflow_disables_go_cache_without_a_go_module():
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "windows-product-rc.yml"
+    ).read_text(encoding="utf-8")
+
+    go_setup = workflow.split("- uses: actions/setup-go@v5", 1)[1]
+    go_setup = go_setup.split("- name:", 1)[0]
+    assert "cache: false" in go_setup
+
+
 def test_acceptance_runner_records_release_evidence_fields_without_short_circuiting():
     calls = 0
 
