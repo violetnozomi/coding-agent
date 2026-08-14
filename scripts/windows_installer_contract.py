@@ -54,10 +54,14 @@ class InstallerContract:
             ),
         )
         missing.extend(label for candidate, label in required if not candidate.exists())
-        names = tuple(item.name.lower() for item in internal.rglob("*") if item.is_file())
-        if not any("winpty" in name for name in names):
+        assets = tuple(
+            item.relative_to(internal).as_posix().lower()
+            for item in internal.rglob("*")
+            if item.is_file()
+        )
+        if not any("winpty" in asset for asset in assets):
             missing.append("_internal/**/winpty native runtime")
-        if not any("tree_sitter" in name for name in names):
+        if not any("tree_sitter" in asset for asset in assets):
             missing.append("_internal/**/tree_sitter native runtime")
         return tuple(missing)
 

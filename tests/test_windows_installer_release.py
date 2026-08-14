@@ -43,7 +43,8 @@ def test_frozen_tree_accepts_complete_distribution(tmp_path):
     (internal / "nz_coder" / "bundled_skills").mkdir(parents=True)
     (tmp_path / "nz-coder.exe").write_bytes(b"exe")
     (internal / "winpty.dll").write_bytes(b"dll")
-    (internal / "tree_sitter.pyd").write_bytes(b"pyd")
+    (internal / "tree_sitter").mkdir()
+    (internal / "tree_sitter" / "_binding.pyd").write_bytes(b"pyd")
 
     assert InstallerContract("0.1.0").validate_frozen_tree(tmp_path) == ()
 
