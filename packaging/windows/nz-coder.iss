@@ -53,17 +53,29 @@ procedure SetUserPathEntry(AddEntry: Boolean);
 var
   CurrentPath: string;
   Entry: string;
-  Parts: TArrayOfString;
+  Remaining: string;
+  Part: string;
   Updated: string;
-  Index: Integer;
+  Separator: Integer;
 begin
   Entry := ExpandConstant('{app}');
   RegQueryStringValue(HKCU, EnvironmentKey, 'Path', CurrentPath);
-  Parts := SplitString(CurrentPath, ';');
+  Remaining := CurrentPath;
   Updated := '';
-  for Index := 0 to GetArrayLength(Parts) - 1 do
-    if (Parts[Index] <> '') and (CompareText(RemoveQuotes(Parts[Index]), Entry) <> 0) then
-      if Updated = '' then Updated := Parts[Index] else Updated := Updated + ';' + Parts[Index];
+  while Remaining <> '' do begin
+    Separator := Pos(';', Remaining);
+    if Separator = 0 then begin
+      Part := Remaining;
+      Remaining := '';
+    end else begin
+      Part := Copy(Remaining, 1, Separator - 1);
+      Delete(Remaining, 1, Separator);
+    end;
+    Part := Trim(Part);
+    if (Part <> '') and (CompareText(Part, Entry) <> 0) and
+       (CompareText(Part, '"' + Entry + '"') <> 0) then
+      if Updated = '' then Updated := Part else Updated := Updated + ';' + Part;
+  end;
   if AddEntry then
     if Updated = '' then Updated := Entry else Updated := Updated + ';' + Entry;
   RegWriteExpandStringValue(HKCU, EnvironmentKey, 'Path', Updated);
