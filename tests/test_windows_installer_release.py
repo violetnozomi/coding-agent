@@ -43,3 +43,23 @@ def test_frozen_tree_accepts_complete_distribution(tmp_path):
     (internal / "tree_sitter.pyd").write_bytes(b"pyd")
 
     assert InstallerContract("0.1.0").validate_frozen_tree(tmp_path) == ()
+
+
+def test_pyinstaller_entrypoint_uses_existing_cli_runtime():
+    entrypoint = ROOT / "packaging" / "windows" / "nz_coder_entry.py"
+
+    text = entrypoint.read_text(encoding="utf-8")
+    assert "from nz_coder.cli import main" in text
+    assert "SystemExit(main())" in text
+
+
+def test_pyinstaller_spec_builds_one_directory_with_package_resources():
+    spec = ROOT / "packaging" / "windows" / "nz-coder.spec"
+
+    text = spec.read_text(encoding="utf-8")
+    assert 'collect_all("nz_coder")' in text
+    assert 'copy_metadata("nz-coder")' in text
+    assert 'name="nz-coder"' in text
+    assert "console=True" in text
+    assert "COLLECT(" in text
+    assert 'target_arch="x86_64"' in text
