@@ -119,3 +119,27 @@ def test_windows_build_script_is_strict_and_emits_a_hashed_artifact():
         'ConvertTo-Json',
     ):
         assert required in text
+
+
+def test_windows_installer_smoke_covers_product_upgrade_and_safe_uninstall():
+    text = (ROOT / "scripts" / "test_windows_installer.ps1").read_text(
+        encoding="utf-8",
+    )
+
+    for required in (
+        'Set-StrictMode -Version Latest',
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART',
+        '/CURRENTUSER',
+        'Install Path With Spaces',
+        'nz-coder.exe',
+        '@("platform", "--json")',
+        '@("doctor", "--json")',
+        '@("config", "show", "--json")',
+        'unins000.exe',
+        'workspace.env.sentinel',
+        'workspace.state.sentinel',
+        'ConvertTo-Json',
+    ):
+        assert required in text
