@@ -31,7 +31,6 @@ WizardStyle=modern
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "userpath"; Description: "Add NZ-Coder to the current user's PATH"; Flags: checkedonce
