@@ -22,8 +22,9 @@ $Steps = [ordered]@{}
 $Failure = $null
 
 function Invoke-Setup([string]$SetupPath) {
-    & $SetupPath /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER "/DIR=$InstallPath"
-    if ($LASTEXITCODE -ne 0) { throw "Setup failed with exit code $LASTEXITCODE." }
+    $Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /DIR=`"$InstallPath`""
+    $Process = Start-Process -FilePath $SetupPath -ArgumentList $Arguments -Wait -PassThru
+    if ($Process.ExitCode -ne 0) { throw "Setup failed with exit code $($Process.ExitCode)." }
 }
 
 function Invoke-ProductJson([string[]]$Arguments, [int[]]$AllowedExitCodes) {
@@ -91,8 +92,11 @@ try {
     if (-not (Test-Path -LiteralPath $Uninstaller -PathType Leaf)) {
         throw "Inno Setup uninstaller was not found."
     }
-    & $Uninstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-    if ($LASTEXITCODE -ne 0) { throw "Uninstall failed with exit code $LASTEXITCODE." }
+    $UninstallProcess = Start-Process -FilePath $Uninstaller `
+        -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+    if ($UninstallProcess.ExitCode -ne 0) {
+        throw "Uninstall failed with exit code $($UninstallProcess.ExitCode)."
+    }
     if (Test-Path -LiteralPath $Executable) { throw "Uninstall retained nz-coder.exe." }
     if ((Get-Content -LiteralPath (Join-Path $Workspace ".env") -Raw) -notmatch "workspace.env.sentinel") {
         throw "Uninstall changed the workspace .env sentinel."

@@ -142,6 +142,9 @@ def test_windows_installer_smoke_covers_product_upgrade_and_safe_uninstall():
         'workspace.env.sentinel',
         'workspace.state.sentinel',
         'ConvertTo-Json',
+        'Start-Process',
+        '-Wait',
+        '-PassThru',
     ):
         assert required in text
 
