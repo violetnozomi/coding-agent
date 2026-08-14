@@ -40,7 +40,7 @@ Name: "startmenu"; Description: "Create a Start Menu shortcut"; Flags: checkedon
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\NZ-Coder"; Filename: "{app}\nz-coder.exe"; WorkingDir: "{userprofile}"; Tasks: startmenu
+Name: "{group}\NZ-Coder"; Filename: "{app}\nz-coder.exe"; WorkingDir: "{%USERPROFILE}"; Tasks: startmenu
 
 [Run]
 Filename: "{app}\nz-coder.exe"; Parameters: "--help"; Description: "Verify NZ-Coder installation"; Flags: postinstall nowait skipifsilent unchecked
