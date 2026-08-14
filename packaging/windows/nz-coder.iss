@@ -49,14 +49,6 @@ Filename: "{app}\nz-coder.exe"; Parameters: "--help"; Description: "Verify NZ-Co
 const
   EnvironmentKey = 'Environment';
 
-procedure BroadcastEnvironmentChange();
-var
-  ResultCode: Integer;
-begin
-  SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
-    CastIntegerToLParam(PChar('Environment')), SMTO_ABORTIFHUNG, 5000, ResultCode);
-end;
-
 procedure SetUserPathEntry(AddEntry: Boolean);
 var
   CurrentPath: string;
@@ -75,7 +67,6 @@ begin
   if AddEntry then
     if Updated = '' then Updated := Entry else Updated := Updated + ';' + Entry;
   RegWriteExpandStringValue(HKCU, EnvironmentKey, 'Path', Updated);
-  BroadcastEnvironmentChange();
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
