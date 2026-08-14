@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import subprocess
+import sys
 
 import pytest
 
@@ -45,6 +48,25 @@ def test_frozen_tree_accepts_complete_distribution(tmp_path):
     assert InstallerContract("0.1.0").validate_frozen_tree(tmp_path) == ()
 
 
+def test_contract_cli_rejects_an_incomplete_frozen_tree(tmp_path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "windows_installer_contract.py"),
+            "--root", str(ROOT),
+            "--validate-frozen", str(tmp_path),
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert json.loads(result.stdout)["artifact_name"].endswith("-setup.exe")
+    assert "nz-coder.exe" in json.loads(result.stdout)["missing"]
+
+
 def test_pyinstaller_entrypoint_uses_existing_cli_runtime():
     entrypoint = ROOT / "packaging" / "windows" / "nz_coder_entry.py"
 
@@ -63,3 +85,37 @@ def test_pyinstaller_spec_builds_one_directory_with_package_resources():
     assert "console=True" in text
     assert "COLLECT(" in text
     assert 'target_arch="x86_64"' in text
+
+
+def test_inno_setup_is_per_user_upgrade_safe_and_owns_path():
+    text = (ROOT / "packaging" / "windows" / "nz-coder.iss").read_text(
+        encoding="utf-8",
+    )
+
+    assert "PrivilegesRequired=lowest" in text
+    assert "ArchitecturesAllowed=x64compatible" in text
+    assert "AppId={{" in text
+    assert 'DefaultDirName={localappdata}\\Programs\\NZ-Coder' in text
+    assert 'Flags: recursesubdirs createallsubdirs' in text
+    assert 'Name: "userpath"' in text
+    assert "ChangesEnvironment=yes" in text
+    assert "UninstallDisplayIcon=" in text
+    assert "[UninstallDelete]" not in text
+
+
+def test_windows_build_script_is_strict_and_emits_a_hashed_artifact():
+    text = (ROOT / "scripts" / "build_windows_installer.ps1").read_text(
+        encoding="utf-8",
+    )
+
+    for required in (
+        'Set-StrictMode -Version Latest',
+        '$ErrorActionPreference = "Stop"',
+        'PyInstaller',
+        'windows_installer_contract.py',
+        'ISCC.exe',
+        'Get-FileHash',
+        'SHA256',
+        'ConvertTo-Json',
+    ):
+        assert required in text

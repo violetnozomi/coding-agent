@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import argparse
+import json
 from pathlib import Path
 import re
 
@@ -68,3 +70,33 @@ def load_contract(root: Path, architecture: str = "x64") -> InstallerContract:
     if match is None:
         raise ValueError(f"Could not read [project].version from {project}")
     return InstallerContract(match.group(1), architecture)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Validate a frozen tree for PowerShell build orchestration."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--validate-frozen", type=Path)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    contract = load_contract(args.root)
+    missing = (
+        contract.validate_frozen_tree(args.validate_frozen)
+        if args.validate_frozen is not None
+        else ()
+    )
+    payload = {
+        "version": contract.version,
+        "architecture": contract.architecture,
+        "artifact_name": contract.artifact_name,
+        "missing": list(missing),
+    }
+    if args.json:
+        print(json.dumps(payload, separators=(",", ":")))
+    elif missing:
+        print("Missing frozen assets: " + ", ".join(missing))
+    return 1 if missing else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
