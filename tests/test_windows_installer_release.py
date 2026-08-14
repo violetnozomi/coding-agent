@@ -143,3 +143,41 @@ def test_windows_installer_smoke_covers_product_upgrade_and_safe_uninstall():
         'ConvertTo-Json',
     ):
         assert required in text
+
+
+def test_windows_installer_workflow_builds_tests_and_publishes_same_artifact():
+    text = (ROOT / ".github" / "workflows" / "windows-installer.yml").read_text(
+        encoding="utf-8",
+    )
+
+    for required in (
+        "windows-latest",
+        'python-version: "3.12"',
+        "pyinstaller==6.16.0",
+        "build_windows_installer.ps1",
+        "test_windows_installer.ps1",
+        "actions/upload-artifact@v4",
+        "windows-installer-evidence",
+        "refs/tags/v",
+        "softprops/action-gh-release@v2",
+        "SHA256SUMS.txt",
+    ):
+        assert required in text
+
+
+def test_windows_install_guide_documents_setup_api_and_lsp_boundaries():
+    text = (ROOT / "docs" / "windows-install.md").read_text(encoding="utf-8")
+
+    for required in (
+        "NZ-Coder-0.1.0-windows-x64-setup.exe",
+        "Get-FileHash",
+        "/connect",
+        "deepseek-v4-flash",
+        "API_BASE_URL",
+        "API_KEY",
+        "nz-coder doctor",
+        "Language servers are optional",
+        "Uninstall",
+        ".nz-coder",
+    ):
+        assert required in text

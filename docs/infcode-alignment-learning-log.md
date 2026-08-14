@@ -15028,3 +15028,13 @@ same-directory idempotency defects. Final evidence and the strict gap matrix are
   依赖违规，根因修复为把 ACL contract 移到顶层中立模块；最终 full regression
   为 2068 passed / 21 native skips / 7 known fork warnings。原生 Windows artifact
   仍是 Release Candidate gate。
+# A250 — Windows 自包含 EXE 发布边界（2026-08-14）
+
+- 采用 PyInstaller one-dir + Inno Setup，而不是 one-file 临时解包；保留现有
+  Agent Runtime，安装器只承担分发职责。
+- EXE 按当前用户安装并拥有自己的 PATH/快捷方式/卸载边界；升级和卸载明确
+  不触碰 workspace `.env`、`.nz-coder`、Session、trace、memory 或源码。
+- Provider 密钥不进入安装器；首次连接继续使用 `/connect` 的掩码输入、私有
+  DACL 持久化和当前 Session 即时切换。
+- 新增冻结树资产契约、构建证据、安装→产品命令→覆盖升级→卸载生命周期证据，
+  并保留语言服务器为 Doctor 可诊断的可选外部能力。

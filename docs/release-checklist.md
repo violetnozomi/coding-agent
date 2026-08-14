@@ -1,5 +1,11 @@
 # NZ-Coder v0.1 Release Checklist
 
+The Windows distribution gate is `.github/workflows/windows-installer.yml`. It
+must build the PyInstaller one-directory runtime, compile the Inno Setup EXE,
+install into a path containing spaces, exercise the installed product, reinstall
+as an upgrade, uninstall, preserve workspace sentinels, and upload the tested EXE
+with SHA-256 and JSON evidence. See `docs/windows-install.md`.
+
 This checklist separates locally proven release behavior from evidence that
 requires another operating system or user-owned third-party credentials.
 

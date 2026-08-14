@@ -55,6 +55,10 @@ The current reader documentation is organized as:
 
 ## Quickstart
 
+Windows 10/11 x64 users can install the self-contained setup executable without
+Python or Git. See [`docs/windows-install.md`](docs/windows-install.md) for
+download verification, `/connect` API configuration, upgrades, and uninstall.
+
 Install from a checkout (editable mode is only needed for development):
 
 ```bash
