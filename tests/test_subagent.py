@@ -105,7 +105,7 @@ class FakeParentTracer:
 
 
 def _tmp_workdir():
-    from nz_coder import config
+    from nz_coder.foundation import config
 
     old = config.WORKDIR
     tmp = Path(tempfile.mkdtemp())
@@ -114,7 +114,7 @@ def _tmp_workdir():
 
 
 def _restore_workdir(old, tmp):
-    from nz_coder import config
+    from nz_coder.foundation import config
 
     config.WORKDIR = old
     shutil.rmtree(str(tmp), ignore_errors=True)
@@ -131,7 +131,7 @@ def _extract_subagent_session_id(result: str) -> str:
 
 
 def test_subagent_exposes_expected_tool_tiers():
-    from nz_coder.subagent import _subagent_tools
+    from nz_coder.runtime.agent.subagent import _subagent_tools
 
     explore_names = {spec["function"]["name"] for spec in _subagent_tools("explore")}
     plan_names = {spec["function"]["name"] for spec in _subagent_tools("plan")}
@@ -148,8 +148,14 @@ def test_subagent_exposes_expected_tool_tiers():
 
 
 def test_dynamic_write_tool_is_hidden_from_read_only_subagents():
-    from nz_coder.subagent import _subagent_tools
-    from nz_coder.tools import TOOL_EXECUTION_MODES, TOOL_HANDLERS, TOOL_SPECS, register
+    from nz_coder.runtime.agent.subagent import _subagent_tools
+    from nz_coder.tools import (
+        TOOL_EXECUTION_MODES,
+        TOOL_HANDLERS,
+        TOOL_SIDE_EFFECTS,
+        TOOL_SPECS,
+        register,
+    )
     name = "_test_dynamic_write"
 
     try:
@@ -161,11 +167,58 @@ def test_dynamic_write_tool_is_hidden_from_read_only_subagents():
     finally:
         TOOL_HANDLERS.pop(name, None)
         TOOL_EXECUTION_MODES.pop(name, None)
+        TOOL_SIDE_EFFECTS.pop(name, None)
         TOOL_SPECS[:] = [spec for spec in TOOL_SPECS if spec["function"]["name"] != name]
 
 
+def test_read_only_subagent_filters_by_side_effect_not_scheduler_mode():
+    """A serial plugin must not gain read-child authority by scheduler choice."""
+    from nz_coder.runtime.agent.subagent import _subagent_tools
+    from nz_coder.tools import (
+        TOOL_EXECUTION_MODES,
+        TOOL_HANDLERS,
+        TOOL_PLAN_MODE_ALLOWED,
+        TOOL_SIDE_EFFECTS,
+        TOOL_SPECS,
+        register,
+    )
+    names = ("_test_child_serial_fs", "_test_child_serial_state")
+
+    try:
+        for name, effect in zip(names, ("mutates-fs", "mutates-state")):
+            register(
+                name,
+                "test",
+                {"type": "object", "properties": {}},
+                lambda: "ok",
+                execution="serial",
+                side_effect=effect,
+            )
+        explore_names = {
+            spec["function"]["name"] for spec in _subagent_tools("explore")
+        }
+        general_names = {
+            spec["function"]["name"]
+            for spec in _subagent_tools("general-purpose")
+        }
+
+        assert not set(names) & explore_names
+        assert set(names) <= general_names
+    finally:
+        for name in names:
+            TOOL_HANDLERS.pop(name, None)
+            TOOL_EXECUTION_MODES.pop(name, None)
+            TOOL_SIDE_EFFECTS.pop(name, None)
+            TOOL_PLAN_MODE_ALLOWED.pop(name, None)
+        TOOL_SPECS[:] = [
+            spec for spec in TOOL_SPECS
+            if spec["function"]["name"] not in names
+        ]
+
+
 def test_subagent_injects_parent_context(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
     from nz_coder.tools.scratchpad import scratchpad
 
     old, tmp = _tmp_workdir()
@@ -207,8 +260,9 @@ def test_subagent_injects_parent_context(monkeypatch):
 
 def test_subagent_enters_native_agent_facade(monkeypatch):
     """A child must build a native request instead of calling legacy Runner(host)."""
-    from nz_coder import config, subagent
-    from nz_coder.runtime.loop import ProductRunEnvironment
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
+    from nz_coder.runtime.execution.loop import ProductRunEnvironment
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -239,7 +293,8 @@ def test_subagent_enters_native_agent_facade(monkeypatch):
 
 
 def test_explore_subagent_uses_explore_model(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -264,7 +319,8 @@ def test_explore_subagent_uses_explore_model(monkeypatch):
 
 
 def test_subagent_semantic_tier_publishes_route_facts(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -307,7 +363,8 @@ def test_subagent_semantic_tier_publishes_route_facts(monkeypatch):
 
 
 def test_fast_tier_never_downgrades_write_child():
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old_fast = config.SUBAGENT_EXPLORE_MODEL
     config.SUBAGENT_EXPLORE_MODEL = "fast-child-model"
@@ -325,7 +382,8 @@ def test_fast_tier_never_downgrades_write_child():
 
 
 def test_subagent_injects_and_returns_validated_evidence_refs(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -357,7 +415,8 @@ def test_subagent_injects_and_returns_validated_evidence_refs(monkeypatch):
 
 
 def test_subagent_hard_postcondition_changes_terminal_result(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -397,7 +456,8 @@ def test_subagent_hard_postcondition_changes_terminal_result(monkeypatch):
 
 
 def test_subagent_gets_one_same_session_verification_repair(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -457,7 +517,8 @@ def test_subagent_gets_one_same_session_verification_repair(monkeypatch):
 
 
 def test_verification_repair_can_satisfy_write_postcondition(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -505,8 +566,9 @@ def test_verification_repair_can_satisfy_write_postcondition(monkeypatch):
 
 
 def test_subagent_publishes_canonical_structured_child_result(monkeypatch):
-    from nz_coder import config, subagent
-    from nz_coder.runtime.child_result import CHILD_RESULT_KEY
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
+    from nz_coder.runtime.agent.child_result import CHILD_RESULT_KEY
 
     schema = {
         "type": "object",
@@ -545,9 +607,10 @@ def test_subagent_publishes_canonical_structured_child_result(monkeypatch):
 
 
 def test_subagent_structured_output_gets_exactly_one_no_tool_repair(monkeypatch):
-    from nz_coder import config, subagent
-    from nz_coder.runtime.child_result import CHILD_RESULT_KEY
-    from nz_coder.runtime.structured_output import (
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
+    from nz_coder.runtime.agent.child_result import CHILD_RESULT_KEY
+    from nz_coder.runtime.conversation.structured_output import (
         STRUCTURED_OUTPUT_REPAIR_SYSTEM_PROMPT,
     )
 
@@ -608,7 +671,7 @@ def test_subagent_structured_output_gets_exactly_one_no_tool_repair(monkeypatch)
 
 
 def test_subagent_progress_uses_parent_task_metadata_channel():
-    from nz_coder.runtime import subagent
+    from nz_coder.runtime.agent import subagent
     from nz_coder.tools import scoped_tool_metadata_reporter
 
     updates = []
@@ -637,7 +700,7 @@ def test_subagent_progress_uses_parent_task_metadata_channel():
 
 
 def test_public_subagent_session_reader_requires_exact_owned_id(tmp_path):
-    from nz_coder.runtime import subagent
+    from nz_coder.runtime.agent import subagent
 
     state = subagent._new_subagent_state("parent-1", "explore", None)
     state["session_id"] = "subagent-owned"
@@ -658,8 +721,56 @@ def test_public_subagent_session_reader_requires_exact_owned_id(tmp_path):
     assert subagent.load_subagent_session("parent-1", "../subagent-owned", tmp_path) == {}
 
 
+def test_subagent_state_persists_strict_json_and_rejects_legacy_nan(tmp_path):
+    from nz_coder.runtime.agent import subagent
+
+    state = subagent._new_subagent_state("parent-1", "explore", None)
+    state["route_facts"] = {"score": float("nan")}
+    subagent._save_subagent_state("parent-1", state, tmp_path)
+    path = subagent._subagent_session_path(
+        "parent-1",
+        state["session_id"],
+        tmp_path,
+    )
+
+    assert subagent._load_subagent_state(
+        "parent-1",
+        state["session_id"],
+        tmp_path,
+    )["route_facts"] == {"score": None}
+    json.loads(
+        path.read_text(encoding="utf-8"),
+        parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
+    )
+
+    path.write_text('{"session_id":"owned","score":NaN}', encoding="utf-8")
+    assert subagent._load_subagent_state(
+        "parent-1",
+        state["session_id"],
+        tmp_path,
+    ) == {}
+
+
+@pytest.mark.parametrize("mode", ["git", "copy", "direct", "unknown"])
+def test_subagent_rejects_unowned_persisted_worktree(tmp_path, mode):
+    from nz_coder.runtime.agent import subagent
+
+    outside = tmp_path.parent / "unowned-subagent-worktree"
+    outside.mkdir(exist_ok=True)
+    state = subagent._new_subagent_state("parent-1", "general-purpose", None)
+    state["worktree"] = {
+        "id": state["session_id"],
+        "path": str(outside),
+        "mode": mode,
+    }
+
+    with pytest.raises(ValueError, match="worktree"):
+        subagent._ensure_subagent_worktree(tmp_path, state)
+
+
 def test_subagent_persists_usage_and_returns_only_invocation_cost_delta(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
     from nz_coder.tools import ToolOutput
 
     old, tmp = _tmp_workdir()
@@ -736,7 +847,8 @@ def test_subagent_persists_usage_and_returns_only_invocation_cost_delta(monkeypa
 
 
 def test_subagent_provider_failure_persists_typed_assistant_error(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -776,8 +888,9 @@ def test_subagent_provider_failure_persists_typed_assistant_error(monkeypatch):
 
 
 def test_subagent_retries_transient_provider_error_on_same_assistant(monkeypatch):
-    from nz_coder import config, subagent
-    from nz_coder.runtime.recovery import RecoveryState
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
+    from nz_coder.runtime.verification.recovery import RecoveryState
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -828,8 +941,8 @@ def test_subagent_retries_transient_provider_error_on_same_assistant(monkeypatch
 
 
 def test_fork_clones_referenced_child_identity_and_rewrites_task_part():
-    from nz_coder import subagent
-    from nz_coder.message_schema import ensure_message_identities
+    from nz_coder.runtime.agent import subagent
+    from nz_coder.protocol.message_schema import ensure_message_identities
 
     old, tmp = _tmp_workdir()
     try:
@@ -889,7 +1002,7 @@ def test_fork_clones_referenced_child_identity_and_rewrites_task_part():
 
 
 def test_fork_clones_write_child_changed_and_deleted_files():
-    from nz_coder import subagent
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     try:
@@ -940,7 +1053,7 @@ def test_fork_clones_write_child_changed_and_deleted_files():
 
 
 def test_fork_child_overlay_failure_preserves_source_and_removes_clone(monkeypatch):
-    from nz_coder import subagent
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     try:
@@ -996,8 +1109,11 @@ def test_fork_child_overlay_failure_preserves_source_and_removes_clone(monkeypat
         _restore_workdir(old, tmp)
 
 
-def test_subagent_persists_large_tool_output(monkeypatch):
-    from nz_coder import config, subagent
+def test_subagent_keeps_large_tool_output_when_request_capacity_can_hold_it(
+    monkeypatch,
+):
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -1006,18 +1122,19 @@ def test_subagent_persists_large_tool_output(monkeypatch):
     config.SUBAGENT_TIMEOUT_SECONDS = 30
     try:
         subagent.set_parent_session("main-session")
+        output = "X" * 35000
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[FakeToolCall("read_file", {"path": "huge.txt"})])),
             FakeResponse(FakeMessage("done")),
         ])
         monkeypatch.setattr(subagent, "OpenAI", lambda **kwargs: fake)
-        monkeypatch.setattr(subagent, "_run_allowed_tool", lambda *args, **kwargs: "X" * 35000)
+        monkeypatch.setattr(subagent, "_run_allowed_tool", lambda *args, **kwargs: output)
 
         result = subagent.run_subagent("read huge output")
 
         second_messages = fake.chat.completions.requests[1]["messages"]
         tool_msg = next(msg for msg in second_messages if msg.get("role") == "tool")
-        assert "<persisted-output>" in tool_msg["content"]
+        assert tool_msg["content"] == output
         session_id = _extract_subagent_session_id(result)
         state = subagent._load_subagent_state("main-session", session_id, tmp)
         messages = _native_child_messages(state, "main-session", tmp)
@@ -1031,9 +1148,11 @@ def test_subagent_persists_large_tool_output(monkeypatch):
         )
         assert tool_part["tool"] == "read_file"
         assert tool_part["state"]["status"] == "completed"
-        assert "<persisted-output>" in tool_part["state"]["output"]
+        assert tool_part["state"]["output"] == output
         worktree = Path(state["worktree"]["path"])
-        assert (worktree / ".nz-coder" / "tool-results" / "subagent-call_1.txt").exists()
+        assert not (
+            worktree / ".nz-coder" / "tool-results" / "subagent-call_1.txt"
+        ).exists()
         assert "[Subagent status: completed]" in result
     finally:
         subagent.set_parent_session(None)
@@ -1043,7 +1162,8 @@ def test_subagent_persists_large_tool_output(monkeypatch):
 
 
 def test_general_subagent_reports_verification_failure_and_rolls_back(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -1072,7 +1192,8 @@ def test_general_subagent_reports_verification_failure_and_rolls_back(monkeypatc
 
 
 def test_subagent_can_request_parent_input_and_resume(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -1116,7 +1237,7 @@ def test_subagent_can_request_parent_input_and_resume(monkeypatch):
 
 
 def test_subagent_allowed_tools_can_be_restricted():
-    from nz_coder.subagent import _subagent_tools
+    from nz_coder.runtime.agent.subagent import _subagent_tools
 
     names = {spec["function"]["name"] for spec in _subagent_tools("general-purpose", allowed_tools=["read_file"])}
 
@@ -1124,9 +1245,9 @@ def test_subagent_allowed_tools_can_be_restricted():
 
 
 def test_subagent_drains_peer_mail_as_untrusted_synthetic_context(tmp_path):
-    import nz_coder.runtime.subagent as subagent
-    from nz_coder.message_schema import SYNTHETIC_USER_KEY
-    from nz_coder.runtime.agent_manager import (
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.protocol.message_schema import SYNTHETIC_USER_KEY
+    from nz_coder.runtime.agent.agent_manager import (
         BackgroundAgentManager,
         scoped_background_agent_manager,
     )
@@ -1157,8 +1278,39 @@ def test_subagent_drains_peer_mail_as_untrusted_synthetic_context(tmp_path):
     assert "Check api.py" in messages[0]["content"]
 
 
+def test_subagent_drains_queued_worker_mail_as_coordinator_instruction(tmp_path):
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.protocol.message_schema import SYNTHETIC_USER_KEY
+    from nz_coder.runtime.agent.agent_manager import (
+        BackgroundAgentManager,
+        scoped_background_agent_manager,
+    )
+
+    manager = BackgroundAgentManager(tmp_path, "parent")
+    child = subagent._new_subagent_state("parent", "general-purpose", None)
+    child.update({"background": True, "status": "running", "isolation": "thread"})
+    manager._save(child)
+    manager.send_message(
+        sender="worker",
+        recipient=child["session_id"],
+        content="Inspect widgets.py before changing the ordering algorithm.",
+    )
+
+    with scoped_background_agent_manager(manager):
+        messages = subagent._drain_peer_messages(
+            "parent",
+            child["session_id"],
+        )
+
+    assert len(messages) == 1
+    assert messages[0][SYNTHETIC_USER_KEY] is True
+    assert messages[0]["_nz_coordinator_instruction"] is True
+    assert "<coordinator-instruction" in messages[0]["content"]
+    assert "Inspect widgets.py" in messages[0]["content"]
+
+
 def test_completion_with_timeout_works_outside_main_thread():
-    from nz_coder.subagent import SubagentTimeout, _completion_with_timeout
+    from nz_coder.runtime.agent.subagent import SubagentTimeout, _completion_with_timeout
 
     class SlowCompletions:
         def create(self, **kwargs):
@@ -1183,7 +1335,8 @@ def test_completion_with_timeout_works_outside_main_thread():
 
 
 def test_general_subagent_tracks_scope_and_changed_files(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -1228,7 +1381,8 @@ def test_general_subagent_tracks_scope_and_changed_files(monkeypatch):
 
 
 def test_subagent_blocks_overlapping_active_write_scope(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -1259,7 +1413,8 @@ def test_subagent_blocks_overlapping_active_write_scope(monkeypatch):
 
 
 def test_subagent_reports_completed_worktree_conflict(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
     from nz_coder.runtime.worktree import Worktree
 
     old, tmp = _tmp_workdir()
@@ -1336,7 +1491,7 @@ def test_subagent_reports_completed_worktree_conflict(monkeypatch):
 
 
 def test_plan_and_legacy_aliases_are_read_only():
-    from nz_coder.subagent import _subagent_tools
+    from nz_coder.runtime.agent.subagent import _subagent_tools
 
     plan_names = {spec["function"]["name"] for spec in _subagent_tools("plan")}
     review_names = {spec["function"]["name"] for spec in _subagent_tools("review")}
@@ -1360,13 +1515,14 @@ def test_plan_and_legacy_aliases_are_read_only():
     ],
 )
 def test_child_runtime_profile_reflects_execution_surface(state, agent_type, expected):
-    from nz_coder.runtime.subagent import _child_runtime_profile
+    from nz_coder.runtime.agent.subagent import _child_runtime_profile
 
     assert _child_runtime_profile(state, agent_type) == expected
 
 
 def test_subagent_persists_worktree_and_child_trace(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
     from nz_coder.runtime.worktree import Worktree
 
     old, tmp = _tmp_workdir()
@@ -1428,7 +1584,8 @@ def test_subagent_persists_worktree_and_child_trace(monkeypatch):
         _restore_workdir(old, tmp)
 
 def test_run_subagent_async_completes(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -1450,7 +1607,8 @@ def test_run_subagent_async_completes(monkeypatch):
 
 
 def test_foreground_task_propagates_tool_cancel_into_child_tools(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
     from nz_coder.tools import current_tool_cancel_event, scoped_tool_cancellation
 
     old, tmp = _tmp_workdir()
@@ -1497,7 +1655,7 @@ def test_foreground_task_propagates_tool_cancel_into_child_tools(monkeypatch):
 
 
 def test_subagent_provider_request_closes_on_parent_cancel():
-    from nz_coder.subagent import SubagentCancelled, _completion_with_timeout
+    from nz_coder.runtime.agent.subagent import SubagentCancelled, _completion_with_timeout
 
     started = threading.Event()
     closed = threading.Event()
@@ -1533,7 +1691,7 @@ def test_subagent_provider_request_closes_on_parent_cancel():
 
 
 def test_run_subagent_async_signals_and_settles_worker_on_cancel(monkeypatch):
-    from nz_coder import subagent
+    from nz_coder.runtime.agent import subagent
 
     started = threading.Event()
     settled = threading.Event()

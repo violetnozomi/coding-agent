@@ -132,7 +132,8 @@ class _DetailControl(UIControl):
         def get_line(index: int) -> StyleAndTextTuples:
             return list(lines[index]) if index < len(lines) else []
 
-        cursor_y = min(max(0, self.owner._detail_window.vertical_scroll), total - 1)
+        window = self.owner._active_detail_window()
+        cursor_y = min(max(0, window.vertical_scroll), total - 1)
         return UIContent(
             get_line=get_line,
             line_count=total,
@@ -193,6 +194,8 @@ class FullscreenComposer:
         self._recovery_count = 0
         self._run_active = False
         self._cancel_run: Callable[[], None] | None = None
+        self._cancel_requested = False
+        self._idle_exit_hint_until = 0.0
         self._stream_text = ""
         self._run_status: tuple[str, ...] = ()
         self._run_output: list[tuple[tuple[str, str], ...]] = []
@@ -310,6 +313,12 @@ class FullscreenComposer:
             wrap_lines=False,
             always_hide_cursor=True,
         )
+        self._selector_detail_window = Window(
+            self._detail_control,
+            height=Dimension(min=4, preferred=8, max=10),
+            wrap_lines=False,
+            always_hide_cursor=True,
+        )
         dialog_input = ConditionalContainer(
             HSplit([
                 Window(height=1, char="─", style="class:selector.rule"),
@@ -330,9 +339,16 @@ class FullscreenComposer:
                     filter=Condition(lambda: self._dialog_kind == "detail"),
                 ),
                 ConditionalContainer(
+                    self._selector_detail_window,
+                    filter=Condition(
+                        lambda: self._dialog_kind == "selector-detail"
+                    ),
+                ),
+                ConditionalContainer(
                     Window(
                         FormattedTextControl(self._dialog_results),
                         height=Dimension(min=3, preferred=15, max=15),
+                        wrap_lines=True,
                     ),
                     filter=Condition(lambda: self._dialog_kind != "detail"),
                 ),
@@ -410,11 +426,20 @@ class FullscreenComposer:
             if self.buffer.text:
                 self.buffer.reset()
                 self.clear_exit_request()
+                self._idle_exit_hint_until = 0.0
             elif self._run_active:
-                if self._cancel_run is not None:
+                if self._cancel_run is not None and not self._cancel_requested:
+                    self._cancel_requested = True
+                    self._run_status = (
+                        "Cancellation requested · stopping at the current safe boundary",
+                    )
                     self._cancel_run()
-            elif self.empty_ctrl_c_requests_exit():
-                self._submissions.put_nowait(TerminalInputAction("exit_confirmed"))
+            else:
+                if self.empty_ctrl_c_requests_exit():
+                    self._idle_exit_hint_until = 0.0
+                    self._submissions.put_nowait(TerminalInputAction("exit_confirmed"))
+                else:
+                    self._idle_exit_hint_until = time.monotonic() + 1.0
             self.invalidate()
 
         @bindings.add("c-d", eager=True, filter=main)
@@ -510,24 +535,27 @@ class FullscreenComposer:
 
         @bindings.add("pageup", eager=True, filter=dialog)
         def _dialog_page_up(_event) -> None:  # noqa: ANN001
-            if self._dialog_kind == "detail":
+            if self._dialog_kind in {"detail", "selector-detail"}:
                 self._scroll_detail(-10)
 
         @bindings.add("pagedown", eager=True, filter=dialog)
         def _dialog_page_down(_event) -> None:  # noqa: ANN001
-            if self._dialog_kind == "detail":
+            if self._dialog_kind in {"detail", "selector-detail"}:
                 self._scroll_detail(10)
 
         @bindings.add("home", eager=True, filter=dialog)
         def _dialog_home(_event) -> None:  # noqa: ANN001
-            if self._dialog_kind == "detail":
-                self._detail_window.vertical_scroll = 0
+            if self._dialog_kind in {"detail", "selector-detail"}:
+                self._active_detail_window().vertical_scroll = 0
                 self.invalidate()
 
         @bindings.add("end", eager=True, filter=dialog)
         def _dialog_end(_event) -> None:  # noqa: ANN001
-            if self._dialog_kind == "detail":
-                self._detail_window.vertical_scroll = max(0, len(self._detail_lines) - 1)
+            if self._dialog_kind in {"detail", "selector-detail"}:
+                self._active_detail_window().vertical_scroll = max(
+                    0,
+                    len(self._detail_lines) - 1,
+                )
                 self.invalidate()
 
         @bindings.add("enter", eager=True, filter=dialog)
@@ -672,10 +700,14 @@ class FullscreenComposer:
     async def select_async(self, **kwargs):  # noqa: ANN003, ANN202
         """Open a fuzzy selector as an overlay in this Application."""
         await self.start_async()
+        detail = str(kwargs.pop("detail", "") or "")
         selector = FuzzySelector(style=None, mouse_support=self.mouse_support, **kwargs)
         self._selector = selector
-        self._dialog_kind = "selector"
+        self._dialog_kind = "selector-detail" if detail else "selector"
         self._dialog_message = selector.text
+        self._dialog_detail = detail
+        self._detail_cache_text = ""
+        self._selector_detail_window.vertical_scroll = 0
         self._dialog_password = False
         self._dialog_buffer.reset()
         self._dialog_future = asyncio.get_running_loop().create_future()
@@ -701,11 +733,14 @@ class FullscreenComposer:
 
     def begin_run(self) -> None:
         self._run_active = True
+        self._cancel_requested = False
+        self._idle_exit_hint_until = 0.0
         self._stream_text = ""
         self._stream_safe = ""
         self._stream_lines = ()
         self._run_status = ()
         self._run_output.clear()
+        self._notices.clear()
         self._output_dirty = True
         self.refresh_transcript()
         self.invalidate()
@@ -770,8 +805,24 @@ class FullscreenComposer:
         self._scroll_to_tail()
         self.invalidate()
 
+    def append_notice(self, value: str) -> None:
+        """Keep one terminal result visible after transient run output clears."""
+        clean = str(value or "")[:_MAX_OUTPUT_BLOCK_CHARS]
+        fragments = tuple(
+            (str(style), str(text))
+            for style, text, *_handler in to_formatted_text(ANSI(clean))
+        )
+        self._notices.append(fragments)
+        del self._notices[:-100]
+        _bound_output_fragments(self._notices, _MAX_OUTPUT_TOTAL_CHARS)
+        self._output_dirty = True
+        self.refresh_transcript()
+        self._scroll_to_tail()
+        self.invalidate()
+
     def end_run(self) -> None:
         self._run_active = False
+        self._cancel_requested = False
         self._stream_text = ""
         self._stream_safe = ""
         self._stream_lines = ()
@@ -810,6 +861,7 @@ class FullscreenComposer:
         self._dialog_detail = ""
         self._detail_cache_text = ""
         self._detail_window.vertical_scroll = 0
+        self._selector_detail_window.vertical_scroll = 0
         self._dialog_buffer.reset()
         self.application.layout.focus(self._input_window)
         self.invalidate()
@@ -852,14 +904,21 @@ class FullscreenComposer:
         return self._detail_lines
 
     def _scroll_detail(self, amount: int) -> None:
-        self._detail_window.vertical_scroll = max(
+        window = self._active_detail_window()
+        window.vertical_scroll = max(
             0,
             min(
                 max(0, len(self._detail_lines) - 1),
-                self._detail_window.vertical_scroll + int(amount),
+                window.vertical_scroll + int(amount),
             ),
         )
         self.invalidate()
+
+    def _active_detail_window(self):  # noqa: ANN202
+        """Return the scroll owner for message or selector detail content."""
+        if self._dialog_kind == "selector-detail":
+            return self._selector_detail_window
+        return self._detail_window
 
     def _transcript_fragments(self):  # noqa: ANN202
         columns = shutil.get_terminal_size(fallback=(100, 30)).columns
@@ -1094,7 +1153,13 @@ class FullscreenComposer:
 
     def _footer(self) -> StyleAndTextTuples:
         if self._run_active:
-            value = " RUNNING · Ctrl+C cancel Agent · new requests queue "
+            value = (
+                " CANCELLING · waiting for safe boundary "
+                if self._cancel_requested
+                else " RUNNING · Ctrl+C cancel Agent · new requests queue "
+            )
+        elif time.monotonic() <= self._idle_exit_hint_until:
+            value = " Ctrl+C again within 1s to exit "
         else:
             value = " Enter send · Alt+Enter newline · Ctrl+K commands · Ctrl+C clear/exit "
         return [("class:bottom-toolbar", value)]

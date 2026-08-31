@@ -13,8 +13,8 @@ from nz_coder.providers import (
     prepare_openai_request,
     resolve_model_capabilities,
 )
-from nz_coder.runtime.loop import AgentLoop, LLMResult
-from nz_coder.runtime.prompt import build
+from nz_coder.runtime.execution.loop import AgentLoop, LLMResult
+from nz_coder.runtime.conversation.prompt import build
 
 
 class _FakeCompletions:
@@ -165,6 +165,61 @@ def test_named_openai_compatible_provider_uses_its_exact_catalog_key():
     assert prepare_openai_request(capability, {})["reasoning_effort"] == "high"
 
 
+def test_openai_wire_adds_empty_reasoning_to_runtime_assistant_for_deepseek():
+    """Late Runtime messages must satisfy DeepSeek's replay wire contract."""
+    capabilities = resolve_model_capabilities(
+        "openai-compatible",
+        "deepseek-v4-flash",
+    )
+    provider = OpenAICompatibleProvider(
+        api_key="test-key",
+        base_url="https://example.invalid",
+    )
+    client = _FakeClient()
+    messages = [
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "task"},
+        {"role": "assistant", "content": "last-call guidance"},
+    ]
+
+    provider.create_completion(
+        client,
+        model="deepseek-v4-flash",
+        messages=messages,
+        _capabilities=capabilities,
+    )
+
+    wire = client.chat.completions.requests[0]["messages"]
+    assert wire[-1]["reasoning_content"] == ""
+    assert "reasoning_content" not in messages[-1]
+
+
+def test_openai_wire_does_not_add_reasoning_to_non_replay_model():
+    """Strict OpenAI-compatible endpoints must not receive unknown fields."""
+    capabilities = resolve_model_capabilities(
+        "openai-compatible",
+        "gpt-4o",
+    )
+    provider = OpenAICompatibleProvider(
+        api_key="test-key",
+        base_url="https://example.invalid",
+    )
+    client = _FakeClient()
+
+    provider.create_completion(
+        client,
+        model="gpt-4o",
+        messages=[
+            {"role": "user", "content": "task"},
+            {"role": "assistant", "content": "last-call guidance"},
+        ],
+        _capabilities=capabilities,
+    )
+
+    wire = client.chat.completions.requests[0]["messages"]
+    assert "reasoning_content" not in wire[-1]
+
+
 def test_registry_rejects_unknown_variant_and_unsafe_variant_fields():
     with pytest.raises(ValueError, match="Unknown model variant"):
         resolve_model_capabilities(
@@ -274,8 +329,8 @@ def test_local_catalog_rejects_non_regular_file_without_blocking(tmp_path):
 
 
 def test_configured_registry_loads_catalog_path(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     catalog_path = tmp_path / "models.json"
     catalog_path.write_text(
@@ -297,7 +352,7 @@ def test_configured_registry_loads_catalog_path(tmp_path, monkeypatch):
 
 
 def test_configured_variant_only_applies_to_active_model(monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
 
     monkeypatch.setattr(config, "MODEL_ID", "qwen-plus")
     monkeypatch.setattr(config, "MODEL_VARIANT", "thinking")
@@ -318,7 +373,7 @@ def test_configured_variant_only_applies_to_active_model(monkeypatch):
 
 
 def test_configured_registry_prefers_explicit_environment_limits(monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
 
     monkeypatch.setenv("MAX_CONTEXT_TOKENS", "64000")
     monkeypatch.setenv("MAX_OUTPUT_TOKENS", "12000")
@@ -452,7 +507,7 @@ def test_kimi_uses_infcode_kimi_prompt_contract():
 
 
 def test_agent_appends_guidance_from_its_own_capability_snapshot(tmp_path):
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     capability = resolve_model_capabilities(
         "openai-compatible",
@@ -541,3 +596,19 @@ def test_reasoning_history_policy_is_model_aware():
         "provider-state"
     )
     assert "reasoning_content" not in gpt_agent._sanitize_messages([message])[0]
+
+    synthetic_tool_turn = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{
+            "id": "synthetic-call",
+            "type": "function",
+            "function": {"name": "bash", "arguments": "{}"},
+        }],
+    }
+    assert qwen_agent._sanitize_messages(
+        [synthetic_tool_turn],
+    )[0]["reasoning_content"] == ""
+    assert "reasoning_content" not in gpt_agent._sanitize_messages(
+        [synthetic_tool_turn],
+    )[0]

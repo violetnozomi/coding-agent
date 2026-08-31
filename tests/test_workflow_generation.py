@@ -7,14 +7,14 @@ import pytest
 
 
 def test_generation_extracts_fenced_or_surrounded_json():
-    from nz_coder.runtime.workflow_generation import extract_generation_json
+    from nz_coder.runtime.workflows.workflow_generation import extract_generation_json
 
     assert json.loads(extract_generation_json('```json\n{"action":"decline","reason":"simple"}\n```'))["action"] == "decline"
     assert json.loads(extract_generation_json('prefix {"action":"decline","reason":"simple"} suffix'))["reason"] == "simple"
 
 
 def test_generation_decline_requires_reason():
-    from nz_coder.runtime.workflow_generation import parse_workflow_generation
+    from nz_coder.runtime.workflows.workflow_generation import parse_workflow_generation
 
     assert parse_workflow_generation(
         '{"action":"decline","reason":"one Agent is sufficient"}'
@@ -24,7 +24,7 @@ def test_generation_decline_requires_reason():
 
 
 def test_generation_builds_and_validates_inert_capsule():
-    from nz_coder.runtime.workflow_generation import parse_workflow_generation
+    from nz_coder.runtime.workflows.workflow_generation import parse_workflow_generation
 
     result = parse_workflow_generation(json.dumps({
         "action": "generate",
@@ -41,7 +41,7 @@ def test_generation_builds_and_validates_inert_capsule():
 
 
 def test_generation_rejects_unknown_action_and_executable_source_shape():
-    from nz_coder.runtime.workflow_generation import parse_workflow_generation
+    from nz_coder.runtime.workflows.workflow_generation import parse_workflow_generation
 
     with pytest.raises(ValueError, match="action must"):
         parse_workflow_generation('{"action":"guess"}')
@@ -55,7 +55,7 @@ def test_generation_rejects_unknown_action_and_executable_source_shape():
 
 
 def test_generation_timeout_precedence_default_and_cap():
-    from nz_coder.runtime.workflow_generation import (
+    from nz_coder.runtime.workflows.workflow_generation import (
         DEFAULT_WORKFLOW_GENERATION_TIMEOUT_MS,
         resolve_workflow_generation_timeout_ms,
     )
@@ -72,7 +72,7 @@ def test_generation_timeout_precedence_default_and_cap():
 
 
 def test_generation_repair_prompt_is_bounded_and_forbids_source():
-    from nz_coder.runtime.workflow_generation import (
+    from nz_coder.runtime.workflows.workflow_generation import (
         next_workflow_generation_repair,
         workflow_generation_repair_prompt,
     )
@@ -88,7 +88,7 @@ def test_generation_repair_prompt_is_bounded_and_forbids_source():
 
 
 def test_generation_tool_projects_validated_capsule():
-    from nz_coder.runtime.workflow_features import workflow_generation
+    from nz_coder.runtime.workflows.workflow_features import workflow_generation
 
     raw = json.dumps({
         "action": "generate",

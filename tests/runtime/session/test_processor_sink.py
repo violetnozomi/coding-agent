@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import copy
 
-from nz_coder.message_schema import MESSAGE_ID_KEY, PARTS_KEY
-from nz_coder.runtime.session_processor import SessionProcessor
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, PARTS_KEY
+from nz_coder.runtime.session.session_processor import SessionProcessor
 
 
 def _message():

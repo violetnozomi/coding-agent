@@ -7,10 +7,10 @@ import time
 import uuid
 from pathlib import Path
 
-from nz_coder import config
-from nz_coder.message_schema import is_synthetic_user_message
+from nz_coder.foundation import config
+from nz_coder.protocol.message_schema import is_synthetic_user_message
 from nz_coder.state.workdir import current_workdir
-from nz_coder.sessions import session_change_dir
+from nz_coder.state.sessions import session_change_dir, write_session_runtime_json
 
 
 class ChangeTracker:
@@ -116,7 +116,7 @@ class ChangeTracker:
             "changes": list(self._changes.values()),
         }
         self.change_dir.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        write_session_runtime_json(self.path, payload)
 
 
 def latest_change_file(change_dir: Path = None) -> Path | None:
@@ -485,10 +485,7 @@ def _save_undo_state(change_dir: Path, state: dict) -> None:
         "workspace": str(current_workdir()),
         "undone": undone,
     }
-    path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False, default=str),
-        encoding="utf-8",
-    )
+    write_session_runtime_json(path, payload)
 
 
 def _clear_undo_state(change_dir: Path) -> None:

@@ -53,7 +53,7 @@ runtime. The duplicate implementation was deleted rather than extended.
 ## Production capability parity
 
 All four surfaces declare the same contract in
-`runtime/product_surfaces.py`. Surface differences are presentation and
+`runtime/execution/product_surfaces.py`. Surface differences are presentation and
 transport choices, not silent Agent capability removal.
 
 | Capability | Interactive | Headless | SDK | HTTP |
@@ -121,7 +121,7 @@ The new architecture tests cover:
 
 | Consumer | Category | Status |
 |---|---|---|
-| `runtime.loop.AgentLoop` | Deprecated API | Thin compatibility subclass |
+| `nz_coder.loop.AgentLoop` | Deprecated public API | Thin façade over `runtime/execution/loop.py` compatibility subclass |
 | `composition.build_coding_agent()` | Compatibility | Explicit opt-in only |
 | `http_service.manager.build_http_agent()` | Compatibility/tests | Not the manager default |
 | `sdk._build_production_agent()` | Compatibility | Not the AgentClient default |

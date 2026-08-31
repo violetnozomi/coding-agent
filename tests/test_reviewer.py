@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from nz_coder.reviewer import review_run_evidence, review_run_evidence_tool
+from nz_coder.intelligence.reviewer import review_run_evidence, review_run_evidence_tool
 
 
 def test_project_creation_without_created_files_fails():

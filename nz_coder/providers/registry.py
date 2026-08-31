@@ -15,12 +15,14 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
-from nz_coder import config
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.foundation import config
+from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+from nz_coder.runtime.process.workdir import current_workdir
 
 _MAX_REGISTRY_BYTES = 10_000_000
 _MAX_PROVIDERS = 500
 _MAX_MODELS = 50_000
+_MAX_REGISTRY_TIMEOUT_SECONDS = 300.0
 _REGISTRY_RELATIVE_PATH = Path(".nz-coder/models/registry.json")
 _LOCK_RELATIVE_PATH = Path(".nz-coder/models/registry.lock")
 _PROVIDER_ALIASES = {
@@ -88,6 +90,7 @@ def sync_model_registry(
     timeout_seconds: float = 10.0,
 ) -> RegistrySyncResult:
     """Refresh a models.dev-compatible registry under a cross-process lock."""
+    timeout = _validated_timeout(timeout_seconds)
     root = (workspace or current_workdir()).resolve()
     source = str(
         source_url or getattr(config, "MODEL_REGISTRY_URL", "https://models.dev/api.json")
@@ -104,7 +107,7 @@ def sync_model_registry(
         _lock_file(descriptor)
         if not force and _is_fresh(target, source):
             return _result(load_registry_snapshot(root, strict=True), False)
-        raw = _get_json(source, timeout_seconds)
+        raw = _get_json(source, timeout)
         snapshot = _normalize_registry(raw, source)
         _write_snapshot(target, snapshot)
         return _result(snapshot, True)
@@ -473,8 +476,11 @@ def _get_json(url: str, timeout_seconds: float) -> dict[str, Any]:
     if len(payload) > _MAX_REGISTRY_BYTES:
         raise RuntimeError("Model registry response is too large")
     try:
-        data = json.loads(payload.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
+        data = json.loads(
+            payload.decode("utf-8"),
+            parse_constant=reject_nonstandard_json_constant,
+        )
+    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise RuntimeError(f"Model registry returned invalid JSON: {exc}") from exc
     if not isinstance(data, dict):
         raise RuntimeError("Model registry returned a non-object JSON response")
@@ -525,8 +531,11 @@ def _read_json(target: Path) -> dict[str, Any]:
     finally:
         os.close(descriptor)
     try:
-        data = json.loads(payload.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
+        data = json.loads(
+            payload.decode("utf-8"),
+            parse_constant=reject_nonstandard_json_constant,
+        )
+    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise ValueError(f"Invalid model registry cache: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError("Model registry cache must contain an object")
@@ -534,7 +543,12 @@ def _read_json(target: Path) -> dict[str, Any]:
 
 
 def _write_snapshot(target: Path, snapshot: dict[str, Any]) -> None:
-    encoded = json.dumps(snapshot, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    encoded = json.dumps(
+        snapshot,
+        ensure_ascii=False,
+        sort_keys=True,
+        allow_nan=False,
+    ).encode("utf-8")
     if len(encoded) > _MAX_REGISTRY_BYTES:
         raise ValueError("Normalized model registry exceeds the size limit")
     descriptor, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
@@ -570,3 +584,24 @@ def _unlock_file(descriptor: int) -> None:
         fcntl.flock(descriptor, fcntl.LOCK_UN)
     except ImportError:
         return
+
+
+def _validated_timeout(value: Any) -> float:
+    if isinstance(value, bool):
+        raise ValueError("Model registry timeout must be a positive finite number")
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            "Model registry timeout must be a positive finite number"
+        ) from exc
+    if (
+        not math.isfinite(timeout)
+        or timeout <= 0
+        or timeout > _MAX_REGISTRY_TIMEOUT_SECONDS
+    ):
+        raise ValueError(
+            "Model registry timeout must be a positive finite number "
+            f"no greater than {_MAX_REGISTRY_TIMEOUT_SECONDS:g} seconds"
+        )
+    return timeout

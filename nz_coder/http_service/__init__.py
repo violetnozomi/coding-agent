@@ -14,7 +14,7 @@ from .daemon import (
     stop_daemon,
 )
 from .workspaces import WorkspaceNotFoundError, WorkspaceRegistry
-from nz_coder.session_events import EventCursorExpiredError
+from nz_coder.protocol.session_events import EventCursorExpiredError
 
 __all__ = [
     "NZCoderClient",

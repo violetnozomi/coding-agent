@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from nz_coder.runtime.workspace_snapshot import SnapshotError, WorkspaceSnapshotStore
+from nz_coder.runtime.process.workspace_snapshot import SnapshotError, WorkspaceSnapshotStore
 
 
 def _store(tmp_path):
@@ -84,16 +84,45 @@ def test_snapshot_diff_full_reports_status_counts_and_bounded_patch(tmp_path):
 
 def test_snapshot_excludes_internal_state_and_symlinks(tmp_path):
     (tmp_path / "app.py").write_text("ok\n", encoding="utf-8")
+    workflow = tmp_path / ".github" / "workflows"
+    workflow.mkdir(parents=True)
+    (workflow / "ci.yml").write_text("name: CI\n", encoding="utf-8")
     internal = tmp_path / ".nz-coder"
     internal.mkdir()
     (internal / "state.json").write_text("secret\n", encoding="utf-8")
+    runs = tmp_path / ".nz-coder-runs"
+    runs.mkdir()
+    trace = runs / "raw-trace.jsonl"
+    trace.write_text('{"event":"tool"}\n', encoding="utf-8")
     (tmp_path / "linked.py").symlink_to(tmp_path / "app.py")
     store = WorkspaceSnapshotStore(tmp_path, internal / "snapshots")
 
-    snapshot = store.track()
-    manifest = store._load(snapshot)
+    before = store.track()
+    trace.write_text(
+        '{"event":"tool"}\n{"event":"result"}\n',
+        encoding="utf-8",
+    )
+    after = store.track()
+    manifest = store._load(after)
 
-    assert list(manifest["files"]) == ["app.py"]
+    assert list(manifest["files"]) == [".github/workflows/ci.yml", "app.py"]
+    assert after == before
+    assert store.changed_files(before, after) == []
+
+
+def test_snapshot_keeps_unmanaged_product_prefixed_directories(tmp_path):
+    """Snapshot storage must not hide user files based on a test-only prefix."""
+    source = tmp_path / ".product-catalog"
+    source.mkdir()
+    (source / "catalog.py").write_text("VALUE = 1\n", encoding="utf-8")
+    state = tmp_path / ".nz-coder"
+    store = WorkspaceSnapshotStore(tmp_path, state / "snapshots")
+
+    snapshot = store.track()
+
+    assert list(store._load(snapshot)["files"]) == [
+        ".product-catalog/catalog.py",
+    ]
 
 
 def test_snapshot_limit_fails_instead_of_creating_ambiguous_manifest(tmp_path):

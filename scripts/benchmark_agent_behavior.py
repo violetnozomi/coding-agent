@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.evaluation.behavioral import (
     AgentBehaviorBenchmark,
     BehaviorBenchmarkConfig,

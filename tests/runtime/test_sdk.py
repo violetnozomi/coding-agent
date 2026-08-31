@@ -8,7 +8,7 @@ from nz_coder.runtime.core import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, AgentHandoff, RunOptions, RunRequest
 from nz_coder.runtime.core.result import RunStatus
 from nz_coder.runtime.core.result import RunResult, TokenUsage
-from nz_coder.runtime.guardrails import InputGuardrail, OutputGuardrail
+from nz_coder.runtime.agent.guardrails import InputGuardrail, OutputGuardrail
 from nz_coder.providers.capabilities import ModelCapabilities
 from nz_coder.runtime.model_gateway import ResolvedModelRuntime
 from nz_coder.sdk import AgentClient, _agent_graph_from_definition, run_agent
@@ -275,7 +275,7 @@ def test_default_sdk_completes_offline_model_tool_model(monkeypatch, tmp_path):
         ),
         owns_client=False,
     )
-    monkeypatch.setattr("nz_coder.runtime.native_sdk.resolve_model_runtime", lambda _request: runtime)
+    monkeypatch.setattr("nz_coder.runtime.execution.native_sdk.resolve_model_runtime", lambda _request: runtime)
     request = RunRequest(
         agent=AgentDefinition(
             name="sdk",

@@ -11,7 +11,7 @@ from typing import Callable
 
 from nz_coder.state.context import estimate_tokens, prompt_budget
 from nz_coder.state.workdir import current_workdir
-from nz_coder.sessions import session_tool_results_dir
+from nz_coder.state.sessions import session_tool_results_dir
 
 
 @dataclass(frozen=True)
@@ -120,17 +120,28 @@ class ToolResultProjector:
             return []
         total = max(1, int(max_tokens))
         needs = [max(1, estimate_tokens(str(output))) for _call_id, _name, output in items]
-        allocations = _adaptive_batch_allocations(needs, total)
-        projected: list[ProjectedToolResult] = []
-        for item_index, ((call_id, tool_name, output), share) in enumerate(zip(items, allocations)):
-            if needs[item_index] <= share:
-                policy, _fraction = _projection_policy(tool_name, self._budget.head_fraction)
-                child = ProjectedToolResult(str(output), {
-                    "tool_name": tool_name, "policy": policy,
-                    "original_tokens": needs[item_index],
-                    "projected_tokens": needs[item_index], "truncated": False,
-                })
-            elif share >= 32:
+        allocations = list(needs)
+        current_tokens = list(needs)
+        projected = []
+        for (call_id, tool_name, output), need in zip(items, needs):
+            policy, _fraction = _projection_policy(tool_name, self._budget.head_fraction)
+            projected.append(ProjectedToolResult(str(output), {
+                "tool_name": tool_name, "policy": policy,
+                "original_tokens": need,
+                "projected_tokens": need, "truncated": False,
+            }))
+
+        for item_index in sorted(
+            range(len(items)), key=lambda index: (-needs[index], index),
+        ):
+            used = sum(current_tokens)
+            if used <= total:
+                break
+            call_id, tool_name, output = items[item_index]
+            other_tokens = used - current_tokens[item_index]
+            share = max(0, total - other_tokens)
+            allocations[item_index] = share
+            if share >= 32:
                 child = ToolResultProjector(
                     budget=ToolResultBudget(share), artifact_writer=self._artifact_writer,
                 ).project(call_id, output, tool_name=tool_name)
@@ -142,24 +153,28 @@ class ToolResultProjector:
                     pass
                 policy, _fraction = _projection_policy(tool_name, self._budget.head_fraction)
                 signal = str(output).splitlines()[-1] if policy == "tail" else str(output).splitlines()[0]
-                note = f"\n[full:{artifact}]" if artifact else ""
-                text = signal[: max(1, share * 3)] + note
-                while estimate_tokens(text) > share and len(signal) > 1:
-                    signal = signal[: max(1, int(len(signal) * 0.75))]
-                    text = signal + note
+                text = _tiny_projection_text(signal, artifact, share)
                 child = ProjectedToolResult(text, {
                     "tool_call_id": call_id, "tool_name": tool_name, "policy": policy,
                     "original_tokens": estimate_tokens(str(output)),
                     "projected_tokens": estimate_tokens(text),
                     "truncated": True, "artifact_path": artifact,
                 }, artifact)
+            projected[item_index] = child
+            current_tokens[item_index] = child.metadata["projected_tokens"]
+
+        result: list[ProjectedToolResult] = []
+        for item_index, ((call_id, _tool_name, _output), child) in enumerate(
+            zip(items, projected)
+        ):
             metadata = {
                 **child.metadata, "tool_call_id": call_id,
-                "batch_budget_tokens": total, "batch_allocated_tokens": share,
-                "batch_allocation": "adaptive-small-first",
+                "batch_budget_tokens": total,
+                "batch_allocated_tokens": allocations[item_index],
+                "batch_allocation": "largest-first-spill",
             }
-            projected.append(ProjectedToolResult(child.text, metadata, child.artifact_path))
-        return projected
+            result.append(ProjectedToolResult(child.text, metadata, child.artifact_path))
+        return result
 
     def _bounded_text(
         self, output: str, artifact_path: str | None, *, head_fraction: float,
@@ -204,34 +219,52 @@ def _projection_policy(tool_name: str, default_fraction: float) -> tuple[str, fl
     return "head-tail", default_fraction
 
 
-def _adaptive_batch_allocations(needs: list[int], total: int) -> list[int]:
-    """Water-fill a batch so small evidence completes before large outputs grow."""
-    if not needs:
-        return []
-    count = len(needs)
-    floor = min(32, max(1, total // count))
-    allocations = [min(floor, need) for need in needs]
-    remaining = max(0, total - sum(allocations))
-    unfinished = {index for index, need in enumerate(needs) if allocations[index] < need}
-    while remaining and unfinished:
-        # Equal growth avoids one large result consuming all capacity.  When a
-        # small result reaches its need it leaves the pool and capacity is
-        # immediately redistributed among the remaining large results.
-        share = max(1, remaining // len(unfinished))
-        progressed = False
-        for index in sorted(unfinished, key=lambda item: (needs[item], item)):
-            grant = min(needs[index] - allocations[index], share, remaining)
-            if grant <= 0:
-                continue
-            allocations[index] += grant
-            remaining -= grant
-            progressed = True
-            if remaining == 0:
-                break
-        unfinished = {index for index in unfinished if allocations[index] < needs[index]}
-        if not progressed:
-            break
-    return allocations
+def _tiny_projection_text(
+    signal: str,
+    artifact_path: str | None,
+    max_tokens: int,
+) -> str:
+    """Fit an irreducible result without allowing its pointer to overflow."""
+    budget = max(0, int(max_tokens))
+    if budget == 0:
+        return ""
+    signal = str(signal or "")
+    note = f"[full:{artifact_path}]" if artifact_path else ""
+    combined = f"{signal}\n{note}" if signal and note else signal or note
+    if estimate_tokens(combined) <= budget:
+        return combined
+    if note and estimate_tokens(note) <= budget:
+        note_tokens = estimate_tokens(note)
+        prefix = _fit_prefix(signal, max(0, budget - note_tokens - 1))
+        candidate = f"{prefix}\n{note}" if prefix else note
+        if estimate_tokens(candidate) <= budget:
+            return candidate
+        return note
+    # The durable pointer remains in structured metadata when its literal path
+    # cannot fit.  Preserving protocol pairing is more important than emitting
+    # an unusably truncated path.
+    return _fit_prefix(signal, budget)
+
+
+def _fit_prefix(value: str, max_tokens: int) -> str:
+    """Return the longest practical prefix under a strict token ceiling."""
+    budget = max(0, int(max_tokens))
+    if budget == 0 or not value:
+        return ""
+    if estimate_tokens(value) <= budget:
+        return value
+    low = 0
+    high = len(value)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if estimate_tokens(value[:middle]) <= budget:
+            low = middle
+        else:
+            high = middle - 1
+    candidate = value[:low]
+    while candidate and estimate_tokens(candidate) > budget:
+        candidate = candidate[:-1]
+    return candidate
 
 
 def _persist_full_output(tool_call_id: str, output: str) -> str:

@@ -10,14 +10,14 @@ from tests.test_loop_fake import FakeClient, FakeMessage, FakeResponse, FakeTool
 
 
 def _graph(*agents, start="worker"):
-    from nz_coder.runtime.handoffs import AgentGraph
+    from nz_coder.runtime.agent.handoffs import AgentGraph
 
     return AgentGraph(agents, start=start)
 
 
 def test_admission_requires_explicit_untrusted_tool_allowlist():
-    from nz_coder.runtime.admission import SystemAgentCap, admit_agent_graph
-    from nz_coder.runtime.handoffs import AgentSpec
+    from nz_coder.runtime.agent.admission import SystemAgentCap, admit_agent_graph
+    from nz_coder.runtime.agent.handoffs import AgentSpec
 
     verdict = admit_agent_graph(
         _graph(AgentSpec("worker", "work")),
@@ -31,8 +31,8 @@ def test_admission_requires_explicit_untrusted_tool_allowlist():
 
 
 def test_admission_rejects_handoffs_without_subagent_capability():
-    from nz_coder.runtime.admission import SystemAgentCap, admit_agent_graph
-    from nz_coder.runtime.handoffs import AgentSpec, HandoffSpec
+    from nz_coder.runtime.agent.admission import SystemAgentCap, admit_agent_graph
+    from nz_coder.runtime.agent.handoffs import AgentSpec, HandoffSpec
 
     graph = _graph(
         AgentSpec(
@@ -51,8 +51,8 @@ def test_admission_rejects_handoffs_without_subagent_capability():
 
 
 def test_admission_clamps_tools_without_mutating_source_graph():
-    from nz_coder.runtime.admission import SystemAgentCap, admit_agent_graph
-    from nz_coder.runtime.handoffs import AgentSpec
+    from nz_coder.runtime.agent.admission import SystemAgentCap, admit_agent_graph
+    from nz_coder.runtime.agent.handoffs import AgentSpec
 
     graph = _graph(AgentSpec(
         "worker",
@@ -73,10 +73,67 @@ def test_admission_clamps_tools_without_mutating_source_graph():
     assert "external_unknown=subagent" in verdict.handle.clamp_notes[0]
 
 
+def test_admission_derives_extension_capability_from_side_effect_metadata():
+    """Scheduler mode must not decide an extension tool's authority tier."""
+    from nz_coder.runtime.agent.admission import resolve_tool_capability
+    from nz_coder.tools import (
+        TOOL_EXECUTION_MODES,
+        TOOL_HANDLERS,
+        TOOL_PLAN_MODE_ALLOWED,
+        TOOL_SIDE_EFFECTS,
+        TOOL_SPECS,
+        register,
+    )
+
+    effects = {
+        "_test_admission_read": ("readonly", "read"),
+        "_test_admission_network": ("reads-network", "bash:network"),
+        "_test_admission_shell": ("mutates-shell", "bash:mutating"),
+        "_test_admission_fs": ("mutates-fs", "edit"),
+        "_test_admission_state": ("mutates-state", "subagent"),
+    }
+    try:
+        for name, (effect, _expected) in effects.items():
+            register(
+                name,
+                "test",
+                {"type": "object", "properties": {}},
+                lambda: "ok",
+                execution="serial",
+                side_effect=effect,
+            )
+
+        assert {
+            name: resolve_tool_capability(name)
+            for name in effects
+        } == {
+            name: expected
+            for name, (_effect, expected) in effects.items()
+        }
+    finally:
+        for name in effects:
+            TOOL_HANDLERS.pop(name, None)
+            TOOL_EXECUTION_MODES.pop(name, None)
+            TOOL_SIDE_EFFECTS.pop(name, None)
+            TOOL_PLAN_MODE_ALLOWED.pop(name, None)
+        TOOL_SPECS[:] = [
+            spec for spec in TOOL_SPECS
+            if spec["function"]["name"] not in effects
+        ]
+
+
+def test_admission_metadata_promotes_registered_readonly_workflow_tool():
+    """A newly added readonly builtin must not need another admission list edit."""
+    import nz_coder.runtime.workflows.workflow_library  # noqa: F401
+    from nz_coder.runtime.agent.admission import resolve_tool_capability
+
+    assert resolve_tool_capability("workflow_library") == "read"
+
+
 def test_admitted_runtime_requires_opaque_handle_and_preserves_trusted_path():
-    from nz_coder.runtime.admission import SystemAgentCap, admit_agent_graph
-    from nz_coder.runtime.composition import admitted_runtime, declared_runtime
-    from nz_coder.runtime.handoffs import AgentSpec
+    from nz_coder.runtime.agent.admission import SystemAgentCap, admit_agent_graph
+    from nz_coder.runtime.execution.composition import admitted_runtime, declared_runtime
+    from nz_coder.runtime.agent.handoffs import AgentSpec
 
     graph = _graph(AgentSpec("worker", "work", allowed_tools=("read_file",)))
     verdict = admit_agent_graph(graph, SystemAgentCap(frozenset({"read"})))
@@ -94,11 +151,11 @@ def test_admitted_runtime_requires_opaque_handle_and_preserves_trusted_path():
 
 
 def test_runtime_clamps_dynamic_bash_network_capability(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.admission import SystemAgentCap, admit_agent_graph
-    from nz_coder.runtime.composition import build_admitted_agent
-    from nz_coder.runtime.handoffs import AgentSpec
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.admission import SystemAgentCap, admit_agent_graph
+    from nz_coder.runtime.execution.composition import build_admitted_agent
+    from nz_coder.runtime.agent.handoffs import AgentSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     graph = _graph(AgentSpec("worker", "work", allowed_tools=("bash",)))
     verdict = admit_agent_graph(
@@ -139,11 +196,11 @@ def test_runtime_clamps_dynamic_bash_network_capability(tmp_path):
 
 
 def test_admission_max_iterations_clamps_user_turn_budget(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.admission import SystemAgentCap, admit_agent_graph
-    from nz_coder.runtime.composition import build_admitted_agent
-    from nz_coder.runtime.handoffs import AgentSpec
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.admission import SystemAgentCap, admit_agent_graph
+    from nz_coder.runtime.execution.composition import build_admitted_agent
+    from nz_coder.runtime.agent.handoffs import AgentSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     graph = _graph(AgentSpec("worker", "work", allowed_tools=()))
     verdict = admit_agent_graph(
@@ -171,11 +228,11 @@ def test_admission_max_iterations_clamps_user_turn_budget(tmp_path):
 
 
 def test_admitted_run_cannot_finish_from_non_terminal_owner(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.admission import SystemAgentCap, admit_agent_graph
-    from nz_coder.runtime.composition import build_admitted_agent
-    from nz_coder.runtime.handoffs import AgentSpec, HandoffSpec
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.admission import SystemAgentCap, admit_agent_graph
+    from nz_coder.runtime.execution.composition import build_admitted_agent
+    from nz_coder.runtime.agent.handoffs import AgentSpec, HandoffSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     graph = _graph(
         AgentSpec(
@@ -216,12 +273,12 @@ def test_admitted_run_cannot_finish_from_non_terminal_owner(tmp_path):
 
 
 def test_terminal_evidence_invariant_tracks_only_committed_writes():
-    from nz_coder.runtime.admission import (
+    from nz_coder.runtime.agent.admission import (
         AdmissionInvariantSession,
         SystemAgentCap,
         admit_agent_graph,
     )
-    from nz_coder.runtime.handoffs import AgentSpec
+    from nz_coder.runtime.agent.handoffs import AgentSpec
 
     graph = _graph(AgentSpec("worker", "work", allowed_tools=("write_file", "bash")))
     verdict = admit_agent_graph(
@@ -252,12 +309,12 @@ def test_terminal_evidence_invariant_tracks_only_committed_writes():
 
 
 def test_terminal_evidence_accepts_successful_verification_artifact():
-    from nz_coder.runtime.admission import (
+    from nz_coder.runtime.agent.admission import (
         AdmissionInvariantSession,
         SystemAgentCap,
         admit_agent_graph,
     )
-    from nz_coder.runtime.handoffs import AgentSpec
+    from nz_coder.runtime.agent.handoffs import AgentSpec
 
     graph = _graph(AgentSpec("worker", "work", allowed_tools=("write_file", "bash")))
     verdict = admit_agent_graph(
@@ -296,6 +353,6 @@ def test_terminal_evidence_accepts_successful_verification_artifact():
     ],
 )
 def test_concrete_bash_capability_classification(command, expected):
-    from nz_coder.runtime.admission import resolve_tool_capability
+    from nz_coder.runtime.agent.admission import resolve_tool_capability
 
     assert resolve_tool_capability("bash", {"command": command}) == expected

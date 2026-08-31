@@ -5,10 +5,10 @@ import json
 
 import pytest
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.providers import OpenAIResponsesProvider, create_provider
 from nz_coder.providers.capabilities import resolve_model_capabilities
-from nz_coder.runtime.loop import AgentLoop
+from nz_coder.runtime.execution.loop import AgentLoop
 
 
 class _FakeResponses:

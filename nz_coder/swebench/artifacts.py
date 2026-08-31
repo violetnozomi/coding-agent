@@ -53,12 +53,14 @@ class AttemptJournal:
         return {str(row["instance_id"]) for row in self.rows()}
 
     def claim(self, instance_id: str) -> None:
-        """Durably claim the sole allowed inference before starting the Agent."""
+        """Durably claim inference, reusing a crash-interrupted open claim."""
         normalized = str(instance_id or "")
         if not normalized:
             raise ValueError("attempt claim requires instance_id")
-        if normalized in self.attempted_ids():
+        if normalized in self.completed_ids():
             raise ValueError(f"instance {normalized} already recorded")
+        if normalized in self.attempted_ids():
+            return
         self._append({
             "event": "claim",
             "instance_id": normalized,

@@ -6,8 +6,8 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from nz_coder import config
-from nz_coder.command_policy import classify_bash
+from nz_coder.foundation import config
+from nz_coder.tool_platform.command_policy import classify_bash
 from nz_coder.tools import register
 from nz_coder.tools.files import _safe_path
 
@@ -172,4 +172,5 @@ register(
         "required": ["project_dir"],
     },
     handler=verify_project_build,
+    side_effect="mutates-shell",
 )

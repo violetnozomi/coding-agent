@@ -493,7 +493,7 @@ def test_mcp_cli_status_and_logout_never_print_tokens(tmp_path, monkeypatch, cap
     store_path = tmp_path / "credentials" / "mcp-auth.json"
     monkeypatch.setenv("NZ_MCP_AUTH_STORE", str(store_path))
     monkeypatch.setattr(
-        "nz_coder.config.MCP_SERVERS_JSON",
+        "nz_coder.foundation.config.MCP_SERVERS_JSON",
         json.dumps(
             {
                 "remote": {

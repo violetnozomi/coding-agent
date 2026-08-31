@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from nz_coder.run_evidence import RunEvidence
+from nz_coder.runtime.observability.run_evidence import RunEvidence
 
 
 def test_child_outcome_keeps_lineage_and_applied_paths_separate():
@@ -352,6 +352,34 @@ def test_bash_dispatch_failure_is_tool_failure_not_verification_failure():
     assert len(evidence.tool_failures) == 1
 
 
+def test_bash_environment_status_uses_trusted_exit_metadata():
+    fake = RunEvidence(run_id="run-fake-environment")
+    fake.record_tool_result(
+        "bash",
+        {"command": "pytest tests/test_module.py::test_fix"},
+        (
+            "Command exited with code 1\n"
+            "Command exited with code 127\npytest: command not found"
+        ),
+        success=False,
+        command_failed=True,
+        metadata={"exit": 1},
+    )
+
+    real = RunEvidence(run_id="run-real-environment")
+    real.record_tool_result(
+        "bash",
+        {"command": "pytest tests/test_module.py::test_fix"},
+        "Command exited with code 127\npytest: command not found",
+        success=False,
+        command_failed=True,
+        metadata={"exit": 127},
+    )
+
+    assert fake.verification_results[0]["status"] == "failed"
+    assert real.verification_results[0]["status"] == "missing_dependency"
+
+
 def test_cargo_harness_list_is_not_recorded_as_executed_test():
     evidence = RunEvidence(run_id="run-cargo-list")
 
@@ -444,6 +472,42 @@ def test_code_write_invalidates_verification_from_previous_diff_generation():
 
     assert evidence.verification_results == []
     assert evidence.build_results == []
+
+
+def test_applied_child_source_changes_invalidate_previous_verification():
+    """A parent merge is a workspace mutation even though the child did edits."""
+    evidence = RunEvidence(run_id="run-child-generation")
+    evidence.record_tool_result(
+        "bash",
+        {"command": "pytest tests/test_parser.py"},
+        "12 passed",
+        success=True,
+    )
+
+    evidence.record_tool_result(
+        "apply_agent_changes",
+        {"reviewed_files": ["src/parser.py", "tests/test_parser.py"]},
+        "Applied reviewed child changes",
+        success=True,
+    )
+
+    assert evidence.verification_results == []
+    assert evidence.modified_files == ["src/parser.py", "tests/test_parser.py"]
+
+
+def test_mutating_bash_invalidates_previous_verification_without_guessing_paths():
+    """Shell writes are unattributed but still stale prior verification."""
+    evidence = RunEvidence(run_id="run-shell-generation")
+    evidence.record_tool_result(
+        "bash", {"command": "pytest -q tests"}, "12 passed", success=True,
+    )
+
+    evidence.record_tool_result(
+        "bash", {"command": "mv src/old.py src/new.py"}, "", success=True,
+    )
+
+    assert evidence.verification_results == []
+    assert evidence.modified_files == []
 
 
 def test_root_document_write_keeps_current_verification_evidence():

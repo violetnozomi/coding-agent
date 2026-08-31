@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 import pytest
 
 from nz_coder.runtime.core import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.core.result import RunResult, RunStatus, TokenUsage
+from nz_coder.runtime.core.run_context import RunContext
 from nz_coder.runtime.core.state import RunState
+from nz_coder.runtime.session.model import Session
 
 
 @pytest.fixture
@@ -88,7 +91,7 @@ def test_run_state_rejects_append_after_terminal(run_request: RunRequest) -> Non
         state.append_message({"role": "user", "content": "late"})
 
 
-def test_token_usage_accumulates_without_mutating_prior_value() -> None:
+def test_token_usage_accumulates_mutually_exclusive_buckets() -> None:
     """Usage aggregation must preserve immutable per-call evidence."""
     first = TokenUsage(input_tokens=10, output_tokens=3)
     total = first.add(TokenUsage(input_tokens=5, output_tokens=2, cached_read_tokens=4))
@@ -99,7 +102,60 @@ def test_token_usage_accumulates_without_mutating_prior_value() -> None:
         output_tokens=5,
         cached_read_tokens=4,
     )
-    assert total.total_tokens == 20
+    assert total.total_tokens == 24
+
+
+def test_token_usage_total_includes_reasoning_and_cache_buckets() -> None:
+    usage = TokenUsage(
+        input_tokens=100,
+        output_tokens=20,
+        cached_read_tokens=30,
+        cached_write_tokens=4,
+        reasoning_tokens=10,
+    )
+
+    assert usage.total_tokens == 164
+
+
+def test_run_context_serializes_parallel_auxiliary_usage(
+    run_request: RunRequest,
+) -> None:
+    """Concurrent Sidecar finishes must not overwrite each other's tokens."""
+    first_add = threading.Event()
+    second_add = threading.Event()
+
+    class RacingUsage:
+        def add(self, other: TokenUsage) -> TokenUsage:
+            if not first_add.is_set():
+                first_add.set()
+                second_add.wait(timeout=0.2)
+            else:
+                second_add.set()
+            return other
+
+    context = RunContext(
+        run_request,
+        Session.create(
+            run_request.session_id,
+            run_request.messages,
+            workspace=run_request.workspace,
+        ),
+        "worker",
+    )
+    context.usage = RacingUsage()
+    threads = [
+        threading.Thread(
+            target=context.add_usage,
+            args=(TokenUsage(input_tokens=10),),
+        )
+        for _index in range(2)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=2)
+
+    assert context.usage.input_tokens == 20
 
 
 def test_run_result_snapshots_terminal_messages() -> None:

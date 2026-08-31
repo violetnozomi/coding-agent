@@ -35,9 +35,9 @@ def _runtime():
 
 
 def test_native_environment_uses_real_production_service_graph(monkeypatch, tmp_path):
-    from nz_coder.runtime import native_sdk
-    from nz_coder.runtime.input_preflight import ProductionInputPreflight
-    from nz_coder.runtime.services import (
+    from nz_coder.runtime.execution import native_sdk
+    from nz_coder.runtime.conversation.input_preflight import ProductionInputPreflight
+    from nz_coder.runtime.execution.services import (
         ProductionCompletionVerifier,
         ProductionMemoryService,
         ProductionTurnModelRuntime,
@@ -47,7 +47,7 @@ def test_native_environment_uses_real_production_service_graph(monkeypatch, tmp_
 
     monkeypatch.setattr(native_sdk, "resolve_model_runtime", lambda _request: _runtime())
     environment = native_sdk.build_product_run_environment(
-        _request(tmp_path), RunOptions(),
+        _request(tmp_path), RunOptions(permission_asker=lambda *_args: True),
     )
     try:
         services = environment.runtime_services
@@ -57,14 +57,16 @@ def test_native_environment_uses_real_production_service_graph(monkeypatch, tmp_
         assert isinstance(services.verifier, ProductionCompletionVerifier)
         assert isinstance(services.inputs, ProductionInputPreflight)
         assert any(isinstance(item, ToolExposureMiddleware) for item in services.middleware)
+        assert environment.auto_mode_controller.enabled is False
+        assert environment.auto_permission_asker is None
     finally:
         environment.close()
 
 
 def test_semantic_configuration_failure_closes_built_environment(monkeypatch, tmp_path):
     from nz_coder.intelligence import semantic
-    from nz_coder.runtime import native_sdk
-    from nz_coder.runtime.loop import ProductRunEnvironment
+    from nz_coder.runtime.execution import native_sdk
+    from nz_coder.runtime.execution.loop import ProductRunEnvironment
 
     monkeypatch.setattr(native_sdk, "resolve_model_runtime", lambda _request: _runtime())
     request = _request(tmp_path)
@@ -100,7 +102,7 @@ def test_semantic_configuration_failure_closes_built_environment(monkeypatch, tm
 
 
 def test_native_sdk_contains_no_reduced_capability_stubs():
-    from nz_coder.runtime import native_sdk
+    from nz_coder.runtime.execution import native_sdk
 
     source = inspect.getsource(native_sdk)
     for name in ("_Memory", "_Verifier", "_Planning", "_Snapshots", "_Inputs"):

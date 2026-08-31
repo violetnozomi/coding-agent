@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
-from nz_coder.runtime.process_backends import (
+from nz_coder.runtime.process.process_backends import (
     ConPtyBackend,
     PosixPtyBackend,
     _WindowsJob,
@@ -247,7 +247,7 @@ def test_conpty_without_job_uses_pid_scoped_taskkill_fallback(tmp_path, monkeypa
         classmethod(lambda cls, pid, **kwargs: None),
     )
     monkeypatch.setattr(
-        "nz_coder.runtime.process_backends.subprocess.run",
+        "nz_coder.runtime.process.process_backends.subprocess.run",
         lambda argv, **kwargs: (
             calls.append((argv, kwargs))
             or subprocess.CompletedProcess(argv, 0)

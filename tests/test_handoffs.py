@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -10,7 +11,7 @@ from tests.test_loop_fake import FakeClient, FakeMessage, FakeResponse, FakeTool
 
 
 def _graph(input_filter=None):
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec, HandoffSpec
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
 
     return AgentGraph(
         [
@@ -31,7 +32,7 @@ def _graph(input_filter=None):
 
 
 def test_agent_graph_rejects_unknown_duplicate_and_cyclic_edges():
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec, HandoffSpec
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
 
     with pytest.raises(ValueError, match="unknown handoff target"):
         AgentGraph([
@@ -72,9 +73,9 @@ def test_handoff_tool_enforces_declared_edges_and_terminal_roles():
 
 
 def test_agent_loop_switches_prompt_persists_part_and_honors_terminal_signal(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     fake = FakeClient([
         FakeResponse(FakeMessage(tool_calls=[
@@ -135,10 +136,10 @@ def test_agent_loop_switches_prompt_persists_part_and_honors_terminal_signal(tmp
 
 
 def test_handoff_input_filter_receives_copy_and_controls_next_visible_history(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.session_processor import SessionProcessor
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.session.session_processor import SessionProcessor
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     observed = []
 
@@ -170,7 +171,7 @@ def test_handoff_input_filter_receives_copy_and_controls_next_visible_history(tm
 
 
 def test_session_lineage_is_append_only_and_recovers_interrupted_agent(tmp_path):
-    from nz_coder.runtime.lineage import SessionLineage
+    from nz_coder.runtime.agent.lineage import SessionLineage
 
     path = tmp_path / "lineage.jsonl"
     lineage = SessionLineage(path, "session-1")
@@ -188,7 +189,7 @@ def test_session_lineage_is_append_only_and_recovers_interrupted_agent(tmp_path)
 
 
 def test_session_lineage_ignores_only_a_truncated_tail(tmp_path):
-    from nz_coder.runtime.lineage import SessionLineage
+    from nz_coder.runtime.agent.lineage import SessionLineage
 
     path = tmp_path / "lineage.jsonl"
     lineage = SessionLineage(path, "session-1")
@@ -204,8 +205,31 @@ def test_session_lineage_ignores_only_a_truncated_tail(tmp_path):
         SessionLineage(path, "session-1")
 
 
+def test_session_lineage_persists_strict_json_and_rejects_legacy_nan(tmp_path):
+    from nz_coder.runtime.agent.lineage import SessionLineage
+
+    path = tmp_path / "lineage.jsonl"
+    lineage = SessionLineage(path, "session-1")
+    entry = lineage.append("run_started", {
+        "usage": [float("nan"), float("inf")],
+    })
+
+    assert entry["payload"] == {"usage": [None, None]}
+    json.loads(
+        path.read_text(encoding="utf-8"),
+        parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
+    )
+
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("null", "NaN", 1),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Invalid lineage entry"):
+        SessionLineage(path, "session-1")
+
+
 def test_agent_call_stack_store_is_atomic_private_and_validated(tmp_path):
-    from nz_coder.runtime.lineage import AgentCallStackStore
+    from nz_coder.runtime.agent.lineage import AgentCallStackStore
 
     path = tmp_path / "agent-call-stack.json"
     store = AgentCallStackStore(path, "session-1")
@@ -226,8 +250,26 @@ def test_agent_call_stack_store_is_atomic_private_and_validated(tmp_path):
         store.load()
 
 
+def test_agent_call_stack_store_normalizes_nonfinite_values(tmp_path):
+    from nz_coder.runtime.agent.lineage import AgentCallStackStore
+
+    path = tmp_path / "agent-call-stack.json"
+    store = AgentCallStackStore(path, "session-1")
+    store.save([{
+        "agent": "caller",
+        "target": "helper",
+        "messages": [{"role": "user", "content": "inspect", "score": float("nan")}],
+    }])
+
+    assert store.load()[0]["messages"][0]["score"] is None
+    json.loads(
+        path.read_text(encoding="utf-8"),
+        parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
+    )
+
+
 def test_memory_outcome_lineage_entries_are_idempotent(tmp_path):
-    from nz_coder.runtime.lineage import SessionLineage
+    from nz_coder.runtime.agent.lineage import SessionLineage
 
     lineage = SessionLineage(tmp_path / "lineage.jsonl", "session-1")
     first = lineage.append_unique(
@@ -248,9 +290,9 @@ def test_memory_outcome_lineage_entries_are_idempotent(tmp_path):
 
 
 def test_agent_tool_guardrail_rejects_hidden_tool_before_dispatch(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     old_workdir = config.WORKDIR
     config.WORKDIR = tmp_path
@@ -272,9 +314,9 @@ def test_agent_tool_guardrail_rejects_hidden_tool_before_dispatch(tmp_path):
 
 
 def test_lineage_artifact_ledger_records_file_and_command_provenance(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     old_workdir = config.WORKDIR
     config.WORKDIR = tmp_path
@@ -314,9 +356,9 @@ def test_lineage_artifact_ledger_records_file_and_command_provenance(tmp_path):
 
 
 def test_lineage_recovery_is_injected_only_after_compaction(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     old_workdir = config.WORKDIR
     config.WORKDIR = tmp_path
@@ -346,10 +388,10 @@ def test_lineage_recovery_is_injected_only_after_compaction(tmp_path):
 
 
 def test_as_tool_handoff_uses_isolated_transcript_then_returns_to_caller(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec, HandoffSpec
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     graph = AgentGraph([
         AgentSpec(
@@ -402,10 +444,10 @@ def test_as_tool_handoff_uses_isolated_transcript_then_returns_to_caller(tmp_pat
 
 
 def test_as_tool_handoff_recovers_caller_after_process_crash(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec, HandoffSpec
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     graph = AgentGraph([
         AgentSpec(
@@ -460,10 +502,10 @@ def test_as_tool_handoff_recovers_caller_after_process_crash(tmp_path):
 
 
 def test_agent_handoff_switches_declared_model_and_reasoning_effort(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec, HandoffSpec
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     graph = AgentGraph([
         AgentSpec(
@@ -515,11 +557,11 @@ def test_agent_handoff_switches_declared_model_and_reasoning_effort(tmp_path):
 
 
 def test_agent_input_and_output_guardrails_rewrite_authoritative_transcript(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.guardrails import InputGuardrail, OutputGuardrail
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.guardrails import InputGuardrail, OutputGuardrail
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     def rewrite_input(messages, _context):
         rewritten = list(messages)
@@ -564,11 +606,11 @@ def test_agent_input_and_output_guardrails_rewrite_authoritative_transcript(tmp_
 
 
 def test_agent_tool_guardrail_blocks_call_and_model_can_recover(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.guardrails import ToolGuardrail
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.guardrails import ToolGuardrail
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     seen_agents = []
 
@@ -612,11 +654,59 @@ def test_agent_tool_guardrail_blocks_call_and_model_can_recover(tmp_path):
     assert tool_message["content"] == "[Guardrail read-policy] list_directory denied"
 
 
+def test_tool_guardrail_selects_current_agent_after_handoff() -> None:
+    """Tool policy follows the active Agent while input/output stay start-owned."""
+    from nz_coder.runtime.agent.guardrail_runtime import ProductionGuardrailRuntime
+    from nz_coder.runtime.agent.guardrails import ToolGuardrail
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+
+    seen = []
+
+    def observe(label):
+        def check(_call, context):
+            seen.append((label, context["agent"].name))
+            return {"action": "allow"}
+
+        return check
+
+    graph = AgentGraph([
+        AgentSpec(
+            "scout",
+            "SCOUT_ROLE",
+            guardrails=(ToolGuardrail("scout-tools", before_tool=observe("scout")),),
+        ),
+        AgentSpec(
+            "worker",
+            "WORKER_ROLE",
+            guardrails=(ToolGuardrail("worker-tools", before_tool=observe("worker")),),
+        ),
+    ], start="scout")
+    host = SimpleNamespace(
+        agent_graph=graph,
+        current_agent_name="worker",
+        auto_mode_controller=None,
+        tracer=SimpleNamespace(log=lambda *_args, **_kwargs: None),
+    )
+
+    guarded, rejected = asyncio.run(ProductionGuardrailRuntime().before_tool(
+        host,
+        {
+            "id": "call-current",
+            "function": {"name": "read_file", "arguments": {"path": "app.py"}},
+        },
+        [],
+    ))
+
+    assert guarded["id"] == "call-current"
+    assert rejected is None
+    assert seen == [("worker", "worker")]
+
+
 def test_agent_reasoning_profile_escalates_real_provider_effort_once(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.handoffs import AgentGraph, AgentReasoningProfile, AgentSpec
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentReasoningProfile, AgentSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     graph = AgentGraph([
         AgentSpec(

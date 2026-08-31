@@ -4,7 +4,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from dataclasses import dataclass
 
-from nz_coder import config
+from nz_coder.foundation import config
 
 
 _ANTHROPIC_NAMES = {"anthropic", "claude"}

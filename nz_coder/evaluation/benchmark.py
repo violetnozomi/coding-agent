@@ -29,11 +29,11 @@ from pathlib import Path
 # Ensure project root is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from nz_coder import config
-from nz_coder.prompt import build
-from nz_coder.runtime.composition import build_product_environment
-from nz_coder.runtime.workdir import scoped_workdir
-from nz_coder.trace import TraceRecorder
+from nz_coder.foundation import config
+from nz_coder.runtime.conversation.prompt import build
+from nz_coder.runtime.execution.composition import build_product_environment
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.state.trace import TraceRecorder
 
 BENCH_DIR = config.WORKDIR / ".nz-coder" / "benchmark"
 REPORT_PATH = BENCH_DIR / "report.json"

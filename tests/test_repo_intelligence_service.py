@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import time
 import multiprocessing
+import threading
+import warnings
 
 
 def _fork_acquire_worker(workspace: str, connection) -> None:
@@ -32,6 +34,108 @@ def test_service_prewarms_in_background_and_reports_fresh_state(tmp_path) -> Non
     assert state.status == "ready"
     assert state.files_indexed == 1
     assert service.symbol_context("run")["definition"]["path"] == "app.py"
+    service.close()
+
+
+def test_failed_prewarm_does_not_start_deferred_watcher(tmp_path, monkeypatch) -> None:
+    """A failed or removed workspace must not leak callback exceptions."""
+    import threading
+
+    from nz_coder.intelligence import service as service_module
+
+    started = threading.Event()
+    monkeypatch.setattr(
+        service_module.RepoIntelligenceService,
+        "_build",
+        lambda self, _max_files: service_module.RepoIntelligenceState(
+            status="failed",
+            error="workspace removed",
+        ),
+    )
+    monkeypatch.setattr(
+        service_module.RepoIntelligenceService,
+        "start_watching",
+        lambda self, **_kwargs: started.set(),
+    )
+
+    service = service_module.acquire_repo_intelligence(
+        tmp_path,
+        interval=0.01,
+        max_files=20,
+    )
+    try:
+        assert service._future is not None
+        assert service._future.result(timeout=2).status == "failed"
+        assert not started.wait(timeout=0.1)
+    finally:
+        service_module.release_repo_intelligence(tmp_path)
+
+
+def test_watcher_startup_failure_is_observable_not_raised(tmp_path, monkeypatch) -> None:
+    """Late SQLite/filesystem teardown cannot escape a Future callback."""
+    from nz_coder.intelligence.service import RepoIntelligenceService
+
+    service = RepoIntelligenceService(tmp_path)
+    service.prewarm(max_files=20).result(timeout=5)
+    monkeypatch.setattr(
+        service,
+        "_indexed_fingerprints",
+        lambda: (_ for _ in ()).throw(OSError("workspace removed")),
+    )
+
+    service.start_watching(interval=0.01, max_files=20)
+
+    assert service.state.watcher_backend == "none"
+    assert service._watch_thread is None
+    service.close()
+
+
+def test_service_indexes_duplicate_property_definitions_with_stable_ids(tmp_path) -> None:
+    """Property getter/setter pairs must not abort the whole repository index."""
+    from nz_coder.intelligence.service import RepoIntelligenceService
+
+    source = tmp_path / "model.py"
+    body = (
+        "class Model:\n"
+        "    @property\n"
+        "    def value(self):\n"
+        "        return self._value\n\n"
+        "    @value.setter\n"
+        "    def value(self, new_value):\n"
+        "        self._value = new_value\n"
+    )
+    source.write_text(body, encoding="utf-8")
+    service = RepoIntelligenceService(tmp_path)
+
+    state = service.prewarm(max_files=20).result(timeout=5)
+    first_ids = [item["symbol_id"] for item in service.index.file_symbols("model.py")]
+
+    source.write_text("\n" + body, encoding="utf-8")
+    service._apply_incremental(("model.py",), 20)
+    second_ids = [item["symbol_id"] for item in service.index.file_symbols("model.py")]
+
+    assert state.status == "ready"
+    assert len(first_ids) == len(set(first_ids)) == 3
+    assert second_ids == first_ids
+    service.close()
+
+
+def test_service_indexes_duplicate_cpp_symbols_after_punctuation(tmp_path) -> None:
+    """Lexical fallback must survive punctuation and repeated type names."""
+    from nz_coder.intelligence.service import RepoIntelligenceService
+
+    source = tmp_path / "types.h"
+    source.write_text(
+        "{\nstruct Span {};\nstruct Span {};\n",
+        encoding="utf-8",
+    )
+    service = RepoIntelligenceService(tmp_path)
+
+    state = service.prewarm(max_files=20).result(timeout=5)
+    symbols = service.index.file_symbols("types.h")
+
+    assert state.status == "ready"
+    assert len(symbols) == len({item["symbol_id"] for item in symbols}) == 2
     service.close()
 
 
@@ -87,7 +191,7 @@ def test_service_coalesces_burst_events_before_incremental_update(tmp_path) -> N
 
 
 def test_product_environment_owns_repo_worker_lifecycle(tmp_path) -> None:
-    from nz_coder.runtime.loop import ProductRunEnvironment
+    from nz_coder.runtime.execution.loop import ProductRunEnvironment
 
     environment = object.__new__(ProductRunEnvironment)
     environment._initialize_repo_intelligence(tmp_path, interval=0.05)
@@ -112,6 +216,55 @@ def test_workspace_registry_shares_worker_and_closes_after_last_release(tmp_path
     release_repo_intelligence(tmp_path)
     assert not first._watch_stop.is_set()
     release_repo_intelligence(tmp_path)
+    assert first._watch_stop.is_set()
+
+
+def test_workspace_lease_acquire_is_atomic_with_last_release(tmp_path, monkeypatch) -> None:
+    """A new Session lease must not race a final release into a closed worker."""
+    import nz_coder.intelligence.service as service_module
+
+    first = service_module.acquire_repo_intelligence(tmp_path, interval=0.05)
+    original_lookup = service_module.workspace_repo_intelligence
+    lookup_returned = threading.Event()
+    allow_acquire = threading.Event()
+    acquired = []
+    errors = []
+
+    def delayed_lookup(*args, **kwargs):
+        service = original_lookup(*args, **kwargs)
+        if threading.current_thread().name == "lease-acquirer":
+            lookup_returned.set()
+            assert allow_acquire.wait(timeout=2)
+        return service
+
+    monkeypatch.setattr(
+        service_module,
+        "workspace_repo_intelligence",
+        delayed_lookup,
+    )
+
+    def acquire_second():
+        try:
+            acquired.append(
+                service_module.acquire_repo_intelligence(tmp_path, interval=0.05)
+            )
+        except Exception as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=acquire_second, name="lease-acquirer")
+    thread.start()
+    if lookup_returned.wait(timeout=0.25):
+        service_module.release_repo_intelligence(tmp_path)
+        allow_acquire.set()
+    else:
+        thread.join(timeout=2)
+        service_module.release_repo_intelligence(tmp_path)
+    thread.join(timeout=2)
+
+    assert errors == []
+    assert acquired == [first]
+    assert not first._watch_stop.is_set()
+    service_module.release_repo_intelligence(tmp_path)
     assert first._watch_stop.is_set()
 
 
@@ -174,7 +327,7 @@ def test_main_and_two_children_share_service_but_worktree_is_isolated(tmp_path) 
     assert isolated._watch_stop.is_set()
 
 
-def test_forked_child_rebuilds_inherited_workspace_registry(tmp_path) -> None:
+def test_explicit_fork_compat_rebuilds_inherited_workspace_registry(tmp_path) -> None:
     from nz_coder.intelligence.service import (
         acquire_repo_intelligence,
         release_repo_intelligence,
@@ -186,7 +339,13 @@ def test_forked_child_rebuilds_inherited_workspace_registry(tmp_path) -> None:
     process = multiprocessing.get_context("fork").Process(
         target=_fork_acquire_worker, args=(str(tmp_path), send),
     )
-    process.start()
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"This process .* is multi-threaded, use of fork.*",
+            category=DeprecationWarning,
+        )
+        process.start()
     send.close()
 
     assert receive.poll(8)

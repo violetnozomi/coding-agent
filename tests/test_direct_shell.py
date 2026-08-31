@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from nz_coder.permissions import PermissionManager
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 def test_direct_shell_executes_through_permissioned_tool_pipeline(tmp_path):

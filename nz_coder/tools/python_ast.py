@@ -5,7 +5,7 @@ import ast
 import difflib
 from pathlib import Path
 
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
 
 
@@ -257,4 +257,5 @@ register(
     },
     handler=python_structural_edit,
     execution="write",
+    side_effect="mutates-fs",
 )

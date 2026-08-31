@@ -9,7 +9,7 @@ from __future__ import annotations
 import html
 from pathlib import Path
 
-from nz_coder.attachments import (
+from nz_coder.protocol.attachments import (
     MAX_DOCUMENT_BYTES,
     MAX_IMAGE_BYTES,
     make_document_attachment,
@@ -17,8 +17,8 @@ from nz_coder.attachments import (
     normalize_attachments,
     sniff_image_mime,
 )
-from nz_coder.documents import detect_document_mime
-from nz_coder.message_schema import attach_file_parts, attach_message_identity
+from nz_coder.capabilities.documents import detect_document_mime
+from nz_coder.protocol.message_schema import attach_file_parts, attach_message_identity
 from nz_coder.state.context import estimate_tokens
 
 INPUT_EXPANSIONS_KEY = "_nz_input_expansions"
@@ -56,6 +56,11 @@ def tag_file_attachments(
             continue
         original_bytes = max(0, int(getattr(attachment, "size", 0) or 0))
         path = _safe_source(root, source) if root is not None else None
+        if path is not None:
+            try:
+                original_bytes = path.stat().st_size
+            except OSError:
+                path = None
         mime = ""
         if path is not None:
             try:
@@ -177,14 +182,14 @@ def _safe_source(workspace: Path, source: str) -> Path | None:
     return resolved if resolved.is_file() else None
 
 
-def _read_bounded_text(path: Path, max_bytes: int) -> tuple[str, int]:
+def _read_bounded_text(path: Path, max_bytes: int) -> tuple[str, int, int]:
     try:
         original_bytes = path.stat().st_size
         with path.open("rb") as stream:
             data = stream.read(max(1, max_bytes))
     except OSError:
-        return "", 0
-    return data.decode("utf-8", errors="replace"), original_bytes
+        return "", 0, 0
+    return data.decode("utf-8", errors="replace"), original_bytes, len(data)
 
 
 def _readable(record: dict) -> bool:
@@ -267,11 +272,22 @@ def resolve_and_apply_budget(messages: list[dict], budget, workspace: str | Path
                     record["resolved"] = True
                     stats["compacted"] += 1
                 else:
-                    text, original_bytes = _read_bounded_text(path, read_limit)
+                    text, original_bytes, sample_bytes = _read_bounded_text(
+                        path,
+                        read_limit,
+                    )
                     record["text"] = text
                     record["originalBytes"] = original_bytes
+                    sample_tokens = estimate_tokens(text)
+                    density_estimate = (
+                        (sample_tokens * original_bytes + sample_bytes - 1)
+                        // sample_bytes
+                        if sample_bytes > 0
+                        else 0
+                    )
                     record["originalTokens"] = max(
-                        estimate_tokens(text),
+                        sample_tokens,
+                        density_estimate,
                         (original_bytes + 3) // 4,
                     )
                     record["resolved"] = True

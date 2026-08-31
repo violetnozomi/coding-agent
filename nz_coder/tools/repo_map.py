@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.intelligence.code_index import (
     AmbiguousSymbolError,
     FileEntry,
@@ -16,7 +16,7 @@ from nz_coder.lsp.workspace_symbols import (
     collect_workspace_symbols,
     format_workspace_symbols,
 )
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
 from nz_coder.tools.repo_languages import is_supported_source
 from nz_coder.tools.repo_ranking import MatchRank, rank_repo_symbol

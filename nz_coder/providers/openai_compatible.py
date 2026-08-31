@@ -5,8 +5,8 @@ from typing import Any, Callable
 
 from openai import OpenAI
 
-from nz_coder import config
-from nz_coder.attachments import openai_chat_messages
+from nz_coder.foundation import config
+from nz_coder.protocol.attachments import openai_chat_messages
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
     configured_model_capabilities,

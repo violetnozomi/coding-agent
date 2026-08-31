@@ -49,7 +49,7 @@ def test_first_startup_imports_terminal_and_reports_windows():
 
 
 def test_powershell_tool_utf8_and_warning_semantics(tmp_path):
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tools.bash import run_bash
     with scoped_workdir(tmp_path):
         result = run_bash("Write-Output '中文 日本語 🚀'; Write-Warning 'warning'; exit 0")
@@ -60,7 +60,7 @@ def test_powershell_tool_utf8_and_warning_semantics(tmp_path):
 
 @pytest.mark.parametrize("executable", ["pwsh.exe", "powershell.exe"])
 def test_powershell_versions_preserve_multilingual_output(executable):
-    from nz_coder.runtime.platform_runtime import decode_process_output
+    from nz_coder.runtime.process.platform_runtime import decode_process_output
 
     resolved = shutil.which(executable)
     assert resolved is not None, f"{executable} must be installed on the Windows RC runner"
@@ -88,7 +88,7 @@ def test_powershell_versions_preserve_multilingual_output(executable):
 
 
 def test_windows_powershell_utf16_without_bom_is_decoded():
-    from nz_coder.runtime.platform_runtime import decode_process_output
+    from nz_coder.runtime.process.platform_runtime import decode_process_output
 
     text = "PowerShell 中文 日本語 output"
     environment = os.environ.copy()
@@ -116,7 +116,7 @@ def test_windows_powershell_utf16_without_bom_is_decoded():
 
 
 def test_native_windows_private_acl_round_trip(tmp_path):
-    from nz_coder.private_paths import (
+    from nz_coder.foundation.private_paths import (
         harden_private_path,
         inspect_private_path,
     )
@@ -137,7 +137,7 @@ def test_native_windows_private_acl_round_trip(tmp_path):
 
 @pytest.mark.parametrize("directory", ["My Project (a)[b]#", "代码项目🚀"])
 def test_space_path_and_cjk_path_file_edit(tmp_path: Path, directory: str):
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tools.files import write_file, read_file
     target = tmp_path / directory
     target.mkdir()
@@ -148,8 +148,8 @@ def test_space_path_and_cjk_path_file_edit(tmp_path: Path, directory: str):
 
 
 def test_junction_escape_blocks_existing_read_and_new_file_write(tmp_path: Path):
-    from nz_coder.runtime.platform_runtime import decode_process_output
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.platform_runtime import decode_process_output
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tools.files import read_file, write_file
 
     workspace = tmp_path / "workspace"
@@ -183,7 +183,7 @@ def test_junction_escape_blocks_existing_read_and_new_file_write(tmp_path: Path)
 
 
 def test_persistent_process_and_conpty_repl_and_ctrl_c(tmp_path):
-    from nz_coder.runtime.process_service import ProcessService
+    from nz_coder.runtime.process.process_service import ProcessService
     service = ProcessService(tmp_path, kill_grace_seconds=0.1)
     try:
         handle = service.start(
@@ -212,7 +212,7 @@ def test_persistent_process_and_conpty_repl_and_ctrl_c(tmp_path):
 
 
 def test_native_windows_pipe_child_reports_job_object_binding(tmp_path):
-    from nz_coder.runtime.process_backends import create_process_backend
+    from nz_coder.runtime.process.process_backends import create_process_backend
 
     backend = create_process_backend(
         f'"{sys.executable}" -c "import time; time.sleep(30)"',
@@ -229,7 +229,7 @@ def test_native_windows_pipe_child_reports_job_object_binding(tmp_path):
 
 
 def test_conpty_resize(tmp_path):
-    from nz_coder.runtime.process_service import ProcessService
+    from nz_coder.runtime.process.process_service import ProcessService
     service = ProcessService(tmp_path, kill_grace_seconds=0.1)
     try:
         handle = service.start(

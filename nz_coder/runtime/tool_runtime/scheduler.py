@@ -7,9 +7,9 @@ from contextvars import copy_context
 import threading
 import time
 
-from nz_coder.runtime.async_utils import to_thread_settled as _to_thread_settled
-from nz_coder.runtime.execution_context import max_parallel_tasks
-from nz_coder.runtime.tool_executor import ToolExecutionResult
+from nz_coder.foundation.async_utils import to_thread_settled as _to_thread_settled
+from nz_coder.runtime.core.execution_context import max_parallel_tasks
+from nz_coder.tool_platform.execution import ToolExecutionResult
 from nz_coder.tools import current_tool_cancel_event, scoped_tool_cancellation
 
 def _notify_schedule_observer(observer, payload: dict) -> None:
@@ -179,7 +179,7 @@ def _execute_concurrent(executor, tool_calls_raw: list, on_metrics=None) -> list
                 result_r = fut.result()
             except Exception as exc:
                 # Safety net: if a tool raises unexpectedly, surface as error
-                from nz_coder.tool_executor import ToolExecutionResult
+                from nz_coder.tool_platform.execution import ToolExecutionResult
                 fn_name = tool_calls_raw[i]["function"]["name"]
                 result_r = ToolExecutionResult(
                     name=fn_name,
@@ -305,7 +305,7 @@ async def _execute_concurrent_async(executor, tool_calls_raw: list, on_metrics=N
                 cancel_callback=cancel_event.set,
             )
         except Exception as exc:
-            from nz_coder.tool_executor import ToolExecutionResult
+            from nz_coder.tool_platform.execution import ToolExecutionResult
             fn_name = tool_calls_raw[i]["function"]["name"]
             result_r = ToolExecutionResult(
                 name=fn_name,

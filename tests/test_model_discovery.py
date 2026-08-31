@@ -9,7 +9,7 @@ import threading
 
 import pytest
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.providers.cli import models_main
 from nz_coder.providers.models import (
     active_model_selection,
@@ -18,7 +18,7 @@ from nz_coder.providers.models import (
     discover_models,
     save_model_selection,
 )
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 class _ModelsHandler(BaseHTTPRequestHandler):
@@ -144,6 +144,30 @@ def test_discovery_rejects_plaintext_remote_credentials():
         )
 
 
+@pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan"), "bad"])
+def test_discovery_rejects_invalid_timeout_before_network(tmp_path, timeout):
+    with pytest.raises(ValueError, match="timeout"):
+        discover_models(
+            "openai-compatible",
+            api_key="key",
+            base_url="http://127.0.0.1:9/v1",
+            workspace=tmp_path,
+            timeout_seconds=timeout,
+        )
+
+
+def test_model_selection_rejects_nonstandard_json_numbers(tmp_path):
+    target = tmp_path / ".nz-coder/models/selection.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        '{"version":1,"provider":"gemini","model_id":"code","variant":NaN}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Invalid model state"):
+        active_model_selection(tmp_path)
+
+
 def test_workspace_selection_round_trip_and_reset(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "MODEL_PROVIDER", "openai-compatible")
     monkeypatch.setattr(config, "MODEL_ID", "fallback-model")
@@ -218,7 +242,7 @@ def test_models_cli_lists_cached_capability_details(
 
 
 def test_agent_uses_workspace_model_selection(tmp_path, monkeypatch):
-    import nz_coder.runtime.loop as loop_module
+    import nz_coder.runtime.execution.loop as loop_module
 
     class Provider:
         name = "gemini"

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 
 class _FakeProvider:
     name = "fake-search"
 
     def search(self, query: str, *, limit: int = 8, timeout: float = 20.0):
-        from nz_coder.web_search import SearchResult
+        from nz_coder.capabilities.web_search import SearchResult
 
         assert query == "current sdk api"
         assert limit == 2
@@ -24,7 +26,7 @@ class _FakeProvider:
 
 def test_web_search_provider_contract_and_tool_output():
     from nz_coder.tools.web_search import web_search
-    from nz_coder.web_search import scoped_web_search_provider
+    from nz_coder.capabilities.web_search import scoped_web_search_provider
 
     with scoped_web_search_provider(_FakeProvider()):
         result = web_search("current sdk api", limit=2, timeout=3)
@@ -38,7 +40,7 @@ def test_web_search_provider_contract_and_tool_output():
 
 
 def test_duckduckgo_parser_preserves_title_snippet_and_target_url():
-    from nz_coder.web_search import _DuckDuckGoParser, _result_url
+    from nz_coder.capabilities.web_search import _DuckDuckGoParser, _result_url
 
     parser = _DuckDuckGoParser()
     parser.feed("""
@@ -59,7 +61,7 @@ def test_duckduckgo_parser_preserves_title_snippet_and_target_url():
 
 
 def test_bing_rss_provider_parses_structured_results(monkeypatch):
-    from nz_coder.web_search import BingRssWebSearchProvider
+    from nz_coder.capabilities.web_search import BingRssWebSearchProvider
 
     payload = b"""<?xml version="1.0"?><rss><channel><item>
       <title>Official release</title><link>https://docs.example.test/release</link>
@@ -76,7 +78,7 @@ def test_bing_rss_provider_parses_structured_results(monkeypatch):
             assert timeout == 4
             return _Response()
 
-    monkeypatch.setattr("nz_coder.web_search.build_opener", lambda: _Opener())
+    monkeypatch.setattr("nz_coder.capabilities.web_search.build_opener", lambda: _Opener())
     results = BingRssWebSearchProvider().search("sdk release", limit=2, timeout=4)
 
     assert results[0].title == "Official release"
@@ -85,7 +87,7 @@ def test_bing_rss_provider_parses_structured_results(monkeypatch):
 
 
 def test_github_issue_provider_preserves_primary_issue_identity(monkeypatch):
-    from nz_coder.web_search import GitHubIssueSearchProvider
+    from nz_coder.capabilities.web_search import GitHubIssueSearchProvider
 
     payload = json.dumps({"items": [{
         "title": "Remove deprecated proxies argument",
@@ -106,7 +108,7 @@ def test_github_issue_provider_preserves_primary_issue_identity(monkeypatch):
             assert timeout == 5
             return _Response()
 
-    monkeypatch.setattr("nz_coder.web_search.build_opener", lambda: _Opener())
+    monkeypatch.setattr("nz_coder.capabilities.web_search.build_opener", lambda: _Opener())
     results = GitHubIssueSearchProvider().search(
         "GitHub issue httpx proxies removed", limit=3, timeout=5,
     )
@@ -117,7 +119,7 @@ def test_github_issue_provider_preserves_primary_issue_identity(monkeypatch):
 
 
 def test_default_provider_routes_issues_and_filters_irrelevant_results(monkeypatch):
-    from nz_coder.web_search import DefaultWebSearchProvider, SearchResult
+    from nz_coder.capabilities.web_search import DefaultWebSearchProvider, SearchResult
 
     provider = DefaultWebSearchProvider()
     monkeypatch.setattr(provider.github, "search", lambda *_args, **_kwargs: [
@@ -150,3 +152,22 @@ def test_web_search_disabled_provider_is_diagnostic(monkeypatch):
 
     monkeypatch.setenv("NZ_CODER_WEB_SEARCH_PROVIDER", "off")
     assert web_search("query").startswith("Error: Web search is disabled")
+
+
+@pytest.mark.parametrize("timeout", [True, float("nan"), float("inf"), float("-inf"), 0])
+def test_web_search_rejects_invalid_timeout_before_network(monkeypatch, timeout):
+    from nz_coder.tools.web_search import web_search
+
+    called = False
+
+    def fail_if_called(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("network provider must not start")
+
+    monkeypatch.setattr("nz_coder.tools.web_search.search_web", fail_if_called)
+
+    result = web_search("query", timeout=timeout)
+
+    assert result.startswith("Error: timeout must be a positive finite number")
+    assert called is False

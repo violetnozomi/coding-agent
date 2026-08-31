@@ -8,7 +8,7 @@ NZ-Coder is a terminal coding-agent runtime built around a small set of explicit
 user input
   -> AgentRuntimeAssembly (coding or explicit declared graph)
   -> optional admission audit for untrusted declared graphs
-  -> AgentLoop compatibility/capability host
+  -> ProductRunEnvironment capability host (AgentLoop only for deprecated compatibility callers)
   -> AgentRunner.run
   -> ProductionRuntimeHost (workspace/session/MCP/ContextVar scope)
   -> AgentRunner._run_turns (single Main/child/background/workflow kernel)
@@ -25,18 +25,18 @@ user input
 
 ## Core Components
 
-- `runtime/runner.py`: owns the single production turn state machine used by
+- `runtime/execution/runner.py`: owns the single production turn state machine used by
   Main, child, background and workflow execution.
-- `runtime/host.py`: binds workspace, Session, MCP, memory, skills, tool state,
+- `runtime/execution/host.py`: binds workspace, Session, MCP, memory, skills, tool state,
   background manager and interaction callbacks around one Runner invocation.
-- `runtime/loop.py`: compatibility and coding-capability adapter; it retains
+- `runtime/execution/loop.py`: compatibility and coding-capability adapter; it retains
   mature prompt/materialization/verification/handoff policies but no longer
   owns a production turn loop.
 - `runtime/model_gateway/`: owns Provider resolution, retry, timeout,
   cancellation, streaming fallback, normalized errors, usage and cost.
 - `runtime/tool_runtime/`: owns read concurrency, side-effect barriers,
   transaction settlement and complete tool-batch post-processing.
-- `runtime/context_manager.py` and `runtime/session_repository.py`: own
+- `runtime/conversation/context_manager.py` and `runtime/session/session_repository.py`: own
   model-window preflight/compaction triggering and durable checkpoints.
 - `tools/`: exposes built-in tools plus context-local dynamic MCP tools through a function-calling registry.
 - `mcp/`: owns layered local/remote configuration, project-command trust,
@@ -59,77 +59,78 @@ The implementation is now organized into functional package directories under `n
 
 Owns the ReAct/CodeAct loop and per-turn control flow.
 
-- `runtime/loop.py`: main agent loop, model calls, effect-aware tool scheduling, ordered side-effect barriers, verification gate, compaction, final status.
-- `runtime/composition.py`: canonical construction owner used by CLI, HTTP,
+- `runtime/execution/loop.py`: main agent loop, model calls, effect-aware tool scheduling, ordered side-effect barriers, verification gate, compaction, final status.
+- `runtime/execution/composition.py`: canonical construction owner used by CLI, HTTP,
   local evaluation, Aider helpers, and SWE-bench. The default `coding` profile
   keeps the native coding loop as the sole control plane; an explicit
   `declared` profile installs one validated AgentGraph instead of silently
   mixing both orchestration styles.
-- `runtime/admission.py`: typed admission verdict/handle, system capability
+- `runtime/agent/admission.py`: typed admission verdict/handle, system capability
   ceiling, declaration-time tool clamp, per-call Bash capability re-clamp,
   per-run mutation/evidence observation, and terminal invariant assertions for
   untrusted declared graphs. Trusted built-in coding and hand-authored declared
   graphs use their existing path unless the caller explicitly selects admission.
-- `runtime/structured_output.py`: provider-neutral JSON extraction, a focused
+- `runtime/conversation/structured_output.py`: provider-neutral JSON extraction, a focused
   JSON-Schema validator, declaration-time unsupported-keyword rejection, and
   the prompt contract for one bounded no-tool repair turn.
-- `runtime/child_result.py`: canonical JSON-safe child terminal result shared by
+- `runtime/agent/child_result.py`: canonical JSON-safe child terminal result shared by
   foreground `task`, background Agent Manager, change application, evidence,
   and declarative as-tool returns, with legacy metadata projection.
-- `runtime/workflow_process.py`: append-only background task lifecycle journal,
+- `runtime/workflows/workflow_process.py`: append-only background task lifecycle journal,
   replay reducer, atomic revisioned snapshot, counts/progress/token projection,
   cross-process run-identity replay, and corruption/truncated-tail recovery.
-- `runtime/workflow_runtime.py`: preflighted declarative workflow execution over
+- `runtime/workflows/workflow_runtime.py`: preflighted declarative workflow execution over
   the same background manager, including phases, bounded parallel lanes,
   barrier-free per-item pipelines, map-reduce, gated synthesis, and a private
   content-addressed successful-result resume cache, token budget, abort, and
   independent sidecar verification.
-- `runtime/workflow_contracts.py`: versioned machine-readable workflow behavior
+- `runtime/workflows/workflow_contracts.py`: versioned machine-readable workflow behavior
   contract consumed by results, SDK-facing metadata, and parity tests.
-- `runtime/workflow_manifest.py`: strict workflow declarations and pattern IDs
+- `runtime/workflows/workflow_manifest.py`: strict workflow declarations and pattern IDs
   checked against the concrete plan before effect admission.
-- `runtime/workflow_run_store.py`: private bounded JSON artifacts, terminal
+- `runtime/workflows/workflow_run_store.py`: private bounded JSON artifacts, terminal
   `run.json`, and typed usage/coverage efficiency reports.
-- `runtime/workflow_capsule.py`: inert versioned reusable-plan envelopes and
+- `runtime/workflows/workflow_capsule.py`: inert versioned reusable-plan envelopes and
   side-effect-free environment/capability requirement preflight.
-- `runtime/workflow_library.py`: project/personal capsule persistence and
+- `runtime/workflows/workflow_library.py`: project/personal capsule persistence and
   discovery with project precedence, symlink exclusion, and atomic 0600 writes.
-- `runtime/workflow_resolver.py`: built-in-first capsule resolution, bounded
+- `runtime/workflows/workflow_resolver.py`: built-in-first capsule resolution, bounded
   saved-capsule argument substitution, and one-level nested workflow expansion.
-- `runtime/workflow_host.py`: safe run/saved/built-in identity resolution,
+- `runtime/workflows/workflow_host.py`: safe run/saved/built-in identity resolution,
   command-only invocation policy, min-wins host ceilings, approval summaries,
   display aliases, resume targeting, and the scout-then-author prompt contract.
-- `runtime/workflow_generation.py`: strict JSON decline/generate envelopes,
+- `runtime/workflows/workflow_generation.py`: strict JSON decline/generate envelopes,
   Provider-backed authoring, inert Capsule validation, one shared timeout budget,
   and at most two repair calls.
-- `runtime/workflow_sdk.py`: asynchronous managed-run handle with first-started
+- `runtime/workflows/workflow_sdk.py`: asynchronous managed-run handle with first-started
   and terminal futures plus pause/resume/stop controls for terminal/SDK hosts.
-- `runtime/agent_resilience.py`: conservative unique tool-name alias repair,
+- `runtime/agent/agent_resilience.py`: conservative unique tool-name alias repair,
   tool-result error/cancellation/code classification, Provider Attempt decisions,
   single pre-boundary buffered fallback, and terminal promise-signal extraction.
-- `runtime/workflow_builtins.py`: trusted JSON-only parallel-investigation and
+- `runtime/workflows/workflow_builtins.py`: trusted JSON-only parallel-investigation and
   scoped-review capsules plus six bounded declarative workflow generators.
-- `runtime/workflow_review.py`: immutable supplied-diff review packets and a
+- `runtime/workflows/workflow_review.py`: immutable supplied-diff review packets and a
   deterministic quality gate that preserves unresolved evidence.
-- `runtime/workflow_sweep.py`: fail-soft cleanup of clean terminal workflow
+- `runtime/workflows/workflow_sweep.py`: fail-soft cleanup of clean terminal workflow
   worktrees while retaining any child with reported or observed changes.
-- `runtime/workflow_features.py`: registered tools for built-in discovery,
+- `runtime/workflows/workflow_features.py`: registered tools for built-in discovery,
   review-packet capture, and inert workflow generation.
-- `runtime/workflow_lifecycle.py`: safe persisted run/artifact readers and
+- `runtime/workflows/workflow_lifecycle.py`: safe persisted run/artifact readers and
   confirmed recoverable archival into workflow-private trash.
-- `runtime/handoffs.py`: declarative Agent/model/tool/guardrail declarations,
+- `runtime/agent/handoffs.py`: declarative Agent/model/tool/guardrail declarations,
   continuation and as-tool edges, and the execution-local handoff signal.
-- `runtime/guardrails.py`: typed input/output/tool verdict contracts.
-- `runtime/lineage.py`: append-only Session facts and atomic as-tool caller
+- `runtime/agent/guardrails.py`: typed input/output/tool verdict contracts.
+- `runtime/agent/lineage.py`: append-only Session facts and atomic as-tool caller
   stack recovery.
-- `runtime/tool_executor.py`: parses tool arguments, applies permission checks, dispatches tools, and classifies dynamic/built-in write effects.
-- `runtime/prompt.py`: builds the system prompt and tool-use guidance.
-- `runtime/runtime_state.py`: state-as-message reminders for task mode, diff state, verification state, idle turns, and Greenfield flow.
-- `runtime/recovery.py`: API/tool error diagnostics, retry behavior, canonical identical-call tracking, and conservative recovery prompts.
-- `runtime/task_policy.py`: task-mode detection and policy helpers such as broad-test detection.
-- `runtime/subagent.py`: isolated child-agent execution with restricted tool sets and scratch output.
-- `runtime/workdir.py`: context-local workspace and derived artifact-directory selection.
-- `runtime/execution_context.py`: context-local max-turn, timeout, scheduler-limit overrides and the mutable broad-test guard.
+- `tool_platform/execution.py`: shared tool-result, workspace-mutation, and command-failure contracts used below the orchestration layer.
+- `runtime/execution/tool_executor.py`: parses tool arguments, applies permission checks, dispatches tools, and re-exports the shared execution contracts for compatibility.
+- `runtime/conversation/prompt.py`: builds the system prompt and tool-use guidance.
+- `runtime/execution/runtime_state.py`: state-as-message reminders for task mode, diff state, verification state, idle turns, and Greenfield flow.
+- `runtime/verification/recovery.py`: API/tool error diagnostics, retry behavior, canonical identical-call tracking, and conservative recovery prompts.
+- `runtime/agent/task_policy.py`: task-mode detection and policy helpers such as broad-test detection.
+- `runtime/agent/subagent.py`: isolated child-agent execution with restricted tool sets and scratch output.
+- `runtime/process/workdir.py`: context-local workspace and derived artifact-directory selection.
+- `runtime/core/execution_context.py`: context-local max-turn, timeout, scheduler-limit overrides and the mutable broad-test guard.
 - `providers/capabilities.py`: immutable model-family metadata, registry and exact local catalog overlays, reasoning variants, prompt-family guidance, and request normalization.
 - `providers/models.py` and `providers/registry.py`: explicit provider discovery,
   bounded offline caches, workspace model selection, and models.dev-compatible
@@ -359,6 +360,16 @@ Explicit `MAX_CONTEXT_TOKENS`, `MAX_OUTPUT_TOKENS`, and
 the Agent-owned immutable capability snapshot, so a catalog edit cannot change
 request semantics halfway through a Session.
 
+Physical context capacity and repeated-input cost are separate budgets.
+`PromptBudget.replay_compaction_tokens` defaults to 24K provider-visible history
+tokens (`NZ_CONTEXT_REPLAY_COMPACTION_TOKENS`; `0` disables it). It excludes the
+fixed system prompt and tool schemas, so a large catalog cannot cause a useless
+summary on a short Session. Above the replay boundary, Context Runtime performs
+the existing semantic compaction, archives the full transcript, and preserves a
+recent provider-visible atomic suffix. Cost-triggered markers record
+`trigger=replay_cost` and `overflow=false`; physical/provider overflow retains
+its existing recovery meaning.
+
 ### 2. Tool Platform
 
 Owns tool registration, permission boundaries, and concrete tool implementations.
@@ -381,7 +392,7 @@ Owns tool registration, permission boundaries, and concrete tool implementations
 
 Structured questions use a UI adapter rather than reading stdin inside the
 tool handler. `interface/questions.py` owns terminal rendering and answer
-parsing; `runtime/loop.py` binds the adapter for one run through a `ContextVar`.
+parsing; `runtime/execution/loop.py` binds the adapter for one run through a `ContextVar`.
 The tool is a serial barrier, is unavailable to child agents, and fails fast in
 headless runs that do not provide an adapter.
 
@@ -704,7 +715,7 @@ Owns the user-facing terminal entry point and process-wide settings.
   keyboard-selected Session/model/fork transitions. The original synchronous
   dispatch remains available to non-interactive callers.
 - `__main__.py`: `python -m nz_coder` entry point.
-- `config.py`: environment-backed process defaults shared by many modules. Per-execution overrides come from `runtime/execution_context.py` and `runtime/workdir.py`; production task execution reads but does not mutate `config` state.
+- `config.py`: environment-backed process defaults shared by many modules. Per-execution overrides come from `runtime/core/execution_context.py` and `runtime/process/workdir.py`; production task execution reads but does not mutate `config` state.
 - `__init__.py`: package marker and project identity.
 
 ### 8. Unified Extension Metadata
@@ -723,12 +734,12 @@ A034 after their production caller graph became empty. NZ-Coder does not retain
 a compatibility import for that independent product. Reusable behavior now has
 one project-owned implementation:
 
-- Agent execution and headless hosting: `runtime/loop.py` plus
+- Agent execution and headless hosting: `runtime/execution/loop.py` plus
   `http_service/`;
 - session routing and lifecycle: `http_service/manager.py` and the persistent
   Session API;
 - ordered updates and reconnect: `session_events.py` plus HTTP SSE journals;
-- background isolated coding tasks: `runtime/agent_manager.py`;
+- background isolated coding tasks: `runtime/agent/agent_manager.py`;
 - local trace and observability: `state/trace.py` and Session events;
 - memory injection and persistence: `state/memory.py` contracts.
 
@@ -736,18 +747,19 @@ No core event is automatically mirrored to an external Dodo data-report sink.
 Adding any external sink remains a new opt-in feature requiring authentication,
 redaction, bounded delivery, and explicit user authorization.
 
-### 10. Low-Priority Cleanup Candidates
+### 10. Completed Structural Cleanup
 
-- `test.py`: appears to be a local scratch/prototype file, not part of the agent runtime.
+- The unreferenced `test.py` scratch module has been removed from the product
+  package.
 
 ## Current Directory Layout
 
 ```text
 nz_coder/
-  runtime/              # loop, executor, prompt, runtime state, recovery, task policy, subagent
+  runtime/              # agent, conversation, execution, verification, workflow, process, and Session domains
   providers/            # adapters, normalized responses, model capability registry
   lsp/                  # optional language-server discovery, JSON-RPC client, lifecycle
-  tool_platform/        # permissions and command policy
+  tool_platform/        # tool contracts, permissions, exposure, catalog, and command policy
   tools/                # concrete tool implementations and registry
   extensions/           # unified secret-free extension metadata and CLI
   state/                # context, memory, sessions, skills, trace, changes, transaction, workspace
@@ -755,11 +767,14 @@ nz_coder/
   project_creation/     # Greenfield mode
   evaluation/           # local eval and benchmark runners
   swebench/             # SWE-bench integration
-  interface/            # CLI
+  interface/            # terminal, headless, setup, and interaction surfaces
   http_service/         # optional authenticated loopback Session API and client
 ```
 
-Top-level modules such as `nz_coder.loop`, `nz_coder.memory`, and `nz_coder.eval_runner` are compatibility wrappers. New code should prefer the package paths above, while existing tests and scripts can continue using the old imports.
+The intentionally retained top-level modules—such as `nz_coder.loop`,
+`nz_coder.permissions`, and `nz_coder.eval_runner`—are formal public façades.
+Internal modules such as memory use their canonical package paths directly;
+removed internal root and flat-runtime paths are not compatibility wrappers.
 
 ## Safety Model
 

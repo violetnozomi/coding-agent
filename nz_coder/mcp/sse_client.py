@@ -10,6 +10,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
+from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.mcp.client import (
     MCPClient,
     MCPError,
@@ -113,7 +114,15 @@ class MCPLegacySSEClient(MCPClient):
             if self._closed:
                 raise MCPError(f"MCP server '{self.name}' is closed")
             endpoint = self._endpoint
-        body = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        try:
+            body = json.dumps(
+                message,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise MCPError("MCP request must contain valid JSON values") from exc
         request = Request(
             endpoint,
             data=body,
@@ -236,8 +245,11 @@ class MCPLegacySSEClient(MCPClient):
             self._set_endpoint(value)
             return
         try:
-            message = json.loads(payload.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            message = json.loads(
+                payload.decode("utf-8"),
+                parse_constant=reject_nonstandard_json_constant,
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
             raise MCPError(f"MCP server '{self.name}' legacy SSE returned invalid JSON") from exc
         if not isinstance(message, dict):
             raise MCPError(f"MCP server '{self.name}' legacy SSE returned invalid JSON-RPC")

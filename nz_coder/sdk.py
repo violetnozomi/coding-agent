@@ -5,13 +5,13 @@ import copy
 from dataclasses import dataclass
 from typing import Callable, Protocol, runtime_checkable
 
-from nz_coder.message_schema import ASSISTANT_USAGE_KEY
+from nz_coder.protocol.message_schema import ASSISTANT_USAGE_KEY
 from nz_coder.runtime.core.request import AgentDefinition, AgentHandoff, RunOptions, RunRequest
 from nz_coder.runtime.core.profiles import READ_CHILD_PROFILE, RunProfile
 from nz_coder.runtime.core.result import RunResult, RunStatus, TokenUsage
-from nz_coder.runtime.handoffs import AgentGraph, AgentSpec, HandoffSpec
-from nz_coder.runtime.runner import AgentRunner
-from nz_coder.runtime.native_sdk import build_native_sdk_runner
+from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
+from nz_coder.runtime.execution.runner import AgentRunner
+from nz_coder.runtime.execution.native_sdk import build_native_sdk_runner
 from nz_coder.runtime.session import Session
 from nz_coder.state.workdir import scoped_workdir
 

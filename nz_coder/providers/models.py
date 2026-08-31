@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
 import stat
@@ -13,18 +14,20 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
-from nz_coder import config
+from nz_coder.foundation import config
+from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
     configured_model_capabilities,
     load_model_catalog_file,
 )
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 
 _MAX_RESPONSE_BYTES = 2_000_000
 _MAX_STATE_BYTES = 2_000_000
 _MAX_DISCOVERY_PAGES = 20
 _MAX_DISCOVERED_MODELS = 10_000
+_MAX_DISCOVERY_TIMEOUT_SECONDS = 300.0
 _CACHE_RELATIVE_PATH = Path(".nz-coder/models/catalog.json")
 _SELECTION_RELATIVE_PATH = Path(".nz-coder/models/selection.json")
 _OPENAI_NAMES = {
@@ -135,12 +138,13 @@ def discover_models(
     timeout_seconds: float = 20.0,
 ) -> list[DiscoveredModel]:
     """Explicitly query one configured provider and replace its cache entry."""
+    timeout = _validated_timeout(timeout_seconds)
     selected = (provider or active_model_selection(workspace).provider).strip().lower()
     key, base = _provider_connection(selected, api_key, base_url)
     url, headers, parser = _discovery_request(selected, base, key)
     models: list[DiscoveredModel] = []
     for _ in range(_MAX_DISCOVERY_PAGES):
-        payload = _get_json(url, headers, timeout_seconds)
+        payload = _get_json(url, headers, timeout)
         models.extend(parser(selected, payload))
         if len(models) > _MAX_DISCOVERED_MODELS:
             raise RuntimeError("Model discovery returned too many models")
@@ -297,8 +301,11 @@ def _get_json(url: str, headers: dict[str, str], timeout_seconds: float) -> dict
     if len(body) > _MAX_RESPONSE_BYTES:
         raise RuntimeError("Model discovery response is too large")
     try:
-        data = json.loads(body.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
+        data = json.loads(
+            body.decode("utf-8"),
+            parse_constant=reject_nonstandard_json_constant,
+        )
+    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise RuntimeError(f"Model discovery returned invalid JSON: {exc}") from exc
     if not isinstance(data, dict):
         raise RuntimeError("Model discovery returned a non-object JSON response")
@@ -431,8 +438,11 @@ def _read_state(target: Path, *, required: bool) -> dict | None:
     finally:
         os.close(descriptor)
     try:
-        data = json.loads(payload.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
+        data = json.loads(
+            payload.decode("utf-8"),
+            parse_constant=reject_nonstandard_json_constant,
+        )
+    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise ValueError(f"Invalid model state file '{target}': {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError(f"Model state file '{target}' must contain an object")
@@ -445,7 +455,13 @@ def _write_state(target: Path, payload: dict) -> None:
         workspace = workspace.parent
     target = _safe_state_path(workspace, target)
     target.parent.mkdir(parents=True, exist_ok=True)
-    encoded = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+        allow_nan=False,
+    ).encode("utf-8")
     if len(encoded) > _MAX_STATE_BYTES:
         raise ValueError("Model state exceeds the size limit")
     descriptor, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
@@ -469,3 +485,24 @@ def _nonempty_string(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"Model {name} must be a non-empty string")
     return value.strip()
+
+
+def _validated_timeout(value: Any) -> float:
+    if isinstance(value, bool):
+        raise ValueError("Model discovery timeout must be a positive finite number")
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            "Model discovery timeout must be a positive finite number"
+        ) from exc
+    if (
+        not math.isfinite(timeout)
+        or timeout <= 0
+        or timeout > _MAX_DISCOVERY_TIMEOUT_SECONDS
+    ):
+        raise ValueError(
+            "Model discovery timeout must be a positive finite number "
+            f"no greater than {_MAX_DISCOVERY_TIMEOUT_SECONDS:g} seconds"
+        )
+    return timeout

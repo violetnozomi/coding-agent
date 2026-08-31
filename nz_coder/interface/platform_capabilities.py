@@ -12,7 +12,7 @@ from typing import Callable
 from rich.console import Console
 from rich.table import Table
 
-from nz_coder.private_paths import windows_private_acl_available
+from nz_coder.foundation.private_paths import windows_private_acl_available
 
 
 Status = dict[str, str]

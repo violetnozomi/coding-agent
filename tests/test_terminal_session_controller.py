@@ -7,7 +7,7 @@ from nz_coder.interface.session_controller import TerminalSessionController
 
 
 def test_terminal_status_uses_the_canonical_workspace_status(tmp_path, monkeypatch):
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     environment = SimpleNamespace(
         session_id="session-status",

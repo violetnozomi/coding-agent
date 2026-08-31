@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-NZ-Coder 已从“Main 与 child 各自拥有执行循环”的结构迁移为一套生产执行内核。CLI、HTTP、evaluation、SWE-bench 和 Python SDK 由 `runtime/composition.py` 构造生产 Agent；Main、read/write child、background 与 workflow 最终进入 `AgentRunner.run()`，资源绑定由 `ProductionRuntimeHost` 负责，唯一 turn 状态机是 `AgentRunner._run_turns()`。本报告中的“完成”只表示下方验收矩阵有源码和测试证据的架构事项，不代表 SWE-bench 分数、第三方 Provider 互操作或终端 UI 产品体验已经等同 InfCodeX。
+NZ-Coder 已从“Main 与 child 各自拥有执行循环”的结构迁移为一套生产执行内核。CLI、HTTP、evaluation、SWE-bench 和 Python SDK 由 `runtime/execution/composition.py` 构造生产 Agent；Main、read/write child、background 与 workflow 最终进入 `AgentRunner.run()`，资源绑定由 `ProductionRuntimeHost` 负责，唯一 turn 状态机是 `AgentRunner._run_turns()`。本报告中的“完成”只表示下方验收矩阵有源码和测试证据的架构事项，不代表 SWE-bench 分数、第三方 Provider 互操作或终端 UI 产品体验已经等同 InfCodeX。
 
 本次重构没有删除已有 Provider、MCP、Memory、LSP、Workflow、Verification、Transaction 或 Session 能力。主要变化是重新分配 ownership：模型调用归 focused `ModelExecutionContext` + `ProductionModelGateway`，工具批生命周期归 `ToolExecutionContext` + `ProductionToolRuntime`，上下文预检归 `ContextExecutionContext` + `ProductionContextManager`，唯一 turn 状态机归 host-free `AgentRunner._run_turns()`，run 初始化与终止策略归 `LifecycleExecutionContext` + `ProductionRunLifecycle`，完整 transcript/checkpoint/finalize 归 `SessionRuntime`，workspace/MCP/ContextVar 生命周期归 `ProductionRuntimeHost`。
 
@@ -182,7 +182,7 @@ InfCodeX 仍有更大的 TypeScript SDK/daemon/client 生态；这不等于 NZ-C
 
 ### Remaining non-blocking P1/P2 boundaries
 
-- `runtime/loop.py` remains large because it is the compatibility host for planning/reflection, coding evidence, trace adapters and legacy public methods. 不能把文件仍大说成“完全解耦”；本阶段的可核验边界是核心 production execution ownership 已迁出，并由 AST 守卫防止回流。
+- `runtime/execution/loop.py` remains large because it is the compatibility host for planning/reflection, coding evidence, trace adapters and legacy public methods. 不能把文件仍大说成“完全解耦”；本阶段的可核验边界是核心 production execution ownership 已迁出，并由 AST 守卫防止回流。
 - `runtime.core.RuntimeServices` 是生产服务图，必需端口包括 model、tools、context、sessions、events、host、memory、verifier、lifecycle、guardrails、inputs、transitions。Runner 对这些核心边界不得退回 `host._...` 私有实现。
 - Public network Provider/MCP interoperability and SWE-bench score parity are external evidence tasks, not architecture facts; this migration used no paid Provider and makes no score-equivalence claim.
 
@@ -192,24 +192,30 @@ InfCodeX 仍有更大的 TypeScript SDK/daemon/client 生态；这不等于 NZ-C
 nz_coder/
   sdk.py                         public RunRequest/RunResult entry
   runtime/
-    composition.py               only production construction owner
-    runner.py                    one orchestration state machine
-    host.py                      run-scoped resources and cleanup
     core/                        immutable contracts/profiles/state/events
     model_gateway/               provider-neutral invocation policy
+    agent/                       admission, guardrails, handoffs, child execution
+      subagent.py                isolation/profile/result facade
+      agent_manager.py           background scheduling, not execution loop
+    conversation/                prompts, context, input, and message handling
+      context_manager.py         budget/preflight/compaction trigger
+      input_preflight.py         image/document conversion
+    execution/                   production construction and state machine
+      composition.py             only production construction owner
+      runner.py                  one orchestration state machine
+      host.py                    run-scoped resources and cleanup
+      loop.py                    product capability host and legacy AgentLoop
+      run_lifecycle.py           initialize and terminal settlement
     tool_runtime/                scheduling and complete batch lifecycle
       policy.py                 admission/convergence/scheduling policy
       result_projection.py      durable contiguous tool results
-    context_manager.py           budget/preflight/compaction trigger
-    input_preflight.py           image/document conversion
-    guardrail_runtime.py         declared input/output/tool policy
-    agent_transition_runtime.py  handoff/schema/terminal transitions
-    run_lifecycle.py             initialize and terminal settlement
-    session_repository.py        durable transcript adapter
-    session_cleanup.py           runtime cleanup adapter for state ports
-    subagent.py                  isolation/profile/result facade
-    agent_manager.py             background scheduling, not execution loop
-    workflow_runtime.py          workflow scheduling/aggregation
+    verification/                gates, evidence, recovery, judge, and stalls
+    workflows/                   workflow definitions, scheduling, and aggregation
+    process/                     workdir, subprocess, and snapshot services
+    session/                     transcript, repository, lifecycle, and cleanup
+    adapters/                    legacy-host projections into focused contexts
+    observability/               run-scoped evidence
+    worktree/                    isolated child workspace lifecycle
   providers/                     protocol adapters and capabilities
   tools/                         schemas, handlers, safe dispatch
   state/                         persistence and state primitives only
@@ -279,19 +285,19 @@ Coverage includes buffered/streaming model calls, retry/fallback, context overfl
 
 | Priority | File | Old responsibility | Current action |
 |---|---|---|---|
-| P0 | `runtime/runner.py` | absent/simplified parallel loop | owns the one production state machine |
-| P0 | `runtime/subagent.py` | independent Provider/tool loop | isolation and result facade; calls shared Runner |
-| P0 | `runtime/loop.py` | orchestration plus all capabilities | compatibility/coding adapter; delegates lifecycle |
-| P0 | `runtime/host.py` | responsibilities embedded in loop | owns resource scopes and cleanup |
+| P0 | `runtime/execution/runner.py` | absent/simplified parallel loop | owns the one production state machine |
+| P0 | `runtime/agent/subagent.py` | independent Provider/tool loop | isolation and result facade; calls shared Runner |
+| P0 | `runtime/execution/loop.py` | orchestration plus all capabilities | compatibility/coding adapter; delegates lifecycle |
+| P0 | `runtime/execution/host.py` | responsibilities embedded in loop | owns resource scopes and cleanup |
 | P0 | `runtime/tool_runtime/*` | scheduling embedded in loop | owns tool-batch lifecycle |
-| P0 | `runtime/guardrail_runtime.py` | guardrail policy embedded in loop | owns declared guardrails |
-| P0 | `runtime/input_preflight.py` | image/document conversion embedded in loop | owns media preflight |
-| P0 | `runtime/agent_transition_runtime.py` | handoff/schema policy embedded in loop | owns Agent transitions |
-| P0 | `runtime/run_lifecycle.py` | init/finalize embedded in loop | owns run lifecycle |
-| P0 | `runtime/context_manager.py` | context preflight embedded in loop | owns budget and compaction trigger |
-| P0 | `runtime/session_repository.py` | direct Session writes | owns production checkpoints |
+| P0 | `runtime/agent/guardrail_runtime.py` | guardrail policy embedded in loop | owns declared guardrails |
+| P0 | `runtime/conversation/input_preflight.py` | image/document conversion embedded in loop | owns media preflight |
+| P0 | `runtime/agent/agent_transition_runtime.py` | handoff/schema policy embedded in loop | owns Agent transitions |
+| P0 | `runtime/execution/run_lifecycle.py` | init/finalize embedded in loop | owns run lifecycle |
+| P0 | `runtime/conversation/context_manager.py` | context preflight embedded in loop | owns budget and compaction trigger |
+| P0 | `runtime/session/session_repository.py` | direct Session writes | owns production checkpoints |
 | P1 | `state/sessions.py` | imported runtime cleanup managers | exposes callbacks only |
-| P1 | `runtime/session_cleanup.py` | absent | installs concrete cleanup adapters |
+| P1 | `runtime/session/lifecycle.py` | absent | installs concrete cleanup adapters |
 | P1 | `sdk.py` | simplified service-only loop | uses production Agent chain |
 | P1 | `message_schema.py` | fork reference logic in terminal layer | owns transport-neutral re-keying |
 | P1 | `interface/timeline.py` | mixed projection and state mutation | terminal projection, re-export compatibility |

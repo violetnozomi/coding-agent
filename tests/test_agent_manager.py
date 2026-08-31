@@ -9,8 +9,8 @@ import pytest
 
 
 def test_background_task_events_project_standard_child_lifecycle(tmp_path):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    from nz_coder.session_events import SessionEventBus
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    from nz_coder.protocol.session_events import SessionEventBus
 
     bus = SessionEventBus(session_id="parent")
     subscription = bus.subscribe()
@@ -43,8 +43,8 @@ def _wait_for_status(manager, session_id: str, expected: str, timeout: float = 2
 
 
 def test_background_manager_starts_parallel_non_overlapping_tasks(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    import nz_coder.runtime.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
 
     gate = threading.Barrier(2)
 
@@ -96,8 +96,42 @@ def test_background_manager_starts_parallel_non_overlapping_tasks(tmp_path, monk
     assert events.metadata["workflow_snapshot"]["revision"] == snapshot["revision"]
 
 
+def test_background_completion_leaves_worker_wake_for_fast_child(tmp_path, monkeypatch):
+    """A child that finishes before the parent yields must not lose its banner."""
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
+
+    def fake_run(prompt, *, session_id, **_kwargs):
+        state = subagent._load_subagent_state("parent", session_id, tmp_path)
+        state["status"] = "completed"
+        subagent._save_subagent_state("parent", state, tmp_path)
+        return f"finished {prompt}"
+
+    monkeypatch.setattr(subagent, "run_subagent", fake_run)
+    manager = BackgroundAgentManager(tmp_path, "parent")
+    manager.start([{
+        "name": "probe",
+        "prompt": "inspect parser",
+        "target_paths": ["parser.py"],
+    }])
+    state = next(item for item in manager._states() if item.get("background"))
+    _wait_for_status(manager, state["session_id"], "completed")
+    deadline = time.monotonic() + 2
+    wake = []
+    while not wake and time.monotonic() < deadline:
+        wake = manager.drain_messages("worker")
+        if not wake:
+            time.sleep(0.01)
+
+    assert len(wake) == 1
+    assert wake[0]["kind"] == "task_completed"
+    assert wake[0]["sender"] == state["session_id"]
+    assert "finished inspect parser" in wake[0]["content"]
+    assert manager.has_worker_wake_source() is False
+
+
 def test_background_manager_rejects_overlapping_requested_scopes(tmp_path):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     manager = BackgroundAgentManager(tmp_path, "parent")
     result = manager.start([
@@ -110,8 +144,8 @@ def test_background_manager_rejects_overlapping_requested_scopes(tmp_path):
 
 
 def test_background_manager_routes_bounded_peer_messages(tmp_path):
-    import nz_coder.runtime.subagent as subagent
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     manager = BackgroundAgentManager(tmp_path, "parent")
     first = subagent._new_subagent_state("parent", "general-purpose", None)
@@ -135,9 +169,160 @@ def test_background_manager_routes_bounded_peer_messages(tmp_path):
     assert manager.drain_messages(second["session_id"]) == []
 
 
+def test_worker_send_message_routes_coordinator_instruction_to_live_child(tmp_path):
+    import nz_coder.runtime.agent.agent_manager as manager_module
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import (
+        BackgroundAgentManager,
+        scoped_background_agent_manager,
+    )
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    manager = BackgroundAgentManager(tmp_path, "parent")
+    child = subagent._new_subagent_state("parent", "general-purpose", None)
+    child.update({
+        "background": True,
+        "status": "running",
+        "display_name": "tests",
+        "isolation": "thread",
+    })
+    manager._save(child)
+    handler = getattr(manager_module, "send_message", None)
+
+    assert callable(handler)
+    with scoped_workdir(tmp_path), scoped_background_agent_manager(manager):
+        delivered = handler(
+            to="tests",
+            content="Limit the repair to the warning order assertion.",
+        )
+    messages = manager.drain_messages(child["session_id"])
+
+    assert delivered.startswith("Message peer-000001 delivered")
+    assert len(messages) == 1
+    assert messages[0]["sender"] == "worker"
+    assert messages[0]["kind"] == "coordinator_instruction"
+
+
+def test_worker_send_message_rejects_process_isolated_child(tmp_path):
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+
+    manager = BackgroundAgentManager(tmp_path, "parent")
+    child = subagent._new_subagent_state("parent", "general-purpose", None)
+    child.update({
+        "background": True,
+        "status": "running",
+        "isolation": "process",
+    })
+    manager._save(child)
+
+    result = manager.send_message(
+        sender="worker",
+        recipient=child["session_id"],
+        content="Check the focused test before editing.",
+    )
+
+    assert result == "Error: online steering is unavailable for process-isolated children"
+
+
+def test_shared_send_message_uses_bound_child_sender_identity(tmp_path):
+    import nz_coder.runtime.agent.agent_manager as manager_module
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import (
+        BackgroundAgentManager,
+        scoped_background_agent_manager,
+    )
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    manager = BackgroundAgentManager(tmp_path, "parent")
+    sender = subagent._new_subagent_state("parent", "general-purpose", None)
+    recipient = subagent._new_subagent_state("parent", "general-purpose", None)
+    sender.update({"background": True, "status": "running", "isolation": "thread"})
+    recipient.update({"background": True, "status": "running", "isolation": "thread"})
+    manager._save(sender)
+    manager._save(recipient)
+    bind_sender = getattr(manager_module, "scoped_agent_message_sender", None)
+
+    assert callable(bind_sender)
+    with (
+        scoped_workdir(tmp_path),
+        scoped_background_agent_manager(manager),
+        bind_sender(manager, sender["session_id"]),
+    ):
+        delivered = manager_module.send_message(
+            to=recipient["session_id"],
+            content="The parser contract changed.",
+        )
+    messages = manager.drain_messages(recipient["session_id"])
+
+    assert delivered.startswith("Message peer-000001 delivered")
+    assert messages[0]["sender"] == sender["session_id"]
+    assert messages[0]["kind"] == "peer_message"
+
+
+def test_child_loop_drains_worker_message_as_coordinator_instruction(tmp_path):
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.protocol.message_schema import SYNTHETIC_USER_KEY
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.execution.loop import AgentLoop
+
+    manager = BackgroundAgentManager(tmp_path, "parent")
+    child = subagent._new_subagent_state("parent", "general-purpose", None)
+    child.update({"background": True, "status": "running", "isolation": "thread"})
+    manager._save(child)
+    manager.send_message(
+        sender="worker",
+        recipient=child["session_id"],
+        content="Do not modify unrelated tests.",
+    )
+    events = []
+    loop = AgentLoop.__new__(AgentLoop)
+    loop.background_agents = object()
+    loop._background_message_manager = manager
+    loop._background_message_recipient = child["session_id"]
+    loop.tracer = type(
+        "Tracer",
+        (),
+        {"log": lambda self, event, **data: events.append((event, data))},
+    )()
+    messages = [{"role": "user", "content": "implement feature"}]
+
+    drained = loop._drain_background_agent_messages(messages)
+
+    assert drained == 1
+    assert messages[-1][SYNTHETIC_USER_KEY] is True
+    assert messages[-1]["_nz_coordinator_instruction"] is True
+    assert '<coordinator-instruction id="peer-000001"' in messages[-1]["content"]
+    assert "Do not modify unrelated tests." in messages[-1]["content"]
+    assert events == [(
+        "peer_messages_drained",
+        {"recipient": child["session_id"], "count": 1},
+    )]
+
+
+def test_child_identity_binds_parent_manager_as_message_inbox(tmp_path):
+    from types import SimpleNamespace
+
+    from nz_coder.runtime.agent.agent_manager import (
+        BackgroundAgentManager,
+        scoped_background_agent_manager,
+    )
+    from nz_coder.runtime.agent.subagent import _bind_child_session_identity
+
+    manager = BackgroundAgentManager(tmp_path, "parent")
+    agent = SimpleNamespace(session_id="child-1", background_agents=object())
+
+    with scoped_background_agent_manager(manager):
+        _bind_child_session_identity(agent, "parent")
+
+    assert agent.parent_session_id == "parent"
+    assert agent._background_message_manager is manager
+    assert agent._background_message_recipient == "child-1"
+
+
 def test_background_manager_broadcasts_to_live_siblings_and_worker(tmp_path):
-    import nz_coder.runtime.subagent as subagent
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     manager = BackgroundAgentManager(tmp_path, "parent")
     sender = subagent._new_subagent_state("parent", "general-purpose", None)
@@ -162,8 +347,8 @@ def test_background_manager_broadcasts_to_live_siblings_and_worker(tmp_path):
 
 
 def test_background_manager_rejects_forwarding_cycles_and_oversized_content(tmp_path):
-    import nz_coder.runtime.subagent as subagent
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     manager = BackgroundAgentManager(tmp_path, "parent")
     sender = subagent._new_subagent_state("parent", "general-purpose", None)
@@ -190,10 +375,10 @@ def test_background_manager_rejects_forwarding_cycles_and_oversized_content(tmp_
 
 
 def test_agent_loop_drains_worker_mail_only_at_explicit_boundary(tmp_path):
-    import nz_coder.runtime.subagent as subagent
-    from nz_coder.message_schema import SYNTHETIC_USER_KEY
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    from nz_coder.runtime.loop import AgentLoop
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.protocol.message_schema import SYNTHETIC_USER_KEY
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     manager = BackgroundAgentManager(tmp_path, "parent")
     sender = subagent._new_subagent_state("parent", "general-purpose", None)
@@ -222,8 +407,8 @@ def test_agent_loop_drains_worker_mail_only_at_explicit_boundary(tmp_path):
 
 
 def test_background_manager_requests_cooperative_cancel(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    import nz_coder.runtime.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
 
     running = threading.Event()
 
@@ -253,8 +438,8 @@ def test_background_manager_requests_cooperative_cancel(tmp_path, monkeypatch):
 
 
 def test_workflow_wait_preserves_requested_result_order(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    import nz_coder.runtime.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
 
     def fake_run(prompt, *, session_id, **_kwargs):
         state = subagent._load_subagent_state("parent", session_id, tmp_path)
@@ -282,9 +467,9 @@ def test_background_fanout_separates_lifetime_and_concurrency_caps(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder import config
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    import nz_coder.runtime.subagent as subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
 
     monkeypatch.setattr(config, "SUBAGENT_BACKGROUND_MAX_TASKS", 4)
     monkeypatch.setattr(config, "SUBAGENT_BACKGROUND_MAX_CONCURRENT", 2)
@@ -342,9 +527,9 @@ def test_concurrent_fanout_admission_cannot_oversubscribe_lifetime_cap(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder import config
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    import nz_coder.runtime.subagent as subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
 
     monkeypatch.setattr(config, "SUBAGENT_BACKGROUND_MAX_TASKS", 1)
     monkeypatch.setattr(config, "SUBAGENT_BACKGROUND_MAX_CONCURRENT", 1)
@@ -383,8 +568,8 @@ def test_concurrent_fanout_admission_cannot_oversubscribe_lifetime_cap(
 
 
 def test_workflow_wait_timeout_stops_and_settles_child(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    import nz_coder.runtime.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
 
     started = threading.Event()
 
@@ -410,8 +595,8 @@ def test_workflow_wait_timeout_stops_and_settles_child(tmp_path, monkeypatch):
 
 
 def test_workflow_stop_is_idempotent_and_emits_one_terminal(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    import nz_coder.runtime.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
 
     started = threading.Event()
 
@@ -440,8 +625,8 @@ def test_workflow_stop_is_idempotent_and_emits_one_terminal(tmp_path, monkeypatc
 
 
 def test_manager_close_settles_unawaited_children(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    import nz_coder.runtime.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
 
     started = threading.Event()
 
@@ -468,7 +653,7 @@ def test_manager_close_settles_unawaited_children(tmp_path, monkeypatch):
 
 
 def test_agent_loop_close_cleans_background_before_other_resources():
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     order = []
     loop = AgentLoop.__new__(AgentLoop)
@@ -493,11 +678,39 @@ def test_agent_loop_close_cleans_background_before_other_resources():
     ]
 
 
+def test_agent_loop_close_preserves_resources_when_background_cannot_settle():
+    """A retryable child timeout must not tear down resources it still uses."""
+    from nz_coder.runtime.execution.loop import AgentLoop
+
+    order = []
+    loop = AgentLoop.__new__(AgentLoop)
+    loop.stall_orchestrator = None
+    loop.background_agents = type(
+        "Background",
+        (),
+        {"close": lambda self, timeout=5.0: (_ for _ in ()).throw(
+            RuntimeError("child still running")
+        )},
+    )()
+    loop._close_repo_intelligence = lambda: order.append("repo")
+    loop.event_bus = type(
+        "Events", (), {"close": lambda self: order.append("events")}
+    )()
+    loop.tracer = type(
+        "Tracer", (), {"close": lambda self: order.append("tracer")}
+    )()
+
+    with pytest.raises(RuntimeError, match="child still running"):
+        loop.close()
+
+    assert order == []
+
+
 def test_dispose_keeps_manager_reachable_when_children_do_not_settle(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder.runtime.agent_manager import (
+    from nz_coder.runtime.agent.agent_manager import (
         background_agent_manager,
         dispose_background_agent_manager,
     )
@@ -519,9 +732,96 @@ def test_dispose_keeps_manager_reachable_when_children_do_not_settle(
     dispose_background_agent_manager(tmp_path, "parent-dispose")
 
 
+def test_dispose_does_not_block_unrelated_workspace_registry(tmp_path, monkeypatch):
+    """One slow Session close must not freeze every workspace manager lookup."""
+    import threading
+
+    from nz_coder.runtime.agent.agent_manager import (
+        background_agent_manager,
+        dispose_background_agent_manager,
+    )
+
+    first = background_agent_manager(tmp_path / "first", "parent")
+    close_entered = threading.Event()
+    close_release = threading.Event()
+    lookup_finished = threading.Event()
+
+    def slow_close(timeout=5.0):
+        close_entered.set()
+        assert close_release.wait(timeout=2)
+
+    monkeypatch.setattr(first, "close", slow_close)
+    disposer = threading.Thread(
+        target=dispose_background_agent_manager,
+        args=(tmp_path / "first", "parent"),
+    )
+    lookup = threading.Thread(
+        target=lambda: (
+            background_agent_manager(tmp_path / "second", "parent"),
+            lookup_finished.set(),
+        )
+    )
+    disposer.start()
+    try:
+        assert close_entered.wait(timeout=1)
+        lookup.start()
+        assert lookup_finished.wait(timeout=0.25)
+    finally:
+        close_release.set()
+        disposer.join(timeout=2)
+        lookup.join(timeout=2)
+        dispose_background_agent_manager(tmp_path / "second", "parent")
+
+
+def test_closed_background_manager_rejects_stale_start_reference(
+    tmp_path,
+    monkeypatch,
+):
+    """A reference retained across Session disposal must not orphan new jobs."""
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    from nz_coder.foundation import config
+
+    manager = BackgroundAgentManager(tmp_path, "closed-parent")
+    manager.close()
+    monkeypatch.setattr(config, "SUBAGENT_WORKTREE_ENABLED", False)
+
+    assert manager.start([{
+        "prompt": "must not start",
+        "target_paths": ["src"],
+    }]) == "Error: background Agent manager is closed"
+
+
+def test_agent_loop_close_releases_registered_background_manager(tmp_path):
+    """Closing and reopening one Session must receive a live manager owner."""
+    from nz_coder.runtime.agent.agent_manager import (
+        background_agent_manager,
+        dispose_background_agent_manager,
+    )
+    from nz_coder.runtime.execution.loop import AgentLoop
+
+    manager = background_agent_manager(tmp_path, "reopen-session")
+    loop = AgentLoop.__new__(AgentLoop)
+    loop.workdir = tmp_path
+    loop.session_id = "reopen-session"
+    loop.stall_orchestrator = None
+    loop.background_agents = manager
+    loop._close_repo_intelligence = lambda: None
+    loop._provider_runtimes = {}
+    loop._owns_event_bus = True
+    loop.event_bus = type("Events", (), {"close": lambda self: None})()
+    loop.tracer = type("Tracer", (), {"close": lambda self: None})()
+
+    loop.close()
+    replacement = background_agent_manager(tmp_path, "reopen-session")
+
+    assert replacement is not manager
+    assert replacement.start([]) != "Error: background Agent manager is closed"
+    dispose_background_agent_manager(tmp_path, "reopen-session")
+
+
 def test_manager_marks_orphaned_live_state_interrupted(tmp_path):
-    import nz_coder.runtime.subagent as subagent
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     state = subagent._new_subagent_state("parent", "general-purpose", None)
     state.update({"background": True, "status": "running"})
@@ -552,7 +852,7 @@ def test_copy_worktree_snapshots_dirty_workspace_without_git(tmp_path, monkeypat
 
 
 def test_worktree_manager_rejects_state_symlink_escape(tmp_path):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
     from nz_coder.runtime.worktree import WorktreeError, WorktreeManager
 
     workspace = tmp_path / "workspace"
@@ -578,33 +878,35 @@ def test_worktree_manager_rejects_state_symlink_escape(tmp_path):
 
 def test_apply_agent_changes_requires_exact_review_and_preserves_transaction(tmp_path):
     import nz_coder.tools.files  # noqa: F401
-    import nz_coder.runtime.subagent as subagent
-    from nz_coder.runtime.agent_manager import (
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import (
         BackgroundAgentManager,
         apply_agent_changes,
         scoped_background_agent_manager,
     )
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tools.files import bind_tool_state
-    from nz_coder.transaction import TransactionManager
-    from nz_coder.changes import ChangeTracker
+    from nz_coder.state.transaction import TransactionManager
+    from nz_coder.state.changes import ChangeTracker
 
     (tmp_path / "a.py").write_text("old\n", encoding="utf-8")
     (tmp_path / "gone.py").write_text("remove\n", encoding="utf-8")
     manager = BackgroundAgentManager(tmp_path, "parent")
     baseline = manager._baseline(["a.py", "gone.py", "new.py"])
-    child = tmp_path / ".nz-coder" / "worktrees" / "child"
+    state = subagent._new_subagent_state("parent", "general-purpose", None)
+    child = tmp_path / ".nz-coder" / "worktrees" / state["session_id"]
     child.mkdir(parents=True)
     (child / "a.py").write_text("new\n", encoding="utf-8")
     (child / "new.py").write_text("created\n", encoding="utf-8")
-    state = subagent._new_subagent_state("parent", "general-purpose", None)
     state.update({
         "background": True,
         "status": "completed",
         "claimed_paths": ["a.py", "gone.py", "new.py"],
         "changed_files": ["a.py", "gone.py", "new.py"],
         "baseline_hashes": baseline,
-        "worktree": {"path": str(child), "mode": "copy"},
+        "worktree": {
+            "id": state["session_id"], "path": str(child), "mode": "copy",
+        },
     })
     manager._save(state)
     txn = TransactionManager()
@@ -634,25 +936,27 @@ def test_apply_agent_changes_requires_exact_review_and_preserves_transaction(tmp
 
 
 def test_apply_agent_changes_rejects_parent_baseline_conflict(tmp_path):
-    import nz_coder.runtime.subagent as subagent
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     target = tmp_path / "app.py"
     target.write_text("base\n", encoding="utf-8")
     manager = BackgroundAgentManager(tmp_path, "parent")
     baseline = manager._baseline(["app.py"])
-    child = tmp_path / ".nz-coder" / "worktrees" / "child"
+    state = subagent._new_subagent_state("parent", "general-purpose", None)
+    child = tmp_path / ".nz-coder" / "worktrees" / state["session_id"]
     child.mkdir(parents=True)
     (child / "app.py").write_text("child\n", encoding="utf-8")
     target.write_text("parent changed\n", encoding="utf-8")
-    state = subagent._new_subagent_state("parent", "general-purpose", None)
     state.update({
         "background": True,
         "status": "completed",
         "claimed_paths": ["app.py"],
         "changed_files": ["app.py"],
         "baseline_hashes": baseline,
-        "worktree": {"path": str(child), "mode": "copy"},
+        "worktree": {
+            "id": state["session_id"], "path": str(child), "mode": "copy",
+        },
     })
     manager._save(state)
 
@@ -663,34 +967,71 @@ def test_apply_agent_changes_rejects_parent_baseline_conflict(tmp_path):
     assert target.read_text(encoding="utf-8") == "parent changed\n"
 
 
-def test_applied_child_changes_follow_parent_transaction_rollback(tmp_path):
-    import nz_coder.tools.files  # noqa: F401
-    import nz_coder.runtime.subagent as subagent
-    from nz_coder.runtime.agent_manager import (
-        BackgroundAgentManager,
-        apply_agent_changes,
-        scoped_background_agent_manager,
-    )
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.tools.files import bind_tool_state
-    from nz_coder.transaction import TransactionManager
-    from nz_coder.changes import ChangeTracker
+def test_apply_agent_changes_rejects_unowned_child_worktree(tmp_path):
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     target = tmp_path / "app.py"
     target.write_text("parent\n", encoding="utf-8")
+    outside = tmp_path.parent / "unowned-apply-worktree"
+    outside.mkdir(exist_ok=True)
+    (outside / "app.py").write_text("untrusted\n", encoding="utf-8")
     manager = BackgroundAgentManager(tmp_path, "parent")
-    baseline = manager._baseline(["app.py"])
-    child = tmp_path / ".nz-coder" / "worktrees" / "rollback-child"
-    child.mkdir(parents=True)
-    (child / "app.py").write_text("child\n", encoding="utf-8")
     state = subagent._new_subagent_state("parent", "general-purpose", None)
     state.update({
         "background": True,
         "status": "completed",
         "claimed_paths": ["app.py"],
         "changed_files": ["app.py"],
+        "baseline_hashes": manager._baseline(["app.py"]),
+        "worktree": {
+            "id": state["session_id"],
+            "path": str(outside),
+            "mode": "copy",
+        },
+    })
+    manager._save(state)
+
+    writes, deletes, error = manager.application_changes(
+        state["session_id"],
+        ["app.py"],
+    )
+
+    assert writes == [] and deletes == []
+    assert "worktree" in error.lower()
+    assert target.read_text(encoding="utf-8") == "parent\n"
+
+
+def test_applied_child_changes_follow_parent_transaction_rollback(tmp_path):
+    import nz_coder.tools.files  # noqa: F401
+    import nz_coder.runtime.agent.subagent as subagent
+    from nz_coder.runtime.agent.agent_manager import (
+        BackgroundAgentManager,
+        apply_agent_changes,
+        scoped_background_agent_manager,
+    )
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.files import bind_tool_state
+    from nz_coder.state.transaction import TransactionManager
+    from nz_coder.state.changes import ChangeTracker
+
+    target = tmp_path / "app.py"
+    target.write_text("parent\n", encoding="utf-8")
+    manager = BackgroundAgentManager(tmp_path, "parent")
+    baseline = manager._baseline(["app.py"])
+    state = subagent._new_subagent_state("parent", "general-purpose", None)
+    child = tmp_path / ".nz-coder" / "worktrees" / state["session_id"]
+    child.mkdir(parents=True)
+    (child / "app.py").write_text("child\n", encoding="utf-8")
+    state.update({
+        "background": True,
+        "status": "completed",
+        "claimed_paths": ["app.py"],
+        "changed_files": ["app.py"],
         "baseline_hashes": baseline,
-        "worktree": {"path": str(child), "mode": "copy"},
+        "worktree": {
+            "id": state["session_id"], "path": str(child), "mode": "copy",
+        },
     })
     manager._save(state)
     txn = TransactionManager()
@@ -714,8 +1055,8 @@ def _blocking_process_child(connection, payload):
 
 
 def test_process_isolation_hard_stops_uncooperative_child(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    import nz_coder.runtime.agent_manager as agent_manager_module
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    import nz_coder.runtime.agent.agent_manager as agent_manager_module
 
     monkeypatch.setattr(
         agent_manager_module,
@@ -742,8 +1083,8 @@ def test_process_isolation_hard_stops_uncooperative_child(tmp_path, monkeypatch)
 
 
 def test_process_isolation_can_be_disabled(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     monkeypatch.setattr(config, "SUBAGENT_PROCESS_ISOLATION_ENABLED", False)
     manager = BackgroundAgentManager(tmp_path, "parent")
@@ -757,7 +1098,7 @@ def test_process_isolation_can_be_disabled(tmp_path, monkeypatch):
 
 
 def test_managed_workflow_retains_only_latest_500_terminal_runs(tmp_path):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     manager = BackgroundAgentManager(tmp_path, "parent")
     for index in range(503):

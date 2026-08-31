@@ -8,6 +8,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import pytest
+
 
 class _FakeMessage:
     def __init__(self, content: str) -> None:
@@ -45,7 +47,7 @@ class _FakeClient:
 
 
 def test_memory_manager_serializes_concurrent_mutations(tmp_path):
-    from nz_coder.memory import MemoryManager
+    from nz_coder.state.memory import MemoryManager
 
     mgr = MemoryManager(tmp_path)
     original_write = mgr._write_memory_file
@@ -82,8 +84,137 @@ def test_memory_manager_serializes_concurrent_mutations(tmp_path):
     assert len(mgr.memories) == 8
 
 
+def test_workspace_memory_manager_is_shared_only_within_one_workspace(tmp_path):
+    """Concurrent sessions share the durable-memory lock, never another workspace."""
+    from nz_coder.state.memory import workspace_memory_manager
+
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+
+    first = workspace_memory_manager(first_dir)
+    same = workspace_memory_manager(first_dir)
+    other = workspace_memory_manager(second_dir)
+
+    assert same is first
+    assert other is not first
+
+
+def test_memory_rejects_multiline_frontmatter_fields(tmp_path):
+    """Model-authored metadata must not terminate or inject the file header."""
+    from nz_coder.state.memory import MemoryManager
+
+    mgr = MemoryManager(tmp_path)
+
+    assert mgr.save(
+        "safe\n---\ntype: user",
+        "description",
+        "project",
+        "content",
+    ) == "Error: memory name must be a single line"
+    assert mgr.save(
+        "safe",
+        "description\n---\nname: injected",
+        "project",
+        "content",
+    ) == "Error: memory description must be a single line"
+    assert list(tmp_path.glob("*.md")) == []
+
+
+def test_memory_load_isolates_one_corrupt_markdown_record(tmp_path):
+    """One hand-edited record must not make the whole memory layer unavailable."""
+    from nz_coder.state.memory import MemoryManager
+
+    writer = MemoryManager(tmp_path)
+    writer.save("healthy", "valid record", "project", "keep this")
+    (tmp_path / "corrupt.md").write_text(
+        "---\n"
+        "name: corrupt\n"
+        "description: bad timestamp\n"
+        "type: project\n"
+        "created_at: not-a-number\n"
+        "last_accessed: 0\n"
+        "access_count: 0\n"
+        "---\n"
+        "broken\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "nonfinite.md").write_text(
+        "---\n"
+        "name: nonfinite\n"
+        "description: invalid numeric metadata\n"
+        "type: project\n"
+        "created_at: nan\n"
+        "last_accessed: inf\n"
+        "access_count: 0\n"
+        "---\n"
+        "broken\n",
+        encoding="utf-8",
+    )
+
+    reader = MemoryManager(tmp_path)
+    reader.load_all()
+
+    assert list(reader.memories) == ["healthy"]
+
+
+def test_auto_memory_pipeline_recovers_corrupt_numeric_cursor(tmp_path, monkeypatch):
+    """Damaged extraction counters cannot suppress or crash later learning."""
+    import nz_coder.state.memory as memory_mod
+    from nz_coder.foundation import config
+    from nz_coder.state.memory import MemoryManager, run_auto_memory_pipeline
+    from nz_coder.state.sessions import session_memory_state_path
+
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    monkeypatch.setattr(config, "SESSION_DIR", tmp_path / "sessions")
+    monkeypatch.setattr(config, "MEMORY_AUTO_EXTRACT", True)
+    monkeypatch.setattr(config, "MEMORY_AUTO_DREAM", False)
+    monkeypatch.setattr(memory_mod, "memory_mgr", MemoryManager(tmp_path / "memory"))
+    monkeypatch.setattr(memory_mod, "extract_session_learnings", lambda *_a, **_k: [])
+    state_path = session_memory_state_path("session-corrupt-cursor")
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({
+        "last_message_count": float("nan"),
+        "total_extractions": float("inf"),
+        "total_saved": "broken",
+    }), encoding="utf-8")
+
+    summary = run_auto_memory_pipeline(
+        "session-corrupt-cursor",
+        [{"role": "user", "content": "remember this new fact"}],
+    )
+    persisted = json.loads(Path(summary["state_path"]).read_text(encoding="utf-8"))
+
+    assert summary["window_message_count"] == 1
+    assert persisted["total_extractions"] == 1
+    assert persisted["total_saved"] == 0
+
+
+def test_memory_update_is_atomic_when_final_replace_fails(tmp_path, monkeypatch):
+    """A crash at the commit point must preserve the previous durable memory."""
+    from nz_coder.state.memory import MemoryManager
+
+    manager = MemoryManager(tmp_path)
+    manager.save("stable", "before", "project", "old content")
+    target = tmp_path / "stable.md"
+    before = target.read_text(encoding="utf-8")
+    original_replace = Path.replace
+
+    def fail_target_replace(path, destination):
+        if Path(destination) == target:
+            raise OSError("commit interrupted")
+        return original_replace(path, destination)
+
+    monkeypatch.setattr(Path, "replace", fail_target_replace)
+
+    with pytest.raises(OSError, match="commit interrupted"):
+        manager.save("stable", "after", "project", "new content")
+
+    assert target.read_text(encoding="utf-8") == before
+    assert not list(tmp_path.glob(".stable.md.*.tmp"))
+
+
 def test_recall_matches_code_identifier_parts_and_word_variants(tmp_path):
-    from nz_coder.memory import MemoryManager
+    from nz_coder.state.memory import MemoryManager
 
     mgr = MemoryManager(tmp_path)
     mgr.save(
@@ -105,7 +236,7 @@ def test_recall_matches_code_identifier_parts_and_word_variants(tmp_path):
 
 
 def test_recall_does_not_return_only_fresh_unrelated_memory(tmp_path):
-    from nz_coder.memory import MemoryManager
+    from nz_coder.state.memory import MemoryManager
 
     mgr = MemoryManager(tmp_path)
     mgr.save(
@@ -119,7 +250,7 @@ def test_recall_does_not_return_only_fresh_unrelated_memory(tmp_path):
 
 
 def test_save_merges_similar_memory_instead_of_duplicating(tmp_path):
-    from nz_coder.memory import MemoryManager
+    from nz_coder.state.memory import MemoryManager
 
     mgr = MemoryManager(tmp_path)
     mgr.save(
@@ -144,7 +275,7 @@ def test_save_merges_similar_memory_instead_of_duplicating(tmp_path):
 
 
 def test_save_does_not_merge_ultra_short_token_overlap(tmp_path):
-    from nz_coder.memory import MemoryManager
+    from nz_coder.state.memory import MemoryManager
 
     mgr = MemoryManager(tmp_path)
     mgr.save("cache_rule", "cache timeout", "project", "Cache timeout defaults to 30s.")
@@ -155,7 +286,7 @@ def test_save_does_not_merge_ultra_short_token_overlap(tmp_path):
 
 
 def test_build_prompt_block_always_includes_user_preferences(tmp_path):
-    from nz_coder.memory import MemoryManager
+    from nz_coder.state.memory import MemoryManager
 
     mgr = MemoryManager(tmp_path)
     mgr.save(
@@ -179,7 +310,7 @@ def test_build_prompt_block_always_includes_user_preferences(tmp_path):
 
 
 def test_extract_session_learnings_uses_optional_llm_json(tmp_path):
-    from nz_coder.memory import extract_session_learnings
+    from nz_coder.state.memory import extract_session_learnings
 
     client = _FakeClient(
         '[{"name":"django_version","description":"Project uses Django 3.2",'
@@ -201,7 +332,7 @@ def test_extract_session_learnings_uses_optional_llm_json(tmp_path):
 
 
 def test_extract_session_learnings_ignores_synthetic_user_diagnostics():
-    from nz_coder.memory import extract_session_learnings
+    from nz_coder.state.memory import extract_session_learnings
 
     messages = [{
         "role": "user",
@@ -213,7 +344,7 @@ def test_extract_session_learnings_ignores_synthetic_user_diagnostics():
 
 
 def test_rerank_memories_uses_optional_llm_order():
-    from nz_coder.memory import rerank_memories
+    from nz_coder.state.memory import rerank_memories
 
     candidates = [
         {"name": "first", "type": "project", "description": "less relevant", "content": "alpha"},
@@ -226,10 +357,52 @@ def test_rerank_memories_uses_optional_llm_order():
     assert [item["name"] for item in ranked] == ["second", "first"]
 
 
+def test_memory_completion_uses_injected_provider_and_observer():
+    """Native providers and memory usage must not disappear behind OpenAI bridge."""
+    from types import SimpleNamespace
+
+    from nz_coder.state.memory import _create_chat_completion
+    from nz_coder.providers.capabilities import ModelCapabilities
+
+    requests = []
+    observed = []
+
+    class Provider:
+        name = "native-test"
+
+        def capabilities(self, model_id):
+            return ModelCapabilities(provider=self.name, model_id=model_id)
+
+        def create_client(self):
+            return object()
+
+        def create_completion(self, _client, **kwargs):
+            requests.append(kwargs)
+            return SimpleNamespace(choices=[SimpleNamespace(
+                message=SimpleNamespace(content='{"memories": []}')
+            )])
+
+    content = _create_chat_completion(
+        object(),
+        provider=Provider(),
+        model="memory-model",
+        messages=[{"role": "user", "content": "extract durable facts"}],
+        max_tokens=123,
+        response_format={"type": "json_object"},
+        observer=lambda name, payload: observed.append((name, payload)),
+    )
+
+    assert content == '{"memories": []}'
+    assert requests[0]["model"] == "memory-model"
+    finishes = [payload for name, payload in observed if name == "model_call_finish"]
+    assert len(finishes) == 1
+    assert finishes[0]["purpose"] == "memory"
+
+
 def test_run_auto_memory_pipeline_only_processes_new_window(tmp_path, monkeypatch):
-    import nz_coder.memory as memory_mod
-    from nz_coder import config
-    from nz_coder.memory import MemoryManager, run_auto_memory_pipeline
+    import nz_coder.state.memory as memory_mod
+    from nz_coder.foundation import config
+    from nz_coder.state.memory import MemoryManager, run_auto_memory_pipeline
 
     old_mgr = memory_mod.memory_mgr
     old_workdir = config.WORKDIR
@@ -270,9 +443,9 @@ def test_run_auto_memory_pipeline_only_processes_new_window(tmp_path, monkeypatc
 
 
 def test_run_auto_memory_pipeline_filters_internal_messages(tmp_path, monkeypatch):
-    import nz_coder.memory as memory_mod
-    from nz_coder import config
-    from nz_coder.memory import MemoryManager, run_auto_memory_pipeline
+    import nz_coder.state.memory as memory_mod
+    from nz_coder.foundation import config
+    from nz_coder.state.memory import MemoryManager, run_auto_memory_pipeline
 
     old_mgr = memory_mod.memory_mgr
     old_workdir = config.WORKDIR
@@ -303,9 +476,9 @@ def test_run_auto_memory_pipeline_filters_internal_messages(tmp_path, monkeypatc
 
 
 def test_auto_memory_pipeline_queues_non_explicit_learning_for_review(tmp_path, monkeypatch):
-    import nz_coder.memory as memory_mod
-    from nz_coder import config
-    from nz_coder.memory import MemoryManager, run_auto_memory_pipeline
+    import nz_coder.state.memory as memory_mod
+    from nz_coder.foundation import config
+    from nz_coder.state.memory import MemoryManager, run_auto_memory_pipeline
 
     old_mgr = memory_mod.memory_mgr
     old_workdir = config.WORKDIR
@@ -347,9 +520,9 @@ def test_auto_memory_pipeline_queues_non_explicit_learning_for_review(tmp_path, 
 
 
 def test_auto_memory_cursor_survives_context_compaction(tmp_path):
-    import nz_coder.memory as memory_mod
-    from nz_coder import config
-    from nz_coder.memory import MemoryManager, run_auto_memory_pipeline
+    import nz_coder.state.memory as memory_mod
+    from nz_coder.foundation import config
+    from nz_coder.state.memory import MemoryManager, run_auto_memory_pipeline
 
     old_mgr = memory_mod.memory_mgr
     old_workdir = config.WORKDIR
@@ -389,10 +562,10 @@ def test_auto_memory_cursor_survives_context_compaction(tmp_path):
 
 
 def test_maybe_run_auto_dream_merges_duplicate_memories_after_threshold(tmp_path, monkeypatch):
-    import nz_coder.memory as memory_mod
-    from nz_coder import config
-    from nz_coder.memory import MemoryManager, maybe_run_auto_dream
-    from nz_coder.sessions import activate_session
+    import nz_coder.state.memory as memory_mod
+    from nz_coder.foundation import config
+    from nz_coder.state.memory import MemoryManager, maybe_run_auto_dream
+    from nz_coder.state.sessions import activate_session
 
     old_mgr = memory_mod.memory_mgr
     old_workdir = config.WORKDIR
@@ -452,9 +625,9 @@ def test_maybe_run_auto_dream_merges_duplicate_memories_after_threshold(tmp_path
         config.MEMORY_CLEANUP_DAYS = old_cleanup
 
 def test_run_auto_memory_pipeline_async_processes_new_window(tmp_path):
-    import nz_coder.memory as memory_mod
-    from nz_coder import config
-    from nz_coder.memory import MemoryManager, run_auto_memory_pipeline_async
+    import nz_coder.state.memory as memory_mod
+    from nz_coder.foundation import config
+    from nz_coder.state.memory import MemoryManager, run_auto_memory_pipeline_async
 
     old_mgr = memory_mod.memory_mgr
     old_workdir = config.WORKDIR
@@ -483,3 +656,57 @@ def test_run_auto_memory_pipeline_async_processes_new_window(tmp_path):
         config.SESSION_DIR = old_session_dir
         config.MEMORY_AUTO_EXTRACT = old_extract
         config.MEMORY_AUTO_DREAM = old_dream
+
+
+def test_cancelled_llm_memory_pipeline_does_not_advance_session_cursor(
+    tmp_path, monkeypatch,
+):
+    """Cancellation must leave the conversation delta eligible for retry."""
+    import nz_coder.state.memory as memory_mod
+    from nz_coder.foundation import config
+    from nz_coder.state.memory import MemoryManager, run_auto_memory_pipeline_async
+    from nz_coder.providers.capabilities import ModelCapabilities
+    from nz_coder.state.sessions import session_memory_state_path
+
+    started = threading.Event()
+    release = threading.Event()
+
+    class Provider:
+        name = "test"
+
+        def create_completion(self, _client, **_kwargs):
+            started.set()
+            release.wait(timeout=2)
+            return _FakeResponse('{"memories": []}')
+
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    monkeypatch.setattr(config, "SESSION_DIR", tmp_path / "sessions")
+    monkeypatch.setattr(config, "MEMORY_AUTO_EXTRACT", True)
+    monkeypatch.setattr(config, "MEMORY_AUTO_DREAM", False)
+    monkeypatch.setattr(memory_mod, "memory_mgr", MemoryManager(tmp_path / "memory"))
+
+    async def scenario():
+        task = asyncio.create_task(run_auto_memory_pipeline_async(
+            "session-cancelled-memory",
+            [{"role": "user", "content": "Keep this durable preference."}],
+            client=object(),
+            model="memory-model",
+            provider=Provider(),
+            capabilities=ModelCapabilities(
+                provider="test",
+                model_id="memory-model",
+            ),
+        ))
+        while not started.is_set():
+            await asyncio.sleep(0.005)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        release.set()
+
+    assert not session_memory_state_path("session-cancelled-memory").exists()
+    assert memory_mod.memory_mgr.memories == {}

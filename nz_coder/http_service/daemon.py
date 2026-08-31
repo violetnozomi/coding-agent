@@ -5,6 +5,7 @@ import argparse
 from collections import deque
 from dataclasses import dataclass
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -18,7 +19,8 @@ from typing import Any, TextIO
 from urllib.parse import urlsplit
 
 from nz_coder import __version__
-from nz_coder.private_paths import harden_private_path
+from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+from nz_coder.foundation.private_paths import harden_private_path
 
 from .client import NZCoderClient
 from .server import SessionHTTPService
@@ -74,6 +76,7 @@ def daemon_status(
     timeout: float = 0.75,
 ) -> dict[str, Any]:
     """Return ownership-validated status without trusting a PID alone."""
+    health_timeout = _validated_timeout(timeout, "status", 60.0)
     paths = daemon_paths(profile, state_root)
     state = _load_state(paths.state)
     if not state:
@@ -90,7 +93,11 @@ def daemon_status(
     if not isinstance(endpoint, str) or not endpoint or not isinstance(nonce, str):
         return {**state, "running": False, "reason": "invalid_state"}
     try:
-        health = NZCoderClient(endpoint, "health-only", timeout=timeout).health()
+        health = NZCoderClient(
+            endpoint,
+            "health-only",
+            timeout=health_timeout,
+        ).health()
     except Exception as exc:
         return {
             **state,
@@ -120,9 +127,11 @@ def start_daemon(
     startup_timeout: float = 15.0,
 ) -> dict[str, Any]:
     """Spawn a detached product runtime and wait for identity-checked health."""
+    ready_timeout = _validated_timeout(startup_timeout, "startup", 300.0)
+    interaction = _validated_timeout(interaction_timeout, "interaction", 86_400.0)
     if host not in {"127.0.0.1", "localhost"}:
         raise ValueError("daemon only accepts a loopback host")
-    if not isinstance(port, int) or not 0 <= port <= 65535:
+    if not isinstance(port, int) or isinstance(port, bool) or not 0 <= port <= 65535:
         raise ValueError("port must be between 0 and 65535")
     paths = daemon_paths(profile, state_root)
     _prepare_private_dir(paths.root)
@@ -164,7 +173,7 @@ def start_daemon(
         "--port",
         str(port),
         "--interaction-timeout",
-        str(interaction_timeout),
+        str(interaction),
     ]
     for root in roots:
         command.extend(("--workspace", root))
@@ -203,7 +212,7 @@ def start_daemon(
         "state": str(paths.state),
     }
     _atomic_state(paths.state, starting)
-    deadline = time.monotonic() + max(0.1, float(startup_timeout))
+    deadline = time.monotonic() + ready_timeout
     last_status: dict[str, Any] = starting
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -231,6 +240,7 @@ def stop_daemon(
     timeout: float = 8.0,
 ) -> dict[str, Any]:
     """Stop only the process proven to own this daemon profile."""
+    stop_timeout = _validated_timeout(timeout, "stop", 300.0)
     paths = daemon_paths(profile, state_root)
     state = _load_state(paths.state)
     if not state:
@@ -254,7 +264,7 @@ def stop_daemon(
     except Exception:
         pass
 
-    deadline = time.monotonic() + max(0.1, float(timeout))
+    deadline = time.monotonic() + stop_timeout
     while time.monotonic() < deadline and _pid_alive(pid):
         time.sleep(0.05)
     if _pid_alive(pid):
@@ -496,8 +506,11 @@ def _load_state(path: Path) -> dict[str, Any]:
     try:
         if path.is_symlink() or path.stat().st_size > _MAX_STATE_BYTES:
             return {}
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        payload = json.loads(
+            path.read_text(encoding="utf-8"),
+            parse_constant=reject_nonstandard_json_constant,
+        )
+    except (OSError, json.JSONDecodeError, ValueError):
         return {}
     return payload if isinstance(payload, dict) else {}
 
@@ -505,8 +518,30 @@ def _load_state(path: Path) -> dict[str, Any]:
 def _atomic_state(path: Path, payload: dict[str, Any]) -> None:
     _atomic_private_text(
         path,
-        json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n",
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+        ) + "\n",
     )
+
+
+def _validated_timeout(value: Any, label: str, maximum: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"daemon {label} timeout must be a positive finite number")
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            f"daemon {label} timeout must be a positive finite number"
+        ) from exc
+    if not math.isfinite(timeout) or timeout <= 0 or timeout > maximum:
+        raise ValueError(
+            f"daemon {label} timeout must be a positive finite number "
+            f"no greater than {maximum:g} seconds"
+        )
+    return timeout
 
 
 def _atomic_private_text(path: Path, value: str) -> None:

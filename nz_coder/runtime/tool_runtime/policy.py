@@ -4,16 +4,26 @@ from __future__ import annotations
 import json
 import time
 
-from nz_coder import config
-from nz_coder.command_policy import is_known_read_only_command
-from nz_coder.recovery import RecoveryState
-from nz_coder.runtime.admission import resolve_tool_capability
-from nz_coder.runtime.async_utils import to_thread_settled as _to_thread_settled
-from nz_coder.runtime.execution_context import max_parallel_tasks, strict_local_tools
+from nz_coder.foundation import config
+from nz_coder.tool_platform.command_policy import is_known_read_only_command
+from nz_coder.runtime.verification.recovery import RecoveryState
+from nz_coder.runtime.agent.admission import resolve_tool_capability
+from nz_coder.foundation.async_utils import to_thread_settled as _to_thread_settled
+from nz_coder.runtime.core.execution_context import max_parallel_tasks, strict_local_tools
 from nz_coder.runtime.core.tool_context import ToolPolicyContext
-from nz_coder.tool_executor import ToolExecutionResult, is_transactional_write_tool
+from nz_coder.swebench.policy import strict_private_tool_input_violation
+from nz_coder.tool_platform.execution import (
+    ToolExecutionResult,
+    is_transactional_write_tool,
+)
 from nz_coder.tools import get_execution_mode
 from nz_coder.state.skills import current_skill_allowed_tools
+
+
+_STALL_SIDECAR_EXEMPT_TOOLS = frozenset({
+    "diff_status",
+    "verify_changed_files",
+})
 
 
 class ProductionToolPolicy:
@@ -160,77 +170,159 @@ class ProductionToolPolicy:
         context: ToolPolicyContext,
         tool_calls: list[dict],
     ) -> dict[int, ToolExecutionResult]:
-        """Bound semantic investigation drift in strict SWE-bench runs."""
+        """Keep the legacy hook as an advisory-only compatibility no-op."""
+        return {}
+
+
+    def strict_private_path_rejections(
+        self,
+        context: ToolPolicyContext,
+        tool_calls: list[dict],
+    ) -> dict[int, ToolExecutionResult]:
+        """Keep SWE inference away from NZ-Coder traces and runtime state."""
         if not strict_local_tools():
             return {}
         rejected: dict[int, ToolExecutionResult] = {}
-        pending_investigations = 0
         for index, tool_call in enumerate(tool_calls):
             function = tool_call.get("function", {})
             name = str(function.get("name") or "")
-            tool_input = context.parse_input(
-                function.get("arguments", {}),
-            )
-            action = context.runtime_state.strict_progress_action(
-                name,
-                pending=pending_investigations,
-                tool_input=tool_input,
-            )
-            if action == "allow":
-                if context.runtime_state.is_investigation_call(name, tool_input):
-                    pending_investigations += 1
+            tool_input = context.parse_input(function.get("arguments", {}))
+            violation = strict_private_tool_input_violation(name, tool_input)
+            if not violation:
                 continue
-            output = (
-                "Denied: Strict investigation budget reached without a source edit. "
-                "Use the evidence already gathered: make the smallest plausible edit, "
-                "call diff_status/verify_changed_files, or finish with a concrete blocker."
-            )
             rejected[index] = ToolExecutionResult(
                 name=name,
                 tool_input=tool_input,
-                output=output,
+                output=f"Denied: {violation}.",
+                executed=False,
+                dispatch_failed=True,
+                command_failed=False,
+                is_write=is_transactional_write_tool(name),
+                permission_denied=True,
+                title="Strict private path guardrail",
+                metadata={
+                    "guardrail": "strict_private_path",
+                },
+            )
+            context.trace(
+                "strict_private_path_blocked",
+                name=name,
+            )
+        return rejected
+
+
+    def implementation_phase_rejections(
+        self,
+        context: ToolPolicyContext,
+        tool_calls: list[dict],
+    ) -> dict[int, ToolExecutionResult]:
+        """Keep the retired pre-edit phase gate as a compatibility no-op.
+
+        Investigation convergence is advisory. Safety, explicit task constraints,
+        exact repetition detection, and the run-level iteration cap remain enforced
+        by their dedicated policies.
+        """
+        del context, tool_calls
+        return {}
+
+
+    def task_constraint_rejections(
+        self,
+        context: ToolPolicyContext,
+        tool_calls: list[dict],
+    ) -> dict[int, ToolExecutionResult]:
+        """Enforce explicit artifact immutability declared by the user."""
+        action_for = getattr(context.runtime_state, "task_constraint_action", None)
+        if not callable(action_for):
+            return {}
+        rejected: dict[int, ToolExecutionResult] = {}
+        for index, tool_call in enumerate(tool_calls):
+            function = tool_call.get("function", {})
+            name = str(function.get("name") or "")
+            tool_input = context.parse_input(function.get("arguments", {}))
+            if action_for(name, tool_input) == "allow":
+                continue
+            rejected[index] = ToolExecutionResult(
+                name=name,
+                tool_input=tool_input,
+                output=(
+                    "Denied: the current user task explicitly forbids modifying test "
+                    "files. Keep the existing tests unchanged and repair source code only."
+                ),
                 executed=False,
                 dispatch_failed=True,
                 command_failed=False,
                 is_write=is_transactional_write_tool(name),
                 permission_denied=False,
-                title="Strict convergence gate",
+                title="Task constraint gate",
                 metadata={
-                    "guardrail": "strict_progress",
-                    "investigation_calls": (
-                        context.runtime_state.investigation_calls_since_edit
-                    ),
-                    "mutation_generation": context.runtime_state.mutation_generation,
+                    "guardrail": "task_constraint",
+                    "constraint": "tests_immutable",
                 },
             )
             context.trace(
-                "strict_progress_blocked",
+                "task_constraint_blocked",
                 name=name,
-                investigation_calls=context.runtime_state.investigation_calls_since_edit,
-                mutation_generation=context.runtime_state.mutation_generation,
+                constraint="tests_immutable",
             )
-        if not rejected:
-            return rejected
-        context.runtime_state.strict_progress_blocks += 1
-        if context.runtime_state.strict_progress_blocks < 2:
-            return rejected
-        for result in rejected.values():
-            result.output = (
-                "Denied: Final blocker — strict investigation budget remains exhausted "
-                "after convergence feedback. Stop investigating and report the concrete "
-                "blocker; this run will not spend more model turns on source reads."
+        return rejected
+
+
+    def closure_phase_rejections(
+        self,
+        context: ToolPolicyContext,
+        tool_calls: list[dict],
+    ) -> dict[int, ToolExecutionResult]:
+        """Enforce environment and shell-observation safety facts."""
+        state = context.runtime_state
+        action_for = getattr(state, "closure_phase_action", None)
+        decision_for = getattr(state, "closure_phase_decision", None)
+        if not callable(action_for):
+            return {}
+        rejected: dict[int, ToolExecutionResult] = {}
+        for index, tool_call in enumerate(tool_calls):
+            function = tool_call.get("function", {})
+            name = str(function.get("name") or "")
+            tool_input = context.parse_input(function.get("arguments", {}))
+            if callable(decision_for):
+                action, reason = decision_for(name, tool_input)
+            else:
+                action, reason = action_for(name, tool_input), ""
+            if action == "allow":
+                continue
+            guardrail = "shell_write_boundary"
+            rejected[index] = ToolExecutionResult(
+                name=name,
+                tool_input=tool_input,
+                output=(
+                    "Denied: this workspace is not Git-backed, so `git diff/status` "
+                    "cannot add closure evidence. Use diff_status and "
+                    "verify_changed_files instead."
+                    if reason == "git_required_but_unavailable" else
+                    "Denied: shell write safety blocked a compound or mutating Git "
+                    "observation. Run a single read-only git diff/status command."
+                ),
+                executed=False,
+                dispatch_failed=True,
+                command_failed=False,
+                is_write=is_transactional_write_tool(name),
+                permission_denied=False,
+                title="Shell write safety gate",
+                metadata={
+                    "guardrail": guardrail,
+                    "reason": reason,
+                    "work_phase": str(getattr(state, "work_phase", "")),
+                    "mutation_generation": int(
+                        getattr(state, "mutation_generation", 0) or 0
+                    ),
+                },
             )
-            result.permission_denied = True
-            result.metadata = {
-                **dict(result.metadata or {}),
-                "strict_terminal_blocker": True,
-                "strict_progress_blocks": context.runtime_state.strict_progress_blocks,
-            }
-        context.trace(
-            "strict_progress_terminal_blocker",
-            blocks=context.runtime_state.strict_progress_blocks,
-            mutation_generation=context.runtime_state.mutation_generation,
-        )
+            context.trace(
+                "shell_write_blocked",
+                name=name,
+                work_phase=str(getattr(state, "work_phase", "")),
+                reason=reason,
+            )
         return rejected
 
 
@@ -358,6 +450,32 @@ class ProductionToolPolicy:
                 except json.JSONDecodeError:
                     signature_input = {"invalid_json": raw_arguments}
 
+            # Runtime-owned verification calls are synthesized by the
+            # scheduler, not selected by the model.  InfCodeX wires its
+            # detector at the assistant tool-use boundary, so these calls
+            # never enter either L1 repeat tracking or the L2 stall sidecar.
+            # Keep any pending model nudge queued for the next actual model
+            # tool call as well.
+            tool_call_id = str(tool_call.get("id") or "")
+            runtime_owned_contract = bool(
+                isinstance(signature_input, dict)
+                and signature_input.get("_nz_runtime_contract") is True
+                and tool_call_id.startswith("verification-contract-")
+            )
+            runtime_owned_stage = bool(
+                isinstance(signature_input, dict)
+                and signature_input.get("_nz_runtime_verification_stage")
+                in {"static", "targeted"}
+                and tool_call_id.startswith("verification-stage-")
+            )
+            if runtime_owned_contract or runtime_owned_stage:
+                context.trace(
+                    "runtime_owned_stall_observation_skipped",
+                    name=fn_name,
+                    tool_call_id=tool_call_id,
+                )
+                continue
+
             orchestrator = context.stall_orchestrator
             pending_nudge = (
                 orchestrator.consume_pending_nudge()
@@ -384,7 +502,13 @@ class ProductionToolPolicy:
                     )
                 continue
 
-            if orchestrator is not None:
+            if orchestrator is not None and fn_name in _STALL_SIDECAR_EXEMPT_TOOLS:
+                context.trace(
+                    "stall_sidecar_observation_skipped",
+                    name=fn_name,
+                    reason="deterministic_closure_tool",
+                )
+            elif orchestrator is not None:
                 signaled = orchestrator.record_tool_use({
                     "id": str(tool_call.get("id") or ""),
                     "name": fn_name,

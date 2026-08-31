@@ -1,28 +1,25 @@
 """Unified Provider resolution and model-call policy for Agent Core."""
 from __future__ import annotations
 
-from nz_coder.runtime.model_gateway.models import (
-    ModelCall,
-    ModelCallOutcome,
-    ModelCallPurpose,
-    ModelCallStatus,
-    ModelStreamEvent,
-)
-from nz_coder.runtime.model_gateway.usage import (
-    NormalizedUsage,
-    extract_provider_reported_cost,
-    normalize_usage,
-    resolve_usage_cost,
-)
-from nz_coder.runtime.model_gateway.runtime import (
-    ModelSelectionRequest,
-    ResolvedModelRuntime,
-    resolve_model_runtime,
-)
-from nz_coder.runtime.model_gateway.gateway import (
-    OpenAIClientBridgeProvider,
-    ProductionModelGateway,
-)
+from importlib import import_module
+
+
+_EXPORTS = {
+    "ModelCall": "models",
+    "ModelCallOutcome": "models",
+    "ModelCallPurpose": "models",
+    "ModelCallStatus": "models",
+    "ModelStreamEvent": "models",
+    "ModelSelectionRequest": "runtime",
+    "NormalizedUsage": "usage",
+    "OpenAIClientBridgeProvider": "gateway",
+    "ProductionModelGateway": "gateway",
+    "ResolvedModelRuntime": "runtime",
+    "extract_provider_reported_cost": "usage",
+    "normalize_usage": "usage",
+    "resolve_usage_cost": "usage",
+    "resolve_model_runtime": "runtime",
+}
 
 __all__ = [
     "ModelCall",
@@ -40,3 +37,18 @@ __all__ = [
     "resolve_usage_cost",
     "resolve_model_runtime",
 ]
+
+
+def __getattr__(name: str):  # noqa: ANN202
+    """Resolve gateway exports without importing Provider machinery eagerly."""
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(f"{__name__}.{module_name}"), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """Include lazy gateway exports in interactive discovery."""
+    return sorted(set(globals()).union(__all__))

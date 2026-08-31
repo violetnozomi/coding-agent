@@ -6,7 +6,7 @@ import threading
 import time
 
 def _record(runs, run_id, **extra):
-    from nz_coder.runtime.workflow_run_store import WorkflowRunStore
+    from nz_coder.runtime.workflows.workflow_run_store import WorkflowRunStore
 
     store = WorkflowRunStore(runs / run_id)
     store.write_terminal({
@@ -18,8 +18,8 @@ def _record(runs, run_id, **extra):
 
 
 def _saved(workspace, name):
-    from nz_coder.runtime.workflow_capsule import create_workflow_capsule
-    from nz_coder.runtime.workflow_library import save_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_capsule import create_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_library import save_workflow_capsule
 
     manifest = {
         "name": name,
@@ -47,7 +47,7 @@ def _saved(workspace, name):
 
 
 def test_identity_resolves_run_id_and_unique_display_alias(tmp_path):
-    from nz_coder.runtime.workflow_host import resolve_workflow_identity
+    from nz_coder.runtime.workflows.workflow_host import resolve_workflow_identity
 
     runs = tmp_path / "runs"
     _record(
@@ -70,7 +70,7 @@ def test_identity_resolves_run_id_and_unique_display_alias(tmp_path):
 
 
 def test_identity_fails_closed_for_duplicate_alias(tmp_path):
-    from nz_coder.runtime.workflow_host import resolve_workflow_identity
+    from nz_coder.runtime.workflows.workflow_host import resolve_workflow_identity
 
     runs = tmp_path / "runs"
     _record(runs, "run-a", display_name="Same")
@@ -84,7 +84,7 @@ def test_identity_fails_closed_for_duplicate_alias(tmp_path):
 
 
 def test_identity_fails_closed_for_run_saved_or_builtin_collision(tmp_path):
-    from nz_coder.runtime.workflow_host import resolve_workflow_identity
+    from nz_coder.runtime.workflows.workflow_host import resolve_workflow_identity
 
     runs = tmp_path / "runs"
     _record(runs, "saved-audit")
@@ -103,7 +103,7 @@ def test_identity_fails_closed_for_run_saved_or_builtin_collision(tmp_path):
 
 
 def test_invocation_policy_is_command_only_and_turn_consumption_is_explicit():
-    from nz_coder.runtime.workflow_host import (
+    from nz_coder.runtime.workflows.workflow_host import (
         workflow_invocation_decision,
         workflow_start_outcome_consumes_turn,
     )
@@ -117,7 +117,7 @@ def test_invocation_policy_is_command_only_and_turn_consumption_is_explicit():
 
 
 def test_host_limits_are_min_wins_and_zero_token_budget_is_unbounded():
-    from nz_coder.runtime.workflow_host import clamp_workflow_limits
+    from nz_coder.runtime.workflows.workflow_host import clamp_workflow_limits
 
     manifest = {
         "max_agents": 10,
@@ -138,7 +138,7 @@ def test_host_limits_are_min_wins_and_zero_token_budget_is_unbounded():
 
 
 def test_approval_summary_reports_effective_limits_and_write_risk():
-    from nz_coder.runtime.workflow_host import build_workflow_approval_summary
+    from nz_coder.runtime.workflows.workflow_host import build_workflow_approval_summary
 
     summary = build_workflow_approval_summary({
         "name": "audit",
@@ -156,7 +156,7 @@ def test_approval_summary_reports_effective_limits_and_write_risk():
 
 
 def test_scout_then_author_prompt_requires_concrete_investigation():
-    from nz_coder.runtime.workflow_host import build_scout_then_author_prompt
+    from nz_coder.runtime.workflows.workflow_host import build_scout_then_author_prompt
 
     prompt = build_scout_then_author_prompt("Review routing")
 
@@ -166,9 +166,9 @@ def test_scout_then_author_prompt_requires_concrete_investigation():
 
 
 def test_host_policy_rejects_literal_fanout_before_spawn(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_runtime import workflow_run
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)
@@ -193,7 +193,7 @@ def test_host_policy_rejects_literal_fanout_before_spawn(tmp_path, monkeypatch):
 
 
 def test_host_concurrency_ceiling_clamps_runtime_pool(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
     from tests.test_workflow_runtime import _manager
 
     manager = _manager(tmp_path, monkeypatch, max_tasks=4, concurrency=4)
@@ -221,9 +221,9 @@ def test_host_concurrency_ceiling_clamps_runtime_pool(tmp_path, monkeypatch):
 
 
 def test_host_token_ceiling_stops_before_next_spawn(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_runtime import workflow_run
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)
@@ -249,9 +249,9 @@ def test_host_token_ceiling_stops_before_next_spawn(tmp_path, monkeypatch):
 
 
 def test_display_name_persists_and_unique_alias_can_seed_resume(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_runtime import workflow_run
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)
@@ -282,9 +282,9 @@ def test_display_name_persists_and_unique_alias_can_seed_resume(tmp_path, monkey
 
 
 def test_resume_target_rejects_saved_or_ambiguous_identity(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_runtime import workflow_run
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _manager
 
     _saved(tmp_path, "saved-audit")
@@ -305,7 +305,7 @@ def test_resume_target_rejects_saved_or_ambiguous_identity(tmp_path, monkeypatch
 
 
 def test_workflow_host_tool_exposes_contracts_without_starting_run():
-    from nz_coder.runtime.workflow_features import workflow_host
+    from nz_coder.runtime.workflows.workflow_features import workflow_host
 
     invocation = workflow_host("invocation", source="natural-language")
     prompt = workflow_host("author-prompt", request="Inspect tests")
@@ -315,7 +315,7 @@ def test_workflow_host_tool_exposes_contracts_without_starting_run():
 
 
 def test_approval_digest_binds_effective_summary_and_rejects_stale_decision():
-    from nz_coder.runtime.workflow_host import (
+    from nz_coder.runtime.workflows.workflow_host import (
         evaluate_workflow_approval,
         workflow_approval_digest,
     )
@@ -335,7 +335,7 @@ def test_approval_digest_binds_effective_summary_and_rejects_stale_decision():
 
 
 def test_approval_gate_distinguishes_headless_denial_and_cancellation():
-    from nz_coder.runtime.workflow_host import evaluate_workflow_approval
+    from nz_coder.runtime.workflows.workflow_host import evaluate_workflow_approval
 
     summary = {"name": "audit"}
 
@@ -347,9 +347,9 @@ def test_approval_gate_distinguishes_headless_denial_and_cancellation():
 
 
 def test_explicit_denial_returns_without_run_or_child(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_runtime import workflow_run
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _manager
 
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)
@@ -370,9 +370,9 @@ def test_explicit_denial_returns_without_run_or_child(tmp_path, monkeypatch):
 
 
 def test_headless_approval_receipt_is_persisted(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_runtime import workflow_run
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)

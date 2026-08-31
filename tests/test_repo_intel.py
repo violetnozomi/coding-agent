@@ -9,7 +9,7 @@ def _init_repo(path):
 
 
 def test_smart_search_uses_valid_git_grep_pathspec(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools import repo_intel
 
     old_workdir = config.WORKDIR
@@ -38,8 +38,35 @@ def test_smart_search_uses_valid_git_grep_pathspec(tmp_path, monkeypatch):
         config.WORKDIR = old_workdir
 
 
+def test_smart_search_keeps_unmanaged_product_prefixed_sources(
+    tmp_path,
+    monkeypatch,
+):
+    """Search must not reserve a prefix created only by local test fixtures."""
+    from nz_coder.foundation import config
+    from nz_coder.tools import repo_intel
+
+    old_workdir = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        source = tmp_path / ".product-catalog" / "catalog.py"
+        source.parent.mkdir()
+        source.write_text("catalog_needle = 'live'\n", encoding="utf-8")
+        monkeypatch.setattr(
+            repo_intel.subprocess,
+            "run",
+            lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", ""),
+        )
+
+        result = repo_intel.smart_search("catalog_needle", max_files=8)
+
+        assert ".product-catalog/catalog.py" in result
+    finally:
+        config.WORKDIR = old_workdir
+
+
 def test_diff_status_reports_untracked_non_python_file(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import diff_status
 
     _init_repo(tmp_path)
@@ -57,8 +84,28 @@ def test_diff_status_reports_untracked_non_python_file(tmp_path):
         config.WORKDIR = old_workdir
 
 
+def test_diff_status_non_git_workspace_is_supported(tmp_path):
+    """A normal directory must not turn finalization into a Git failure."""
+    from nz_coder.foundation import config
+    from nz_coder.tools.repo_intel import diff_status
+
+    old_workdir = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+
+        result = diff_status()
+
+        assert not result.startswith("Error:")
+        assert "workspace_mode: non_git" in result
+        assert "git usage" not in result.lower()
+        assert "not a git repository" not in result.lower()
+    finally:
+        config.WORKDIR = old_workdir
+
+
 def test_verify_changed_files_checks_untracked_python_file(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import verify_changed_files
 
     _init_repo(tmp_path)
@@ -75,8 +122,38 @@ def test_verify_changed_files_checks_untracked_python_file(tmp_path):
         config.WORKDIR = old_workdir
 
 
+def test_verify_changed_files_checks_tracked_python_file_without_git(tmp_path):
+    """Run-local change evidence must support normal non-Git workspaces."""
+    from nz_coder.foundation import config
+    from nz_coder.state.changes import ChangeTracker
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import scoped_session, session_change_dir
+    from nz_coder.tools.repo_intel import verify_changed_files
+
+    old_workdir = config.WORKDIR
+    config.WORKDIR = tmp_path
+    try:
+        with scoped_workdir(tmp_path), scoped_session("non-git-verify"):
+            target = tmp_path / "app.py"
+            target.write_text("VALUE = 1\n", encoding="utf-8")
+            tracker = ChangeTracker(
+                run_id="non-git-change",
+                change_dir=session_change_dir(),
+            )
+            tracker.record_before("app.py", True, "VALUE = 1\n")
+            target.write_text("VALUE = 2\n", encoding="utf-8")
+            tracker.record_after("app.py", True, "VALUE = 2\n")
+
+            result = verify_changed_files()
+
+        assert result.startswith("OK: py_compile changed files")
+        assert "OK  app.py" in result
+    finally:
+        config.WORKDIR = old_workdir
+
+
 def test_verify_changed_files_skips_deleted_python_file(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools import repo_intel
 
     old_workdir = config.WORKDIR
@@ -97,7 +174,7 @@ def test_verify_changed_files_skips_deleted_python_file(tmp_path, monkeypatch):
 
 
 def test_smart_search_uses_log_tf_idf_instead_of_linear_line_count(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import smart_search
 
     old_workdir = config.WORKDIR
@@ -141,7 +218,7 @@ def test_find_callers_prefers_call_over_attribute_duplicate():
 
 
 def test_read_symbol_lists_and_reads_nested_symbols(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import read_symbol
 
     old_workdir = config.WORKDIR
@@ -181,7 +258,7 @@ def test_read_symbol_lists_and_reads_nested_symbols(tmp_path):
 def test_smart_search_reuses_ast_parse_for_summary(tmp_path, monkeypatch):
     import subprocess
 
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools import repo_intel
 
     old_workdir = config.WORKDIR
@@ -217,7 +294,7 @@ def test_smart_search_reuses_ast_parse_for_summary(tmp_path, monkeypatch):
 
 
 def test_diff_status_recognizes_typescript_tests_without_swebench_warning(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import diff_status
 
     _init_repo(tmp_path)
@@ -239,7 +316,7 @@ def test_diff_status_recognizes_typescript_tests_without_swebench_warning(tmp_pa
 
 
 def test_verify_changed_files_warns_for_typescript_without_configured_checker(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import verify_changed_files
 
     _init_repo(tmp_path)
@@ -284,7 +361,7 @@ def test_verify_changed_files_go_compile_does_not_run_tests(tmp_path, monkeypatc
     import os
     import shlex
 
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import verify_changed_files
 
     _init_repo(tmp_path)
@@ -317,7 +394,7 @@ def test_verify_changed_files_go_compile_does_not_run_tests(tmp_path, monkeypatc
 
 
 def test_verify_changed_files_warns_for_go_without_module_metadata(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools import repo_intel
 
     _init_repo(tmp_path)
@@ -342,7 +419,7 @@ def test_verify_changed_files_warns_for_go_without_module_metadata(tmp_path, mon
 
 
 def test_node_typecheck_command_prefers_pnpm_lockfile(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import _node_typecheck_command
 
     old_workdir = config.WORKDIR
@@ -360,7 +437,7 @@ def test_node_typecheck_command_prefers_pnpm_lockfile(tmp_path):
 
 
 def test_node_typecheck_command_prefers_yarn_lockfile(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import _node_typecheck_command
 
     old_workdir = config.WORKDIR
@@ -378,7 +455,7 @@ def test_node_typecheck_command_prefers_yarn_lockfile(tmp_path):
 
 
 def test_read_symbol_respects_max_depth_parameter(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import read_symbol
 
     old_workdir = config.WORKDIR
@@ -408,7 +485,7 @@ def test_read_symbol_respects_max_depth_parameter(tmp_path):
 
 
 def test_smart_search_no_files_message_is_include_aware(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_intel import smart_search
 
     old_workdir = config.WORKDIR

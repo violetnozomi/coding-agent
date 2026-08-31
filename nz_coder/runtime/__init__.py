@@ -1,1 +1,1 @@
-"""Agent runtime loop, execution, prompt, recovery, and task policy."""
+"""Agent runtime domain packages and production execution services."""

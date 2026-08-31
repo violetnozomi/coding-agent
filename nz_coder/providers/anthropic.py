@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any, Iterable, Iterator
 
-from nz_coder import config
-from nz_coder.attachments import attachment_base64, normalize_attachments
+from nz_coder.foundation import config
+from nz_coder.protocol.attachments import attachment_base64, normalize_attachments
 from nz_coder.providers.http import NativeClient, UrllibTransport
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
@@ -58,16 +59,16 @@ def _finish_reason(value: Any, *, has_tools: bool = False) -> str:
 
 def _usage(value: Any) -> dict[str, Any]:
     source = value if isinstance(value, dict) else {}
-    input_tokens = max(0, int(source.get("input_tokens") or 0))
-    output_tokens = max(0, int(source.get("output_tokens") or 0))
+    input_tokens = _usage_token(source.get("input_tokens"))
+    output_tokens = _usage_token(source.get("output_tokens"))
+    cache_read = _usage_token(source.get("cache_read_input_tokens"))
+    cache_write = _usage_token(source.get("cache_creation_input_tokens"))
     result = {
         "input_tokens": input_tokens,
         "uncached_input_tokens": input_tokens,
         "output_tokens": output_tokens,
-        "total_tokens": input_tokens + output_tokens,
+        "total_tokens": input_tokens + output_tokens + cache_read + cache_write,
     }
-    cache_read = max(0, int(source.get("cache_read_input_tokens") or 0))
-    cache_write = max(0, int(source.get("cache_creation_input_tokens") or 0))
     if cache_read:
         result["cache_read_input_tokens"] = cache_read
     if cache_write:
@@ -76,6 +77,18 @@ def _usage(value: Any) -> dict[str, Any]:
         if key in source:
             result[key] = source[key]
     return result
+
+
+def _usage_token(value: Any) -> int:
+    if isinstance(value, bool) or value is None:
+        return 0
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    if not math.isfinite(number) or number < 0 or number > 1_000_000_000_000:
+        return 0
+    return int(number)
 
 
 def _append_message(messages: list[dict], role: str, blocks: list[dict]) -> None:
@@ -349,7 +362,12 @@ class AnthropicProvider:
                     "input_tokens": input_tokens,
                     "uncached_input_tokens": input_tokens,
                     "output_tokens": output_tokens,
-                    "total_tokens": input_tokens + output_tokens,
+                    "total_tokens": (
+                        input_tokens
+                        + output_tokens
+                        + cache_read_tokens
+                        + cache_write_tokens
+                    ),
                 }
                 if cache_read_tokens:
                     stream_usage["cache_read_input_tokens"] = cache_read_tokens
@@ -372,7 +390,12 @@ class AnthropicProvider:
                     "input_tokens": input_tokens,
                     "uncached_input_tokens": input_tokens,
                     "output_tokens": output_tokens,
-                    "total_tokens": input_tokens + output_tokens,
+                    "total_tokens": (
+                        input_tokens
+                        + output_tokens
+                        + cache_read_tokens
+                        + cache_write_tokens
+                    ),
                 }
                 if cache_read_tokens:
                     stream_usage["cache_read_input_tokens"] = cache_read_tokens

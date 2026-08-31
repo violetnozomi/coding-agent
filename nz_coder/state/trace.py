@@ -2,17 +2,21 @@
 from __future__ import annotations
 
 import json
+import math
+import threading
 import time
 import uuid
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.state.workdir import current_workdir
-from nz_coder.sessions import active_session_id, session_trace_dir
+from nz_coder.state.sessions import active_session_id, session_trace_dir
 
 MAX_FIELD_CHARS = 4000
+MAX_CONTAINER_ITEMS = 200
+MAX_NESTING_DEPTH = 16
 _DEFAULT_TRACE_DIR = Path(config.TRACE_DIR)
 
 
@@ -51,6 +55,7 @@ class TraceRecorder:
         self.trace_dir = trace_dir if trace_dir is not None else globals()["trace_dir"]()
         prefix = f"{self.session_id}__" if self.session_id else ""
         self.path = self.trace_dir / f"{prefix}{self.run_id}.jsonl"
+        self._lock = threading.Lock()
         self.dropped_events = 0
         self.last_write_error: str | None = None
         if self.enabled:
@@ -61,27 +66,46 @@ class TraceRecorder:
                 self.dropped_events += 1
                 self.last_write_error = str(exc)
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Serialize durable trace identity without the process-local lock."""
+        state = dict(self.__dict__)
+        state.pop("_lock", None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Recreate synchronization after crossing a spawn boundary."""
+        self.__dict__.update(state)
+        self._lock = threading.Lock()
+
     def log(self, event: str, **payload: Any) -> None:
         if not self.enabled:
             return
-        row = {
-            "ts": time.time(),
-            "run_id": self.run_id,
-            "trace_id": self.trace_id,
-            "session_id": self.session_id,
-            "agent_id": self.agent_id,
-            "parent_agent_id": self.parent_agent_id,
-            "parent_trace_id": self.parent_trace_id,
-            "agent_type": self.agent_type,
-            "event": event,
-            **_sanitize(payload),
-        }
         try:
-            with self.path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
-        except OSError as exc:
-            self.dropped_events += 1
-            self.last_write_error = str(exc)
+            row = {
+                "ts": time.time(),
+                "run_id": self.run_id,
+                "trace_id": self.trace_id,
+                "session_id": self.session_id,
+                "agent_id": self.agent_id,
+                "parent_agent_id": self.parent_agent_id,
+                "parent_trace_id": self.parent_trace_id,
+                "agent_type": self.agent_type,
+                "event": event,
+                **_sanitize(payload),
+            }
+            encoded = json.dumps(
+                row,
+                ensure_ascii=False,
+                default=str,
+                allow_nan=False,
+            ) + "\n"
+            with self._lock:
+                with self.path.open("a", encoding="utf-8") as f:
+                    f.write(encoded)
+        except Exception as exc:
+            with self._lock:
+                self.dropped_events += 1
+                self.last_write_error = str(exc)
 
 
 def latest_trace(trace_dir: Path = None, session_id: str = None) -> Path | None:
@@ -101,12 +125,38 @@ def latest_trace(trace_dir: Path = None, session_id: str = None) -> Path | None:
         if session_id:
             safe = _safe_session_id(session_id)
             pattern = f"{safe}__*.jsonl"
-            traces = sorted(base.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
         else:
-            traces = sorted(base.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if traces:
-            return traces[0]
+            pattern = "*.jsonl"
+        dated_traces: list[tuple[float, str, Path]] = []
+        for path in base.glob(pattern):
+            try:
+                modified_at = path.stat().st_mtime
+            except OSError:
+                # Rotation/cleanup may remove a candidate between glob() and
+                # stat().  A stale candidate must not hide a valid trace.
+                continue
+            dated_traces.append((modified_at, path.name, path))
+        if dated_traces:
+            dated_traces.sort(reverse=True)
+            return dated_traces[0][2]
     return None
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return result if math.isfinite(result) else default
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
 
 
 def summarize_trace(path: Path, max_events: int = 40) -> str:
@@ -117,9 +167,11 @@ def summarize_trace(path: Path, max_events: int = 40) -> str:
     all_rows = []
     for raw in raw_lines:
         try:
-            all_rows.append(json.loads(raw))
+            payload = json.loads(raw)
         except json.JSONDecodeError:
             continue
+        if isinstance(payload, dict):
+            all_rows.append(payload)
 
     tool_rows = [r for r in all_rows if r.get("event") == "tool_call"]
     batch_rows = [r for r in all_rows if r.get("event") == "tool_batch_completed"]
@@ -131,25 +183,24 @@ def summarize_trace(path: Path, max_events: int = 40) -> str:
     tool_counter: Counter = Counter(r.get("name", "?") for r in tool_rows)
     top3 = tool_counter.most_common(3)
     durations = [
-        float(row.get("duration_ms", 0.0) or 0.0)
+        _safe_float(row.get("duration_ms", 0.0))
         for row in tool_rows
     ]
     total_tool_ms = sum(durations)
     peak_concurrency = max(
-        (int(row.get("peak_concurrency", 0) or 0) for row in batch_rows),
+        (_safe_int(row.get("peak_concurrency", 0)) for row in batch_rows),
         default=0,
     )
     barrier_wait_ms = sum(
-        float(row.get("barrier_wait_ms", 0.0) or 0.0)
+        _safe_float(row.get("barrier_wait_ms", 0.0))
         for row in batch_rows
     )
     run_start = next((r.get("ts", 0.0) for r in all_rows if r.get("event") == "run_start"), None)
     run_end = next((r.get("ts", 0.0) for r in reversed(all_rows) if r.get("event") == "run_end"), None)
     last_ts = all_rows[-1].get("ts", 0.0) if all_rows else 0.0
-    elapsed_seconds = (
-        float((run_end or last_ts) - run_start)
-        if run_start and (run_end or last_ts) else 0.0
-    )
+    start_seconds = _safe_float(run_start)
+    end_seconds = _safe_float(run_end or last_ts)
+    elapsed_seconds = max(0.0, end_seconds - start_seconds)
     elapsed = (
         f"{elapsed_seconds:.1f}s"
         + ("" if run_end else " (running)")
@@ -215,19 +266,21 @@ def summarize_trace(path: Path, max_events: int = 40) -> str:
         lines.append(f"  Top-3 tools      : {top3_str}")
     lines.append("")
     lines.append("=== Recent events ===")
-    for row in all_rows[-max_events:]:
+    bounded_events = max(0, int(max_events))
+    recent_rows = all_rows[-bounded_events:] if bounded_events else []
+    for row in recent_rows:
         event = row.get("event", "?")
         if event == "tool_call":
             lines.append(
                 f"- tool {row.get('name')} -> {row.get('status')} "
-                f"({float(row.get('duration_ms', 0.0) or 0.0):.1f}ms, "
+                f"({_safe_float(row.get('duration_ms', 0.0)):.1f}ms, "
                 f"{row.get('output_len', 0)} chars)"
             )
         elif event == "tool_batch_completed":
             lines.append(
                 f"- tool batch {row.get('batch_id')} -> peak={row.get('peak_concurrency', 0)} "
-                f"wall={float(row.get('wall_ms', 0.0) or 0.0):.1f}ms "
-                f"barrier_wait={float(row.get('barrier_wait_ms', 0.0) or 0.0):.1f}ms"
+                f"wall={_safe_float(row.get('wall_ms', 0.0)):.1f}ms "
+                f"barrier_wait={_safe_float(row.get('barrier_wait_ms', 0.0)):.1f}ms"
             )
         elif event == "doom_loop_streak_reset":
             lines.append(
@@ -235,11 +288,11 @@ def summarize_trace(path: Path, max_events: int = 40) -> str:
                 f"after {row.get('previous_tool')}×{row.get('previous_count', 0)}"
             )
         elif event == "llm_response":
-            duration = float(row.get("duration_ms", 0.0) or 0.0)
+            duration = _safe_float(row.get("duration_ms", 0.0))
             ttft = row.get("first_token_ms")
             timing = f" duration={duration:.1f}ms" if duration else ""
             if ttft is not None:
-                timing += f" ttft={float(ttft):.1f}ms"
+                timing += f" ttft={_safe_float(ttft):.1f}ms"
             lines.append(
                 f"- llm response: tools={row.get('tool_calls', 0)} "
                 f"content={row.get('content_len', 0)} chars{timing}"
@@ -264,18 +317,21 @@ def _llm_samples(rows: list[dict]) -> list[dict]:
         if event != "llm_response" or not pending:
             continue
         request = pending.pop(0)
-        duration = float(row.get("duration_ms", 0.0) or 0.0)
+        duration = _safe_float(row.get("duration_ms", 0.0))
         if duration <= 0:
             duration = max(
                 0.0,
-                (float(row.get("ts", 0.0)) - float(request.get("ts", 0.0))) * 1000,
+                (
+                    _safe_float(row.get("ts", 0.0))
+                    - _safe_float(request.get("ts", 0.0))
+                ) * 1000,
             )
         first_token = row.get("first_token_ms")
         samples.append({
             "duration_ms": duration,
-            "first_token_ms": float(first_token) if first_token is not None else None,
-            "token_estimate": int(request.get("token_estimate", 0) or 0),
-            "attempts": int(row.get("attempts", 1) or 1),
+            "first_token_ms": _safe_float(first_token) if first_token is not None else None,
+            "token_estimate": _safe_int(request.get("token_estimate", 0)),
+            "attempts": _safe_int(row.get("attempts", 1), 1),
         })
     return samples
 
@@ -290,21 +346,61 @@ def _child_wait_ms(rows: list[dict]) -> float:
         if not child_id:
             continue
         if event == "subagent_spawn":
-            pending[child_id] = float(row.get("ts", 0.0) or 0.0)
+            pending[child_id] = _safe_float(row.get("ts", 0.0))
         elif event == "subagent_complete" and child_id in pending:
-            total += max(0.0, float(row.get("ts", 0.0) or 0.0) - pending.pop(child_id))
+            total += max(
+                0.0,
+                _safe_float(row.get("ts", 0.0)) - pending.pop(child_id),
+            )
     return total * 1000
 
 
-def _sanitize(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(k): _sanitize(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_sanitize(v) for v in value]
+def _sanitize(
+    value: Any,
+    *,
+    _seen: set[int] | None = None,
+    _depth: int = 0,
+) -> Any:
+    if _depth >= MAX_NESTING_DEPTH:
+        return "[maximum trace nesting depth reached]"
+    if isinstance(value, (dict, list, tuple, set, frozenset)):
+        seen = _seen if _seen is not None else set()
+        identity = id(value)
+        if identity in seen:
+            return "[circular reference]"
+        seen.add(identity)
+        try:
+            if isinstance(value, dict):
+                items = list(value.items())
+                result = {
+                    str(key): _sanitize(
+                        item,
+                        _seen=seen,
+                        _depth=_depth + 1,
+                    )
+                    for key, item in items[:MAX_CONTAINER_ITEMS]
+                }
+                omitted = len(items) - MAX_CONTAINER_ITEMS
+                if omitted > 0:
+                    result["__nz_truncated_items__"] = omitted
+                return result
+            items = list(value)
+            result = [
+                _sanitize(item, _seen=seen, _depth=_depth + 1)
+                for item in items[:MAX_CONTAINER_ITEMS]
+            ]
+            omitted = len(items) - MAX_CONTAINER_ITEMS
+            if omitted > 0:
+                result.append(f"(... {omitted} more items)")
+            return result
+        finally:
+            seen.remove(identity)
     if isinstance(value, str):
         if len(value) > MAX_FIELD_CHARS:
             return value[:MAX_FIELD_CHARS] + "... (truncated)"
         return value
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
     return value
 
 

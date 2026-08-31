@@ -40,10 +40,10 @@ from nz_coder.interface.preferences import (
     selector_style,
     theme_names,
 )
-from nz_coder.private_paths import harden_private_path
+from nz_coder.foundation.private_paths import harden_private_path
 from nz_coder.interface.selector import FuzzySelector
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.sessions import list_session_ids
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.state.sessions import list_session_ids
 
 
 _IGNORED_DIRECTORIES = {
@@ -388,6 +388,7 @@ class TerminalInput:
         title: str,
         values: Iterable[tuple[object, str]],
         text: str = "Type to filter · Up/Down move · Enter select · Esc cancel",
+        detail: str = "",
         multiple: bool = False,
         allow_custom: bool = False,
         actions: Iterable[tuple[str, str, str]] = (),
@@ -399,7 +400,7 @@ class TerminalInput:
             return None
         selector = FuzzySelector(
             title=title,
-            text=text,
+            text=(f"{detail}\n{text}" if detail and self.fullscreen is None else text),
             values=choices,
             multiple=multiple,
             allow_custom=allow_custom,
@@ -413,6 +414,7 @@ class TerminalInput:
                 return await self.fullscreen.select_async(
                     title=title,
                     text=text,
+                    detail=detail,
                     values=choices,
                     multiple=multiple,
                     allow_custom=allow_custom,

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import subprocess
 
-from nz_coder.runtime.platform_runtime import terminate_process_tree
+from nz_coder.runtime.process.platform_runtime import terminate_process_tree
 
 
 class _Process:

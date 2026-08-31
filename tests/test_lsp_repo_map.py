@@ -158,7 +158,7 @@ def test_workspace_symbols_gracefully_fall_back_on_client_failure(
 
 
 def test_repo_map_semantic_mode_adds_lsp_supplement(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.lsp.workspace_symbols import (
         WorkspaceSymbolEntry,
         WorkspaceSymbolResult,

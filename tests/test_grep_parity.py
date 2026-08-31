@@ -4,9 +4,9 @@ from __future__ import annotations
 import json
 import os
 
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools import ToolOutput
-from nz_coder.runtime.ripgrep import decode_ripgrep_event
+from nz_coder.capabilities.ripgrep import decode_ripgrep_event
 from nz_coder.tools.search import grep_search
 
 
@@ -109,7 +109,7 @@ def test_grep_code_two_preserves_rows_and_emits_partial_notice(tmp_path, monkeyp
         [_match_event("source.py", "needle\n", 1)],
         code=2,
     )
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake))
 
     with scoped_workdir(tmp_path):
         result = grep_search("needle")
@@ -129,7 +129,7 @@ def test_grep_drops_rows_whose_file_disappeared_before_stat(tmp_path, monkeypatc
             _match_event("source.py", "needle\n", 1),
         ],
     )
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake))
 
     with scoped_workdir(tmp_path):
         result = grep_search("needle")
@@ -141,7 +141,7 @@ def test_grep_drops_rows_whose_file_disappeared_before_stat(tmp_path, monkeypatc
 
 def test_grep_invalid_json_is_an_explicit_tool_error(tmp_path, monkeypatch):
     fake = _fake_rg(tmp_path, raw="not-json")
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake))
 
     with scoped_workdir(tmp_path):
         result = grep_search("needle")
@@ -152,7 +152,7 @@ def test_grep_invalid_json_is_an_explicit_tool_error(tmp_path, monkeypatch):
 def test_grep_include_case_and_no_rg_fallback(tmp_path, monkeypatch):
     (tmp_path / "one.py").write_text("Needle\n", encoding="utf-8")
     (tmp_path / "two.txt").write_text("Needle\n", encoding="utf-8")
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
 
     with scoped_workdir(tmp_path):
         sensitive = grep_search("needle", include="*.py")

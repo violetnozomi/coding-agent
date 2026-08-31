@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import asyncio
 
-from nz_coder import config
-from nz_coder.message_schema import MESSAGE_ID_KEY, PARTS_KEY
+from nz_coder.foundation import config
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, PARTS_KEY
 from nz_coder.runtime.session.model import Session, SessionIdentity, SessionStatus
 from nz_coder.runtime.session.store import (
     EphemeralSessionStore,
@@ -78,3 +78,38 @@ def test_ephemeral_store_round_trip_never_creates_workspace_files(tmp_path):
     assert restored is not session
     assert restored.transcript == session.transcript
     assert not (tmp_path / ".nz-coder").exists()
+
+
+def test_legacy_store_isolates_invalid_messages_and_parent_on_restore(
+    tmp_path,
+    monkeypatch,
+):
+    """One corrupt legacy record must not make the entire Session unusable."""
+    payload = {
+        "session_id": "resume-1",
+        "parent_session_id": "../other-session",
+        "run_status": "running",
+        "messages": [
+            {"role": "user", "content": "keep me"},
+            {"role": "assistant"},
+            "not-a-message",
+        ],
+    }
+    monkeypatch.setattr(
+        LegacyJsonSessionStore,
+        "_load_sync",
+        staticmethod(lambda _identity, _workspace: payload),
+    )
+
+    restored = asyncio.run(LegacyJsonSessionStore().load(
+        SessionIdentity("resume-1"),
+        tmp_path,
+    ))
+
+    assert restored is not None
+    assert restored.parent_session_id is None
+    assert restored.transcript == [{"role": "user", "content": "keep me"}]
+    assert restored.metadata["session_recovery"] == {
+        "invalid_messages_dropped": 2,
+        "invalid_parent_session_id_ignored": True,
+    }

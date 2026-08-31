@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from nz_coder.intelligence.service import workspace_repo_intelligence
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
 
 

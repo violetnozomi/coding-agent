@@ -11,7 +11,7 @@ def _which(mapping):
 
 
 def test_windows_shell_prefers_pwsh_then_windows_powershell_then_cmd():
-    from nz_coder.runtime.platform_runtime import ShellKind, select_shell
+    from nz_coder.runtime.process.platform_runtime import ShellKind, select_shell
 
     pwsh = select_shell(
         os_name="nt", which=_which({"pwsh.exe": r"C:\Program Files\PowerShell\pwsh.exe"})
@@ -37,7 +37,7 @@ def test_windows_shell_prefers_pwsh_then_windows_powershell_then_cmd():
 
 
 def test_powershell_invokes_a_quoted_executable_with_call_operator():
-    from nz_coder.runtime.platform_runtime import ShellKind, ShellSpec
+    from nz_coder.runtime.process.platform_runtime import ShellKind, ShellSpec
 
     shell = ShellSpec(ShellKind.POWERSHELL, r"C:\Program Files\PowerShell\pwsh.exe")
 
@@ -47,7 +47,7 @@ def test_powershell_invokes_a_quoted_executable_with_call_operator():
 
 
 def test_powershell_propagates_native_command_exit_status():
-    from nz_coder.runtime.platform_runtime import ShellKind, ShellSpec
+    from nz_coder.runtime.process.platform_runtime import ShellKind, ShellSpec
 
     shell = ShellSpec(ShellKind.POWERSHELL, "pwsh.exe")
 
@@ -57,16 +57,26 @@ def test_powershell_propagates_native_command_exit_status():
 
 
 def test_posix_shell_is_explicit_bash_or_sh_argv():
-    from nz_coder.runtime.platform_runtime import ShellKind, select_shell
+    from nz_coder.runtime.process.platform_runtime import ShellKind, select_shell
 
     shell = select_shell(os_name="posix", which=_which({"bash": "/bin/bash"}))
 
     assert shell.kind is ShellKind.BASH
-    assert shell.argv("git status") == ("/bin/bash", "-lc", "git status")
+    assert shell.argv("git status") == (
+        "/bin/bash", "-o", "pipefail", "-lc", "git status",
+    )
+
+
+def test_posix_sh_does_not_claim_pipefail_support():
+    from nz_coder.runtime.process.platform_runtime import ShellKind, ShellSpec
+
+    shell = ShellSpec(ShellKind.SH, "/bin/sh")
+
+    assert shell.argv("pytest -q") == ("/bin/sh", "-lc", "pytest -q")
 
 
 def test_windows_stdio_executable_wraps_cmd_and_powershell_scripts():
-    from nz_coder.runtime.platform_runtime import executable_argv
+    from nz_coder.runtime.process.platform_runtime import executable_argv
 
     mapping = {
         "typescript-language-server": r"C:\npm\typescript-language-server.cmd",
@@ -101,13 +111,13 @@ def test_windows_stdio_executable_wraps_cmd_and_powershell_scripts():
 def test_windows_workspace_containment_is_drive_and_case_aware(
     candidate, workspace, expected
 ):
-    from nz_coder.runtime.platform_runtime import is_within_workspace
+    from nz_coder.runtime.process.platform_runtime import is_within_workspace
 
     assert is_within_workspace(candidate, workspace, platform="windows") is expected
 
 
 def test_process_output_decodes_utf8_utf16_and_legacy_without_exceptions():
-    from nz_coder.runtime.platform_runtime import decode_process_output
+    from nz_coder.runtime.process.platform_runtime import decode_process_output
 
     assert decode_process_output("中文 日本語 🚀".encode("utf-8")) == "中文 日本語 🚀"
     assert decode_process_output("中文警告".encode("utf-16")) == "中文警告"
@@ -125,7 +135,7 @@ def test_process_output_decodes_utf8_utf16_and_legacy_without_exceptions():
     ],
 )
 def test_process_output_preserves_multilingual_diagnostics(payload, preferred, expected):
-    from nz_coder.runtime.platform_runtime import decode_process_output
+    from nz_coder.runtime.process.platform_runtime import decode_process_output
 
     assert decode_process_output(payload, preferred_encoding=preferred) == expected
 
@@ -138,13 +148,13 @@ def test_process_output_preserves_multilingual_diagnostics(payload, preferred, e
     ],
 )
 def test_process_output_detects_utf16_without_bom(encoding, text):
-    from nz_coder.runtime.platform_runtime import decode_process_output
+    from nz_coder.runtime.process.platform_runtime import decode_process_output
 
     assert decode_process_output(text.encode(encoding)) == text
 
 
 def test_process_output_uses_native_windows_ansi_and_oem_candidates(monkeypatch):
-    import nz_coder.runtime.platform_runtime as platform_runtime
+    import nz_coder.runtime.process.platform_runtime as platform_runtime
 
     monkeypatch.setattr(
         platform_runtime,
@@ -162,7 +172,7 @@ def test_process_output_uses_native_windows_ansi_and_oem_candidates(monkeypatch)
 
 
 def test_explicit_utf8_does_not_guess_a_lossy_native_code_page(monkeypatch):
-    import nz_coder.runtime.platform_runtime as platform_runtime
+    import nz_coder.runtime.process.platform_runtime as platform_runtime
 
     monkeypatch.setattr(
         platform_runtime,
@@ -176,7 +186,7 @@ def test_explicit_utf8_does_not_guess_a_lossy_native_code_page(monkeypatch):
 
 
 def test_posix_workspace_containment_uses_resolved_path_boundary(tmp_path: Path):
-    from nz_coder.runtime.platform_runtime import is_within_workspace
+    from nz_coder.runtime.process.platform_runtime import is_within_workspace
 
     workspace = tmp_path / "repo"
     workspace.mkdir()
@@ -185,7 +195,7 @@ def test_posix_workspace_containment_uses_resolved_path_boundary(tmp_path: Path)
 
 
 def test_workspace_containment_resolves_existing_link_and_new_child_parent(tmp_path: Path):
-    from nz_coder.runtime.platform_runtime import is_within_workspace
+    from nz_coder.runtime.process.platform_runtime import is_within_workspace
 
     workspace = tmp_path / "repo"
     outside = tmp_path / "outside"

@@ -12,7 +12,7 @@ def format_tool_summary(tool_name: str, tool_input: dict) -> str:
         return f"doom_loop: allow repeated identical call to {repeated_tool}?"
     if tool_name == "bash":
         cmd = tool_input.get("command", "")
-        return f"bash: {cmd[:120]}"
+        return f"bash: {str(cmd)[:2000]}"
     if tool_name == "process":
         operation = str(tool_input.get("operation") or "operation")
         detail = tool_input.get("command") or tool_input.get("process_id") or ""

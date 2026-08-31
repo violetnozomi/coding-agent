@@ -5,7 +5,7 @@ import atexit
 import threading
 from pathlib import Path
 
-from nz_coder import config
+from nz_coder.foundation import config
 
 from .client import LSPClient
 from .servers import ResolvedServer, resolve_server
@@ -50,6 +50,7 @@ def get_client_for_file(path: Path, workspace: Path) -> LSPClient | None:
                 command=resolved.command,
                 root=resolved.root,
                 language_id=resolved.language_id,
+                analysis_paths=resolved.analysis_paths,
             )
         except Exception as exc:
             _BROKEN.add(key)

@@ -70,7 +70,7 @@ def test_windows_clipboard_image_uses_argument_safe_powershell():
 
 
 def test_clipboard_image_missing_helper_bad_mime_and_oversize_fail_soft():
-    from nz_coder.attachments import MAX_IMAGE_BYTES
+    from nz_coder.protocol.attachments import MAX_IMAGE_BYTES
     from nz_coder.interface.clipboard import read_image
 
     assert read_image(
@@ -89,7 +89,7 @@ def test_clipboard_image_missing_helper_bad_mime_and_oversize_fail_soft():
 
 def test_clipboard_image_persistence_is_private_and_workspace_local(tmp_path):
     from nz_coder.interface.clipboard import ClipboardImage, persist_image
-    from nz_coder.private_paths import inspect_private_path
+    from nz_coder.foundation.private_paths import inspect_private_path
 
     relative = persist_image(tmp_path, ClipboardImage(PNG, "image/png", "test"))
     path = tmp_path / relative

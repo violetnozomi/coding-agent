@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import copy
 
-from nz_coder.message_schema import MESSAGE_ID_KEY
+from nz_coder.protocol.message_schema import (
+    MESSAGE_ID_KEY,
+    cleanup_incomplete_tool_history,
+)
 from nz_coder.runtime.core.request import RunRequest
 from nz_coder.runtime.core.result import RunStatus
 from nz_coder.runtime.core.run_context import RunContext
@@ -56,17 +59,40 @@ class SessionRuntime:
         """Persist one settled non-terminal state from the live RunContext."""
         self._validate_context(context)
         normalized = _session_status(status)
+        if normalized.terminal:
+            self._clean_tool_history(context)
         context.session.record_status(normalized)
         await self.store.save(context.session)
 
     async def finalize(self, context: RunContext, status: RunStatus) -> None:
         """Persist one terminal run state exactly once."""
         self._validate_context(context)
-        context.finish(status)
-        context.session.usage = context.session.usage.add(context.usage)
+        if context.finalized or context.terminal_status is not None:
+            raise RuntimeError("RunContext is already terminal")
+        self._clean_tool_history(context)
+        previous_status = context.session.status
+        previous_usage = context.session.usage
+        context.session.usage = previous_usage.add(context.usage)
         context.session.finish(SessionStatus(status.value))
-        await self.store.save(context.session)
-        context.finalized = True
+        try:
+            await self.store.save(context.session)
+        except BaseException:
+            # The durable boundary did not commit. Restore the in-memory
+            # terminal/usage fields so the caller may retry without double
+            # charging this run. Tool-history cleanup remains intentionally
+            # applied because it is a validity repair, not terminal state.
+            context.session.status = previous_status
+            context.session.usage = previous_usage
+            context.session.mark_dirty()
+            raise
+        context.finish(status)
+
+    @staticmethod
+    def _clean_tool_history(context: RunContext) -> None:
+        """Repair interrupted Provider protocol envelopes before persistence."""
+        cleaned = cleanup_incomplete_tool_history(context.transcript)
+        if cleaned != context.transcript:
+            context.session.replace_transcript(cleaned)
 
     @staticmethod
     def _validate_context(context: RunContext) -> None:

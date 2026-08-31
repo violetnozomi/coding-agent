@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from nz_coder.attachments import MAX_IMAGE_BYTES, make_image_attachment
-from nz_coder.context import prompt_budget
-from nz_coder.message_schema import (
+from nz_coder.protocol.attachments import MAX_IMAGE_BYTES, make_image_attachment
+from nz_coder.state.context import prompt_budget
+from nz_coder.protocol.message_schema import (
     attach_file_parts,
     attach_message_identity,
     ensure_message_identities,
@@ -15,12 +15,12 @@ from nz_coder.providers.anthropic import _convert_messages as anthropic_messages
 from nz_coder.providers.capabilities import ModelCapabilities
 from nz_coder.providers.gemini import _convert_messages as gemini_messages
 from nz_coder.providers.openai_responses import _message_input
-from nz_coder.runtime.loop import AgentLoop
+from nz_coder.runtime.execution.loop import AgentLoop
 from nz_coder.state.input_expansion import (
     resolve_and_apply_budget,
     tag_file_attachments,
 )
-from nz_coder.attachments import openai_chat_messages
+from nz_coder.protocol.attachments import openai_chat_messages
 
 
 _PNG = b"\x89PNG\r\n\x1a\nuser-image"
@@ -91,6 +91,25 @@ def test_oversized_and_fifth_user_images_are_notes_not_inline_payloads(tmp_path)
     assert len(files) == 4
     assert "exceeded the attachment count" in notes[4]
     assert "10 MB or larger" in notes[5]
+
+
+def test_attachment_size_uses_workspace_stat_not_client_hint(tmp_path):
+    """A stale remote size hint must not make the server read a huge image."""
+    large = tmp_path / "stale-size.png"
+    large.write_bytes(_PNG)
+    large.open("ab").truncate(MAX_IMAGE_BYTES)
+    message = {"role": "user", "content": "review"}
+    attach_message_identity(message, "msg-stale-size", session_id="session-image")
+
+    tag_file_attachments(
+        message,
+        "review",
+        [SimpleNamespace(path=large.name, size=1)],
+        workspace=tmp_path,
+    )
+
+    assert message["_nz_parts"] == []
+    assert "10 MB or larger" in message["_nz_input_expansions"][0]["text"]
 
 
 def test_user_filepart_survives_projection_and_invalid_remote_is_removed():

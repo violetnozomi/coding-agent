@@ -4,12 +4,14 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from nz_coder.message_schema import MESSAGE_ID_KEY, PARTS_KEY, SESSION_ID_KEY
-from nz_coder.runtime.runner import AgentRunner
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, PARTS_KEY, SESSION_ID_KEY
+from nz_coder.runtime.execution.runner import AgentRunner
 from nz_coder.runtime.core.contracts import RuntimeServices
 from nz_coder.runtime.core.request import RunRequest
 from nz_coder.runtime.core.run_context import RunContext
 from nz_coder.runtime.session.model import Session
+from nz_coder.runtime.core.result import RunStatus
+from nz_coder.runtime.execution.runner import _result_status
 
 
 class UnusedModel:
@@ -39,6 +41,7 @@ class RecordingSessionRuntime:
     def __init__(self) -> None:
         self.opened = []
         self.checkpoints = []
+        self.final_statuses = []
 
     async def open(self, request: RunRequest) -> RunContext:
         self.opened.append(request.session_id)
@@ -54,6 +57,7 @@ class RecordingSessionRuntime:
         self.checkpoints.append((context.session.session_id, str(status)))
 
     async def finalize(self, context, status):
+        self.final_statuses.append(status)
         context.finish(status)
         context.finalized = True
 
@@ -175,6 +179,12 @@ class DirectRuntimeHost:
         )
 
 
+def test_provider_error_abort_maps_to_error_not_user_interruption():
+    """Recovery exhaustion and Ctrl+C are distinct product outcomes."""
+    assert _result_status({"status": "aborted"}) is RunStatus.ERROR
+    assert _result_status({"status": "interrupted"}) is RunStatus.INTERRUPTED
+
+
 def _services(
     host: SettledHost,
     *,
@@ -252,3 +262,28 @@ def test_runner_normalizes_keyboard_interrupt():
 
     assert result == {"status": "interrupted"}
     assert host.finalized == ["interrupted"]
+
+
+def test_legacy_runner_finalizes_native_session_when_planning_raises():
+    """Compatibility entry must obey the native catch-finalization contract."""
+    host = SettledHost()
+    runtime = RecordingSessionRuntime()
+
+    async def fail_planning(_messages):
+        raise RuntimeError("planning exploded")
+
+    host._maybe_generate_plan = fail_planning
+    messages = [{"role": "user", "content": "work"}]
+
+    try:
+        asyncio.run(AgentRunner(_services(
+            host,
+            session_runtime=runtime,
+        )).run(host, messages, stream=False))
+    except RuntimeError as exc:
+        assert str(exc) == "planning exploded"
+    else:
+        raise AssertionError("planning failure must propagate")
+
+    assert runtime.final_statuses == [RunStatus.ERROR]
+    assert host.active_run_context is None

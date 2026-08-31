@@ -4,12 +4,16 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from nz_coder.runtime.adapters.tool import tool_context_from_legacy_host
+from nz_coder.runtime.adapters.tool import (
+    projection_context_from_legacy_host,
+    tool_context_from_legacy_host,
+)
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.run_context import RunContext
 from nz_coder.runtime.core.tool_context import ToolExecutionContext
 from nz_coder.runtime.session.model import Session
+from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
 
 
 class _SessionRuntime:
@@ -134,3 +138,41 @@ def test_tool_context_refreshes_policy_identity_after_handoff(tmp_path) -> None:
 
     assert transition == {"from": "coder", "to": "reviewer"}
     assert context.policy.agent_name == "reviewer"
+
+
+def test_projected_output_reaches_every_post_result_hook() -> None:
+    """No legacy hook may bypass the unified result admission decision."""
+    received: list[tuple[str, str]] = []
+
+    class Hooks:
+        def after_tool_result(self, _host, _messages, _result, output) -> None:
+            received.append(("after", output))
+
+        def on_post_tool_use(self, *_args, output="", **_kwargs) -> None:
+            received.append(("post", output))
+
+    host = _Host()
+    host.hooks = Hooks()
+    result = ToolExecutionResult(
+        name="bash",
+        tool_input={"command": "pytest"},
+        output="raw-result-that-did-not-fit",
+        executed=True,
+        dispatch_failed=False,
+        command_failed=False,
+        is_write=False,
+    )
+    projections = (
+        tool_context_from_legacy_host(host).projection,
+        projection_context_from_legacy_host(host),
+    )
+
+    for index, projection in enumerate(projections):
+        projection.after_result([], result, f"admitted-result-{index}")
+
+    assert received == [
+        ("after", "admitted-result-0"),
+        ("post", "admitted-result-0"),
+        ("after", "admitted-result-1"),
+        ("post", "admitted-result-1"),
+    ]

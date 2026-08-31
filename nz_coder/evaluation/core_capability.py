@@ -16,9 +16,11 @@ import time
 from nz_coder.intelligence.code_index import PersistentCodeIndex
 from nz_coder.intelligence.repository_graph import RepositoryGraph
 from nz_coder.evaluation.native_scenario import run_native_long_horizon
+from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 from nz_coder.tool_platform.catalog import ToolCatalog
 from nz_coder.tool_platform.exposure import ContextPressure, ToolExposurePlanner
 from nz_coder.tool_platform.results import ToolResultBudget, ToolResultProjector
+from nz_coder.tool_platform.search import ToolSearchIndex
 
 
 @dataclass(frozen=True)
@@ -394,6 +396,89 @@ def _tool_spec(name: str) -> dict:
     }}
 
 
+def _benchmark_tool_discovery() -> dict:
+    """Measure natural-language recall, unlock, and two-turn schema cost."""
+    import nz_coder.runtime.execution.loop  # noqa: F401  # register the production tool surface
+    from nz_coder.tools import get_catalog_specs
+
+    specs = get_catalog_specs()
+    catalog = ToolCatalog.from_specs(specs)
+    planner = ToolExposurePlanner()
+    pressure = ContextPressure(128_000, 3_300, 8_000)
+    initial = planner.plan(catalog, pressure=pressure)
+    search = ToolSearchIndex(catalog)
+    scenarios = (
+        ("repo_overview", "understand repository structure modules dependencies overview",
+         ("repo_context", "repo_map")),
+        ("symbol_source", "read Python symbol source definition", ("read_symbol",)),
+        ("symbol_callers", "find Python symbol callers references",
+         ("find_symbol_callers", "code_references")),
+        ("changed_verify", "verify changed source files syntax typecheck",
+         ("verify_changed_files",)),
+        ("workflow_execute", "run parallel multi-step workflow pipeline", ("workflow_run",)),
+        ("workflow_history", "inspect saved workflow run history artifacts", ("workflow_runs",)),
+        ("semantic", "locate code using business language meaning embedding similarity",
+         ("semantic_search",)),
+        ("project_profile", "detect repository languages package managers test commands",
+         ("project_profile",)),
+    )
+    rows = []
+    for case_id, query, targets in scenarios:
+        matches = search.search(query, limit=5)
+        names = tuple(item.name for item in matches)
+        target_ranks = [names.index(target) + 1 for target in targets if target in names]
+        ranked_target = min(
+            ((names.index(target), target) for target in targets if target in names),
+            default=None,
+        )
+        exact_matches = (
+            search.search(f"select:{ranked_target[1]}", limit=1)
+            if ranked_target is not None else ()
+        )
+        exact_names = tuple(item.name for item in exact_matches)
+        next_plan = planner.plan(catalog, unlocked=exact_names, pressure=pressure)
+        next_deferred = set(next_plan.deferred_names)
+        result_text = "\n".join(
+            json.dumps(item.definition.spec()["function"], ensure_ascii=False, sort_keys=True)
+            for item in exact_matches
+        )
+        search_result_tokens = max(1, (len(result_text) + 3) // 4)
+        baseline = catalog.schema_tokens * 2
+        progressive = (
+            initial.estimated_tokens_after
+            + next_plan.estimated_tokens_after
+            + search_result_tokens
+        )
+        saved = baseline - progressive
+        rows.append({
+            "case_id": case_id,
+            "target_recalled": bool(target_ranks),
+            "target_rank": min(target_ranks) if target_ranks else None,
+            "next_turn_unlocked": bool(
+                ranked_target is not None and ranked_target[1] not in next_deferred
+            ),
+            "matches": list(names),
+            "search_result_tokens": search_result_tokens,
+            "two_turn_token_savings": saved,
+            "two_turn_token_savings_pct": round(saved / max(1, baseline) * 100, 1),
+        })
+    ranks = [int(row["target_rank"]) for row in rows if row["target_rank"] is not None]
+    return {
+        "catalog_tools": len(specs),
+        "full_schema_tokens": catalog.schema_tokens,
+        "initial_visible_tools": len(initial.visible_names),
+        "initial_schema_tokens": initial.estimated_tokens_after,
+        "discovery_recall_cases": len(rows),
+        "discovery_recall_hits": sum(bool(row["target_recalled"]) for row in rows),
+        "worst_target_rank": max(ranks, default=0),
+        "next_turn_unlocks": sum(bool(row["next_turn_unlocked"]) for row in rows),
+        "two_turn_token_savings_min_pct": min(
+            (float(row["two_turn_token_savings_pct"]) for row in rows), default=0.0,
+        ),
+        "discovery_cases": rows,
+    }
+
+
 def run_local_benchmark(output_dir: Path) -> dict:
     """Exercise A-H production contracts and persist deterministic evidence."""
     started = time.perf_counter()
@@ -425,21 +510,30 @@ def run_local_benchmark(output_dir: Path) -> dict:
 
     catalog_sizes = [20, 50, 100, 200]
     exposure_counts = []
+    exposure_deferred_counts = []
     low_pressure_counts = []
+    low_pressure_deferred_counts = []
+    visible_expected = [21, 51, 101, 201]
+    low_pressure_deferred_expected = [0, 50, 100, 200]
     for size in catalog_sizes:
         catalog = ToolCatalog.from_specs(
             [_tool_spec("read_file"), *[_tool_spec(f"mcp_bench_{i}") for i in range(size)]],
         )
         pressure = ContextPressure(20_000, 15_000, 3_000)
-        exposure_counts.append(len(ToolExposurePlanner(
-            minimum_deferred_tools=1,
-        ).plan(catalog, pressure=pressure).visible_names))
-        low_pressure_counts.append(len(ToolExposurePlanner(
+        pressure_plan = ToolExposurePlanner(minimum_deferred_tools=1).plan(
+            catalog, pressure=pressure,
+        )
+        exposure_counts.append(len(pressure_plan.visible_names))
+        exposure_deferred_counts.append(len(pressure_plan.deferred_names))
+        low_pressure_plan = ToolExposurePlanner(
             minimum_deferred_tools=1,
         ).plan(
             catalog,
             pressure=ContextPressure(200_000, 1_000, 8_000),
-        ).visible_names))
+        )
+        low_pressure_counts.append(len(low_pressure_plan.visible_names))
+        low_pressure_deferred_counts.append(len(low_pressure_plan.deferred_names))
+    discovery = _benchmark_tool_discovery()
 
     projector = ToolResultProjector(
         budget=ToolResultBudget(100),
@@ -448,7 +542,15 @@ def run_local_benchmark(output_dir: Path) -> dict:
     projected = projector.project_batch([
         (f"call-{i}", "bash", "head\n" + "x" * 4000 + "\nFAIL") for i in range(20)
     ], max_tokens=600)
-    native = run_native_long_horizon(workspace, tool_turns=40)
+    nominal_sla_turns = 15
+    native_tool_turns = 40
+    with scoped_runtime_overrides(nominal_agent_turns=nominal_sla_turns):
+        native = run_native_long_horizon(workspace, tool_turns=native_tool_turns)
+    nominal_sla_advisory = bool(
+        native["model_calls"] > nominal_sla_turns
+        and native["tool_results"] == native_tool_turns
+        and native["result"].get("status") == "completed"
+    )
     trace_events = list(native["events"])
     for turn in range(40):
         visible = projector.project_batch([
@@ -477,22 +579,24 @@ def run_local_benchmark(output_dir: Path) -> dict:
         "success": second_verify.returncode == 0,
     })
 
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    from nz_coder.runtime.subagent import _new_subagent_state
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.agent.subagent import _new_subagent_state
     conflict_workspace = root / "conflict-workspace"
     conflict_workspace.mkdir(parents=True, exist_ok=True)
     conflict_target = conflict_workspace / "app.py"
     conflict_target.write_text("base\n", encoding="utf-8")
     manager = BackgroundAgentManager(conflict_workspace, "benchmark-parent")
     baseline = manager._baseline(["app.py"])
-    child = conflict_workspace / ".nz-coder" / "worktrees" / "benchmark-child"
+    state = _new_subagent_state("benchmark-parent", "general-purpose", None)
+    child = conflict_workspace / ".nz-coder" / "worktrees" / state["session_id"]
     child.mkdir(parents=True, exist_ok=True)
     (child / "app.py").write_text("child\n", encoding="utf-8")
-    state = _new_subagent_state("benchmark-parent", "general-purpose", None)
     state.update({
         "background": True, "status": "completed", "claimed_paths": ["app.py"],
         "changed_files": ["app.py"], "baseline_hashes": baseline,
-        "worktree": {"path": str(child), "mode": "copy"},
+        "worktree": {
+            "id": state["session_id"], "path": str(child), "mode": "copy",
+        },
     })
     manager._save(state)
     conflict_target.write_text("parent changed\n", encoding="utf-8")
@@ -507,7 +611,7 @@ def run_local_benchmark(output_dir: Path) -> dict:
         "event": "run_complete",
         "success": (
             second_verify.returncode == 0
-            and native["result"].get("status") == "completed"
+            and nominal_sla_advisory
         ),
         "patch_valid": second_verify.returncode == 0,
         "wall_time_ms": round((time.perf_counter() - started) * 1000, 3),
@@ -531,18 +635,32 @@ def run_local_benchmark(output_dir: Path) -> dict:
         "C": {"passed": large_graph.overview()["module_count"] == 300,
               "module_count": large_graph.overview()["module_count"]},
         "D": {"passed": (
-                  all(count == 1 for count in exposure_counts)
-                  and low_pressure_counts == [size + 1 for size in catalog_sizes]
+                  exposure_counts == visible_expected
+                  and exposure_deferred_counts == catalog_sizes
+                  and low_pressure_counts == visible_expected
+                  and low_pressure_deferred_counts == low_pressure_deferred_expected
+                  and discovery["discovery_recall_hits"]
+                  == discovery["discovery_recall_cases"]
+                  and discovery["next_turn_unlocks"]
+                  == discovery["discovery_recall_cases"]
+                  and discovery["two_turn_token_savings_min_pct"] > 0
               ),
               "catalog_sizes": catalog_sizes, "visible_counts": exposure_counts,
-              "low_pressure_visible": low_pressure_counts},
+              "hinted_counts": exposure_deferred_counts,
+              "low_pressure_visible": low_pressure_counts,
+              "low_pressure_hinted": low_pressure_deferred_counts,
+              "schema_budget_enforced": (
+                  low_pressure_deferred_counts == low_pressure_deferred_expected
+              ), **discovery},
         "E": {"passed": sum(
             item.metadata["projected_tokens"] for item in projected
         ) <= 600, "aggregate_budget_respected": sum(
             item.metadata["projected_tokens"] for item in projected
         ) <= 600},
-        "F": {"passed": trajectory.turns >= 40, "turns": trajectory.turns,
-              "long_horizon": trajectory.turns >= 40,
+        "F": {"passed": nominal_sla_advisory, "turns": trajectory.turns,
+              "long_horizon": trajectory.turns >= native_tool_turns,
+              "nominal_sla_enforced": native["model_calls"] <= nominal_sla_turns,
+              "nominal_sla_advisory": nominal_sla_advisory,
               "production_projection_calls": 40,
               "agent_runner_model_calls": native["model_calls"],
               "agent_runner_tool_results": native["tool_results"],

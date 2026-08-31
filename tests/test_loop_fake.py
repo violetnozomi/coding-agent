@@ -83,7 +83,7 @@ class FakeClient:
 
 def test_parallel_tool_diagnostic_is_appended_after_every_tool_result():
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.tool_executor import ToolExecutionResult
+    from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
 
     tool_calls = [
         {
@@ -152,7 +152,7 @@ def _run_agent(agent, *args, **kwargs):
 
 
 def _tmp_workdir():
-    from nz_coder import config
+    from nz_coder.foundation import config
 
     old = config.WORKDIR
     tmp = Path(tempfile.mkdtemp())
@@ -161,7 +161,7 @@ def _tmp_workdir():
 
 
 def _restore_workdir(old, tmp):
-    from nz_coder import config
+    from nz_coder.foundation import config
 
     config.WORKDIR = old
     shutil.rmtree(str(tmp), ignore_errors=True)
@@ -223,9 +223,9 @@ def test_loop_executes_tool_then_final_response():
         _restore_workdir(old, tmp)
 
 
-def test_strict_progress_gate_blocks_only_investigation_calls_at_limit():
+def test_strict_progress_gate_does_not_block_investigation_calls_at_limit():
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     old, tmp = _tmp_workdir()
     try:
@@ -250,17 +250,15 @@ def test_strict_progress_gate_blocks_only_investigation_calls_at_limit():
         with scoped_runtime_overrides(strict_local_tools=False):
             ordinary = agent._strict_progress_rejections(calls)
 
-        assert set(blocked) == {0}
-        assert "Strict investigation budget reached" in blocked[0].output
-        assert blocked[0].permission_denied is False
+        assert blocked == {}
         assert ordinary == {}
     finally:
         _restore_workdir(old, tmp)
 
 
-def test_strict_progress_gate_accounts_for_reads_in_the_same_batch():
+def test_strict_progress_gate_allows_reads_crossing_limit_in_same_batch():
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     old, tmp = _tmp_workdir()
     try:
@@ -281,15 +279,15 @@ def test_strict_progress_gate_accounts_for_reads_in_the_same_batch():
         with scoped_runtime_overrides(strict_local_tools=True):
             blocked = agent._strict_progress_rejections(calls)
 
-        assert set(blocked) == {2}
+        assert blocked == {}
     finally:
         _restore_workdir(old, tmp)
 
 
-def test_strict_progress_gate_turns_repeated_feedback_into_final_blocker():
-    """Catches an Agent burning every remaining turn on rejected searches."""
+def test_strict_progress_gate_never_turns_repeated_reads_into_terminal_blocker():
+    """Read pressure remains advisory even when the same call is reconsidered."""
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     old, tmp = _tmp_workdir()
     try:
@@ -310,10 +308,86 @@ def test_strict_progress_gate_turns_repeated_feedback_into_final_blocker():
             first = agent._strict_progress_rejections(call)
             second = agent._strict_progress_rejections(call)
 
-        assert first[0].permission_denied is False
-        assert second[0].permission_denied is True
-        assert second[0].metadata["strict_terminal_blocker"] is True
-        assert "Final blocker" in second[0].output
+        assert first == {}
+        assert second == {}
+    finally:
+        _restore_workdir(old, tmp)
+
+
+def test_strict_progress_soft_boundary_allows_reads_beyond_retired_hard_limit():
+    """The real strict loop keeps executing reads after the advisory nudge."""
+    from nz_coder.loop import AgentLoop
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+
+    old, tmp = _tmp_workdir()
+    try:
+        (tmp / "tests").mkdir()
+        tokens = " ".join(f"token_{index}" for index in range(10))
+        (tmp / "app.py").write_text(f"value = '{tokens}'\n", encoding="utf-8")
+        (tmp / "tests" / "test_app.py").write_text(
+            "def test_value():\n    assert True\n",
+            encoding="utf-8",
+        )
+        localized_calls = [
+            FakeToolCall("read_file", {"path": "app.py"}, call_id="source"),
+            FakeToolCall(
+                "read_file",
+                {"path": "tests/test_app.py"},
+                call_id="test",
+            ),
+            *[
+                FakeToolCall(
+                    "grep_search",
+                    {"pattern": f"token_{index}", "path": "app.py"},
+                    call_id=f"grep-{index}",
+                )
+                for index in range(10)
+            ],
+        ]
+        fake = FakeClient([
+            FakeResponse(FakeMessage(tool_calls=localized_calls)),
+            FakeResponse(FakeMessage(tool_calls=[
+                FakeToolCall(
+                    "grep_search", {"pattern": f"late-clue-{index}", "path": "app.py"},
+                    call_id=f"late-{index}",
+                )
+                for index in range(8)
+            ])),
+            FakeResponse(FakeMessage(tool_calls=[
+                FakeToolCall(
+                    "grep_search",
+                    {"pattern": "beyond-old-limit-one", "path": "app.py"},
+                    call_id="beyond-one",
+                ),
+            ])),
+            FakeResponse(FakeMessage(tool_calls=[
+                FakeToolCall(
+                    "grep_search",
+                    {"pattern": "beyond-old-limit-two", "path": "app.py"},
+                    call_id="beyond-two",
+                ),
+            ])),
+            FakeResponse(FakeMessage("continued after soft convergence")),
+        ])
+        messages = [{"role": "user", "content": "Fix the bug in app.py"}]
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=fake,
+            trace_enabled=False,
+        )
+
+        with scoped_runtime_overrides(strict_local_tools=True):
+            status = _run_agent(agent, messages, stream=False)
+
+        assert status["status"] == "completed"
+        assert fake.chat.completions.calls == 5
+        assert agent.runtime_state.investigation_calls_since_edit == 22
+        assert "Final blocker" not in next(
+            message["content"]
+            for message in messages
+            if message.get("tool_call_id") == "beyond-two"
+        )
     finally:
         _restore_workdir(old, tmp)
 
@@ -322,7 +396,7 @@ def test_strict_successful_changed_file_verification_ends_without_another_model_
     import subprocess
 
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     old, tmp = _tmp_workdir()
     try:
@@ -371,7 +445,7 @@ def test_strict_verify_before_diff_ends_without_another_model_turn():
     import subprocess
 
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     old, tmp = _tmp_workdir()
     try:
@@ -413,8 +487,8 @@ def test_strict_verify_before_diff_ends_without_another_model_turn():
 
 def test_verification_terminal_requires_strict_successful_source_diff():
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
-    from nz_coder.tool_executor import ToolExecutionResult
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
 
     old, tmp = _tmp_workdir()
     try:
@@ -452,12 +526,91 @@ def test_verification_terminal_requires_strict_successful_source_diff():
         agent.runtime_state.verification_generation = 1
         agent.vm._needed = True
         agent.vm._state = __import__(
-            "nz_coder.verification_evidence", fromlist=["VerificationState"]
+            "nz_coder.runtime.verification.evidence", fromlist=["VerificationState"]
         ).VerificationState.BLOCKED_ENVIRONMENT
         with scoped_runtime_overrides(strict_local_tools=True):
             assert agent._strict_verification_completed([(0, {}, result("OK: passed"))]) is False
     finally:
         _restore_workdir(old, tmp)
+
+
+def test_loop_forwards_model_acceptance_contract_to_verification_manager():
+    from nz_coder.loop import AgentLoop
+    from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
+
+    agent = AgentLoop(
+        "test",
+        permission_mode="auto",
+        client=FakeClient([]),
+        trace_enabled=False,
+    )
+    agent.runtime_state.set_acceptance_criteria_from_text(
+        "完成后运行 python -m pytest -q cron_engine/tests。"
+    )
+    agent.runtime_state.observe_tool(
+        "edit_file", {"path": "cron_engine/parser.py"}, "Done"
+    )
+    agent.runtime_state.has_diff = True
+    observed = []
+    agent.vm.observe_acceptance_contract = (
+        lambda command, output, *, passed: observed.append(
+            (command, output, passed)
+        )
+    )
+
+    agent._observe_runtime_tool(ToolExecutionResult(
+        name="bash",
+        tool_input={"command": "python -m pytest -q cron_engine/tests"},
+        output="59 passed",
+        executed=True,
+        dispatch_failed=False,
+        command_failed=False,
+        is_write=False,
+    ))
+
+    assert observed == [
+        ("python -m pytest -q cron_engine/tests", "59 passed", True)
+    ]
+
+
+def test_loop_forwards_trusted_bash_exit_code_to_verification_manager():
+    from nz_coder.loop import AgentLoop
+    from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
+
+    agent = AgentLoop(
+        "test",
+        permission_mode="auto",
+        client=FakeClient([]),
+        trace_enabled=False,
+    )
+    observed = []
+    agent.vm.observe_bash = (
+        lambda tool_input, output, dispatch_failed, command_failed, *, exit_code:
+        observed.append((tool_input, output, dispatch_failed, command_failed, exit_code))
+    )
+    result = ToolExecutionResult(
+        name="bash",
+        tool_input={"command": "pytest tests/test_api.py::test_retry"},
+        output="Command exited with code 1\n1 failed",
+        executed=True,
+        dispatch_failed=False,
+        command_failed=True,
+        is_write=False,
+        metadata={"exit": 1},
+    )
+
+    try:
+        agent._observe_verification_tool(result)
+    finally:
+        agent.close()
+
+    assert observed == [(
+        {"command": "pytest tests/test_api.py::test_retry"},
+        "Command exited with code 1\n1 failed",
+        False,
+        True,
+        1,
+    )]
 
 
 def test_queued_followup_stops_before_next_provider_step():
@@ -481,9 +634,15 @@ def test_queued_followup_stops_before_next_provider_step():
         assert result["status"] == "interrupted"
         assert fake.chat.completions.calls == 1
         assert (tmp / "settled.txt").read_text(encoding="utf-8") == "done"
-        assistant = next(item for item in messages if item.get("role") == "assistant")
-        assert assistant["_nz_end_state"] == {"reason": "interrupted"}
-        tool_part = next(part for part in assistant["_nz_parts"] if part["type"] == "tool")
+        assistants = [
+            item for item in messages if item.get("role") == "assistant"
+        ]
+        assert assistants[0].get("_nz_end_state") is None
+        assert assistants[-1]["_nz_end_state"] == {"reason": "interrupted"}
+        assert not assistants[-1].get("tool_calls")
+        tool_part = next(
+            part for part in assistants[0]["_nz_parts"] if part["type"] == "tool"
+        )
         assert tool_part["state"]["status"] == "completed"
     finally:
         _restore_workdir(old, tmp)
@@ -492,8 +651,8 @@ def test_queued_followup_stops_before_next_provider_step():
 def test_identical_step_snapshots_skip_empty_session_patch_rebuild(monkeypatch):
     """Read-only steps must not rescan the full Session diff for an empty patch."""
     from nz_coder.loop import AgentLoop
-    from nz_coder.message_schema import attach_message_identity
-    from nz_coder.runtime.session_processor import SessionProcessor
+    from nz_coder.protocol.message_schema import attach_message_identity
+    from nz_coder.runtime.session.session_processor import SessionProcessor
 
     old, tmp = _tmp_workdir()
     try:
@@ -522,22 +681,25 @@ def test_identical_step_snapshots_skip_empty_session_patch_rebuild(monkeypatch):
 
 def test_output_limit_reasoning_only_persists_warning_and_usage():
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.session_processor import REASONING_LENGTH_WARNING
+    from nz_coder.runtime.session.session_processor import REASONING_LENGTH_WARNING
 
     old, tmp = _tmp_workdir()
     try:
-        fake = FakeClient([FakeResponse(
-            FakeMessage(reasoning_content="unfinished reasoning"),
-            finish_reason="length",
-            usage={
-                "prompt_tokens": 40,
-                "completion_tokens": 10,
-                "total_tokens": 50,
-                "prompt_tokens_details": {"cached_tokens": 15},
-                "completion_tokens_details": {"reasoning_tokens": 7},
-                "cache_write_input_tokens": 2,
-            },
-        )])
+        fake = FakeClient([
+            FakeResponse(
+                FakeMessage(reasoning_content="unfinished reasoning"),
+                finish_reason="length",
+                usage={
+                    "prompt_tokens": 40,
+                    "completion_tokens": 10,
+                    "total_tokens": 50,
+                    "prompt_tokens_details": {"cached_tokens": 15},
+                    "completion_tokens_details": {"reasoning_tokens": 7},
+                    "cache_write_input_tokens": 2,
+                },
+            ),
+            FakeResponse(FakeMessage("final visible answer")),
+        ])
         messages = [{"role": "user", "content": "solve"}]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
 
@@ -551,6 +713,7 @@ def test_output_limit_reasoning_only_persists_warning_and_usage():
         )
         finish = next(part for part in assistant["_nz_parts"] if part["type"] == "step-finish")
         assert result["status"] == "completed"
+        assert result["content"] == "final visible answer"
         assert warning["text"] == REASONING_LENGTH_WARNING
         assert finish["reason"] == "length"
         assert finish["tokens"] == {
@@ -568,14 +731,18 @@ def test_output_limit_reasoning_only_persists_warning_and_usage():
             "cache_read": 15,
             "cache_write": 2,
         }
-        assert fake.chat.completions.calls == 1
+        assert fake.chat.completions.calls == 2
+        assert any(
+            message.get("_nz_output_limit_continuation") is True
+            for message in messages
+        )
     finally:
         _restore_workdir(old, tmp)
 
 
 def test_authoritative_registry_pricing_persists_assistant_and_step_cost():
     from nz_coder.loop import AgentLoop
-    from nz_coder.message_schema import message_records
+    from nz_coder.protocol.message_schema import message_records
     from nz_coder.providers.registry import ModelPricing
 
     old, tmp = _tmp_workdir()
@@ -635,7 +802,7 @@ def test_authoritative_registry_pricing_persists_assistant_and_step_cost():
 
 def test_provider_reported_cost_takes_priority_over_registry_estimate():
     from nz_coder.loop import AgentLoop
-    from nz_coder.message_schema import message_records
+    from nz_coder.protocol.message_schema import message_records
     from nz_coder.providers.registry import ModelPricing
 
     old, tmp = _tmp_workdir()
@@ -665,9 +832,10 @@ def test_provider_reported_cost_takes_priority_over_registry_estimate():
 
 
 def test_foreground_task_cost_is_merged_into_parent_assistant(monkeypatch):
-    from nz_coder import config, subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
     from nz_coder.loop import AgentLoop
-    from nz_coder.message_schema import message_records
+    from nz_coder.protocol.message_schema import message_records
 
     class ChildMessage:
         content = "child done"
@@ -743,16 +911,28 @@ def test_foreground_task_cost_is_merged_into_parent_assistant(monkeypatch):
 
 def test_output_limit_does_not_execute_incomplete_tool_call():
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.session_processor import OUTPUT_LENGTH_WARNING
+    from nz_coder.runtime.session.session_processor import OUTPUT_LENGTH_WARNING
 
     old, tmp = _tmp_workdir()
     try:
-        fake = FakeClient([FakeResponse(
-            FakeMessage(tool_calls=[
-                FakeToolCall("write_file", {"path": "partial.txt", "content": "bad"}),
-            ]),
-            finish_reason="length",
-        )])
+        fake = FakeClient([
+            FakeResponse(
+                FakeMessage(tool_calls=[
+                    FakeToolCall(
+                        "write_file",
+                        {"path": "partial.txt", "content": "bad"},
+                    ),
+                ]),
+                finish_reason="length",
+            ),
+            FakeResponse(FakeMessage(tool_calls=[
+                FakeToolCall(
+                    "write_file",
+                    {"path": "partial.txt", "content": "good"},
+                ),
+            ])),
+            FakeResponse(FakeMessage("done")),
+        ])
         messages = [{"role": "user", "content": "write"}]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
 
@@ -768,7 +948,16 @@ def test_output_limit_does_not_execute_incomplete_tool_call():
         assert warning["text"] == OUTPUT_LENGTH_WARNING
         assert tool["state"]["status"] == "error"
         assert "was not executed" in tool["state"]["error"]
-        assert not (tmp / "partial.txt").exists()
+        repair_result = next(
+            message
+            for message in messages
+            if message.get("role") == "tool"
+            and message.get("_nz_output_limit_repair") is True
+        )
+        assert repair_result["tool_call_id"] == "call_1"
+        assert "not executed" in repair_result["content"]
+        assert (tmp / "partial.txt").read_text(encoding="utf-8") == "good"
+        assert fake.chat.completions.calls == 3
     finally:
         _restore_workdir(old, tmp)
 
@@ -800,7 +989,7 @@ def test_provider_finish_error_is_not_reported_as_success():
 
 def test_exhausted_provider_error_keeps_status_headers_and_identity(monkeypatch):
     from nz_coder.loop import AgentLoop
-    from nz_coder.message_schema import message_records
+    from nz_coder.protocol.message_schema import message_records
 
     class RateLimitFailure(Exception):
         status_code = 429
@@ -863,9 +1052,9 @@ def test_empty_tool_calls_finish_cannot_leave_false_tool_terminal_state():
         _restore_workdir(old, tmp)
 
 
-def test_last_step_uses_infcode_text_only_summary_prompt():
+def test_last_step_keeps_narrow_repair_available_at_emergency_hard_cap():
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     old, tmp = _tmp_workdir()
     try:
@@ -886,9 +1075,10 @@ def test_last_step_uses_infcode_text_only_summary_prompt():
 
         final_request = fake.chat.completions.requests[-1]
         assert final_request["messages"][-1]["role"] == "assistant"
-        assert "CRITICAL - MAXIMUM STEPS REACHED" in final_request["messages"][-1]["content"]
-        assert "MUST provide a text response summarizing work done so far" in final_request["messages"][-1]["content"]
-        assert result["status"] != "max_turns"
+        assert "CRITICAL - EMERGENCY HARD-CAP CALL" in final_request["messages"][-1]["content"]
+        assert "one already-identified local repair remains" in final_request["messages"][-1]["content"]
+        assert final_request.get("tools")
+        assert result["status"] == "max_turns"
         assert not any(
             part.get("type") == "patch"
             for message in messages
@@ -1053,7 +1243,7 @@ def test_loop_can_rebind_http_interaction_askers_after_construction():
 
 
 def test_loop_reports_failed_verification_without_reopening_completion():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -1090,7 +1280,7 @@ def test_loop_reports_failed_verification_without_reopening_completion():
 
 def test_loop_runs_required_static_and_targeted_stages_before_completion():
     """模型静态检查后提前结束会被 gate 拉回，目标测试通过后才能完成。"""
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -1131,7 +1321,7 @@ def test_loop_runs_required_static_and_targeted_stages_before_completion():
         ])
         messages = [{"role": "user", "content": "implement run and verify the exact test"}]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
-        from nz_coder.runtime.hooks import verification_gate_hook
+        from nz_coder.runtime.verification.hooks import verification_gate_hook
         agent.hooks.register_before_no_tool_response(verification_gate_hook)
         agent.vm._plan_builder = lambda _changed_files: {
             "recommended": [],
@@ -1181,7 +1371,7 @@ def test_loop_runs_required_static_and_targeted_stages_before_completion():
 
 
 def test_loop_reflection_reopens_incomplete_completion(monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -1215,7 +1405,7 @@ def test_loop_reflection_reopens_incomplete_completion(monkeypatch):
         ])
         messages = [{"role": "user", "content": "Implement app.py and add tests."}]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
-        from nz_coder.runtime.hooks import reflection_gate_hook
+        from nz_coder.runtime.verification.hooks import reflection_gate_hook
         agent.hooks.register_before_no_tool_response(reflection_gate_hook)
         monkeypatch.setattr(agent.vm, "should_gate", lambda: False)
         monkeypatch.setattr(agent, "_run_reflection_review", lambda content_text: next(reviews))
@@ -1239,7 +1429,7 @@ def test_loop_streaming_emits_only_accepted_final_answer(monkeypatch):
     old, tmp = _tmp_workdir()
     try:
         agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
-        from nz_coder.runtime.hooks import reflection_gate_hook
+        from nz_coder.runtime.verification.hooks import reflection_gate_hook
         agent.hooks.register_before_no_tool_response(reflection_gate_hook)
         results = iter([
             LLMResult(content="draft answer", tool_calls=[]),
@@ -1263,7 +1453,7 @@ def test_loop_streaming_emits_only_accepted_final_answer(monkeypatch):
 
 def test_loop_reflection_parses_subagent_output(monkeypatch):
     from nz_coder.loop import AgentLoop
-    from nz_coder import subagent
+    from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     try:
@@ -1521,7 +1711,7 @@ def test_loop_retries_transient_api_errors():
 
 def test_loop_writes_trace_events():
     from nz_coder.loop import AgentLoop
-    from nz_coder.trace import TraceRecorder
+    from nz_coder.state.trace import TraceRecorder
 
     old, tmp = _tmp_workdir()
     try:
@@ -1578,6 +1768,10 @@ def test_runtime_summary_exposes_generation_terminal_evidence():
 
     runtime = agent._runtime_summary()
 
+    assert runtime["package_install_attempts"] == 0
+    assert runtime["emergency_broad_exploration"] == 0
+    assert runtime["work_phase"] == "normal"
+
     assert runtime["mutation_generation"] == 3
     assert runtime["diff_generation"] == 3
     assert runtime["verification_generation"] == 3
@@ -1586,7 +1780,7 @@ def test_runtime_summary_exposes_generation_terminal_evidence():
 
 def test_loop_tracks_session_scoped_runtime_state_and_trace():
     from nz_coder.loop import AgentLoop
-    from nz_coder.sessions import session_runtime_state_path
+    from nz_coder.state.sessions import session_runtime_state_path
 
     old, tmp = _tmp_workdir()
     try:
@@ -1605,7 +1799,7 @@ def test_loop_tracks_session_scoped_runtime_state_and_trace():
         _restore_workdir(old, tmp)
 
 
-def test_loop_injects_denial_guidance_when_all_writes_are_rejected(monkeypatch):
+def test_loop_injects_denial_guidance_and_allows_a_safe_final_response(monkeypatch):
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -1625,14 +1819,14 @@ def test_loop_injects_denial_guidance_when_all_writes_are_rejected(monkeypatch):
             m.get("role") == "user" and "所有写操作均被用户拒绝" in m.get("content", "")
             for m in messages
         )
-        assert status["status"] == "blocked"
-        assert fake.chat.completions.calls == 1
+        assert status["status"] == "completed"
+        assert fake.chat.completions.calls == 2
     finally:
         _restore_workdir(old, tmp)
 
 
 def test_loop_can_explicitly_continue_after_permission_denial(monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -1733,7 +1927,7 @@ def test_loop_can_complete_hard_refactor_with_structural_edit():
 
 def test_tool_call_limit_read_only_dispatches_only_prefix():
     """超过 MAX_TOOL_CALLS_PER_RESPONSE 的只读工具只执行前缀，不再绕过 loop 限额。"""
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -1763,7 +1957,7 @@ def test_tool_call_limit_read_only_dispatches_only_prefix():
 
 def test_tool_call_limit_write_dispatches_only_prefix():
     """写工具批次也只能执行前缀，不能在串行分支绕过上限。"""
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -1889,6 +2083,43 @@ def test_400_api_error_injects_diagnostic():
         _restore_workdir(old, tmp)
 
 
+def test_402_balance_error_aborts_after_one_provider_request():
+    """Account failures are terminal and must not consume Agent turns."""
+    from nz_coder.loop import AgentLoop
+
+    class BalanceError(RuntimeError):
+        status_code = 402
+        code = "invalid_request_error"
+        body = {
+            "error": {
+                "message": "Insufficient Balance",
+                "type": "unknown_error",
+                "code": "invalid_request_error",
+            }
+        }
+
+    old, tmp = _tmp_workdir()
+    try:
+        fake = FakeClient([
+            BalanceError("Insufficient Balance: invalid_request_error"),
+        ])
+        messages = [{"role": "user", "content": "fix the issue"}]
+        agent = AgentLoop(
+            "test", permission_mode="auto", client=fake, trace_enabled=False,
+        )
+
+        result = _run_agent(agent, messages, stream=False)
+
+        assert result["status"] == "aborted"
+        assert fake.chat.completions.calls == 1
+        assert not any(
+            "<api-error-diagnostic>" in str(message.get("content") or "")
+            for message in messages
+        )
+    finally:
+        _restore_workdir(old, tmp)
+
+
 def test_context_overflow_compacts_then_resumes_without_json_diagnostic():
     """Provider context rejection follows processor compact instead of 400 repair."""
     from openai import BadRequestError
@@ -1941,7 +2172,7 @@ def test_context_overflow_compacts_then_resumes_without_json_diagnostic():
 
 def test_context_overflow_stops_after_three_compaction_attempts(monkeypatch):
     from nz_coder.loop import AgentLoop, LLMResult
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     old, tmp = _tmp_workdir()
     try:
@@ -1982,9 +2213,9 @@ def test_context_overflow_stops_after_three_compaction_attempts(monkeypatch):
 
 
 def test_pre_send_and_reactive_compactions_share_one_three_attempt_owner(monkeypatch):
-    from nz_coder.context import prompt_budget
+    from nz_coder.state.context import prompt_budget
     from nz_coder.loop import AgentLoop, LLMResult
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     old, tmp = _tmp_workdir()
     try:
@@ -2033,9 +2264,9 @@ def test_pre_send_and_reactive_compactions_share_one_three_attempt_owner(monkeyp
 
 
 def test_pre_send_compaction_failure_is_checkpointed_without_provider_call(monkeypatch):
-    from nz_coder.context import prompt_budget
+    from nz_coder.state.context import prompt_budget
     from nz_coder.loop import AgentLoop
-    from nz_coder.sessions import load_session
+    from nz_coder.state.sessions import load_session
 
     old, tmp = _tmp_workdir()
     try:
@@ -2173,7 +2404,7 @@ def _restore_planning_config(config, old):
 
 
 def test_planning_disabled_keeps_llm_call_count_unchanged():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.tools.scratchpad import scratchpad
 
@@ -2181,22 +2412,435 @@ def test_planning_disabled_keeps_llm_call_count_unchanged():
     old_planning = _set_planning_config(config, enabled=False)
     scratchpad.clear()
     try:
-        fake = FakeClient([FakeResponse(FakeMessage("done"))])
-        messages = [{"role": "user", "content": "Add a REST endpoint for users"}]
+        fake = FakeClient([])
+        messages = [{
+            "role": "user",
+            "content": (
+                "Add a REST endpoint for users, add tests, and run "
+                "pytest -q tests/test_users.py."
+            ),
+        }]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
-        status = _run_agent(agent, messages, stream=False)
+        agent.runtime_state.initial_task_text = messages[0]["content"]
+        agent.runtime_state.task_mode = "test"
+        agent.runtime_state.verification_contract = {
+            "command": "pytest -q tests/test_users.py",
+        }
+        asyncio.run(agent._maybe_generate_plan(messages))
 
-        assert status["status"] == "completed"
-        assert fake.chat.completions.calls == 1
+        assert fake.chat.completions.calls == 0
         assert not any(e["category"] == "plan" for e in scratchpad.entries)
+        assert agent.runtime_state.task_contract["requirements"]
+        assert agent.runtime_state.requirement_ledger["items"]
     finally:
         scratchpad.clear()
         _restore_planning_config(config, old_planning)
         _restore_workdir(old, tmp)
 
 
+def test_runtime_bootstrap_does_not_bind_traceback_path_as_artifact():
+    """The loop must pass Runtime path authority into deterministic bootstrap."""
+    from nz_coder.foundation import config
+    from nz_coder.loop import AgentLoop
+
+    old, tmp = _tmp_workdir()
+    old_planning = _set_planning_config(config, enabled=False)
+    try:
+        source = tmp / "src" / "_pytest" / "runner.py"
+        source.parent.mkdir(parents=True)
+        source.write_text("# traceback frame\n", encoding="utf-8")
+        task = (
+            "Solve the initialization bug. Traceback: File "
+            "src/_pytest/runner.py, line 42. Run python -m pytest -q "
+            "tests/test_commands.py."
+        )
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=FakeClient([]),
+            trace_enabled=False,
+        )
+        agent.runtime_state.initial_task_text = task
+        agent.runtime_state.set_acceptance_criteria_from_text(task)
+
+        asyncio.run(agent._maybe_generate_plan([{
+            "role": "user",
+            "content": task,
+        }]))
+
+        behavior = next(
+            item
+            for item in agent.runtime_state.task_contract["requirements"]
+            if item["kind"] == "behavior"
+        )
+        assert agent.runtime_state.requested_paths == []
+        assert behavior["expected_artifacts"] == []
+    finally:
+        _restore_planning_config(config, old_planning)
+        _restore_workdir(old, tmp)
+
+
+def test_invalid_planner_json_retains_runtime_bootstrap_contract():
+    from nz_coder.foundation import config
+    from nz_coder.loop import AgentLoop
+
+    old, tmp = _tmp_workdir()
+    old_planning = _set_planning_config(config, enabled=True)
+    try:
+        fake = FakeClient([FakeResponse(FakeMessage('{"objective":"truncated'))])
+        messages = [{
+            "role": "user",
+            "content": (
+                "Implement named cron fields, add tests, update README, preserve API "
+                "compatibility, then run pytest -q cron_engine/tests."
+            ),
+        }]
+        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
+        agent.runtime_state.initial_task_text = messages[0]["content"]
+        agent.runtime_state.task_mode = "test"
+        agent.runtime_state.verification_contract = {
+            "command": "pytest -q cron_engine/tests",
+        }
+        asyncio.run(agent._maybe_generate_plan(messages))
+
+        assert fake.chat.completions.calls == 1
+        assert agent.runtime_state.task_contract["requirements"]
+        assert agent.runtime_state.requirement_ledger["items"]
+        assert fake.chat.completions.requests[0]["response_format"] == {
+            "type": "json_object",
+        }
+    finally:
+        _restore_planning_config(config, old_planning)
+        _restore_workdir(old, tmp)
+
+
+def test_gateway_observer_adds_control_usage_once_but_not_coding_usage():
+    from nz_coder.loop import AgentLoop
+
+    class UsageContext:
+        finalized = False
+
+        def __init__(self):
+            self.values = []
+
+        def add_usage(self, value):
+            self.values.append(value)
+
+    old, tmp = _tmp_workdir()
+    try:
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=FakeClient([]),
+            trace_enabled=False,
+        )
+        context = UsageContext()
+        agent.active_run_context = context
+        usage = {
+            "input": 100,
+            "output": 20,
+            "total": 120,
+            "reasoning": 5,
+            "cache_read": 10,
+            "cache_write": 0,
+        }
+
+        agent._model_gateway_observer("model_call_finish", {
+            "purpose": "planning",
+            "provider_id": "openai-responses",
+            "model_id": "gpt-planner",
+            "status": "completed",
+            "attempts": 1,
+            "duration_ms": 10.0,
+            "usage": usage,
+            "cost": 0.001,
+            "cost_source": "registry",
+        })
+        agent._model_gateway_observer("model_call_finish", {
+            "purpose": "coding",
+            "provider_id": "anthropic",
+            "model_id": "claude-coder",
+            "status": "completed",
+            "attempts": 1,
+            "duration_ms": 15.0,
+            "usage": usage,
+            "cost": 0.002,
+            "cost_source": "provider",
+        })
+
+        assert len(context.values) == 1
+        assert context.values[0].input_tokens == 100
+        assert context.values[0].output_tokens == 20
+        assert agent.runtime_state.provider_calls_by_purpose == {
+            "planning": 1,
+            "coding": 1,
+        }
+        assert agent.runtime_state.provider_calls_by_model == {
+            "openai-responses/gpt-planner": 1,
+            "anthropic/claude-coder": 1,
+        }
+        assert agent.runtime_state.provider_cost_usd == 0.003
+        assert agent.runtime_state.provider_cost_sources == {
+            "registry": 1,
+            "provider": 1,
+        }
+    finally:
+        _restore_workdir(old, tmp)
+
+
+def test_gateway_observer_accounts_auto_mode_usage_exactly_once():
+    """Classifier cost is distinct from coding and added once to run totals."""
+    from nz_coder.loop import AgentLoop
+
+    class UsageContext:
+        finalized = False
+
+        def __init__(self):
+            self.values = []
+
+        def add_usage(self, value):
+            self.values.append(value)
+
+    old, tmp = _tmp_workdir()
+    try:
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=FakeClient([]),
+            trace_enabled=False,
+        )
+        context = UsageContext()
+        agent.active_run_context = context
+        agent._model_gateway_observer("model_call_finish", {
+            "purpose": "auto_mode",
+            "provider_id": "fake",
+            "model_id": "judge",
+            "status": "completed",
+            "attempts": 1,
+            "duration_ms": 7.5,
+            "usage": {
+                "input": 12,
+                "output": 3,
+                "total": 15,
+                "reasoning": 0,
+                "cache_read": 0,
+                "cache_write": 0,
+            },
+            "cost": 0.001,
+            "cost_source": "estimated",
+        })
+
+        assert agent.runtime_state.provider_calls_by_purpose["auto_mode"] == 1
+        assert agent.runtime_state.provider_usage_by_purpose["auto_mode"]["input"] == 12
+        assert agent.runtime_state.provider_cost_usd_by_purpose["auto_mode"] == 0.001
+        assert len(context.values) == 1
+        assert context.values[0].input_tokens == 12
+        assert context.values[0].output_tokens == 3
+    finally:
+        _restore_workdir(old, tmp)
+
+
+def test_gateway_observer_sanitizes_auto_provider_errors_before_trace():
+    """Provider error echoes cannot copy classifier payloads into trace."""
+    from nz_coder.loop import AgentLoop
+
+    events = []
+    agent = AgentLoop.__new__(AgentLoop)
+    agent.tracer = type(
+        "TracerSpy",
+        (),
+        {"log": lambda _self, name, **payload: events.append((name, payload))},
+    )()
+    payload = {
+        "purpose": "auto_mode",
+        "attempt": 1,
+        "provider_id": "fake",
+        "model_id": "judge",
+        "request_model_id": "judge-wire",
+        "variant": "default",
+        "error": "validation echoed AUTO_TRACE_SECRET",
+        "body": {"prompt": "AUTO_TRACE_SECRET"},
+        "headers": {"Authorization": "Bearer AUTO_TRACE_SECRET"},
+        "request": {"messages": ["AUTO_TRACE_SECRET"]},
+    }
+
+    agent._model_gateway_observer(
+        "model_call_response_format_fallback",
+        payload,
+    )
+
+    serialized = json.dumps(events, ensure_ascii=False)
+    assert "AUTO_TRACE_SECRET" not in serialized
+    assert events == [(
+        "model_call_response_format_fallback",
+        {
+            "purpose": "auto_mode",
+            "attempt": 1,
+            "provider_id": "fake",
+            "model_id": "judge",
+            "request_model_id": "judge-wire",
+            "variant": "default",
+        },
+    )]
+    assert payload["error"].endswith("AUTO_TRACE_SECRET")
+
+
+def test_terminal_auto_bash_classifier_accounts_once_end_to_end():
+    """Residual Bash uses one Auto Gateway call and one accounting record."""
+    from nz_coder.loop import AgentLoop
+    from nz_coder.providers.registry import ModelPricing
+    from nz_coder.state.trace import TraceRecorder
+
+    approvals = []
+
+    async def approve(*_args):
+        approvals.append(True)
+        return "once"
+
+    old, tmp = _tmp_workdir()
+    agent = None
+    try:
+        fake = FakeClient([
+            FakeResponse(
+                FakeMessage(tool_calls=[
+                    FakeToolCall("bash", {"command": "echo auto-ok"}),
+                ]),
+                finish_reason="tool_calls",
+                usage={
+                    "prompt_tokens": 20,
+                    "completion_tokens": 4,
+                    "total_tokens": 24,
+                },
+            ),
+            FakeResponse(
+                FakeMessage(json.dumps({
+                    "decision": "allow",
+                    "reason_code": "safe_local_command",
+                    "reason": "bounded local command",
+                })),
+                finish_reason="stop",
+                usage={
+                    "prompt_tokens": 12,
+                    "completion_tokens": 3,
+                    "total_tokens": 15,
+                },
+            ),
+            FakeResponse(
+                FakeMessage("done"),
+                finish_reason="stop",
+                usage={
+                    "prompt_tokens": 10,
+                    "completion_tokens": 2,
+                    "total_tokens": 12,
+                },
+            ),
+        ])
+        tracer = TraceRecorder(trace_dir=tmp / "traces", enabled=True)
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=fake,
+            tracer=tracer,
+            auto_mode_classifier_enabled=True,
+        )
+        agent.model_pricing = ModelPricing(input=1.0, output=2.0)
+        agent.set_interaction_askers(auto_permission_asker=approve)
+        messages = [{"role": "user", "content": "Print a local marker"}]
+
+        result = _run_agent(agent, messages, stream=False)
+
+        requests = fake.chat.completions.requests
+        classifier_request = requests[1]
+        rows = [
+            json.loads(line)
+            for line in tracer.path.read_text(encoding="utf-8").splitlines()
+        ]
+        auto_finishes = [
+            row for row in rows
+            if row.get("event") == "model_call_finish"
+            and row.get("purpose") == "auto_mode"
+        ]
+        auto_decisions = [
+            row for row in rows if row.get("event") == "auto_mode_decision"
+        ]
+
+        assert result["status"] == "completed"
+        assert result["content"] == "done"
+        assert approvals == []
+        assert len(requests) == 3
+        assert classifier_request.get("tools", []) == []
+        assert classifier_request.get("stream", False) is False
+        assert classifier_request["response_format"] == {"type": "json_object"}
+        assert classifier_request["max_tokens"] == 256
+        assert agent.runtime_state.provider_calls_by_purpose["auto_mode"] == 1
+        assert agent.runtime_state.provider_usage_by_purpose["auto_mode"] == {
+            "input": 12,
+            "output": 3,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0,
+            "total": 15,
+        }
+        assert agent.runtime_state.provider_cost_usd_by_purpose["auto_mode"] == (
+            0.000018
+        )
+        assert len(auto_finishes) == 1
+        assert auto_finishes[0]["usage"]["input"] == 12
+        assert auto_finishes[0]["cost"] == 0.000018
+        assert len(auto_decisions) == 1
+        assert auto_decisions[0]["source"] == "classifier"
+    finally:
+        if agent is not None:
+            agent.close()
+        _restore_workdir(old, tmp)
+
+
+def test_runtime_summary_exposes_complete_provider_accounting():
+    from nz_coder.loop import AgentLoop
+
+    old, tmp = _tmp_workdir()
+    try:
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=FakeClient([]),
+            trace_enabled=False,
+        )
+        agent.runtime_state.observe_provider_call(
+            "planning",
+            usage={"input": 10, "output": 2, "total": 12},
+            attempts=1,
+            duration_ms=5.0,
+            cost=0.004,
+            cost_source="registry",
+        )
+        agent.runtime_state.observe_provider_turn({
+            "turn": 1,
+            "reason": "initial_investigation",
+            "outcome": "investigation_batch",
+            "tool_names": ["read_file"],
+        })
+
+        runtime = agent._runtime_summary()
+
+        assert runtime["provider_calls"] == 1
+        agent.runtime_state.forbids_test_changes = True
+        runtime = agent._runtime_summary()
+        assert runtime["forbids_test_changes"] is True
+        assert runtime["provider_calls_by_purpose"] == {"planning": 1}
+        assert runtime["provider_usage"]["total"] == 12
+        assert runtime["provider_usage_by_purpose"]["planning"]["input"] == 10
+        assert runtime["provider_cost_usd"] == 0.004
+        assert runtime["provider_cost_usd_by_purpose"] == {"planning": 0.004}
+        assert runtime["provider_turns_by_reason"] == {"initial_investigation": 1}
+        assert runtime["provider_turns_by_outcome"] == {"investigation_batch": 1}
+        assert runtime["provider_turn_records"][0]["tool_names"] == ["read_file"]
+    finally:
+        _restore_workdir(old, tmp)
+
+
 def test_planning_enabled_generates_plan_for_feature_task():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.tools.scratchpad import scratchpad
 
@@ -2225,8 +2869,62 @@ def test_planning_enabled_generates_plan_for_feature_task():
         _restore_workdir(old, tmp)
 
 
+def test_planning_call_returns_task_contract_without_extra_model_call():
+    from nz_coder.foundation import config
+    from nz_coder.loop import AgentLoop
+    from nz_coder.tools.scratchpad import scratchpad
+
+    old, tmp = _tmp_workdir()
+    old_planning = _set_planning_config(config, enabled=True)
+    scratchpad.clear()
+    try:
+        planner = json.dumps({
+            "objective": "Create the requested artifact",
+            "plan": [{
+                "title": "Create artifact",
+                "target": "hello.txt",
+                "verification": "file diff",
+            }],
+            "requirements": [{
+                "id": "R1",
+                "description": "Create hello.txt",
+                "kind": "artifact",
+                "expected_artifacts": ["hello.txt"],
+                "satisfaction_mode": "deterministic",
+            }],
+            "constraints": [],
+        })
+        fake = FakeClient([
+            FakeResponse(FakeMessage(planner)),
+            FakeResponse(FakeMessage(tool_calls=[
+                FakeToolCall("write_file", {"path": "hello.txt", "content": "hello\n"}),
+            ])),
+            FakeResponse(FakeMessage("done")),
+        ])
+        messages = [{
+            "role": "user",
+            "content": "Add a new hello artifact file for this feature and verify it.",
+        }]
+        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
+
+        status = _run_agent(agent, messages, stream=False)
+
+        assert status["status"] == "completed"
+        assert fake.chat.completions.calls == 3
+        assert agent.runtime_state.task_contract["objective"] == (
+            "Create the requested artifact"
+        )
+        ledger = agent.runtime_state.requirement_ledger_snapshot()
+        assert ledger.status("R1") == "satisfied"
+        assert "## Plan" in agent.runtime_state.plan_text
+    finally:
+        scratchpad.clear()
+        _restore_planning_config(config, old_planning)
+        _restore_workdir(old, tmp)
+
+
 def test_planning_enabled_skips_simple_bugfix_task():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -2247,7 +2945,7 @@ def test_planning_enabled_skips_simple_bugfix_task():
 def test_planning_restore_hydrates_plan_without_new_planning_call():
     import json
 
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.tools.scratchpad import scratchpad
 
@@ -2284,8 +2982,147 @@ def test_planning_restore_hydrates_plan_without_new_planning_call():
         _restore_workdir(old, tmp)
 
 
+def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
+    """A resumable activation preserves task facts without reusing spent turns."""
+    from nz_coder.foundation import config
+    from nz_coder.loop import AgentLoop
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    old, tmp = _tmp_workdir()
+    old_planning = _set_planning_config(config, enabled=False)
+    old_max_turns = config.MAX_AGENT_TURNS
+    config.MAX_AGENT_TURNS = 20
+    try:
+        original_task = (
+            "Fix parser.py and run python -m pytest -q tests/test_parser.py"
+        )
+        state = RuntimeState()
+        state.reset(max_turns=20)
+        state.initial_task_text = original_task
+        state.set_acceptance_criteria_from_text(original_task)
+        state.turn_count = 200
+        state.read_files = ["parser.py", "tests/test_parser.py"]
+        state_dir = tmp / ".nz-coder"
+        state_dir.mkdir(exist_ok=True)
+        state.save(state_dir / "runtime_state.json", active=False)
+
+        fake = FakeClient([FakeResponse(FakeMessage("done"))])
+        messages = [
+            {
+                "role": "assistant",
+                "content": "Stopped before verification.",
+                "_nz_continuation": {
+                    "version": 1,
+                    "status": "max_turns",
+                    "summary": f"## Latest User Instruction\n{original_task}",
+                },
+            },
+            {"role": "user", "content": "go on"},
+        ]
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=fake,
+            trace_enabled=False,
+            session_id="resume-max-turns-go-on",
+        )
+
+        _run_agent(agent, messages, stream=False)
+
+        assert fake.chat.completions.calls > 0
+        assert agent.runtime_state.turn_count > 0
+        assert agent.runtime_state.initial_task_text == original_task
+        assert agent.runtime_state.verification_contract["command"] == (
+            "python -m pytest -q tests/test_parser.py"
+        )
+        assert agent.runtime_state.read_files == [
+            "parser.py", "tests/test_parser.py",
+        ]
+    finally:
+        config.MAX_AGENT_TURNS = old_max_turns
+        _restore_planning_config(config, old_planning)
+        _restore_workdir(old, tmp)
+
+
+def test_substantive_continuation_overlays_current_round_constraints(monkeypatch):
+    """A resumed task keeps its origin while honoring the newest User constraints."""
+    from nz_coder.foundation import config
+    from nz_coder.loop import AgentLoop
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    old, tmp = _tmp_workdir()
+    monkeypatch.setattr(config, "RUNTIME_STATE_PERSIST", True)
+    agent = None
+    try:
+        original_task = (
+            "Fix parser.py. The parser must preserve numeric fields. "
+            "Run python -m pytest -q tests/test_parser.py."
+        )
+        state = RuntimeState()
+        state.reset(max_turns=20)
+        state.initial_task_text = original_task
+        state.set_acceptance_criteria_from_text(original_task)
+        state.read_files = ["parser.py", "tests/test_parser.py"]
+        state_dir = tmp / ".nz-coder"
+        state_dir.mkdir(exist_ok=True)
+        state.save(state_dir / "runtime_state.json", active=False)
+
+        current_instruction = (
+            "Continue the parser fix in parser_v2.py. The fallback must reject "
+            "empty aliases. Do not modify tests. Run python -m pytest -q "
+            "tests/test_new_parser.py."
+        )
+        messages = [
+            {
+                "role": "assistant",
+                "content": "Stopped before verification.",
+                "_nz_continuation": {
+                    "version": 1,
+                    "status": "max_turns",
+                    "summary": f"## Latest User Instruction\n{original_task}",
+                },
+            },
+            {"role": "user", "content": current_instruction},
+        ]
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=FakeClient([]),
+            trace_enabled=False,
+            session_id="resume-with-current-round-constraints",
+        )
+
+        agent._init_run(messages, stream=False)
+
+        assert agent.runtime_state.initial_task_text == original_task
+        assert agent.runtime_state.verification_contract["command"] == (
+            "python -m pytest -q tests/test_new_parser.py"
+        )
+        assert agent.runtime_state.forbids_test_changes is True
+        assert agent.runtime_state.wants_tests is False
+        assert agent.runtime_state.requested_paths == [
+            "parser_v2.py",
+            "parser.py",
+        ]
+        assert any(
+            "fallback must reject empty aliases" in criterion
+            for criterion in agent.runtime_state.acceptance_criteria
+        )
+        assert any(
+            "parser must preserve numeric fields" in criterion
+            for criterion in agent.runtime_state.acceptance_criteria
+        )
+        assert agent.runtime_state.read_files == [
+            "parser.py", "tests/test_parser.py",
+        ]
+    finally:
+        if agent is not None:
+            agent.close()
+        _restore_workdir(old, tmp)
+
+
 def test_replan_respects_max_attempts():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -2313,7 +3150,7 @@ def test_replan_respects_max_attempts():
 
 
 def test_replan_verification_guard_requires_diff():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -2337,7 +3174,7 @@ def test_replan_verification_guard_requires_diff():
 
 
 def test_patch_risk_triggers_one_replan_and_enters_replan_prompt():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -2381,7 +3218,7 @@ def test_patch_risk_triggers_one_replan_and_enters_replan_prompt():
 
 
 def test_patch_risk_refresh_uses_change_tracker_without_git(monkeypatch):
-    import nz_coder.verification_planner as planner
+    import nz_coder.intelligence.verification_planner as planner
     from nz_coder.loop import AgentLoop
     from nz_coder.tools import dispatch
     from nz_coder.tools.files import bind_tool_state
@@ -2436,7 +3273,7 @@ def test_patch_risk_refresh_uses_change_tracker_without_git(monkeypatch):
 
 
 def test_patch_risk_reuses_project_profile_from_prompt(monkeypatch):
-    import nz_coder.project_profile as profile_module
+    import nz_coder.intelligence.project_profile as profile_module
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -2470,7 +3307,7 @@ def test_patch_risk_reuses_project_profile_from_prompt(monkeypatch):
 
 
 def test_planning_failure_does_not_block_react_loop():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -2498,7 +3335,7 @@ def test_planning_failure_does_not_block_react_loop():
 
 
 def test_replan_failure_does_not_raise_or_increment_count():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -2651,7 +3488,7 @@ def test_streaming_final_turn_emits_content_once_after_stream_end():
 
 
 def test_committed_write_batch_attaches_lsp_diagnostics_after_commit(monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     import nz_coder.loop as loop_mod
     from nz_coder.loop import AgentLoop
 
@@ -2723,7 +3560,7 @@ def test_committed_write_batch_attaches_lsp_diagnostics_after_commit(monkeypatch
 
 
 def test_rolled_back_write_batch_never_publishes_lsp_state(monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     import nz_coder.loop as loop_mod
     from nz_coder.loop import AgentLoop
 
@@ -2768,7 +3605,7 @@ def test_rolled_back_write_batch_never_publishes_lsp_state(monkeypatch):
 
 
 def test_agent_run_preserves_session_scratchpad():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.tools.scratchpad import scratchpad
 
@@ -2808,8 +3645,104 @@ def test_auto_compaction_resets_stall_sidecar_history():
     assert agent.stall_orchestrator.reset_count == 1
 
 
+def test_approved_plan_exit_is_terminal_without_another_model_call(tmp_path):
+    """Plan approval is a product boundary, not a prompt for paid narration."""
+    from nz_coder.loop import AgentLoop
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    fake = FakeClient([
+        FakeResponse(FakeMessage(tool_calls=[
+            FakeToolCall(
+                "plan_exit",
+                {"title": "Parser update", "summary": "- Change parser\n- Run tests"},
+                call_id="plan-exit",
+            ),
+        ])),
+    ])
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop(
+            "test",
+            permission_mode="plan",
+            client=fake,
+            question_asker=lambda _questions: [["Approve Plan (Recommended)"]],
+            trace_enabled=False,
+        )
+        agent.plan_mode.write("# Parser update\n\n1. Change parser\n2. Run tests")
+        messages = [{"role": "user", "content": "Create an implementation plan only"}]
+
+        status = _run_agent(agent, messages, stream=False)
+        agent.close()
+
+    assert status["status"] == "completed"
+    assert "Parser update" in status["content"]
+    assert "Change parser" in status["content"]
+    assert fake.chat.completions.calls == 1
+
+
+def test_plan_exit_can_resume_build_in_same_run(tmp_path):
+    """Explicit implement choice keeps the model loop alive after approval."""
+    from nz_coder.loop import AgentLoop
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    fake = FakeClient([
+        FakeResponse(FakeMessage(tool_calls=[
+            FakeToolCall(
+                "plan_exit",
+                {"title": "Parser update", "summary": "- Implement\n- Verify"},
+                call_id="plan-exit",
+            ),
+        ])),
+        FakeResponse(FakeMessage("Implementation phase complete.")),
+    ])
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop(
+            "test",
+            permission_mode="plan",
+            client=fake,
+            question_asker=lambda _questions: [["Implement in This Session"]],
+            trace_enabled=False,
+        )
+        agent.plan_mode.write("# Parser update\n\n1. Implement\n2. Verify")
+
+        status = _run_agent(
+            agent,
+            [{"role": "user", "content": "Plan and then implement the parser update"}],
+            stream=False,
+        )
+        agent.close()
+
+    assert status["status"] == "completed"
+    assert status["content"] == "Implementation phase complete."
+    assert fake.chat.completions.calls == 2
+
+
+def test_agent_close_cancels_and_settles_stall_sidecar():
+    """Explicit disposal must retire Provider work owned by the old Session."""
+    from nz_coder.loop import AgentLoop
+
+    class Sidecar:
+        calls: list[float] = []
+
+        def cancel_and_settle(self, timeout=0):
+            self.calls.append(timeout)
+            return True
+
+    agent = AgentLoop(
+        "test",
+        permission_mode="auto",
+        client=FakeClient([]),
+        trace_enabled=False,
+    )
+    sidecar = Sidecar()
+    agent.stall_orchestrator = sidecar
+
+    agent.close()
+
+    assert sidecar.calls == [0.5]
+
+
 def test_identical_third_tool_call_is_blocked_before_dispatch():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -2859,7 +3792,7 @@ def test_identical_third_tool_call_is_blocked_before_dispatch():
 
 
 def test_interleaved_stall_sidecar_nudge_blocks_only_the_following_call():
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
@@ -2933,10 +3866,84 @@ def test_provider_stall_sidecar_coerces_infcodex_camel_case_string_boolean():
     }
 
 
+def test_provider_stall_sidecar_forces_structured_report_tool():
+    """DeepSeek may put reasoning outside content; the report call is authoritative."""
+    from nz_coder.loop import AgentLoop
+
+    fake = FakeClient([
+        FakeResponse(FakeMessage(
+            reasoning_content="The repeated verification is legitimate.",
+            tool_calls=[FakeToolCall(
+                "report_stall_judgment",
+                {
+                    "isStuck": False,
+                    "reason": "workspace evidence changed",
+                    "suggestedTool": "",
+                    "nudge": "",
+                },
+            )],
+        )),
+    ])
+    agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
+
+    verdict = agent._provider_stall_sidecar("signal plus transcript")
+
+    assert verdict == {
+        "is_stuck": False,
+        "reason": "workspace evidence changed",
+        "nudge": "",
+        "trace": "sidecar_ok",
+    }
+    request = fake.chat.completions.requests[0]
+    assert request["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "report_stall_judgment"},
+    }
+    assert request["tools"][0]["function"]["name"] == "report_stall_judgment"
+
+
+def test_provider_stall_sidecar_cancel_retires_gateway_poll():
+    """Terminal settlement must not leave L2 usage for the next run."""
+    import threading
+
+    from nz_coder.loop import AgentLoop
+
+    started = threading.Event()
+    release = threading.Event()
+    fake = FakeClient([])
+
+    def blocking_create(**_kwargs):
+        started.set()
+        release.wait(timeout=2)
+        return FakeResponse(FakeMessage("late"))
+
+    fake.chat.completions.create = blocking_create
+    agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
+    cancel_event = threading.Event()
+    outcome = {}
+    worker = threading.Thread(
+        target=lambda: outcome.setdefault(
+            "verdict",
+            agent._provider_stall_sidecar("signal", cancel_event),
+        )
+    )
+    worker.start()
+    assert started.wait(timeout=1)
+    cancel_event.set()
+    worker.join(timeout=1)
+    release.set()
+
+    assert not worker.is_alive()
+    assert outcome["verdict"]["trace"] == "cancelled"
+    assert agent.runtime_state.provider_calls_by_purpose == {
+        "stall_sidecar": 1,
+    }
+
+
 def test_real_agent_awaits_async_stop_hook_revise_then_accept():
     """Catches the production natural-stop path using only synchronous hooks."""
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.hooks import AgentHooks, StopHookDecision
+    from nz_coder.runtime.verification.hooks import AgentHooks, StopHookDecision
 
     decisions = iter((
         StopHookDecision("reanimate", "Correct the missing import.", "sidecar-verifier"),
@@ -2977,7 +3984,7 @@ def test_real_agent_awaits_async_stop_hook_revise_then_accept():
 def test_real_agent_async_stop_hook_blocked_surfaces_reason_without_extra_turn():
     """Catches a blocked verdict being finalized as an ordinary completion."""
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.hooks import AgentHooks, StopHookDecision
+    from nz_coder.runtime.verification.hooks import AgentHooks, StopHookDecision
 
     async def verifier(_context):
         return StopHookDecision(
@@ -3006,7 +4013,7 @@ def test_real_agent_async_stop_hook_blocked_surfaces_reason_without_extra_turn()
 def test_agent_injected_sidecar_is_first_and_injected_clients_stay_opt_in():
     """Catches test seams gaining hidden calls or fallback hooks running first."""
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.hooks import AgentHooks, StopHookDecision
+    from nz_coder.runtime.verification.hooks import AgentHooks, StopHookDecision
 
     async def fallback(_context):
         return StopHookDecision()
@@ -3067,8 +4074,8 @@ def test_agent_owned_client_installs_production_sidecar_by_default():
 def test_production_sidecar_runs_isolated_request_after_real_agent_stop(tmp_path):
     """Catches production assembly that installs a hook but never invokes it."""
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.trace import TraceRecorder
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.trace import TraceRecorder
 
     class Provider:
         name = "openai-compatible"

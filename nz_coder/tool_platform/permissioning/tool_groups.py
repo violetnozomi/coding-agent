@@ -1,19 +1,12 @@
-"""Tool groupings used by permission checks."""
+"""Compatibility tool groupings and explicit safe state-tool exceptions."""
 from __future__ import annotations
 
+from nz_coder.tools import FILESYSTEM_MUTATION_TOOLS
 
-WRITE_TOOLS = frozenset({
-    "write_file",
-    "edit_file",
-    "apply_patch",
-    "replace_lines",
-    "python_structural_edit",
-    "write_files_batch",
-    "scaffold_project",
-    "apply_agent_changes",
-    "save_memory",
-    "delete_memory",
-})
+
+# Backward-compatible exports. Runtime authority comes from registry metadata;
+# these snapshots remain for extensions importing the historic names.
+WRITE_TOOLS = FILESYSTEM_MUTATION_TOOLS
 
 READ_TOOLS = frozenset({
     "read_file",
@@ -36,9 +29,10 @@ READ_TOOLS = frozenset({
     "webfetch",
 })
 
-SAFE_TOOLS = READ_TOOLS | frozenset({
+SAFE_STATE_TOOLS = frozenset({
     "todo",
     "compact",
+    "emit_handoff",
     "question",
     "plan_enter",
     "write_plan",
@@ -48,4 +42,9 @@ SAFE_TOOLS = READ_TOOLS | frozenset({
     "load_skill",
     "recall_memory",
     "read_scratchpad",
+    "load_optional_tools",
+    "verify_changed_files",
+    "verify_project_build",
 })
+
+SAFE_TOOLS = READ_TOOLS | SAFE_STATE_TOOLS

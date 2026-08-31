@@ -4,9 +4,9 @@ import json
 import shlex
 import sys
 
-from nz_coder.runtime.process_service import close_workspace_process_service
-from nz_coder.runtime.workdir import scoped_workdir
-from nz_coder.session_events import SessionEventBus, scoped_session_event_bus
+from nz_coder.runtime.process.process_service import close_workspace_process_service
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.protocol.session_events import SessionEventBus, scoped_session_event_bus
 from nz_coder.tools.process import run_process
 
 
@@ -101,7 +101,7 @@ def test_process_tool_reconnects_across_separate_run_event_scopes(tmp_path):
 
 
 def test_process_permission_and_admission_are_operation_aware():
-    from nz_coder.runtime.admission import resolve_tool_capability
+    from nz_coder.runtime.agent.admission import resolve_tool_capability
     from nz_coder.tool_platform.permissioning.checker import PermissionChecker
 
     checker = PermissionChecker("default")

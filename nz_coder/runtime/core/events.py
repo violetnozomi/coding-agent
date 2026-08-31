@@ -1,6 +1,7 @@
 """Host-neutral event contracts emitted by the shared Agent runtime."""
 from __future__ import annotations
 
+import asyncio
 import copy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -67,10 +68,18 @@ class RuntimeEventSink(Protocol):
 class RuntimeEventMiddleware:
     """Emit canonical events while keeping sink failures out of Agent control flow."""
 
-    def __init__(self, sink: RuntimeEventSink) -> None:
+    def __init__(
+        self,
+        sink: RuntimeEventSink,
+        *,
+        emit_run_events: bool = True,
+    ) -> None:
         self.sink = sink
+        self.emit_run_events = bool(emit_run_events)
 
     async def before_run(self, context) -> None:
+        if not self.emit_run_events:
+            return
         opened = getattr(context, "metadata", {}).get("session_open")
         if opened in {"created", "resumed"}:
             self._emit(
@@ -81,6 +90,8 @@ class RuntimeEventMiddleware:
         self._emit(context, RuntimeEventName.RUN_STARTED)
 
     async def after_run(self, context, result) -> None:
+        if not self.emit_run_events:
+            return
         status = result.get("status") if isinstance(result, dict) else "completed"
         name = (
             RuntimeEventName.RUN_CANCELLED
@@ -92,6 +103,21 @@ class RuntimeEventMiddleware:
         self._emit(context, name, {"status": str(status)})
 
     async def on_run_error(self, context, error) -> None:
+        if not self.emit_run_events:
+            return
+        if isinstance(error, (asyncio.CancelledError, KeyboardInterrupt)):
+            self._emit(
+                context,
+                RuntimeEventName.RUN_CANCELLED,
+                {
+                    "status": (
+                        "interrupted"
+                        if isinstance(error, KeyboardInterrupt)
+                        else "cancelled"
+                    ),
+                },
+            )
+            return
         self._emit(context, RuntimeEventName.RUN_FAILED, {"error": str(error)})
 
     async def before_model(self, context) -> None:
@@ -101,6 +127,8 @@ class RuntimeEventMiddleware:
         self._emit(context, RuntimeEventName.MODEL_FINISHED)
 
     async def on_model_error(self, context, error) -> None:
+        if isinstance(error, asyncio.CancelledError):
+            return
         self._emit(context, RuntimeEventName.MODEL_FAILED, {"error": str(error)})
 
     async def before_tool_batch(self, context) -> None:
@@ -110,6 +138,8 @@ class RuntimeEventMiddleware:
         self._emit(context, RuntimeEventName.TOOL_FINISHED)
 
     async def on_tool_batch_error(self, context, error) -> None:
+        if isinstance(error, asyncio.CancelledError):
+            return
         self._emit(context, RuntimeEventName.TOOL_FAILED, {"error": str(error)})
 
     def _emit(self, context, name: RuntimeEventName, payload: dict | None = None) -> None:

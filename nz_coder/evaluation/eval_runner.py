@@ -17,12 +17,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from nz_coder import config
-from nz_coder.changes import load_change_file
-from nz_coder.command_policy import classify_bash
-from nz_coder.prompt import build as build_prompt
-from nz_coder.runtime.execution_context import scoped_runtime_overrides
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.foundation import config
+from nz_coder.state.changes import load_change_file
+from nz_coder.tool_platform.command_policy import classify_bash
+from nz_coder.runtime.conversation.prompt import build as build_prompt
+from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 Task = dict[str, Any]
@@ -338,8 +338,8 @@ async def _run_agent(task: Task, repo: Path, mode: str) -> tuple[dict, Any | Non
             "last_verification": None,
         }, None
 
-    from nz_coder.memory import memory_mgr
-    from nz_coder.runtime.composition import build_product_environment
+    from nz_coder.state.memory import memory_mgr
+    from nz_coder.runtime.execution.composition import build_product_environment
 
     memory_mgr.memory_dir = repo / ".nz-coder" / "memory"
     memory_mgr.load_all()

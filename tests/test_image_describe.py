@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from nz_coder.attachments import make_image_attachment
-from nz_coder.message_schema import (
+from nz_coder.protocol.attachments import make_image_attachment
+from nz_coder.protocol.message_schema import (
     PARTS_KEY,
     attach_file_parts,
     attach_message_identity,
@@ -15,8 +15,8 @@ from nz_coder.message_schema import (
     message_records,
 )
 from nz_coder.providers.capabilities import ModelCapabilities
-from nz_coder.runtime.loop import AgentLoop
-from nz_coder.vision import ProviderImageDescriber, describe_images
+from nz_coder.runtime.execution.loop import AgentLoop
+from nz_coder.capabilities.vision import ProviderImageDescriber, describe_images
 
 
 _PNG = b"\x89PNG\r\n\x1a\nimage-describe"
@@ -177,6 +177,7 @@ def test_vision_model_skips_description_and_keeps_original_media():
 
 def test_provider_image_describer_uses_vision_capability_and_no_tools():
     requests = []
+    observed = []
 
     class Provider:
         name = "test"
@@ -202,6 +203,7 @@ def test_provider_image_describer_uses_vision_capability_and_no_tools():
         provider=Provider(),
         client=object(),
         max_tokens=321,
+        observer=lambda name, payload: observed.append((name, payload)),
     )
     result = asyncio.run(descriptor(
         make_image_attachment(_PNG, "image/png", filename="terminal.png"),
@@ -214,10 +216,70 @@ def test_provider_image_describer_uses_vision_capability_and_no_tools():
     assert requests[0]["stream"] is False
     assert "tools" not in requests[0]
     assert requests[0]["messages"][0]["_nz_user_attachments"]
+    finishes = [payload for name, payload in observed if name == "model_call_finish"]
+    assert len(finishes) == 1
+    assert finishes[0]["purpose"] == "vision"
+
+
+def test_provider_image_describer_cancels_gateway_poll_on_task_cancel():
+    """Cancelling image preflight must not wait for the Provider hard timeout."""
+    import threading
+
+    started = threading.Event()
+    release = threading.Event()
+    observed = []
+
+    class Provider:
+        name = "test"
+
+        def capabilities(self, model_id):
+            return ModelCapabilities(
+                provider="test",
+                model_id=model_id,
+                supports_image_input=True,
+            )
+
+        def create_client(self):
+            return object()
+
+        def create_completion(self, _client, **_kwargs):
+            started.set()
+            release.wait(timeout=2)
+            message = SimpleNamespace(content="late")
+            return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+    descriptor = ProviderImageDescriber(
+        "test",
+        "vision-model",
+        provider=Provider(),
+        client=object(),
+        observer=lambda name, payload: observed.append((name, payload)),
+    )
+
+    async def scenario():
+        task = asyncio.create_task(descriptor(
+            make_image_attachment(_PNG, "image/png", filename="terminal.png"),
+            "Read this screenshot.",
+        ))
+        while not started.is_set():
+            await asyncio.sleep(0.005)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        release.set()
+
+    finishes = [payload for name, payload in observed if name == "model_call_finish"]
+    assert len(finishes) == 1
+    assert finishes[0]["purpose"] == "vision"
+    assert finishes[0]["status"] == "cancelled"
 
 
 def test_agent_run_describes_before_main_nonvision_request(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
 
     requests = []
 

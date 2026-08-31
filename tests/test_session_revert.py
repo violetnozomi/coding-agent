@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import pytest
 
-from nz_coder.message_schema import attach_message_identity
-from nz_coder.runtime.session_processor import SessionProcessor
-from nz_coder.runtime.session_revert import SessionReverter
-from nz_coder.runtime.workspace_snapshot import SnapshotError, WorkspaceSnapshotStore
+from nz_coder.protocol.message_schema import attach_message_identity
+from nz_coder.runtime.session.session_processor import SessionProcessor
+from nz_coder.runtime.session.session_revert import SessionReverter
+from nz_coder.runtime.process.workspace_snapshot import SnapshotError, WorkspaceSnapshotStore
 
 
 def _history(tmp_path):
@@ -79,7 +79,7 @@ def test_revert_persistence_failure_restores_workspace_and_history(tmp_path, mon
         raise OSError("disk full")
 
     monkeypatch.setattr(
-        "nz_coder.runtime.session_revert.write_session_runtime_json",
+        "nz_coder.runtime.session.session_revert.write_session_runtime_json",
         fail_write,
     )
 

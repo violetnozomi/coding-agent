@@ -18,8 +18,8 @@ from nz_coder.http_service.daemon import (
     start_daemon,
     stop_daemon,
 )
-from nz_coder.runtime.workdir import scoped_workdir
-from nz_coder.sessions import save_session
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.state.sessions import save_session
 
 
 def test_windows_process_identity_uses_native_creation_time_without_shell():
@@ -150,6 +150,38 @@ def test_daemon_private_writer_hardens_directory_and_final_file(tmp_path, monkey
     assert target in hardened
 
 
+@pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
+def test_daemon_status_rejects_invalid_timeout_before_state_access(tmp_path, timeout):
+    with pytest.raises(ValueError, match="status timeout"):
+        daemon_status(state_root=tmp_path, timeout=timeout)
+
+
+@pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
+def test_daemon_start_rejects_invalid_startup_timeout_before_spawn(tmp_path, timeout):
+    with pytest.raises(ValueError, match="startup timeout"):
+        start_daemon(state_root=tmp_path, port=0, startup_timeout=timeout)
+    assert not tmp_path.exists() or not any(tmp_path.rglob("state.json"))
+
+
+@pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
+def test_daemon_stop_rejects_invalid_timeout_before_state_access(tmp_path, timeout):
+    with pytest.raises(ValueError, match="stop timeout"):
+        stop_daemon(state_root=tmp_path, timeout=timeout)
+
+
+def test_daemon_state_rejects_nonstandard_numbers_and_preserves_previous(tmp_path):
+    from nz_coder.http_service import daemon
+
+    target = tmp_path / "state.json"
+    target.write_text('{"pid":NaN}', encoding="utf-8")
+    assert daemon._load_state(target) == {}
+
+    daemon._atomic_state(target, {"pid": 42})
+    with pytest.raises(ValueError):
+        daemon._atomic_state(target, {"pid": float("nan")})
+    assert json.loads(target.read_text(encoding="utf-8")) == {"pid": 42}
+
+
 def test_daemon_start_status_stop_owns_pid_and_private_token(tmp_path: Path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -175,7 +207,7 @@ def test_daemon_start_status_stop_owns_pid_and_private_token(tmp_path: Path):
         if os.name != "nt":
             assert token_path.stat().st_mode & 0o077 == 0
         else:
-            from nz_coder.private_paths import inspect_private_path
+            from nz_coder.foundation.private_paths import inspect_private_path
 
             assert inspect_private_path(token_path).hardened is True
             assert inspect_private_path(token_path.parent).hardened is True

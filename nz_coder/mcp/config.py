@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.mcp.trust import MCPTrustStore
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 _ENV_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")

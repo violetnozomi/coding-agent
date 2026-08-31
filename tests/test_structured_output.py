@@ -28,7 +28,7 @@ FINDING_SCHEMA = {
 
 
 def _agent(schema=FINDING_SCHEMA):
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
 
     return AgentGraph([
         AgentSpec(
@@ -41,7 +41,7 @@ def _agent(schema=FINDING_SCHEMA):
 
 
 def test_extract_prefers_last_fenced_json_and_handles_nested_shapes():
-    from nz_coder.runtime.structured_output import extract_json_candidate
+    from nz_coder.runtime.conversation.structured_output import extract_json_candidate
 
     text = (
         "draft ```json\n{\"old\": true}\n```\n"
@@ -54,7 +54,7 @@ def test_extract_prefers_last_fenced_json_and_handles_nested_shapes():
 
 
 def test_schema_validator_reports_nested_required_and_extra_fields():
-    from nz_coder.runtime.structured_output import validate_against_schema
+    from nz_coder.runtime.conversation.structured_output import validate_against_schema
 
     errors = validate_against_schema(
         {
@@ -76,7 +76,7 @@ def test_schema_validator_reports_nested_required_and_extra_fields():
 
 
 def test_schema_declaration_rejects_silently_unsupported_constraints():
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
 
     with pytest.raises(ValueError, match="unsupported.*minimum"):
         AgentGraph([
@@ -92,8 +92,29 @@ def test_schema_declaration_rejects_silently_unsupported_constraints():
         ], start="reviewer")
 
 
+def test_schema_declaration_rejects_nonstandard_json_numbers():
+    from nz_coder.runtime.conversation.structured_output import assert_supported_output_schema
+
+    with pytest.raises(ValueError, match="JSON serializable"):
+        assert_supported_output_schema({"type": "number", "default": float("nan")})
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_structured_output_rejects_nonstandard_json_numbers(constant: str):
+    """A permissive Python parser must not widen the wire JSON contract."""
+    from nz_coder.runtime.conversation.structured_output import evaluate_structured_output
+
+    evaluated = evaluate_structured_output(
+        f'{{"value": {constant}}}',
+        {"type": "object"},
+    )
+
+    assert evaluated.ok is False
+    assert "valid JSON" in evaluated.errors[0]
+
+
 def test_output_schema_is_owned_by_terminal_agent():
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec, HandoffSpec
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
 
     with pytest.raises(ValueError, match="terminal owner"):
         AgentGraph([
@@ -109,10 +130,10 @@ def test_output_schema_is_owned_by_terminal_agent():
 
 
 def test_declared_agent_surfaces_valid_structured_output(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.composition import build_declared_agent
-    from nz_coder.runtime.structured_output import STRUCTURED_OUTPUT_KEY
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.composition import build_declared_agent
+    from nz_coder.runtime.conversation.structured_output import STRUCTURED_OUTPUT_KEY
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     fake = FakeClient([FakeResponse(FakeMessage(
         'Review complete.\n```json\n'
@@ -145,12 +166,12 @@ def test_declared_agent_surfaces_valid_structured_output(tmp_path):
 
 
 def test_invalid_output_gets_one_seeded_no_tool_repair(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.composition import build_declared_agent
-    from nz_coder.runtime.structured_output import (
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.composition import build_declared_agent
+    from nz_coder.runtime.conversation.structured_output import (
         STRUCTURED_OUTPUT_REPAIR_SYSTEM_PROMPT,
     )
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     fake = FakeClient([
         FakeResponse(FakeMessage("prose without json")),
@@ -191,9 +212,9 @@ def test_invalid_output_gets_one_seeded_no_tool_repair(tmp_path):
 
 
 def test_invalid_repair_does_not_publish_unvalidated_structured_value(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.composition import build_declared_agent
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.composition import build_declared_agent
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     fake = FakeClient([
         FakeResponse(FakeMessage("no json")),
@@ -222,9 +243,9 @@ def test_invalid_repair_does_not_publish_unvalidated_structured_value(tmp_path):
 
 
 def test_invalid_terminal_signal_repairs_before_settling(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.composition import build_declared_agent
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.composition import build_declared_agent
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     fake = FakeClient([
         FakeResponse(FakeMessage(tool_calls=[FakeToolCall(
@@ -258,11 +279,11 @@ def test_invalid_terminal_signal_repairs_before_settling(tmp_path):
 
 
 def test_as_tool_result_carries_validated_structured_payload_to_caller(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.composition import build_declared_agent
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec, HandoffSpec
-    from nz_coder.runtime.structured_output import STRUCTURED_OUTPUT_KEY
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.composition import build_declared_agent
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
+    from nz_coder.runtime.conversation.structured_output import STRUCTURED_OUTPUT_KEY
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     graph = AgentGraph([
         AgentSpec(

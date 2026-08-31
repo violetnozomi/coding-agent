@@ -4,14 +4,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from nz_coder.intelligence.code_index import CallResolutionRequest, ResolvedCallLocation
-from nz_coder.lsp.client import path_to_uri, uri_to_path
+from nz_coder.lsp.client import _validated_timeout, path_to_uri, uri_to_path
 from nz_coder.lsp.manager import get_client_for_file
 
 
 class LspCallTargetResolver:
     def __init__(self, workspace: Path, *, request_timeout: float = 1.0) -> None:
         self.workspace = Path(workspace).resolve()
-        self.request_timeout = max(0.05, float(request_timeout))
+        self.request_timeout = _validated_timeout(request_timeout)
 
     @staticmethod
     def _first_location(value) -> dict | None:

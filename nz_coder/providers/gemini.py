@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any, Iterable, Iterator
 from urllib.parse import quote
 
-from nz_coder import config
-from nz_coder.attachments import attachment_base64, normalize_attachments
+from nz_coder.foundation import config
+from nz_coder.protocol.attachments import attachment_base64, normalize_attachments
 from nz_coder.providers.http import NativeClient, UrllibTransport
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
@@ -351,25 +352,37 @@ def _gemini_finish_reason(value: Any, *, has_tools: bool = False) -> str:
 
 def _gemini_usage(value: Any) -> dict[str, int]:
     source = value if isinstance(value, dict) else {}
-    input_tokens = max(0, int(source.get("promptTokenCount") or 0))
-    output_tokens = max(0, int(source.get("candidatesTokenCount") or 0))
+    input_tokens = _usage_token(source.get("promptTokenCount"))
+    output_tokens = _usage_token(source.get("candidatesTokenCount"))
     total_tokens = max(
-        0,
-        int(source.get("totalTokenCount") or input_tokens + output_tokens),
+        input_tokens + output_tokens,
+        _usage_token(source.get("totalTokenCount")),
     )
+    cache_read = _usage_token(source.get("cachedContentTokenCount"))
     result = {
         "input_tokens": input_tokens,
         "uncached_input_tokens": max(
             0,
-            input_tokens - int(source.get("cachedContentTokenCount") or 0),
+            input_tokens - cache_read,
         ),
         "output_tokens": output_tokens,
         "total_tokens": total_tokens,
     }
-    reasoning_tokens = max(0, int(source.get("thoughtsTokenCount") or 0))
-    cache_read = max(0, int(source.get("cachedContentTokenCount") or 0))
+    reasoning_tokens = _usage_token(source.get("thoughtsTokenCount"))
     if reasoning_tokens:
         result["reasoning_tokens"] = reasoning_tokens
     if cache_read:
         result["cache_read_input_tokens"] = cache_read
     return result
+
+
+def _usage_token(value: Any) -> int:
+    if isinstance(value, bool) or value is None:
+        return 0
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    if not math.isfinite(number) or number < 0 or number > 1_000_000_000_000:
+        return 0
+    return int(number)

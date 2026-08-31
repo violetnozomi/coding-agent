@@ -18,7 +18,7 @@ from prompt_toolkit.document import Document
 from nz_coder.interface.commands import build_default_registry
 from nz_coder.interface.terminal_input import TerminalCompleter, scan_workspace_files
 from nz_coder.interface.timeline import format_transcript
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state.sessions import list_sessions, session_dir
 from nz_coder.tool_platform.results import ToolResultBudget, ToolResultProjector
 

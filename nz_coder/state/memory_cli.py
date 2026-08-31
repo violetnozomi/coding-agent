@@ -5,7 +5,7 @@ import argparse
 import json
 import sys
 
-from nz_coder.memory import current_memory_manager
+from nz_coder.state.memory import current_memory_manager
 from nz_coder.state.memory_control import MemoryControlPlane
 
 

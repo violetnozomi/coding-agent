@@ -6,7 +6,7 @@ import threading
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from nz_coder.attachments import MAX_IMAGE_BYTES
+from nz_coder.protocol.attachments import MAX_IMAGE_BYTES
 from nz_coder.tools import ToolOutput, dispatch, get_execution_mode, get_specs
 from nz_coder.tools.webfetch import MAX_RESPONSE_BYTES, webfetch
 
@@ -166,3 +166,21 @@ def test_webfetch_rejects_invalid_urls_redirects_and_parameters():
     assert webfetch("https://example.test/", timeout=0) == (
         "Error: timeout must be greater than zero"
     )
+
+
+def test_webfetch_rejects_nonfinite_timeout_before_network(monkeypatch):
+    called = False
+
+    def fail_if_called(_url):
+        nonlocal called
+        called = True
+        raise AssertionError("network opener must not be created")
+
+    monkeypatch.setattr("nz_coder.tools.webfetch._opener_for", fail_if_called)
+
+    for timeout in (float("nan"), float("inf"), float("-inf")):
+        assert webfetch("https://example.test/", timeout=timeout) == (
+            "Error: timeout must be a positive finite number"
+        )
+
+    assert called is False

@@ -7,13 +7,13 @@ import time
 
 import pytest
 
-from nz_coder.runtime.loop import (
+from nz_coder.runtime.execution.loop import (
     AgentLoop,
     _execute_concurrent_async,
     _to_thread_settled,
 )
 from nz_coder.state.transaction import TransactionManager
-from nz_coder.tool_executor import ToolExecutionResult
+from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
 
 
 class _Tracer:

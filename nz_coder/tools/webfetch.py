@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ipaddress
+import math
 import re
 import zlib
 from html.parser import HTMLParser
@@ -9,7 +10,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
-from nz_coder.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
+from nz_coder.protocol.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
 from nz_coder.tools import ToolOutput, register
 
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -202,9 +203,12 @@ def webfetch(
         elif isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
             raise ValueError("timeout must be a number of seconds")
         else:
-            timeout_seconds = min(float(timeout), MAX_TIMEOUT_SECONDS)
+            timeout_seconds = float(timeout)
+            if not math.isfinite(timeout_seconds):
+                raise ValueError("timeout must be a positive finite number")
             if timeout_seconds <= 0:
                 raise ValueError("timeout must be greater than zero")
+            timeout_seconds = min(timeout_seconds, MAX_TIMEOUT_SECONDS)
 
         normalized_url = _normalize_url(url)
         request = Request(
@@ -298,4 +302,6 @@ register(
     },
     handler=webfetch,
     execution="read",
+    side_effect="reads-network",
+    plan_mode_allowed=True,
 )

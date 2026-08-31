@@ -12,8 +12,8 @@ from nz_coder.interface.commands.registry import CommandContext
 from nz_coder.interface.commands.registry import product_command_category
 from nz_coder.interface.selector import SelectorActionResult
 from nz_coder.interface.timeline import format_transcript
-from nz_coder.runtime.workdir import scoped_workdir
-from nz_coder.sessions import load_session, rename_session, save_session
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.state.sessions import load_session, rename_session, save_session
 
 
 class _Console:

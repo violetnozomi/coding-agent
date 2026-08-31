@@ -4,9 +4,9 @@ from __future__ import annotations
 import pytest
 
 from nz_coder.providers import OpenAICompatibleProvider, create_provider
-from nz_coder.runtime.loop import AgentLoop
-from nz_coder.runtime.subagent import _completion_with_timeout
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.execution.loop import AgentLoop
+from nz_coder.runtime.agent.subagent import _completion_with_timeout
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 class _FakeCompletions:

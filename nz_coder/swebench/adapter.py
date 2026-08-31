@@ -114,7 +114,7 @@ class SWEBenchAdapter:
         if instance_ids:
             cmd.extend(["--instance_ids", *instance_ids])
         if args.clean:
-            cmd.append("--clean")
+            cmd.extend(["--clean", "true"])
 
         print("Running official SWE-bench harness:")
         print(" ".join(cmd))
@@ -380,8 +380,13 @@ def _instance_image_name(
 
 
 def _docker_pull_with_timeout(image: str, timeout: int) -> tuple[bool, str]:
-    queue: multiprocessing.Queue = multiprocessing.Queue()
-    process = multiprocessing.Process(target=_docker_pull_worker, args=(image, queue), daemon=True)
+    context = multiprocessing.get_context("spawn")
+    queue: multiprocessing.Queue = context.Queue()
+    process = context.Process(
+        target=_docker_pull_worker,
+        args=(image, queue),
+        daemon=True,
+    )
     process.start()
     process.join(timeout)
     if process.is_alive():

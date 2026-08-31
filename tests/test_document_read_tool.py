@@ -1,12 +1,12 @@
 """Source-contract tests for InfCode-aligned PDF/DOCX ``read_file`` reads."""
 from __future__ import annotations
 
-from nz_coder.documents import (
+from nz_coder.capabilities.documents import (
     DocumentPageRange,
     parse_document_pages,
     read_document_file,
 )
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools import TOOL_SPECS, ToolOutput
 from nz_coder.tools.files import read_file
 
@@ -46,9 +46,9 @@ def test_pdf_without_pages_requires_pagination_above_twenty(
 ):
     pdf = tmp_path / "long.pdf"
     pdf.write_bytes(b"%PDF-1.4\n%%EOF")
-    monkeypatch.setattr("nz_coder.documents._pdf_page_count", lambda *_args: 21)
+    monkeypatch.setattr("nz_coder.capabilities.documents._pdf_page_count", lambda *_args: 21)
     monkeypatch.setattr(
-        "nz_coder.documents._extract_pdf",
+        "nz_coder.capabilities.documents._extract_pdf",
         lambda *_args: (_ for _ in ()).throw(AssertionError("must not convert")),
     )
 
@@ -67,13 +67,13 @@ def test_pdf_page_ranges_have_independent_sidecars(tmp_path, monkeypatch):
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.4\n%%EOF")
     calls = []
-    monkeypatch.setattr("nz_coder.documents._pdf_page_count", lambda *_args: 40)
+    monkeypatch.setattr("nz_coder.capabilities.documents._pdf_page_count", lambda *_args: 40)
 
     def extract(_path, _cache, _cancel, start, end):
         calls.append((start, end))
         return f"pages {start}-{end}"
 
-    monkeypatch.setattr("nz_coder.documents._extract_pdf", extract)
+    monkeypatch.setattr("nz_coder.capabilities.documents._extract_pdf", extract)
 
     first = read_document_file(
         "paper.pdf",
@@ -107,7 +107,7 @@ def test_pdf_page_ranges_have_independent_sidecars(tmp_path, monkeypatch):
 def test_pdf_page_range_cannot_exceed_document(tmp_path, monkeypatch):
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.4\n%%EOF")
-    monkeypatch.setattr("nz_coder.documents._pdf_page_count", lambda *_args: 3)
+    monkeypatch.setattr("nz_coder.capabilities.documents._pdf_page_count", lambda *_args: 3)
 
     result = read_document_file(
         "paper.pdf",

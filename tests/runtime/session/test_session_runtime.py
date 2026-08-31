@@ -9,6 +9,7 @@ import pytest
 from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.core.result import RunStatus
+from nz_coder.runtime.core.result import TokenUsage
 from nz_coder.runtime.session.model import Session, SessionStatus
 from nz_coder.runtime.session.runtime import SessionRuntime
 
@@ -129,6 +130,21 @@ def test_checkpoint_and_finalize_persist_owned_session_once(tmp_path):
         asyncio.run(runtime.finalize(context, RunStatus.ERROR))
 
 
+def test_finalize_persists_blocked_as_distinct_terminal_status(tmp_path):
+    """Policy denial is durable state, not a generic execution error."""
+    store = MemorySessionStore()
+    runtime = SessionRuntime(store)
+    context = asyncio.run(runtime.open(_request(
+        tmp_path,
+        [{"role": "user", "content": "unsafe request"}],
+    )))
+
+    asyncio.run(runtime.finalize(context, RunStatus.BLOCKED))
+
+    assert context.terminal_status is RunStatus.BLOCKED
+    assert store.saved[-1].status is SessionStatus.BLOCKED
+
+
 def test_error_checkpoint_does_not_finalize_run_context(tmp_path):
     """Diagnostic persistence before lifecycle finalization remains resumable."""
     store = MemorySessionStore()
@@ -140,6 +156,120 @@ def test_error_checkpoint_does_not_finalize_run_context(tmp_path):
     assert context.finalized is False
     asyncio.run(runtime.finalize(context, RunStatus.ERROR))
     assert context.finalized is True
+
+
+def test_error_checkpoint_cleans_incomplete_tool_history_before_persistence(
+    tmp_path,
+):
+    """Catch checkpoints must never persist Provider-invalid tool pairing."""
+    store = MemorySessionStore()
+    runtime = SessionRuntime(store)
+    context = asyncio.run(runtime.open(_request(tmp_path, [
+        {"role": "user", "content": "inspect both files"},
+        {
+            "role": "assistant",
+            "content": "I will inspect them.",
+            "tool_calls": [
+                {
+                    "id": "call-settled",
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": "{}"},
+                },
+                {
+                    "id": "call-orphan",
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": "{}"},
+                },
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call-settled",
+            "content": "first.py",
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "unknown-result",
+            "content": "must be removed",
+        },
+    ])))
+
+    asyncio.run(runtime.checkpoint(context, SessionStatus.ERROR))
+
+    persisted = list(store.saved[-1].transcript)
+    assert [call["id"] for call in persisted[1]["tool_calls"]] == [
+        "call-settled",
+    ]
+    assert [
+        message["tool_call_id"]
+        for message in persisted
+        if message["role"] == "tool"
+    ] == ["call-settled"]
+
+
+def test_terminal_finalize_cleans_tail_orphan_without_losing_assistant_text(
+    tmp_path,
+):
+    """A failed tail call is stripped while honest visible text is retained."""
+    store = MemorySessionStore()
+    runtime = SessionRuntime(store)
+    context = asyncio.run(runtime.open(_request(tmp_path, [
+        {"role": "user", "content": "inspect app.py"},
+        {
+            "role": "assistant",
+            "content": "Starting the requested inspection.",
+            "tool_calls": [{
+                "id": "call-never-settled",
+                "type": "function",
+                "function": {"name": "read_file", "arguments": "{}"},
+            }],
+        },
+    ])))
+
+    asyncio.run(runtime.finalize(context, RunStatus.ERROR))
+
+    assistant = store.saved[-1].transcript[-1]
+    assert assistant["content"] == "Starting the requested inspection."
+    assert "tool_calls" not in assistant
+
+
+def test_terminal_save_failure_keeps_context_retryable_without_double_usage(
+    tmp_path,
+):
+    """A transient store failure cannot commit an in-memory false terminal."""
+
+    class FailingOnceStore(MemorySessionStore):
+        def __init__(self):
+            super().__init__()
+            self.attempts = 0
+
+        async def save(self, session):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise OSError("temporary storage failure")
+            await super().save(session)
+
+    store = FailingOnceStore()
+    runtime = SessionRuntime(store)
+    context = asyncio.run(runtime.open(_request(
+        tmp_path,
+        [{"role": "user", "content": "finish safely"}],
+    )))
+    context.add_usage(TokenUsage(input_tokens=7, output_tokens=3))
+
+    with pytest.raises(OSError, match="temporary storage failure"):
+        asyncio.run(runtime.finalize(context, RunStatus.ERROR))
+
+    assert context.finalized is False
+    assert context.terminal_status is None
+    assert context.session.status is SessionStatus.RUNNING
+    assert context.session.usage == TokenUsage()
+
+    asyncio.run(runtime.finalize(context, RunStatus.ERROR))
+
+    assert context.finalized is True
+    assert context.session.usage == TokenUsage(input_tokens=7, output_tokens=3)
+    assert store.saved[-1].usage == context.session.usage
 
 
 def test_run_context_snapshots_request_metadata(tmp_path):

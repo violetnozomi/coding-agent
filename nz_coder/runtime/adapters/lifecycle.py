@@ -3,16 +3,16 @@ from __future__ import annotations
 
 import copy
 
-from nz_coder import config
-from nz_coder.message_schema import bind_user_context
-from nz_coder.run_evidence import RunEvidence
+from nz_coder.foundation import config
+from nz_coder.protocol.message_schema import bind_user_context
+from nz_coder.runtime.observability.run_evidence import RunEvidence
 from nz_coder.runtime.core.lifecycle_context import (
     LifecycleExecutionContext,
     LifecycleRunState,
 )
-from nz_coder.runtime.session_revert import SessionReverter
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.sessions import session_runtime_state_path
+from nz_coder.runtime.session.session_revert import SessionReverter
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.state.sessions import session_runtime_state_path
 
 
 def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
@@ -47,7 +47,13 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         for source, target in mapping.items():
             setattr(host, target, getattr(state, source))
 
-    def prepare_runtime_state(task_text: str, max_turns: int, timeout: float) -> bool:
+    def prepare_runtime_state(
+        task_text: str,
+        max_turns: int,
+        timeout: float,
+        resume_activation: bool = False,
+        current_round_instruction: str = "",
+    ) -> bool:
         host._runtime_state_path = session_runtime_state_path(host.session_id)
         legacy_path = current_workdir() / ".nz-coder" / "runtime_state.json"
         host.runtime_state.reset(max_turns=max_turns, timeout_seconds=timeout)
@@ -58,15 +64,43 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
             restore_path = host._runtime_state_path
             if not restore_path.exists() and legacy_path.exists():
                 restore_path = legacy_path
-            restored = host.runtime_state.load(restore_path)
+            restored = host.runtime_state.load(
+                restore_path,
+                allow_inactive=resume_activation,
+            )
             if restored:
-                host.runtime_state.max_turns = max_turns
-                host.runtime_state.timeout_seconds = timeout
+                if resume_activation:
+                    host.runtime_state.begin_resumed_activation(
+                        max_turns=max_turns,
+                        timeout_seconds=timeout,
+                    )
+                else:
+                    host.runtime_state.max_turns = max_turns
+                    host.runtime_state.timeout_seconds = timeout
                 if not host.runtime_state.initial_task_text:
                     host.runtime_state.initial_task_text = task_text
+                if current_round_instruction:
+                    host.runtime_state.apply_current_round_instruction(
+                        current_round_instruction,
+                        workspace=current_workdir(),
+                    )
                 if host.runtime_state.plan_text:
                     host._sp.replace_category("plan", host.runtime_state.plan_text)
+        try:
+            host.runtime_state.workspace_git_available = (
+                current_workdir() / ".git"
+            ).exists()
+        except OSError:
+            host.runtime_state.workspace_git_available = None
         return bool(restored)
+
+    def assert_terminal(status: str) -> str:
+        """Keep admission evidence inside the focused lifecycle owner."""
+        resolved = host._assert_admission_terminal(status)
+        state.admission_terminal_violations = tuple(
+            getattr(host, "_admission_terminal_violations", ())
+        )
+        return resolved
 
     return LifecycleExecutionContext(
         run_state=state,
@@ -84,6 +118,7 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         current_agent_name=lambda: host.current_agent_name,
         structured_outputs=lambda: host._structured_outputs,
         clear_reverter=lambda: _clear_reverter(host),
+        clear_read_cache=lambda: _clear_read_cache(host),
         reset_hooks=host.hooks.reset_run_state,
         clear_reasoning_escalation=host._agent_reasoning_escalated.clear,
         restore_agent_role=lambda: _restore_agent_role(host),
@@ -95,7 +130,7 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         publish_started=lambda messages, stream, max_turns: _publish_started(
             host, messages, stream, max_turns,
         ),
-        assert_terminal=host._assert_admission_terminal,
+        assert_terminal=assert_terminal,
         finish_lineage=host._finish_lineage,
         persist_assistant_end=host._persist_assistant_end_state,
         runtime_summary=host._runtime_summary,
@@ -149,6 +184,13 @@ def _clear_reverter(host) -> None:
     reverter = getattr(host, "session_reverter", None)
     if isinstance(reverter, SessionReverter):
         reverter.clear()
+
+
+def _clear_read_cache(host) -> None:
+    executor = getattr(host, "executor", None)
+    clear = getattr(executor, "clear_read_cache", None)
+    if callable(clear):
+        clear()
 
 
 def _start_run_evidence(host) -> None:

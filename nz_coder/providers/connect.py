@@ -9,8 +9,8 @@ import tempfile
 from urllib.parse import urlsplit
 
 from nz_coder.providers.configuration import set_provider_connection_override
-from nz_coder.private_paths import harden_private_path
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.runtime.process.workdir import current_workdir
 
 
 @dataclass(frozen=True)

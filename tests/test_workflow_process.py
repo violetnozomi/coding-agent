@@ -20,7 +20,7 @@ def _state(status: str = "queued") -> dict:
 
 
 def test_workflow_snapshot_tracks_revision_counts_and_progress(tmp_path):
-    from nz_coder.runtime.workflow_process import WorkflowProcessStore
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
 
     store = WorkflowProcessStore(
         tmp_path / "workflow",
@@ -54,7 +54,7 @@ def test_workflow_snapshot_tracks_revision_counts_and_progress(tmp_path):
 
 
 def test_workflow_event_log_replays_when_snapshot_is_missing(tmp_path):
-    from nz_coder.runtime.workflow_process import WorkflowProcessStore
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
 
     root = tmp_path / "workflow"
     store = WorkflowProcessStore(root, "parent", agent_cap=4)
@@ -69,7 +69,7 @@ def test_workflow_event_log_replays_when_snapshot_is_missing(tmp_path):
 
 
 def test_workflow_event_log_ignores_only_truncated_tail(tmp_path):
-    from nz_coder.runtime.workflow_process import WorkflowProcessStore
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
 
     root = tmp_path / "workflow"
     store = WorkflowProcessStore(root, "parent", agent_cap=4)
@@ -83,7 +83,7 @@ def test_workflow_event_log_ignores_only_truncated_tail(tmp_path):
 
 
 def test_workflow_event_log_rejects_corrupt_complete_middle(tmp_path):
-    from nz_coder.runtime.workflow_process import WorkflowProcessStore
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
 
     root = tmp_path / "workflow"
     WorkflowProcessStore(root, "parent", agent_cap=4)
@@ -95,7 +95,7 @@ def test_workflow_event_log_rejects_corrupt_complete_middle(tmp_path):
 
 
 def test_workflow_reconcile_is_idempotent(tmp_path):
-    from nz_coder.runtime.workflow_process import WorkflowProcessStore
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
 
     store = WorkflowProcessStore(tmp_path / "workflow", "parent", agent_cap=4)
     store.reconcile([_state()])

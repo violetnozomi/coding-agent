@@ -21,8 +21,8 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Optional
 
-from nz_coder import config
-from nz_coder.ripgrep import RipgrepFilesCancelled, list_ripgrep_files
+from nz_coder.foundation import config
+from nz_coder.capabilities.ripgrep import RipgrepFilesCancelled, list_ripgrep_files
 from nz_coder.state.workdir import current_workdir
 from nz_coder.tools import ToolOutput, current_tool_cancel_event, register
 
@@ -520,4 +520,5 @@ register(
         "required": ["name"],
     },
     handler=_load_skill,
+    plan_mode_allowed=True,
 )

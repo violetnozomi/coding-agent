@@ -102,4 +102,5 @@ register(
         "required": ["project_spec", "blueprint"],
     },
     handler=plan_project_acceptance_tool,
+    side_effect="readonly",
 )

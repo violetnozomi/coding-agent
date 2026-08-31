@@ -140,6 +140,78 @@ def test_policy_routes_short_business_intent_without_identifier_threshold(tmp_pa
         service.close()
 
 
+def test_policy_language_metadata_does_not_materialize_full_snapshot(
+    tmp_path, monkeypatch,
+) -> None:
+    """First-turn routing stays cheap when the full symbol graph is expensive."""
+    from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
+
+    (tmp_path / "app.py").write_text("def run(): return 1\n", encoding="utf-8")
+    (tmp_path / "main.go").write_text(
+        "package main\nfunc main() {}\n",
+        encoding="utf-8",
+    )
+    service = _service(tmp_path)
+    monkeypatch.setattr(
+        service.index,
+        "snapshot",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("full snapshot is not a metadata query")
+        ),
+    )
+    monkeypatch.setattr(
+        service.index,
+        "languages",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("routing metadata must not wait for the index lock")
+        ),
+    )
+    try:
+        decision = RepoRetrievalPolicy(hot_path_ms=500).decide(
+            "fix duplicate invoice retries",
+            service=service,
+            strategy="guidance",
+        )
+
+        assert decision.signal.languages == ("go", "python")
+    finally:
+        service.close()
+
+
+def test_policy_routes_declared_contract_artifacts_as_known_locations(tmp_path) -> None:
+    """Planner-owned artifact paths must outrank a vague natural-language query."""
+    from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
+
+    (tmp_path / "cron_engine").mkdir()
+    (tmp_path / "cron_engine" / "parser.py").write_text(
+        "def parse(value): return value\n",
+        encoding="utf-8",
+    )
+    service = _service(tmp_path)
+    try:
+        decision = RepoRetrievalPolicy(hot_path_ms=500).decide(
+            "完善名称范围支持并补充测试",
+            service=service,
+            strategy="guidance",
+            semantic_available=False,
+            known_paths=(
+                "cron_engine/parser.py",
+                "cron_engine/tests/test_parser.py",
+            ),
+        )
+
+        assert decision.signal.task_class == "known-location"
+        assert decision.signal.recommended_operation == "read"
+        assert decision.signal.recommended_tools == ("read_file",)
+        assert decision.signal.candidate_files == (
+            "cron_engine/parser.py",
+            "cron_engine/tests/test_parser.py",
+        )
+        assert "skip broad repository orientation" in decision.guidance
+    finally:
+        service.close()
+
+
 @pytest.mark.parametrize(("query", "expected"), [
     ("fix src/auth/api.py", "known-location"),
     ("update packages/billing/service.ts", "known-location"),
@@ -373,7 +445,7 @@ def test_sentence_transformer_provider_records_load_failure(monkeypatch) -> None
 
 
 def test_semantic_tool_schema_is_hidden_from_run_without_ready_backend():
-    from nz_coder.runtime.loop import ProductRunEnvironment
+    from nz_coder.runtime.execution.loop import ProductRunEnvironment
     from nz_coder.tools import get_specs
 
     host = object.__new__(ProductRunEnvironment)
@@ -389,7 +461,7 @@ def test_semantic_tool_schema_is_hidden_from_run_without_ready_backend():
 
 
 def test_semantic_tool_schema_is_exposed_only_for_ready_backend():
-    from nz_coder.runtime.loop import ProductRunEnvironment
+    from nz_coder.runtime.execution.loop import ProductRunEnvironment
 
     host = object.__new__(ProductRunEnvironment)
     host._structured_output_active_repair = ""
@@ -401,7 +473,7 @@ def test_semantic_tool_schema_is_exposed_only_for_ready_backend():
 
 
 def test_explicit_semantic_tool_uses_query_budget_not_hot_path_budget(monkeypatch, tmp_path):
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tools.semantic_search import semantic_search
 
     captured = {}

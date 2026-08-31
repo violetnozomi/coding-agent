@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.intelligence.analyzers import (
     AnalysisResult,
     AnalyzerRegistry,
@@ -32,6 +32,13 @@ EXCLUDED_DIRS = frozenset({
     ".pytest_cache", ".ruff_cache", ".svn", ".tox", ".venv",
     "__pycache__", "build", "dist", "node_modules", "site-packages", "venv",
 })
+
+
+def is_excluded_directory(name: str) -> bool:
+    """Return whether a directory is known generated or internal state."""
+    return name in EXCLUDED_DIRS
+
+
 SCHEMA_VERSION = 3
 # Compatibility hook: analyzers share this stdlib module object and historical
 # tests/extensions patch ``code_index.ast.parse`` to observe AST cache reuse.
@@ -463,7 +470,11 @@ class PersistentCodeIndex:
             candidates.append(base)
         else:
             for root, dir_names, file_names in os.walk(base, followlinks=False):
-                dir_names[:] = sorted(name for name in dir_names if name not in EXCLUDED_DIRS)
+                dir_names[:] = sorted(
+                    name
+                    for name in dir_names
+                    if not is_excluded_directory(name)
+                )
                 candidates.extend(Path(root) / name for name in sorted(file_names))
         files: list[Path] = []
         omitted = 0
@@ -1188,6 +1199,17 @@ class PersistentCodeIndex:
     def generation(self) -> int:
         with self._lock, self._connect() as connection:
             return self._generation(connection)
+
+    def languages(self) -> tuple[str, ...]:
+        """Return indexed languages without materializing symbols or edges."""
+        with self._lock, self._connect() as connection:
+            return tuple(
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT DISTINCT language FROM files "
+                    "WHERE language <> '' ORDER BY language"
+                )
+            )
 
     def snapshot(self, paths: list[str] | None = None) -> IndexSnapshot:
         """Load a consistent persistent snapshot without touching the filesystem."""

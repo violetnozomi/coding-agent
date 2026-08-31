@@ -126,6 +126,157 @@ def test_fullscreen_selector_is_an_overlay_not_a_second_application():
     asyncio.run(scenario())
 
 
+def test_fullscreen_selector_detail_is_complete_and_independently_scrollable():
+    async def scenario() -> None:
+        with create_pipe_input() as pipe:
+            composer = FullscreenComposer(
+                transcript_provider=lambda: "Session",
+                status_provider=lambda: "provider/model · plan",
+                sidebar_provider=None,
+                sidebar_mode="hide",
+                completer=DummyCompleter(),
+                history=None,
+                style=Style.from_dict({}),
+                mouse_support=False,
+                empty_ctrl_c_requests_exit=lambda: False,
+                clear_exit_request=lambda: None,
+                input=pipe,
+                output=DummyOutput(),
+            )
+            detail = "# Approved plan\n\n" + "\n".join(
+                f"- Step {index}: detailed action" for index in range(30)
+            ) + "\nFINAL-MARKER"
+            selected = asyncio.create_task(composer.select_async(
+                title="Plan ready",
+                text="Read the full plan · PgUp/PgDn scroll · Enter select",
+                detail=detail,
+                values=[("approve", "Approve plan"), ("revise", "Keep planning")],
+            ))
+            await asyncio.sleep(0.05)
+
+            assert composer._dialog_kind == "selector-detail"
+            rendered = "\n".join(
+                "".join(fragment[1] for fragment in line)
+                for line in composer._detail_content_lines(68)
+            )
+            assert "FINAL-MARKER" in rendered
+            composer._scroll_detail(10)
+            assert composer._selector_detail_window.vertical_scroll == 10
+
+            pipe.send_text("\x1b")
+            assert await asyncio.wait_for(selected, 1) is None
+            await composer.close_async()
+
+    asyncio.run(scenario())
+
+
+def test_fullscreen_first_idle_ctrl_c_shows_confirmation_hint():
+    async def scenario() -> None:
+        with create_pipe_input() as pipe:
+            composer = FullscreenComposer(
+                transcript_provider=lambda: "Session",
+                status_provider=lambda: "provider/model",
+                sidebar_provider=None,
+                sidebar_mode="hide",
+                completer=DummyCompleter(),
+                history=None,
+                style=Style.from_dict({}),
+                mouse_support=False,
+                empty_ctrl_c_requests_exit=lambda: False,
+                clear_exit_request=lambda: None,
+                input=pipe,
+                output=DummyOutput(),
+            )
+            read = asyncio.create_task(composer.read_async())
+            await asyncio.sleep(0.05)
+            pipe.send_text("\x03")
+            await asyncio.sleep(0.05)
+            assert "Ctrl+C again" in _plain(composer._footer())
+            read.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await read
+            await composer.close_async()
+
+    asyncio.run(scenario())
+
+
+def test_fullscreen_run_cancel_is_immediately_visible():
+    async def scenario() -> None:
+        cancelled = []
+        with create_pipe_input() as pipe:
+            composer = FullscreenComposer(
+                transcript_provider=lambda: "Session",
+                status_provider=lambda: "provider/model",
+                sidebar_provider=None,
+                sidebar_mode="hide",
+                completer=DummyCompleter(),
+                history=None,
+                style=Style.from_dict({}),
+                mouse_support=False,
+                empty_ctrl_c_requests_exit=lambda: False,
+                clear_exit_request=lambda: None,
+                input=pipe,
+                output=DummyOutput(),
+            )
+            await composer.start_async()
+            composer.begin_run()
+            composer.set_cancel_run(lambda: cancelled.append(True))
+            pipe.send_text("\x03")
+            await asyncio.sleep(0.05)
+            assert cancelled == [True]
+            assert any("Cancellation requested" in line for line in composer._run_status)
+            await composer.close_async()
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_terminal_notice_survives_fullscreen_end_run():
+    """The durable idle screen must retain the cancellation result."""
+    composer = FullscreenComposer(
+        transcript_provider=lambda: "Session",
+        status_provider=lambda: "provider/model",
+        sidebar_provider=None,
+        sidebar_mode="hide",
+        completer=DummyCompleter(),
+        history=None,
+        style=Style.from_dict({}),
+        mouse_support=False,
+        empty_ctrl_c_requests_exit=lambda: False,
+        clear_exit_request=lambda: None,
+        output=DummyOutput(),
+    )
+
+    composer.begin_run()
+    composer.append_output("temporary tool output")
+    composer.append_notice("■ Run cancelled · 0 tool(s) · 0.2s")
+    composer.end_run()
+
+    rendered = "".join(text for _style, text in composer._transcript_fragments())
+    assert "Run cancelled" in rendered
+    assert "temporary tool output" not in rendered
+
+
+def test_begin_run_folds_old_command_notices_out_of_live_region():
+    composer = FullscreenComposer(
+        transcript_provider=lambda: "Session",
+        status_provider=lambda: "provider/model",
+        sidebar_provider=None,
+        sidebar_mode="hide",
+        completer=DummyCompleter(),
+        history=None,
+        style=Style.from_dict({}),
+        mouse_support=False,
+        empty_ctrl_c_requests_exit=lambda: False,
+        clear_exit_request=lambda: None,
+        output=DummyOutput(),
+    )
+    composer.append_output("old /help output")
+
+    composer.begin_run()
+
+    assert composer._notices == []
+
+
 def test_fullscreen_preferences_update_without_rebuilding_application():
     style = Style.from_dict({"status": "#ffffff"})
     composer = FullscreenComposer(

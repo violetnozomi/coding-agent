@@ -3,8 +3,8 @@ from __future__ import annotations
 
 
 def test_legacy_categories_fold_into_plan(tmp_path):
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.sessions import scoped_session
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import scoped_session
     from nz_coder.tools.scratchpad import Scratchpad
 
     scratchpad = Scratchpad()
@@ -30,8 +30,8 @@ def test_invalid_scratchpad_category_still_errors():
 
 
 def test_scratchpad_persists_across_instances(tmp_path):
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.sessions import scoped_session, session_scratchpad_path
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import scoped_session, session_scratchpad_path
     from nz_coder.tools.scratchpad import Scratchpad
 
     with scoped_workdir(tmp_path), scoped_session("persisted-session"):
@@ -50,8 +50,8 @@ def test_scratchpad_persists_across_instances(tmp_path):
 
 def test_todo_persists_priority_and_cancelled_state(tmp_path):
     import json
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.sessions import scoped_session, session_todo_path
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import scoped_session, session_todo_path
     from nz_coder.tools import todo
 
     with scoped_workdir(tmp_path), scoped_session("todo-session"):
@@ -84,8 +84,8 @@ def test_scratchpad_restores_in_fresh_python_process(tmp_path):
     import subprocess
     import sys
     from pathlib import Path
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.sessions import scoped_session
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import scoped_session
     from nz_coder.tools.scratchpad import Scratchpad
 
     with scoped_workdir(tmp_path), scoped_session("fresh-process"):
@@ -93,8 +93,8 @@ def test_scratchpad_restores_in_fresh_python_process(tmp_path):
         assert not first.update("plan", "persist across process restart").startswith("Error:")
 
     script = (
-        "import sys; from pathlib import Path; from nz_coder import config; "
-        "config.WORKDIR = Path(sys.argv[1]); from nz_coder.sessions import activate_session; "
+        "import sys; from pathlib import Path; from nz_coder.foundation import config; "
+        "config.WORKDIR = Path(sys.argv[1]); from nz_coder.state.sessions import activate_session; "
         "activate_session('fresh-process'); from nz_coder.tools.scratchpad import Scratchpad; "
         "print(Scratchpad().read())"
     )

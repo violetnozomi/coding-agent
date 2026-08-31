@@ -8,7 +8,7 @@ import shlex
 import sys
 import time
 
-from nz_coder.runtime.process_service import ProcessService
+from nz_coder.runtime.process.process_service import ProcessService
 
 
 @dataclass(frozen=True)

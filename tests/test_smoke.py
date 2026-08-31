@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 def test_imports():
-    from nz_coder import config
+    from nz_coder.foundation import config
     assert config.MODEL_ID
     assert config.WORKDIR
 
@@ -34,10 +34,10 @@ def test_tool_registration():
     import nz_coder.tools.todo       # noqa
     import nz_coder.tools.question   # noqa
     import nz_coder.tools.repo_intel  # noqa
-    import nz_coder.project_profile   # noqa
-    import nz_coder.verification_planner  # noqa
-    import nz_coder.impact_analyzer   # noqa
-    import nz_coder.reviewer          # noqa
+    import nz_coder.intelligence.project_profile   # noqa
+    import nz_coder.intelligence.verification_planner  # noqa
+    import nz_coder.intelligence.impact_analyzer   # noqa
+    import nz_coder.intelligence.reviewer          # noqa
     import nz_coder.project_creation.requirement_analyzer  # noqa
     import nz_coder.project_creation.blueprint  # noqa
     import nz_coder.project_creation.templates  # noqa
@@ -45,9 +45,9 @@ def test_tool_registration():
     import nz_coder.project_creation.completeness  # noqa
     import nz_coder.project_creation.acceptance_planner  # noqa
     import nz_coder.project_creation.verifier  # noqa
-    import nz_coder.subagent          # noqa
-    import nz_coder.memory            # noqa
-    import nz_coder.skills            # noqa
+    import nz_coder.runtime.agent.subagent          # noqa
+    import nz_coder.state.memory            # noqa
+    import nz_coder.state.skills            # noqa
 
     specs = get_specs()
     names = [s["function"]["name"] for s in specs]
@@ -162,7 +162,7 @@ def test_permissions():
 
 
 def test_prompt_builder():
-    from nz_coder.prompt import build
+    from nz_coder.runtime.conversation.prompt import build
 
     prompt = build(memory_block="## Test memory", skill_descriptions="- test-skill: desc")
     assert "NZ-Coder" in prompt
@@ -179,8 +179,8 @@ def test_prompt_builder():
 
 def test_transaction_commit():
     import tempfile
-    from nz_coder.transaction import TransactionManager
-    from nz_coder import config
+    from nz_coder.state.transaction import TransactionManager
+    from nz_coder.foundation import config
 
     old_workdir = config.WORKDIR
     tmpdir = Path(tempfile.mkdtemp())
@@ -207,8 +207,8 @@ def test_transaction_commit():
 
 def test_transaction_rollback():
     import tempfile
-    from nz_coder.transaction import TransactionManager
-    from nz_coder import config
+    from nz_coder.state.transaction import TransactionManager
+    from nz_coder.foundation import config
 
     old_workdir = config.WORKDIR
     tmpdir = Path(tempfile.mkdtemp())
@@ -235,8 +235,8 @@ def test_transaction_rollback():
 
 def test_transaction_rollback_new_file():
     import tempfile
-    from nz_coder.transaction import TransactionManager
-    from nz_coder import config
+    from nz_coder.state.transaction import TransactionManager
+    from nz_coder.foundation import config
 
     old_workdir = config.WORKDIR
     tmpdir = Path(tempfile.mkdtemp())
@@ -262,7 +262,7 @@ def test_transaction_rollback_new_file():
 def test_apply_patch_tool():
     import tempfile
     import shutil
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.files import apply_patch, replace_lines
 
     old_workdir = config.WORKDIR
@@ -319,7 +319,7 @@ def test_apply_patch_tool():
 def test_memory_manager_crud():
     import tempfile
     import shutil
-    from nz_coder.memory import MemoryManager
+    from nz_coder.state.memory import MemoryManager
 
     tmpdir = Path(tempfile.mkdtemp())
     try:
@@ -336,7 +336,7 @@ def test_memory_manager_crud():
 
 
 def test_command_policy():
-    from nz_coder.command_policy import classify_bash, is_known_read_only_command
+    from nz_coder.tool_platform.command_policy import classify_bash, is_known_read_only_command
 
     assert is_known_read_only_command("git status")
     assert not classify_bash("rg copy")["mutating"]
@@ -348,7 +348,7 @@ def test_command_policy():
 
 
 def test_bash_blocks_package_install_by_default(monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.bash import run_bash
 
     old_allow = config.ALLOW_BASH_PACKAGE_INSTALLS
@@ -366,8 +366,8 @@ def test_bash_blocks_package_install_by_default(monkeypatch):
 
 
 def test_subagent_stops_after_configured_turn_budget(monkeypatch):
-    from nz_coder import config
-    from nz_coder import subagent
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent
 
     class FakeFunction:
         name = "grep_search"
@@ -428,8 +428,8 @@ def test_subagent_stops_after_configured_turn_budget(monkeypatch):
 def test_change_tracker_diff_and_revert():
     import tempfile
     import shutil
-    from nz_coder import config
-    from nz_coder.changes import ChangeTracker
+    from nz_coder.foundation import config
+    from nz_coder.state.changes import ChangeTracker
 
     old_workdir = config.WORKDIR
     tmpdir = Path(tempfile.mkdtemp())
@@ -457,8 +457,8 @@ def test_change_tracker_diff_and_revert():
 def test_session_save_load():
     import tempfile
     import shutil
-    from nz_coder import config
-    from nz_coder.sessions import load_session, save_session
+    from nz_coder.foundation import config
+    from nz_coder.state.sessions import load_session, save_session
 
     old_session_dir = config.SESSION_DIR
     tmpdir = Path(tempfile.mkdtemp())
@@ -481,8 +481,8 @@ def test_session_save_load():
 def test_session_artifact_paths_are_isolated_by_session_id():
     import tempfile
     import shutil
-    from nz_coder import config
-    from nz_coder.sessions import activate_session, active_session_id, session_runtime_state_path, session_subagent_dir
+    from nz_coder.foundation import config
+    from nz_coder.state.sessions import activate_session, active_session_id, session_runtime_state_path, session_subagent_dir
 
     old_workdir = config.WORKDIR
     tmpdir = Path(tempfile.mkdtemp())
@@ -499,7 +499,7 @@ def test_session_artifact_paths_are_isolated_by_session_id():
 
 
 def test_workspace_status_report():
-    from nz_coder.workspace import status_report
+    from nz_coder.state.workspace import status_report
 
     report = status_report(history=[{"role": "user", "content": "hi"}])
     assert "NZ-Coder Status" in report
@@ -510,8 +510,8 @@ def test_workspace_status_report():
 def test_persist_large_output_uses_current_workdir():
     import tempfile
     import shutil
-    from nz_coder import config
-    from nz_coder.context import persist_large_output
+    from nz_coder.foundation import config
+    from nz_coder.state.context import persist_large_output
 
     old_workdir = config.WORKDIR
     old_trigger = config.PERSIST_OUTPUT_TRIGGER
@@ -531,7 +531,7 @@ def test_persist_large_output_uses_current_workdir():
 def test_python_symbol_check_tool():
     import tempfile
     import shutil
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.python_ast import python_symbol_check
 
     old_workdir = config.WORKDIR
@@ -566,7 +566,7 @@ class UserManager:
 def test_python_structural_edit_tool():
     import tempfile
     import shutil
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.python_ast import python_structural_edit, python_symbol_check
 
     old_workdir = config.WORKDIR
@@ -707,18 +707,29 @@ def test_surface_console_falls_back_to_rich_after_terminal_boundary_failure():
     from nz_coder.interface.cli import _SurfaceConsole
 
     projected = []
+    terminal = []
     printed = []
-    surface = type("_Surface", (), {"append_output": projected.append})()
+
+    class _Surface:
+        def append_output(self, value):
+            projected.append(value)
+
+        def append_notice(self, value):
+            terminal.append(value)
+
+    surface = _Surface()
     output = _SurfaceConsole(
         _FakeConsole(lambda *args, **kwargs: printed.append((args, kwargs))),
         surface,
     )
 
     output.print("inside")
+    output.print_terminal("terminal")
     output.disable_surface()
     output.print("fallback", markup=False)
 
     assert projected and "inside" in projected[0]
+    assert terminal and "terminal" in terminal[0]
     assert printed == [(('fallback',), {'markup': False})]
 
 
@@ -952,7 +963,7 @@ def test_agent_loop_keeps_renderer_reference():
 
 
 def test_glob_search_recurses_into_subdirectories(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.search import glob_search
 
     old = config.WORKDIR
@@ -970,7 +981,7 @@ def test_glob_search_recurses_into_subdirectories(tmp_path):
 
 
 def test_list_directory_includes_subdirectories(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.files import list_directory
 
     old = config.WORKDIR
@@ -985,7 +996,7 @@ def test_list_directory_includes_subdirectories(tmp_path):
 
 
 def test_prompt_forbids_bash_redirection_for_file_writes():
-    from nz_coder.prompt import build
+    from nz_coder.runtime.conversation.prompt import build
 
     prompt = build()
 
@@ -1020,8 +1031,8 @@ if __name__ == "__main__":
 def test_session_runtime_dirs_are_isolated():
     import tempfile
     import shutil
-    from nz_coder import config
-    from nz_coder.sessions import (
+    from nz_coder.foundation import config
+    from nz_coder.state.sessions import (
         activate_session,
         session_change_dir,
         session_tool_results_dir,
@@ -1052,8 +1063,8 @@ def test_session_runtime_dirs_are_isolated():
 def test_scratchpad_isolated_by_session_id():
     import tempfile
     import shutil
-    from nz_coder import config
-    from nz_coder.sessions import activate_session
+    from nz_coder.foundation import config
+    from nz_coder.state.sessions import activate_session
     from nz_coder.tools.scratchpad import scratchpad
 
     old_workdir = config.WORKDIR
@@ -1084,8 +1095,8 @@ def test_scratchpad_isolated_by_session_id():
 def test_todo_isolated_by_session_id():
     import tempfile
     import shutil
-    from nz_coder import config
-    from nz_coder.sessions import activate_session
+    from nz_coder.foundation import config
+    from nz_coder.state.sessions import activate_session
     from nz_coder.tools.todo import render, todo_update
 
     old_workdir = config.WORKDIR
@@ -1110,9 +1121,9 @@ def test_todo_isolated_by_session_id():
 def test_persist_large_output_uses_active_session_runtime_dir():
     import tempfile
     import shutil
-    from nz_coder import config
-    from nz_coder.context import persist_large_output
-    from nz_coder.sessions import activate_session, session_tool_results_dir
+    from nz_coder.foundation import config
+    from nz_coder.state.context import persist_large_output
+    from nz_coder.state.sessions import activate_session, session_tool_results_dir
 
     old_workdir = config.WORKDIR
     old_trigger = config.PERSIST_OUTPUT_TRIGGER

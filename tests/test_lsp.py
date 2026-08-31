@@ -7,8 +7,10 @@ import sys
 import textwrap
 from pathlib import Path
 
+import pytest
+
 from nz_coder.lsp import close_all_clients
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 _FAKE_SERVER = r"""
@@ -152,6 +154,35 @@ while True:
         continue
     send({"jsonrpc": "2.0", "id": request_id, "result": result})
 """
+
+
+@pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
+def test_lsp_client_rejects_invalid_timeout_before_spawn(tmp_path, monkeypatch, timeout):
+    from nz_coder.lsp.client import LSPClient
+
+    monkeypatch.setattr(
+        subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("invalid timeout must fail before process spawn")
+        ),
+    )
+    with pytest.raises(ValueError, match="timeout"):
+        LSPClient(
+            server_id="invalid",
+            command=(sys.executable, "server.py"),
+            root=tmp_path,
+            language_id="python",
+            initialize_timeout=timeout,
+        )
+
+
+@pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
+def test_lsp_resolver_rejects_invalid_timeout(tmp_path, timeout):
+    from nz_coder.intelligence.lsp_resolver import LspCallTargetResolver
+
+    with pytest.raises(ValueError, match="timeout"):
+        LspCallTargetResolver(tmp_path, request_timeout=timeout)
 
 
 def test_windows_lsp_override_preserves_backslashes_and_quoted_paths():
@@ -308,8 +339,18 @@ def test_lsp_tool_gracefully_reports_unsupported_extension(tmp_path):
 
 
 def test_lsp_tool_reports_server_initialization_failure(tmp_path, monkeypatch):
+    import time
+
+    from nz_coder.lsp.client import LSPClient
     from nz_coder.tools.lsp import lsp
 
+    read_stderr = LSPClient._read_stderr
+
+    def delayed_read_stderr(client):
+        time.sleep(0.05)
+        read_stderr(client)
+
+    monkeypatch.setattr(LSPClient, "_read_stderr", delayed_read_stderr)
     broken = tmp_path / "broken_lsp.py"
     broken.write_text(
         "import sys\nsys.stderr.write('broken server\\n')\nsys.exit(2)\n",
@@ -332,7 +373,7 @@ def test_lsp_tool_reports_server_initialization_failure(tmp_path, monkeypatch):
 
 
 def test_lsp_tool_honors_disabled_configuration(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.lsp import lsp
 
     (tmp_path / "app.py").write_text("answer = 42\n", encoding="utf-8")
@@ -379,10 +420,29 @@ def test_lsp_is_classified_as_safe_read_only_tool():
     assert decision == {"behavior": "allow", "reason": "Safe tool"}
 
 
+def test_python_package_project_root_promotes_parent_import_path(tmp_path, monkeypatch):
+    from nz_coder.lsp.servers import resolve_server
+
+    package = tmp_path / "cron_engine"
+    tests = package / "tests"
+    tests.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "pyproject.toml").write_text("[project]\nname='cron-engine'\n", encoding="utf-8")
+    target = tests / "test_parser.py"
+    target.write_text("from cron_engine.parser import parse\n", encoding="utf-8")
+    monkeypatch.setenv("NZ_LSP_PYTHON_COMMAND", sys.executable)
+
+    resolved = resolve_server(target, tmp_path)
+
+    assert resolved is not None
+    assert resolved.root == tmp_path.resolve()
+    assert resolved.analysis_paths == ()
+
+
 def test_write_diagnostics_use_real_protocol_and_normalize_locations(
     tmp_path, monkeypatch,
 ):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.lsp.write_diagnostics import collect_write_diagnostics
 
     server = _write_fake_server(tmp_path)
@@ -412,7 +472,7 @@ def test_write_diagnostics_use_real_protocol_and_normalize_locations(
 
 
 def test_write_diagnostics_silently_skip_missing_server(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.lsp.write_diagnostics import collect_write_diagnostics
 
     monkeypatch.setenv(

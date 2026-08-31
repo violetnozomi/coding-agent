@@ -34,7 +34,7 @@ def test_ri_related_tests_reaches_indirect_checkout_test_beyond_planner_heuristi
 ) -> None:
     from nz_coder.intelligence.service import RepoIntelligenceService
     from nz_coder.intelligence.verification_planner import plan_verification_commands
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     _indirect_pricing_fixture(tmp_path)
     profile = {
@@ -75,7 +75,7 @@ def test_planner_ri_evidence_catches_regression_missed_by_current_plan(tmp_path)
 
     from nz_coder.intelligence.service import workspace_repo_intelligence
     from nz_coder.intelligence.verification_planner import plan_verification_commands
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     _indirect_pricing_fixture(tmp_path)
     profile = {
@@ -142,9 +142,9 @@ def test_verification_gate_surfaces_ri_related_test_without_making_it_required(
 ) -> None:
     from nz_coder.intelligence.service import workspace_repo_intelligence
     from nz_coder.intelligence.verification import VerificationManager
-    from nz_coder.recovery import RecoveryState
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.trace import TraceRecorder
+    from nz_coder.runtime.verification.recovery import RecoveryState
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.trace import TraceRecorder
 
     _indirect_pricing_fixture(tmp_path)
     with scoped_workdir(tmp_path):

@@ -6,9 +6,9 @@ import pytest
 
 from nz_coder.providers.capabilities import ModelCapabilities
 from nz_coder.providers.normalized import chunk, completion
-from nz_coder.runtime.loop import AgentLoop
-from nz_coder.runtime.think_tags import ThinkTagDemux, demux_think_tags
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.execution.loop import AgentLoop
+from nz_coder.runtime.conversation.think_tags import ThinkTagDemux, demux_think_tags
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 @pytest.mark.parametrize(

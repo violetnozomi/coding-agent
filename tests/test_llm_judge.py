@@ -6,7 +6,7 @@ import threading
 
 def test_edit_distance_and_fuzzy_match_choose_exact_then_nearest():
     """Catches report-tool typos being dropped or outranking an exact call."""
-    from nz_coder.runtime.llm_judge import edit_distance, find_fuzzy_tool_match
+    from nz_coder.runtime.verification.llm_judge import edit_distance, find_fuzzy_tool_match
 
     typo = {"name": "emit_sidecar_verdct", "input": {"verdict": "revise"}}
     exact = {"name": "emit_sidecar_verdict", "input": {"verdict": "accept"}}
@@ -21,7 +21,7 @@ def test_edit_distance_and_fuzzy_match_choose_exact_then_nearest():
 
 
 def _request():
-    from nz_coder.runtime.llm_judge import JudgeRequest
+    from nz_coder.runtime.verification.llm_judge import JudgeRequest
 
     return JudgeRequest(
         system_prompt="judge",
@@ -37,7 +37,7 @@ def _default(reason: str) -> dict:
 
 def test_llm_judge_parses_one_fuzzy_report_tool():
     """Catches successful structured responses falling into fail-open."""
-    from nz_coder.runtime.llm_judge import JudgeResponse, invoke_llm_judge
+    from nz_coder.runtime.verification.llm_judge import JudgeResponse, invoke_llm_judge
 
     result = invoke_llm_judge(
         request=_request(),
@@ -62,7 +62,7 @@ def test_llm_judge_parses_one_fuzzy_report_tool():
 
 def test_llm_judge_failure_modes_are_distinct_and_fail_open():
     """Catches provider/no-tool/parser failures escaping or sharing the wrong tag."""
-    from nz_coder.runtime.llm_judge import JudgeResponse, invoke_llm_judge
+    from nz_coder.runtime.verification.llm_judge import JudgeResponse, invoke_llm_judge
 
     provider_error = invoke_llm_judge(
         request=_request(),
@@ -93,7 +93,7 @@ def test_llm_judge_failure_modes_are_distinct_and_fail_open():
 
 def test_llm_judge_timeout_ignores_late_provider_result():
     """Catches a hung or late judge blocking the Main Agent."""
-    from nz_coder.runtime.llm_judge import JudgeResponse, invoke_llm_judge
+    from nz_coder.runtime.verification.llm_judge import JudgeResponse, invoke_llm_judge
 
     release = threading.Event()
 
@@ -118,7 +118,7 @@ def test_llm_judge_timeout_ignores_late_provider_result():
 
 def test_llm_judge_cancellation_fails_open_before_timeout():
     """Catches caller cancellation being ignored until the full judge deadline."""
-    from nz_coder.runtime.llm_judge import JudgeResponse, invoke_llm_judge
+    from nz_coder.runtime.verification.llm_judge import JudgeResponse, invoke_llm_judge
 
     release = threading.Event()
     cancelled = threading.Event()

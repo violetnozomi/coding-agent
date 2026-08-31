@@ -16,16 +16,22 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 from pathlib import Path
 
 from nz_coder.swebench.adapter import SWEBenchAdapter
 from nz_coder.swebench.artifacts import AttemptJournal
 from nz_coder.swebench.guardrail import PatchGuardrail
-from nz_coder.swebench.orchestrator import RetryOrchestrator, DEFAULT_BENCH_DIR
+from nz_coder.swebench.orchestrator import (
+    DEFAULT_BENCH_DIR,
+    RetryOrchestrator,
+    default_swe_work_root,
+)
 from nz_coder.swebench.profiles import DEFAULT_PROFILE, PROFILES, get_profile
-from nz_coder.swebench.submission import build_submission_bundle
+from nz_coder.swebench.submission import (
+    build_submission_bundle,
+    record_official_evaluation_provenance,
+)
 from nz_coder.swebench.trace_budget import GIB, TraceBudget
 
 
@@ -54,13 +60,11 @@ def run_agent(args: argparse.Namespace) -> int:
         print("Error: datasets is not installed. Install it with `pip install datasets`.")
         return 2
 
-    from nz_coder import config
-    from nz_coder.prompt import build
-    from nz_coder.runtime.composition import build_product_environment
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
-    from nz_coder.trace import TraceRecorder
-
-    default_turns = 80 if not os.environ.get("MAX_AGENT_TURNS") else None
+    from nz_coder.foundation import config
+    from nz_coder.runtime.conversation.prompt import build
+    from nz_coder.runtime.execution.composition import build_product_environment
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.state.trace import TraceRecorder
 
     profile = get_profile(args.profile)
     adapter = SWEBenchAdapter(profile.name)
@@ -77,7 +81,11 @@ def run_agent(args: argparse.Namespace) -> int:
         return 2
 
     run_id = args.run_id or time.strftime("%Y%m%d-%H%M%S")
-    work_root = Path(args.work_root or DEFAULT_BENCH_DIR / "runs" / run_id)
+    work_root = (
+        Path(args.work_root)
+        if args.work_root
+        else default_swe_work_root(run_id)
+    )
     predictions_path = Path(args.output or DEFAULT_BENCH_DIR / f"predictions-{run_id}.jsonl")
     report_path = predictions_path.with_suffix(".report.json")
     manifest_path = predictions_path.with_suffix(".manifest.json")
@@ -116,7 +124,8 @@ def run_agent(args: argparse.Namespace) -> int:
         model_name=args.model_name,
         provider=config.MODEL_PROVIDER,
         model_id=config.MODEL_ID,
-        max_agent_turns=(default_turns or config.MAX_AGENT_TURNS),
+        max_agent_turns=config.MAX_AGENT_TURNS,
+        nominal_agent_turns=config.SWE_NOMINAL_AGENT_TURNS,
         agent_timeout_seconds=args.agent_timeout,
         benchmark_profile=profile.name,
         expected_instances=profile.expected_instances,
@@ -161,7 +170,8 @@ def run_agent(args: argparse.Namespace) -> int:
         journal.write_predictions(predictions_path)
 
     with scoped_runtime_overrides(
-        max_agent_turns=default_turns,
+        max_agent_turns=config.MAX_AGENT_TURNS,
+        nominal_agent_turns=config.SWE_NOMINAL_AGENT_TURNS,
         strict_local_tools=args.strict,
     ):
         results = orchestrator.run_batch(
@@ -210,13 +220,11 @@ def retry_agent(args: argparse.Namespace) -> int:
         print("Error: datasets is not installed. Install it with `pip install datasets`.")
         return 2
 
-    from nz_coder import config
-    from nz_coder.prompt import build
-    from nz_coder.runtime.composition import build_product_environment
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
-    from nz_coder.trace import TraceRecorder
-
-    default_turns = 80 if not os.environ.get("MAX_AGENT_TURNS") else None
+    from nz_coder.foundation import config
+    from nz_coder.runtime.conversation.prompt import build
+    from nz_coder.runtime.execution.composition import build_product_environment
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.state.trace import TraceRecorder
 
     profile = get_profile(args.profile)
     adapter = SWEBenchAdapter(profile.name)
@@ -237,7 +245,11 @@ def retry_agent(args: argparse.Namespace) -> int:
         return 2
 
     run_id = args.run_id or time.strftime("%Y%m%d-%H%M%S-retry")
-    work_root = Path(args.work_root or DEFAULT_BENCH_DIR / "runs" / run_id)
+    work_root = (
+        Path(args.work_root)
+        if args.work_root
+        else default_swe_work_root(run_id)
+    )
     predictions_path = Path(args.output or DEFAULT_BENCH_DIR / f"predictions-{run_id}.jsonl")
     report_path = predictions_path.with_suffix(".report.json")
     manifest_path = predictions_path.with_suffix(".manifest.json")
@@ -262,7 +274,10 @@ def retry_agent(args: argparse.Namespace) -> int:
     orchestrator = RetryOrchestrator(adapter, PatchGuardrail())
 
     with (
-        scoped_runtime_overrides(max_agent_turns=default_turns),
+        scoped_runtime_overrides(
+            max_agent_turns=config.MAX_AGENT_TURNS,
+            nominal_agent_turns=config.SWE_NOMINAL_AGENT_TURNS,
+        ),
         predictions_path.open("w", encoding="utf-8") as pred_file,
     ):
         results = orchestrator.retry_batch(
@@ -387,6 +402,7 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("--output-dir", required=True)
     package.add_argument("--organization", default="independent")
     package.add_argument("--model", default="deepseek-v4-flash")
+    package.add_argument("--evaluation-run-id")
 
     return parser
 
@@ -400,10 +416,20 @@ def main(argv: list[str] | None = None) -> int:
         return adapter.check_environment()
     if args.command == "run-eval":
         result = adapter.run_harness(Path(args.predictions_path), args)
-        if result or not args.package or args.profile != "verified":
-            return result
         predictions_path = Path(args.predictions_path)
         manifest_path = predictions_path.with_suffix(".manifest.json")
+        if result == 0 and manifest_path.is_file():
+            try:
+                record_official_evaluation_provenance(
+                    manifest_path,
+                    predictions_path,
+                    args.run_id,
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                print(f"Official evaluation passed, but provenance recording failed: {exc}")
+                return 2
+        if result or not args.package or args.profile != "verified":
+            return result
         trajectories_dir = predictions_path.parent / f"{predictions_path.stem}-trajs"
         logs_dir = Path(
             args.eval_log_dir or Path("logs") / "run_evaluation" / args.run_id
@@ -439,6 +465,12 @@ def main(argv: list[str] | None = None) -> int:
         return retry_agent(args)
     if args.command == "package":
         try:
+            if args.evaluation_run_id:
+                record_official_evaluation_provenance(
+                    Path(args.manifest_path),
+                    Path(args.predictions_path),
+                    args.evaluation_run_id,
+                )
             target = build_submission_bundle(
                 profile=get_profile(args.profile),
                 predictions_path=Path(args.predictions_path),

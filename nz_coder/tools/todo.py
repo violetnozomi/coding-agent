@@ -10,8 +10,8 @@ _loaded_sessions: set[tuple[str, str]] = set()
 
 
 def _session_key() -> tuple[str, str]:
-    from nz_coder.runtime.workdir import current_workdir
-    from nz_coder.sessions import active_session_id
+    from nz_coder.runtime.process.workdir import current_workdir
+    from nz_coder.state.sessions import active_session_id
 
     return str(current_workdir()), active_session_id() or "default"
 
@@ -25,7 +25,7 @@ def _items() -> list[dict]:
 
 
 def _load_items(session_id: str) -> list[dict]:
-    from nz_coder.sessions import session_todo_path
+    from nz_coder.state.sessions import session_todo_path
 
     path = session_todo_path(session_id)
     try:
@@ -49,7 +49,7 @@ def _load_items(session_id: str) -> list[dict]:
 
 
 def _persist_items(session_id: str, items: list[dict]) -> str | None:
-    from nz_coder.sessions import (
+    from nz_coder.state.sessions import (
         session_todo_path,
         write_session_runtime_json,
     )
@@ -162,4 +162,5 @@ register(
         "required": ["items"],
     },
     handler=todo_update,
+    plan_mode_allowed=True,
 )

@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import os
 
-from nz_coder.changes import ChangeTracker, revert_change_file
-from nz_coder.runtime.workdir import scoped_workdir
+import pytest
+
+from nz_coder.state.changes import ChangeTracker, revert_change_file
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 def _record_change(
@@ -53,6 +55,30 @@ def test_current_snapshot_reports_deleted_files_without_git(tmp_path):
 
         assert tracker.current_changed_paths() == ["app.py"]
         assert tracker.current_deleted_paths() == ["app.py"]
+
+
+def test_change_manifest_replace_failure_preserves_last_checkpoint(
+    tmp_path,
+    monkeypatch,
+):
+    import nz_coder.state.sessions as sessions
+
+    change_dir = tmp_path / ".nz-coder" / "runtime" / "changes"
+    with scoped_workdir(tmp_path):
+        tracker = ChangeTracker(run_id="atomic", change_dir=change_dir)
+        tracker.record_before("app.py", True, "before\n")
+        prior = tracker.path.read_text(encoding="utf-8")
+        monkeypatch.setattr(
+            sessions.os,
+            "replace",
+            lambda *_args: (_ for _ in ()).throw(OSError("commit failed")),
+        )
+
+        with pytest.raises(OSError, match="commit failed"):
+            tracker.record_after("app.py", True, "after\n")
+
+    assert tracker.path.read_text(encoding="utf-8") == prior
+    assert not list(change_dir.glob(".atomic.json.*.tmp"))
 
 
 def test_multi_level_undo_redo_restores_files_and_history(tmp_path):
@@ -159,7 +185,7 @@ def test_new_change_set_invalidates_redo_stack(tmp_path):
 
 
 def test_agent_rotates_owned_change_tracker_after_modifying_turn(tmp_path):
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     with scoped_workdir(tmp_path):
         change_dir = tmp_path / ".nz-coder" / "sessions" / "_artifacts" / "s1" / "runtime" / "changes"

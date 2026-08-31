@@ -28,8 +28,9 @@ _TOTAL_TRUNCATED_NOTICE = (
 _TOTAL_OMITTED_NOTICE = (
     "[NZ-Coder notice: This rule file was omitted due to the cumulative rules size limit.]"
 )
-_TRACKED_CACHE: dict[tuple[str, str, int], bool] = {}
+_TRACKED_CACHE: dict[tuple[str, str, tuple[int, int, int]], bool] = {}
 _TRACKED_LOCK = threading.Lock()
+_TRACKED_CACHE_MAX_ENTRIES = 2048
 _STATE_LOCK = threading.RLock()
 _STATE_FILENAME = "instruction-file-state.json"
 _STATE_MAX_BYTES = 64_000
@@ -484,14 +485,39 @@ def _escape_reminder(text: str) -> str:
     )
 
 
+def _git_index_signature(project: Path) -> tuple[int, int, int]:
+    """Return a cheap worktree-aware identity for tracked-file decisions."""
+    marker = project / ".git"
+    try:
+        marker_mtime = marker.stat().st_mtime_ns
+    except OSError:
+        return (-1, -1, -1)
+    git_dir = marker
+    if marker.is_file():
+        try:
+            declaration = marker.read_text(encoding="utf-8")[:4096].strip()
+        except OSError:
+            return (marker_mtime, -1, -1)
+        prefix = "gitdir:"
+        if not declaration.lower().startswith(prefix):
+            return (marker_mtime, -1, -1)
+        candidate = Path(declaration[len(prefix):].strip())
+        git_dir = candidate if candidate.is_absolute() else marker.parent / candidate
+    try:
+        index_stat = (git_dir / "index").stat()
+    except OSError:
+        return (marker_mtime, -1, -1)
+    return (marker_mtime, index_stat.st_mtime_ns, index_stat.st_size)
+
+
 def _is_checked_in(project: Path, path: Path) -> bool:
     """Best-effort cached equivalent of InfCode's project instruction label."""
     try:
         relative = path.resolve().relative_to(project.resolve()).as_posix()
-        mtime_ns = path.stat().st_mtime_ns
     except (OSError, ValueError):
         return False
-    key = (str(project.resolve()), relative, mtime_ns)
+    project_key = str(project.resolve())
+    key = (project_key, relative, _git_index_signature(project))
     with _TRACKED_LOCK:
         cached = _TRACKED_CACHE.get(key)
     if cached is not None:
@@ -510,7 +536,12 @@ def _is_checked_in(project: Path, path: Path) -> bool:
     except (OSError, subprocess.TimeoutExpired):
         tracked = False
     with _TRACKED_LOCK:
+        for stale_key in tuple(_TRACKED_CACHE):
+            if stale_key[:2] == key[:2] and stale_key != key:
+                _TRACKED_CACHE.pop(stale_key, None)
         _TRACKED_CACHE[key] = tracked
+        while len(_TRACKED_CACHE) > _TRACKED_CACHE_MAX_ENTRIES:
+            _TRACKED_CACHE.pop(next(iter(_TRACKED_CACHE)))
     return tracked
 
 

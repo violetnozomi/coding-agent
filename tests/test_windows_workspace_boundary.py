@@ -1,7 +1,7 @@
 """Resolved workspace security contracts shared by Windows file operations."""
 from __future__ import annotations
 
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools.files import read_file, write_file
 
 

@@ -10,17 +10,17 @@ import asyncio
 import threading
 from typing import Any, Awaitable, Callable
 
-from nz_coder import config
-from nz_coder.runtime.async_utils import to_thread_settled as _to_thread_settled
+from nz_coder.foundation import config
+from nz_coder.foundation.async_utils import to_thread_settled as _to_thread_settled
 from nz_coder.runtime.adapters.tool import (
     policy_context_from_legacy_host,
     projection_context_from_legacy_host,
     tool_context_from_legacy_host,
 )
 from nz_coder.runtime.core.tool_context import ToolExecutionContext, ToolPolicyContext
-from nz_coder.runtime.guardrail_runtime import ProductionGuardrailRuntime
-from nz_coder.runtime.input_preflight import ProductionInputPreflight
-from nz_coder.runtime.tool_executor import ToolExecutionResult
+from nz_coder.runtime.agent.guardrail_runtime import ProductionGuardrailRuntime
+from nz_coder.runtime.conversation.input_preflight import ProductionInputPreflight
+from nz_coder.tool_platform.execution import ToolExecutionResult
 from nz_coder.runtime.tool_runtime.scheduler import (
     _execute_scheduled,
     _execute_scheduled_async,
@@ -28,7 +28,11 @@ from nz_coder.runtime.tool_runtime.scheduler import (
 )
 from nz_coder.runtime.tool_runtime.policy import ProductionToolPolicy
 from nz_coder.runtime.tool_runtime.result_projection import ProductionToolResultProjector
-from nz_coder.tools import current_tool_cancel_event, scoped_tool_metadata_reporter
+from nz_coder.tools import (
+    current_tool_cancel_event,
+    scoped_dynamic_tool_snapshot,
+    scoped_tool_metadata_reporter,
+)
 from nz_coder.tools.question import scoped_question_lifecycle_reporter
 
 
@@ -43,10 +47,40 @@ class ProductionToolRuntime:
         self.policy = policy or ProductionToolPolicy()
         self.results = results or ProductionToolResultProjector()
 
-    def execute_batch_sync(self, host, tool_calls_raw: list, messages: list,
-                       on_tool=None, on_text=None, *,
-                       processor: Any | None = None,
-                       usage: Any | None = None) -> str:
+    def execute_batch_sync(
+        self,
+        host,
+        tool_calls_raw: list,
+        messages: list,
+        on_tool=None,
+        on_text=None,
+        *,
+        processor: Any | None = None,
+        usage: Any | None = None,
+    ) -> str:
+        """Execute one batch against one immutable dynamic-tool generation."""
+        with scoped_dynamic_tool_snapshot():
+            return self._execute_batch_sync_snapshot(
+                host,
+                tool_calls_raw,
+                messages,
+                on_tool=on_tool,
+                on_text=on_text,
+                processor=processor,
+                usage=usage,
+            )
+
+    def _execute_batch_sync_snapshot(
+        self,
+        host,
+        tool_calls_raw: list,
+        messages: list,
+        on_tool=None,
+        on_text=None,
+        *,
+        processor: Any | None = None,
+        usage: Any | None = None,
+    ) -> str:
         """执行一批工具调用，并分发执行后的状态更新。"""
         policy_context = policy_context_from_legacy_host(host)
         projection_context = projection_context_from_legacy_host(host)
@@ -205,14 +239,49 @@ class ProductionToolRuntime:
         )
         return action
 
-    async def execute_batch_async(self, owner, tool_calls_raw: list, messages: list,
-                                   on_tool=None, on_text=None, *,
-                                   processor: Any | None = None,
-                                   usage: Any | None = None,
-                                   finish_step: bool = True,
-                                   checkpoint: Callable[[str], Awaitable[None]] | None = None,
-                                   tool_context: ToolExecutionContext | None = None,
-                                   ) -> str:
+    async def execute_batch_async(
+        self,
+        owner,
+        tool_calls_raw: list,
+        messages: list,
+        on_tool=None,
+        on_text=None,
+        *,
+        processor: Any | None = None,
+        usage: Any | None = None,
+        finish_step: bool = True,
+        checkpoint: Callable[[str], Awaitable[None]] | None = None,
+        tool_context: ToolExecutionContext | None = None,
+    ) -> str:
+        """Execute one async batch against one dynamic-tool generation."""
+        with scoped_dynamic_tool_snapshot():
+            return await self._execute_batch_async_snapshot(
+                owner,
+                tool_calls_raw,
+                messages,
+                on_tool=on_tool,
+                on_text=on_text,
+                processor=processor,
+                usage=usage,
+                finish_step=finish_step,
+                checkpoint=checkpoint,
+                tool_context=tool_context,
+            )
+
+    async def _execute_batch_async_snapshot(
+        self,
+        owner,
+        tool_calls_raw: list,
+        messages: list,
+        on_tool=None,
+        on_text=None,
+        *,
+        processor: Any | None = None,
+        usage: Any | None = None,
+        finish_step: bool = True,
+        checkpoint: Callable[[str], Awaitable[None]] | None = None,
+        tool_context: ToolExecutionContext | None = None,
+    ) -> str:
         """Async variant of one tool batch execution."""
         context = (
             owner
@@ -354,9 +423,11 @@ class ProductionToolRuntime:
         original = tool_calls_raw[:config.MAX_TOOL_CALLS_PER_RESPONSE]
         will_execute = []
         guardrail_blocked: dict[int, ToolExecutionResult] = {}
+        guardrails = _guardrail_runtime(host)
+        before_tool = getattr(guardrails, "before_tool_sync", guardrails.before_tool)
         for index, tool_call in enumerate(original):
             guarded, rejected = asyncio.run(
-                _guardrail_runtime(host).before_tool(
+                before_tool(
                     host, tool_call, messages,
                 )
             )
@@ -374,6 +445,18 @@ class ProductionToolRuntime:
         )
         blocked.update(self.policy.agent_tool_rejections(policy_context, will_execute))
         blocked.update(self.policy.admission_tool_rejections(policy_context, will_execute))
+        blocked.update(self.policy.strict_private_path_rejections(
+            policy_context, will_execute,
+        ))
+        blocked.update(self.policy.task_constraint_rejections(
+            policy_context, will_execute,
+        ))
+        blocked.update(self.policy.implementation_phase_rejections(
+            policy_context, will_execute,
+        ))
+        blocked.update(self.policy.closure_phase_rejections(
+            policy_context, will_execute,
+        ))
         blocked.update(self.policy.strict_progress_rejections(policy_context, will_execute))
         blocked.update(guardrail_blocked)
         mode = "scheduled"
@@ -463,6 +546,18 @@ class ProductionToolRuntime:
         )
         blocked.update(self.policy.agent_tool_rejections(policy_context, will_execute))
         blocked.update(self.policy.admission_tool_rejections(policy_context, will_execute))
+        blocked.update(self.policy.strict_private_path_rejections(
+            policy_context, will_execute,
+        ))
+        blocked.update(self.policy.task_constraint_rejections(
+            policy_context, will_execute,
+        ))
+        blocked.update(self.policy.implementation_phase_rejections(
+            policy_context, will_execute,
+        ))
+        blocked.update(self.policy.closure_phase_rejections(
+            policy_context, will_execute,
+        ))
         blocked.update(self.policy.strict_progress_rejections(policy_context, will_execute))
         blocked.update(guardrail_blocked)
         mode = "scheduled"
@@ -555,7 +650,7 @@ def _legacy_dispatch_override(host, name: str):
     if not callable(candidate):
         return None
     function = getattr(candidate, "__func__", candidate)
-    if getattr(function, "__module__", "") == "nz_coder.runtime.loop":
+    if getattr(function, "__module__", "") == "nz_coder.runtime.execution.loop":
         return None
     return candidate
 

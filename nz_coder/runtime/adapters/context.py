@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from nz_coder.runtime.core.context import ContextExecutionContext
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 
 
 def context_from_legacy_host(host) -> ContextExecutionContext:
@@ -25,4 +25,6 @@ def context_from_legacy_host(host) -> ContextExecutionContext:
         stamp_auto_compaction=host._stamp_auto_compaction,
         trace=tracer.log,
         report_pressure=report_pressure,
+        projected_replay_tokens=getattr(host, "_projected_replay_tokens", None),
+        cancel_compaction=getattr(host, "_cancel_compaction", None),
     )

@@ -8,6 +8,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
+from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.mcp.client import (
     MCPClient,
     MCPError,
@@ -201,11 +202,15 @@ class MCPHTTPClient(MCPClient):
                 thread.join(timeout=0.5)
 
     def _post(self, message: dict[str, Any], *, timeout: float) -> list[dict[str, Any]]:
-        body = json.dumps(
-            message,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
+        try:
+            body = json.dumps(
+                message,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise MCPError("MCP request must contain valid JSON values") from exc
         request = Request(
             self.url,
             data=body,
@@ -457,8 +462,11 @@ class MCPHTTPClient(MCPClient):
 
     def _decode_json_messages(self, payload: bytes) -> list[dict[str, Any]]:
         try:
-            value = json.loads(payload.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            value = json.loads(
+                payload.decode("utf-8"),
+                parse_constant=reject_nonstandard_json_constant,
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
             raise MCPError(f"MCP server '{self.name}' returned invalid JSON") from exc
         values = value if isinstance(value, list) else [value]
         if not all(isinstance(item, dict) for item in values):

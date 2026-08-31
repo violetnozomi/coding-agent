@@ -310,4 +310,5 @@ register(
         "required": ["project_dir"],
     },
     handler=inspect_generated_project_tool,
+    side_effect="readonly",
 )

@@ -1,7 +1,7 @@
 """Governed Skill metadata, enforcement, and run isolation."""
 from __future__ import annotations
 
-from nz_coder.recovery import RecoveryState
+from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.core.tool_context import ToolPolicyContext
 from nz_coder.runtime.tool_runtime.policy import ProductionToolPolicy
 from nz_coder.state.skills import (

@@ -149,4 +149,5 @@ register(
         "required": ["project_spec"],
     },
     handler=create_project_blueprint_tool,
+    side_effect="readonly",
 )

@@ -150,14 +150,15 @@ Memory / Scratchpad / Skills / Sessions
 - `project_creation/`：Greenfield 模式
 - `evaluation/`、`swebench/`：评测与基准
 
-另外仓库里有很多顶层模块，比如 `nz_coder.loop`、`nz_coder.memory`、`nz_coder.permissions`。
-这些现在多数是**兼容 wrapper**，而且我这里核对过源码：它们不是第二套实现，而是非常薄的模块别名层，直接把 `sys.modules[__name__]` 指到子目录中的真实实现。对应关系是：
+包根目录现在只保留正式公共入口；它们不是第二套实现，而是很薄的
+façade。内部模块已经迁到 canonical 子包，不再保留通用兼容 wrapper。
+典型对应关系是：
 
-- `nz_coder.loop` -> `nz_coder.runtime.loop`
-- `nz_coder.memory` -> `nz_coder.state.memory`
+- `nz_coder.loop` -> `nz_coder.runtime.execution.loop`
 - `nz_coder.permissions` -> `nz_coder.tool_platform.permissions`
 
-所以你读代码时，优先读子目录里的真实实现；顶层模块更多是为了兼容旧 import 和旧测试。
+所以读代码时应优先进入子目录里的真实实现；记忆等内部能力直接使用
+`nz_coder.state.memory`，不存在 `nz_coder.memory` 兼容入口。
 
 ---
 
@@ -192,7 +193,7 @@ CLI 启动后会做几件事：
 
 核心文件：
 
-- [loop.py](/home/pyh/nzcoder/nz_coder/runtime/loop.py)
+- [loop.py](/home/pyh/nzcoder/nz_coder/runtime/execution/loop.py)
 
 `AgentLoop.__init__()` 会把整个系统的核心组件组起来：
 
@@ -268,8 +269,8 @@ CLI 启动后会做几件事：
 见：
 
 - `_build_api_messages()`
-- `_build_context_layers()`（`runtime/loop.py` 里的模块级 helper）
-- `_inject_dynamic_context()`（`runtime/loop.py` 里的模块级 helper）
+- `_build_context_layers()`（`runtime/execution/loop.py` 里的模块级 helper）
+- `_inject_dynamic_context()`（`runtime/execution/loop.py` 里的模块级 helper）
 
 核心思想是：
 
@@ -292,9 +293,9 @@ CLI 启动后会做几件事：
 
 核心文件：
 
-- [prompt.py](/home/pyh/nzcoder/nz_coder/runtime/prompt.py)
+- [prompt.py](/home/pyh/nzcoder/nz_coder/runtime/conversation/prompt.py)
 - [context.py](/home/pyh/nzcoder/nz_coder/state/context.py)
-- [runtime_state.py](/home/pyh/nzcoder/nz_coder/runtime/runtime_state.py)
+- [runtime_state.py](/home/pyh/nzcoder/nz_coder/runtime/execution/runtime_state.py)
 - [scratchpad.py](/home/pyh/nzcoder/nz_coder/tools/scratchpad.py)
 
 ### 5.1 System prompt 的角色
@@ -494,7 +495,7 @@ NZ-Coder 的记忆不是单一 memory。
 核心文件：
 
 - [tools/__init__.py](/home/pyh/nzcoder/nz_coder/tools/__init__.py)
-- [tool_executor.py](/home/pyh/nzcoder/nz_coder/runtime/tool_executor.py)
+- [tool_executor.py](/home/pyh/nzcoder/nz_coder/runtime/execution/tool_executor.py)
 - `tools/` 目录下各具体工具模块
 
 ### 7.1 工具注册机制
@@ -526,7 +527,7 @@ dispatch(name, arguments)
 
 ### 7.2 为什么是副作用 import
 
-`runtime/loop.py` 顶部会 import 一堆工具模块：
+`runtime/execution/loop.py` 顶部会 import 一堆工具模块：
 
 - `nz_coder.tools.bash`
 - `nz_coder.tools.files`
@@ -778,7 +779,7 @@ shell 不是直接裸放开的。
 核心文件：
 
 - [verification.py](/home/pyh/nzcoder/nz_coder/intelligence/verification.py)
-- `runtime/loop.py` 里的 verification gate
+- `runtime/execution/loop.py` 里的 verification gate
 - `verification_planner.py`
 - `repo_intel.py` 里的 `verify_changed_files`
 
@@ -915,7 +916,7 @@ Skill 机制本质上是：
 
 核心文件：
 
-- [subagent.py](/home/pyh/nzcoder/nz_coder/runtime/subagent.py)
+- [subagent.py](/home/pyh/nzcoder/nz_coder/runtime/agent/subagent.py)
 
 Subagent 的思想不是“多智能体很酷”，而是：
 
@@ -1015,7 +1016,7 @@ Trace 是 append-only JSONL。
 
 核心文件：
 
-- [run_evidence.py](/home/pyh/nzcoder/nz_coder/run_evidence.py)
+- [run_evidence.py](/home/pyh/nzcoder/nz_coder/runtime/observability/run_evidence.py)
 
 RunEvidence 不是审查器，而是**运行期证据收集器**。
 
@@ -1045,7 +1046,7 @@ RunEvidence 不是审查器，而是**运行期证据收集器**。
 
 核心文件：
 
-- [reviewer.py](/home/pyh/nzcoder/nz_coder/reviewer.py)
+- [reviewer.py](/home/pyh/nzcoder/nz_coder/intelligence/reviewer.py)
 
 Reviewer 才是那个**只读审查器**：
 
@@ -1094,8 +1095,8 @@ CLI 做的事情大多是：
 
 ### 第一轮：先抓主循环
 
-1. [runtime/loop.py](/home/pyh/nzcoder/nz_coder/runtime/loop.py)
-2. [runtime/prompt.py](/home/pyh/nzcoder/nz_coder/runtime/prompt.py)
+1. [runtime/execution/loop.py](/home/pyh/nzcoder/nz_coder/runtime/execution/loop.py)
+2. [runtime/conversation/prompt.py](/home/pyh/nzcoder/nz_coder/runtime/conversation/prompt.py)
 3. [interface/cli.py](/home/pyh/nzcoder/nz_coder/interface/cli.py)
 
 先弄清：
@@ -1107,7 +1108,7 @@ CLI 做的事情大多是：
 ### 第二轮：看执行面和安全面
 
 1. [tools/__init__.py](/home/pyh/nzcoder/nz_coder/tools/__init__.py)
-2. [runtime/tool_executor.py](/home/pyh/nzcoder/nz_coder/runtime/tool_executor.py)
+2. [runtime/execution/tool_executor.py](/home/pyh/nzcoder/nz_coder/runtime/execution/tool_executor.py)
 3. [tool_platform/permissions.py](/home/pyh/nzcoder/nz_coder/tool_platform/permissions.py)
 4. [tool_platform/command_policy.py](/home/pyh/nzcoder/nz_coder/tool_platform/command_policy.py)
 5. [tools/files.py](/home/pyh/nzcoder/nz_coder/tools/files.py)
@@ -1123,7 +1124,7 @@ CLI 做的事情大多是：
 1. [state/memory.py](/home/pyh/nzcoder/nz_coder/state/memory.py)
 2. [tools/scratchpad.py](/home/pyh/nzcoder/nz_coder/tools/scratchpad.py)
 3. [state/context.py](/home/pyh/nzcoder/nz_coder/state/context.py)
-4. [runtime/runtime_state.py](/home/pyh/nzcoder/nz_coder/runtime/runtime_state.py)
+4. [runtime/execution/runtime_state.py](/home/pyh/nzcoder/nz_coder/runtime/execution/runtime_state.py)
 5. [state/sessions.py](/home/pyh/nzcoder/nz_coder/state/sessions.py)
 
 这轮重点理解：
@@ -1138,8 +1139,8 @@ CLI 做的事情大多是：
 2. [state/transaction.py](/home/pyh/nzcoder/nz_coder/state/transaction.py)
 3. [state/changes.py](/home/pyh/nzcoder/nz_coder/state/changes.py)
 4. [state/trace.py](/home/pyh/nzcoder/nz_coder/state/trace.py)
-5. [run_evidence.py](/home/pyh/nzcoder/nz_coder/run_evidence.py)
-6. [reviewer.py](/home/pyh/nzcoder/nz_coder/reviewer.py)
+5. [run_evidence.py](/home/pyh/nzcoder/nz_coder/runtime/observability/run_evidence.py)
+6. [reviewer.py](/home/pyh/nzcoder/nz_coder/intelligence/reviewer.py)
 
 这轮重点看：
 

@@ -9,18 +9,18 @@ import zipfile
 
 import pytest
 
-from nz_coder import config
-from nz_coder.attachments import make_document_attachment
-from nz_coder.context import prompt_budget
-from nz_coder.documents import DOCX_MIME, PDF_MIME, DocumentReadResult, read_document
-from nz_coder.message_schema import (
+from nz_coder.foundation import config
+from nz_coder.protocol.attachments import make_document_attachment
+from nz_coder.state.context import prompt_budget
+from nz_coder.capabilities.documents import DOCX_MIME, PDF_MIME, DocumentReadResult, read_document
+from nz_coder.protocol.message_schema import (
     PARTS_KEY,
     attach_file_parts,
     attach_message_identity,
     message_records,
 )
 from nz_coder.providers.capabilities import ModelCapabilities
-from nz_coder.runtime.loop import AgentLoop
+from nz_coder.runtime.execution.loop import AgentLoop
 from nz_coder.state.input_expansion import (
     resolve_and_apply_budget,
     tag_file_attachments,
@@ -144,7 +144,7 @@ def test_docx_reader_extracts_text_and_reuses_sidecar(tmp_path, monkeypatch):
         session_id="session-document",
     ))
     monkeypatch.setattr(
-        "nz_coder.documents._extract_docx",
+        "nz_coder.capabilities.documents._extract_docx",
         lambda _path: (_ for _ in ()).throw(AssertionError("cache was not reused")),
     )
     second = asyncio.run(read_document(
@@ -172,7 +172,7 @@ def test_invalid_docx_and_missing_pdf_converter_are_explicit_errors(
 
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.4\n%%EOF")
-    monkeypatch.setattr("nz_coder.documents.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.capabilities.documents.shutil.which", lambda _name: None)
     pdf_result = asyncio.run(read_document(
         _document_part(pdf, tmp_path, PDF_MIME),
         workspace=tmp_path,
@@ -231,7 +231,7 @@ def test_document_reader_cancellation_settles_worker_without_cache(
         cancel_event.wait(2)
         raise RuntimeError("worker stopped")
 
-    monkeypatch.setattr("nz_coder.documents._extract_docx", slow_extract)
+    monkeypatch.setattr("nz_coder.capabilities.documents._extract_docx", slow_extract)
 
     async def scenario():
         task = asyncio.create_task(read_document(

@@ -2,7 +2,7 @@
 
 
 def test_verify_project_build_runs_py_compile_and_pytest(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.project_creation.verifier import verify_project_build
 
     old = config.WORKDIR
@@ -24,7 +24,7 @@ def test_verify_project_build_runs_py_compile_and_pytest(tmp_path):
 
 
 def test_verify_project_build_warns_on_missing_dependency(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.project_creation import verifier
 
     old = config.WORKDIR

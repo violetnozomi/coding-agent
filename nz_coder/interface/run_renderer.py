@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from nz_coder.interface.presentation_tokens import clip_terminal_text
-from nz_coder.session_events import (
+from nz_coder.protocol.session_events import (
     EventSubscriptionGapError,
     SessionEvent,
     SessionSubscription,
@@ -375,7 +375,8 @@ class TerminalRunRenderer:
                     rows.append(f"  ↳ {child_status}")
         if len(self._running_parts) > 3:
             rows.append(f"  +{len(self._running_parts) - 3} more running tool(s)")
-        setter(tuple(rows))
+        status_width = max(20, int(getattr(self.console, "width", 100) or 100) - 4)
+        setter(tuple(clip_terminal_text(row, status_width) for row in rows))
 
     def _render_tool(self, properties: dict) -> None:
         self._tool_count += 1
@@ -455,6 +456,9 @@ class TerminalRunRenderer:
         if self._terminal_seen:
             return
         self._terminal_seen = True
+        printer = getattr(self.console, "print_terminal", None)
+        if not callable(printer):
+            printer = self.console.print
         elapsed = max(0.0, time.monotonic() - self._started_at)
         normalized = status.lower()
         if normalized in {"completed", "completed_unverified"}:
@@ -465,20 +469,20 @@ class TerminalRunRenderer:
             icon, style = "✗", "error"
         suffix = f" · {self._tool_count} tool(s) · {elapsed:.1f}s"
         line = f"{icon} Run {normalized.replace('_', ' ')}{suffix}"
-        self.console.print(f"[{style}]{line}[/{style}]", highlight=False)
+        printer(f"[{style}]{line}[/{style}]", highlight=False)
         footer = self._assistant_footer()
         if footer:
-            self.console.print(Text(footer, style="dim"))
+            printer(Text(footer, style="dim"))
         changed = self._changed_paths()
         if changed:
             preview = ", ".join(changed[:5])
             suffix = f", +{len(changed) - 5} more" if len(changed) > 5 else ""
-            self.console.print(
+            printer(
                 f"[info]Δ {len(changed)} changed file(s):[/info] {preview}{suffix}",
                 highlight=False,
             )
         if detail:
-            self.console.print(Text(_sanitize(detail, 600), style="red"))
+            printer(Text(_sanitize(detail, 600), style="red"))
 
     def _render_process_event(self, event_type: str, properties: dict) -> None:
         process = properties.get("process") if isinstance(properties.get("process"), dict) else {}

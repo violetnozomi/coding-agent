@@ -25,6 +25,9 @@ class MemoryExecutionContext:
     lineage: object | None
     recall: MemoryRecallState
     commit_recall: Callable[[MemoryRecallState], None] = lambda _state: None
+    provider: object | None = None
+    capabilities: object | None = None
+    observer: Callable[[str, dict], None] | None = None
 
     def __post_init__(self) -> None:
         if not self.session_id:
@@ -33,3 +36,5 @@ class MemoryExecutionContext:
             raise TypeError("MemoryExecutionContext recall must be MemoryRecallState")
         if not callable(self.commit_recall):
             raise TypeError("MemoryExecutionContext commit_recall must be callable")
+        if self.observer is not None and not callable(self.observer):
+            raise TypeError("MemoryExecutionContext observer must be callable")

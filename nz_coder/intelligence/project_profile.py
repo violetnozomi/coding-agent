@@ -10,7 +10,7 @@ import json
 import os
 from pathlib import Path
 
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
 
 _EXCLUDED_DIRS = {
@@ -29,6 +29,10 @@ _LANG_BY_EXT = {
     ".rb": "ruby", ".php": "php", ".c": "c", ".cc": "cpp", ".cpp": "cpp",
     ".h": "c", ".hpp": "cpp", ".cs": "csharp",
 }
+
+
+def _is_excluded_directory(name: str) -> bool:
+    return name in _EXCLUDED_DIRS
 
 
 def _safe_workdir(path: str | Path | None = None) -> Path:
@@ -81,7 +85,7 @@ def _node_package_manager(root: Path) -> str:
 
 
 def _looks_like_source_root(path: Path) -> bool:
-    if not path.is_dir() or path.name in _EXCLUDED_DIRS:
+    if not path.is_dir() or _is_excluded_directory(path.name):
         return False
     if (path / "__init__.py").exists():
         return True
@@ -92,7 +96,7 @@ def _sample_languages(root: Path, limit: int = 5000) -> list[str]:
     found: list[str] = []
     count = 0
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [name for name in dirnames if name not in _EXCLUDED_DIRS]
+        dirnames[:] = [name for name in dirnames if not _is_excluded_directory(name)]
         for filename in filenames:
             if count >= limit:
                 return found
@@ -119,7 +123,14 @@ def _detect_python(root: Path, profile: dict) -> None:
         else:
             _add_unique(profile["package_managers"], "pip")
 
-    if (root / "pytest.ini").exists() or "pytest" in pyproject or (root / "tests").exists():
+    native_runner = root / "tests" / "runtests.py"
+    if native_runner.is_file():
+        _add_unique(profile["test_commands"], "python tests/runtests.py")
+    if (
+        (root / "pytest.ini").exists()
+        or "pytest" in pyproject
+        or ((root / "tests").exists() and not native_runner.is_file())
+    ):
         _add_unique(profile["test_commands"], "pytest")
     if tox_ini.exists():
         _add_unique(profile["test_commands"], "tox")
@@ -261,6 +272,124 @@ def build_project_profile(path: str | Path | None = None, save: bool = False) ->
     return profile
 
 
+def build_project_execution_facts(path: str | Path | None = None) -> dict:
+    """Return deterministic roots and launch facts the model must not infer.
+
+    The paths are derived from the active workspace and lightweight project
+    profile.  They are data for prompt construction, not executable commands.
+    """
+    root = _safe_workdir(path)
+    profile = build_project_profile(root.relative_to(current_workdir()), save=False)
+    project_root = _single_nested_project_root(root) or root
+    if project_root != root:
+        nested_relative = project_root.relative_to(root).as_posix()
+        nested_profile = build_project_profile(
+            project_root.relative_to(current_workdir()),
+            save=False,
+        )
+        for test_root in nested_profile.get("test_roots", []):
+            _add_unique(
+                profile["test_roots"],
+                f"{nested_relative}/{test_root}",
+            )
+        for command in nested_profile.get("test_commands", []):
+            if command == "pytest" and nested_profile.get("test_roots"):
+                for test_root in nested_profile["test_roots"]:
+                    _add_unique(
+                        profile["test_commands"],
+                        f"python -m pytest -q {nested_relative}/{test_root}",
+                    )
+            else:
+                _add_unique(profile["test_commands"], command)
+    python_packages: list[dict] = []
+    seen_packages: set[str] = set()
+
+    package_roots = [root]
+    package_roots.extend(
+        root / item
+        for item in profile.get("source_roots", [])
+        if (root / item).is_dir()
+    )
+    for candidate_root in package_roots:
+        candidates = []
+        if (candidate_root / "__init__.py").is_file() and candidate_root != root:
+            candidates.append(candidate_root)
+        candidates.extend(
+            child for child in candidate_root.iterdir()
+            if child.is_dir()
+            and not _is_excluded_directory(child.name)
+            and (child / "__init__.py").is_file()
+        )
+        for package in candidates:
+            relative = package.relative_to(root).as_posix()
+            if relative in seen_packages:
+                continue
+            seen_packages.add(relative)
+            python_packages.append({
+                "module_name": package.name,
+                "package_path": relative,
+                "module_cwd": str(package.parent.resolve()),
+            })
+
+    entrypoints: list[str] = []
+    for package in python_packages:
+        main_path = root / package["package_path"] / "__main__.py"
+        if main_path.is_file():
+            entrypoints.append(main_path.relative_to(root).as_posix())
+    for candidate in ("main.py", "app.py", "manage.py"):
+        if (root / candidate).is_file():
+            _add_unique(entrypoints, candidate)
+
+    return {
+        "workspace_root": str(root.resolve()),
+        "project_root": str(project_root.resolve()),
+        "source_roots": list(profile.get("source_roots", [])),
+        "test_roots": list(profile.get("test_roots", [])),
+        "python_packages": python_packages,
+        "node_packages": _node_execution_facts(root),
+        "test_commands": list(profile.get("test_commands", [])),
+        "typecheck_commands": list(profile.get("typecheck_commands", [])),
+        "lint_commands": list(profile.get("lint_commands", [])),
+        "build_commands": list(profile.get("build_commands", [])),
+        "entrypoints": entrypoints,
+    }
+
+
+def _single_nested_project_root(root: Path) -> Path | None:
+    """Return one unambiguous one-level project root inside a workspace."""
+    manifests = (
+        "pyproject.toml", "setup.py", "setup.cfg", "package.json",
+        "go.mod", "Cargo.toml",
+    )
+    if any((root / name).is_file() for name in manifests):
+        return None
+    candidates = [
+        child
+        for child in root.iterdir()
+        if child.is_dir()
+        and not _is_excluded_directory(child.name)
+        and any((child / name).is_file() for name in manifests)
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _node_execution_facts(root: Path) -> list[dict]:
+    """Return root and one-level workspace package facts without globbing deeply."""
+    result: list[dict] = []
+    candidates = [root]
+    packages = root / "packages"
+    if packages.is_dir():
+        candidates.extend(child for child in packages.iterdir() if child.is_dir())
+    for candidate in candidates:
+        if not (candidate / "package.json").is_file():
+            continue
+        result.append({
+            "package_root": candidate.relative_to(root).as_posix(),
+            "package_manager": _node_package_manager(candidate),
+        })
+    return result
+
+
 def load_project_profile(path: str | Path | None = None, rebuild: bool = False) -> dict:
     """Load a saved project profile or rebuild it if missing/stale is acceptable."""
     root = _safe_workdir(path)
@@ -334,4 +463,5 @@ register(
         },
     },
     handler=project_profile,
+    plan_mode_allowed=True,
 )

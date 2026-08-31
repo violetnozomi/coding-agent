@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 def test_three_identical_calls_in_window_emit_stall_envelope():
-    from nz_coder.runtime.stall_detector import StallDetector
+    from nz_coder.runtime.verification.stall_detector import StallDetector
 
     detector = StallDetector(disabled=False)
     assert detector.record_tool_use("read", {"path": "a.py"}).kind == "no_stall"
@@ -22,7 +22,7 @@ def test_three_identical_calls_in_window_emit_stall_envelope():
 
 
 def test_identical_calls_can_be_interleaved_inside_window():
-    from nz_coder.runtime.stall_detector import StallDetector
+    from nz_coder.runtime.verification.stall_detector import StallDetector
 
     detector = StallDetector(disabled=False)
     detector.record_tool_use("read", {"path": "a.py"})
@@ -35,7 +35,7 @@ def test_identical_calls_can_be_interleaved_inside_window():
 
 
 def test_cache_hit_lowers_threshold_to_two_calls():
-    from nz_coder.runtime.stall_detector import StallDetector
+    from nz_coder.runtime.verification.stall_detector import StallDetector
 
     detector = StallDetector(disabled=False)
     detector.record_tool_use("read", {"path": "a.py"}, cache_hit=True)
@@ -46,7 +46,7 @@ def test_cache_hit_lowers_threshold_to_two_calls():
 
 
 def test_stable_input_order_window_eviction_and_reset(monkeypatch):
-    from nz_coder.runtime.stall_detector import StallDetector
+    from nz_coder.runtime.verification.stall_detector import StallDetector
 
     detector = StallDetector(window_size=4, disabled=False)
     detector.record_tool_use("read", {"path": "a.py", "offset": 1})

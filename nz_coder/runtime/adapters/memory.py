@@ -24,4 +24,7 @@ def memory_context_from_legacy_host(host) -> MemoryExecutionContext:
         lineage=getattr(host, "lineage", None),
         recall=state,
         commit_recall=commit,
+        provider=getattr(host, "provider", None),
+        capabilities=getattr(host, "model_capabilities", None),
+        observer=getattr(host, "_model_gateway_observer", None),
     )

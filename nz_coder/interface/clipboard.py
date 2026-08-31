@@ -11,8 +11,8 @@ import subprocess
 import sys
 import tempfile
 
-from nz_coder.attachments import MAX_IMAGE_BYTES, sniff_image_mime
-from nz_coder.private_paths import harden_private_path
+from nz_coder.protocol.attachments import MAX_IMAGE_BYTES, sniff_image_mime
+from nz_coder.foundation.private_paths import harden_private_path
 
 
 _MAX_CLIPBOARD_BYTES = 1_000_000

@@ -18,7 +18,7 @@ def _method_names(path: Path) -> set[str]:
 
 
 def test_loop_keeps_only_tool_runtime_compatibility_facades() -> None:
-    source = (ROOT / "nz_coder" / "runtime" / "loop.py").read_text(
+    source = (ROOT / "nz_coder" / "runtime" / "execution" / "loop.py").read_text(
         encoding="utf-8",
     )
     tree = ast.parse(source)
@@ -40,16 +40,41 @@ def test_tool_runtime_does_not_import_agent_loop() -> None:
     for path in scope.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module == "nz_coder.runtime.loop":
+            if isinstance(node, ast.ImportFrom) and node.module == "nz_coder.runtime.execution.loop":
                 failures.append(str(path.relative_to(ROOT)))
     assert failures == []
 
 
 def test_scheduler_has_single_production_owner() -> None:
-    loop_methods = _method_names(ROOT / "nz_coder" / "runtime" / "loop.py")
+    loop_methods = _method_names(ROOT / "nz_coder" / "runtime" / "execution" / "loop.py")
     scheduler_methods = _method_names(
         ROOT / "nz_coder" / "runtime" / "tool_runtime" / "scheduler.py",
     )
     for name in ("_execute_scheduled", "_execute_scheduled_async", "_execute_concurrent", "_execute_concurrent_async"):
         assert name in scheduler_methods
         assert name not in loop_methods
+
+
+def test_tool_runtime_package_exports_are_lazy_compatible_aliases() -> None:
+    from nz_coder.runtime.tool_runtime import (
+        ProductionToolRuntime,
+        execute_concurrent,
+        execute_concurrent_async,
+        execute_scheduled,
+        execute_scheduled_async,
+    )
+    from nz_coder.runtime.tool_runtime.pipeline import (
+        ProductionToolRuntime as CanonicalToolRuntime,
+    )
+    from nz_coder.runtime.tool_runtime.scheduler import (
+        _execute_concurrent,
+        _execute_concurrent_async,
+        _execute_scheduled,
+        _execute_scheduled_async,
+    )
+
+    assert ProductionToolRuntime is CanonicalToolRuntime
+    assert execute_concurrent is _execute_concurrent
+    assert execute_concurrent_async is _execute_concurrent_async
+    assert execute_scheduled is _execute_scheduled
+    assert execute_scheduled_async is _execute_scheduled_async

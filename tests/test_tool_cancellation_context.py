@@ -10,12 +10,12 @@ import time
 
 import pytest
 
-from nz_coder.documents import _DocumentInterrupted, _pdf_page_count
-from nz_coder.message_schema import PARTS_KEY, attach_message_identity
-from nz_coder.runtime.async_utils import to_thread_settled
-from nz_coder.runtime.loop import AgentLoop, _execute_concurrent_async
-from nz_coder.runtime.session_processor import SessionProcessor
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.capabilities.documents import _DocumentInterrupted, _pdf_page_count
+from nz_coder.protocol.message_schema import PARTS_KEY, attach_message_identity
+from nz_coder.foundation.async_utils import to_thread_settled
+from nz_coder.runtime.execution.loop import AgentLoop, _execute_concurrent_async
+from nz_coder.runtime.session.session_processor import SessionProcessor
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools import dispatch, register, scoped_tool_cancellation
 from nz_coder.tools.bash import run_bash
 from nz_coder.tools.files import read_file
@@ -74,7 +74,7 @@ def test_cancelled_pdf_read_settles_worker_without_cache_or_completed_toolpart(
     started = threading.Event()
     observed_cancel = threading.Event()
 
-    monkeypatch.setattr("nz_coder.documents._pdf_page_count", lambda *_args: 1)
+    monkeypatch.setattr("nz_coder.capabilities.documents._pdf_page_count", lambda *_args: 1)
 
     def slow_extract(_path, _cache, cancel_event, _start, _end):
         started.set()
@@ -82,7 +82,7 @@ def test_cancelled_pdf_read_settles_worker_without_cache_or_completed_toolpart(
             observed_cancel.set()
         raise RuntimeError("conversion stopped")
 
-    monkeypatch.setattr("nz_coder.documents._extract_pdf", slow_extract)
+    monkeypatch.setattr("nz_coder.capabilities.documents._extract_pdf", slow_extract)
 
     tool_call = {
         "id": "call-cancel-pdf",
@@ -171,8 +171,8 @@ def test_pdfinfo_process_is_terminated_by_cooperative_cancel(
         def wait(self, timeout=None):
             return self.returncode
 
-    monkeypatch.setattr("nz_coder.documents.shutil.which", lambda _name: "/fake/pdfinfo")
-    monkeypatch.setattr("nz_coder.documents.subprocess.Popen", Process)
+    monkeypatch.setattr("nz_coder.capabilities.documents.shutil.which", lambda _name: "/fake/pdfinfo")
+    monkeypatch.setattr("nz_coder.capabilities.documents.subprocess.Popen", Process)
     cancel_event = threading.Event()
     interrupted = []
 

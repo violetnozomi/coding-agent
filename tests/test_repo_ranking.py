@@ -83,7 +83,7 @@ def test_rank_normalizes_windows_path_query():
 
 
 def test_repo_map_orders_exact_symbol_before_partial_symbol(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_map import repo_map
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)

@@ -5,7 +5,7 @@ import copy
 import asyncio
 
 from nz_coder.runtime.adapters.runner import run_request_from_legacy_host
-from nz_coder.runtime.native_sdk import NativeSDKRunner
+from nz_coder.runtime.execution.native_sdk import NativeSDKRunner
 from nz_coder.sdk import AgentClient
 
 
@@ -60,12 +60,12 @@ class TerminalSessionController:
         return getattr(self.environment, "_mm", None)
 
     def status_report(self, history: list[dict]) -> str:
-        from nz_coder.workspace import status_report
+        from nz_coder.state.workspace import status_report
 
         return status_report(self.environment, history)
 
     def trace_report(self) -> str:
-        from nz_coder.trace import latest_trace, summarize_trace
+        from nz_coder.state.trace import latest_trace, summarize_trace
 
         path = latest_trace(session_id=self.session_id) or latest_trace()
         return summarize_trace(path)
@@ -80,7 +80,7 @@ class TerminalSessionController:
         return tracker.render_diff() if tracker is not None else render_latest_diff()
 
     def processes(self) -> list[dict]:
-        from nz_coder.runtime.process_service import workspace_process_service
+        from nz_coder.runtime.process.process_service import workspace_process_service
 
         service = workspace_process_service(self.environment.workdir)
         values = []
@@ -108,7 +108,7 @@ class TerminalSessionController:
         max_bytes: int = 8192,
         wait_seconds: float = 0.0,
     ) -> dict:
-        from nz_coder.runtime.process_service import workspace_process_service
+        from nz_coder.runtime.process.process_service import workspace_process_service
 
         return workspace_process_service(self.environment.workdir).read(
             process_id,
@@ -120,7 +120,7 @@ class TerminalSessionController:
         ).to_dict()
 
     def process_kill(self, process_id: str) -> dict:
-        from nz_coder.runtime.process_service import workspace_process_service
+        from nz_coder.runtime.process.process_service import workspace_process_service
 
         return workspace_process_service(self.environment.workdir).kill(
             process_id,
@@ -196,8 +196,8 @@ class TerminalSessionController:
 
     def close(self) -> None:
         """Close the current product environment exactly once."""
-        from nz_coder.runtime.process_service import dispose_session_processes
-        from nz_coder.runtime.workdir import current_workdir
+        from nz_coder.runtime.process.process_service import dispose_session_processes
+        from nz_coder.runtime.process.workdir import current_workdir
 
         dispose_session_processes(current_workdir(), self.session_id)
         close = getattr(self.environment, "close", None)

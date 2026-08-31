@@ -34,7 +34,7 @@ def _plan() -> dict:
 
 
 def _capsule(**overrides) -> dict:
-    from nz_coder.runtime.workflow_capsule import create_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_capsule import create_workflow_capsule
 
     values = {
         "manifest": _manifest(),
@@ -55,7 +55,7 @@ def _capsule(**overrides) -> dict:
 
 
 def test_capsule_is_json_only_versioned_and_rejects_source():
-    from nz_coder.runtime.workflow_capsule import validate_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_capsule import validate_workflow_capsule
 
     capsule = _capsule()
     assert capsule["format"] == "nzcoder.workflow"
@@ -67,7 +67,7 @@ def test_capsule_is_json_only_versioned_and_rejects_source():
 
 
 def test_capsule_preflight_reports_version_environment_and_inventory():
-    from nz_coder.runtime.workflow_capsule import (
+    from nz_coder.runtime.workflows.workflow_capsule import (
         create_workflow_capsule,
         preflight_workflow_capsule,
     )
@@ -107,7 +107,7 @@ def test_capsule_preflight_reports_version_environment_and_inventory():
 
 
 def test_capsule_discovery_project_overrides_personal_and_ignores_symlink(tmp_path):
-    from nz_coder.runtime.workflow_library import (
+    from nz_coder.runtime.workflows.workflow_library import (
         discover_workflow_capsules,
         load_workflow_capsule,
         save_workflow_capsule,
@@ -139,14 +139,77 @@ def test_capsule_discovery_project_overrides_personal_and_ignores_symlink(tmp_pa
     assert os.stat(project_ref["path"]).st_mode & 0o777 == 0o600
 
 
+def test_workflow_project_library_rejects_workspace_symlink_escape(tmp_path):
+    from nz_coder.runtime.workflows.workflow_library import save_workflow_capsule
+
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    workspace.mkdir()
+    outside.mkdir()
+    (workspace / ".nz-coder").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="escapes workspace"):
+        save_workflow_capsule("review", _capsule(), workspace=workspace)
+    assert not (outside / "workflows").exists()
+
+
+def test_workflow_capsule_rejects_nonstandard_json_numbers(tmp_path):
+    from nz_coder.runtime.workflows.workflow_library import (
+        load_workflow_capsule,
+        save_workflow_capsule,
+    )
+
+    capsule = _capsule()
+    capsule["plan"]["phases"][0]["score"] = float("nan")
+    with pytest.raises(ValueError, match="strict JSON"):
+        save_workflow_capsule("review", capsule, workspace=tmp_path)
+
+    target = tmp_path / ".nz-coder/workflows/review.workflow.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(_capsule()).replace(
+            '"read_only": true',
+            '"read_only": true, "score": NaN',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid workflow capsule"):
+        load_workflow_capsule("review", workspace=tmp_path)
+
+
+def test_workflow_exact_load_does_not_scan_the_library(tmp_path, monkeypatch):
+    from nz_coder.runtime.workflows import workflow_library
+
+    workflow_library.save_workflow_capsule(
+        "review",
+        _capsule(),
+        workspace=tmp_path,
+    )
+    monkeypatch.setattr(
+        workflow_library,
+        "discover_workflow_capsules",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("exact load must not scan")
+        ),
+    )
+
+    capsule, ref = workflow_library.load_workflow_capsule(
+        "review",
+        workspace=tmp_path,
+    )
+    assert capsule["manifest"]["name"] == "saved-review"
+    assert ref["source"] == "project"
+
+
 def test_saved_capsule_preflights_and_executes_through_real_runtime(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_library import save_workflow_capsule
-    from nz_coder.runtime.workflow_runtime import workflow_run
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_library import save_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)
@@ -170,13 +233,13 @@ def test_persisted_run_and_artifact_read_then_recoverable_archive(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_lifecycle import (
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_lifecycle import (
         workflow_run_archive,
         workflow_runs,
     )
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)
@@ -204,10 +267,10 @@ def test_persisted_run_and_artifact_read_then_recoverable_archive(
 
 
 def test_archive_preflights_all_ids_before_moving_any_run(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_lifecycle import workflow_run_archive
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_lifecycle import workflow_run_archive
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)

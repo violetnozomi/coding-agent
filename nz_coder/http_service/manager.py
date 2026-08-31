@@ -12,8 +12,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from nz_coder import config
-from nz_coder.message_schema import (
+from nz_coder.foundation import config
+from nz_coder.protocol.message_schema import (
     MESSAGE_ID_KEY,
     MESSAGE_SCHEMA_VERSION,
     attach_message_identity,
@@ -24,14 +24,14 @@ from nz_coder.message_schema import (
     session_diffs,
     session_summary,
 )
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
+from nz_coder.runtime.session.lifecycle import delete_session
 from nz_coder.sdk import AgentClient
-from nz_coder.session_events import SessionEventBus
-from nz_coder.sessions import (
+from nz_coder.protocol.session_events import SessionEventBus
+from nz_coder.state.sessions import (
     create_session_id,
-    delete_session,
     list_sessions,
     load_session,
     rename_session,
@@ -59,25 +59,44 @@ class SessionBusyError(RuntimeError):
 AgentFactory = Callable[[str, str], Any]
 
 
+def _validated_wait_timeout(
+    value: float | None,
+    label: str,
+    *,
+    allow_none: bool,
+) -> float | None:
+    if value is None:
+        if allow_none:
+            return None
+        raise ValueError(f"session {label} timeout must be a non-negative finite number")
+    if isinstance(value, bool):
+        raise ValueError(f"session {label} timeout must be a non-negative finite number")
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            f"session {label} timeout must be a non-negative finite number"
+        ) from exc
+    if not math.isfinite(timeout) or timeout < 0 or timeout > 86_400:
+        raise ValueError(
+            f"session {label} timeout must be a non-negative finite number"
+        )
+    return timeout
+
+
 def build_http_agent(session_id: str, permission_mode: str):
     """Build an AgentLoop with a conservative pre-broker permission fallback."""
-    from nz_coder.memory import (
-        MemoryManager,
+    from nz_coder.state.memory import (
         bind_memory_manager,
-        current_memory_manager,
+        workspace_memory_manager,
     )
-    from nz_coder.prompt import build
-    from nz_coder.runtime.composition import build_coding_agent
-    from nz_coder.runtime.workdir import current_derived_path, current_workdir
-    from nz_coder.skills import SkillLoader, bind_skill_loader, current_skill_loader
+    from nz_coder.runtime.conversation.prompt import build
+    from nz_coder.runtime.execution.composition import build_coding_agent
+    from nz_coder.runtime.process.workdir import current_derived_path, current_workdir
+    from nz_coder.state.skills import SkillLoader, bind_skill_loader, current_skill_loader
 
     memory_dir = current_derived_path("MEMORY_DIR")
-    default_memory = current_memory_manager()
-    memory_manager = (
-        default_memory
-        if default_memory.memory_dir.resolve() == memory_dir.resolve()
-        else MemoryManager(memory_dir)
-    )
+    memory_manager = workspace_memory_manager(memory_dir)
     project_skills = current_workdir() / ".nz-coder" / "skills"
     default_skills = current_skill_loader()
     skill_manager = (
@@ -191,7 +210,7 @@ class ManagedSession:
         allowed_tools: tuple[str, ...] = (),
         model_override: str | None = None,
     ) -> RunRequest:
-        from nz_coder.prompt import build
+        from nz_coder.runtime.conversation.prompt import build
 
         provider, model, variant = self._model_identity()
         if model_override:
@@ -271,8 +290,8 @@ class ManagedSession:
             return normalized
 
     def _reverter(self):
-        from nz_coder.runtime.session_revert import SessionReverter
-        from nz_coder.runtime.workspace_snapshot import WorkspaceSnapshotStore
+        from nz_coder.runtime.session.session_revert import SessionReverter
+        from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
 
         with scoped_workdir(self.workspace):
             snapshot_root = session_snapshot_dir(self.session_id)
@@ -454,7 +473,7 @@ class ManagedSession:
 
     def workflows(self) -> dict:
         """Project active and durable runs from the Session-owned Workflow owner."""
-        from nz_coder.runtime.workflow_run_store import list_workflow_run_records
+        from nz_coder.runtime.workflows.workflow_run_store import list_workflow_run_records
 
         manager = self._workflow_manager()
         active = manager.workflow_run_snapshots()
@@ -467,7 +486,7 @@ class ManagedSession:
         return {"runs": [*active, *persisted]}
 
     def workflow(self, run_id: str) -> dict:
-        from nz_coder.runtime.workflow_run_store import read_workflow_run_record
+        from nz_coder.runtime.workflows.workflow_run_store import read_workflow_run_record
 
         identifier = str(run_id or "").strip()
         manager = self._workflow_manager()
@@ -501,11 +520,11 @@ class ManagedSession:
         import hashlib
         import json
 
-        from nz_coder.runtime.workflow_host import (
+        from nz_coder.runtime.workflows.workflow_host import (
             build_workflow_approval_summary,
             workflow_approval_digest,
         )
-        from nz_coder.runtime.workflow_resolver import resolve_workflow_capsule
+        from nz_coder.runtime.workflows.workflow_resolver import resolve_workflow_capsule
 
         if not isinstance(arguments, dict):
             raise ValueError("workflow arguments must be an object")
@@ -549,7 +568,7 @@ class ManagedSession:
         """Start the exact plan approved by a Remote product adapter."""
         import hmac
 
-        from nz_coder.runtime.workflow_sdk import WorkflowHostSDK
+        from nz_coder.runtime.workflows.workflow_sdk import WorkflowHostSDK
 
         manager, resolved, _summary, expected = self._resolve_workflow_for_approval(
             name, arguments
@@ -763,11 +782,12 @@ class ManagedSession:
         return True
 
     def wait(self, timeout: float | None = None) -> bool:
+        wait_timeout = _validated_wait_timeout(timeout, "wait", allow_none=True)
         with self._lock:
             thread = self._run_thread
         if thread is None:
             return True
-        thread.join(timeout=timeout)
+        thread.join(timeout=wait_timeout)
         return not thread.is_alive()
 
     def dispose(self, *, force: bool = False) -> None:
@@ -780,7 +800,7 @@ class ManagedSession:
             self.status = "disposed"
             self.updated_at = time.time()
         self.interactions.close()
-        from nz_coder.runtime.process_service import dispose_session_processes
+        from nz_coder.runtime.process.process_service import dispose_session_processes
 
         dispose_session_processes(self.workspace, self.session_id)
         if self.agent is not None:
@@ -808,7 +828,7 @@ class ManagedSession:
             self.status = "disposed"
             self.updated_at = time.time()
         self.interactions.close()
-        from nz_coder.runtime.process_service import dispose_session_processes
+        from nz_coder.runtime.process.process_service import dispose_session_processes
 
         dispose_session_processes(self.workspace, self.session_id)
         if self.agent is not None:
@@ -1121,7 +1141,7 @@ class SessionManager:
 
     def fork(self, session_id: str, turn_number: int | None = None) -> dict:
         from nz_coder.interface.timeline import fork_history, forked_session_title, conversation_turns
-        from nz_coder.message_schema import rebind_fork_history
+        from nz_coder.protocol.message_schema import rebind_fork_history
 
         parent = self.get(session_id)
         with parent._lock:
@@ -1198,6 +1218,7 @@ class SessionManager:
         return self.workspaces.list()
 
     def close(self, timeout: float = 5.0) -> None:
+        close_timeout = _validated_wait_timeout(timeout, "close", allow_none=False)
         with self._lock:
             if self._closed:
                 return
@@ -1206,11 +1227,10 @@ class SessionManager:
             self._sessions.clear()
         for session in sessions:
             session.abort()
-        deadline = time.monotonic() + max(0.0, timeout)
+        deadline = time.monotonic() + close_timeout
         for session in sessions:
             session.wait(max(0.0, deadline - time.monotonic()))
             session.dispose(force=True)
-
     def _build_session(
         self,
         *,

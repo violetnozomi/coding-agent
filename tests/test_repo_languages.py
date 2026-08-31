@@ -143,7 +143,7 @@ def test_extract_language_symbols(filename, source, expected):
 
 
 def test_repo_map_indexes_mixed_language_directory(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_map import repo_map
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
@@ -179,7 +179,7 @@ def test_repo_map_indexes_mixed_language_directory(tmp_path, monkeypatch):
 
 
 def test_repo_map_supports_non_python_file_and_query(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_map import repo_map
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
@@ -201,7 +201,7 @@ def test_repo_map_semantic_probe_uses_ranked_non_python_file(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.lsp.workspace_symbols import WorkspaceSymbolResult
     from nz_coder.tools import repo_map as module
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from nz_coder.runtime.workflow_contracts import workflow_contract
-from nz_coder.runtime.workflow_runtime import lint_workflow_plan
+from nz_coder.runtime.workflows.workflow_contracts import workflow_contract
+from nz_coder.runtime.workflows.workflow_runtime import lint_workflow_plan
 
 
 def test_contract_is_defensive_and_declares_terminal_semantics():

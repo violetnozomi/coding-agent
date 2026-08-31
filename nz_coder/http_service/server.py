@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import math
 import os
 import secrets
 import threading
@@ -11,7 +12,11 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from nz_coder.session_events import EventCursorExpiredError, iter_sse
+from nz_coder.foundation.json_safety import (
+    json_safe_value,
+    reject_nonstandard_json_constant,
+)
+from nz_coder.protocol.session_events import EventCursorExpiredError, iter_sse
 from nz_coder.state.instructions import (
     create_instruction_file,
     delete_instruction_file,
@@ -21,7 +26,7 @@ from nz_coder.state.instructions import (
 
 from .interactions import InteractionNotFoundError
 from .manager import SessionBusyError, SessionManager, SessionNotFoundError
-from nz_coder.runtime.process_service import (
+from nz_coder.runtime.process.process_service import (
     ProcessNotFoundError,
     ProcessOwnershipError,
     ProcessStateError,
@@ -218,7 +223,7 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
                 self._json(HTTPStatus.OK, session.interactions.list("question"))
                 return
             if len(segments) == 3 and segments[2] == "children" and method == "GET":
-                from nz_coder.runtime.subagent import list_subagent_sessions
+                from nz_coder.runtime.agent.subagent import list_subagent_sessions
 
                 self._json(
                     HTTPStatus.OK,
@@ -226,7 +231,7 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
                 )
                 return
             if len(segments) == 4 and segments[2] == "children" and method == "GET":
-                from nz_coder.runtime.subagent import load_subagent_session
+                from nz_coder.runtime.agent.subagent import load_subagent_session
 
                 child = load_subagent_session(session.session_id, segments[3], session.workspace)
                 if not child:
@@ -608,8 +613,11 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
             raise ValueError("request body exceeds 1 MiB limit")
         raw = self.rfile.read(length)
         try:
-            payload = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            payload = json.loads(
+                raw.decode("utf-8"),
+                parse_constant=reject_nonstandard_json_constant,
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
             raise ValueError("request body must be valid UTF-8 JSON") from exc
         if not isinstance(payload, dict):
             raise ValueError("request body must be a JSON object")
@@ -637,7 +645,12 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
         return value
 
     def _json(self, status: int, payload) -> None:
-        data = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+        data = json.dumps(
+            json_safe_value(payload),
+            ensure_ascii=False,
+            default=str,
+            allow_nan=False,
+        ).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
@@ -681,7 +694,7 @@ class SessionHTTPService:
     ):
         if host not in _LOOPBACK_HOSTS:
             raise ValueError("phase-1 HTTP service only accepts 127.0.0.1 or localhost")
-        if not isinstance(port, int) or not 0 <= port <= 65535:
+        if not isinstance(port, int) or isinstance(port, bool) or not 0 <= port <= 65535:
             raise ValueError("port must be between 0 and 65535")
         if token is not None and len(token) < 16:
             raise ValueError("bearer token must contain at least 16 characters")
@@ -691,13 +704,19 @@ class SessionHTTPService:
             or not 1 <= event_queue_size <= 4096
         ):
             raise ValueError("event_queue_size must be between 1 and 4096")
+        try:
+            heartbeat = float(heartbeat_seconds)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("heartbeat must be a positive finite number") from exc
+        if not math.isfinite(heartbeat) or heartbeat <= 0:
+            raise ValueError("heartbeat must be a positive finite number")
         self.manager = manager or SessionManager(
             interaction_timeout_seconds=interaction_timeout_seconds,
             workspace_roots=workspace_roots,
             restore_saved=restore_saved_sessions,
         )
         self.token = token or secrets.token_urlsafe(32)
-        self.heartbeat_seconds = max(0.05, float(heartbeat_seconds))
+        self.heartbeat_seconds = max(0.05, heartbeat)
         self.event_queue_size = event_queue_size
         self.started_at = time.time()
         self.runtime_identity = dict(runtime_identity or {})

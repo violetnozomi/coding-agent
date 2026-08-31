@@ -7,10 +7,10 @@ import pytest
 
 from nz_coder.interface.commands import build_default_registry
 from nz_coder.interface.commands.registry import CommandContext
-from nz_coder.message_schema import attach_message_identity
-from nz_coder.runtime.workdir import scoped_workdir
-from nz_coder.session_stats import aggregate_session_stats, render_session_stats
-from nz_coder.sessions import save_session
+from nz_coder.protocol.message_schema import attach_message_identity
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.state.session_stats import aggregate_session_stats, render_session_stats
+from nz_coder.state.sessions import save_session
 
 
 def _assistant(session_id: str, message_id: str, *, priced: bool) -> dict:
@@ -60,7 +60,7 @@ def _assistant(session_id: str, message_id: str, *, priced: bool) -> dict:
 
 
 def test_stats_aggregate_parent_cost_once_and_keep_child_model_usage(tmp_path):
-    from nz_coder.runtime import subagent
+    from nz_coder.runtime.agent import subagent
 
     with scoped_workdir(tmp_path):
         session_id = "session-stats"

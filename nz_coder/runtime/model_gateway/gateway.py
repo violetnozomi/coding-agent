@@ -2,14 +2,18 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import queue
 import threading
 import time
 from dataclasses import replace
 from typing import Callable
 
-from nz_coder.runtime.agent_resilience import ProviderAttemptController
-from nz_coder.runtime.model_gateway.errors import classify_provider_error
+from nz_coder.runtime.agent.agent_resilience import ProviderAttemptController
+from nz_coder.runtime.model_gateway.errors import (
+    classify_provider_error,
+    should_fallback_for_forced_tool_choice,
+)
 from nz_coder.runtime.model_gateway.models import (
     ModelCall,
     ModelCallOutcome,
@@ -17,12 +21,13 @@ from nz_coder.runtime.model_gateway.models import (
 )
 from nz_coder.runtime.model_gateway.runtime import ResolvedModelRuntime
 from nz_coder.runtime.model_gateway.usage import (
+    NormalizedUsage,
     extract_provider_reported_cost,
     normalize_usage,
     resolve_usage_cost,
 )
-from nz_coder.runtime.recovery import RecoveryState
-from nz_coder.runtime.think_tags import ThinkTagDemux, demux_think_tags
+from nz_coder.runtime.verification.recovery import RecoveryState
+from nz_coder.runtime.conversation.think_tags import ThinkTagDemux, demux_think_tags
 from nz_coder.runtime.model_gateway.stream import iter_stream_with_timeouts
 from nz_coder.providers.capabilities import configured_model_capabilities
 
@@ -31,6 +36,18 @@ def _field(owner, name: str):
     if isinstance(owner, dict):
         return owner.get(name)
     return getattr(owner, name, None)
+
+
+def _sum_usage(*values: NormalizedUsage) -> NormalizedUsage:
+    """Add mutually exclusive usage buckets across Provider attempts."""
+    return NormalizedUsage(
+        input_tokens=sum(value.input_tokens for value in values),
+        output_tokens=sum(value.output_tokens for value in values),
+        total_tokens=sum(value.total_tokens for value in values),
+        reasoning_tokens=sum(value.reasoning_tokens for value in values),
+        cache_read_tokens=sum(value.cache_read_tokens for value in values),
+        cache_write_tokens=sum(value.cache_write_tokens for value in values),
+    )
 
 
 def _tool_call_dict(value) -> dict:
@@ -92,16 +109,91 @@ class ProductionModelGateway:
         observer: Callable[[str, dict], None] | None = None,
         backoff_base: float = 2.0,
     ) -> None:
+        if (
+            isinstance(max_retries, bool)
+            or not isinstance(max_retries, int)
+            or max_retries < 0
+        ):
+            raise ValueError("max_retries must be a non-negative integer")
+        try:
+            normalized_poll = float(poll_interval)
+            normalized_backoff = float(backoff_base)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("Gateway timing policy must be finite") from exc
+        if not math.isfinite(normalized_poll) or normalized_poll <= 0:
+            raise ValueError("poll_interval must be positive and finite")
+        if not math.isfinite(normalized_backoff) or normalized_backoff < 0:
+            raise ValueError("backoff_base must be non-negative and finite")
+        if not callable(wait):
+            raise ValueError("wait must be callable")
+        if observer is not None and not callable(observer):
+            raise ValueError("observer must be callable")
         self.runtime = runtime
-        self.max_retries = max(0, int(max_retries))
+        self.max_retries = max_retries
         self.wait = wait
-        self.poll_interval = min(0.05, max(0.001, float(poll_interval)))
+        self.poll_interval = min(0.05, max(0.001, normalized_poll))
         self.observer = observer
-        self.backoff_base = max(0.0, float(backoff_base))
+        self.backoff_base = normalized_backoff
+
+    def _wait_for_retry(
+        self,
+        seconds: float,
+        cancel_event: threading.Event | None,
+    ) -> bool:
+        """Wait once, using Event.wait for an interruptible production sleep."""
+        if cancel_event is not None and self.wait is time.sleep:
+            wait = getattr(cancel_event, "wait", None)
+            if callable(wait):
+                return bool(wait(max(0.0, seconds)))
+            deadline = time.monotonic() + max(0.0, seconds)
+            while not cancel_event.is_set():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self.wait(min(0.05, remaining))
+            return bool(cancel_event.is_set())
+        self.wait(seconds)
+        return bool(cancel_event is not None and cancel_event.is_set())
 
     def _observe(self, name: str, **payload) -> None:
         if self.observer is not None:
-            self.observer(name, dict(payload))
+            if name.startswith("model_call_"):
+                payload = {
+                    **payload,
+                    "provider_id": self.runtime.provider_id,
+                    "model_id": self.runtime.model_id,
+                    "request_model_id": self.runtime.request_model_id,
+                    "variant": self.runtime.variant,
+                }
+            try:
+                self.observer(name, dict(payload))
+            except Exception:
+                # Observability is intentionally best effort.  A trace sink or
+                # product accounting bug must not turn a settled model request
+                # into a retry, duplicate billing, or a user-visible failure.
+                return
+
+    def _observe_finish(
+        self,
+        call: ModelCall,
+        outcome: ModelCallOutcome,
+        *,
+        attempt: int,
+    ) -> ModelCallOutcome:
+        """Publish one complete logical-call accounting record."""
+        self._observe(
+            "model_call_finish",
+            purpose=call.purpose.value,
+            status=outcome.status.value,
+            attempt=max(1, int(attempt)),
+            attempts=max(1, int(outcome.attempts)),
+            finish_reason=outcome.finish_reason,
+            usage=outcome.usage.as_legacy_dict(),
+            duration_ms=max(0.0, float(outcome.duration_ms)),
+            cost=outcome.cost,
+            cost_source=outcome.cost_source,
+        )
+        return outcome
 
     def _request_kwargs(self, call: ModelCall) -> dict:
         runtime = self.runtime
@@ -228,6 +320,8 @@ class ProductionModelGateway:
         self,
         call: ModelCall,
         cancel_event: threading.Event | None = None,
+        *,
+        _publish_finish: bool = True,
     ) -> ModelCallOutcome:
         """Execute and settle one buffered logical call."""
         if call.streaming:
@@ -248,6 +342,13 @@ class ProductionModelGateway:
         attempt = 0
         active_call = call
         response_format_fallback_used = False
+        tool_choice_fallback_used = False
+
+        def finish(outcome: ModelCallOutcome) -> ModelCallOutcome:
+            if not _publish_finish:
+                return outcome
+            return self._observe_finish(call, outcome, attempt=attempt)
+
         while True:
             attempt += 1
             self._observe(
@@ -263,18 +364,32 @@ class ProductionModelGateway:
                     duration_ms=round((time.perf_counter() - started) * 1000, 3),
                     attempts=attempt,
                 )
-                self._observe("model_call_finish", status=outcome.status.value, attempt=attempt)
-                return outcome
+                return finish(outcome)
             except BaseException as exc:
+                if (
+                    active_call.tool_choice is not None
+                    and not tool_choice_fallback_used
+                    and should_fallback_for_forced_tool_choice(exc)
+                ):
+                    tool_choice_fallback_used = True
+                    active_call = replace(active_call, tool_choice=None)
+                    self._observe(
+                        "model_call_tool_choice_fallback",
+                        purpose=call.purpose.value,
+                        attempt=attempt,
+                        error=str(exc),
+                    )
+                    continue
                 classification = classify_provider_error(exc)
                 duration = round((time.perf_counter() - started) * 1000, 3)
                 if classification == "context_overflow":
-                    return ModelCallOutcome.context_overflow(
+                    outcome = ModelCallOutcome.context_overflow(
                         str(exc),
                         provider_metadata=_error_metadata(exc),
                         duration_ms=duration,
                         attempts=attempt,
                     )
+                    return finish(outcome)
                 if classification == "client_error":
                     if (
                         active_call.response_format is not None
@@ -290,12 +405,13 @@ class ProductionModelGateway:
                             error=str(exc),
                         )
                         continue
-                    return ModelCallOutcome.client_error(
+                    outcome = ModelCallOutcome.client_error(
                         str(exc),
                         provider_metadata=_error_metadata(exc),
                         duration_ms=duration,
                         attempts=attempt,
                     )
+                    return finish(outcome)
                 retryable = classification == "retryable"
                 recovery.record_error(exc)
                 decision = controller.decide(
@@ -306,13 +422,14 @@ class ProductionModelGateway:
                     retryable=retryable,
                 )
                 if decision.action != "retry":
-                    return ModelCallOutcome.aborted(
+                    outcome = ModelCallOutcome.aborted(
                         str(exc),
                         retryable=retryable,
                         provider_metadata=_error_metadata(exc),
                         duration_ms=duration,
                         attempts=attempt,
                     )
+                    return finish(outcome)
                 wait_seconds = recovery.backoff_seconds(exc)
                 self._observe(
                     "model_call_retry",
@@ -321,18 +438,36 @@ class ProductionModelGateway:
                     wait_seconds=wait_seconds,
                     error=str(exc),
                 )
-                self.wait(wait_seconds)
-                if cancel_event is not None and cancel_event.is_set():
-                    return ModelCallOutcome.cancelled(
+                if self._wait_for_retry(wait_seconds, cancel_event):
+                    outcome = ModelCallOutcome.cancelled(
                         duration_ms=round(
                             (time.perf_counter() - started) * 1000, 3
                         ),
                         attempts=attempt,
                     )
+                    return finish(outcome)
                 continue
-            outcome = self._normalize(response, started=started, attempts=attempt)
-            self._observe("model_call_finish", status=outcome.status.value, attempt=attempt)
-            return outcome
+            try:
+                outcome = self._normalize(
+                    response,
+                    started=started,
+                    attempts=attempt,
+                )
+            except Exception as exc:
+                outcome = ModelCallOutcome.aborted(
+                    (
+                        "Malformed Provider response: "
+                        f"{type(exc).__name__}: {exc}"
+                    ),
+                    retryable=False,
+                    provider_metadata=_error_metadata(exc),
+                    duration_ms=round(
+                        (time.perf_counter() - started) * 1000,
+                        3,
+                    ),
+                    attempts=attempt,
+                )
+            return finish(outcome)
 
     async def complete(
         self,
@@ -377,6 +512,62 @@ class ProductionModelGateway:
         recovery.max_retries = self.max_retries
         recovery.backoff_base = self.backoff_base
         attempt = 0
+        active_call = call
+        tool_choice_fallback_used = False
+        accounted_usage = NormalizedUsage()
+        accounted_cost = 0.0
+        accounted_cost_complete = True
+        accounted_cost_sources: set[str] = set()
+
+        def archive_attempt(
+            attempt_usage: NormalizedUsage,
+            reported_cost: float | None = None,
+            *,
+            resolved_cost: float | None = None,
+            resolved_source: str | None = None,
+        ) -> None:
+            """Retain billing evidence before a retry discards attempt content."""
+            nonlocal accounted_usage, accounted_cost, accounted_cost_complete
+            accounted_usage = _sum_usage(accounted_usage, attempt_usage)
+            if resolved_cost is None and resolved_source is None:
+                resolved_cost, resolved_source = resolve_usage_cost(
+                    attempt_usage,
+                    self.runtime.pricing,
+                    reported_cost,
+                )
+            if resolved_cost is not None:
+                accounted_cost += resolved_cost
+                accounted_cost_sources.add(str(resolved_source or "unknown"))
+            elif attempt_usage.total_tokens:
+                accounted_cost_complete = False
+
+        def finalize_accounting(
+            attempt_usage: NormalizedUsage,
+            reported_cost: float | None = None,
+            *,
+            resolved_cost: float | None = None,
+            resolved_source: str | None = None,
+        ) -> tuple[NormalizedUsage, float | None, str | None]:
+            """Combine archived attempts with one terminal attempt."""
+            total_usage = _sum_usage(accounted_usage, attempt_usage)
+            sources = set(accounted_cost_sources)
+            total_cost = accounted_cost
+            complete = accounted_cost_complete
+            if resolved_cost is None and resolved_source is None:
+                resolved_cost, resolved_source = resolve_usage_cost(
+                    attempt_usage,
+                    self.runtime.pricing,
+                    reported_cost,
+                )
+            if resolved_cost is not None:
+                total_cost += resolved_cost
+                sources.add(str(resolved_source or "unknown"))
+            elif attempt_usage.total_tokens:
+                complete = False
+            if not complete or not sources:
+                return total_usage, None, None
+            source = next(iter(sources)) if len(sources) == 1 else "mixed"
+            return total_usage, round(total_cost, 12), source
 
         def emit(kind: str, **data):
             if on_event is not None:
@@ -385,6 +576,12 @@ class ProductionModelGateway:
 
         while True:
             attempt += 1
+            self._observe(
+                "model_call_start",
+                purpose=call.purpose.value,
+                attempt=attempt,
+                streaming=True,
+            )
             text_parts: list[str] = []
             reasoning_parts: list[str] = []
             tool_calls: dict[int, dict] = {}
@@ -417,14 +614,17 @@ class ProductionModelGateway:
                     stable_boundary = True
 
             def terminal(status: str, error: str = "", retryable: bool = False):
-                cost, source = resolve_usage_cost(usage, self.runtime.pricing, provider_cost)
+                total_usage, cost, source = finalize_accounting(
+                    usage,
+                    provider_cost,
+                )
                 values = {
                     "content": "".join(text_parts),
                     "reasoning": "".join(reasoning_parts),
                     "tool_calls": tuple(tool_calls[index] for index in sorted(tool_calls)),
                     "provider_metadata": provider_metadata,
                     "finish_reason": finish_reason or ("tool-calls" if tool_calls else "stop"),
-                    "usage": usage,
+                    "usage": total_usage,
                     "cost": cost,
                     "cost_source": source,
                     "duration_ms": round((time.perf_counter() - started) * 1000, 3),
@@ -432,25 +632,27 @@ class ProductionModelGateway:
                     "attempts": attempt,
                 }
                 if status == "completed":
-                    return ModelCallOutcome.completed(**values)
-                if status == "context_overflow":
-                    return ModelCallOutcome.context_overflow(error, **values)
-                if status == "client_error":
-                    return ModelCallOutcome.client_error(error, **values)
-                if status == "cancelled":
-                    return ModelCallOutcome.cancelled(error, **values)
-                return ModelCallOutcome.aborted(
-                    error,
-                    retryable=retryable,
-                    **values,
-                )
+                    outcome = ModelCallOutcome.completed(**values)
+                elif status == "context_overflow":
+                    outcome = ModelCallOutcome.context_overflow(error, **values)
+                elif status == "client_error":
+                    outcome = ModelCallOutcome.client_error(error, **values)
+                elif status == "cancelled":
+                    outcome = ModelCallOutcome.cancelled(error, **values)
+                else:
+                    outcome = ModelCallOutcome.aborted(
+                        error,
+                        retryable=retryable,
+                        **values,
+                    )
+                return self._observe_finish(call, outcome, attempt=attempt)
 
             try:
                 if cancel_event is not None and cancel_event.is_set():
                     return terminal("cancelled", "model stream cancelled")
                 stream = self.runtime.provider.create_completion(
                     self.runtime.client,
-                    **self._request_kwargs(call),
+                    **self._request_kwargs(active_call),
                 )
                 for chunk in iter_stream_with_timeouts(
                     stream,
@@ -534,6 +736,23 @@ class ProductionModelGateway:
                 return terminal("completed")
             except BaseException as exc:
                 consume_think(think_tags.finish())
+                if (
+                    not stable_boundary
+                    and active_call.tool_choice is not None
+                    and not tool_choice_fallback_used
+                    and should_fallback_for_forced_tool_choice(exc)
+                ):
+                    archive_attempt(usage, provider_cost)
+                    tool_choice_fallback_used = True
+                    active_call = replace(active_call, tool_choice=None)
+                    self._observe(
+                        "model_call_tool_choice_fallback",
+                        purpose=call.purpose.value,
+                        attempt=attempt,
+                        error=str(exc),
+                        streaming=True,
+                    )
+                    continue
                 classification = classify_provider_error(exc)
                 if classification == "context_overflow":
                     return terminal("context_overflow", str(exc))
@@ -560,17 +779,33 @@ class ProductionModelGateway:
                     attempt=attempt,
                 )
                 if decision.action == "non_streaming_fallback":
+                    archive_attempt(usage, provider_cost)
                     fallback = self.complete_sync(
-                        replace(call, streaming=False),
+                        replace(active_call, streaming=False),
                         cancel_event,
+                        _publish_finish=False,
                     )
-                    return replace(
+                    total_usage, total_cost, total_cost_source = finalize_accounting(
+                        fallback.usage,
+                        resolved_cost=fallback.cost,
+                        resolved_source=fallback.cost_source,
+                    )
+                    combined = replace(
                         fallback,
+                        usage=total_usage,
+                        cost=total_cost,
+                        cost_source=total_cost_source,
                         duration_ms=round((time.perf_counter() - started) * 1000, 3),
                         attempts=attempt + fallback.attempts,
                     )
+                    return self._observe_finish(
+                        call,
+                        combined,
+                        attempt=combined.attempts,
+                    )
                 if decision.action != "retry":
                     return terminal("aborted", str(exc), retryable)
+                archive_attempt(usage, provider_cost)
                 recovery.record_error(exc)
                 wait_seconds = recovery.backoff_seconds(exc)
                 self._observe(
@@ -581,7 +816,8 @@ class ProductionModelGateway:
                     error=str(exc),
                     streaming=True,
                 )
-                self.wait(wait_seconds)
+                if self._wait_for_retry(wait_seconds, cancel_event):
+                    return terminal("cancelled", "model stream cancelled")
             finally:
                 if stream is not None:
                     from nz_coder.runtime.model_gateway.stream import close_stream

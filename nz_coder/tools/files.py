@@ -7,20 +7,20 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
-from nz_coder import config
-from nz_coder.attachments import (
+from nz_coder.foundation import config
+from nz_coder.protocol.attachments import (
     MAX_IMAGE_BYTES,
     make_image_attachment,
     sniff_image_mime,
 )
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.documents import (
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.capabilities.documents import (
     DOCX_MIME,
     PDF_MIME,
     detect_document_mime,
     read_document_file,
 )
-from nz_coder.sessions import active_session_id
+from nz_coder.state.sessions import active_session_id
 from nz_coder.tools import ToolOutput, current_tool_cancel_event, register
 from nz_coder.tools.read_support import (
     DEFAULT_READ_LIMIT,
@@ -32,7 +32,7 @@ from nz_coder.tools.read_support import (
     read_text_lines,
     warm_lsp,
 )
-from nz_coder.workspace import git_file_status
+from nz_coder.state.workspace import git_file_status
 
 # Context-local bindings avoid cross-talk between concurrent agent runs.
 _txn_manager: ContextVar[object | None] = ContextVar(
@@ -111,7 +111,7 @@ def _begin_local_txn():
     txn = _get_txn()
     manage_locally = False
     if txn is None:
-        from nz_coder.transaction import TransactionManager
+        from nz_coder.state.transaction import TransactionManager
         txn = TransactionManager()
         manage_locally = True
     elif not txn.active:
@@ -571,8 +571,8 @@ def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> s
         return f"Error: {e}"
 
 
-def apply_patch(changes: list, dry_run: bool = False) -> str:
-    """Apply exact replacement/create/delete hunks after validating every change."""
+def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
+    """Apply exact hunks, accepting a top-level path for single-file patches."""
     try:
         if not isinstance(changes, list) or not changes:
             return "Error: changes must be a non-empty list"
@@ -583,11 +583,14 @@ def apply_patch(changes: list, dry_run: bool = False) -> str:
         for i, change in enumerate(changes):
             if not isinstance(change, dict):
                 return f"Error: change {i} must be an object"
+            change = dict(change)
+            if not str(change.get("path", "")).strip() and str(path or "").strip():
+                change["path"] = path
             op = str(change.get("op", "replace")).strip().lower()
             path = str(change.get("path", "")).strip()
             old_text = change.get("old_text")
             new_text = change.get("new_text", change.get("content"))
-            if op not in ("replace", "create", "delete"):
+            if op not in ("replace", "create", "delete", "append"):
                 return f"Error: change {i} has invalid op '{op}'"
             if not path:
                 return f"Error: change {i} requires path"
@@ -627,6 +630,20 @@ def apply_patch(changes: list, dry_run: bool = False) -> str:
                 if isinstance(old_text, str) and old_text not in current:
                     return f"Error: change {i} delete guard old_text not found in {path}"
                 prepared[key]["after"] = None
+                continue
+
+            if op == "append":
+                if not prepared[key]["exists_before"]:
+                    return f"Error: change {i} append target not found: {path}"
+                if not isinstance(new_text, str):
+                    return f"Error: change {i} append requires new_text"
+                separator = ""
+                if current and new_text and not (
+                    current.endswith(("\n", "\r"))
+                    or new_text.startswith(("\n", "\r"))
+                ):
+                    separator = "\n"
+                prepared[key]["after"] = current + separator + new_text
                 continue
 
             if not prepared[key]["exists_before"]:
@@ -742,6 +759,7 @@ register(
     },
     handler=write_file,
     execution="write",
+    side_effect="mutates-fs",
 )
 
 
@@ -773,6 +791,7 @@ register(
     },
     handler=write_files_batch,
     execution="write",
+    side_effect="mutates-fs",
 )
 
 register(
@@ -789,14 +808,26 @@ register(
     },
     handler=edit_file,
     execution="write",
+    side_effect="mutates-fs",
 )
 
 register(
     name="apply_patch",
-    description="Apply exact text replacements, file creates, and file deletes atomically. Validates every hunk before writing and returns diffs.",
+    description=(
+        "Apply exact text replacements, file creates, and file deletes atomically. "
+        "Validates every hunk before writing and returns diffs. Every change must "
+        "include its relative path."
+    ),
     parameters={
         "type": "object",
         "properties": {
+            "path": {
+                "type": "string",
+                "description": (
+                    "Compatibility fallback for saved single-file calls; new calls "
+                    "must set path on every change."
+                ),
+            },
             "changes": {
                 "type": "array",
                 "description": "List of patch hunks.",
@@ -805,8 +836,11 @@ register(
                     "properties": {
                         "op": {
                             "type": "string",
-                            "enum": ["replace", "create", "delete"],
-                            "description": "Patch operation. Default: replace.",
+                            "enum": ["replace", "create", "delete", "append"],
+                            "description": (
+                                "Patch operation. Default: replace. Use append only "
+                                "to add new content at end-of-file without old_text."
+                            ),
                         },
                         "path": {"type": "string", "description": "Relative path from workspace root."},
                         "old_text": {"type": "string", "description": "Exact text to replace, or delete guard text."},
@@ -823,6 +857,7 @@ register(
     },
     handler=apply_patch,
     execution="write",
+    side_effect="mutates-fs",
 )
 
 register(
@@ -843,6 +878,7 @@ register(
     },
     handler=replace_lines,
     execution="write",
+    side_effect="mutates-fs",
 )
 
 register(

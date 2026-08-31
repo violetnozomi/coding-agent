@@ -16,9 +16,9 @@ from tests.test_loop_fake import FakeClient, FakeMessage, FakeResponse
 
 def test_main_facade_preserves_result_envelope(tmp_path) -> None:  # noqa: ANN001
     """The future Runner facade must preserve current host-visible result keys."""
-    from nz_coder import config
-    from nz_coder.runtime.composition import build_coding_agent
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.composition import build_coding_agent
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     old_workdir = config.WORKDIR
     config.WORKDIR = tmp_path
@@ -46,7 +46,7 @@ def test_main_facade_preserves_result_envelope(tmp_path) -> None:  # noqa: ANN00
 
 def test_child_facades_preserve_public_parameters() -> None:
     """Child migration must remain callable by every existing orchestrator."""
-    from nz_coder.runtime.subagent import run_subagent, run_subagent_async
+    from nz_coder.runtime.agent.subagent import run_subagent, run_subagent_async
 
     expected = {
         "prompt",
@@ -66,9 +66,9 @@ def test_child_facades_preserve_public_parameters() -> None:
 
 
 def test_main_trace_proves_shared_runner_chain(tmp_path) -> None:
-    from nz_coder.runtime.composition import build_coding_agent
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.trace import TraceRecorder
+    from nz_coder.runtime.execution.composition import build_coding_agent
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.trace import TraceRecorder
 
     tracer = TraceRecorder(trace_dir=tmp_path / "traces", enabled=True)
     with scoped_workdir(tmp_path):

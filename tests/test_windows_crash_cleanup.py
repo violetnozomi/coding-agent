@@ -53,7 +53,7 @@ def _wait_file(path: Path, timeout: float = 5.0) -> None:
 
 
 def test_wc1_normal_kill_leaves_zero_owned_processes(tmp_path):
-    from nz_coder.runtime.process_service import ProcessService
+    from nz_coder.runtime.process.process_service import ProcessService
 
     service = ProcessService(tmp_path, kill_grace_seconds=0.1)
     handle = service.start(
@@ -66,7 +66,7 @@ def test_wc1_normal_kill_leaves_zero_owned_processes(tmp_path):
 
 
 def test_wc2_session_cleanup_kills_only_owned_session_then_close_kills_rest(tmp_path):
-    from nz_coder.runtime.process_service import ProcessService
+    from nz_coder.runtime.process.process_service import ProcessService
 
     service = ProcessService(tmp_path, kill_grace_seconds=0.1)
     first = service.start(
@@ -106,7 +106,7 @@ def test_wc4_parent_forced_termination_closes_job_and_child(tmp_path):
     pid_file = tmp_path / "owned.pid"
     helper.write_text(
         "import os, pathlib, subprocess, sys, time\n"
-        "from nz_coder.runtime.process_service import ProcessService\n"
+        "from nz_coder.runtime.process.process_service import ProcessService\n"
         "root=pathlib.Path(sys.argv[1])\n"
         "service=ProcessService(root)\n"
         "command=subprocess.list2cmdline([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
@@ -136,7 +136,7 @@ def test_wc4_parent_forced_termination_closes_job_and_child(tmp_path):
 
 
 def test_wc5_npm_node_child_tree_leaves_zero_orphans(tmp_path):
-    from nz_coder.runtime.process_service import ProcessService
+    from nz_coder.runtime.process.process_service import ProcessService
 
     npm = shutil.which("npm.cmd") or shutil.which("npm")
     assert npm is not None, "Node/npm must be installed on the Windows RC runner"

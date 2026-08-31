@@ -29,7 +29,7 @@ class _FakeWindowsACL:
 
 @pytest.mark.skipif(os.name == "nt", reason="Windows filesystems do not expose POSIX modes")
 def test_posix_private_path_applies_owner_only_modes(tmp_path: Path):
-    from nz_coder.private_paths import harden_private_path
+    from nz_coder.foundation.private_paths import harden_private_path
 
     directory = tmp_path / "state"
     directory.mkdir(mode=0o777)
@@ -49,7 +49,7 @@ def test_posix_private_path_applies_owner_only_modes(tmp_path: Path):
 
 
 def test_windows_private_path_reports_verified_acl_not_chmod(tmp_path: Path):
-    from nz_coder.private_paths import harden_private_path
+    from nz_coder.foundation.private_paths import harden_private_path
 
     token = tmp_path / "daemon.token"
     token.write_text("secret", encoding="utf-8")
@@ -63,7 +63,7 @@ def test_windows_private_path_reports_verified_acl_not_chmod(tmp_path: Path):
 
 
 def test_windows_private_path_failure_remains_honest_tier_b(tmp_path: Path):
-    from nz_coder.private_paths import harden_private_path
+    from nz_coder.foundation.private_paths import harden_private_path
 
     token = tmp_path / "daemon.token"
     token.write_text("secret", encoding="utf-8")
@@ -81,7 +81,7 @@ def test_windows_private_path_failure_remains_honest_tier_b(tmp_path: Path):
 
 
 def test_windows_private_path_inspection_detects_unhardened_path(tmp_path: Path):
-    from nz_coder.private_paths import (
+    from nz_coder.foundation.private_paths import (
         harden_private_path,
         inspect_private_path,
     )
@@ -99,14 +99,14 @@ def test_windows_private_path_inspection_detects_unhardened_path(tmp_path: Path)
 
 
 def test_windows_acl_availability_uses_api_probe():
-    from nz_coder.private_paths import windows_private_acl_available
+    from nz_coder.foundation.private_paths import windows_private_acl_available
 
     assert windows_private_acl_available(_FakeWindowsACL(available=True)) is True
     assert windows_private_acl_available(_FakeWindowsACL(available=False)) is False
 
 
 def test_missing_private_path_is_not_reported_as_secure(tmp_path: Path):
-    from nz_coder.private_paths import inspect_private_path
+    from nz_coder.foundation.private_paths import inspect_private_path
 
     result = inspect_private_path(
         tmp_path / "missing",
@@ -119,7 +119,7 @@ def test_missing_private_path_is_not_reported_as_secure(tmp_path: Path):
 
 
 def test_windows_dacl_parser_requires_protected_full_control_for_user_and_system():
-    from nz_coder.private_paths import _private_dacl_sddl
+    from nz_coder.foundation.private_paths import _private_dacl_sddl
 
     current = "S-1-5-21-1000"
     assert _private_dacl_sddl(
@@ -141,7 +141,7 @@ def test_windows_dacl_parser_requires_protected_full_control_for_user_and_system
 
 
 def test_windows_dacl_parser_accepts_local_administrator_alias_only_for_rid_500():
-    from nz_coder.private_paths import _private_dacl_sddl
+    from nz_coder.foundation.private_paths import _private_dacl_sddl
 
     assert _private_dacl_sddl(
         "D:PAI(A;;FA;;;SY)(A;;FA;;;LA)",
@@ -154,7 +154,7 @@ def test_windows_dacl_parser_accepts_local_administrator_alias_only_for_rid_500(
 
 
 def test_windows_private_path_failure_reports_redacted_observed_dacl(tmp_path: Path):
-    from nz_coder.private_paths import inspect_private_path
+    from nz_coder.foundation.private_paths import inspect_private_path
 
     class ObservedACL(_FakeWindowsACL):
         observed_sddl = "D:PAI(A;;FA;;;SY)(A;;0x1200A9;;;S-1-5-21-123-456-789-1001)"

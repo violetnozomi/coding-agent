@@ -10,16 +10,16 @@ import stat
 
 from rich.console import Console
 
-from nz_coder import config
-from nz_coder.doctor import (
+from nz_coder.foundation import config
+from nz_coder.interface.setup.doctor import (
     collect_doctor_checks,
     collect_repo_intelligence_checks,
     doctor_main,
     _check_private_state_security,
     _check_credential_file_security,
 )
-from nz_coder.private_paths import PrivatePathSecurity
-from nz_coder.initializer import init_main
+from nz_coder.foundation.private_paths import PrivatePathSecurity
+from nz_coder.interface.setup.initializer import init_main
 from nz_coder.providers.configuration import provider_connection
 
 
@@ -112,6 +112,28 @@ def test_doctor_json_is_secret_free_and_returns_failure(monkeypatch, tmp_path, c
     assert all(item["category"] in {"required", "optional", "experimental"} for item in payload["checks"])
 
 
+def test_doctor_accepts_headless_cwd_and_workspace_alias(
+    monkeypatch, tmp_path, capsys,
+):
+    """Installation diagnostics must target a workspace without shell cd."""
+    import nz_coder.interface.setup.doctor as doctor
+
+    observed = []
+
+    def collect(workspace=None):
+        observed.append(workspace)
+        return []
+
+    monkeypatch.setattr(doctor, "collect_doctor_checks", collect)
+    for option in ("--cwd", "--workspace"):
+        result = doctor_main([option, str(tmp_path), "--json"])
+        payload = json.loads(capsys.readouterr().out)
+
+        assert result == 0
+        assert observed[-1] == tmp_path.resolve()
+        assert payload["workspace"] == str(tmp_path.resolve())
+
+
 def test_doctor_rich_table_contains_actions(monkeypatch, tmp_path):
     output = Console(record=True, force_terminal=False, width=140)
     monkeypatch.setattr(config, "MODEL_PROVIDER", "openai-compatible")
@@ -134,7 +156,7 @@ def test_doctor_rich_table_contains_actions(monkeypatch, tmp_path):
 
 
 def test_repo_intelligence_doctor_is_independent_of_provider(monkeypatch, tmp_path, capsys):
-    import nz_coder.doctor as doctor
+    import nz_coder.interface.setup.doctor as doctor
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
@@ -167,7 +189,7 @@ def test_workspace_dotenv_loads_after_wheel_style_import_and_shell_wins(tmp_path
         encoding="utf-8",
     )
     code = (
-        "import json; from nz_coder import config; "
+        "import json; from nz_coder.foundation import config; "
         "print(json.dumps([config.API_KEY, config.MODEL_ID]))"
     )
     environment = dict(os.environ)
@@ -197,7 +219,7 @@ def test_workspace_dotenv_loads_after_wheel_style_import_and_shell_wins(tmp_path
 
 
 def test_init_creates_private_config_and_refuses_overwrite(tmp_path, capsys, monkeypatch):
-    import nz_coder.initializer as initializer
+    import nz_coder.interface.setup.initializer as initializer
 
     hardened = []
     monkeypatch.setattr(
@@ -282,7 +304,7 @@ def test_windows_doctor_verifies_persisted_credential_acl(tmp_path):
 def test_init_does_not_claim_owner_private_when_hardening_fails(
     tmp_path, capsys, monkeypatch,
 ):
-    import nz_coder.initializer as initializer
+    import nz_coder.interface.setup.initializer as initializer
 
     monkeypatch.setattr(
         initializer,

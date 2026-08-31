@@ -5,14 +5,14 @@ import json
 
 import pytest
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.providers import (
     AnthropicProvider,
     GeminiProvider,
     create_provider,
 )
 from nz_coder.providers.http import UrllibTransport
-from nz_coder.runtime.loop import AgentLoop
+from nz_coder.runtime.execution.loop import AgentLoop
 
 
 class _FakeTransport:
@@ -356,7 +356,7 @@ def test_native_streams_emit_terminal_finish_and_cumulative_usage():
         "input_tokens": 31,
         "uncached_input_tokens": 31,
         "output_tokens": 12,
-        "total_tokens": 43,
+        "total_tokens": 58,
         "cache_read_input_tokens": 11,
         "cache_creation_input_tokens": 4,
     }
@@ -524,3 +524,90 @@ def test_sse_parser_handles_events_and_done_marker():
         {"type": "text", "value": "ok"},
     ]
     assert response.closed
+
+
+@pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
+def test_native_transport_rejects_invalid_timeout(timeout):
+    with pytest.raises(ValueError, match="timeout"):
+        UrllibTransport(timeout)
+
+
+def test_native_transport_rejects_nonfinite_outgoing_payload(monkeypatch):
+    import nz_coder.providers.http as provider_http
+
+    monkeypatch.setattr(
+        provider_http,
+        "urlopen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("invalid JSON must fail before network")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="strict JSON"):
+        UrllibTransport().post_json(
+            "https://provider.test/v1/messages",
+            {},
+            {"temperature": float("nan")},
+        )
+
+
+def test_native_transport_rejects_nonstandard_json_responses(monkeypatch):
+    import nz_coder.providers.http as provider_http
+
+    class Response:
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self, _limit=-1):
+            return b'{"usage":NaN}'
+
+    monkeypatch.setattr(provider_http, "urlopen", lambda *_args, **_kwargs: Response())
+
+    with pytest.raises(RuntimeError, match="invalid JSON"):
+        UrllibTransport().post_json("https://provider.test/v1/messages", {}, {})
+    with pytest.raises(RuntimeError, match="invalid JSON"):
+        list(UrllibTransport._decode_sse_data(['{"usage":Infinity}']))
+
+
+def test_native_provider_usage_repairs_malformed_numeric_fields():
+    anthropic = AnthropicProvider(
+        api_key="key",
+        transport=_FakeTransport(response={
+            "type": "message",
+            "content": [{"type": "text", "text": "ok"}],
+            "usage": {"input_tokens": "Infinity", "output_tokens": 2},
+        }),
+    )
+    gemini = GeminiProvider(
+        api_key="key",
+        transport=_FakeTransport(response={
+            "candidates": [{
+                "finishReason": "STOP",
+                "content": {"parts": [{"text": "ok"}]},
+            }],
+            "usageMetadata": {
+                "promptTokenCount": "NaN",
+                "candidatesTokenCount": 3,
+                "totalTokenCount": "invalid",
+            },
+        }),
+    )
+
+    anthropic_result = anthropic.create_completion(
+        anthropic.create_client(),
+        model="claude-test",
+        messages=[{"role": "user", "content": "hi"}],
+    )
+    gemini_result = gemini.create_completion(
+        gemini.create_client(),
+        model="gemini-test",
+        messages=[{"role": "user", "content": "hi"}],
+    )
+
+    assert anthropic_result.usage["total_tokens"] == 2
+    assert gemini_result.usage["total_tokens"] == 3

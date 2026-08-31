@@ -5,7 +5,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import cast
 
-from nz_coder import config
+from nz_coder.foundation import config
 
 from .manager import get_client_for_file
 

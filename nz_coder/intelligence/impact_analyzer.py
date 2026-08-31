@@ -10,11 +10,11 @@ import re
 import subprocess
 from pathlib import Path
 
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.project_profile import build_project_profile
-from nz_coder.task_policy import is_source_file, is_test_file, language_for_path
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.intelligence.project_profile import build_project_profile
+from nz_coder.runtime.agent.task_policy import is_source_file, is_test_file, language_for_path
 from nz_coder.tools import register
-from nz_coder.verification_planner import plan_verification_commands
+from nz_coder.intelligence.verification_planner import plan_verification_commands
 
 _SENSITIVE_PATH_RE = re.compile(
     r"(^|/)(config|settings|migration|migrations|schema|auth|security|database|db|models)(/|\.|$)",
@@ -31,6 +31,16 @@ _PUBLIC_SYMBOL_PATTERNS = (
     ("function", re.compile(r"^\s*(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")),
     ("export", re.compile(r"^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\b")),
     ("rust", re.compile(r"^\s*pub(?:\([^)]*\))?\s+(?:async\s+)?(?:fn|struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)\b")),
+)
+
+_PERSISTENT_DELETE_CALL_RE = re.compile(r"\.\s*delete\s*\(")
+_PERSISTENT_QUERY_EVIDENCE_RE = re.compile(
+    r"\.(?:objects|query)\b|\bqueryset[A-Za-z0-9_]*\b",
+    re.IGNORECASE,
+)
+_DELETE_RECEIVER_RE = re.compile(
+    r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*delete\s*\(",
+    re.IGNORECASE,
 )
 
 
@@ -143,6 +153,96 @@ def _public_symbol_changes(diff_text: str) -> tuple[dict[str, list[str]], dict[s
     return deleted, changed
 
 
+def _persistent_delete_additions(
+    diff_text: str,
+    changed_files: list[str],
+) -> dict[str, list[str]]:
+    """Return added ``.delete(...)`` calls scoped to sensitive source files."""
+    sensitive = {
+        str(path).replace("\\", "/").lstrip("./")
+        for path in changed_files
+        if is_source_file(path)
+        and _SENSITIVE_PATH_RE.search(str(path).replace("\\", "/"))
+    }
+    if not sensitive:
+        return {}
+
+    normalized_changed = {
+        str(path).replace("\\", "/").lstrip("./")
+        for path in changed_files
+        if str(path).strip()
+    }
+    matches: dict[str, list[str]] = {}
+    unscoped: list[str] = []
+    current_file = ""
+    recent_lines: list[str] = []
+    for line in str(diff_text or "").splitlines():
+        if line.startswith("+++ "):
+            raw = line[4:].strip()
+            current_file = raw[2:] if raw.startswith("b/") else raw
+            current_file = current_file.replace("\\", "/").lstrip("./")
+            recent_lines = []
+            continue
+        if line.startswith("@@"):
+            recent_lines = []
+            continue
+        if line.startswith(("--- ", "diff --git ")):
+            continue
+        content = line[1:] if line[:1] in {"+", "-", " "} else line
+        is_added_delete = (
+            line.startswith("+")
+            and not line.startswith("+++")
+            and _PERSISTENT_DELETE_CALL_RE.search(content) is not None
+        )
+        if not is_added_delete:
+            if not line.startswith("-"):
+                recent_lines = [*recent_lines[-11:], content]
+            continue
+        evidence = "\n".join([*recent_lines[-11:], content])
+        receiver_match = _DELETE_RECEIVER_RE.search(content)
+        receiver = receiver_match.group(1) if receiver_match is not None else ""
+        direct_query_chain = bool(
+            re.search(
+                r"\.(?:objects|query)\b[^\n]*\.\s*delete\s*\(",
+                content,
+                flags=re.IGNORECASE,
+            )
+        )
+        receiver_query = receiver.casefold().startswith(("query", "queryset"))
+        assigned_query = bool(
+            receiver
+            and re.search(
+                rf"\b{re.escape(receiver)}\s*=[\s\S]{{0,800}}?"
+                r"\.(?:objects|query)\b",
+                evidence,
+                flags=re.IGNORECASE,
+            )
+        )
+        closing_query_chain = bool(
+            not receiver
+            and _PERSISTENT_QUERY_EVIDENCE_RE.search(evidence)
+        )
+        if not (
+            direct_query_chain
+            or receiver_query
+            or assigned_query
+            or closing_query_chain
+        ):
+            recent_lines = [*recent_lines[-11:], content]
+            continue
+        addition = content
+        if current_file in sensitive:
+            matches.setdefault(current_file, []).append(addition.strip())
+        elif not current_file:
+            unscoped.append(addition.strip())
+        recent_lines = [*recent_lines[-11:], content]
+
+    if unscoped and len(normalized_changed) == 1 and len(sensitive) == 1:
+        only_path = next(iter(sensitive))
+        matches.setdefault(only_path, []).extend(unscoped)
+    return matches
+
+
 def _signature_changed(diff_text: str) -> bool:
     _deleted, changed = _public_symbol_changes(diff_text)
     return bool(changed)
@@ -249,6 +349,23 @@ def analyze_patch_impact(
     if any(_SENSITIVE_PATH_RE.search(f.replace("\\", "/")) for f in changed):
         risk_score += 2
         reasons.append("sensitive path touched (config/auth/security/database/schema/migration)")
+    persistent_deletions = _persistent_delete_additions(diff, changed)
+    if persistent_deletions:
+        risk_score += 1
+        detail = "; ".join(
+            f"{path}: {', '.join(lines[:3])}"
+            for path, lines in sorted(persistent_deletions.items())
+        )
+        reasons.append(f"persistent data deletion added in sensitive path ({detail})")
+        risk_signals.append({
+            "category": "persistent_data_deletion",
+            "severity": "review",
+            "detail": detail,
+        })
+        review_notes.append(
+            "Semantically review added persistent-data deletion for authorization, "
+            "data preservation, and integrity effects before accepting the patch."
+        )
     deleted_symbols, changed_signatures = _public_symbol_changes(diff)
     if deleted_symbols:
         risk_score += 2
@@ -407,7 +524,7 @@ def format_impact_report(report: dict) -> str:
 def analyze_impact() -> str:
     """Tool handler: analyze current patch impact and risk."""
     try:
-        from nz_coder.changes import (
+        from nz_coder.state.changes import (
             current_changed_files,
             current_deleted_files,
             render_current_change_diff,

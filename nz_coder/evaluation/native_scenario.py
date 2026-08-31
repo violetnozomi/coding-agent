@@ -10,8 +10,8 @@ from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunOptions, RunRequest
 from nz_coder.runtime.core.run_context import RunContext
 from nz_coder.runtime.core.runner_context import RunnerExecutionContext
-from nz_coder.runtime.model_result import LLMResult
-from nz_coder.runtime.runner import AgentRunner
+from nz_coder.runtime.conversation.model_result import LLMResult
+from nz_coder.runtime.execution.runner import AgentRunner
 from nz_coder.runtime.session.model import Session
 
 

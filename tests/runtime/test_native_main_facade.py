@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from nz_coder.runtime.core.request import RunOptions, RunRequest
-from nz_coder.runtime.loop import AgentLoop
+from nz_coder.runtime.execution.loop import AgentLoop
 
 
 class _Runner:

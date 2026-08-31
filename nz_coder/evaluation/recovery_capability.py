@@ -11,10 +11,10 @@ from unittest.mock import patch
 from nz_coder.intelligence.verification import VerificationManager
 from nz_coder.lsp.write_diagnostics import collect_write_diagnostics
 from nz_coder.permissions import PermissionManager
-from nz_coder.recovery import RecoveryState
-from nz_coder.runtime.agent_resilience import ProviderAttemptController
-from nz_coder.runtime.tool_executor import ToolExecutor
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.verification.recovery import RecoveryState
+from nz_coder.runtime.agent.agent_resilience import ProviderAttemptController
+from nz_coder.runtime.execution.tool_executor import ToolExecutor
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state.transaction import TransactionManager
 from nz_coder.tools.bash import run_bash
 
@@ -57,7 +57,7 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
     })
 
     executor = ToolExecutor(PermissionManager("auto"))
-    with patch("nz_coder.runtime.tool_executor.dispatch", side_effect=RuntimeError("fault fixture")):
+    with patch("nz_coder.runtime.execution.tool_executor.dispatch", side_effect=RuntimeError("fault fixture")):
         tool_exception = executor.execute_one(_tool_call("read_file"), 0)
     runs.append({
         "case_id": "R2", "failure": "tool_exception", "expected_action": "return_repair_evidence",
@@ -91,7 +91,7 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
         "evidence": rollback,
     })
 
-    with patch("nz_coder.runtime.tool_executor.dispatch", return_value=_Unrenderable()):
+    with patch("nz_coder.runtime.execution.tool_executor.dispatch", return_value=_Unrenderable()):
         malformed = executor.execute_one(_tool_call("read_file"), 0)
     runs.append({
         "case_id": "R5", "failure": "malformed_tool_result",
@@ -129,6 +129,7 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
         {"command": "pytest -q"},
         "Command exited with code 127\npytest: command not found",
         dispatch_failed=False, command_failed=True,
+        exit_code=127,
     )
     verification = manager.status()
     runs.append({

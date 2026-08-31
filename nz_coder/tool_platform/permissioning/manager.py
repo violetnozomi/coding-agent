@@ -2,13 +2,24 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import logging
 
-from nz_coder import config
+from nz_coder.foundation import config
 
 from .checker import PermissionChecker
 from .interaction import format_tool_summary, read_permission_answer
 from .modes import normalize_mode
-from .rules import PermissionRule, load_rules_from_settings, parse_rules
+from .rules import (
+    PermissionRule,
+    first_matching_rule,
+    load_rules_from_settings,
+    parse_rules,
+    persist_allow_rule,
+    scoped_allow_rule,
+)
+
+
+log = logging.getLogger(__name__)
 
 
 class PermissionManager:
@@ -64,6 +75,21 @@ class PermissionManager:
             ask_rules=self._ask_rules,
         )
 
+    def explicit_rule_behavior(
+        self,
+        tool_name: str,
+        tool_input: dict,
+    ) -> str | None:
+        """Return the first matching configured rule behavior, if any."""
+        for behavior, rules in (
+            ("deny", self._deny_rules),
+            ("allow", self._allow_rules),
+            ("ask", self._ask_rules),
+        ):
+            if first_matching_rule(rules, tool_name, tool_input) is not None:
+                return behavior
+        return None
+
     def ask_user(self, tool_name: str, tool_input: dict) -> bool:
         """Interactive confirmation. Returns True if user approves."""
         if self._asker is not None:
@@ -71,7 +97,7 @@ class PermissionManager:
             if isinstance(answer, str):
                 normalized = answer.strip().lower()
                 if normalized == "always":
-                    self._add_scoped_allow(tool_name, tool_input)
+                    self._add_scoped_allow(tool_name, tool_input, persist=True)
                     return True
                 if normalized == "once":
                     return True
@@ -89,11 +115,13 @@ class PermissionManager:
                 self.mode = "auto"
                 return True
             if answer == "p":
-                if tool_name == "bash":
-                    cmd = tool_input.get("command", "")
-                    prefix = cmd.split()[0] if cmd.split() else cmd
-                    self.add_allow(f"bash(prefix:{prefix} )")
-                    print(f"  [Permission] Added allow rule: bash(prefix:{prefix} )")
+                persisted = self._add_scoped_allow(
+                    tool_name,
+                    tool_input,
+                    persist=True,
+                )
+                if persisted:
+                    print("  [Permission] Added persistent scoped allow rule")
                 return True
             if answer in ("n", "no"):
                 return False
@@ -124,15 +152,24 @@ class PermissionManager:
             return normalized == "once"
         return bool(answer)
 
-    def _add_scoped_allow(self, tool_name: str, tool_input: dict) -> None:
-        """Add the narrowest rule supported by the current rule grammar."""
-        if tool_name == "bash":
-            command = str(tool_input.get("command") or "").strip()
-            prefix = command.split()[0] if command.split() else ""
-            if prefix:
-                self.add_allow(f"bash(prefix:{prefix} )")
-                return
-        self.add_allow(tool_name)
+    def _add_scoped_allow(
+        self,
+        tool_name: str,
+        tool_input: dict,
+        *,
+        persist: bool = False,
+    ) -> bool:
+        """Add a narrow rule, optionally persisting it for future sessions."""
+        try:
+            rule = scoped_allow_rule(tool_name, tool_input)
+            if persist:
+                persist_allow_rule(rule)
+        except (OSError, PermissionError, ValueError) as exc:
+            log.warning("Could not persist permission rule: %s", exc)
+            return False
+        if rule not in self._allow_rules:
+            self._allow_rules.append(rule)
+        return True
 
     def _read_permission_answer(self, summary: str) -> str | None:
         return read_permission_answer(

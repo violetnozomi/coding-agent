@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from nz_coder import config
+from nz_coder.foundation import config
 
 from .server import SessionHTTPService
 

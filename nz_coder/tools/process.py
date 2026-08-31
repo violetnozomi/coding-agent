@@ -3,17 +3,17 @@ from __future__ import annotations
 
 import json
 
-from nz_coder import config
-from nz_coder.command_policy import classify_bash
-from nz_coder.runtime.execution_context import strict_local_tools
-from nz_coder.runtime.process_service import (
+from nz_coder.foundation import config
+from nz_coder.tool_platform.command_policy import classify_bash
+from nz_coder.runtime.core.execution_context import strict_local_tools
+from nz_coder.runtime.process.process_service import (
     ProcessNotFoundError,
     ProcessOwnershipError,
     ProcessStateError,
     workspace_process_service,
 )
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.session_events import current_session_event_bus
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.protocol.session_events import current_session_event_bus
 from nz_coder.state.sessions import active_session_id
 from nz_coder.tools import ToolOutput, current_tool_cancel_event, register
 from nz_coder.tools.bash import _command_title, _resolve_bash_workdir
@@ -264,4 +264,5 @@ register(
     },
     handler=run_process,
     execution="serial",
+    side_effect="mutates-shell",
 )

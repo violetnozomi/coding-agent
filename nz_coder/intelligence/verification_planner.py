@@ -11,18 +11,17 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.project_profile import build_project_profile, load_project_profile
-from nz_coder.task_policy import is_test_file, language_for_path
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.intelligence.project_profile import build_project_profile, load_project_profile
+from nz_coder.runtime.agent.task_policy import (
+    is_test_file,
+    language_for_path,
+    native_runner_positional_selectors,
+)
 from nz_coder.tools import register
 
 
 VERIFICATION_STAGE_ORDER = ("static", "targeted", "regression")
-_PYTHON_PTH_STARTUP_WARNING_RE = re.compile(
-    r"^Error processing line \d+ of .*?\.pth:\s*$.*?"
-    r"^Remainder of file ignored\s*$",
-    re.MULTILINE | re.DOTALL,
-)
 
 
 def _q(value: str) -> str:
@@ -45,18 +44,24 @@ def _add_planned_command(
     reason: str,
     *,
     required: bool,
+    automation_provenance: str = "",
 ) -> None:
     """Add one command to the legacy list and its explicit pipeline stage."""
     _add_command(destination, command, reason)
     existing = next((item for item in stages[stage] if item["command"] == command), None)
     if existing is not None:
         existing["required"] = bool(existing.get("required")) or required
+        if automation_provenance:
+            existing["automation_provenance"] = automation_provenance
         return
-    stages[stage].append({
+    item = {
         "command": command,
         "reason": reason,
         "required": required,
-    })
+    }
+    if automation_provenance:
+        item["automation_provenance"] = automation_provenance
+    stages[stage].append(item)
 
 
 def normalize_verification_command(command: str) -> str:
@@ -174,7 +179,7 @@ def is_python_probe_command(command: str) -> bool:
 
 def verification_output_failed(output: str) -> bool:
     """Return True when zero-exit output still contains clear failure evidence."""
-    cleaned = _PYTHON_PTH_STARTUP_WARNING_RE.sub("", str(output or ""))
+    cleaned = str(output or "")
     lowered = cleaned.lower()
     if (
         "traceback (most recent call last)" in lowered
@@ -196,6 +201,49 @@ def verification_output_failed(output: str) -> bool:
     return False
 
 
+def verification_output_has_no_tests(output: str) -> bool:
+    """Return True when a successful test command explicitly ran zero tests."""
+    cleaned = str(output or "")
+    positive_patterns = (
+        r"\b(?:collected|ran|running|found)\s+[1-9]\d*\s+(?:items?|tests?)\b",
+        r"\btests run:\s*[1-9]\d*\b",
+        r"\b[1-9]\d*\s+passed\b",
+    )
+    if any(
+        re.search(pattern, cleaned, re.IGNORECASE)
+        for pattern in positive_patterns
+    ):
+        return False
+
+    go_empty_markers = ("[no test files]", "[no tests to run]")
+    if any(marker in cleaned.casefold() for marker in go_empty_markers):
+        package_summaries = [
+            line.strip().casefold()
+            for line in cleaned.splitlines()
+            if line.lstrip().startswith(("?", "ok "))
+        ]
+        if package_summaries and all(
+            any(marker in line for marker in go_empty_markers)
+            for line in package_summaries
+        ):
+            return True
+
+    return any(
+        re.search(pattern, cleaned, re.IGNORECASE)
+        for pattern in (
+            r"\bno tests ran\b",
+            r"\bno tests found\b",
+            r"\bno tests to run\b",
+            r"\bcollected\s+0\s+items?\b",
+            r"\bran\s+0\s+tests?\b",
+            r"\brunning\s+0\s+tests?\b",
+            r"\bfound\s+0\s+tests?(?:\(s\))?",
+            r"\btests run:\s*0\b",
+            r"\btest result:\s*ok\.\s*0\s+passed\b",
+        )
+    )
+
+
 _PRESENTATION_FLAGS = {
     "-q", "--quiet", "-v", "-vv", "--verbose", "-s", "-x",
     "--disable-warnings", "--color=yes", "--color=no",
@@ -213,13 +261,165 @@ def _canonical_segment_tokens(tokens: list[str]) -> tuple[str, ...]:
         if module_index < len(args):
             executable = args[module_index].lower()
             args = args[module_index + 1:]
+    native_runner = any(
+        arg.replace("\\", "/").endswith("tests/runtests.py")
+        for arg in args
+    )
     canonical = [executable]
-    for arg in args:
+    skip_parallel_value = False
+    for index, arg in enumerate(args):
+        if skip_parallel_value:
+            skip_parallel_value = False
+            continue
         lowered = arg.lower()
+        if native_runner and lowered == "--parallel":
+            if index + 1 < len(args) and re.fullmatch(
+                r"(?:\d+|auto)", args[index + 1], re.I,
+            ):
+                skip_parallel_value = True
+            continue
+        if native_runner and lowered.startswith("--parallel="):
+            continue
         if lowered in _PRESENTATION_FLAGS or lowered.startswith("--tb="):
             continue
         canonical.append(arg)
     return tuple(canonical)
+
+
+def _pytest_native_runner_scopes(command: str) -> tuple[str, ...]:
+    """Map pytest file selectors to the equivalent Django runner selectors."""
+    scopes: list[str] = []
+    for tokens in verification_command_segments(command):
+        if not tokens:
+            continue
+        executable = Path(tokens[0]).name.lower()
+        args = list(tokens[1:])
+        if re.match(r"^(python|pypy)(\d+(\.\d+)*)?$", executable):
+            if "-m" not in args:
+                continue
+            module_index = args.index("-m") + 1
+            if module_index >= len(args) or args[module_index].lower() not in {
+                "pytest",
+                "py.test",
+            }:
+                continue
+            args = args[module_index + 1:]
+        elif executable not in {"pytest", "py.test", "pytest3"}:
+            continue
+
+        positional_only = False
+        for argument in args:
+            if not argument:
+                continue
+            if argument == "--":
+                positional_only = True
+                continue
+            lowered = argument.lower()
+            if not positional_only and argument.startswith("-"):
+                if (
+                    lowered in _PRESENTATION_FLAGS
+                    or lowered.startswith("--tb=")
+                    or lowered.startswith("--color=")
+                ):
+                    continue
+                return ()
+            path, *nodes = argument.replace("\\", "/").split("::")
+            while path.startswith("./"):
+                path = path[2:]
+            if not path.startswith("tests/") or not path.endswith(".py"):
+                return ()
+            selector = path[len("tests/"):-len(".py")].replace("/", ".")
+            if nodes:
+                selector += "." + ".".join(nodes)
+            if selector and selector not in scopes:
+                scopes.append(selector)
+    return tuple(scopes)
+
+
+def _is_workspace_native_runner_token(token: str) -> bool:
+    """Return whether a token names the exact runner verified by the planner."""
+    normalized = str(token or "").replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized == "tests/runtests.py"
+
+
+def _native_runner_scopes(command: str) -> tuple[str, ...]:
+    """Return positional selectors from a repository-native Django runner."""
+    scopes: list[str] = []
+    for tokens in verification_command_segments(command):
+        runner_index = next(
+            (
+                index
+                for index, token in enumerate(tokens)
+                if _is_workspace_native_runner_token(token)
+            ),
+            None,
+        )
+        if runner_index is None:
+            continue
+        selectors: list[str] = []
+        skip_value = False
+        positional_only = False
+        for token in tokens[runner_index + 1:]:
+            if skip_value:
+                if token.startswith("-"):
+                    return ()
+                skip_value = False
+                continue
+            if positional_only:
+                selectors.append(token)
+                continue
+            if token == "--":
+                positional_only = True
+                continue
+            if token.startswith("-"):
+                if re.fullmatch(r"-v\d+", token, re.I):
+                    continue
+                option, separator, value = token.partition("=")
+                if option not in {"-v", "--verbosity", "--parallel"}:
+                    return ()
+                if separator:
+                    if not value:
+                        return ()
+                else:
+                    skip_value = True
+                continue
+            selectors.append(token)
+        if skip_value:
+            return ()
+        for selector in selectors:
+            normalized = selector.replace("\\", "/")
+            while normalized.startswith("./"):
+                normalized = normalized[2:]
+            if normalized.startswith("tests/") and normalized.endswith(".py"):
+                normalized = normalized[len("tests/"):-len(".py")]
+            normalized = normalized.replace("/", ".").strip(".")
+            if normalized and normalized not in scopes:
+                scopes.append(normalized)
+    return tuple(scopes)
+
+
+def _native_runner_verification_scope_covers(
+    planned: str,
+    observed: str,
+    plan: dict | None = None,
+) -> bool:
+    """Return whether a native Django run covers an equivalent pytest scope.
+
+    At least one side must invoke ``tests/runtests.py``. This keeps the alias
+    local to repositories with that native runner instead of treating pytest
+    paths and dotted names as interchangeable in every Python project.
+    """
+    if str((plan or {}).get("native_runner_kind") or "") != "django":
+        return False
+    planned_native = _native_runner_scopes(planned)
+    observed_native = _native_runner_scopes(observed)
+    if not planned_native and not observed_native:
+        return False
+    planned_scopes = planned_native or _pytest_native_runner_scopes(planned)
+    observed_scopes = observed_native or _pytest_native_runner_scopes(observed)
+    return bool(planned_scopes) and set(planned_scopes) <= set(observed_scopes)
 
 
 def _planned_stage_for_segment(tokens: list[str], plan: dict | None) -> str | None:
@@ -332,6 +532,21 @@ def _segment_verification_stage(tokens: list[str]) -> str | None:
         return None
     if executable in {"bash", "sh", "zsh"} and len(args) >= 2 and args[0] in {"-c", "-lc"}:
         return classify_verification_command(args[1])
+
+    native_runner_index = next(
+        (
+            index
+            for index, token in enumerate(tokens)
+            if token.replace("\\", "/").endswith("tests/runtests.py")
+        ),
+        None,
+    )
+    if native_runner_index is not None:
+        return (
+            "targeted"
+            if native_runner_positional_selectors(tokens[native_runner_index + 1:])
+            else "regression"
+        )
 
     if executable.startswith(("python", "pypy")):
         if "-m" in args:
@@ -542,6 +757,57 @@ def _python_related_tests(path: str, profile: dict) -> list[str]:
             candidate_str = candidate.as_posix()
             if candidate_str not in candidates and (root / candidate_str).exists():
                 candidates.append(candidate_str)
+    package_test_root = rel.parent / "tests"
+    for candidate in (
+        package_test_root / f"test_{stem}.py",
+        package_test_root / rel.name,
+        package_test_root / f"{stem}_test.py",
+    ):
+        candidate_str = candidate.as_posix()
+        if candidate_str not in candidates and (root / candidate_str).is_file():
+            candidates.append(candidate_str)
+
+    # Mature repositories do not always use ``test_<source-stem>.py``.  Pytest,
+    # for example, maps ``assertion/rewrite.py`` to ``test_assertrewrite.py``
+    # and ``logging.py`` to ``logging/test_reporting.py``.  Rank a bounded
+    # filename/path scan before accepting a lower-affinity call-graph edge as
+    # the sole required behavior check.
+    ignored = {
+        "app", "core", "lib", "package", "py", "pytest", "python", "src",
+        "test", "testing", "tests",
+    }
+    parts = [
+        token
+        for token in re.findall(r"[a-z0-9]+", rel.with_suffix("").as_posix().lower())
+        if len(token) >= 4 and token not in ignored
+    ]
+    stem_tokens = set(re.findall(r"[a-z0-9]+", stem.lower()))
+    ranked: list[tuple[int, str]] = []
+    scanned = 0
+    for test_root in test_roots:
+        base = root / str(test_root)
+        if not base.is_dir():
+            continue
+        for test_path in base.rglob("*.py"):
+            scanned += 1
+            if scanned > 2500:
+                break
+            candidate = test_path.relative_to(root).as_posix()
+            if not is_test_file(candidate):
+                continue
+            compact = re.sub(r"[^a-z0-9]+", "", candidate.lower())
+            score = sum(
+                8 if signal in stem_tokens else 3
+                for signal in parts
+                if signal in compact
+            )
+            if score > 0:
+                ranked.append((score, candidate))
+        if scanned > 2500:
+            break
+    for _score, candidate in sorted(ranked, key=lambda item: (-item[0], item[1])):
+        if candidate not in candidates:
+            candidates.append(candidate)
     return candidates
 
 
@@ -599,6 +865,99 @@ def _node_commands(profile: dict) -> tuple[str | None, str | None]:
     return typecheck, test
 
 
+def _is_native_python_test_runner(command: str) -> bool:
+    """Return whether *command* invokes a repository runtests.py script."""
+    try:
+        tokens = shlex.split(str(command or ""))
+    except ValueError:
+        return False
+    return any(
+        token.replace("\\", "/").endswith("tests/runtests.py")
+        for token in tokens
+    )
+
+
+def _native_python_runner_kind(command: str, root: Path) -> str:
+    """Identify a repository-native runner using bounded workspace evidence."""
+    if not _is_native_python_test_runner(command):
+        return ""
+    try:
+        tokens = shlex.split(str(command or ""))
+    except ValueError:
+        return ""
+    if not any(_is_workspace_native_runner_token(token) for token in tokens):
+        return ""
+    runner = root / "tests" / "runtests.py"
+    django_init = root / "django" / "__init__.py"
+    if not runner.is_file() or not django_init.is_file():
+        return ""
+    try:
+        runner_text = runner.read_text(encoding="utf-8", errors="replace")[:131072]
+    except OSError:
+        return ""
+    if re.search(r"(?m)^\s*(?:import\s+django\b|from\s+django\b)", runner_text):
+        return "django"
+    return ""
+
+
+def _python_test_runner(profile: dict) -> str | None:
+    """Prefer explicit native runners, then configured pytest commands."""
+    commands = [
+        str(command).strip()
+        for command in profile.get("test_commands", [])
+        if str(command).strip()
+    ]
+    native = next(
+        (command for command in commands if _is_native_python_test_runner(command)),
+        None,
+    )
+    if native:
+        return native
+    pytest_command = next(
+        (
+            command
+            for command in commands
+            if classify_verification_command(command) == "regression"
+            and "pytest" in command.casefold()
+        ),
+        None,
+    )
+    if pytest_command:
+        return pytest_command
+    if profile.get("test_roots") and not commands:
+        return "pytest"
+    return None
+
+
+def _native_python_test_selector(target: str) -> str:
+    """Convert a test path/node id into a runtests.py dotted label."""
+    raw_path, *nodes = str(target or "").replace("\\", "/").split("::")
+    path = raw_path.lstrip("./")
+    parts = [part for part in path.split("/") if part]
+    if parts[:1] == ["tests"]:
+        parts = parts[1:]
+    if parts and parts[-1].endswith(".py"):
+        parts[-1] = parts[-1][:-3]
+    if parts[-1:] == ["__init__"]:
+        parts.pop()
+    label_parts = [*parts, *(node for node in nodes if node)]
+    return ".".join(label_parts) or str(target or "")
+
+
+def _python_target_command(
+    runner: str,
+    target: str,
+    *,
+    native_runner_kind: str = "",
+) -> str:
+    selector = (
+        _native_python_test_selector(target)
+        if native_runner_kind == "django"
+        else str(target)
+    )
+    return f"{runner} {_q(selector)}"
+
+
 def _go_package(path: str) -> str:
     parent = Path(path).parent.as_posix()
     return "." if parent in {"", "."} else "./" + parent
@@ -627,6 +986,7 @@ def plan_verification_commands(
     include_broad: bool = False,
     deleted_files: list[str] | None = None,
     related_tests: list[str] | None = None,
+    require_targeted: bool = False,
     use_repo_intelligence: bool = True,
 ) -> dict:
     """Return focused first-pass commands plus optional broader fallbacks."""
@@ -643,6 +1003,12 @@ def plan_verification_commands(
         if project_profile is not None
         else load_project_profile()
     )
+    python_test_runner = _python_test_runner(profile)
+    root = current_workdir()
+    native_runner_kind = _native_python_runner_kind(
+        python_test_runner or "",
+        root,
+    )
 
     recommended: list[dict] = []
     fallback: list[dict] = []
@@ -650,7 +1016,6 @@ def plan_verification_commands(
     stage_commands: dict[str, list[dict]] = {
         stage: [] for stage in VERIFICATION_STAGE_ORDER
     }
-    root = current_workdir()
     has_go_metadata = any((root / name).exists() for name in ("go.mod", "go.work"))
     has_cargo_metadata = (root / "Cargo.toml").exists()
     deleted = (
@@ -678,9 +1043,17 @@ def plan_verification_commands(
 
     for test in failing[:6]:
         if test.endswith(".py") or ".py::" in test or "::" in test or test.startswith(("tests/", "test/")):
+            runner = python_test_runner or "pytest"
             _add_planned_command(
                 recommended, stage_commands, "targeted",
-                f"pytest {_q(test)}", "exact failing test provided", required=True,
+                _python_target_command(
+                    runner,
+                    test,
+                    native_runner_kind=native_runner_kind,
+                ),
+                "exact failing test provided",
+                required=True,
+                automation_provenance="failure_evidence",
             )
         elif language_for_path(test) == "rust" and has_cargo_metadata:
             _add_planned_command(
@@ -688,14 +1061,19 @@ def plan_verification_commands(
                 f"cargo test {_q(Path(test).stem)}",
                 "exact failing Rust test provided",
                 required=True,
+                automation_provenance="failure_evidence",
             )
 
-    if py_source and ("pytest" in profile.get("test_commands", []) or profile.get("test_roots")):
+    if py_source and python_test_runner:
         for rel in py_source[:4]:
             for candidate in _python_related_tests(rel, profile)[:2]:
                 _add_planned_command(
                     recommended, stage_commands, "targeted",
-                    f"pytest {_q(candidate)}",
+                    _python_target_command(
+                        python_test_runner,
+                        candidate,
+                        native_runner_kind=native_runner_kind,
+                    ),
                     f"related test candidate for {rel}",
                     required=False,
                 )
@@ -715,13 +1093,17 @@ def plan_verification_commands(
                 recommended,
                 stage_commands,
                 "targeted",
-                f"pytest {_q(candidate)}",
+                _python_target_command(
+                    python_test_runner,
+                    candidate,
+                    native_runner_kind=native_runner_kind,
+                ),
                 f"related test from {structural_source or 'repository graph'}",
                 required=False,
             )
         target = recommended if include_broad else fallback
         _add_planned_command(
-            target, stage_commands, "regression", "pytest",
+            target, stage_commands, "regression", python_test_runner,
             "broad Python test runner", required=False,
         )
 
@@ -770,6 +1152,7 @@ def plan_verification_commands(
                 _add_planned_command(
                     recommended, stage_commands, "targeted", f"cargo test {_q(test)}",
                     "exact Rust failing test provided", required=True,
+                    automation_provenance="failure_evidence",
                 )
         target = recommended if include_broad else fallback
         _add_planned_command(
@@ -782,19 +1165,24 @@ def plan_verification_commands(
     if not recommended:
         notes.append("No focused verification command could be inferred from the current profile.")
 
-    stages = [
-        {
+    stages = []
+    for stage in VERIFICATION_STAGE_ORDER:
+        command_required = any(
+            bool(item.get("required")) for item in stage_commands[stage]
+        )
+        evidence_required = bool(require_targeted and stage == "targeted")
+        stages.append({
             "name": stage,
-            "required": any(bool(item.get("required")) for item in stage_commands[stage]),
+            "required": command_required or evidence_required,
+            "evidence_required": evidence_required,
             "commands": stage_commands[stage],
-        }
-        for stage in VERIFICATION_STAGE_ORDER
-    ]
+        })
     return {
         "recommended": recommended,
         "fallback": fallback,
         "notes": notes,
         "stages": stages,
+        "native_runner_kind": native_runner_kind,
     }
 
 

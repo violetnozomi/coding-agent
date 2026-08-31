@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+import math
 
 import pytest
 
@@ -12,6 +13,11 @@ from nz_coder.runtime.model_gateway.models import (
     ModelCallStatus,
     ModelStreamEvent,
 )
+
+
+def test_auto_mode_has_distinct_model_call_purpose() -> None:
+    """Classifier usage must not be attributed to the coding model turn."""
+    assert ModelCallPurpose.AUTO_MODE.value == "auto_mode"
 
 
 def test_model_call_snapshots_messages_tools_and_tool_choice() -> None:
@@ -46,6 +52,57 @@ def test_model_call_rejects_non_positive_output_budget(max_tokens: int) -> None:
             messages=[],
             max_output_tokens=max_tokens,
         )
+
+
+@pytest.mark.parametrize(
+    "timeout",
+    [True, 0, -1, float("nan"), float("inf"), -float("inf")],
+)
+def test_model_call_rejects_non_finite_or_boolean_timeout(timeout) -> None:
+    """Invalid deadlines cannot disable the Gateway's hard timeout."""
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        ModelCall(
+            purpose=ModelCallPurpose.CODING,
+            messages=[],
+            max_output_tokens=100,
+            timeout_seconds=timeout,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("attempts", True),
+        ("attempts", 0),
+        ("duration_ms", float("nan")),
+        ("duration_ms", float("inf")),
+        ("duration_ms", -1),
+        ("first_token_ms", float("nan")),
+        ("first_token_ms", -1),
+        ("cost", float("inf")),
+        ("cost", -0.01),
+    ],
+)
+def test_model_call_outcome_rejects_corrupt_accounting_fields(
+    field: str,
+    value,
+) -> None:
+    """Terminal evidence must remain finite before observers persist it."""
+    values = {field: value}
+    with pytest.raises(ValueError, match=field):
+        ModelCallOutcome.completed(**values)
+
+
+def test_model_call_outcome_accepts_finite_accounting_fields() -> None:
+    outcome = ModelCallOutcome.completed(
+        attempts=2,
+        duration_ms=12.5,
+        first_token_ms=3.5,
+        cost=0.002,
+    )
+
+    assert outcome.attempts == 2
+    assert math.isfinite(outcome.duration_ms)
 
 
 def test_context_overflow_outcome_is_not_a_client_error() -> None:

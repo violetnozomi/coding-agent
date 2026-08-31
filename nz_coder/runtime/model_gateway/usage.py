@@ -47,6 +47,8 @@ def _token(owner: Any, *names: str) -> int:
     for name in names:
         value = _field(owner, name)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if isinstance(value, float) and not math.isfinite(value):
+                continue
             return max(0, int(value))
     return 0
 
@@ -55,6 +57,8 @@ def _optional_token(owner: Any, *names: str) -> int | None:
     for name in names:
         value = _field(owner, name)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if isinstance(value, float) and not math.isfinite(value):
+                continue
             return max(0, int(value))
     return None
 
@@ -65,7 +69,7 @@ def normalize_usage(value: Any) -> NormalizedUsage:
         return NormalizedUsage()
     raw_input = _token(value, "prompt_tokens", "input_tokens")
     raw_output = _token(value, "completion_tokens", "output_tokens")
-    total = _token(value, "total_tokens") or raw_input + raw_output
+    provider_total = _token(value, "total_tokens")
     prompt_details = _field(value, "prompt_tokens_details") or {}
     input_details = _field(value, "input_tokens_details") or {}
     completion_details = _field(value, "completion_tokens_details") or {}
@@ -91,9 +95,22 @@ def normalize_usage(value: Any) -> NormalizedUsage:
         if explicit_uncached is not None
         else max(0, raw_input - cache_read - cache_write)
     )
+    output_tokens = max(0, raw_output - reasoning)
+    # ``total_tokens`` is not consistent across native APIs.  OpenAI-style
+    # totals include cached input and reasoning, while Anthropic reports those
+    # in separate buckets.  Never let the aggregate undercount the mutually
+    # exclusive buckets used by context pressure and cost accounting.
+    bucket_total = (
+        input_tokens
+        + output_tokens
+        + reasoning
+        + cache_read
+        + cache_write
+    )
+    total = max(provider_total, bucket_total)
     return NormalizedUsage(
         input_tokens=input_tokens,
-        output_tokens=max(0, raw_output - reasoning),
+        output_tokens=output_tokens,
         total_tokens=total,
         reasoning_tokens=reasoning,
         cache_read_tokens=cache_read,

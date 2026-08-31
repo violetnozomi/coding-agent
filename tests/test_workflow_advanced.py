@@ -8,9 +8,9 @@ import pytest
 
 
 def test_builtin_resolver_precedes_shadowing_saved_capsule(tmp_path):
-    from nz_coder.runtime.workflow_capsule import create_workflow_capsule
-    from nz_coder.runtime.workflow_library import save_workflow_capsule
-    from nz_coder.runtime.workflow_resolver import resolve_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_capsule import create_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_library import save_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_resolver import resolve_workflow_capsule
 
     manifest = {
         "name": "shadow",
@@ -50,9 +50,9 @@ def test_one_level_nested_workflow_shares_parent_runtime_and_phase_events(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_runtime import workflow_run
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)
@@ -86,9 +86,9 @@ def test_nested_workflow_shares_token_budget_and_blocks_inner_synthesis(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.runtime.workflow_runtime import workflow_run
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)
@@ -111,9 +111,9 @@ def test_nested_workflow_shares_token_budget_and_blocks_inner_synthesis(
 
 
 def test_nested_workflow_depth_is_rejected_before_spawn(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_capsule import create_workflow_capsule
-    from nz_coder.runtime.workflow_library import save_workflow_capsule
-    from nz_coder.runtime.workflow_resolver import resolve_nested_workflows
+    from nz_coder.runtime.workflows.workflow_capsule import create_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_library import save_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_resolver import resolve_nested_workflows
     from tests.test_workflow_runtime import _manager
 
     manifest = {
@@ -144,7 +144,7 @@ def test_nested_workflow_depth_is_rejected_before_spawn(tmp_path, monkeypatch):
 
 
 def test_parallel_investigation_builtin_is_bounded_and_structured():
-    from nz_coder.runtime.workflow_builtins import get_builtin_workflow
+    from nz_coder.runtime.workflows.workflow_builtins import get_builtin_workflow
 
     capsule = get_builtin_workflow(
         "parallel-investigation",
@@ -159,7 +159,7 @@ def test_parallel_investigation_builtin_is_bounded_and_structured():
 
 
 def test_builtin_input_bounds_reject_zero_investigators_and_excess_reviewers():
-    from nz_coder.runtime.workflow_builtins import get_builtin_workflow
+    from nz_coder.runtime.workflows.workflow_builtins import get_builtin_workflow
 
     with pytest.raises(ValueError, match="targets must be non-empty"):
         get_builtin_workflow(
@@ -174,7 +174,7 @@ def test_builtin_input_bounds_reject_zero_investigators_and_excess_reviewers():
 
 
 def test_review_packets_partition_hash_and_preserve_unicode(tmp_path):
-    from nz_coder.runtime.workflow_review import write_review_packets
+    from nz_coder.runtime.workflows.workflow_review import write_review_packets
 
     diff = (
         "diff --git a/src/app.py b/src/app.py\n--- a/src/app.py\n+++ b/src/app.py\n"
@@ -205,7 +205,7 @@ def test_review_packets_partition_hash_and_preserve_unicode(tmp_path):
 
 
 def test_quality_gate_preserves_confirmed_and_unresolved_but_drops_refuted():
-    from nz_coder.runtime.workflow_review import review_quality_gate
+    from nz_coder.runtime.workflows.workflow_review import review_quality_gate
 
     result = review_quality_gate([{
         "structured": {
@@ -224,7 +224,7 @@ def test_quality_gate_preserves_confirmed_and_unresolved_but_drops_refuted():
 
 
 def test_quality_gate_never_infers_approval_from_missing_structured_output():
-    from nz_coder.runtime.workflow_review import review_quality_gate
+    from nz_coder.runtime.workflows.workflow_review import review_quality_gate
 
     result = review_quality_gate([{"final_text": "looks fine"}])
 
@@ -236,9 +236,9 @@ def test_scoped_review_builtin_runs_review_gate_artifact_and_synthesis(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workflow_runtime import workflow_run
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
+    from nz_coder.runtime.process.workdir import scoped_workdir
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)
@@ -270,7 +270,7 @@ def test_scoped_review_builtin_runs_review_gate_artifact_and_synthesis(
 
 
 def test_worktree_sweep_removes_clean_read_only_and_retains_changed(tmp_path):
-    from nz_coder.runtime.workflow_sweep import sweep_workflow_worktrees
+    from nz_coder.runtime.workflows.workflow_sweep import sweep_workflow_worktrees
 
     worktrees = tmp_path / ".nz-coder" / "worktrees"
     clean = worktrees / "clean"
@@ -307,8 +307,8 @@ def test_worktree_sweep_removes_clean_read_only_and_retains_changed(tmp_path):
     ],
 )
 def test_json_generator_covers_all_declared_patterns_without_source(pattern):
-    from nz_coder.runtime.workflow_builtins import generate_pattern_workflow
-    from nz_coder.runtime.workflow_capsule import validate_workflow_capsule
+    from nz_coder.runtime.workflows.workflow_builtins import generate_pattern_workflow
+    from nz_coder.runtime.workflows.workflow_capsule import validate_workflow_capsule
 
     capsule = generate_pattern_workflow(pattern, "Inspect the repository")
     validated = validate_workflow_capsule(capsule)

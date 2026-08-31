@@ -7,7 +7,7 @@ import pytest
 from rich.console import Console
 
 from nz_coder.interface import timeline
-from nz_coder.message_schema import ensure_message_identities, legacy_messages
+from nz_coder.protocol.message_schema import ensure_message_identities, legacy_messages
 
 
 def _history():
@@ -57,6 +57,20 @@ def test_latest_assistant_text_prefers_visible_typed_text_parts():
     ]
 
     assert timeline.latest_assistant_text(messages) == "visible"
+
+
+def test_terminal_transcript_hides_non_text_structured_content():
+    document = timeline.build_transcript_document(
+        "session-structured",
+        [
+            {"role": "user", "content": "inspect"},
+            {"role": "assistant", "content": {"internal": [1, 2, 3]}},
+        ],
+    )
+
+    rendered = document.markdown()
+    assert "internal" not in rendered
+    assert "[1, 2, 3]" not in rendered
 
 
 def test_fork_history_keeps_complete_turn_and_returns_deep_copy():

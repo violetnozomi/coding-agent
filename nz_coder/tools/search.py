@@ -7,20 +7,42 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from nz_coder.runtime.ripgrep import (
+from nz_coder.capabilities.ripgrep import (
     RipgrepCancelled,
     RipgrepSearchMatch,
     decode_ripgrep_event,
     list_ripgrep_files,
     search_ripgrep,
 )
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import ToolOutput, current_tool_cancel_event, register
 
 
 _GREP_LIMIT = 100
 _GLOB_LIMIT = 100
 _MAX_GREP_LINE_LENGTH = 2000
+_DEFAULT_IGNORED_DIRECTORIES = frozenset({
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nz-coder",
+    ".nz-coder-runs",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+})
+
+
+def _is_default_ignored_part(part: str) -> bool:
+    return part in _DEFAULT_IGNORED_DIRECTORIES
 
 
 def _m_in_workspace(m: Path, base: Path) -> bool:
@@ -39,6 +61,30 @@ def _safe_path(p: str = ".") -> Path:
     except ValueError:
         raise ValueError(f"Path escapes workspace: {p}")
     return path
+
+
+def _default_ignores_enabled(base: Path, pattern: str = "") -> bool:
+    """Disable implicit ignores only for an explicitly named private scope."""
+    workspace = current_workdir().resolve()
+    try:
+        relative_parts = base.resolve().relative_to(workspace).parts
+    except ValueError:
+        relative_parts = ()
+    pattern_parts = Path(str(pattern).replace("\\", "/")).parts
+    return not any(_is_default_ignored_part(part) for part in (*relative_parts, *pattern_parts))
+
+
+def _default_repo_excluded(path: str) -> bool:
+    return any(
+        _is_default_ignored_part(part)
+        for part in Path(str(path).replace("\\", "/")).parts
+    )
+
+
+def _default_ignore_globs() -> tuple[str, ...]:
+    return tuple(
+        f"!**/{name}/**" for name in sorted(_DEFAULT_IGNORED_DIRECTORIES)
+    )
 
 
 class _SearchInterrupted(Exception):
@@ -72,13 +118,17 @@ def _run_rg_search(
     include: str | None = None,
     files: list[str] | None = None,
     case_insensitive: bool = False,
+    use_default_ignores: bool = True,
 ) -> tuple[list[_RGMatch], bool]:
     """Compatibility adapter around the shared Ripgrep.search producer."""
     try:
         result = search_ripgrep(
             cwd,
             pattern,
-            patterns=(include,) if include else (),
+            patterns=(
+                ((include,) if include else ())
+                + (_default_ignore_globs() if use_default_ignores else ())
+            ),
             files=tuple(files) if files is not None else None,
             case_insensitive=case_insensitive,
             cancel_event=current_tool_cancel_event(),
@@ -95,6 +145,7 @@ def _python_rg_search(
     include: str | None,
     files: list[str] | None,
     case_insensitive: bool,
+    use_default_ignores: bool = True,
 ) -> tuple[list[_RGMatch], bool]:
     """Best-effort producer for installations without a ripgrep binary."""
     try:
@@ -114,6 +165,8 @@ def _python_rg_search(
         try:
             relative = candidate.relative_to(cwd)
         except ValueError:
+            continue
+        if use_default_ignores and _default_repo_excluded(relative.as_posix()):
             continue
         if include and not _matches_glob(relative, include):
             continue
@@ -151,6 +204,7 @@ def _search_matches(
     search = _safe_path(path)
     cwd = search if search.is_dir() else search.parent
     files = None if search.is_dir() else [search.name]
+    use_default_ignores = _default_ignores_enabled(search)
     try:
         rows, partial = _run_rg_search(
             cwd,
@@ -158,6 +212,7 @@ def _search_matches(
             include=include,
             files=files,
             case_insensitive=case_insensitive,
+            use_default_ignores=use_default_ignores,
         )
     except FileNotFoundError:
         rows, partial = _python_rg_search(
@@ -166,6 +221,7 @@ def _search_matches(
             include=include,
             files=files,
             case_insensitive=case_insensitive,
+            use_default_ignores=use_default_ignores,
         )
     by_path: dict[Path, float | None] = {}
     matches: list[_SearchMatch] = []
@@ -420,7 +476,13 @@ def _iter_fallback_files(base: Path):
             yield root_path / filename
 
 
-def _run_rg_files(base: Path, pattern: str, limit: int) -> tuple[list[str], bool]:
+def _run_rg_files(
+    base: Path,
+    pattern: str,
+    limit: int,
+    *,
+    use_default_ignores: bool = True,
+) -> tuple[list[str], bool]:
     """Compatibility wrapper around the shared Ripgrep.files producer."""
     try:
         result = list_ripgrep_files(
@@ -429,6 +491,7 @@ def _run_rg_files(base: Path, pattern: str, limit: int) -> tuple[list[str], bool
             hidden=True,
             follow=False,
             limit=limit,
+            exclude=_default_repo_excluded if use_default_ignores else None,
             cancel_event=current_tool_cancel_event(),
         )
     except RipgrepCancelled as error:
@@ -453,7 +516,17 @@ def glob_search(pattern: str, path: str = ".") -> str:
             return f"Error: glob path must be a directory: {base}"
         if not base.is_dir():
             return f"Error: No such directory: {base}"
-        files, truncated = _run_rg_files(base, raw, _GLOB_LIMIT)
+        use_default_ignores = _default_ignores_enabled(base, raw)
+        files, truncated = (
+            _run_rg_files(base, raw, _GLOB_LIMIT)
+            if use_default_ignores
+            else _run_rg_files(
+                base,
+                raw,
+                _GLOB_LIMIT,
+                use_default_ignores=False,
+            )
+        )
         entries: list[tuple[str, float]] = []
         for relative in files:
             _raise_if_cancelled()

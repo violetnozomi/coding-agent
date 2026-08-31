@@ -234,6 +234,7 @@ class PythonAstAnalyzer:
         symbols: list[SymbolRecord] = []
         node_symbols: dict[ast.AST, SymbolRecord] = {}
         owner_class: dict[ast.AST, str] = {}
+        symbol_occurrences: dict[str, int] = {}
 
         def collect(body: list[ast.stmt], prefix: str = "", class_name: str = "") -> None:
             for node in body:
@@ -247,8 +248,20 @@ class PythonAstAnalyzer:
                     kind = "async method" if isinstance(node, ast.AsyncFunctionDef) else "method"
                 else:
                     kind = "async function" if isinstance(node, ast.AsyncFunctionDef) else "function"
+                base_symbol_id = symbol_id_for(relative, qualified, kind)
+                occurrence = symbol_occurrences.get(base_symbol_id, 0) + 1
+                symbol_occurrences[base_symbol_id] = occurrence
                 record = SymbolRecord(
-                    symbol_id=symbol_id_for(relative, qualified, kind),
+                    symbol_id=(
+                        base_symbol_id
+                        if occurrence == 1
+                        else symbol_id_for(
+                            relative,
+                            qualified,
+                            kind,
+                            discriminator=f"duplicate-{occurrence}",
+                        )
+                    ),
                     name=node.name,
                     qualified_name=qualified,
                     kind=kind,
@@ -531,6 +544,7 @@ class TreeSitterAnalyzer:
         symbols: list[SymbolRecord] = []
         symbol_nodes: list[tuple[object, object, SymbolRecord]] = []
         imports: list[ImportRecord] = []
+        symbol_occurrences: dict[str, int] = {}
 
         def add_symbol(node: object, name_node: object | None, kind: str, owner: str = "") -> None:
             name = self._text(content, name_node).strip()
@@ -542,8 +556,20 @@ class TreeSitterAnalyzer:
             signature = lines[line - 1].strip() if line <= len(lines) else None
             parent_text = self._text(content, getattr(node, "parent", None))[:80]
             exported = parent_text.lstrip().startswith("export ") or signature.lstrip().startswith("export ")
+            base_symbol_id = symbol_id_for(relative, qualified, kind)
+            occurrence = symbol_occurrences.get(base_symbol_id, 0) + 1
+            symbol_occurrences[base_symbol_id] = occurrence
             record = SymbolRecord(
-                symbol_id_for(relative, qualified, kind), name, qualified, kind,
+                (
+                    base_symbol_id
+                    if occurrence == 1
+                    else symbol_id_for(
+                        relative,
+                        qualified,
+                        kind,
+                        discriminator=f"duplicate-{occurrence}",
+                    )
+                ), name, qualified, kind,
                 relative, module_id, language, line, int(node.end_point[0]) + 1,
                 _compact(signature or "") or None, exported, 0.92,
                 f"tree-sitter-{language}", self.capability_tier.value,
@@ -736,6 +762,7 @@ class LexicalFallbackAnalyzer:
         module_id = module_id_for_path(relative)
         extracted = _extract_language_symbols(source, language)
         symbols: list[SymbolRecord] = []
+        symbol_occurrences: dict[str, int] = {}
         for item in extracted:
             qualified = f"{module_name}.{item.name}" if module_name else item.name
             signature = item.signature or None
@@ -748,8 +775,20 @@ class LexicalFallbackAnalyzer:
                 exported = bool(signature and signature.lstrip().startswith("pub "))
             else:
                 exported = None
+            base_symbol_id = symbol_id_for(relative, qualified, item.kind)
+            occurrence = symbol_occurrences.get(base_symbol_id, 0) + 1
+            symbol_occurrences[base_symbol_id] = occurrence
             symbols.append(SymbolRecord(
-                symbol_id_for(relative, qualified, item.kind), item.name, qualified,
+                (
+                    base_symbol_id
+                    if occurrence == 1
+                    else symbol_id_for(
+                        relative,
+                        qualified,
+                        item.kind,
+                        discriminator=f"duplicate-{occurrence}",
+                    )
+                ), item.name, qualified,
                 item.kind, relative, module_id, language, item.line, item.line,
                 signature, exported, 0.55, f"lexical-{language}",
                 self.capability_tier.value,
@@ -789,10 +828,10 @@ class LexicalFallbackAnalyzer:
             stripped = raw.strip()
             if not stripped or stripped.startswith(("//", "#")):
                 continue
+            caller = next(
+                (item for item in reversed(functions) if item.line <= line_number), None,
+            )
             for match in _IDENTIFIER_RE.finditer(raw):
-                caller = next(
-                    (item for item in reversed(functions) if item.line <= line_number), None,
-                )
                 references.append(ReferenceRecord(
                     relative, caller.symbol_id if caller else None, match.group(0), "",
                     line_number, match.start(), _compact(raw), 0.4,

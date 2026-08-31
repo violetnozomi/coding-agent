@@ -15,8 +15,9 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.theme import Theme
 
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder import __version__, config
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder import __version__
+from nz_coder.foundation import config
 from nz_coder.interface.commands import (
     CommandContext,
     build_default_registry,
@@ -27,11 +28,11 @@ from nz_coder.interface.preferences import record_recent_model, rich_theme
 from nz_coder.interface.run_renderer import TerminalRunRenderer
 from nz_coder.interface.terminal_input import TerminalInput
 from nz_coder.interface.submission import build_user_submission
-from nz_coder.message_schema import bind_user_context
-from nz_coder.memory import memory_mgr
-from nz_coder.prompt import build
-from nz_coder.sessions import activate_session, create_session_id, save_session
-from nz_coder.skills import skill_loader
+from nz_coder.protocol.message_schema import bind_user_context
+from nz_coder.state.memory import memory_mgr
+from nz_coder.runtime.conversation.prompt import build
+from nz_coder.state.sessions import activate_session, create_session_id, save_session
+from nz_coder.state.skills import skill_loader
 
 theme = Theme({
     "tool": "bold yellow",
@@ -62,6 +63,17 @@ class _SurfaceConsole:
         from nz_coder.interface.fullscreen import render_rich_output
 
         self.surface.append_output(
+            render_rich_output(*objects, width=self.width, **kwargs)
+        )
+
+    def print_terminal(self, *objects, **kwargs) -> None:  # noqa: ANN002, ANN003
+        """Project a run terminal result into the durable idle notice area."""
+        if self.surface is None:
+            self._base.print(*objects, **kwargs)
+            return
+        from nz_coder.interface.fullscreen import render_rich_output
+
+        self.surface.append_notice(
             render_rich_output(*objects, width=self.width, **kwargs)
         )
 
@@ -352,7 +364,7 @@ def _build_agent(system_prompt: str, renderer: StreamingRenderer, session_id: st
                  permission_mode: str = None):
     from nz_coder.providers.configuration import provider_connection
     from nz_coder.providers.models import active_model_selection
-    from nz_coder.runtime.composition import build_product_environment
+    from nz_coder.runtime.execution.composition import build_product_environment
 
     connection = provider_connection(active_model_selection().provider)
     return build_product_environment(
@@ -361,6 +373,7 @@ def _build_agent(system_prompt: str, renderer: StreamingRenderer, session_id: st
         permission_mode=permission_mode,
         session_id=session_id,
         client=None if connection.configured else _UnavailableModelClient(connection.provider),
+        auto_mode_classifier_enabled=config.AUTO_MODE_CLASSIFIER_ENABLED,
     )
 
 
@@ -675,8 +688,13 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             run_view.close()
             input_ui.refresh_files()
 
+        result_status = (
+            str(result.get("status") or "") if isinstance(result, dict) else ""
+        )
         if (
-            getattr(agent, "tool_calls_this_run", 0) >= 3
+            not cancelled
+            and result_status not in {"cancelled", "interrupted"}
+            and getattr(agent, "tool_calls_this_run", 0) >= 3
             and not getattr(agent, "used_save_memory", False)
         ):
             history.append(bind_user_context(
@@ -722,7 +740,7 @@ def _render_submission_metadata(
 
 def _terminal_status(session_state: dict, history: list) -> dict[str, str]:
     """Build a cheap, secret-free status snapshot for the inline composer."""
-    from nz_coder.context import estimate_tokens
+    from nz_coder.state.context import estimate_tokens
 
     agent = session_state.get("agent")
     provider = getattr(getattr(agent, "provider", None), "name", "-")
@@ -782,8 +800,8 @@ def _terminal_transcript(
 
 def _terminal_sidebar(session_state: dict, history: list) -> str:
     """Build a bounded, secret-free sidebar from current Session owners."""
-    from nz_coder.context import estimate_tokens
-    from nz_coder.sessions import load_session
+    from nz_coder.state.context import estimate_tokens
+    from nz_coder.state.sessions import load_session
 
     agent = session_state.get("agent")
     session_id = str(session_state.get("id") or "-")
@@ -949,11 +967,11 @@ def main(argv: list[str] | None = None) -> int:
 
         return platform_main(args[1:])
     if args and args[0] == "doctor":
-        from nz_coder.doctor import doctor_main
+        from nz_coder.interface.setup.doctor import doctor_main
 
         return doctor_main(args[1:], output_console=console)
     if args and args[0] == "init":
-        from nz_coder.initializer import init_main
+        from nz_coder.interface.setup.initializer import init_main
 
         return init_main(args[1:])
     if args and args[0] in ("-V", "--version"):
@@ -961,10 +979,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args and args[0] in ("-h", "--help"):
         console.print(
-            "Usage: nz-coder [run ... | completion <bash|zsh|fish> | init ... | "
-            "doctor ... | serve ... | daemon ... | attach ... | mcp ... | "
-            "provider-smoke ... | swebench ... | models ... | memory ... | "
-            "extensions {list,status,reload,enable,disable} | config show | platform]",
+            "NZ-Coder terminal coding agent\n\n"
+            "Usage: nz-coder [COMMAND] [OPTIONS]\n\n"
+            "Interactive:\n"
+            "  nz-coder                         Start the full-screen coding assistant\n"
+            "  nz-coder attach [URL]            Attach to a daemon Session\n\n"
+            "Headless:\n"
+            "  nz-coder run --prompt TEXT       Run one non-interactive task\n"
+            "  nz-coder serve                   Start the loopback HTTP Session service\n"
+            "  nz-coder daemon                  Manage the persistent local service\n\n"
+            "Configuration:\n"
+            "  nz-coder init                    Create workspace configuration\n"
+            "  nz-coder doctor                  Check credentials, LSP, MCP, and terminal\n"
+            "  nz-coder config show             Show effective configuration\n"
+            "  nz-coder models list             List available models\n"
+            "  nz-coder models select PROVIDER/MODEL  Select a model\n\n"
+            "More: nz-coder mcp --help | swebench --help | extensions --help\n"
+            "Inside the terminal use /help, /model, /mode, or Ctrl+K.",
             markup=False,
         )
         return 0

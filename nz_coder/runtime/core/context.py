@@ -19,6 +19,8 @@ class ContextExecutionContext:
     stamp_auto_compaction: Callable[[list[dict]], None]
     trace: Callable[..., None]
     report_pressure: Callable[[dict], None] = lambda _payload: None
+    projected_replay_tokens: Callable[[list[dict]], int] | None = None
+    cancel_compaction: Callable[[], object] | None = None
 
     def __post_init__(self) -> None:
         workspace = Path(self.workspace).resolve()
@@ -33,4 +35,15 @@ class ContextExecutionContext:
         ):
             if not callable(getattr(self, name)):
                 raise TypeError(f"ContextExecutionContext {name} must be callable")
+        if (
+            self.projected_replay_tokens is not None
+            and not callable(self.projected_replay_tokens)
+        ):
+            raise TypeError(
+                "ContextExecutionContext projected_replay_tokens must be callable"
+            )
+        if self.cancel_compaction is not None and not callable(self.cancel_compaction):
+            raise TypeError(
+                "ContextExecutionContext cancel_compaction must be callable"
+            )
         object.__setattr__(self, "workspace", workspace)

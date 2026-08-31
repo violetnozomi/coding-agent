@@ -1,7 +1,7 @@
 """Tests for additive persistent message and text-part identities."""
 from __future__ import annotations
 
-from nz_coder.message_schema import (
+from nz_coder.protocol.message_schema import (
     assistant_error_from_exception,
     attach_message_identity,
     attach_text_part,
@@ -391,8 +391,8 @@ def test_compaction_and_input_expansion_metadata_are_projected_as_parts():
 
 
 def test_structured_compaction_metadata_survives_session_save_and_load(tmp_path, monkeypatch):
-    from nz_coder import sessions
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.state import sessions
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     monkeypatch.setattr(sessions, "_active_model_id", lambda: "fake-model")
     messages = [{
@@ -418,8 +418,8 @@ def test_structured_compaction_metadata_survives_session_save_and_load(tmp_path,
 
 
 def test_snapshot_summaries_project_and_persist_session_diff(tmp_path, monkeypatch):
-    from nz_coder import sessions
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.state import sessions
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     monkeypatch.setattr(sessions, "_active_model_id", lambda: "fake-model")
     diff = {

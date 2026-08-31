@@ -7,7 +7,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from nz_coder import config
+from nz_coder.foundation import config
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,7 @@ class ResolvedServer:
     language_id: str
     command: tuple[str, ...]
     root: Path
+    analysis_paths: tuple[Path, ...] = ()
 
 
 _SPECS = (
@@ -200,6 +201,18 @@ def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
     if spec is None:
         return None
     root = _find_root(path, workspace, spec.root_markers)
+    # A pyproject can live directly inside an import package (for example
+    # workspace/cron_engine/{pyproject.toml,__init__.py}).  Pyright rooted at
+    # that directory cannot resolve ``import cron_engine`` because the import
+    # package's parent is missing.  Promote only this package-root layout;
+    # ordinary projects and src layouts retain their nearest marker root.
+    if (
+        spec.language == "python"
+        and (root / "__init__.py").is_file()
+        and root != workspace.resolve()
+    ):
+        root = root.parent.resolve()
+    analysis_paths: tuple[Path, ...] = ()
     override = config.get(f"NZ_LSP_{spec.language.upper()}_COMMAND", "").strip()
     commands = (_split_override(override),) if override else spec.commands
     for command in commands:
@@ -212,6 +225,7 @@ def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
                 language_id=spec.language_id,
                 command=resolved,
                 root=root,
+                analysis_paths=analysis_paths,
             )
     return None
 

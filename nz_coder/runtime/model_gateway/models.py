@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import math
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -19,6 +20,7 @@ class ModelCallPurpose(str, Enum):
     VERIFIER = "verifier"
     STALL_SIDECAR = "stall_sidecar"
     VISION = "vision"
+    AUTO_MODE = "auto_mode"
 
 
 class ModelCallStatus(str, Enum):
@@ -55,7 +57,12 @@ class ModelCall:
             or self.max_output_tokens <= 0
         ):
             raise ValueError("ModelCall max_output_tokens must be positive")
-        if not isinstance(self.timeout_seconds, (int, float)) or self.timeout_seconds <= 0:
+        if (
+            not isinstance(self.timeout_seconds, (int, float))
+            or isinstance(self.timeout_seconds, bool)
+            or not math.isfinite(float(self.timeout_seconds))
+            or self.timeout_seconds <= 0
+        ):
             raise ValueError("ModelCall timeout_seconds must be positive")
         object.__setattr__(self, "messages", copy.deepcopy(tuple(self.messages)))
         object.__setattr__(self, "tools", copy.deepcopy(tuple(self.tools)))
@@ -111,8 +118,17 @@ class ModelCallOutcome:
     def __post_init__(self) -> None:
         if not isinstance(self.status, ModelCallStatus):
             raise TypeError("ModelCallOutcome status must be a ModelCallStatus")
-        if self.attempts < 1:
+        if (
+            not isinstance(self.attempts, int)
+            or isinstance(self.attempts, bool)
+            or self.attempts < 1
+        ):
             raise ValueError("ModelCallOutcome attempts must be positive")
+        _require_finite_nonnegative(self.duration_ms, "duration_ms")
+        if self.first_token_ms is not None:
+            _require_finite_nonnegative(self.first_token_ms, "first_token_ms")
+        if self.cost is not None:
+            _require_finite_nonnegative(self.cost, "cost")
         object.__setattr__(self, "tool_calls", copy.deepcopy(tuple(self.tool_calls)))
         object.__setattr__(self, "provider_metadata", copy.deepcopy(self.provider_metadata))
 
@@ -160,4 +176,17 @@ class ModelCallOutcome:
             error=str(error),
             retryable=bool(retryable),
             **values,
+        )
+
+
+def _require_finite_nonnegative(value, field_name: str) -> None:
+    """Reject boolean, non-numeric, non-finite, and negative accounting."""
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(float(value))
+        or value < 0
+    ):
+        raise ValueError(
+            f"ModelCallOutcome {field_name} must be finite and non-negative"
         )

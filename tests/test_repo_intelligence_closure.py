@@ -295,7 +295,7 @@ def test_unified_structural_lookup_returns_symbol_module_and_process(tmp_path) -
 
 
 def test_repo_context_lookup_operation_uses_single_tool_entry(tmp_path, monkeypatch) -> None:
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_context import repo_context
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)

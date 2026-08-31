@@ -12,6 +12,7 @@ class RunStatus(str, Enum):
     COMPLETED = "completed"
     INTERRUPTED = "interrupted"
     CANCELLED = "cancelled"
+    BLOCKED = "blocked"
     ERROR = "error"
     MAX_TURNS = "max_turns"
 
@@ -33,8 +34,14 @@ class TokenUsage:
 
     @property
     def total_tokens(self) -> int:
-        """Return provider-billed input plus output tokens without double counting cache."""
-        return self.input_tokens + self.output_tokens
+        """Return the sum of the runtime's mutually exclusive token buckets."""
+        return (
+            self.input_tokens
+            + self.output_tokens
+            + self.cached_read_tokens
+            + self.cached_write_tokens
+            + self.reasoning_tokens
+        )
 
     def add(self, other: TokenUsage) -> TokenUsage:
         """Return an immutable field-wise aggregate."""

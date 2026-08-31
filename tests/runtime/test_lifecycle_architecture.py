@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_production_run_lifecycle_consumes_focused_context() -> None:
-    path = ROOT / "nz_coder" / "runtime" / "run_lifecycle.py"
+    path = ROOT / "nz_coder" / "runtime" / "execution" / "run_lifecycle.py"
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     runtime = next(

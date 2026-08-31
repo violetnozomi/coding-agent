@@ -10,7 +10,7 @@ from prompt_toolkit.formatted_text import to_formatted_text
 
 from nz_coder.interface.fullscreen import _render_markdown
 from nz_coder.interface.terminal_input import scan_workspace_files
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state.sessions import list_sessions, session_dir
 from nz_coder.tool_platform.results import ToolResultBudget, ToolResultProjector
 

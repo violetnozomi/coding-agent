@@ -48,6 +48,7 @@ def test_context_from_legacy_host_exposes_only_focused_operations(tmp_path) -> N
     assert context.workspace == tmp_path.resolve()
     assert context.budget == prompt_budget(32_000, 4_000)
     assert context.projected_tokens(messages) == 17
+    assert context.projected_replay_tokens is None
     assert context.compact(messages) == [{"role": "system", "content": "summary"}]
     context.stamp_auto_compaction(messages)
     context.trace("context_event", count=1)

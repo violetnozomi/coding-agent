@@ -15,7 +15,7 @@ def _install_fake_child(
     calls=None,
     verifier_verdicts=None,
 ):
-    import nz_coder.runtime.subagent as subagent
+    import nz_coder.runtime.agent.subagent as subagent
 
     delay_map = delays or {}
     observed = calls if calls is not None else []
@@ -57,8 +57,8 @@ def _install_fake_child(
 
 
 def _manager(tmp_path, monkeypatch, *, max_tasks=20, concurrency=4):
-    from nz_coder import config
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     monkeypatch.setattr(config, "SUBAGENT_BACKGROUND_MAX_TASKS", max_tasks)
     monkeypatch.setattr(config, "SUBAGENT_BACKGROUND_MAX_CONCURRENT", concurrency)
@@ -66,7 +66,7 @@ def _manager(tmp_path, monkeypatch, *, max_tasks=20, concurrency=4):
 
 
 def test_gated_synthesis_counts_as_agent_and_consumes_full_results(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime, lint_workflow_plan
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime, lint_workflow_plan
 
     calls = _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=3, concurrency=2)
@@ -101,7 +101,7 @@ def test_gated_synthesis_counts_as_agent_and_consumes_full_results(tmp_path, mon
 
 
 def test_pipeline_streams_items_without_stage_barrier_and_preserves_order(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
 
     calls = _install_fake_child(
         monkeypatch,
@@ -124,7 +124,7 @@ def test_pipeline_streams_items_without_stage_barrier_and_preserves_order(tmp_pa
 
 
 def test_map_reduce_is_failure_isolated_and_runs_final_fold(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=4, concurrency=2)
@@ -148,7 +148,7 @@ def test_map_reduce_is_failure_isolated_and_runs_final_fold(tmp_path, monkeypatc
 
 
 def test_quality_preflight_rejects_before_any_child_is_published(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import lint_workflow_plan
+    from nz_coder.runtime.workflows.workflow_runtime import lint_workflow_plan
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=2)
@@ -183,9 +183,9 @@ def test_quality_preflight_rejects_before_any_child_is_published(tmp_path, monke
 
 
 def test_workflow_tool_runs_through_bound_session_manager(tmp_path, monkeypatch):
-    from nz_coder.runtime.agent_manager import scoped_background_agent_manager
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.runtime.workflow_runtime import workflow_run
+    from nz_coder.runtime.agent.agent_manager import scoped_background_agent_manager
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.runtime.workflows.workflow_runtime import workflow_run
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)
@@ -207,7 +207,7 @@ def test_workflow_tool_runs_through_bound_session_manager(tmp_path, monkeypatch)
 
 
 def test_workflow_children_cannot_recursively_start_another_workflow():
-    from nz_coder.runtime.subagent import _subagent_tools
+    from nz_coder.runtime.agent.subagent import _subagent_tools
 
     names = {
         spec["function"]["name"]
@@ -219,7 +219,7 @@ def test_workflow_children_cannot_recursively_start_another_workflow():
 
 
 def test_resume_cache_replays_success_but_reruns_synthesis(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
 
     calls = _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=5, concurrency=2)
@@ -255,8 +255,8 @@ def test_resume_cache_replays_success_but_reruns_synthesis(tmp_path, monkeypatch
 
 
 def test_result_cache_is_private_and_treats_corruption_or_failure_as_miss(tmp_path):
-    from nz_coder.runtime.child_result import ChildAgentResult
-    from nz_coder.runtime.workflow_runtime import WorkflowResultCache
+    from nz_coder.runtime.agent.child_result import ChildAgentResult
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowResultCache
 
     cache = WorkflowResultCache(tmp_path / "runs", "current")
     completed = ChildAgentResult(
@@ -279,8 +279,8 @@ def test_result_cache_is_private_and_treats_corruption_or_failure_as_miss(tmp_pa
 
 
 def test_workflow_events_bridge_to_session_bus_and_sse(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
-    from nz_coder.session_events import SessionEventBus, encode_sse
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
+    from nz_coder.protocol.session_events import SessionEventBus, encode_sse
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=2)
@@ -313,7 +313,7 @@ def test_workflow_events_bridge_to_session_bus_and_sse(tmp_path, monkeypatch):
 
 
 def test_sidecar_verifier_accepts_in_fresh_child_context(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
 
     calls = _install_fake_child(monkeypatch, tmp_path, verifier_verdicts=["accept"])
     manager = _manager(tmp_path, monkeypatch, max_tasks=2)
@@ -335,7 +335,7 @@ def test_sidecar_verifier_accepts_in_fresh_child_context(tmp_path, monkeypatch):
 
 
 def test_sidecar_revise_reanimates_synthesis_once_then_accepts(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
 
     calls = _install_fake_child(
         monkeypatch,
@@ -363,7 +363,7 @@ def test_sidecar_revise_reanimates_synthesis_once_then_accepts(tmp_path, monkeyp
 def test_token_budget_stops_before_next_agent_spawn(tmp_path, monkeypatch):
     import pytest
 
-    from nz_coder.runtime.workflow_runtime import WorkflowBudgetError, WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowBudgetError, WorkflowRuntime
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=3, concurrency=1)
@@ -398,7 +398,7 @@ def test_token_budget_stops_before_next_agent_spawn(tmp_path, monkeypatch):
 def test_workflow_abort_stops_active_child_and_emits_unique_terminal(tmp_path, monkeypatch):
     import threading
 
-    from nz_coder.runtime.workflow_runtime import WorkflowAbortError, WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowAbortError, WorkflowRuntime
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)
@@ -442,8 +442,8 @@ def test_workflow_abort_stops_active_child_and_emits_unique_terminal(tmp_path, m
 
 
 def test_workflow_records_bounded_idempotent_lineage_outcome(tmp_path, monkeypatch):
-    from nz_coder.runtime.lineage import SessionLineage
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.agent.lineage import SessionLineage
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)
@@ -475,7 +475,7 @@ def test_workflow_records_bounded_idempotent_lineage_outcome(tmp_path, monkeypat
 
 
 def test_manifest_preflight_enforces_declared_phases_caps_and_read_only():
-    from nz_coder.runtime.workflow_runtime import lint_workflow_plan
+    from nz_coder.runtime.workflows.workflow_runtime import lint_workflow_plan
 
     plan = {
         "manifest": {
@@ -509,7 +509,7 @@ def test_manifest_preflight_enforces_declared_phases_caps_and_read_only():
 
 
 def test_manifest_rejects_unsupported_pattern_before_spawn():
-    from nz_coder.runtime.workflow_runtime import lint_workflow_plan
+    from nz_coder.runtime.workflows.workflow_runtime import lint_workflow_plan
 
     plan = {
         "manifest": {
@@ -535,7 +535,7 @@ def test_manifest_rejects_unsupported_pattern_before_spawn():
 
 
 def test_managed_run_pause_gates_next_spawn_then_resume(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)
@@ -558,7 +558,7 @@ def test_managed_run_pause_gates_next_spawn_then_resume(tmp_path, monkeypatch):
 
 
 def test_managed_run_stop_releases_paused_spawn_as_abort(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowAbortError, WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowAbortError, WorkflowRuntime
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)
@@ -587,7 +587,7 @@ def test_managed_run_stop_releases_paused_spawn_as_abort(tmp_path, monkeypatch):
 
 
 def test_managed_run_stop_active_child_cannot_complete_workflow(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowAbortError, WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowAbortError, WorkflowRuntime
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)
@@ -624,7 +624,7 @@ def _capture_error(runtime, plan, errors):
 
 
 def test_artifact_log_cost_report_and_terminal_run_record(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflow_runtime import WorkflowRuntime
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
 
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)

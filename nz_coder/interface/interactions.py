@@ -34,6 +34,42 @@ class TerminalInteractionBridge:
             self._ask_workflow_approval(dict(summary)), default="cancel"
         )
 
+    async def ask_auto_permission(
+        self,
+        tool_name: str,
+        tool_input: dict,
+        details: dict,
+    ) -> str:
+        """Settle one classifier fallback directly on the CLI event loop."""
+        summary = format_tool_summary(tool_name, tool_input)
+        reason = str(details.get("reason") or "Classifier unavailable")[:500]
+        degraded = bool(details.get("degraded"))
+        degraded_notice = (
+            "Auto classifier is degraded; rules and human approval are active.\n"
+            if degraded
+            else ""
+        )
+        try:
+            result = await self._select(
+                title="Auto mode permission required",
+                text=(
+                    f"{summary}\nReason: {reason}\n"
+                    f"{degraded_notice}"
+                    "Choose a decision for this exact action. Esc rejects."
+                ),
+                values=[
+                    ("once", "Allow once"),
+                    (
+                        "always",
+                        "Always allow this exact action in this session",
+                    ),
+                    ("reject", "Reject"),
+                ],
+            )
+        except Exception:
+            return "reject"
+        return str(result) if result in {"once", "always", "reject"} else "reject"
+
     def _submit(self, coroutine, *, default):  # noqa: ANN001
         if threading.get_ident() == self.owner_thread or self.loop.is_closed():
             coroutine.close()
@@ -75,12 +111,13 @@ class TerminalInteractionBridge:
             multiple = bool(question.get("multiple"))
             result = await self._select(
                 title=str(question.get("header") or "Question"),
+                detail=str(question["question"]),
                 text=(
-                    f"{question['question']}\n"
+                    "PgUp/PgDn scroll details · "
                     + (
-                        "Type to filter · Space toggles choices · Enter submits · Esc dismisses"
+                        "Type to filter · Space toggles · Enter submits · Esc dismisses"
                         if multiple
-                        else "Type to filter or enter a custom answer · Enter selects · Esc dismisses"
+                        else "Type to filter/custom answer · Enter selects · Esc dismisses"
                     )
                 ),
                 values=values,
@@ -137,6 +174,11 @@ def bind_terminal_interactions(agent, terminal_input, renderer) -> TerminalInter
     agent.set_interaction_askers(
         question_asker=bridge.ask_question,
         permission_asker=bridge.ask_permission,
+        auto_permission_asker=(
+            bridge.ask_auto_permission
+            if bool(getattr(terminal_input, "interactive", False))
+            else None
+        ),
         workflow_approval_asker=bridge.ask_workflow_approval,
     )
     return bridge

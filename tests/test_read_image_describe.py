@@ -6,13 +6,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from nz_coder import config
-from nz_coder.attachments import make_image_attachment
-from nz_coder.message_schema import attach_message_identity
+from nz_coder.foundation import config
+from nz_coder.protocol.attachments import make_image_attachment
+from nz_coder.protocol.message_schema import attach_message_identity
 from nz_coder.providers.capabilities import ModelCapabilities
-from nz_coder.runtime.loop import AgentLoop
-from nz_coder.runtime.session_processor import SessionProcessor
-from nz_coder.runtime.tool_executor import ToolExecutionResult
+from nz_coder.runtime.execution.loop import AgentLoop
+from nz_coder.runtime.session.session_processor import SessionProcessor
+from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
 
 
 _PNG = b"\x89PNG\r\n\x1a\nread-image-describe"

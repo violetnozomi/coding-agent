@@ -10,9 +10,9 @@ from nz_coder.runtime.adapters.tool import tool_context_from_legacy_host
 from nz_coder.runtime.core.runner_context import RunnerExecutionContext
 from nz_coder.runtime.core.profiles import MAIN_PROFILE, profile_for_mode
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
-from nz_coder.runtime.message_runtime import LegacyMessageRuntime
-from nz_coder.runtime.planning_runtime import LegacyPlanningRuntime
-from nz_coder.runtime.snapshot_runtime import LegacySnapshotRuntime
+from nz_coder.runtime.conversation.message_runtime import LegacyMessageRuntime
+from nz_coder.runtime.agent.planning_runtime import LegacyPlanningRuntime
+from nz_coder.runtime.process.snapshot_runtime import LegacySnapshotRuntime
 from nz_coder.runtime.adapters.verification import verification_context_from_legacy_host
 
 
@@ -183,12 +183,68 @@ class _PolicyService:
         )
 
     async def verify_completion(self, messages, status, content):
-        return await self.services.verifier.verify(
+        reviewed_status = await self.services.verifier.verify(
             verification_context_from_legacy_host(self.host),
             messages,
             status,
             content,
         )
+        if reviewed_status not in {"completed", "completed_unverified"}:
+            return reviewed_status
+        state = getattr(self.host, "runtime_state", None)
+        ledger_data = getattr(state, "requirement_ledger", None)
+        if isinstance(ledger_data, dict) and ledger_data:
+            from nz_coder.runtime.verification.completion_gate import (
+                COMPLETION_GATE_REANIMATE_BUDGET,
+                append_completion_guidance,
+            )
+
+            decision, appended = append_completion_guidance(messages, state)
+            if not decision.ready:
+                if appended:
+                    self.host.tracer.log(
+                        "requirement_completion_blocked",
+                        missing_ids=list(decision.missing_ids),
+                        prompt_count=state.completion_gate_prompts,
+                    )
+                elif (
+                    int(getattr(state, "completion_gate_prompts", 0) or 0)
+                    >= COMPLETION_GATE_REANIMATE_BUDGET
+                ):
+                    self.host.tracer.log(
+                        "requirement_completion_budget_exhausted",
+                        missing_ids=list(decision.missing_ids),
+                        prompt_count=state.completion_gate_prompts,
+                    )
+                    self.host._persist_runtime_state(active=True)
+                    return "continue"
+                self.host._persist_runtime_state(active=True)
+                return "continue"
+        return reviewed_status
+
+    def observe_verification_contract(
+        self,
+        command: str,
+        output: str,
+        passed: bool,
+    ) -> None:
+        self.host.vm.observe_acceptance_contract(
+            command,
+            output,
+            passed=passed,
+        )
+        observe = getattr(
+            getattr(self.host, "runtime_state", None),
+            "observe_requirement_verification",
+            None,
+        )
+        if callable(observe):
+            observe(command, passed=passed, acceptance=True)
+
+    def verification_status(self) -> dict:
+        manager = getattr(self.host, "vm", None)
+        status = getattr(manager, "status", None)
+        return status() if callable(status) else {}
 
 
 class _TurnControlService:
@@ -202,6 +258,10 @@ class _TurnControlService:
     def drain_background_messages(self, messages):
         callback = getattr(self.host, "_drain_background_agent_messages", None)
         return callback(messages) if callable(callback) else None
+
+    async def idle_yield(self, messages):
+        callback = getattr(self.host, "_idle_yield_for_background_messages", None)
+        return bool(await callback(messages)) if callable(callback) else False
 
     def has_agent_call_stack(self):
         return bool(getattr(self.host, "_agent_call_stack", []))
@@ -261,7 +321,7 @@ def _call_hook(hooks, name: str, *args, **kwargs) -> None:
 
 
 def _lifecycle_owner(host, lifecycle):
-    from nz_coder.runtime.run_lifecycle import ProductionRunLifecycle
+    from nz_coder.runtime.execution.run_lifecycle import ProductionRunLifecycle
 
     if isinstance(lifecycle, ProductionRunLifecycle):
         return lifecycle_context_from_legacy_host(host)

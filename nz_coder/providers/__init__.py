@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.providers.anthropic import AnthropicProvider
 from nz_coder.providers.base import ModelProvider
 from nz_coder.providers.capabilities import (

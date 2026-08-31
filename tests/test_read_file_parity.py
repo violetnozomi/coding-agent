@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools import TOOL_SPECS, ToolOutput
 from nz_coder.tools.files import read_file
 from nz_coder.tools.read_support import warm_lsp

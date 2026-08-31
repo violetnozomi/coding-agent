@@ -5,8 +5,311 @@ import json
 from types import SimpleNamespace
 
 
+def test_tool_failure_diagnostic_hook_records_structured_recovery_facts():
+    from nz_coder.runtime.verification.hooks import ToolResultContext, tool_failure_diagnostic_hook
+
+    recorded = []
+    traces = []
+    diagnostic = (
+        "<test-failure-diagnostic>\n"
+        "primary_classification: subprocess_workspace_drift\n"
+        "supporting_classification: widespread_test_regression\n"
+        "repair_target: tests/test_cli.py\n"
+        "</test-failure-diagnostic>"
+    )
+    runtime_state = SimpleNamespace(
+        record_recovery_diagnostic=recorded.append,
+        primary_recovery_classification="subprocess_workspace_drift",
+        supporting_recovery_classifications=["widespread_test_regression"],
+        recovery_repair_targets=["tests/test_cli.py"],
+    )
+    loop = SimpleNamespace(
+        recovery=SimpleNamespace(
+            tool_failure_diagnostic=lambda _name, _output: diagnostic,
+        ),
+        runtime_state=runtime_state,
+        tracer=SimpleNamespace(
+            log=lambda event, **data: traces.append((event, data)),
+        ),
+    )
+    messages = []
+
+    tool_failure_diagnostic_hook(ToolResultContext(
+        loop=loop,
+        messages=messages,
+        result=SimpleNamespace(name="bash"),
+        output="failed",
+    ))
+
+    assert recorded == [diagnostic]
+    assert traces[-1][1]["primary"] == "subprocess_workspace_drift"
+    assert traces[-1][1]["repair_targets"] == ["tests/test_cli.py"]
+
+
+def test_tool_failure_hook_passes_contract_artifacts_to_real_recovery():
+    """The hook must connect RuntimeState artifacts to read failure recovery."""
+    from nz_coder.runtime.verification.recovery import RecoveryState
+    from nz_coder.runtime.verification.hooks import ToolResultContext, tool_failure_diagnostic_hook
+
+    recorded = []
+    runtime_state = SimpleNamespace(
+        task_contract={
+            "requirements": [{
+                "expected_artifacts": [
+                    "cron_engine/parser.py",
+                    "cron_engine/README.md",
+                ],
+            }],
+        },
+        record_recovery_diagnostic=recorded.append,
+        primary_recovery_classification="",
+        supporting_recovery_classifications=[],
+        recovery_repair_targets=[],
+    )
+    loop = SimpleNamespace(
+        recovery=RecoveryState(),
+        runtime_state=runtime_state,
+        tracer=SimpleNamespace(log=lambda *_args, **_kwargs: None),
+    )
+    messages = []
+
+    tool_failure_diagnostic_hook(ToolResultContext(
+        loop=loop,
+        messages=messages,
+        result=SimpleNamespace(
+            name="read_file",
+            tool_input={"path": "README.md"},
+        ),
+        output="Error: File not found: README.md",
+    ))
+
+    assert "cron_engine/README.md" in messages[-1]["content"]
+    assert recorded and "declared_artifact_path" in recorded[-1]
+
+
+def test_tool_failure_hook_skips_current_environment_blocker_diagnostic():
+    """An infrastructure failure must not inject source-repair instructions."""
+    from nz_coder.runtime.verification.hooks import ToolResultContext, tool_failure_diagnostic_hook
+
+    command = "python3 -m pytest tests/lint/unittest_lint.py -q"
+    traces = []
+
+    def unexpected_diagnostic(*_args, **_kwargs):
+        raise AssertionError("environment blockers do not need code-repair guidance")
+
+    loop = SimpleNamespace(
+        recovery=SimpleNamespace(tool_failure_diagnostic=unexpected_diagnostic),
+        runtime_state=SimpleNamespace(task_contract={}),
+        vm=SimpleNamespace(status=lambda: {
+            "verification_state": "blocked_environment",
+            "environment_blocker": {
+                "command": command,
+                "output": "ModuleNotFoundError: No module named 'astroid'",
+            },
+        }),
+        tracer=SimpleNamespace(
+            log=lambda event, **data: traces.append((event, data)),
+        ),
+    )
+    messages = []
+
+    tool_failure_diagnostic_hook(ToolResultContext(
+        loop=loop,
+        messages=messages,
+        result=SimpleNamespace(
+            name="bash",
+            tool_input={"command": command},
+        ),
+        output="Command exited with code 4\nModuleNotFoundError: No module named 'astroid'",
+    ))
+
+    assert messages == []
+    assert traces == [(
+        "tool_failure_diagnostic_skipped",
+        {"name": "bash", "reason": "verification_environment_blocker"},
+    )]
+
+
+def test_tool_failure_hook_recovers_from_detailed_blocker_output(tmp_path):
+    """The VM blocker excerpt must recover a locally available Django runner."""
+    from nz_coder.runtime.verification.recovery import RecoveryState
+    from nz_coder.runtime.verification.hooks import ToolResultContext, tool_failure_diagnostic_hook
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    command = "python3 tests/runtests.py auth_tests.test_migrations -v1"
+    blocker_output = "ModuleNotFoundError: No module named 'django'"
+    (tmp_path / "django").mkdir()
+    (tmp_path / "django" / "__init__.py").write_text("", encoding="utf-8")
+    runner = tmp_path / "tests" / "runtests.py"
+    runner.parent.mkdir()
+    runner.write_text("# Django native test runner\n", encoding="utf-8")
+    runtime_state = SimpleNamespace(
+        task_contract={},
+        primary_recovery_classification="",
+        supporting_recovery_classifications=[],
+        recovery_repair_targets=[],
+    )
+    loop = SimpleNamespace(
+        recovery=RecoveryState(),
+        runtime_state=runtime_state,
+        vm=SimpleNamespace(status=lambda: {
+            "verification_state": "blocked_environment",
+            "environment_blocker": {
+                "command": command,
+                "output": blocker_output,
+            },
+        }),
+        tracer=SimpleNamespace(log=lambda *_args, **_kwargs: None),
+    )
+    messages = []
+
+    with scoped_workdir(tmp_path):
+        tool_failure_diagnostic_hook(ToolResultContext(
+            loop=loop,
+            messages=messages,
+            result=SimpleNamespace(
+                name="bash",
+                tool_input={"command": command},
+            ),
+            output="Command exited with code 1",
+        ))
+
+    assert len(messages) == 1
+    assert (
+        "PYTHONPATH=. python3 tests/runtests.py "
+        "auth_tests.test_migrations -v1"
+    ) in messages[0]["content"]
+    assert "Inspect the implicated source file" not in messages[0]["content"]
+
+
+def test_tool_failure_hook_skips_policy_owned_rejection_diagnostic():
+    """A precise policy rejection must not be wrapped in generic recovery text."""
+    from nz_coder.runtime.verification.hooks import ToolResultContext, tool_failure_diagnostic_hook
+
+    traces = []
+
+    def unexpected_diagnostic(*_args, **_kwargs):
+        raise AssertionError("policy output already contains the required next action")
+
+    loop = SimpleNamespace(
+        recovery=SimpleNamespace(tool_failure_diagnostic=unexpected_diagnostic),
+        runtime_state=SimpleNamespace(task_contract={}),
+        tracer=SimpleNamespace(
+            log=lambda event, **data: traces.append((event, data)),
+        ),
+    )
+    messages = []
+
+    tool_failure_diagnostic_hook(ToolResultContext(
+        loop=loop,
+        messages=messages,
+        result=SimpleNamespace(
+            name="grep_search",
+            tool_input={"query": "needle"},
+            executed=False,
+            dispatch_failed=True,
+            permission_denied=False,
+            metadata={"guardrail": "implementation_phase"},
+        ),
+        output=(
+            "Denied: enough repository evidence has already been gathered; "
+            "make the first source edit now."
+        ),
+    ))
+
+    assert messages == []
+    assert traces == [(
+        "tool_failure_diagnostic_skipped",
+        {"name": "grep_search", "reason": "policy_owned_rejection"},
+    )]
+
+
+def test_retired_strict_terminal_marker_does_not_suppress_recovery_diagnostic():
+    """A retired investigation marker cannot act as a hidden policy rejection."""
+    from nz_coder.runtime.verification.hooks import ToolResultContext, tool_failure_diagnostic_hook
+
+    diagnostic = "Inspect the failed read and choose a corrected path."
+    calls = []
+    loop = SimpleNamespace(
+        recovery=SimpleNamespace(
+            tool_failure_diagnostic=lambda name, output, **kwargs: (
+                calls.append((name, output, kwargs)) or diagnostic
+            ),
+        ),
+        runtime_state=SimpleNamespace(
+            task_contract={},
+            primary_recovery_classification="",
+            supporting_recovery_classifications=[],
+            recovery_repair_targets=[],
+        ),
+        tracer=SimpleNamespace(log=lambda *_args, **_kwargs: None),
+    )
+    messages = []
+
+    tool_failure_diagnostic_hook(ToolResultContext(
+        loop=loop,
+        messages=messages,
+        result=SimpleNamespace(
+            name="grep_search",
+            tool_input={"query": "needle"},
+            permission_denied=False,
+            metadata={"strict_terminal_blocker": True},
+        ),
+        output="Error: search backend returned an incomplete result",
+    ))
+
+    assert calls == [(
+        "grep_search",
+        "Error: search backend returned an incomplete result",
+        {"tool_input": {"query": "needle"}},
+    )]
+    assert messages[-1]["content"] == diagnostic
+
+
+def test_tool_failure_hook_skips_actionable_strict_shell_rejection():
+    """Strict Bash guidance is already model-visible and must remain authoritative."""
+    from nz_coder.runtime.verification.hooks import ToolResultContext, tool_failure_diagnostic_hook
+
+    traces = []
+
+    def unexpected_diagnostic(*_args, **_kwargs):
+        raise AssertionError("strict Bash rejection does not need generic recovery")
+
+    loop = SimpleNamespace(
+        recovery=SimpleNamespace(tool_failure_diagnostic=unexpected_diagnostic),
+        runtime_state=SimpleNamespace(task_contract={}),
+        tracer=SimpleNamespace(
+            log=lambda event, **data: traces.append((event, data)),
+        ),
+    )
+    messages = []
+
+    tool_failure_diagnostic_hook(ToolResultContext(
+        loop=loop,
+        messages=messages,
+        result=SimpleNamespace(
+            name="bash",
+            tool_input={"command": "python -c 'print(1)'"},
+            executed=True,
+            dispatch_failed=True,
+            permission_denied=False,
+            metadata={},
+        ),
+        output=(
+            "Error: arbitrary Python execution is forbidden in SWE-bench strict "
+            "mode. Use repository tools or a direct narrow pytest command."
+        ),
+    ))
+
+    assert messages == []
+    assert traces == [(
+        "tool_failure_diagnostic_skipped",
+        {"name": "bash", "reason": "actionable_policy_output"},
+    )]
+
+
 def test_manual_compact_hook_uses_agent_bound_compaction():
-    from nz_coder.runtime.hooks import ToolBatchContext, manual_compact_hook
+    from nz_coder.runtime.verification.hooks import ToolBatchContext, manual_compact_hook
 
     calls = []
 
@@ -39,9 +342,38 @@ def test_manual_compact_hook_uses_agent_bound_compaction():
     assert notices == ["[manual compact]"]
 
 
+def test_todo_reminder_is_silent_when_runtime_contract_owns_progress(monkeypatch):
+    """The task contract is the sole progress ledger after admission."""
+    from nz_coder.runtime.verification import hooks
+
+    monkeypatch.setattr(
+        hooks,
+        "get_reminder",
+        lambda _rounds: "<reminder>duplicate plan update</reminder>",
+    )
+    loop = SimpleNamespace(
+        runtime_state=SimpleNamespace(contract_owns_progress=lambda: True),
+        rounds_without_todo=4,
+    )
+    messages = []
+
+    hooks.todo_reminder_hook(hooks.ToolBatchContext(
+        loop=loop,
+        messages=messages,
+        manual_compact=False,
+        used_todo=False,
+        on_text=None,
+        write_total=0,
+        write_denied=0,
+    ))
+
+    assert loop.rounds_without_todo == 0
+    assert messages == []
+
+
 def test_strict_generation_hook_accepts_requested_test_changes():
-    from nz_coder.runtime.hooks import StopHookContext, strict_generation_stop_hook
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.verification.hooks import StopHookContext, strict_generation_stop_hook
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     context = StopHookContext(
         transcript=(),
@@ -66,8 +398,8 @@ def test_strict_generation_hook_accepts_requested_test_changes():
 
 
 def test_strict_generation_hook_rejects_unrequested_test_changes():
-    from nz_coder.runtime.hooks import StopHookContext, strict_generation_stop_hook
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.verification.hooks import StopHookContext, strict_generation_stop_hook
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     context = StopHookContext(
         transcript=(),
@@ -92,8 +424,8 @@ def test_strict_generation_hook_rejects_unrequested_test_changes():
 
 
 def test_strict_generation_hook_surfaces_pending_targeted_evidence():
-    from nz_coder.runtime.hooks import StopHookContext, strict_generation_stop_hook
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.verification.hooks import StopHookContext, strict_generation_stop_hook
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
     context = StopHookContext(
         transcript=(),
@@ -122,6 +454,229 @@ def test_strict_generation_hook_surfaces_pending_targeted_evidence():
 
     assert decision.action == "reanimate"
     assert "pytest tests/test_api.py::test_retry" in decision.message
+
+
+def test_strict_generation_hook_requests_non_empty_targeted_evidence():
+    from nz_coder.runtime.verification.hooks import StopHookContext, strict_generation_stop_hook
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+
+    context = StopHookContext(
+        transcript=(),
+        last_assistant_text="done",
+        runtime_state={
+            "mutation_generation": 2,
+            "strict_generation_ready": False,
+            "verification": {
+                "verification_needed": True,
+                "verification_pipeline": {
+                    "stages": [{
+                        "name": "targeted",
+                        "required": True,
+                        "evidence_required": True,
+                        "status": "pending",
+                        "commands": [],
+                    }],
+                },
+            },
+        },
+    )
+
+    with scoped_runtime_overrides(strict_local_tools=True):
+        decision = strict_generation_stop_hook(context)
+
+    assert decision.action == "reanimate"
+    assert "direct narrow behavioral test" in decision.message
+    assert "at least one test" in decision.message
+
+
+def test_strict_generation_hook_allows_targeted_environment_blocker():
+    from nz_coder.runtime.verification.hooks import StopHookContext, strict_generation_stop_hook
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+
+    context = StopHookContext(
+        transcript=(),
+        last_assistant_text="done",
+        runtime_state={
+            "mutation_generation": 2,
+            "diff_generation": 2,
+            "has_diff": True,
+            "verification": {
+                "verification_needed": True,
+                "verification_state": "blocked_environment",
+                "environment_blocker": {
+                    "stage": "targeted",
+                    "command": "pytest tests/test_api.py::test_retry",
+                },
+            },
+        },
+    )
+
+    with scoped_runtime_overrides(strict_local_tools=True):
+        decision = strict_generation_stop_hook(context)
+
+    assert decision.action == "complete_unverified"
+
+
+def test_strict_generation_hook_recovers_local_django_import_blocker(tmp_path):
+    """A local package-path retry must run before terminal environment fallback."""
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.verification.hooks import StopHookContext, strict_generation_stop_hook
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    (tmp_path / "django").mkdir()
+    (tmp_path / "django" / "__init__.py").write_text("", encoding="utf-8")
+    runner = tmp_path / "tests" / "runtests.py"
+    runner.parent.mkdir()
+    runner.write_text("# Django native test runner\n", encoding="utf-8")
+    context = StopHookContext(
+        transcript=(),
+        last_assistant_text="done",
+        runtime_state={
+            "mutation_generation": 2,
+            "diff_generation": 2,
+            "has_diff": True,
+            "verification": {
+                "verification_needed": True,
+                "verification_state": "blocked_environment",
+                "environment_blocker": {
+                    "stage": "targeted",
+                    "command": (
+                        "python3 tests/runtests.py "
+                        "auth_tests.test_migrations -v1"
+                    ),
+                    "output": "ModuleNotFoundError: No module named 'django'",
+                },
+            },
+        },
+    )
+
+    with (
+        scoped_workdir(tmp_path),
+        scoped_runtime_overrides(strict_local_tools=True),
+    ):
+        decision = strict_generation_stop_hook(context)
+
+    assert decision.action == "reanimate"
+    assert (
+        "PYTHONPATH=. python3 tests/runtests.py "
+        "auth_tests.test_migrations -v1"
+    ) in decision.message
+
+
+def test_strict_generation_hook_recovers_django_parallel_runtime(tmp_path):
+    """A host unittest mismatch must retry the same Django scope serially."""
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.verification.hooks import StopHookContext, strict_generation_stop_hook
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    (tmp_path / "django").mkdir()
+    (tmp_path / "django" / "__init__.py").write_text("", encoding="utf-8")
+    runner = tmp_path / "tests" / "runtests.py"
+    runner.parent.mkdir()
+    runner.write_text("# Django native test runner\n", encoding="utf-8")
+    context = StopHookContext(
+        transcript=(),
+        last_assistant_text="done",
+        runtime_state={
+            "mutation_generation": 2,
+            "diff_generation": 2,
+            "has_diff": True,
+            "verification": {
+                "verification_needed": True,
+                "verification_state": "blocked_environment",
+                "environment_blocker": {
+                    "stage": "targeted",
+                    "command": (
+                        "PYTHONPATH=. python3 tests/runtests.py "
+                        "auth_tests.test_migrations -v1"
+                    ),
+                    "output": "RuntimeWarning: TestResult has no addDuration method",
+                },
+            },
+        },
+    )
+
+    with (
+        scoped_workdir(tmp_path),
+        scoped_runtime_overrides(strict_local_tools=True),
+    ):
+        decision = strict_generation_stop_hook(context)
+
+    assert decision.action == "reanimate"
+    assert (
+        "PYTHONPATH=. python3 tests/runtests.py "
+        "auth_tests.test_migrations -v1 --parallel 1"
+    ) in decision.message
+
+
+def test_strict_generation_hook_does_not_repeat_serial_django_retry(tmp_path):
+    """An already-serial recovery command cannot create a reanimation loop."""
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.verification.hooks import StopHookContext, strict_generation_stop_hook
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    (tmp_path / "django").mkdir()
+    (tmp_path / "django" / "__init__.py").write_text("", encoding="utf-8")
+    runner = tmp_path / "tests" / "runtests.py"
+    runner.parent.mkdir()
+    runner.write_text("# Django native test runner\n", encoding="utf-8")
+    context = StopHookContext(
+        transcript=(),
+        last_assistant_text="done",
+        runtime_state={
+            "mutation_generation": 2,
+            "diff_generation": 2,
+            "has_diff": True,
+            "verification": {
+                "verification_needed": True,
+                "verification_state": "blocked_environment",
+                "environment_blocker": {
+                    "stage": "targeted",
+                    "command": (
+                        "PYTHONPATH=. python3 tests/runtests.py "
+                        "auth_tests.test_migrations -v1 --parallel 1"
+                    ),
+                    "output": "RuntimeWarning: TestResult has no addDuration method",
+                },
+            },
+        },
+    )
+
+    with (
+        scoped_workdir(tmp_path),
+        scoped_runtime_overrides(strict_local_tools=True),
+    ):
+        decision = strict_generation_stop_hook(context)
+
+    assert decision.action == "complete_unverified"
+
+
+def test_strict_generation_hook_rejects_static_only_environment_blocker():
+    from nz_coder.runtime.verification.hooks import StopHookContext, strict_generation_stop_hook
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+
+    context = StopHookContext(
+        transcript=(),
+        last_assistant_text="done",
+        runtime_state={
+            "mutation_generation": 2,
+            "diff_generation": 2,
+            "has_diff": True,
+            "verification": {
+                "verification_needed": True,
+                "verification_state": "blocked_environment",
+                "environment_blocker": {
+                    "stage": "static",
+                    "command": "ruff check pkg/module.py",
+                },
+            },
+        },
+    )
+
+    with scoped_runtime_overrides(strict_local_tools=True):
+        decision = strict_generation_stop_hook(context)
+
+    assert decision.action == "reanimate"
 
 
 def _stub_loop(
@@ -163,7 +718,7 @@ def _stub_loop(
 
 
 def test_parse_hook_condition_matches_tool_and_runtime_context():
-    from nz_coder.runtime.hooks import HookContext, parse_hook_condition
+    from nz_coder.runtime.verification.hooks import HookContext, parse_hook_condition
 
     ctx = HookContext(
         loop=None,
@@ -187,8 +742,8 @@ def test_parse_hook_condition_matches_tool_and_runtime_context():
 
 
 def test_load_configured_hooks_from_settings(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.hooks import load_configured_hooks_from_settings
+    from nz_coder.foundation import config
+    from nz_coder.runtime.verification.hooks import load_configured_hooks_from_settings
 
     settings_dir = tmp_path / ".nz-coder"
     settings_dir.mkdir()
@@ -233,7 +788,7 @@ def test_load_configured_hooks_from_settings(tmp_path, monkeypatch):
 
 
 def test_base_context_tracks_requested_path_conflict_and_missing_tests():
-    from nz_coder.runtime.hooks import AgentHooks
+    from nz_coder.runtime.verification.hooks import AgentHooks
 
     loop = _stub_loop(
         requested_paths=["src/app.py", "tests/test_app.py"],
@@ -264,7 +819,7 @@ def test_base_context_tracks_requested_path_conflict_and_missing_tests():
 
 
 def test_default_hooks_finish_first_non_tool_response_like_infcode():
-    from nz_coder.runtime.hooks import build_default_hooks
+    from nz_coder.runtime.verification.hooks import build_default_hooks
 
     calls = []
 
@@ -291,8 +846,8 @@ def test_default_hooks_finish_first_non_tool_response_like_infcode():
 
 
 def test_stop_hook_reanimates_with_isolated_snapshot_and_bounded_context():
-    from nz_coder.message_schema import SYNTHETIC_USER_KEY
-    from nz_coder.runtime.hooks import AgentHooks
+    from nz_coder.protocol.message_schema import SYNTHETIC_USER_KEY
+    from nz_coder.runtime.verification.hooks import AgentHooks
 
     seen = []
 
@@ -319,7 +874,7 @@ def test_stop_hook_reanimates_with_isolated_snapshot_and_bounded_context():
 
 
 def test_stop_hook_abort_and_reanimate_budget_are_explicit():
-    from nz_coder.runtime.hooks import AgentHooks
+    from nz_coder.runtime.verification.hooks import AgentHooks
 
     loop = _stub_loop()
     messages = [{"role": "assistant", "content": "done"}]
@@ -341,7 +896,7 @@ def test_stop_hook_abort_and_reanimate_budget_are_explicit():
 
 
 def test_stop_hook_exception_and_invalid_shape_fail_open_with_trace():
-    from nz_coder.runtime.hooks import AgentHooks
+    from nz_coder.runtime.verification.hooks import AgentHooks
 
     loop = _stub_loop()
     events = []
@@ -366,8 +921,8 @@ def test_async_stop_hook_awaits_revise_and_preserves_snapshot_isolation():
     """Catches coroutine decisions being normalized before they are awaited."""
     import asyncio
 
-    from nz_coder.message_schema import SYNTHETIC_USER_KEY
-    from nz_coder.runtime.hooks import AgentHooks, StopHookDecision
+    from nz_coder.protocol.message_schema import SYNTHETIC_USER_KEY
+    from nz_coder.runtime.verification.hooks import AgentHooks, StopHookDecision
 
     seen = []
 
@@ -402,7 +957,7 @@ def test_async_stop_hook_exception_fails_open_to_later_consumer():
     """Catches a broken verifier preventing the deterministic next hook."""
     import asyncio
 
-    from nz_coder.runtime.hooks import AgentHooks
+    from nz_coder.runtime.verification.hooks import AgentHooks
 
     events = []
     loop = _stub_loop()
@@ -426,7 +981,7 @@ def test_async_stop_hook_exception_fails_open_to_later_consumer():
 
 
 def test_hook_error_policy_prompt_queues_fallback_message(monkeypatch):
-    from nz_coder.runtime.hooks import AgentHooks, ConfiguredHook, HookAction
+    from nz_coder.runtime.verification.hooks import AgentHooks, ConfiguredHook, HookAction
 
     def _raise(*args, **kwargs):
         raise RuntimeError("boom")
@@ -450,7 +1005,7 @@ def test_hook_error_policy_prompt_queues_fallback_message(monkeypatch):
 
 
 def test_pre_tool_hook_error_policy_reject_blocks_tool(monkeypatch):
-    from nz_coder.runtime.hooks import AgentHooks, ConfiguredHook, HookAction
+    from nz_coder.runtime.verification.hooks import AgentHooks, ConfiguredHook, HookAction
 
     def _raise(*args, **kwargs):
         raise RuntimeError("bad render")
@@ -484,8 +1039,8 @@ def test_pre_tool_hook_error_policy_reject_blocks_tool(monkeypatch):
 
 
 def test_hook_failure_is_written_to_trace(tmp_path, monkeypatch):
-    from nz_coder.runtime.hooks import AgentHooks, ConfiguredHook, HookAction
-    from nz_coder.trace import TraceRecorder
+    from nz_coder.runtime.verification.hooks import AgentHooks, ConfiguredHook, HookAction
+    from nz_coder.state.trace import TraceRecorder
 
     def _raise(*args, **kwargs):
         raise RuntimeError("bad render")

@@ -8,16 +8,16 @@ from rich.markup import escape
 from rich.table import Table
 
 from nz_coder.interface.commands.registry import Command, CommandContext, CommandRegistry
-from nz_coder.runtime.workflow_host import (
+from nz_coder.runtime.workflows.workflow_host import (
     build_workflow_approval_summary,
     workflow_approval_digest,
 )
-from nz_coder.runtime.workflow_resolver import resolve_workflow_capsule
-from nz_coder.runtime.workflow_run_store import (
+from nz_coder.runtime.workflows.workflow_resolver import resolve_workflow_capsule
+from nz_coder.runtime.workflows.workflow_run_store import (
     list_workflow_run_records,
     read_workflow_run_record,
 )
-from nz_coder.runtime.workflow_sdk import WorkflowHostSDK, WorkflowStartError
+from nz_coder.runtime.workflows.workflow_sdk import WorkflowHostSDK, WorkflowStartError
 
 
 def register_workflow_commands(registry: CommandRegistry) -> None:

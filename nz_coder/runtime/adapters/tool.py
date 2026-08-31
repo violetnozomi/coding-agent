@@ -9,7 +9,7 @@ from nz_coder.runtime.core.tool_context import (
     ToolPolicyContext,
     ToolProjectionContext,
 )
-from nz_coder.runtime.tool_observers import LegacyCodingToolObserver
+from nz_coder.runtime.tool_runtime.observers import LegacyCodingToolObserver
 
 
 def tool_context_from_legacy_host(
@@ -49,7 +49,7 @@ def tool_context_from_legacy_host(
             result.name,
             result.tool_input,
             file_path=host._infer_hook_file_path(result.tool_input),
-            output=result.output,
+            output=output,
             status="error" if result.dispatch_failed else "ok",
             is_write=result.is_write,
         )
@@ -202,7 +202,7 @@ def projection_context_from_legacy_host(
                 result.name,
                 result.tool_input,
                 file_path=host._infer_hook_file_path(result.tool_input),
-                output=result.output,
+                output=output,
                 status="error" if result.dispatch_failed else "ok",
                 is_write=result.is_write,
             )
@@ -225,6 +225,7 @@ def projection_context_from_legacy_host(
         stall_orchestrator=getattr(host, "stall_orchestrator", None),
         after_result=after_result,
         available_result_tokens=available_result_tokens,
+        runtime_state=getattr(host, "runtime_state", None),
     )
 
 
@@ -253,6 +254,6 @@ def _legacy_override(host, name: str):
     if not callable(candidate):
         return None
     function = getattr(candidate, "__func__", candidate)
-    if getattr(function, "__module__", "") == "nz_coder.runtime.loop":
+    if getattr(function, "__module__", "") == "nz_coder.runtime.execution.loop":
         return None
     return candidate

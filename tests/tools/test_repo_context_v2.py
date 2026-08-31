@@ -5,7 +5,7 @@ import json
 
 
 def test_repo_context_exposes_symbol_and_process_operations(tmp_path, monkeypatch) -> None:
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_context import repo_context
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)

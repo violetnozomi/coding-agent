@@ -83,4 +83,5 @@ register(
         },
     },
     handler=load_optional_tools,
+    plan_mode_allowed=True,
 )

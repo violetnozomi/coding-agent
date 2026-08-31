@@ -10,7 +10,7 @@ def _tool(call_id: str, name: str = "read_file") -> dict:
 
 def test_stall_verdict_is_non_blocking_and_consumed_by_the_next_tool():
     """Catches awaiting L2 on the triggering call or losing its later nudge."""
-    from nz_coder.runtime.stall_sidecar import StallSidecarOrchestrator
+    from nz_coder.runtime.verification.stall_sidecar import StallSidecarOrchestrator
 
     release = threading.Event()
 
@@ -35,7 +35,7 @@ def test_stall_verdict_is_non_blocking_and_consumed_by_the_next_tool():
 
 def test_stall_prompt_contains_bounded_third_person_tool_transcript():
     """Catches sending only the L1 envelope or allowing unbounded history."""
-    from nz_coder.runtime.stall_sidecar import StallSidecarOrchestrator
+    from nz_coder.runtime.verification.stall_sidecar import StallSidecarOrchestrator
 
     prompts: list[str] = []
     sidecar = StallSidecarOrchestrator(
@@ -59,7 +59,7 @@ def test_stall_prompt_contains_bounded_third_person_tool_transcript():
 
 def test_reset_discards_a_stale_async_verdict():
     """Catches a pre-compaction L2 completion arming the new transcript."""
-    from nz_coder.runtime.stall_sidecar import StallSidecarOrchestrator
+    from nz_coder.runtime.verification.stall_sidecar import StallSidecarOrchestrator
 
     release = threading.Event()
 
@@ -78,9 +78,32 @@ def test_reset_discards_a_stale_async_verdict():
     assert sidecar.transcript_size == 0
 
 
+def test_cancel_and_settle_signals_cancel_aware_provider_worker():
+    """A terminal run must not leave a Provider observer in the next run."""
+    from nz_coder.runtime.verification.stall_sidecar import StallSidecarOrchestrator
+
+    started = threading.Event()
+    cancelled = threading.Event()
+
+    def evaluate(_prompt: str, cancel_event: threading.Event) -> dict:
+        started.set()
+        assert cancel_event.wait(timeout=2)
+        cancelled.set()
+        return {"is_stuck": False, "trace": "cancelled"}
+
+    sidecar = StallSidecarOrchestrator(evaluate=evaluate)
+    for index in range(1, 4):
+        sidecar.record_tool_use(_tool(str(index)))
+
+    assert started.wait(timeout=1)
+    assert sidecar.cancel_and_settle(timeout=1)
+    assert cancelled.is_set()
+    assert sidecar.consume_pending_nudge() is None
+
+
 def test_sidecar_error_and_malformed_verdict_fail_open():
     """Catches L2 failures suppressing a valid main-agent tool call."""
-    from nz_coder.runtime.stall_sidecar import StallSidecarOrchestrator
+    from nz_coder.runtime.verification.stall_sidecar import StallSidecarOrchestrator
 
     events: list[dict] = []
     verdicts = iter((RuntimeError("offline"), {"is_stuck": "yes"}))
@@ -105,7 +128,7 @@ def test_sidecar_error_and_malformed_verdict_fail_open():
 
 def test_sidecar_timeout_fails_open_and_ignores_late_result():
     """Catches a hung L2 worker or a late verdict suppressing future work."""
-    from nz_coder.runtime.stall_sidecar import StallSidecarOrchestrator
+    from nz_coder.runtime.verification.stall_sidecar import StallSidecarOrchestrator
 
     release = threading.Event()
     events: list[dict] = []

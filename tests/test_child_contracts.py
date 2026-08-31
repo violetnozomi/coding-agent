@@ -5,7 +5,7 @@ import pytest
 
 
 def test_evidence_refs_fail_fast_on_unknown_prefix_and_empty_task():
-    from nz_coder.runtime.child_contracts import normalize_evidence_refs
+    from nz_coder.runtime.agent.child_contracts import normalize_evidence_refs
 
     with pytest.raises(ValueError, match="unsupported evidence ref"):
         normalize_evidence_refs(["baseline"])
@@ -14,7 +14,7 @@ def test_evidence_refs_fail_fast_on_unknown_prefix_and_empty_task():
 
 
 def test_evidence_briefing_resolves_file_finding_and_prior_task(tmp_path):
-    from nz_coder.runtime.child_contracts import build_evidence_briefing
+    from nz_coder.runtime.agent.child_contracts import build_evidence_briefing
 
     (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
     briefing = build_evidence_briefing(
@@ -32,7 +32,7 @@ def test_evidence_briefing_resolves_file_finding_and_prior_task(tmp_path):
 
 
 def test_evidence_file_path_cannot_escape_workspace(tmp_path):
-    from nz_coder.runtime.child_contracts import build_evidence_briefing
+    from nz_coder.runtime.agent.child_contracts import build_evidence_briefing
 
     with pytest.raises(ValueError, match="escapes workspace"):
         build_evidence_briefing(
@@ -43,7 +43,7 @@ def test_evidence_file_path_cannot_escape_workspace(tmp_path):
 
 
 def test_verification_contract_rejects_unsafe_paths_and_unknown_fields():
-    from nz_coder.runtime.child_contracts import normalize_verification_contract
+    from nz_coder.runtime.agent.child_contracts import normalize_verification_contract
 
     with pytest.raises(ValueError, match="unsafe path"):
         normalize_verification_contract({
@@ -54,7 +54,7 @@ def test_verification_contract_rejects_unsafe_paths_and_unknown_fields():
 
 
 def test_verification_evaluates_mutation_read_and_final_text_evidence():
-    from nz_coder.runtime.child_contracts import evaluate_child_verification
+    from nz_coder.runtime.agent.child_contracts import evaluate_child_verification
 
     state = {
         "changed_files": ["src/app.py"],
@@ -87,7 +87,7 @@ def test_verification_evaluates_mutation_read_and_final_text_evidence():
 
 
 def test_verification_rejects_preparatory_non_terminal_text():
-    from nz_coder.runtime.child_contracts import evaluate_child_verification
+    from nz_coder.runtime.agent.child_contracts import evaluate_child_verification
 
     result = evaluate_child_verification(
         {
@@ -104,7 +104,7 @@ def test_verification_rejects_preparatory_non_terminal_text():
 
 
 def test_verification_reads_evidence_from_session_transcript_not_task_state():
-    from nz_coder.runtime.child_contracts import evaluate_child_verification
+    from nz_coder.runtime.agent.child_contracts import evaluate_child_verification
 
     transcript = [{
         "role": "assistant",
@@ -131,7 +131,7 @@ def test_verification_reads_evidence_from_session_transcript_not_task_state():
 
 
 def test_presentation_excerpt_is_bounded_and_truthfully_labeled():
-    from nz_coder.runtime.child_contracts import presentation_excerpt
+    from nz_coder.runtime.agent.child_contracts import presentation_excerpt
 
     summary, kind = presentation_excerpt("word " * 500, max_chars=80)
 

@@ -24,9 +24,9 @@ from nz_coder.mcp import (
 )
 from nz_coder.tool_platform.permissioning.checker import PermissionChecker
 from nz_coder.tool_platform.permissioning.rules import PermissionRule
-from nz_coder.runtime.tool_executor import is_transactional_write_tool
+from nz_coder.runtime.execution.tool_executor import is_transactional_write_tool
 from nz_coder.permissions import PermissionManager
-from nz_coder.runtime.tool_executor import ToolExecutor
+from nz_coder.runtime.execution.tool_executor import ToolExecutor
 from nz_coder.tools import (
     dispatch,
     get_execution_mode,
@@ -103,6 +103,17 @@ def test_mcp_config_rejects_unsafe_or_ambiguous_values(tmp_path, raw, expected):
         load_mcp_server_configs(raw, workspace=tmp_path)
 
 
+@pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
+def test_mcp_client_rejects_invalid_timeout_before_spawn(tmp_path, timeout):
+    with pytest.raises(ValueError, match="timeout"):
+        MCPClient(
+            name="invalid",
+            command=(sys.executable, str(FIXTURE_SERVER)),
+            cwd=tmp_path,
+            startup_timeout_seconds=timeout,
+        )
+
+
 def test_mcp_client_initializes_lists_calls_times_out_and_closes(tmp_path):
     client = MCPClient(
         name="echo",
@@ -122,6 +133,9 @@ def test_mcp_client_initializes_lists_calls_times_out_and_closes(tmp_path):
     ]
     assert client.call_tool("echo", {"value": "hello"})["content"][0]["text"] == "echo:hello"
     assert client.call_tool("structured", {})["structuredContent"] == {"answer": 42}
+    with pytest.raises(MCPError, match="valid JSON"):
+        client.call_tool("echo", {"value": float("nan")})
+    assert client._pending == {}
     assert [item["name"] for item in client.list_prompts()] == ["review"]
     assert client.get_prompt("review", {"topic": "MCP"})["messages"][0][
         "content"
@@ -234,6 +248,33 @@ def test_mcp_runtime_exposes_scoped_tools_and_formats_untrusted_output(tmp_path)
         runtime.close()
 
     assert dispatch("mcp_echo_echo", {}) == "Error: Unknown tool 'mcp_echo_echo'"
+
+
+def test_tool_executor_resolves_one_dynamic_provider_generation():
+    """Permission and dispatch must use one immutable MCP binding snapshot."""
+    provider_calls = []
+
+    def provider():
+        provider_calls.append(len(provider_calls) + 1)
+        return [{
+            "name": "mcp_snapshot_read",
+            "description": "test",
+            "parameters": {"type": "object", "properties": {}},
+            "handler": lambda: "ok",
+            "execution": "read",
+            "side_effect": "reads-network",
+        }]
+
+    with scoped_dynamic_tool_provider(provider):
+        provider_calls.clear()  # Ignore eager scope validation.
+        result = ToolExecutor(PermissionManager("default")).execute_one({
+            "id": "snapshot-call",
+            "function": {"name": "mcp_snapshot_read", "arguments": "{}"},
+        }, 0)
+
+    assert result.executed is True
+    assert result.output == "ok"
+    assert provider_calls == [1]
 
 
 def test_mcp_image_and_resource_blob_become_tool_attachments(tmp_path):
@@ -438,6 +479,10 @@ def test_mcp_runtime_refreshes_tools_prompts_and_resources_on_notifications(
 def test_mcp_runtime_connect_disconnect_reconnect(tmp_path):
     runtime = MCPRuntime([_server_config(tmp_path)]).start()
     first_client = runtime.clients["echo"]
+    first_identities = {
+        binding["name"]: binding["binding_identity"]
+        for binding in runtime.tool_bindings()
+    }
     try:
         assert runtime.disconnect("echo").status == "disabled"
         assert runtime.tool_bindings() == []
@@ -447,10 +492,28 @@ def test_mcp_runtime_connect_disconnect_reconnect(tmp_path):
         assert runtime.connect("echo").status == "connected"
         second_client = runtime.clients["echo"]
         assert second_client is not first_client
-        assert len(runtime.tool_bindings()) == 4
+        second_bindings = runtime.tool_bindings()
+        second_identities = {
+            binding["name"]: binding["binding_identity"]
+            for binding in second_bindings
+        }
+        assert len(second_bindings) == 4
+        assert second_identities.keys() == first_identities.keys()
+        assert all(
+            second_identities[name] != first_identities[name]
+            for name in first_identities
+        )
 
         assert runtime.reconnect("echo").status == "connected"
         assert runtime.clients["echo"] is not second_client
+        third_identities = {
+            binding["name"]: binding["binding_identity"]
+            for binding in runtime.tool_bindings()
+        }
+        assert all(
+            third_identities[name] != second_identities[name]
+            for name in second_identities
+        )
         with pytest.raises(MCPError, match="Unknown MCP server"):
             runtime.connect("missing")
     finally:
@@ -870,7 +933,7 @@ def test_dynamic_tool_overlays_are_thread_local():
 
 
 def test_subagents_do_not_inherit_parent_mcp_tools():
-    from nz_coder.runtime.subagent import _subagent_tools
+    from nz_coder.runtime.agent.subagent import _subagent_tools
 
     with scoped_dynamic_tools(
         [{"name": "mcp_parent_private", "handler": lambda: "ok", "execution": "read"}]
@@ -900,8 +963,8 @@ def test_child_scope_clears_and_restores_parent_dynamic_tool_overlay():
 
 
 def test_agent_loop_reuses_mcp_runtime_until_agent_close(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime import loop as loop_module
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution import loop as loop_module
 
     events: list[str] = []
 

@@ -22,14 +22,14 @@ from nz_coder.http_service import (
     SessionManager,
 )
 from nz_coder.http_service.manager import build_http_agent
-from nz_coder.message_schema import SESSION_SUMMARY_KEY
-from nz_coder.memory import MemoryManager, current_memory_manager
+from nz_coder.protocol.message_schema import SESSION_SUMMARY_KEY
+from nz_coder.state.memory import MemoryManager, current_memory_manager
 from nz_coder.state.memory_control import MemoryControlPlane
-from nz_coder.runtime.workdir import current_workdir, scoped_workdir
-from nz_coder.runtime.process_service import workspace_process_service
-from nz_coder.sessions import load_session, save_session, session_runtime_dir
-from nz_coder.session_events import SessionEventBus, encode_sse
-from nz_coder.skills import current_skill_loader
+from nz_coder.runtime.process.workdir import current_workdir, scoped_workdir
+from nz_coder.runtime.process.process_service import workspace_process_service
+from nz_coder.state.sessions import load_session, save_session, session_runtime_dir
+from nz_coder.protocol.session_events import SessionEventBus, encode_sse
+from nz_coder.state.skills import current_skill_loader
 
 
 class FakeAgent:
@@ -208,7 +208,7 @@ def test_http_session_run_messages_and_sse_replay(local_service):
 
 
 def test_http_projects_agents_and_controls_runtime_owned_workflow(local_service):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
 
     client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
     created = client.create_session("default")
@@ -242,8 +242,8 @@ def test_http_projects_agents_and_controls_runtime_owned_workflow(local_service)
 def test_http_remote_workflow_prepare_and_start_require_exact_approval(
     local_service, monkeypatch
 ):
-    from nz_coder.runtime.agent_manager import BackgroundAgentManager
-    from nz_coder.runtime import workflow_resolver
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.workflows import workflow_resolver
 
     client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
     created = client.create_session("default")
@@ -276,7 +276,7 @@ def test_http_remote_workflow_prepare_and_start_require_exact_approval(
         return real_resolve(*args, **kwargs)
 
     monkeypatch.setattr(workflow_resolver, "resolve_workflow_capsule", counted_resolve)
-    monkeypatch.setattr("nz_coder.runtime.workflow_sdk.WorkflowHostSDK", SDK)
+    monkeypatch.setattr("nz_coder.runtime.workflows.workflow_sdk.WorkflowHostSDK", SDK)
     try:
         arguments = {"question": "Inspect routing", "max_agents": 2}
         prepared = client.prepare_workflow(
@@ -942,8 +942,8 @@ def test_http_session_busy_abort_and_delete_boundary(local_service):
 
 
 def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     first_delta = threading.Event()
     release_stream = threading.Event()
@@ -1009,7 +1009,11 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
     thread.start()
     client = NZCoderClient(service.base_url, service.token, timeout=10)
     try:
-        workspace_id = client.list_workspaces()[0]["id"]
+        workspace_id = next(
+            item["id"]
+            for item in client.list_workspaces()
+            if item["path"] == str(tmp_path)
+        )
         session_id = client.create_session("auto", workspace_id)["id"]
 
         client.run(session_id, "first")
@@ -1484,7 +1488,7 @@ def test_remote_session_delete_cleans_owned_processes(local_service):
 
 
 def test_remote_child_status_reads_existing_subagent_registry(local_service):
-    from nz_coder.runtime import subagent as subagent_module
+    from nz_coder.runtime.agent import subagent as subagent_module
 
     client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
     parent = client.create_session("default")
@@ -1522,8 +1526,8 @@ def test_remote_child_running_disconnect_then_completed_reconnect(
     monkeypatch,
 ):
     """A child remains daemon-owned while terminal clients come and go."""
-    from nz_coder import config
-    from nz_coder.runtime import subagent as subagent_module
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent import subagent as subagent_module
 
     class BlockingMessage:
         content = "child complete"
@@ -1887,6 +1891,8 @@ def test_http_service_rejects_non_loopback_and_short_token():
         SessionHTTPService(host="0.0.0.0", port=0, manager=manager)
     with pytest.raises(ValueError, match="at least 16"):
         SessionHTTPService(port=0, token="short", manager=manager)
+    with pytest.raises(ValueError, match="port"):
+        SessionHTTPService(port=True, manager=manager)
     with pytest.raises(ValueError, match="positive finite"):
         SessionManager(agent_factory=_fake_factory, interaction_timeout_seconds=0)
     with pytest.raises(ValueError, match="positive finite"):
@@ -1897,6 +1903,49 @@ def test_http_service_rejects_non_loopback_and_short_token():
         )
     with pytest.raises(ValueError, match="loopback"):
         NZCoderClient("http://example.test:4096", "test-token-1234567890")
+
+
+@pytest.mark.parametrize("heartbeat", [0, -1, float("inf"), float("nan")])
+def test_http_service_rejects_invalid_heartbeat(heartbeat):
+    manager = SessionManager(agent_factory=_fake_factory)
+    try:
+        with pytest.raises(ValueError, match="heartbeat"):
+            SessionHTTPService(
+                port=0,
+                manager=manager,
+                heartbeat_seconds=heartbeat,
+            )
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
+def test_http_client_rejects_invalid_transport_timeout(timeout):
+    with pytest.raises(ValueError, match="client timeout"):
+        NZCoderClient(
+            "http://127.0.0.1:4096",
+            "test-token-1234567890",
+            timeout=timeout,
+        )
+
+
+@pytest.mark.parametrize("timeout", [-1, True, float("inf"), float("nan")])
+def test_managed_session_rejects_invalid_wait_timeout(local_service, timeout):
+    session_id = local_service.manager.create()["id"]
+
+    with pytest.raises(ValueError, match="wait timeout"):
+        local_service.manager.get(session_id).wait(timeout)
+
+
+@pytest.mark.parametrize("timeout", [-1, True, float("inf"), float("nan")])
+def test_session_manager_rejects_invalid_close_timeout(timeout):
+    manager = SessionManager(agent_factory=_fake_factory)
+    try:
+        with pytest.raises(ValueError, match="close timeout"):
+            manager.close(timeout)
+        assert manager.create()["id"]
+    finally:
+        manager.close()
 
 
 def test_http_client_reports_validation_errors(local_service):
@@ -1926,6 +1975,21 @@ def test_http_client_reports_validation_errors(local_service):
         list(client.events("session", reconnect_attempts=True))
     with pytest.raises(ValueError, match="non-negative finite"):
         list(client.events("session", reconnect_delay=float("nan")))
+    with pytest.raises(ValueError, match="Out of range float"):
+        client._request("POST", "/session", {"permission_mode": float("nan")})
+
+    nonstandard = Request(
+        local_service.base_url + "/session",
+        data=b'{"permission_mode": NaN}',
+        headers={
+            "Authorization": f"Bearer {local_service.token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with pytest.raises(HTTPError) as nonstandard_error:
+        build_opener(ProxyHandler({})).open(nonstandard, timeout=2)
+    assert nonstandard_error.value.code == 400
 
 
 def test_http_workspace_registry_and_unknown_workspace(local_service):
@@ -2143,8 +2207,8 @@ def test_http_restore_marks_an_unsettled_accepted_run_as_interrupted(tmp_path):
 
 
 def test_http_restore_projects_typed_assistant_finish_and_error(tmp_path):
-    from nz_coder.message_schema import attach_message_identity, set_assistant_error
-    from nz_coder.runtime.session_processor import SessionProcessor
+    from nz_coder.protocol.message_schema import attach_message_identity, set_assistant_error
+    from nz_coder.runtime.session.session_processor import SessionProcessor
 
     workspace = tmp_path / "project"
     workspace.mkdir()
@@ -2202,8 +2266,8 @@ def test_http_restore_projects_typed_assistant_finish_and_error(tmp_path):
 
 
 def test_http_restore_terminates_durable_pending_question_parts(tmp_path):
-    from nz_coder.message_schema import attach_message_identity
-    from nz_coder.runtime.session_processor import SessionProcessor
+    from nz_coder.protocol.message_schema import attach_message_identity
+    from nz_coder.runtime.session.session_processor import SessionProcessor
 
     workspace = tmp_path / "project"
     workspace.mkdir()
@@ -2442,7 +2506,7 @@ def test_http_restore_skips_oversized_session_file(tmp_path, monkeypatch):
 
 def test_http_agent_prompt_uses_the_selected_workspace_state(tmp_path, monkeypatch):
     from nz_coder import loop as loop_module
-    from nz_coder import prompt as prompt_module
+    from nz_coder.runtime.conversation import prompt as prompt_module
 
     workspace = tmp_path / "project"
     skills_dir = workspace / ".nz-coder" / "skills" / "project-skill"
@@ -2483,6 +2547,7 @@ def test_http_agent_prompt_uses_the_selected_workspace_state(tmp_path, monkeypat
     assert captured["memory_manager"].memory_dir == workspace / ".nz-coder" / "memory"
     assert captured["skill_loader"]._project_dir == workspace / ".nz-coder" / "skills"
     assert captured["system_prompt"] == "workspace prompt"
+    assert not captured["kwargs"].get("auto_mode_classifier_enabled", False)
     assert captured["kwargs"]["event_bus"]._journal.path == (
         workspace
         / ".nz-coder"
@@ -2511,7 +2576,7 @@ def test_cli_main_dispatches_serve_subcommand(monkeypatch):
 
 
 def test_serve_main_passes_interaction_timeout_and_closes(monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.http_service import cli as service_cli
 
     captured = {}

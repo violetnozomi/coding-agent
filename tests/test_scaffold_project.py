@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 def test_scaffold_project_creates_fastapi_demo(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.project_creation.templates import scaffold_project
 
     old = config.WORKDIR

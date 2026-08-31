@@ -11,8 +11,8 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
-from nz_coder import config
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.foundation import config
+from nz_coder.runtime.process.workdir import current_workdir
 
 _MAX_CATALOG_BYTES = 2_000_000
 _CATALOG_CACHE: dict[Path, tuple[int, int, dict[str, Any]]] = {}
@@ -41,6 +41,49 @@ class ModelCapabilities:
     selected_variant: str | None = None
     variant_options_json: str = "{}"
     source: str = "fallback"
+
+
+def _validated_capability_snapshot(
+    capability: ModelCapabilities,
+) -> ModelCapabilities:
+    """Reject malformed adapter metadata before it reaches request policy."""
+    for name, minimum in (("context_tokens", 0), ("output_tokens", 1)):
+        value = getattr(capability, name)
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < minimum
+        ):
+            raise ValueError(
+                f"Model capability '{name}' must be an integer >= {minimum}"
+            )
+    for name in (
+        "supports_tools",
+        "supports_streaming",
+        "supports_reasoning",
+        "supports_image_input",
+        "supports_temperature",
+        "preserve_reasoning_content",
+    ):
+        if not isinstance(getattr(capability, name), bool):
+            raise ValueError(f"Model capability '{name}' must be boolean")
+    temperature = capability.default_temperature
+    if temperature is not None and (
+        isinstance(temperature, bool)
+        or not isinstance(temperature, (int, float))
+        or not math.isfinite(float(temperature))
+    ):
+        raise ValueError(
+            "Model capability 'default_temperature' must be finite or null"
+        )
+    if capability.max_tokens_parameter not in {
+        "max_tokens",
+        "max_completion_tokens",
+    }:
+        raise ValueError(
+            "Model capability 'max_tokens_parameter' is unsupported"
+        )
+    return capability
 
 
 @dataclass(frozen=True)
@@ -441,11 +484,13 @@ def capabilities_for_provider(provider: Any, model_id: str) -> ModelCapabilities
     if callable(resolver):
         value = resolver(model_id)
         if isinstance(value, ModelCapabilities):
-            return value
+            return _validated_capability_snapshot(value)
     value = getattr(provider, "model_capabilities", None)
     if isinstance(value, ModelCapabilities):
-        return value
-    return configured_model_capabilities(getattr(provider, "name", None), model_id)
+        return _validated_capability_snapshot(value)
+    return _validated_capability_snapshot(
+        configured_model_capabilities(getattr(provider, "name", None), model_id)
+    )
 
 
 def prepare_openai_request(
@@ -454,6 +499,19 @@ def prepare_openai_request(
 ) -> dict[str, Any]:
     """Normalize OpenAI-compatible request fields from declared capabilities."""
     request = dict(kwargs)
+    messages = request.get("messages")
+    if capabilities.preserve_reasoning_content and isinstance(messages, list):
+        request["messages"] = [
+            {
+                **message,
+                "reasoning_content": str(
+                    message.get("reasoning_content") or ""
+                ),
+            }
+            if isinstance(message, dict) and message.get("role") == "assistant"
+            else message
+            for message in messages
+        ]
     if not capabilities.supports_tools:
         request.pop("tools", None)
         request.pop("tool_choice", None)

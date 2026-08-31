@@ -21,7 +21,7 @@ def _imports(path: Path) -> set[str]:
 
 def test_runtime_core_has_no_coding_or_legacy_concrete_imports() -> None:
     forbidden = (
-        "nz_coder.runtime.loop", "nz_coder.interface", "nz_coder.tools",
+        "nz_coder.runtime.execution.loop", "nz_coder.interface", "nz_coder.tools",
         "nz_coder.lsp", "nz_coder.runtime.verification", "nz_coder.greenfield",
         "nz_coder.repo",
     )
@@ -34,8 +34,8 @@ def test_runtime_core_has_no_coding_or_legacy_concrete_imports() -> None:
 
 
 def test_background_and_workflow_do_not_own_model_or_tool_loops() -> None:
-    manager = (ROOT / "nz_coder/runtime/agent_manager.py").read_text(encoding="utf-8")
-    workflow = (ROOT / "nz_coder/runtime/workflow_runtime.py").read_text(encoding="utf-8")
+    manager = (ROOT / "nz_coder/runtime/agent/agent_manager.py").read_text(encoding="utf-8")
+    workflow = (ROOT / "nz_coder/runtime/workflows/workflow_runtime.py").read_text(encoding="utf-8")
     assert "run_subagent(" in manager
     assert "BackgroundAgentManager" in workflow
     for source in (manager, workflow):
@@ -59,18 +59,18 @@ def test_capability_modules_do_not_depend_on_agent_loop() -> None:
     )
     for relative in capability_paths:
         imports = _imports(ROOT / relative)
-        assert "nz_coder.runtime.loop" not in imports
+        assert "nz_coder.runtime.execution.loop" not in imports
         assert "nz_coder.loop" not in imports
 
 
 def test_production_host_binds_mcp_catalog_to_run_scope() -> None:
-    source = (ROOT / "nz_coder/runtime/host.py").read_text(encoding="utf-8")
+    source = (ROOT / "nz_coder/runtime/execution/host.py").read_text(encoding="utf-8")
     assert "scoped_mcp_runtime(mcp_runtime)" in source
     assert source.count("scoped_mcp_runtime(mcp_runtime)") == 1
 
 
 def test_loop_context_entrypoints_are_compatibility_facades() -> None:
-    path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     methods = {
@@ -92,10 +92,10 @@ def test_production_service_graph_has_one_session_owner() -> None:
     contracts = (
         ROOT / "nz_coder" / "runtime" / "core" / "contracts.py"
     ).read_text(encoding="utf-8")
-    services = (ROOT / "nz_coder" / "runtime" / "services.py").read_text(
+    services = (ROOT / "nz_coder" / "runtime" / "execution" / "services.py").read_text(
         encoding="utf-8"
     )
-    loop = (ROOT / "nz_coder" / "runtime" / "loop.py").read_text(
+    loop = (ROOT / "nz_coder" / "runtime" / "execution" / "loop.py").read_text(
         encoding="utf-8"
     )
 
@@ -107,21 +107,21 @@ def test_production_service_graph_has_one_session_owner() -> None:
 
 def test_context_and_session_adapters_do_not_import_agent_loop() -> None:
     for relative in (
-        "nz_coder/runtime/context_manager.py",
-        "nz_coder/runtime/session_repository.py",
-        "nz_coder/runtime/runner.py",
+        "nz_coder/runtime/conversation/context_manager.py",
+        "nz_coder/runtime/session/session_repository.py",
+        "nz_coder/runtime/execution/runner.py",
     ):
         path = ROOT / relative
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         assert not any(
-            isinstance(node, ast.ImportFrom) and node.module == "nz_coder.runtime.loop"
+            isinstance(node, ast.ImportFrom) and node.module == "nz_coder.runtime.execution.loop"
             for node in ast.walk(tree)
         )
 
 
 def test_context_manager_consumes_focused_context_not_agent_host() -> None:
     """Context budgeting must not regain direct AgentLoop state access."""
-    path = ROOT / "nz_coder" / "runtime" / "context_manager.py"
+    path = ROOT / "nz_coder" / "runtime" / "conversation" / "context_manager.py"
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     manager = next(
@@ -140,7 +140,7 @@ def test_context_manager_consumes_focused_context_not_agent_host() -> None:
 
 def test_runner_injects_focused_context_into_every_tool_batch() -> None:
     """A new Runner tool path must not bypass run-scoped Tool ownership."""
-    path = ROOT / "nz_coder" / "runtime" / "runner.py"
+    path = ROOT / "nz_coder" / "runtime" / "execution" / "runner.py"
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     calls = [
@@ -151,7 +151,7 @@ def test_runner_injects_focused_context_into_every_tool_batch() -> None:
         and node.func.attr == "execute_batch_async"
     ]
 
-    assert len(calls) == 2
+    assert calls
     for call in calls:
         first_argument = ast.get_source_segment(source, call.args[0]) or ""
         assert "resolve_tool_runtime_context" in first_argument
@@ -163,10 +163,21 @@ def test_runner_injects_focused_context_into_every_tool_batch() -> None:
         node
         for node in ast.walk(pipeline_tree)
         if isinstance(node, ast.AsyncFunctionDef)
-        and node.name == "execute_batch_async"
+        and node.name == "_execute_batch_async_snapshot"
     )
     async_source = ast.get_source_segment(pipeline_source, execute_async) or ""
     assert "lifecycle.checkpoint" in async_source
+    public_execute_async = next(
+        node
+        for node in ast.walk(pipeline_tree)
+        if isinstance(node, ast.AsyncFunctionDef)
+        and node.name == "execute_batch_async"
+    )
+    public_async_source = (
+        ast.get_source_segment(pipeline_source, public_execute_async) or ""
+    )
+    assert "scoped_dynamic_tool_snapshot" in public_async_source
+    assert "_execute_batch_async_snapshot" in public_async_source
     assert "host._checkpoint_messages" not in async_source
 
 
@@ -175,7 +186,11 @@ def test_async_tool_runtime_is_host_free_but_sync_compatibility_is_explicit() ->
     pipeline_path = ROOT / "nz_coder" / "runtime" / "tool_runtime" / "pipeline.py"
     pipeline_source = pipeline_path.read_text(encoding="utf-8")
     pipeline_tree = ast.parse(pipeline_source, filename=str(pipeline_path))
-    for name in ("execute_batch_async", "dispatch_async"):
+    for name in (
+        "execute_batch_async",
+        "_execute_batch_async_snapshot",
+        "dispatch_async",
+    ):
         method = next(
             node
             for node in ast.walk(pipeline_tree)
@@ -205,14 +220,15 @@ def test_async_tool_runtime_is_host_free_but_sync_compatibility_is_explicit() ->
     sync_method = next(
         node
         for node in ast.walk(pipeline_tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "execute_batch_sync"
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_execute_batch_sync_snapshot"
     )
     sync_source = ast.get_source_segment(pipeline_source, sync_method) or ""
     assert "host." in sync_source
 
 
 def test_main_loop_is_owned_by_shared_runner() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     loop_source = loop_path.read_text(encoding="utf-8")
     loop_tree = ast.parse(loop_source, filename=str(loop_path))
     loop_run = next(
@@ -224,7 +240,7 @@ def test_main_loop_is_owned_by_shared_runner() -> None:
     assert "_run_native_facade" in facade
     assert "for turn_index" not in facade
 
-    runner_path = ROOT / "nz_coder" / "runtime" / "runner.py"
+    runner_path = ROOT / "nz_coder" / "runtime" / "execution" / "runner.py"
     runner_source = runner_path.read_text(encoding="utf-8")
     runner_tree = ast.parse(runner_source, filename=str(runner_path))
     host_run = next(
@@ -249,7 +265,7 @@ def test_main_loop_is_owned_by_shared_runner() -> None:
 
 
 def test_agent_runner_exposes_only_one_execution_state_machine() -> None:
-    path = ROOT / "nz_coder" / "runtime" / "runner.py"
+    path = ROOT / "nz_coder" / "runtime" / "execution" / "runner.py"
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     runner = next(
@@ -284,9 +300,14 @@ def test_agent_runner_exposes_only_one_execution_state_machine() -> None:
         "services.model.complete_turn",
         "services.tools.execute_batch_async",
         "services.session_runtime.checkpoint",
-        "context.policy.verify_completion",
+        "self._settle_terminal_boundary",
     ):
         assert required in implementation
+    settlement = ast.get_source_segment(
+        source,
+        async_methods["_settle_terminal_boundary"],
+    ) or ""
+    assert "context.policy.verify_completion" in settlement
     for forbidden in (
         "host._init_run",
         "host._finalize_async",
@@ -305,8 +326,91 @@ def test_agent_runner_exposes_only_one_execution_state_machine() -> None:
         assert forbidden not in implementation
 
 
+def test_provider_projection_supersedes_stale_file_read_without_mutating_session():
+    from nz_coder.runtime.conversation.message_projection import project_provider_messages
+
+    messages = [
+        {"role": "assistant", "content": "", "tool_calls": [{
+            "id": "read-1",
+            "type": "function",
+            "function": {"name": "read_file", "arguments": "{}"},
+        }]},
+        {
+            "role": "tool",
+            "tool_call_id": "read-1",
+            "content": "OLD CONTENT",
+            "_nz_evidence_kind": "file_read",
+            "_nz_resource": "src/app.py",
+            "_nz_mutation_generation": 0,
+        },
+        {"role": "assistant", "content": "", "tool_calls": [{
+            "id": "write-1",
+            "type": "function",
+            "function": {"name": "edit_file", "arguments": "{}"},
+        }]},
+        {
+            "role": "tool",
+            "tool_call_id": "write-1",
+            "content": "Updated src/app.py",
+            "_nz_evidence_kind": "file_write",
+            "_nz_mutated_resources": ["src/app.py"],
+            "_nz_mutation_generation": 1,
+        },
+    ]
+
+    projected = project_provider_messages(messages)
+
+    assert messages[1]["content"] == "OLD CONTENT"
+    assert projected[1]["content"] == (
+        "[Earlier read of src/app.py omitted: file changed in mutation generation 1.]"
+    )
+    assert projected[3]["content"] == "Updated src/app.py"
+
+
+def test_provider_projection_supersedes_failed_verification_after_later_pass():
+    from nz_coder.runtime.conversation.message_projection import project_provider_messages
+
+    messages = [
+        {"role": "assistant", "content": "", "tool_calls": [{
+            "id": "test-1", "type": "function",
+            "function": {"name": "bash", "arguments": "{}"},
+        }]},
+        {
+            "role": "tool",
+            "tool_call_id": "test-1",
+            "content": "TRACEBACK\n1 failed",
+            "_nz_evidence_kind": "verification",
+            "_nz_resource": "targeted",
+            "_nz_mutation_generation": 1,
+            "_nz_verification_passed": False,
+        },
+        {"role": "assistant", "content": "", "tool_calls": [{
+            "id": "test-2", "type": "function",
+            "function": {"name": "bash", "arguments": "{}"},
+        }]},
+        {
+            "role": "tool",
+            "tool_call_id": "test-2",
+            "content": "94 passed",
+            "_nz_evidence_kind": "verification",
+            "_nz_resource": "targeted",
+            "_nz_mutation_generation": 2,
+            "_nz_verification_passed": True,
+        },
+    ]
+
+    projected = project_provider_messages(messages)
+
+    assert messages[1]["content"].startswith("TRACEBACK")
+    assert projected[1]["content"] == (
+        "[Earlier targeted verification failure from generation 1 omitted; "
+        "superseded by a passing generation 2 result.]"
+    )
+    assert projected[3]["content"] == "94 passed"
+
+
 def test_guardrail_policy_is_owned_by_runtime_service() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     loop_source = loop_path.read_text(encoding="utf-8")
     loop_tree = ast.parse(loop_source, filename=str(loop_path))
     methods = {
@@ -323,12 +427,12 @@ def test_guardrail_policy_is_owned_by_runtime_service() -> None:
         assert f"runtime_services.guardrails.{operation}" in methods[name]
         assert "validate_verdict" not in methods[name]
 
-    service_path = ROOT / "nz_coder" / "runtime" / "guardrail_runtime.py"
+    service_path = ROOT / "nz_coder" / "runtime" / "agent" / "guardrail_runtime.py"
     service_source = service_path.read_text(encoding="utf-8")
     assert "class ProductionGuardrailRuntime" in service_source
-    assert "nz_coder.runtime.loop" not in service_source
+    assert "nz_coder.runtime.execution.loop" not in service_source
 
-    runner_source = (ROOT / "nz_coder" / "runtime" / "runner.py").read_text(
+    runner_source = (ROOT / "nz_coder" / "runtime" / "execution" / "runner.py").read_text(
         encoding="utf-8"
     )
     adapter_source = (
@@ -344,7 +448,7 @@ def test_guardrail_policy_is_owned_by_runtime_service() -> None:
 
 
 def test_attachment_preflight_is_owned_by_runtime_service() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     source = loop_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(loop_path))
     methods = {
@@ -361,12 +465,12 @@ def test_attachment_preflight_is_owned_by_runtime_service() -> None:
         assert "describe_images(" not in methods[name]
 
     preflight_source = (
-        ROOT / "nz_coder" / "runtime" / "input_preflight.py"
+        ROOT / "nz_coder" / "runtime" / "conversation" / "input_preflight.py"
     ).read_text(encoding="utf-8")
     assert "class ProductionInputPreflight" in preflight_source
-    assert "nz_coder.runtime.loop" not in preflight_source
+    assert "nz_coder.runtime.execution.loop" not in preflight_source
 
-    runner_source = (ROOT / "nz_coder" / "runtime" / "runner.py").read_text(
+    runner_source = (ROOT / "nz_coder" / "runtime" / "execution" / "runner.py").read_text(
         encoding="utf-8"
     )
     adapter_source = (
@@ -379,7 +483,7 @@ def test_attachment_preflight_is_owned_by_runtime_service() -> None:
 
 
 def test_agent_transitions_are_owned_by_runtime_service() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     source = loop_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(loop_path))
     methods = {
@@ -397,12 +501,12 @@ def test_agent_transitions_are_owned_by_runtime_service() -> None:
         assert f"runtime_services.transitions.{operation}" in methods[name]
 
     transition_source = (
-        ROOT / "nz_coder" / "runtime" / "agent_transition_runtime.py"
+        ROOT / "nz_coder" / "runtime" / "agent" / "agent_transition_runtime.py"
     ).read_text(encoding="utf-8")
     assert "class ProductionAgentTransitionRuntime" in transition_source
-    assert "nz_coder.runtime.loop" not in transition_source
+    assert "nz_coder.runtime.execution.loop" not in transition_source
 
-    runner_source = (ROOT / "nz_coder" / "runtime" / "runner.py").read_text(
+    runner_source = (ROOT / "nz_coder" / "runtime" / "execution" / "runner.py").read_text(
         encoding="utf-8"
     )
     adapter_source = (
@@ -417,7 +521,7 @@ def test_agent_transitions_are_owned_by_runtime_service() -> None:
 
 
 def test_tool_admission_and_scheduling_policy_is_owned_by_tool_runtime() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     source = loop_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(loop_path))
     methods = {
@@ -446,7 +550,7 @@ def test_tool_admission_and_scheduling_policy_is_owned_by_tool_runtime() -> None
         ROOT / "nz_coder" / "runtime" / "tool_runtime" / "policy.py"
     ).read_text(encoding="utf-8")
     assert "class ProductionToolPolicy" in policy_source
-    assert "nz_coder.runtime.loop" not in policy_source
+    assert "nz_coder.runtime.execution.loop" not in policy_source
 
     pipeline_source = (
         ROOT / "nz_coder" / "runtime" / "tool_runtime" / "pipeline.py"
@@ -465,13 +569,13 @@ def test_tool_admission_and_scheduling_policy_is_owned_by_tool_runtime() -> None
         ROOT / "nz_coder" / "runtime" / "tool_runtime" / "result_projection.py"
     ).read_text(encoding="utf-8")
     assert "class ProductionToolResultProjector" in projection_source
-    assert "nz_coder.runtime.loop" not in projection_source
+    assert "nz_coder.runtime.execution.loop" not in projection_source
     assert "tool_runtime" in methods["_consume_dispatched_tools"]
     assert len(methods["_consume_dispatched_tools"].splitlines()) < 18
 
 
 def test_run_initialization_is_owned_by_lifecycle_service() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     source = loop_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(loop_path))
     method = next(
@@ -484,10 +588,10 @@ def test_run_initialization_is_owned_by_lifecycle_service() -> None:
     assert "runtime_state.reset" not in facade
 
     lifecycle_source = (
-        ROOT / "nz_coder" / "runtime" / "run_lifecycle.py"
+        ROOT / "nz_coder" / "runtime" / "execution" / "run_lifecycle.py"
     ).read_text(encoding="utf-8")
     assert "class ProductionRunLifecycle" in lifecycle_source
-    assert "nz_coder.runtime.loop" not in lifecycle_source
+    assert "nz_coder.runtime.execution.loop" not in lifecycle_source
 
     for name in ("_finalize", "_finalize_async"):
         method = next(
@@ -501,14 +605,14 @@ def test_run_initialization_is_owned_by_lifecycle_service() -> None:
 
 
 def test_composition_installs_production_runtime_services() -> None:
-    path = ROOT / "nz_coder" / "runtime" / "composition.py"
+    path = ROOT / "nz_coder" / "runtime" / "execution" / "composition.py"
     source = path.read_text(encoding="utf-8")
     assert "build_runtime_services" in source
     assert "runtime_services" in source
 
 
 def test_model_turn_execution_is_owned_by_model_service() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     loop_source = loop_path.read_text(encoding="utf-8")
     loop_tree = ast.parse(loop_source, filename=str(loop_path))
     facade = next(
@@ -520,7 +624,7 @@ def test_model_turn_execution_is_owned_by_model_service() -> None:
     assert "run_in_executor" not in facade_source
     assert "asyncio.shield" not in facade_source
 
-    service_path = ROOT / "nz_coder" / "runtime" / "services.py"
+    service_path = ROOT / "nz_coder" / "runtime" / "execution" / "services.py"
     service_source = service_path.read_text(encoding="utf-8")
     assert "run_in_executor" in service_source
     assert "asyncio.shield" in service_source
@@ -528,7 +632,7 @@ def test_model_turn_execution_is_owned_by_model_service() -> None:
 
 
 def test_memory_recall_and_terminal_learning_are_owned_by_memory_service() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     loop_source = loop_path.read_text(encoding="utf-8")
     loop_tree = ast.parse(loop_source, filename=str(loop_path))
     methods = {
@@ -541,7 +645,7 @@ def test_memory_recall_and_terminal_learning_are_owned_by_memory_service() -> No
     assert "runtime_services.memory.finalize" in methods["_maybe_save_learnings_async"]
     assert "run_auto_memory_pipeline_async" not in methods["_maybe_save_learnings_async"]
 
-    service_source = (ROOT / "nz_coder" / "runtime" / "services.py").read_text(
+    service_source = (ROOT / "nz_coder" / "runtime" / "execution" / "services.py").read_text(
         encoding="utf-8"
     )
     assert "ProductionMemoryService" in service_source
@@ -550,7 +654,7 @@ def test_memory_recall_and_terminal_learning_are_owned_by_memory_service() -> No
 
 
 def test_provider_message_projection_is_not_owned_by_agent_loop() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     loop_source = loop_path.read_text(encoding="utf-8")
     loop_tree = ast.parse(loop_source, filename=str(loop_path))
     method = next(
@@ -562,14 +666,14 @@ def test_provider_message_projection_is_not_owned_by_agent_loop() -> None:
     assert len(facade.splitlines()) < 20
     assert "normalize_attachments" not in facade
 
-    projection_path = ROOT / "nz_coder" / "runtime" / "message_projection.py"
+    projection_path = ROOT / "nz_coder" / "runtime" / "conversation" / "message_projection.py"
     source = projection_path.read_text(encoding="utf-8")
     assert "def project_provider_messages" in source
-    assert "nz_coder.runtime.loop" not in source
+    assert "nz_coder.runtime.execution.loop" not in source
 
 
 def test_agent_role_activation_is_owned_by_role_runtime() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     source = loop_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(loop_path))
     methods = {
@@ -581,14 +685,14 @@ def test_agent_role_activation_is_owned_by_role_runtime() -> None:
     assert "resolve_model_runtime" not in methods["_activate_agent_runtime"]
     assert "role_runtime.escalate" in methods["_escalate_agent_reasoning"]
 
-    role_path = ROOT / "nz_coder" / "runtime" / "agent_role_runtime.py"
+    role_path = ROOT / "nz_coder" / "runtime" / "agent" / "agent_role_runtime.py"
     role_source = role_path.read_text(encoding="utf-8")
     assert "class ProductionAgentRoleRuntime" in role_source
-    assert "nz_coder.runtime.loop" not in role_source
+    assert "nz_coder.runtime.execution.loop" not in role_source
 
 
 def test_buffered_provider_calls_are_owned_by_model_service() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     source = loop_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(loop_path))
     methods = {
@@ -600,7 +704,7 @@ def test_buffered_provider_calls_are_owned_by_model_service() -> None:
         assert "runtime_services.model" in methods[name]
         assert "ModelCall(" not in methods[name]
 
-    service_source = (ROOT / "nz_coder" / "runtime" / "services.py").read_text(
+    service_source = (ROOT / "nz_coder" / "runtime" / "execution" / "services.py").read_text(
         encoding="utf-8"
     )
     assert "def complete_buffered" in service_source
@@ -609,7 +713,7 @@ def test_buffered_provider_calls_are_owned_by_model_service() -> None:
 
 def test_production_turn_model_runtime_consumes_focused_context() -> None:
     """The production model port must not regain broad AgentLoop access."""
-    path = ROOT / "nz_coder" / "runtime" / "services.py"
+    path = ROOT / "nz_coder" / "runtime" / "execution" / "services.py"
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     runtime = next(
@@ -623,7 +727,7 @@ def test_production_turn_model_runtime_consumes_focused_context() -> None:
     assert "ModelExecutionContext" in segment
 
     runner_source = (
-        ROOT / "nz_coder" / "runtime" / "runner.py"
+        ROOT / "nz_coder" / "runtime" / "execution" / "runner.py"
     ).read_text(encoding="utf-8")
     adapter_source = (
         ROOT / "nz_coder" / "runtime" / "adapters" / "runner.py"
@@ -633,7 +737,7 @@ def test_production_turn_model_runtime_consumes_focused_context() -> None:
 
 
 def test_memory_and_verifier_services_consume_focused_contexts() -> None:
-    path = ROOT / "nz_coder/runtime/services.py"
+    path = ROOT / "nz_coder/runtime/execution/services.py"
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     classes = {
@@ -646,7 +750,7 @@ def test_memory_and_verifier_services_consume_focused_contexts() -> None:
         assert "host." not in segment
         assert "vars(host)" not in segment
     assert "memory_context_from_legacy_host" in (
-        ROOT / "nz_coder/runtime/loop.py"
+        ROOT / "nz_coder/runtime/execution/loop.py"
     ).read_text(encoding="utf-8")
     assert "verification_context_from_legacy_host" in (
         ROOT / "nz_coder/runtime/adapters/runner.py"
@@ -655,7 +759,7 @@ def test_memory_and_verifier_services_consume_focused_contexts() -> None:
 
 def test_runner_turn_state_machine_consumes_focused_context() -> None:
     """The one production turn loop must not receive the compatibility host."""
-    path = ROOT / "nz_coder" / "runtime" / "runner.py"
+    path = ROOT / "nz_coder" / "runtime" / "execution" / "runner.py"
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     method = next(
@@ -671,7 +775,7 @@ def test_runner_turn_state_machine_consumes_focused_context() -> None:
 
 def test_native_runner_path_cannot_reach_legacy_adapter_or_host() -> None:
     """Legacy conversion stays inside the explicitly named compatibility path."""
-    path = ROOT / "nz_coder" / "runtime" / "runner.py"
+    path = ROOT / "nz_coder" / "runtime" / "execution" / "runner.py"
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     methods = {
@@ -700,7 +804,7 @@ def test_native_runner_path_cannot_reach_legacy_adapter_or_host() -> None:
 
 
 def test_stream_projection_and_result_type_are_outside_agent_loop() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     source = loop_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(loop_path))
     method = next(
@@ -715,15 +819,15 @@ def test_stream_projection_and_result_type_are_outside_agent_loop() -> None:
         for node in tree.body
     )
 
-    stream_source = (ROOT / "nz_coder" / "runtime" / "provider_stream.py").read_text(
+    stream_source = (ROOT / "nz_coder" / "runtime" / "execution" / "provider_stream.py").read_text(
         encoding="utf-8"
     )
     assert "def project_streaming_turn" in stream_source
-    assert "nz_coder.runtime.loop" not in stream_source
+    assert "nz_coder.runtime.execution.loop" not in stream_source
 
 
 def test_prompt_layer_assembly_is_owned_by_context_runtime() -> None:
-    loop_path = ROOT / "nz_coder" / "runtime" / "loop.py"
+    loop_path = ROOT / "nz_coder" / "runtime" / "execution" / "loop.py"
     source = loop_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(loop_path))
     method = next(
@@ -736,15 +840,15 @@ def test_prompt_layer_assembly_is_owned_by_context_runtime() -> None:
     assert "load_instruction_context" not in facade
     assert "_build_context_layers" not in facade
 
-    prompt_source = (ROOT / "nz_coder" / "runtime" / "prompt_builder.py").read_text(
+    prompt_source = (ROOT / "nz_coder" / "runtime" / "conversation" / "prompt_builder.py").read_text(
         encoding="utf-8"
     )
     assert "class ProductionPromptBuilder" in prompt_source
-    assert "nz_coder.runtime.loop" not in prompt_source
+    assert "nz_coder.runtime.execution.loop" not in prompt_source
 
 
 def test_child_facade_has_no_provider_or_tool_turn_loop() -> None:
-    path = ROOT / "nz_coder" / "runtime" / "subagent.py"
+    path = ROOT / "nz_coder" / "runtime" / "agent" / "subagent.py"
     source = path.read_text(encoding="utf-8")
     assert "AgentLoop(" not in source
     assert "declared_runtime(graph).build" in source

@@ -10,6 +10,8 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 
+from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+
 _EVENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
@@ -39,9 +41,23 @@ class NZCoderClient:
             or parsed.fragment
         ):
             raise ValueError("NZCoderClient only accepts a loopback HTTP base URL")
+        if isinstance(timeout, bool):
+            raise ValueError("client timeout must be a positive finite number")
+        try:
+            request_timeout = float(timeout)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("client timeout must be a positive finite number") from exc
+        if (
+            not math.isfinite(request_timeout)
+            or request_timeout <= 0
+            or request_timeout > 600
+        ):
+            raise ValueError(
+                "client timeout must be a positive finite number no greater than 600 seconds"
+            )
         self.base_url = normalized
         self.token = token
-        self.timeout = timeout
+        self.timeout = request_timeout
         # This client is loopback-only. Environment HTTP proxies must never
         # receive the bearer token or intercept localhost traffic.
         self._opener = build_opener(ProxyHandler({}))
@@ -550,7 +566,10 @@ class NZCoderClient:
             line = raw_line.decode("utf-8").rstrip("\r\n")
             if not line:
                 if data_lines:
-                    yield json.loads("\n".join(data_lines)), frame_id
+                    yield json.loads(
+                        "\n".join(data_lines),
+                        parse_constant=reject_nonstandard_json_constant,
+                    ), frame_id
                 data_lines = []
                 frame_id = ""
                 continue
@@ -573,7 +592,11 @@ class NZCoderClient:
         data = None
         if body is not None:
             headers["Content-Type"] = "application/json"
-            data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            data = json.dumps(
+                body,
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode("utf-8")
         request = Request(
             self.base_url + path,
             data=data,
@@ -582,7 +605,10 @@ class NZCoderClient:
         )
         try:
             with self._opener.open(request, timeout=self.timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
+                return json.loads(
+                    response.read().decode("utf-8"),
+                    parse_constant=reject_nonstandard_json_constant,
+                )
         except HTTPError as exc:
             self._raise_http_error(exc)
 

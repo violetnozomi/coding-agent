@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from types import SimpleNamespace
 
 from nz_coder.providers.capabilities import ModelCapabilities
@@ -114,6 +115,77 @@ def test_buffered_success_normalizes_every_model_fact() -> None:
     assert request["_capabilities"].model_id == "logical"
 
 
+def test_buffered_finish_observation_includes_purpose_usage_and_duration() -> None:
+    provider = _Provider([_response()])
+    observed = []
+    gateway = ProductionModelGateway(
+        _runtime(provider),
+        observer=lambda name, payload: observed.append((name, payload)),
+    )
+
+    gateway.complete_sync(_call())
+
+    finish = [payload for name, payload in observed if name == "model_call_finish"]
+    assert len(finish) == 1
+    assert finish[0] == {
+        "provider_id": "fake",
+        "model_id": "logical",
+        "request_model_id": "wire",
+        "variant": None,
+        "purpose": "coding",
+        "status": "completed",
+        "attempt": 1,
+        "attempts": 1,
+        "finish_reason": "tool_calls",
+        "usage": {
+            "input": 100,
+            "output": 20,
+            "total": 135,
+            "reasoning": 5,
+            "cache_read": 10,
+            "cache_write": 0,
+        },
+        "duration_ms": finish[0]["duration_ms"],
+        "cost": 0.00015,
+        "cost_source": "registry",
+    }
+    assert finish[0]["duration_ms"] >= 0
+
+
+def test_gateway_observer_failure_never_masks_model_outcome() -> None:
+    """Tracing/telemetry is best effort and cannot become a Provider failure."""
+    provider = _Provider([_response()])
+
+    def broken_observer(_name, _payload):
+        raise RuntimeError("telemetry sink failed")
+
+    outcome = ProductionModelGateway(
+        _runtime(provider),
+        observer=broken_observer,
+    ).complete_sync(_call())
+
+    assert outcome.status is ModelCallStatus.COMPLETED
+    assert outcome.content == "done"
+
+
+def test_malformed_success_response_becomes_structured_aborted_outcome() -> None:
+    """A 2xx proxy response without choices must not escape the Gateway."""
+    provider = _Provider([SimpleNamespace(choices=[], usage=None)])
+    observed = []
+
+    outcome = ProductionModelGateway(
+        _runtime(provider),
+        observer=lambda name, payload: observed.append((name, payload)),
+    ).complete_sync(_call())
+
+    assert outcome.status is ModelCallStatus.ABORTED
+    assert outcome.retryable is False
+    assert "Malformed Provider response" in outcome.error
+    finishes = [payload for name, payload in observed if name == "model_call_finish"]
+    assert len(finishes) == 1
+    assert finishes[0]["status"] == "aborted"
+
+
 class _HTTPError(RuntimeError):
     def __init__(self, status_code: int, message: str, headers=None):
         super().__init__(message)
@@ -136,6 +208,62 @@ def test_ordinary_400_is_non_retryable_client_error() -> None:
     assert len(provider.calls) == 1
 
 
+def test_forced_tool_choice_rejection_retries_without_forcing() -> None:
+    """Mirror InfCodeX's judge fallback for reasoning-model gateways."""
+    provider = _Provider([
+        _HTTPError(400, "Thinking mode does not support this tool_choice"),
+        _response(),
+    ])
+    observed = []
+    call = ModelCall(
+        purpose=ModelCallPurpose.STALL_SIDECAR,
+        messages=[{"role": "user", "content": "judge"}],
+        tools=[{"type": "function", "function": {"name": "emit_verdict"}}],
+        tool_choice={
+            "type": "function",
+            "function": {"name": "emit_verdict"},
+        },
+        max_output_tokens=100,
+        timeout_seconds=1,
+    )
+
+    outcome = ProductionModelGateway(
+        _runtime(provider),
+        max_retries=0,
+        observer=lambda name, payload: observed.append((name, payload)),
+    ).complete_sync(call)
+
+    assert outcome.status is ModelCallStatus.COMPLETED
+    assert outcome.attempts == 2
+    assert provider.calls[0][1]["tool_choice"]["function"]["name"] == "emit_verdict"
+    assert "tool_choice" not in provider.calls[1][1]
+    assert provider.calls[1][1]["tools"] == list(call.tools)
+    assert any(name == "model_call_tool_choice_fallback" for name, _ in observed)
+
+
+def test_unrelated_forced_tool_choice_400_does_not_fallback() -> None:
+    provider = _Provider([
+        _HTTPError(400, "invalid request body"),
+        _response(),
+    ])
+    call = ModelCall(
+        purpose=ModelCallPurpose.STALL_SIDECAR,
+        messages=[{"role": "user", "content": "judge"}],
+        tools=[{"type": "function", "function": {"name": "emit_verdict"}}],
+        tool_choice={
+            "type": "function",
+            "function": {"name": "emit_verdict"},
+        },
+        max_output_tokens=100,
+        timeout_seconds=1,
+    )
+
+    outcome = ProductionModelGateway(_runtime(provider)).complete_sync(call)
+
+    assert outcome.status is ModelCallStatus.CLIENT_ERROR
+    assert len(provider.calls) == 1
+
+
 def test_retry_after_429_then_success_uses_injected_wait() -> None:
     waits = []
     provider = _Provider([
@@ -149,6 +277,29 @@ def test_retry_after_429_then_success_uses_injected_wait() -> None:
     assert outcome.status is ModelCallStatus.COMPLETED
     assert outcome.attempts == 2
     assert waits == [1.25]
+
+
+def test_retry_after_wait_is_cancelled_without_dispatching_again() -> None:
+    """Ctrl-C must interrupt a provider Retry-After sleep immediately."""
+    cancelled = threading.Event()
+    timer = threading.Timer(0.03, cancelled.set)
+    provider = _Provider([
+        _HTTPError(429, "rate limited", {"retry-after": "1"}),
+        _response(),
+    ])
+    timer.start()
+    started = time.monotonic()
+    try:
+        outcome = ProductionModelGateway(_runtime(provider)).complete_sync(
+            _call(),
+            cancel_event=cancelled,
+        )
+    finally:
+        timer.cancel()
+
+    assert outcome.status is ModelCallStatus.CANCELLED
+    assert time.monotonic() - started < 0.5
+    assert len(provider.calls) == 1
 
 
 def test_retry_exhaustion_is_aborted_and_retryable() -> None:

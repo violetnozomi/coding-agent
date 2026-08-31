@@ -23,9 +23,9 @@ from nz_coder.evaluation.core_capability import (
 )
 from nz_coder.evaluation.native_scenario import run_native_agent_scenario
 from nz_coder.intelligence.service import RepoIntelligenceService
-from nz_coder.runtime.model_result import LLMResult
+from nz_coder.runtime.conversation.model_result import LLMResult
 from nz_coder.runtime.core.request import RunOptions, RunRequest
-from nz_coder.runtime.runner import AgentRunner
+from nz_coder.runtime.execution.runner import AgentRunner
 
 
 @dataclass(frozen=True)
@@ -214,7 +214,7 @@ class ProductionAgentBehaviorDriver:
         self, task: BehaviorTask, workspace: Path, config: BehaviorBenchmarkConfig,
     ) -> BehaviorObservation:
         from nz_coder.runtime.core.profiles import MAIN_PROFILE
-        from nz_coder.runtime.execution_context import scoped_runtime_overrides
+        from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
         from nz_coder.sdk import AgentClient
         from nz_coder.tools import get_specs, scoped_dynamic_tools
         from nz_coder.tool_platform.catalog import ToolCatalog
@@ -1218,7 +1218,7 @@ def _retrieval_metrics(events: tuple[dict, ...], task: BehaviorTask) -> dict:
 
 
 def _verification_reliability_metrics(events: tuple[dict, ...]) -> dict:
-    from nz_coder.verification_planner import classify_verification_command
+    from nz_coder.intelligence.verification_planner import classify_verification_command
 
     has_execution_events = any(
         str(event.get("event") or event.get("type") or "") == "tool_call"
@@ -1625,7 +1625,7 @@ class AgentBehaviorBenchmark:
                 "", error=f"{type(exc).__name__}: {exc}",
             )
         if task.capability == "persistent-process":
-            from nz_coder.runtime.process_service import (
+            from nz_coder.runtime.process.process_service import (
                 close_workspace_process_service,
                 workspace_process_service,
             )

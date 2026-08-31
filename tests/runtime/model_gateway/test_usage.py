@@ -46,12 +46,38 @@ def test_anthropic_usage_preserves_explicit_uncached_and_cache_write() -> None:
     assert usage.cache_write_tokens == 10
 
 
+def test_usage_total_covers_all_mutually_exclusive_buckets() -> None:
+    """Anthropic cache buckets must count toward context pressure and totals."""
+    usage = normalize_usage({
+        "input_tokens": 31,
+        "uncached_input_tokens": 31,
+        "output_tokens": 12,
+        "total_tokens": 43,
+        "cache_read_input_tokens": 11,
+        "cache_creation_input_tokens": 4,
+    })
+
+    assert usage.total_tokens == 58
+
+
 def test_usage_rejects_negative_boolean_and_malformed_values() -> None:
     """Untrusted Provider accounting cannot create negative or boolean tokens."""
     usage = normalize_usage({
         "input_tokens": -10,
         "output_tokens": True,
         "total_tokens": "100",
+    })
+
+    assert usage == NormalizedUsage()
+
+
+def test_usage_rejects_non_finite_provider_token_values() -> None:
+    """NaN/Inf in an OpenAI-compatible usage body must not break completion."""
+    usage = normalize_usage({
+        "input_tokens": float("nan"),
+        "output_tokens": float("inf"),
+        "total_tokens": float("-inf"),
+        "cache_read_input_tokens": float("nan"),
     })
 
     assert usage == NormalizedUsage()

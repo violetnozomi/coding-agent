@@ -9,14 +9,15 @@ from pathlib import Path
 from typing import Callable, TextIO
 
 from nz_coder.interface.submission import build_user_submission, resolve_submission_files
+from nz_coder.foundation.json_safety import json_safe_value
 from nz_coder.providers.models import active_model_selection
-from nz_coder.runtime import prompt
+from nz_coder.runtime.conversation import prompt
 from nz_coder.runtime.core.events import RuntimeEvent
 from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.core.result import RunResult, RunStatus
 from nz_coder.sdk import AgentClient
-from nz_coder.skills import skill_loader
+from nz_coder.state.skills import skill_loader
 from nz_coder.state.sessions import create_session_id, load_session
 from nz_coder.state.workdir import scoped_workdir
 
@@ -35,7 +36,11 @@ class _ArgumentParser(argparse.ArgumentParser):
 
 def _parser() -> argparse.ArgumentParser:
     parser = _ArgumentParser(prog="nz-coder run", add_help=True)
-    parser.add_argument("prompt", nargs="*")
+    parser.add_argument(
+        "-p", "--prompt", dest="prompt_option", metavar="TEXT",
+        help="task prompt (positional text and stdin are also supported)",
+    )
+    parser.add_argument("prompt", nargs="*", help="task prompt as positional text")
     parser.add_argument("--cwd", default=".")
     parser.add_argument("--provider")
     parser.add_argument("--model")
@@ -85,7 +90,7 @@ def _session_id(args) -> str:
 
 def _result_record(result: RunResult) -> dict:
     usage = result.usage
-    return {
+    record = {
         "session_id": result.session_id,
         "status": result.status.value,
         "text": result.final_text,
@@ -100,6 +105,50 @@ def _result_record(result: RunResult) -> dict:
         "changed_files": list(result.metadata.get("changed_files", [])),
         "error": result.error or None,
     }
+    runtime = result.metadata.get("runtime")
+    if isinstance(runtime, dict) and int(runtime.get("provider_calls") or 0) > 0:
+        provider_record = {
+            "calls": int(runtime.get("provider_calls") or 0),
+            "attempts": int(runtime.get("provider_attempts") or 0),
+            "calls_by_purpose": dict(
+                runtime.get("provider_calls_by_purpose") or {}
+            ),
+            "usage_by_purpose": {
+                str(purpose): dict(values)
+                for purpose, values in (
+                    runtime.get("provider_usage_by_purpose") or {}
+                ).items()
+                if isinstance(values, dict)
+            },
+        }
+        calls_by_model = dict(runtime.get("provider_calls_by_model") or {})
+        usage_by_model = {
+                str(model): dict(values)
+                for model, values in (
+                    runtime.get("provider_usage_by_model") or {}
+                ).items()
+                if isinstance(values, dict)
+        }
+        if calls_by_model:
+            provider_record["calls_by_model"] = calls_by_model
+        if usage_by_model:
+            provider_record["usage_by_model"] = usage_by_model
+        if "provider_cost_usd" in runtime:
+            provider_record.update({
+                "cost_usd": float(runtime.get("provider_cost_usd") or 0.0),
+                "cost_usd_by_purpose": dict(
+                    runtime.get("provider_cost_usd_by_purpose") or {}
+                ),
+                "cost_usd_by_model": dict(
+                    runtime.get("provider_cost_usd_by_model") or {}
+                ),
+                "cost_unknown_calls": int(
+                    runtime.get("provider_cost_unknown_calls") or 0
+                ),
+                "cost_sources": dict(runtime.get("provider_cost_sources") or {}),
+            })
+        record["provider"] = provider_record
+    return record
 
 
 def _event_record(event: RuntimeEvent) -> dict:
@@ -123,15 +172,26 @@ def _provider_failure(error: BaseException) -> bool:
     ))
 
 
+def _json_record(value: object) -> str:
+    return json.dumps(
+        json_safe_value(value),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
 async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable) -> int:
     workspace = Path(args.cwd).resolve()
     if not workspace.is_dir():
         raise ValueError(f"Workspace is not a directory: {workspace}")
     if args.max_turns is not None and args.max_turns < 1:
         raise ValueError("--max-turns must be a positive integer")
+    option_prompt = str(args.prompt_option or "").strip()
     positional = " ".join(args.prompt).strip()
     piped = _stdin_text(stdin)
-    user_text = "\n\n".join(part for part in (positional, piped) if part)
+    user_text = "\n\n".join(
+        part for part in (option_prompt, positional, piped) if part
+    )
     if not user_text:
         raise ValueError("A prompt is required as an argument or on stdin")
 
@@ -190,7 +250,7 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
 
         def on_event(event: RuntimeEvent) -> None:
             if args.output == "jsonl":
-                stdout.write(json.dumps(_event_record(event), ensure_ascii=False) + "\n")
+                stdout.write(_json_record(_event_record(event)) + "\n")
                 stdout.flush()
 
         result = await client_factory().run(request, on_event=on_event)
@@ -199,9 +259,9 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
         if result.final_text:
             stdout.write(result.final_text.rstrip("\n") + "\n")
     elif args.output == "json":
-        stdout.write(json.dumps(record, ensure_ascii=False) + "\n")
+        stdout.write(_json_record(record) + "\n")
     else:
-        stdout.write(json.dumps({"type": "result", **record}, ensure_ascii=False) + "\n")
+        stdout.write(_json_record({"type": "result", **record}) + "\n")
     if result.status in {RunStatus.CANCELLED, RunStatus.INTERRUPTED}:
         return EXIT_CANCELLED
     return EXIT_SUCCESS if result.status is RunStatus.COMPLETED else EXIT_TASK_FAILED

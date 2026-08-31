@@ -18,9 +18,12 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import threading
+import tempfile
 import time
+import weakref
 from collections import Counter
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -28,14 +31,14 @@ from functools import wraps
 from pathlib import Path
 from typing import Optional
 
-from nz_coder import config
-from nz_coder.message_schema import (
+from nz_coder.foundation import config
+from nz_coder.protocol.message_schema import (
     MESSAGE_ID_KEY,
     SYNTHETIC_USER_KEY,
     is_synthetic_user_message,
 )
 from nz_coder.state.workdir import current_derived_path
-from nz_coder.async_utils import to_thread_settled
+from nz_coder.foundation.async_utils import to_thread_settled
 from nz_coder.tools import register
 
 MEMORY_TYPES = ("user", "project", "feedback", "reference")
@@ -78,6 +81,68 @@ AUTO_DREAM_REPORT_FILE = "AUTO_DREAM.md"
 AUTO_DREAM_MERGE_THRESHOLD = 0.66
 AUTO_MEMORY_LOCK = threading.Lock()
 AUTO_DREAM_LOCK = threading.Lock()
+
+
+class _MemoryPipelineCancelled(RuntimeError):
+    """Internal cooperative stop that must not advance extraction state."""
+
+
+def _finite_nonnegative_float(
+    value: object,
+    *,
+    default: float | None = 0.0,
+) -> float | None:
+    """Normalize one untrusted persisted metric without accepting NaN/Inf."""
+    if isinstance(value, bool):
+        return default
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    if not math.isfinite(normalized) or normalized < 0:
+        return default
+    return normalized
+
+
+def _nonnegative_int(value: object, *, default: int = 0) -> int:
+    """Normalize one persisted counter without truncating fractional values."""
+    if isinstance(value, bool):
+        return default
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    if (
+        not math.isfinite(normalized)
+        or normalized < 0
+        or not normalized.is_integer()
+    ):
+        return default
+    return int(normalized)
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Durably replace one memory artifact without exposing partial text."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temporary_path = Path(temporary)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary_path.replace(path)
+    except BaseException:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def _synchronized(method):
@@ -175,18 +240,34 @@ class MemoryManager:
         for md in sorted(self.memory_dir.glob("*.md")):
             if md.name == "MEMORY.md":
                 continue
-            parsed = self._parse_frontmatter(md.read_text(encoding="utf-8"))
-            if parsed:
+            try:
+                parsed = self._parse_frontmatter(md.read_text(encoding="utf-8"))
+                if not parsed:
+                    continue
                 name = parsed.get("name", md.stem)
+                created_at = _finite_nonnegative_float(
+                    parsed.get("created_at", 0.0),
+                    default=None,
+                )
+                last_accessed = _finite_nonnegative_float(
+                    parsed.get("last_accessed", 0.0),
+                    default=None,
+                )
+                if created_at is None or last_accessed is None:
+                    raise ValueError("memory timestamps must be finite")
                 self.memories[name] = {
                     "description": parsed.get("description", ""),
                     "type": parsed.get("type", "project"),
                     "content": parsed.get("content", ""),
-                    "created_at": float(parsed.get("created_at", 0.0)),
-                    "last_accessed": float(parsed.get("last_accessed", 0.0)),
-                    "access_count": int(parsed.get("access_count", 0)),
+                    "created_at": created_at,
+                    "last_accessed": last_accessed,
+                    "access_count": _nonnegative_int(
+                        parsed.get("access_count", 0)
+                    ),
                     "file": md.name,
                 }
+            except (OSError, TypeError, ValueError):
+                continue
 
     def _load_store_memories(self) -> None:
         self.store.connect()
@@ -216,8 +297,16 @@ class MemoryManager:
             if not parsed:
                 continue
             name = parsed.get("name", md.stem)
-            created_at = float(parsed.get("created_at", 0.0) or 0.0)
-            last_accessed = float(parsed.get("last_accessed", 0.0) or 0.0)
+            created_at = _finite_nonnegative_float(
+                parsed.get("created_at", 0.0),
+                default=None,
+            )
+            last_accessed = _finite_nonnegative_float(
+                parsed.get("last_accessed", 0.0),
+                default=None,
+            )
+            if created_at is None or last_accessed is None:
+                continue
             self.store.upsert({
                 "id": self._safe_name(name),
                 "name": name,
@@ -227,7 +316,7 @@ class MemoryManager:
                 "created": created_at or None,
                 "updated": last_accessed or created_at or None,
                 "last_accessed": last_accessed or created_at or None,
-                "access_count": int(parsed.get("access_count", 0) or 0),
+                "access_count": _nonnegative_int(parsed.get("access_count", 0)),
             })
 
     def _to_public(self, rec: dict) -> dict:
@@ -237,9 +326,11 @@ class MemoryManager:
             "description": rec.get("description", "") or "",
             "type": rec.get("type", "project") or "project",
             "content": rec.get("content", "") or "",
-            "created_at": float(rec.get("created") or 0.0),
-            "last_accessed": float(rec.get("last_accessed") or 0.0),
-            "access_count": int(rec.get("access_count") or 0),
+            "created_at": _finite_nonnegative_float(rec.get("created")) or 0.0,
+            "last_accessed": (
+                _finite_nonnegative_float(rec.get("last_accessed")) or 0.0
+            ),
+            "access_count": _nonnegative_int(rec.get("access_count")),
             "file": f"{self._safe_name(name)}.md",
         }
 
@@ -324,6 +415,9 @@ class MemoryManager:
         max_chars: int = 3000,
         rerank_client=None,
         model: str | None = None,
+        rerank_provider=None,
+        rerank_capabilities=None,
+        rerank_observer=None,
     ) -> str:
         if not self.has_memories():
             return ""
@@ -335,7 +429,16 @@ class MemoryManager:
         if query and remaining_slots:
             candidates = self.recall(query, top_k=max(remaining_slots * 3, remaining_slots))
             candidates = [item for item in candidates if item.get("type") != "user"]
-            candidates = rerank_memories(query, candidates, rerank_client, model, remaining_slots)
+            candidates = rerank_memories(
+                query,
+                candidates,
+                rerank_client,
+                model,
+                remaining_slots,
+                provider=rerank_provider,
+                capabilities=rerank_capabilities,
+                observer=rerank_observer,
+            )
             items = user_items + candidates[:remaining_slots]
         elif remaining_slots:
             sorted_mems = sorted(
@@ -383,6 +486,10 @@ class MemoryManager:
 
     @_synchronized
     def save(self, name: str, description: str, mem_type: str, content: str) -> str:
+        if "\n" in str(name) or "\r" in str(name):
+            return "Error: memory name must be a single line"
+        if "\n" in str(description) or "\r" in str(description):
+            return "Error: memory description must be a single line"
         if mem_type not in MEMORY_TYPES:
             return f"Error: type must be one of {MEMORY_TYPES}"
         safe_name = self._safe_name(name)
@@ -493,7 +600,7 @@ class MemoryManager:
             f"access_count: {mem['access_count']}\n"
             f"---\n{mem['content']}\n"
         )
-        (self.memory_dir / fname).write_text(frontmatter, encoding="utf-8")
+        _atomic_write_text(self.memory_dir / fname, frontmatter)
 
     def _find_merge_target(
         self,
@@ -731,7 +838,7 @@ class MemoryManager:
                 f"access_count: {mem['access_count']}\n"
                 f"---\n{mem['content']}\n"
             )
-            fp.write_text(frontmatter, encoding="utf-8")
+            _atomic_write_text(fp, frontmatter)
 
     def _rebuild_index(self) -> None:
         self.memory_dir.mkdir(parents=True, exist_ok=True)
@@ -767,7 +874,7 @@ class MemoryManager:
             )
 
         index_path = self.memory_dir / "MEMORY.md"
-        index_path.write_text(content, encoding="utf-8")
+        _atomic_write_text(index_path, content)
 
     def _write_auto_dream_report(self, report: dict) -> None:
         self.memory_dir.mkdir(parents=True, exist_ok=True)
@@ -801,7 +908,10 @@ class MemoryManager:
             lines.append("")
         if not merged and not deleted and not staled:
             lines.extend(["## Summary", "- No changes were needed.", ""])
-        (self.memory_dir / AUTO_DREAM_REPORT_FILE).write_text("\n".join(lines), encoding="utf-8")
+        _atomic_write_text(
+            self.memory_dir / AUTO_DREAM_REPORT_FILE,
+            "\n".join(lines),
+        )
 
 
     def _parse_frontmatter(self, text: str) -> Optional[dict]:
@@ -825,6 +935,11 @@ def extract_session_learnings(
     messages: list[dict],
     client=None,
     model: str | None = None,
+    *,
+    provider=None,
+    capabilities=None,
+    observer=None,
+    cancel_event: threading.Event | None = None,
 ) -> list[dict]:
     """从对话历史中提取值得跨 session 保存的经验。
 
@@ -833,7 +948,15 @@ def extract_session_learnings(
     """
     candidates = _extract_rule_based_learnings(messages)
     if client is not None and model:
-        candidates.extend(_extract_llm_session_learnings(messages, client, model))
+        candidates.extend(_extract_llm_session_learnings(
+            messages,
+            client,
+            model,
+            provider=provider,
+            capabilities=capabilities,
+            observer=observer,
+            cancel_event=cancel_event,
+        ))
     return _dedupe_learning_candidates(candidates)
 
 
@@ -912,7 +1035,16 @@ def _extract_rule_based_learnings(messages: list[dict]) -> list[dict]:
     return candidates
 
 
-def _extract_llm_session_learnings(messages: list[dict], client, model: str) -> list[dict]:
+def _extract_llm_session_learnings(
+    messages: list[dict],
+    client,
+    model: str,
+    *,
+    provider=None,
+    capabilities=None,
+    observer=None,
+    cancel_event: threading.Event | None = None,
+) -> list[dict]:
     """用 LLM 从最近对话中提取结构化长期记忆候选。"""
     excerpt = _conversation_excerpt(messages)
     if not excerpt:
@@ -938,9 +1070,15 @@ def _extract_llm_session_learnings(messages: list[dict], client, model: str) -> 
             messages=[{"role": "user", "content": prompt}],
             max_tokens=800,
             response_format={"type": "json_object"},
+            provider=provider,
+            capabilities=capabilities,
+            observer=observer,
+            cancel_event=cancel_event,
         )
         raw = resp
         data = _parse_json_list(raw)
+    except _MemoryPipelineCancelled:
+        raise
     except Exception:
         return []
 
@@ -987,14 +1125,17 @@ def _dedupe_learning_candidates(candidates: list[dict]) -> list[dict]:
 
 def _read_json_file(path: Path) -> dict:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def _write_json_file(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    _atomic_write_text(
+        path,
+        json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False),
+    )
 
 
 def _filter_auto_memory_messages(messages: list[dict]) -> list[dict]:
@@ -1060,13 +1201,19 @@ def _canonicalize_learning_candidate(item: dict) -> dict | None:
         "description": description,
         "type": mem_type,
         "content": content,
-        "confidence": min(1.0, max(0.0, float(item.get("confidence", 0.75) or 0.0))),
+        "confidence": min(
+            1.0,
+            _finite_nonnegative_float(
+                item.get("confidence", 0.75),
+                default=0.0,
+            ) or 0.0,
+        ),
         "reason": _clean_one_line(str(item.get("reason", "automatic extraction")))[:300],
     }
 
 
 def _current_session_ids(session_id: str | None = None) -> list[str]:
-    from nz_coder.sessions import list_session_ids
+    from nz_coder.state.sessions import list_session_ids
 
     ids = set(list_session_ids())
     if session_id:
@@ -1088,7 +1235,9 @@ def maybe_run_auto_dream(session_id: str | None = None, *, tracer=None) -> dict:
         new_ids = sorted(set(current_ids) - previous_ids)
         min_hours = max(1, int(getattr(config, "MEMORY_AUTO_DREAM_MIN_HOURS", 24) or 24))
         min_sessions = max(1, int(getattr(config, "MEMORY_AUTO_DREAM_MIN_NEW_SESSIONS", 5) or 5))
-        last_run_at = float(state.get("last_run_at", 0.0) or 0.0)
+        last_run_at = _finite_nonnegative_float(
+            state.get("last_run_at"),
+        ) or 0.0
         if last_run_at and now - last_run_at < min_hours * 3600:
             return {
                 "status": "skipped",
@@ -1188,13 +1337,17 @@ def run_auto_memory_pipeline(
     client=None,
     model: str | None = None,
     tracer=None,
+    provider=None,
+    capabilities=None,
+    observer=None,
+    cancel_event: threading.Event | None = None,
 ) -> dict:
     if not getattr(config, "MEMORY_AUTO_EXTRACT", True):
         return {"status": "disabled", "reason": "feature_flag"}
     if not AUTO_MEMORY_LOCK.acquire(blocking=False):
         return {"status": "busy", "reason": "lock_held"}
     try:
-        from nz_coder.sessions import session_memory_state_path
+        from nz_coder.state.sessions import session_memory_state_path
 
         state_path = session_memory_state_path(session_id)
         state = _read_json_file(state_path)
@@ -1213,7 +1366,7 @@ def run_auto_memory_pipeline(
         else:
             # Backward-compatible migration from the old count-only cursor.
             last_count = min(
-                max(int(state.get("last_message_count", 0) or 0), 0),
+                _nonnegative_int(state.get("last_message_count")),
                 len(snapshots),
             )
             window = snapshots[last_count:]
@@ -1225,7 +1378,17 @@ def run_auto_memory_pipeline(
         if filtered:
             from nz_coder.state.memory_control import MemoryControlPlane
 
-            candidates = extract_session_learnings(filtered, client=client, model=model)
+            candidates = extract_session_learnings(
+                filtered,
+                client=client,
+                model=model,
+                provider=provider,
+                capabilities=capabilities,
+                observer=observer,
+                cancel_event=cancel_event,
+            )
+            if cancel_event is not None and cancel_event.is_set():
+                raise _MemoryPipelineCancelled("memory extraction cancelled")
             manager = current_memory_manager()
             control = MemoryControlPlane(manager.memory_dir, manager)
             source_message_ids = tuple(
@@ -1235,6 +1398,8 @@ def run_auto_memory_pipeline(
                 and message.get(MESSAGE_ID_KEY)
             )
             for candidate in candidates:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise _MemoryPipelineCancelled("memory extraction cancelled")
                 proposal = control.submit(
                     candidate,
                     source_session=str(session_id or ""),
@@ -1256,6 +1421,8 @@ def run_auto_memory_pipeline(
                 elif proposal.status == "pending_review":
                     pending_review_count += 1
 
+        if cancel_event is not None and cancel_event.is_set():
+            raise _MemoryPipelineCancelled("memory extraction cancelled")
         now = time.time()
         next_state = {
             "session_id": str(session_id or ""),
@@ -1265,8 +1432,12 @@ def run_auto_memory_pipeline(
                 current_keys,
             ),
             "last_extracted_at": now,
-            "total_extractions": int(state.get("total_extractions", 0) or 0) + 1,
-            "total_saved": int(state.get("total_saved", 0) or 0) + len(saved_names),
+            "total_extractions": _nonnegative_int(
+                state.get("total_extractions")
+            ) + 1,
+            "total_saved": _nonnegative_int(
+                state.get("total_saved")
+            ) + len(saved_names),
             "last_saved_names": saved_names[-10:],
         }
         _write_json_file(state_path, next_state)
@@ -1297,8 +1468,12 @@ async def run_auto_memory_pipeline_async(
     client=None,
     model: str | None = None,
     tracer=None,
+    provider=None,
+    capabilities=None,
+    observer=None,
 ) -> dict:
     """Async wrapper for the auto-memory extraction pipeline."""
+    cancel_event = threading.Event()
     return await to_thread_settled(
         run_auto_memory_pipeline,
         session_id,
@@ -1306,6 +1481,11 @@ async def run_auto_memory_pipeline_async(
         client=client,
         model=model,
         tracer=tracer,
+        provider=provider,
+        capabilities=capabilities,
+        observer=observer,
+        cancel_event=cancel_event,
+        cancel_callback=cancel_event.set,
     )
 
 
@@ -1463,7 +1643,15 @@ def _join_description(old: str, new: str, max_len: int = 180) -> str:
     return joined[: max_len - 3].rstrip() + "..." if len(joined) > max_len else joined
 
 
-def _create_chat_completion(client, **kwargs):
+def _create_chat_completion(
+    client,
+    *,
+    provider=None,
+    capabilities=None,
+    observer=None,
+    cancel_event=None,
+    **kwargs,
+):
     """优先使用 JSON mode；不支持时回退到普通 completion。"""
     from nz_coder.model_gateway import (
         ModelCall,
@@ -1475,22 +1663,31 @@ def _create_chat_completion(client, **kwargs):
         resolve_model_runtime,
     )
 
-    provider = OpenAIClientBridgeProvider()
+    active_provider = provider or OpenAIClientBridgeProvider()
     runtime = resolve_model_runtime(ModelSelectionRequest(
-        provider_name=provider.name,
+        provider_name=str(
+            getattr(active_provider, "name", "openai-compatible")
+        ),
         model_id=str(kwargs["model"]),
-        provider=provider,
+        provider=active_provider,
         client=client,
         owns_client=False,
     ))
-    outcome = ProductionModelGateway(runtime).complete_sync(ModelCall(
-        purpose=ModelCallPurpose.MEMORY,
-        messages=kwargs["messages"],
-        max_output_tokens=int(kwargs.get("max_tokens") or 800),
-        response_format=kwargs.get("response_format"),
-        metadata={"allow_response_format_fallback": True},
-        timeout_seconds=600.0,
-    ))
+    if capabilities is not None:
+        runtime.capabilities = capabilities
+    outcome = ProductionModelGateway(runtime, observer=observer).complete_sync(
+        ModelCall(
+            purpose=ModelCallPurpose.MEMORY,
+            messages=kwargs["messages"],
+            max_output_tokens=int(kwargs.get("max_tokens") or 800),
+            response_format=kwargs.get("response_format"),
+            metadata={"allow_response_format_fallback": True},
+            timeout_seconds=600.0,
+        ),
+        cancel_event=cancel_event,
+    )
+    if outcome.status is ModelCallStatus.CANCELLED:
+        raise _MemoryPipelineCancelled(outcome.error or "memory extraction cancelled")
     if outcome.status is not ModelCallStatus.COMPLETED:
         raise RuntimeError(outcome.error or outcome.status.value)
     return outcome.content
@@ -1564,6 +1761,10 @@ def rerank_memories(
     client=None,
     model: str | None = None,
     top_k: int = 5,
+    *,
+    provider=None,
+    capabilities=None,
+    observer=None,
 ) -> list[dict]:
     """用可选 LLM 对粗召回结果重排；失败时保持原排序。"""
     if not candidates or client is None or not model:
@@ -1591,6 +1792,9 @@ def rerank_memories(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=300,
+            provider=provider,
+            capabilities=capabilities,
+            observer=observer,
         )
         names = _parse_json_list(raw)
     except Exception:
@@ -1620,11 +1824,38 @@ _MEMORY_MANAGER: ContextVar[MemoryManager | None] = ContextVar(
     "nz_coder_memory_manager",
     default=None,
 )
+_WORKSPACE_MEMORY_MANAGERS: weakref.WeakValueDictionary[str, MemoryManager] = (
+    weakref.WeakValueDictionary()
+)
+_WORKSPACE_MEMORY_MANAGERS_LOCK = threading.Lock()
+_WORKSPACE_MEMORY_MANAGERS[str(memory_mgr.memory_dir.resolve())] = memory_mgr
 
 
 def current_memory_manager() -> MemoryManager:
     """Return the memory manager bound to the current agent context."""
     return _MEMORY_MANAGER.get() or memory_mgr
+
+
+def workspace_memory_manager(memory_dir: Path | None = None) -> MemoryManager:
+    """Return the shared Markdown manager for one resolved workspace path.
+
+    Long-term memory is workspace-scoped rather than Session-scoped. Sharing
+    its manager gives concurrent HTTP/CLI sessions one cache and one mutation
+    lock while the path key prevents state from crossing workspaces. An
+    explicitly bound adapter remains authoritative for dependency injection.
+    """
+    selected = (memory_dir or current_derived_path("MEMORY_DIR")).resolve()
+    bound = _MEMORY_MANAGER.get()
+    if bound is not None and bound.memory_dir.resolve() == selected:
+        return bound
+    key = str(selected)
+    with _WORKSPACE_MEMORY_MANAGERS_LOCK:
+        existing = _WORKSPACE_MEMORY_MANAGERS.get(key)
+        if existing is not None:
+            return existing
+        manager = MemoryManager(selected)
+        _WORKSPACE_MEMORY_MANAGERS[key] = manager
+        return manager
 
 
 @contextmanager
@@ -1695,6 +1926,7 @@ register(
         },
     },
     handler=_list_memories,
+    side_effect="readonly",
 )
 
 register(
@@ -1726,4 +1958,5 @@ register(
         "required": ["query"],
     },
     handler=_recall_memory,
+    side_effect="readonly",
 )

@@ -3,18 +3,24 @@ from __future__ import annotations
 
 from nz_coder.tool_platform.policies.command_policy import (
     classify_bash,
+    external_workspace_path,
     is_known_read_only_command,
 )
-from nz_coder.tools import get_execution_mode
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.tools import (
+    get_tool_side_effect,
+    is_filesystem_mutation_tool,
+    is_tool_plan_mode_allowed,
+)
 
 from .modes import normalize_mode
 from .rules import PermissionRule, first_matching_rule
-from .tool_groups import SAFE_TOOLS, WRITE_TOOLS
+from .tool_groups import SAFE_STATE_TOOLS
 
 
-def _is_write_tool(name: str) -> bool:
-    """Include dynamically registered write effects in permission decisions."""
-    return name in WRITE_TOOLS or get_execution_mode(name) == "write"
+def _is_local_edit(name: str) -> bool:
+    """Return whether acceptEdits may authorize this workspace mutation."""
+    return is_filesystem_mutation_tool(name)
 
 
 class PermissionChecker:
@@ -41,7 +47,7 @@ class PermissionChecker:
             }
 
         if tool_name == "bash":
-            return self._check_bash(tool_input, allow_rules)
+            return self._check_bash(tool_input, allow_rules, ask_rules)
 
         if tool_name == "process":
             return self._check_process(tool_input, allow_rules, ask_rules)
@@ -70,12 +76,17 @@ class PermissionChecker:
             return {"behavior": "allow", "reason": "Read-only web fetch"}
 
         if self.mode == "plan":
-            if _is_write_tool(tool_name):
-                return {"behavior": "deny", "reason": "Plan mode: write operations blocked"}
-            return {"behavior": "allow", "reason": "Plan mode: read-only allowed"}
-
-        if tool_name in SAFE_TOOLS:
-            return {"behavior": "allow", "reason": "Safe tool"}
+            if not is_tool_plan_mode_allowed(tool_name):
+                reason = (
+                    "Plan mode: write operations blocked"
+                    if _is_local_edit(tool_name)
+                    else "Plan mode: tool side effects blocked"
+                )
+                return {
+                    "behavior": "deny",
+                    "reason": reason,
+                }
+            return {"behavior": "allow", "reason": "Plan mode: allowed by tool metadata"}
 
         allow_rule = first_matching_rule(allow_rules, tool_name, tool_input)
         if allow_rule is not None:
@@ -91,21 +102,30 @@ class PermissionChecker:
                 "reason": f"Ask rule: {ask_rule.content or ask_rule.tool}",
             }
 
+        if tool_name in SAFE_STATE_TOOLS:
+            return {"behavior": "allow", "reason": "Safe tool"}
+
         if self.mode == "auto":
             return {"behavior": "allow", "reason": "Auto mode"}
 
         if self.mode == "acceptEdits":
-            if _is_write_tool(tool_name):
+            if _is_local_edit(tool_name):
                 return {"behavior": "allow", "reason": "acceptEdits mode"}
             return {
                 "behavior": "ask",
                 "reason": f"acceptEdits mode: {tool_name} needs approval",
             }
 
-        if _is_write_tool(tool_name):
+        if _is_local_edit(tool_name):
             return {"behavior": "ask", "reason": f"Write operation: {tool_name}"}
 
-        return {"behavior": "allow", "reason": "Default allow"}
+        if get_tool_side_effect(tool_name) not in {"readonly", "reads-network"}:
+            return {
+                "behavior": "ask",
+                "reason": f"Side-effect operation: {tool_name}",
+            }
+
+        return {"behavior": "allow", "reason": "Safe tool"}
 
     def _check_mcp(
         self,
@@ -115,9 +135,9 @@ class PermissionChecker:
         ask_rules: list[PermissionRule],
     ) -> dict:
         """Apply conservative permissions to external MCP side effects."""
-        effect = get_execution_mode(tool_name)
+        effect = get_tool_side_effect(tool_name)
         if self.mode == "plan":
-            if effect != "read":
+            if not is_tool_plan_mode_allowed(tool_name):
                 return {
                     "behavior": "deny",
                     "reason": f"Plan mode: MCP {effect} operation blocked",
@@ -138,7 +158,7 @@ class PermissionChecker:
             }
         if self.mode == "auto":
             return {"behavior": "allow", "reason": "Auto mode"}
-        if effect == "read":
+        if effect in {"readonly", "reads-network"}:
             return {"behavior": "allow", "reason": "Read-only MCP tool"}
         return {
             "behavior": "ask",
@@ -148,8 +168,19 @@ class PermissionChecker:
             ),
         }
 
-    def _check_bash(self, tool_input: dict, allow_rules: list[PermissionRule]) -> dict:
+    def _check_bash(
+        self,
+        tool_input: dict,
+        allow_rules: list[PermissionRule],
+        ask_rules: list[PermissionRule],
+    ) -> dict:
         command = tool_input.get("command", "")
+        escaped = external_workspace_path(command, current_workdir())
+        if escaped is not None:
+            return {
+                "behavior": "deny",
+                "reason": f"Blocked: path outside workspace ({escaped})",
+            }
         classification = classify_bash(command)
 
         if classification["dangerous"]:
@@ -168,6 +199,12 @@ class PermissionChecker:
             return {
                 "behavior": "allow",
                 "reason": f"Rule: {allow_rule.content or allow_rule.tool}",
+            }
+        ask_rule = first_matching_rule(ask_rules, "bash", tool_input)
+        if ask_rule is not None:
+            return {
+                "behavior": "ask",
+                "reason": f"Ask rule: {ask_rule.content or ask_rule.tool}",
             }
 
         if self.mode == "auto":
@@ -199,6 +236,31 @@ class PermissionChecker:
     ) -> dict:
         """Apply Bash-equivalent policy to start and explicit policy to stdin."""
         operation = str(tool_input.get("operation") or "").strip().lower()
+        if operation == "start":
+            command = str(tool_input.get("command") or "")
+            escaped = external_workspace_path(command, current_workdir())
+            if escaped is not None:
+                return {
+                    "behavior": "deny",
+                    "reason": f"Blocked: path outside workspace ({escaped})",
+                }
+            classification = classify_bash(command)
+            if classification["dangerous"]:
+                return {
+                    "behavior": "deny",
+                    "reason": f"Blocked: {classification['reason']}",
+                }
+            if self.mode == "plan":
+                return self._check_bash(
+                    {"command": command},
+                    allow_rules,
+                    ask_rules,
+                )
+        elif operation == "write" and self.mode == "plan":
+            return {
+                "behavior": "deny",
+                "reason": "Plan mode: process stdin blocked",
+            }
         allow_rule = first_matching_rule(allow_rules, "process", tool_input)
         if allow_rule is not None:
             return {
@@ -215,6 +277,7 @@ class PermissionChecker:
             return self._check_bash(
                 {"command": str(tool_input.get("command") or "")},
                 allow_rules,
+                ask_rules,
             )
         if operation == "write":
             if self.mode == "plan":

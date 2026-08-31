@@ -1,9 +1,9 @@
 """Characterization coverage for the legacy JSON Session boundary."""
 from __future__ import annotations
 
-from nz_coder import config
-from nz_coder.message_schema import MESSAGE_ID_KEY, PARTS_KEY
-from nz_coder.sessions import load_session, save_session
+from nz_coder.foundation import config
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, PARTS_KEY
+from nz_coder.state.sessions import load_session, save_session
 
 
 def test_legacy_session_round_trip_preserves_status_and_message_parts(

@@ -14,8 +14,8 @@ from nz_coder.providers.extensions import (
 )
 from nz_coder.providers.models import save_model_selection
 from nz_coder.providers.registry import _normalize_registry
-from nz_coder.runtime.loop import AgentLoop
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.execution.loop import AgentLoop
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 @dataclass

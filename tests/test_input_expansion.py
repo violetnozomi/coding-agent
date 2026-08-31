@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from nz_coder.context import prompt_budget
+from nz_coder.state.context import prompt_budget
 from nz_coder.state.input_expansion import (
     compact_stored,
     resolve_and_apply_budget,
@@ -40,6 +40,25 @@ def test_single_large_attachment_is_truncated_without_touching_user_text(tmp_pat
     )
     assert message["content"] == first_render
     assert second == {"resolved": 0, "truncated": 0, "compacted": 0}
+
+
+def test_bounded_cjk_attachment_estimates_unread_tail_by_sample_density(tmp_path):
+    """Large CJK files must not use the ASCII four-bytes-per-token fallback."""
+    (tmp_path / "cjk.txt").write_text("中" * 100_000, encoding="utf-8")
+    message = {"role": "user", "content": "review"}
+    tag_file_attachments(
+        message,
+        "review",
+        [SimpleNamespace(path="cjk.txt", size=300_000)],
+    )
+
+    resolve_and_apply_budget(
+        [message],
+        prompt_budget(context_tokens=4_000, output_tokens=1_000),
+        tmp_path,
+    )
+
+    assert message["_nz_input_expansions"][0]["originalTokens"] >= 95_000
 
 
 def test_multiple_attachments_keep_later_small_source_and_tombstone_earlier(tmp_path):

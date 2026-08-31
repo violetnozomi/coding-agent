@@ -8,8 +8,8 @@ import pytest
 
 def test_eval_runner_closes_agent_when_run_raises(tmp_path, monkeypatch):
     from nz_coder import eval_runner
-    from nz_coder.memory import memory_mgr
-    from nz_coder.runtime import composition
+    from nz_coder.state.memory import memory_mgr
+    from nz_coder.runtime.execution import composition
 
     class FailingAgent:
         instance = None

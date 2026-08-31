@@ -45,8 +45,8 @@ class Scratchpad:
         return self._session_entries()
 
     def _session_key(self) -> tuple[str, str]:
-        from nz_coder.runtime.workdir import current_workdir
-        from nz_coder.sessions import active_session_id
+        from nz_coder.runtime.process.workdir import current_workdir
+        from nz_coder.state.sessions import active_session_id
 
         return str(current_workdir()), active_session_id() or "default"
 
@@ -58,7 +58,7 @@ class Scratchpad:
         return self._entries_by_session.setdefault(key, [])
 
     def _load_entries(self, session_id: str) -> list[dict]:
-        from nz_coder.sessions import session_scratchpad_path
+        from nz_coder.state.sessions import session_scratchpad_path
 
         path = session_scratchpad_path(session_id)
         try:
@@ -82,7 +82,7 @@ class Scratchpad:
         return entries[-_MAX_ENTRIES:]
 
     def _persist_entries(self, session_id: str, entries: list[dict]) -> str | None:
-        from nz_coder.sessions import (
+        from nz_coder.state.sessions import (
             session_scratchpad_path,
             write_session_runtime_json,
         )

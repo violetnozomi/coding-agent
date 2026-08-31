@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
-from nz_coder import config
+from nz_coder.foundation import config
 
 _DERIVED_DIRS = (
     "TRANSCRIPT_DIR",

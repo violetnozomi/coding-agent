@@ -5,8 +5,8 @@ from dataclasses import replace
 
 from nz_coder.providers.capabilities import resolve_model_capabilities
 from nz_coder.runtime.core.model_context import ModelExecutionContext
-from nz_coder.runtime.model_result import LLMResult
-from nz_coder.runtime.services import ProductionTurnModelRuntime
+from nz_coder.runtime.conversation.model_result import LLMResult
+from nz_coder.runtime.execution.services import ProductionTurnModelRuntime
 
 
 def _context(*, streaming: bool) -> tuple[ModelExecutionContext, list]:

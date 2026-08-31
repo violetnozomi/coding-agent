@@ -237,4 +237,5 @@ register(
     },
     handler=question,
     execution="serial",
+    plan_mode_allowed=True,
 )

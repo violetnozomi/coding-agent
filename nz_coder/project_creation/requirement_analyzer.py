@@ -206,4 +206,5 @@ register(
         "required": ["prompt"],
     },
     handler=analyze_project_requirements_tool,
+    side_effect="readonly",
 )

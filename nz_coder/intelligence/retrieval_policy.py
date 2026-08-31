@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 import re
 import time
 
-from nz_coder.runtime.task_policy import detect_task_mode, estimate_text_complexity
+from nz_coder.runtime.agent.task_policy import detect_task_mode, estimate_text_complexity
 
 
 RETRIEVAL_STRATEGIES = frozenset({
@@ -69,23 +70,28 @@ class RepoRetrievalPolicy:
     def decide(
         self, query: str, *, service, strategy: str = "guidance",
         changed_paths: tuple[str, ...] = (), semantic_available: bool = False,
+        known_paths: tuple[str, ...] = (),
     ) -> RetrievalDecision:
         selected = str(strategy or "guidance").casefold()
         if selected not in RETRIEVAL_STRATEGIES:
             raise ValueError(
                 "repo retrieval strategy must be tool-only, guidance, auto-context, or policy"
             )
+        declared_paths = self._normalize_known_paths(known_paths)
         state = service.state
         cache_key = (
             selected, int(state.generation), str(query), tuple(changed_paths),
-            bool(semantic_available),
+            bool(semantic_available), declared_paths,
         )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
         started = time.perf_counter()
         task_class, operation, tools, route_confidence = self._route(
-            query, changed_paths=changed_paths, semantic_available=semantic_available,
+            query,
+            changed_paths=changed_paths,
+            semantic_available=semantic_available,
+            known_paths=declared_paths,
         )
         items: list[dict] = []
         fallback = ""
@@ -137,10 +143,13 @@ class RepoRetrievalPolicy:
             item_confidence = max(
                 (float(item.get("score") or 0.0) for item in accepted), default=0.0,
             )
-        candidate_files = tuple(dict.fromkeys(
-            str(item.get("file") or str(item.get("locator") or "").split(":", 1)[0])
-            for item in accepted if item.get("file") or item.get("locator")
-        ))
+        candidate_files = tuple(dict.fromkeys((
+            *declared_paths,
+            *(
+                str(item.get("file") or str(item.get("locator") or "").split(":", 1)[0])
+                for item in accepted if item.get("file") or item.get("locator")
+            ),
+        )))
         candidate_modules = tuple(dict.fromkeys(
             str(item.get("module_id") or item.get("identity") or "")
             for item in accepted if item.get("kind") == "module" or item.get("module_id")
@@ -153,12 +162,19 @@ class RepoRetrievalPolicy:
             candidate_files=candidate_files,
             routing_confidence=route_confidence,
             evidence_confidence=item_confidence,
-            candidate_count=len(accepted),
+            candidate_count=len(candidate_files),
             fallback_state=fallback,
             index_status=str(state.status), task_class=task_class,
             recommended_operation=operation, recommended_tools=tools,
         )
-        guidance = self._guidance(semantic_available) if selected in {"guidance", "policy"} else ""
+        guidance = (
+            self._guidance(
+                semantic_available,
+                task_class=task_class,
+                known_paths=declared_paths,
+            )
+            if selected in {"guidance", "policy"} else ""
+        )
         auto_context = self._format_auto_context(accepted, operation)
         decision = RetrievalDecision(
             strategy=selected, signal=signal, guidance=guidance,
@@ -171,6 +187,7 @@ class RepoRetrievalPolicy:
     @staticmethod
     def _route(
         query: str, *, changed_paths: tuple[str, ...], semantic_available: bool,
+        known_paths: tuple[str, ...] = (),
     ) -> tuple[str, str, tuple[str, ...], float]:
         text = str(query or "")
         mode = detect_task_mode(text)
@@ -200,6 +217,8 @@ class RepoRetrievalPolicy:
         ))
         if paths:
             return "known-location", "read", ("read_file", "grep_search"), 0.95
+        if known_paths:
+            return "known-location", "read", ("read_file",), 0.97
         if changed_paths and (changed_intent or mode in {"refactor", "bugfix", "discuss"}):
             return "changed-code", "changed_scope", ("repo_context", "read_file"), 0.88
         if literal_hints:
@@ -295,16 +314,35 @@ class RepoRetrievalPolicy:
 
     @staticmethod
     def _languages(service) -> tuple[str, ...]:
-        try:
-            return tuple(sorted({
-                str(entry.language) for entry in service.index.snapshot().files
-                if entry.language
-            }))
-        except (OSError, RuntimeError):
-            return ()
+        return tuple(getattr(service.state, "languages", ()) or ())
 
     @staticmethod
-    def _guidance(semantic_available: bool) -> str:
+    def _normalize_known_paths(values: tuple[str, ...]) -> tuple[str, ...]:
+        result: list[str] = []
+        for raw in values:
+            value = str(raw or "").strip().replace("\\", "/")
+            path = PurePosixPath(value)
+            if not value or path.is_absolute() or ".." in path.parts:
+                continue
+            normalized = path.as_posix()
+            if normalized not in result:
+                result.append(normalized)
+        return tuple(result[:12])
+
+    @staticmethod
+    def _guidance(
+        semantic_available: bool,
+        *,
+        task_class: str = "",
+        known_paths: tuple[str, ...] = (),
+    ) -> str:
+        if task_class == "known-location" and known_paths:
+            return (
+                "Declared target paths already resolve the initial workset: "
+                + ", ".join(known_paths)
+                + ". Inspect only the needed targets with read_file; skip broad repository "
+                "orientation unless a declared path is missing."
+            )
         semantic = (
             " Business-language intent that may not match code vocabulary: use semantic_search, "
             "then follow its symbol_id/module_id with repo_context."

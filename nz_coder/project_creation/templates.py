@@ -513,4 +513,5 @@ register(
     },
     handler=scaffold_project,
     execution="write",
+    side_effect="mutates-fs",
 )

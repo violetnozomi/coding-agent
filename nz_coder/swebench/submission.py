@@ -33,6 +33,11 @@ def validate_submission_inputs(
     """Validate schema, pass@1 provenance, trajectories, and official logs."""
     errors: list[str] = []
     rows = _load_predictions(Path(predictions_path), errors)
+    evaluation_run_id = _validate_evaluation_provenance(
+        manifest,
+        Path(predictions_path),
+        errors,
+    )
     ids = [str(row.get("instance_id") or "") for row in rows]
     unique_ids = set(ids)
     if len(rows) != profile.expected_instances:
@@ -80,16 +85,35 @@ def validate_submission_inputs(
         rows,
         errors,
     )
+    rows_by_id = {
+        str(row.get("instance_id") or ""): row
+        for row in rows
+    }
     for instance_id in sorted(unique_ids):
         trajectory_path = Path(trajectories_dir) / f"{instance_id}.jsonl"
         if not trajectory_path.is_file():
             errors.append(f"missing trajectory for {instance_id}")
         else:
             _validate_trajectory(trajectory_path, instance_id, errors)
-        instance_logs = _find_instance_log_dir(Path(logs_dir), instance_id)
-        for filename in ("report.json", "test_output.txt"):
+        prediction = rows_by_id[instance_id]
+        instance_logs = _find_instance_log_dir(
+            Path(logs_dir),
+            instance_id,
+            run_id=evaluation_run_id,
+            model_name=str(prediction.get("model_name_or_path") or ""),
+        )
+        for filename in ("report.json", "test_output.txt", "patch.diff"):
             if not (instance_logs / filename).is_file():
                 errors.append(f"missing official log {instance_id}/{filename}")
+        official_patch = instance_logs / "patch.diff"
+        if official_patch.is_file():
+            try:
+                patch_text = official_patch.read_text(encoding="utf-8")
+            except OSError as exc:
+                errors.append(f"cannot read official patch {instance_id}: {exc}")
+            else:
+                if patch_text != str(prediction.get("model_patch") or ""):
+                    errors.append(f"official patch mismatch for {instance_id}")
     return SubmissionValidation(not errors, tuple(errors), len(rows))
 
 
@@ -130,17 +154,25 @@ def build_submission_bundle(
     target_logs = target / "logs"
     target_logs.mkdir()
     predictions = {
-        row["instance_id"]: row["model_patch"]
+        row["instance_id"]: row
         for row in _load_predictions(Path(predictions_path), [])
     }
+    evaluation_run_id = str(
+        (manifest.get("official_evaluation") or {}).get("run_id") or ""
+    )
     resolved = 0
-    for instance_id, patch in predictions.items():
-        source_logs = _find_instance_log_dir(Path(logs_dir), instance_id)
+    for instance_id, prediction in predictions.items():
+        source_logs = _find_instance_log_dir(
+            Path(logs_dir),
+            instance_id,
+            run_id=evaluation_run_id,
+            model_name=str(prediction.get("model_name_or_path") or ""),
+        )
         instance_target = target_logs / instance_id
         instance_target.mkdir()
         shutil.copy2(source_logs / "report.json", instance_target / "report.json")
         shutil.copy2(source_logs / "test_output.txt", instance_target / "test_output.txt")
-        (instance_target / "patch.diff").write_text(patch, encoding="utf-8")
+        shutil.copy2(source_logs / "patch.diff", instance_target / "patch.diff")
         if _report_resolved(source_logs / "report.json", instance_id):
             resolved += 1
     metadata_payload = {
@@ -202,17 +234,79 @@ def _simple_yaml(value: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _find_instance_log_dir(logs_dir: Path, instance_id: str) -> Path:
-    direct = logs_dir / instance_id
-    if direct.is_dir():
-        return direct
-    if not logs_dir.is_dir():
-        return direct
-    matches = [
-        path for path in logs_dir.rglob(instance_id)
-        if path.is_dir() and (path / "report.json").is_file()
-    ]
-    return sorted(matches, key=lambda path: (len(path.parts), str(path)))[0] if matches else direct
+def _find_instance_log_dir(
+    logs_dir: Path,
+    instance_id: str,
+    *,
+    run_id: str,
+    model_name: str,
+) -> Path:
+    """Resolve exactly one official run/model/instance directory."""
+    root = Path(logs_dir)
+    run = _safe_relative_parts(run_id)
+    model = _safe_relative_parts(model_name)
+    instance = _safe_relative_parts(instance_id)
+    if not run or not model or len(instance) != 1:
+        return root / "__invalid_official_provenance__" / str(instance_id)
+    run_root = root if root.name == run[-1] and len(run) == 1 else root.joinpath(*run)
+    return run_root.joinpath(*model, instance[0])
+
+
+def _safe_relative_parts(value: str) -> tuple[str, ...]:
+    normalized = str(value or "").replace("\\", "/")
+    parts = tuple(normalized.split("/"))
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        return ()
+    return parts
+
+
+def _validate_evaluation_provenance(
+    manifest: dict,
+    predictions_path: Path,
+    errors: list[str],
+) -> str:
+    provenance = manifest.get("official_evaluation")
+    if not isinstance(provenance, dict):
+        errors.append("manifest official_evaluation provenance is missing")
+        return ""
+    run_id = str(provenance.get("run_id") or "")
+    if len(_safe_relative_parts(run_id)) != 1:
+        errors.append("manifest official_evaluation run_id is invalid")
+        run_id = ""
+    expected_digest = str(provenance.get("predictions_sha256") or "")
+    actual_digest = (
+        hashlib.sha256(Path(predictions_path).read_bytes()).hexdigest()
+        if Path(predictions_path).is_file() else ""
+    )
+    if not re_full_sha256(expected_digest) or expected_digest != actual_digest:
+        errors.append("manifest official_evaluation predictions_sha256 mismatch")
+    return run_id
+
+
+def record_official_evaluation_provenance(
+    manifest_path: Path,
+    predictions_path: Path,
+    run_id: str,
+) -> Path:
+    """Bind a successful official harness run to exact prediction bytes."""
+    target = Path(manifest_path)
+    manifest = json.loads(target.read_text(encoding="utf-8"))
+    if len(_safe_relative_parts(run_id)) != 1:
+        raise ValueError("official evaluation run_id must be one safe path component")
+    predictions = Path(predictions_path)
+    if not predictions.is_file():
+        raise FileNotFoundError(f"predictions file not found: {predictions}")
+    manifest["official_evaluation"] = {
+        "run_id": str(run_id),
+        "predictions_sha256": hashlib.sha256(predictions.read_bytes()).hexdigest(),
+    }
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(target)
+    return target
 
 
 def _validate_trajectory(path: Path, instance_id: str, errors: list[str]) -> None:

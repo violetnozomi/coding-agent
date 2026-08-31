@@ -11,7 +11,7 @@ import json
 import time
 from typing import Any, Callable
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.providers import create_provider
 
 _CHECK_NAMES = ("text", "tool", "stream")

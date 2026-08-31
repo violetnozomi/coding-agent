@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from nz_coder.message_schema import bind_user_context
+from nz_coder.protocol.message_schema import bind_user_context
 from nz_coder.state.input_expansion import tag_file_attachments
 
 

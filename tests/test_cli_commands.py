@@ -17,6 +17,67 @@ class FakeConsole:
         self.messages.append(message)
 
 
+def test_narrow_process_view_keeps_complete_process_id():
+    from io import StringIO
+    from rich.console import Console
+    from nz_coder.interface.commands.handlers.core import _render_processes
+
+    output = StringIO()
+    console = Console(file=output, width=80, force_terminal=False)
+    console.print(_render_processes([{
+        "process_id": "proc_0ebfa2a812ca",
+        "status": "running",
+        "command": "python -m http.server 8000 --directory a-very-long-directory",
+        "cwd": "/workspace/project",
+        "started_at": None,
+        "exit_code": None,
+        "owner_session_id": "session-owner",
+        "pty_tier": "pipe",
+    }], width=80))
+
+    rendered = output.getvalue()
+    assert "proc_0ebfa2a812ca" in rendered
+    assert "RUNNING" in rendered
+    assert "python -m http.server" in rendered
+
+
+def test_narrow_session_view_keeps_complete_session_id():
+    from io import StringIO
+    from rich.console import Console
+    from nz_coder.interface.commands.handlers.core import _render_session_options
+    from nz_coder.interface.timeline import SessionOption
+
+    output = StringIO()
+    console = Console(file=output, width=80, force_terminal=False)
+    console.print(_render_session_options([SessionOption(
+        session_id="session-20260814_144950-ad401b3f",
+        title="Parser implementation and regression tests",
+        active=True,
+        timestamp="2026-08-14 14:49",
+        message_count=19,
+        model="openai-compatible/deepseek-v4-flash",
+        mode="acceptEdits",
+    )]))
+
+    rendered = output.getvalue()
+    assert "session-20260814_144950-ad401b3f" in rendered
+    assert "Parser implementation" in rendered
+    assert "19 messages" in rendered
+
+
+def test_top_level_help_contains_product_onboarding(monkeypatch):
+    fake_console = FakeConsole()
+    monkeypatch.setattr(cli, "console", fake_console)
+
+    assert cli.main(["--help"]) == 0
+
+    rendered = "\n".join(str(item) for item in fake_console.messages)
+    assert "Interactive:" in rendered
+    assert "Headless:" in rendered
+    assert "Configuration:" in rendered
+    assert "nz-coder models" in rendered
+
+
 class FakePermissions:
     def __init__(self, mode: str = "default") -> None:
         self.mode = mode
@@ -172,6 +233,60 @@ def test_run_cli_cancelled_turn_returns_to_same_repl(monkeypatch):
     assert calls[-1][-1]["_nz_user_agent"] == "build"
     assert calls[-1][-1]["_nz_time"]["created"] >= 0
     assert agent.closed is True
+
+
+def test_typed_cancelled_turn_does_not_append_memory_reminder(monkeypatch):
+    agent = FakeAgent()
+    agent.tool_calls_this_run = 4
+    agent.used_save_memory = False
+
+    async def run(_messages, **_kwargs):
+        return {"status": "cancelled"}
+
+    agent.run = run
+
+    class Renderer:
+        on_token = None
+
+        def start(self):
+            return None
+
+        def finish(self):
+            return None
+
+        def pause(self):
+            return None
+
+        def resume(self):
+            return None
+
+    saved = []
+    monkeypatch.setattr(cli.config, "API_KEY", "test")
+    monkeypatch.setattr(cli.memory_mgr, "load_all", lambda: None)
+    monkeypatch.setattr(cli.memory_mgr, "build_prompt_block", lambda **_kwargs: "")
+    monkeypatch.setattr(cli.skill_loader, "descriptions", lambda: "")
+    monkeypatch.setattr(cli, "build", lambda **_kwargs: "system")
+    monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
+    monkeypatch.setattr(cli, "create_session_id", lambda: "session-test")
+    monkeypatch.setattr(cli, "activate_session", lambda value: value)
+    monkeypatch.setattr(cli, "_build_agent", lambda *_args: agent)
+    monkeypatch.setattr(cli, "print_banner", lambda *_args: None)
+    monkeypatch.setattr(
+        cli,
+        "save_session",
+        lambda messages, **_kwargs: saved.append([dict(item) for item in messages]),
+    )
+    inputs = iter(("cancel me", "exit"))
+    monkeypatch.setattr(cli, "read_user_query", lambda: next(inputs))
+
+    asyncio.run(cli._run_cli())
+
+    assert saved
+    assert all(
+        "substantial task" not in str(message.get("content", ""))
+        for snapshot in saved
+        for message in snapshot
+    )
 
 
 def test_handled_sigint_cancellation_is_fully_consumed():
@@ -354,7 +469,7 @@ def test_subagents_picker_opens_read_only_child_transcript(monkeypatch, tmp_path
     session_state = {"id": "session-1", "agent": FakeAgent()}
     monkeypatch.setattr(cli, "console", fake_console)
     monkeypatch.setattr(
-        "nz_coder.runtime.subagent.list_subagent_sessions",
+        "nz_coder.runtime.agent.subagent.list_subagent_sessions",
         lambda *_args: [{
             "session_id": "subagent-1",
             "agent_type": "explore",
@@ -365,7 +480,7 @@ def test_subagents_picker_opens_read_only_child_transcript(monkeypatch, tmp_path
         }],
     )
     monkeypatch.setattr(
-        "nz_coder.runtime.subagent.load_subagent_session",
+        "nz_coder.runtime.agent.subagent.load_subagent_session",
         lambda *_args: {
             "session_id": "subagent-1",
             "agent_type": "explore",
@@ -422,7 +537,7 @@ def test_interactive_child_route_resumes_owned_state_without_replacing_parent(mo
     captured = {}
     monkeypatch.setattr(cli, "console", fake_console)
     monkeypatch.setattr(
-        "nz_coder.runtime.subagent.load_subagent_session",
+        "nz_coder.runtime.agent.subagent.load_subagent_session",
         lambda *_args: {
             "session_id": "subagent-1",
             "agent_type": "explore",
@@ -436,7 +551,7 @@ def test_interactive_child_route_resumes_owned_state_without_replacing_parent(mo
         captured.update(prompt=prompt, **kwargs)
         return "continued child result"
 
-    monkeypatch.setattr("nz_coder.runtime.subagent.run_subagent_async", resume)
+    monkeypatch.setattr("nz_coder.runtime.agent.subagent.run_subagent_async", resume)
 
     handled = asyncio.run(cli.handle_command_async(
         "/subagent subagent-1 inspect more", [], session_state,
@@ -771,7 +886,7 @@ def test_fork_picker_forks_selected_completed_turn(monkeypatch):
     ))
 
     assert handled is True
-    from nz_coder.message_schema import legacy_messages
+    from nz_coder.protocol.message_schema import legacy_messages
 
     assert legacy_messages(history) == [
         {"role": "user", "content": "first"},
@@ -929,7 +1044,7 @@ def test_handle_command_fork_copies_complete_turn_and_replaces_agent(monkeypatch
     handled = cli.handle_command("/fork 1", history, session_state, "system", object())
 
     assert handled is True
-    from nz_coder.message_schema import legacy_messages
+    from nz_coder.protocol.message_schema import legacy_messages
 
     assert legacy_messages(history) == [
         {"role": "user", "content": "first"},
@@ -975,7 +1090,7 @@ def test_handle_command_fork_build_failure_restores_original_session(monkeypatch
 
 def test_handle_command_fork_child_clone_failure_closes_new_agent_and_restores(monkeypatch):
     from nz_coder.interface.commands.handlers import core
-    from nz_coder.runtime import subagent
+    from nz_coder.runtime.agent import subagent
 
     fake_console = FakeConsole()
     monkeypatch.setattr(cli, "console", fake_console)

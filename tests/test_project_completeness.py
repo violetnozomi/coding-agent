@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 def test_project_completeness_reports_sqlite_gap_with_documented_fallback(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.project_creation.requirement_analyzer import analyze_project_requirements
     from nz_coder.project_creation.blueprint import create_project_blueprint
     from nz_coder.project_creation.templates import scaffold_project

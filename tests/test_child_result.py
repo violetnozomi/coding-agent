@@ -1,9 +1,11 @@
 """Contracts for the canonical child-Agent terminal result envelope."""
 from __future__ import annotations
 
+import json
+
 
 def test_child_result_round_trip_preserves_explicit_null_structured_value():
-    from nz_coder.runtime.child_result import ChildAgentResult
+    from nz_coder.runtime.agent.child_result import ChildAgentResult
 
     result = ChildAgentResult.from_dict({
         "task_id": "task-1",
@@ -20,7 +22,7 @@ def test_child_result_round_trip_preserves_explicit_null_structured_value():
 
 
 def test_child_result_bounds_persisted_text_and_marks_truncation():
-    from nz_coder.runtime.child_result import ChildAgentResult
+    from nz_coder.runtime.agent.child_result import ChildAgentResult
 
     result = ChildAgentResult.from_dict({
         "task_id": "task-1",
@@ -33,8 +35,56 @@ def test_child_result_bounds_persisted_text_and_marks_truncation():
     assert result.final_text_truncated is True
 
 
+def test_child_result_ignores_nonfinite_usage_and_non_boolean_flags():
+    """Corrupt persisted metrics must not prevent a child from settling."""
+    from nz_coder.runtime.agent.child_result import ChildAgentResult
+
+    result = ChildAgentResult.from_dict({
+        "task_id": "task",
+        "name": "worker",
+        "status": "completed",
+        "final_text": "done",
+        "usage": {
+            "input": float("nan"),
+            "output": float("inf"),
+            "total": 12.7,
+            "cached": -2,
+            "flag": True,
+        },
+        "limit_reached": "false",
+        "interrupted": 1,
+    })
+
+    assert result.usage == {"total": 12, "cached": 0}
+    assert result.limit_reached is False
+    assert result.interrupted is False
+
+
+def test_child_result_repairs_nonfinite_nested_payloads_for_workflow_storage():
+    """Structured child evidence must remain strict JSON across cache/resume."""
+    from nz_coder.runtime.agent.child_result import ChildAgentResult
+
+    result = ChildAgentResult.from_dict({
+        "task_id": "task",
+        "name": "worker",
+        "status": "completed",
+        "final_text": "done",
+        "structured": {"score": float("nan")},
+        "verification": {"duration": float("inf")},
+        "route_facts": {"latency": -float("inf")},
+        "conflicts": [{"weight": float("nan")}],
+    })
+
+    payload = result.to_dict()
+    assert payload["structured"] == {"score": None}
+    assert payload["verification"] == {"duration": None}
+    assert payload["route_facts"] == {"latency": None}
+    assert payload["conflicts"] == [{"weight": None}]
+    json.dumps(payload, allow_nan=False)
+
+
 def test_child_result_metadata_keeps_legacy_projection():
-    from nz_coder.runtime.child_result import CHILD_RESULT_KEY, ChildAgentResult
+    from nz_coder.runtime.agent.child_result import CHILD_RESULT_KEY, ChildAgentResult
 
     metadata = ChildAgentResult.from_dict({
         "task_id": "child-1",
@@ -54,7 +104,7 @@ def test_child_result_metadata_keeps_legacy_projection():
 
 
 def test_child_result_adapts_legacy_tool_metadata():
-    from nz_coder.runtime.child_result import ChildAgentResult
+    from nz_coder.runtime.agent.child_result import ChildAgentResult
 
     result = ChildAgentResult.from_metadata(
         {
@@ -74,7 +124,7 @@ def test_child_result_adapts_legacy_tool_metadata():
 
 
 def test_child_result_from_state_projects_runtime_owners():
-    from nz_coder.runtime.child_result import child_result_from_state
+    from nz_coder.runtime.agent.child_result import child_result_from_state
 
     result = child_result_from_state(
         {

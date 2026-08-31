@@ -6,12 +6,12 @@ import asyncio
 from nz_coder.runtime.core.profiles import READ_CHILD_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.core.result import RunStatus
-from nz_coder.runtime.child_contracts import TaskStatus
+from nz_coder.runtime.agent.child_contracts import TaskStatus
 from nz_coder.runtime.session.model import SessionIdentity
 from nz_coder.runtime.session.runtime import SessionRuntime
 from nz_coder.runtime.session.model import Session
 from nz_coder.runtime.session.store import LegacyJsonSessionStore
-from nz_coder.runtime.subagent import (
+from nz_coder.runtime.agent.subagent import (
     _bind_child_session_identity,
     _child_activation_messages,
     _new_subagent_state,

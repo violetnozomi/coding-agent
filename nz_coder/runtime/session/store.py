@@ -40,17 +40,39 @@ class LegacyJsonSessionStore:
         payload = await asyncio.to_thread(self._load_sync, identity, workspace)
         if not payload:
             return None
-        messages = payload.get("messages")
-        if not isinstance(messages, list):
-            messages = []
-        parent_session_id = payload.get("parent_session_id")
-        if not isinstance(parent_session_id, str) or not parent_session_id:
-            parent_session_id = identity.parent_session_id
+        raw_messages = payload.get("messages")
+        candidates = raw_messages if isinstance(raw_messages, list) else []
+        messages = [message for message in candidates if _valid_message(message)]
+        invalid_messages = (
+            len(candidates) - len(messages)
+            if isinstance(raw_messages, list)
+            else int(raw_messages is not None)
+        )
+        parent_session_id = identity.parent_session_id
+        invalid_parent = False
+        raw_parent = payload.get("parent_session_id")
+        if raw_parent is not None and raw_parent != "":
+            try:
+                candidate_identity = SessionIdentity(
+                    identity.session_id,
+                    raw_parent,
+                )
+            except (TypeError, ValueError):
+                invalid_parent = True
+            else:
+                parent_session_id = candidate_identity.parent_session_id
         metadata = (
             dict(payload.get("metadata"))
             if isinstance(payload.get("metadata"), dict)
             else {}
         )
+        recovery = {}
+        if invalid_messages:
+            recovery["invalid_messages_dropped"] = invalid_messages
+        if invalid_parent:
+            recovery["invalid_parent_session_id_ignored"] = True
+        if recovery:
+            metadata["session_recovery"] = recovery
         mode = payload.get("mode")
         if isinstance(mode, str) and mode:
             metadata.setdefault("permission_mode", mode)
@@ -149,3 +171,12 @@ def _session_status(value: object) -> SessionStatus:
         return SessionStatus(str(value))
     except ValueError:
         return SessionStatus.IDLE
+
+
+def _valid_message(value: object) -> bool:
+    """Return whether a legacy transcript entry satisfies Session's minimum."""
+    return bool(
+        isinstance(value, dict)
+        and isinstance(value.get("role"), str)
+        and "content" in value
+    )

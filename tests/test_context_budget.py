@@ -1,18 +1,22 @@
 """Tests for model-window-aware context budgeting and overflow persistence."""
 from __future__ import annotations
 
+import json
+import threading
 from types import SimpleNamespace
 
 import pytest
 
-from nz_coder.context import (
+from nz_coder.state.context import (
+    estimate_tokens,
     estimate_request_tokens,
     micro_compact,
+    persist_large_output,
     persist_oversized_user_inputs,
     prompt_budget,
 )
-from nz_coder.runtime.workdir import scoped_workdir
-from nz_coder.sessions import scoped_session
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.state.sessions import scoped_session
 
 
 def test_prompt_budget_reserves_small_window_output_proportionally():
@@ -24,6 +28,45 @@ def test_prompt_budget_reserves_small_window_output_proportionally():
     assert budget.expansion_budget_tokens == 7_200
     assert budget.tool_prune_protect_tokens == 12_000
     assert budget.tool_prune_minimum_tokens == 4_800
+
+
+def test_prompt_budget_caps_replayed_history_for_large_context_models(monkeypatch):
+    """A huge physical window must not imply replaying its full history each turn."""
+    from nz_coder.foundation import config
+
+    monkeypatch.setattr(config, "CONTEXT_REPLAY_COMPACTION_TOKENS", 24_000)
+
+    budget = prompt_budget(context_tokens=1_000_000, output_tokens=64_000)
+
+    assert budget.usable_input_tokens == 936_000
+    assert budget.replay_compaction_tokens == 24_000
+
+
+def test_prompt_budget_can_disable_replay_cost_compaction(monkeypatch):
+    """Operators can retain capacity-only compaction for cache-heavy providers."""
+    from nz_coder.foundation import config
+
+    monkeypatch.setattr(config, "CONTEXT_REPLAY_COMPACTION_TOKENS", 0)
+
+    budget = prompt_budget(context_tokens=1_000_000, output_tokens=64_000)
+
+    assert budget.replay_compaction_tokens == 0
+
+
+def test_default_context_compaction_is_capacity_only(monkeypatch):
+    """Early lossy replay compaction must remain an explicit operator opt-in."""
+    from nz_coder.foundation import config
+
+    assert config.DEFAULT_CONTEXT_REPLAY_COMPACTION_TOKENS == 0
+    monkeypatch.setattr(
+        config,
+        "CONTEXT_REPLAY_COMPACTION_TOKENS",
+        config.DEFAULT_CONTEXT_REPLAY_COMPACTION_TOKENS,
+    )
+
+    budget = prompt_budget(context_tokens=1_000_000, output_tokens=64_000)
+
+    assert budget.replay_compaction_tokens == 0
 
 
 def test_request_estimate_includes_tool_schemas():
@@ -38,6 +81,13 @@ def test_request_estimate_includes_tool_schemas():
     }]
 
     assert estimate_request_tokens(messages, tools) > estimate_request_tokens(messages)
+
+
+def test_token_estimate_counts_cjk_as_characters_not_json_escape_bytes():
+    """CJK input must not be inflated by ``\\uXXXX`` serialization escapes."""
+    estimate = estimate_tokens("中" * 400)
+
+    assert 390 <= estimate <= 420
 
 
 def test_micro_compact_preserves_all_results_in_current_two_user_turns():
@@ -96,6 +146,25 @@ def test_micro_compact_prunes_only_old_turns_with_model_aware_budget():
     assert current_tool["content"] == large
 
 
+def test_micro_compact_ignores_corrupt_persisted_assistant_timestamp():
+    """A hand-edited Session timestamp must not break every later request."""
+    large = "source line\n" * 1000
+    messages = [
+        {"role": "user", "content": "old"},
+        {"role": "tool", "tool_call_id": "old", "content": large},
+        {"role": "user", "content": "recent"},
+        {"role": "user", "content": "current"},
+        {"role": "assistant", "content": "working", "_timestamp": "broken"},
+    ]
+
+    replaced = micro_compact(
+        messages,
+        budget=prompt_budget(context_tokens=4_000, output_tokens=1_000),
+    )
+
+    assert replaced == 1
+
+
 def test_oversized_user_input_is_persisted_with_readable_reference(tmp_path):
     messages = [{"role": "user", "content": "x" * 12_000}]
 
@@ -119,14 +188,45 @@ def test_oversized_user_input_is_persisted_with_readable_reference(tmp_path):
     assert str(persisted[0].relative_to(tmp_path)) in messages[0]["content"]
 
 
+def test_reused_tool_call_id_does_not_alias_different_large_outputs(
+    tmp_path,
+    monkeypatch,
+):
+    """Durable history references must remain content-stable across retries."""
+    from nz_coder.state import context as context_module
+
+    monkeypatch.setattr(context_module, "TRIGGER_CHARS", 1)
+    with scoped_workdir(tmp_path), scoped_session("duplicate-tool-call"):
+        first = persist_large_output("same-call", "first-output")
+        second = persist_large_output("same-call", "second-output")
+
+    results_dir = (
+        tmp_path
+        / ".nz-coder"
+        / "sessions"
+        / "_artifacts"
+        / "duplicate-tool-call"
+        / "runtime"
+        / "tool-results"
+    )
+    persisted = sorted(results_dir.glob("same-call*.txt"))
+    assert len(persisted) == 2
+    assert {path.read_text(encoding="utf-8") for path in persisted} == {
+        "first-output",
+        "second-output",
+    }
+    assert first != second
+
+
 def test_agent_compacts_when_tool_schema_pushes_full_request_over_budget(monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime import loop as loop_module
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution import loop as loop_module
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     monkeypatch.setattr(config, "MAX_CONTEXT_TOKENS", 12_000)
     monkeypatch.setattr(config, "MAX_OUTPUT_TOKENS", 2_000)
     monkeypatch.setattr(config, "SYSTEM_CONTEXT_BUDGET_TOKENS", 1_000)
+    monkeypatch.setattr(config, "MODEL_ID", "gpt-test")
     monkeypatch.setattr(
         loop_module,
         "get_specs",
@@ -165,7 +265,7 @@ def test_agent_compacts_when_tool_schema_pushes_full_request_over_budget(monkeyp
 
 def test_agent_soft_preflight_does_not_call_summary_model(monkeypatch):
     """InfCode cleans at 85% but compacts only after the usable hard limit."""
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     class Tracer:
         def __init__(self):
@@ -191,7 +291,7 @@ def test_agent_soft_preflight_does_not_call_summary_model(monkeypatch):
 
 
 def test_compaction_tail_can_split_oversized_recent_turn_at_assistant_boundary():
-    from nz_coder.context import _select_compaction_parts
+    from nz_coder.state.context import _select_compaction_parts
 
     messages = [
         {"role": "user", "content": "old task"},
@@ -208,8 +308,71 @@ def test_compaction_tail_can_split_oversized_recent_turn_at_assistant_boundary()
     assert tail == [{"role": "assistant", "content": "latest concise result"}]
 
 
+def test_compaction_tail_preserves_recent_atomic_suffix_with_one_human_turn():
+    """A long single-prompt agent run must not summarize its active tool batch."""
+    from nz_coder.state.context import _select_compaction_parts
+
+    recent_assistant = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{"id": "write-2"}],
+    }
+    recent_result = {
+        "role": "tool",
+        "tool_call_id": "write-2",
+        "content": "recent verification evidence",
+    }
+    messages = [
+        {"role": "user", "content": "implement the feature"},
+        {"role": "assistant", "content": "old reasoning " + "x" * 16_000},
+        {"role": "tool", "tool_call_id": "old", "content": "old output"},
+        recent_assistant,
+        recent_result,
+    ]
+
+    head, tail = _select_compaction_parts(
+        messages,
+        prompt_budget(context_tokens=8_000, output_tokens=2_000),
+    )
+
+    assert head == messages[:3]
+    assert tail == [recent_assistant, recent_result]
+
+
+def test_compaction_tail_ignores_durable_only_message_metadata():
+    """Session parts must not crowd provider-visible recent evidence out of the tail."""
+    from nz_coder.state.context import _select_compaction_parts
+
+    recent_assistant = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{"id": "write-2"}],
+        "_nz_parts": [{"snapshot": "x" * 20_000}],
+    }
+    recent_result = {
+        "role": "tool",
+        "tool_call_id": "write-2",
+        "content": "recent verification evidence",
+        "_nz_parts": [{"durable": "y" * 20_000}],
+    }
+    messages = [
+        {"role": "user", "content": "implement the feature"},
+        {"role": "assistant", "content": "old reasoning " + "x" * 16_000},
+        recent_assistant,
+        recent_result,
+    ]
+
+    head, tail = _select_compaction_parts(
+        messages,
+        prompt_budget(context_tokens=8_000, output_tokens=2_000),
+    )
+
+    assert head == messages[:2]
+    assert tail == [recent_assistant, recent_result]
+
+
 def test_provider_reported_overflow_triggers_next_turn_compaction():
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     class Tracer:
         def __init__(self):
@@ -240,7 +403,7 @@ def test_provider_reported_overflow_triggers_next_turn_compaction():
 
 
 def test_provider_usage_before_latest_compaction_boundary_is_not_reused():
-    from nz_coder.runtime.loop import _last_assistant_usage_total
+    from nz_coder.runtime.execution.loop import _last_assistant_usage_total
 
     messages = [
         {
@@ -264,6 +427,31 @@ def test_provider_usage_before_latest_compaction_boundary_is_not_reused():
         "_nz_usage": {"total": 2_000},
     })
     assert _last_assistant_usage_total(messages) == 2_000
+
+
+def test_corrupt_persisted_compaction_usage_degrades_without_crashing():
+    """Context pressure survives nonfinite fields in an old Session record."""
+    from nz_coder.runtime.execution.loop import _last_assistant_usage_total
+
+    messages = [
+        {
+            "role": "user",
+            "content": "summary",
+            "_nz_compaction": {"created_at": float("nan")},
+        },
+        {
+            "role": "assistant",
+            "content": "answer",
+            "_timestamp": float("inf"),
+            "_nz_usage": {
+                "total": float("nan"),
+                "input": 120,
+                "output": 30,
+            },
+        },
+    ]
+
+    assert _last_assistant_usage_total(messages) == 150
 
 
 class _CompactionClient:
@@ -293,11 +481,113 @@ class _SequencedCompactionClient:
         )
 
 
+def test_auto_compact_reports_compaction_provider_usage(tmp_path, monkeypatch):
+    """Compaction is a paid model call and must share the Agent usage ledger."""
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
+
+    monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient("## Goal\n- keep working")
+    observed = []
+    messages = [
+        {"role": "user", "content": "old task"},
+        {"role": "assistant", "content": "old result"},
+        {"role": "user", "content": "recent task"},
+        {"role": "assistant", "content": "recent result"},
+        {"role": "user", "content": "latest task"},
+        {"role": "assistant", "content": "latest result"},
+    ]
+
+    with scoped_workdir(tmp_path), scoped_session("compact-observer"):
+        auto_compact(
+            messages,
+            client,
+            "fake-model",
+            observer=lambda name, payload: observed.append((name, payload)),
+        )
+
+    starts = [payload for name, payload in observed if name == "model_call_start"]
+    finishes = [payload for name, payload in observed if name == "model_call_finish"]
+    assert len(starts) == len(finishes) == 1
+    assert starts[0]["purpose"] == "compaction"
+    assert finishes[0]["purpose"] == "compaction"
+
+
+def test_auto_compact_transcript_is_strict_json(tmp_path, monkeypatch):
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
+    from nz_coder.state.sessions import session_transcript_dir
+
+    monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient("## Goal\n- keep working")
+    messages = [{
+        "role": "user",
+        "content": "old task",
+        "_nz_extension": {"score": float("nan")},
+    }]
+
+    with scoped_workdir(tmp_path), scoped_session("compact-strict-json"):
+        auto_compact(messages, client, "fake-model")
+        transcript = next(session_transcript_dir().glob("transcript_*.jsonl"))
+
+    restored = json.loads(
+        transcript.read_text(encoding="utf-8").strip(),
+        parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
+    )
+    assert restored["_nz_extension"] == {"score": None}
+
+
+def test_agent_compaction_threads_its_gateway_observer(monkeypatch):
+    """The product host must not replace an observed Gateway with a silent one."""
+    from nz_coder.runtime.execution import loop as loop_module
+    from nz_coder.runtime.execution.loop import AgentLoop
+
+    captured = {}
+
+    def fake_compact(_messages, _client, _model, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(loop_module, "auto_compact", fake_compact)
+    agent = AgentLoop.__new__(AgentLoop)
+    agent.client = object()
+    agent.provider = None
+    agent._active_model_id = lambda: "fake-model"
+    agent._prompt_budget = lambda: prompt_budget(10_000, 2_000)
+    agent._model_gateway_observer = lambda _name, _payload: None
+
+    agent._compact_messages([{"role": "user", "content": "summarize"}])
+
+    assert captured["observer"] is agent._model_gateway_observer
+
+
+def test_auto_compact_honors_cancel_before_provider_dispatch(tmp_path, monkeypatch):
+    """An interrupted terminal run must not start a 600-second summary call."""
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
+
+    monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient("unused")
+    cancelled = threading.Event()
+    cancelled.set()
+
+    with scoped_workdir(tmp_path), scoped_session("compact-cancelled"):
+        with pytest.raises(RuntimeError, match="cancelled"):
+            auto_compact(
+                [{"role": "user", "content": "large history"}],
+                client,
+                "fake-model",
+                cancel_event=cancelled,
+            )
+
+    assert client.request == {}
+
+
 def test_auto_compact_preserves_recent_complete_turns(tmp_path, monkeypatch):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.sessions import scoped_session
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import scoped_session
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _CompactionClient("## Goal\n- finish migration")
@@ -315,17 +605,110 @@ def test_auto_compact_preserves_recent_complete_turns(tmp_path, monkeypatch):
 
     assert "<session-summary>" in result[0]["content"]
     assert result[1:] == messages[2:]
-    request_content = client.request["messages"][0]["content"]
+    request_content = client.request["messages"][-1]["content"]
     assert "## Critical Context" in request_content
     assert "old task" in request_content
     assert "recent task" not in request_content
 
 
+def test_auto_compact_summary_input_always_anchors_original_task(
+    tmp_path,
+    monkeypatch,
+):
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact, prompt_budget
+
+    monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient("## Goal\n- preserve the original task")
+    original_task = (
+        "ORIGINAL TASK ANCHOR: repair the array stacking bug. "
+        + ("preserve this requirement; " * 80)
+    )
+    messages = [{"role": "user", "content": original_task}]
+    messages.extend(
+        {
+            "role": "assistant",
+            "content": f"investigation evidence {index}: " + ("x" * 4_000),
+        }
+        for index in range(10)
+    )
+
+    with scoped_workdir(tmp_path), scoped_session("compact-task-anchor"):
+        auto_compact(
+            messages,
+            client,
+            "fake-model",
+            budget=prompt_budget(context_tokens=10_000, output_tokens=2_000),
+        )
+
+    assert original_task in client.request["messages"][-1]["content"]
+
+
+def test_auto_compact_uses_text_only_specialist_system_prompt(
+    tmp_path,
+    monkeypatch,
+):
+    """The compactor must not inherit coding-agent tool-call behavior."""
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
+
+    monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient("## Goal\n- keep working")
+
+    with scoped_workdir(tmp_path), scoped_session("compact-specialist-prompt"):
+        auto_compact(
+            [{"role": "user", "content": "repair the parser"}],
+            client,
+            "fake-model",
+        )
+
+    system, user = client.request["messages"]
+    assert system["role"] == "system"
+    assert "TEXT ONLY" in system["content"]
+    assert "Do NOT call any tools" in system["content"]
+    assert user["role"] == "user"
+
+
+def test_auto_compact_rejects_tool_protocol_as_summary_and_preserves_task(
+    tmp_path,
+    monkeypatch,
+):
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
+
+    monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient(
+        '<｜｜DSML｜｜tool_calls>\n'
+        '<｜｜DSML｜｜invoke name="read_file">'
+    )
+    original_task = "Repair concat so missing variables are preserved"
+    messages = [
+        {"role": "user", "content": original_task},
+        {"role": "assistant", "content": "investigating"},
+        {"role": "user", "content": "recent task"},
+        {"role": "assistant", "content": "recent result"},
+        {"role": "user", "content": "latest task"},
+        {"role": "assistant", "content": "latest result"},
+    ]
+
+    with scoped_workdir(tmp_path), scoped_session("compact-invalid-summary"):
+        result = auto_compact(messages, client, "fake-model")
+
+    summary = result[0]["content"]
+    marker = result[0]["_nz_compaction"]
+    assert "DSML" not in summary
+    assert "## Goal" in summary
+    assert original_task in summary
+    assert marker["summary_recovery"] == {
+        "fallback": "tool-protocol-output",
+    }
+
+
 def test_auto_compact_does_not_send_message_protocol_metadata(tmp_path, monkeypatch):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.sessions import scoped_session
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import scoped_session
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _CompactionClient("summary")
@@ -347,17 +730,17 @@ def test_auto_compact_does_not_send_message_protocol_metadata(tmp_path, monkeypa
     with scoped_workdir(tmp_path), scoped_session("compact-private"):
         auto_compact(messages, client, "fake-model")
 
-    request_content = client.request["messages"][0]["content"]
+    request_content = client.request["messages"][-1]["content"]
     assert "old task" in request_content
     assert "_nz_" not in request_content
     assert "private part" not in request_content
 
 
 def test_auto_compact_updates_previous_anchored_summary(tmp_path, monkeypatch):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.sessions import scoped_session
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import scoped_session
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _CompactionClient("## Goal\n- refreshed goal")
@@ -374,7 +757,7 @@ def test_auto_compact_updates_previous_anchored_summary(tmp_path, monkeypatch):
     with scoped_workdir(tmp_path), scoped_session("compact-anchor"):
         result = auto_compact(messages, client, "fake-model")
 
-    request_content = client.request["messages"][0]["content"]
+    request_content = client.request["messages"][-1]["content"]
     assert "<previous-summary>" in request_content
     assert "durable fact" in request_content
     assert "new head fact" in request_content
@@ -383,8 +766,8 @@ def test_auto_compact_updates_previous_anchored_summary(tmp_path, monkeypatch):
 
 
 def test_auto_compact_uses_provider_capability_snapshot(tmp_path, monkeypatch):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
     from nz_coder.providers import OpenAICompatibleProvider, resolve_model_capabilities
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
@@ -424,8 +807,8 @@ def test_auto_compact_uses_provider_capability_snapshot(tmp_path, monkeypatch):
 
 
 def test_auto_compact_persists_structured_tail_boundary(tmp_path, monkeypatch):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _CompactionClient("summary")
@@ -452,8 +835,8 @@ def test_auto_compact_persists_structured_tail_boundary(tmp_path, monkeypatch):
 
 
 def test_auto_compact_retries_once_only_after_payload_shrinks(tmp_path, monkeypatch):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _SequencedCompactionClient([
@@ -485,9 +868,9 @@ def test_auto_compact_retries_once_only_after_payload_shrinks(tmp_path, monkeypa
 
     marker = result[0]["_nz_compaction"]["payload_recovery"]
     assert len(client.requests) == 2
-    assert "tool evidence" in client.requests[0]["messages"][0]["content"]
-    assert "tool evidence" not in client.requests[1]["messages"][0]["content"]
-    assert "Older tool outputs" in client.requests[1]["messages"][0]["content"]
+    assert "tool evidence" in client.requests[0]["messages"][-1]["content"]
+    assert "tool evidence" not in client.requests[1]["messages"][-1]["content"]
+    assert "Older tool outputs" in client.requests[1]["messages"][-1]["content"]
     assert tool_message["_nz_tool_compacted_at"] > 0
     assert marker["retried"] is True
     assert marker["after_bytes"] < marker["before_bytes"]
@@ -498,8 +881,8 @@ def test_auto_compact_payload_recovery_degrades_only_tagged_expansion(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
     from nz_coder.state.input_expansion import render_expanded_message
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
@@ -545,8 +928,8 @@ def test_auto_compact_skips_retry_and_drops_aggregate_head_at_safe_tail(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _SequencedCompactionClient([
@@ -576,8 +959,8 @@ def test_auto_compact_second_overflow_falls_back_after_single_retry(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _SequencedCompactionClient([
@@ -607,8 +990,8 @@ def test_auto_compact_oversized_user_turn_uses_placeholder_without_retry(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact, prompt_budget
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact, prompt_budget
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _SequencedCompactionClient([
@@ -634,8 +1017,8 @@ def test_auto_compact_without_shrink_or_safe_boundary_preserves_error(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder import context as context_module
-    from nz_coder.context import auto_compact
+    from nz_coder.state import context as context_module
+    from nz_coder.state.context import auto_compact
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     error = RuntimeError("request entity too large")

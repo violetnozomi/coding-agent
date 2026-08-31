@@ -199,4 +199,5 @@ register(
         "required": ["project_spec", "blueprint", "project_dir"],
     },
     handler=check_project_completeness_tool,
+    side_effect="readonly",
 )

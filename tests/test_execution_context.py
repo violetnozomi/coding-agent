@@ -8,17 +8,20 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
 
-from nz_coder import config
-from nz_coder.runtime.execution_context import (
+from nz_coder.foundation import config
+from nz_coder.runtime.core.execution_context import (
     agent_timeout_seconds,
     broad_tests_blocked,
+    declared_test_scopes,
     max_agent_turns,
     max_parallel_tasks,
+    nominal_agent_turns,
     scoped_broad_test_guard,
+    scoped_declared_test_scopes,
     scoped_runtime_overrides,
     set_broad_tests_blocked,
 )
-from nz_coder.runtime.workdir import current_workdir, scoped_workdir
+from nz_coder.runtime.process.workdir import current_workdir, scoped_workdir
 
 
 class _ContextProbeAgent:
@@ -26,6 +29,7 @@ class _ContextProbeAgent:
         self.observed = {
             "workdir": str(current_workdir()),
             "max_agent_turns": max_agent_turns(),
+            "nominal_agent_turns": nominal_agent_turns(),
             "agent_timeout_seconds": agent_timeout_seconds(),
             "max_parallel_tasks": max_parallel_tasks(),
         }
@@ -60,6 +64,25 @@ def test_runtime_overrides_are_nested_and_restore_defaults():
         assert max_parallel_tasks() == 2
 
     assert (max_agent_turns(), agent_timeout_seconds(), max_parallel_tasks()) == defaults
+
+
+def test_nominal_turn_budget_is_context_local_and_bounded_by_hard_cap():
+    from nz_coder.runtime.core import execution_context
+
+    nominal_agent_turns = getattr(execution_context, "nominal_agent_turns", None)
+    assert callable(nominal_agent_turns)
+    default = nominal_agent_turns()
+
+    with scoped_runtime_overrides(
+        max_agent_turns=80,
+        nominal_agent_turns=20,
+    ):
+        assert nominal_agent_turns() == 20
+        with scoped_runtime_overrides(max_agent_turns=12):
+            assert nominal_agent_turns() == 12
+        assert nominal_agent_turns() == 20
+
+    assert nominal_agent_turns() == default
 
 
 def test_runtime_context_is_isolated_across_threads(tmp_path):
@@ -127,6 +150,51 @@ def test_bash_broad_test_guard_is_context_local(monkeypatch, tmp_path):
     assert len(calls) == 1
 
 
+def test_bash_guard_allows_only_user_declared_directory_suite(monkeypatch, tmp_path):
+    from nz_coder.tools.bash import run_bash
+
+    calls = []
+
+    class FakeProcess:
+        def __init__(self, *args, **kwargs):
+            calls.append((args, kwargs))
+            self.stdout = io.StringIO("75 passed")
+            self.returncode = 0
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+    monkeypatch.setattr(subprocess, "Popen", FakeProcess)
+    with (
+        scoped_workdir(tmp_path),
+        scoped_broad_test_guard(True),
+        scoped_declared_test_scopes(("cron_engine/tests",)),
+    ):
+        assert declared_test_scopes() == ("cron_engine/tests",)
+        allowed = run_bash(
+            "python -m pytest -q cron_engine/tests 2>&1 | tail -4"
+        )
+        blocked = run_bash("python -m pytest -q other/tests")
+
+    assert allowed == "75 passed"
+    assert blocked.startswith("Error: Broad test runner blocked")
+    assert len(calls) == 1
+
+
+def test_declared_test_scope_stops_at_chinese_comma():
+    from nz_coder.runtime.agent.task_policy import declared_test_scopes
+
+    prompt = (
+        "完成后必须运行 python -m pytest -q cron_engine/tests，"
+        "并根据真实测试结果给出最终总结。"
+    )
+
+    assert declared_test_scopes(prompt) == ("cron_engine/tests",)
+
+
 def test_evaluation_workspace_scope_does_not_mutate_config(tmp_path):
     from nz_coder.evaluation.eval_runner import _temporary_workdir
 
@@ -143,13 +211,14 @@ def test_evaluation_workspace_scope_does_not_mutate_config(tmp_path):
     assert config.MAX_AGENT_TURNS == original_turns
 
 
-def test_swebench_fork_inherits_runtime_context(tmp_path):
+def test_swebench_spawn_restores_runtime_context(tmp_path):
     from nz_coder.swebench.orchestrator import _run_agent_attempt
 
     with (
         scoped_workdir(tmp_path),
         scoped_runtime_overrides(
             max_agent_turns=17,
+            nominal_agent_turns=13,
             agent_timeout_seconds=4.5,
             max_parallel_tasks=3,
         ),
@@ -166,6 +235,7 @@ def test_swebench_fork_inherits_runtime_context(tmp_path):
     assert result == {
         "workdir": str(tmp_path.resolve()),
         "max_agent_turns": 17,
+        "nominal_agent_turns": 13,
         "agent_timeout_seconds": 4.5,
         "max_parallel_tasks": 3,
     }

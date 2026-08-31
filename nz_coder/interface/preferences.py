@@ -12,8 +12,8 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 from rich.theme import Theme
 
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.private_paths import harden_private_path
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.foundation.private_paths import harden_private_path
 
 
 _STATE_PATH = Path(".nz-coder/terminal/preferences.json")

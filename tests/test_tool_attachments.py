@@ -3,19 +3,19 @@ from __future__ import annotations
 
 import pytest
 
-from nz_coder.attachments import (
+from nz_coder.protocol.attachments import (
     MAX_IMAGE_BYTES,
     make_image_attachment,
     openai_chat_messages,
 )
-from nz_coder.message_schema import attach_message_identity, message_records
+from nz_coder.protocol.message_schema import attach_message_identity, message_records
 from nz_coder.providers.anthropic import _convert_messages as anthropic_messages
 from nz_coder.providers.capabilities import ModelCapabilities
 from nz_coder.providers.gemini import _convert_messages as gemini_messages
 from nz_coder.providers.openai_responses import _message_input
-from nz_coder.runtime.loop import AgentLoop
-from nz_coder.runtime.session_processor import SessionProcessor
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.execution.loop import AgentLoop
+from nz_coder.runtime.session.session_processor import SessionProcessor
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools import ToolOutput
 from nz_coder.tools.files import read_file
 

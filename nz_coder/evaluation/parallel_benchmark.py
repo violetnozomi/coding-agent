@@ -14,8 +14,8 @@ from threading import Lock
 import time
 from types import MethodType
 
-from nz_coder.runtime.execution_context import scoped_runtime_overrides
-from nz_coder.runtime.loop import AgentLoop
+from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+from nz_coder.runtime.execution.loop import AgentLoop
 
 
 @dataclass(frozen=True)

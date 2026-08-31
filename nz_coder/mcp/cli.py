@@ -9,7 +9,7 @@ from nz_coder.mcp.client import MCPError
 from nz_coder.mcp.config import MCPServerConfig, load_mcp_server_configs
 from nz_coder.mcp.oauth import MCPOAuthManager
 from nz_coder.mcp.trust import MCPTrustStore
-from nz_coder import config
+from nz_coder.foundation import config
 
 
 def mcp_main(argv: list[str] | None = None) -> int:

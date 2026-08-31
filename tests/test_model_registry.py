@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.providers import configured_model_capabilities
 from nz_coder.providers.cli import models_main
 from nz_coder.providers.registry import (
@@ -21,7 +21,7 @@ from nz_coder.providers.registry import (
     sync_model_registry,
 )
 from nz_coder.providers.models import save_model_selection
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 def _registry_payload(context: int = 222_000) -> dict:
@@ -205,6 +205,28 @@ def test_registry_rejects_unsafe_source_urls(tmp_path, url, message):
         sync_model_registry(url, workspace=tmp_path)
 
 
+@pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan"), "bad"])
+def test_registry_rejects_invalid_timeout_before_network(tmp_path, timeout):
+    with pytest.raises(ValueError, match="timeout"):
+        sync_model_registry(
+            "http://127.0.0.1:9/api.json",
+            workspace=tmp_path,
+            timeout_seconds=timeout,
+        )
+
+
+def test_registry_strict_load_rejects_nonstandard_json_numbers(tmp_path):
+    target = tmp_path / ".nz-coder/models/registry.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        '{"version":1,"source":"local","providers":{},"extra":NaN}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Invalid model registry cache"):
+        load_registry_snapshot(tmp_path, strict=True)
+
+
 def test_registry_path_must_stay_in_workspace(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "MODEL_REGISTRY_PATH", "../registry.json")
     with pytest.raises(ValueError, match="escapes workspace"):
@@ -268,7 +290,7 @@ def test_agent_uses_api_model_id_but_keeps_logical_capability_identity(
     registry_server,
     monkeypatch,
 ):
-    from nz_coder.runtime import loop as loop_module
+    from nz_coder.runtime.execution import loop as loop_module
 
     _RegistryHandler.payload = {
         "openai": {

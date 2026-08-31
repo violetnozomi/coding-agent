@@ -21,6 +21,10 @@
 
 | 编号 | 日期 | 对齐能力 | 状态 | NZ-Coder 主要结果 | 完成时验证 |
 |---|---|---|---|---|---|
+| A280 | 2026-08-25 | 真实SWE续片故障收口：Provider fail-fast、验证/风险语义、调查收敛与Repo热路径 | production_verified（续片因余额中止，不计成绩） | 402/鉴权类错误一次调用即fatal且归类`agent_failed`；stdlib兼容导入故障归环境阻塞；closure reserve拒绝不再污染patch risk；source+test定位后12次调查收敛；语言路由读取后台发布状态，不再物化完整索引或等待数据库锁 | A280只得到4题有效推理+3题余额失败，未跑官方harness且不报告分数；新增行为TDD红绿，Repo/HTTP相关144项通过，完整门禁见详细记录 |
+| A278 | 2026-08-25 | Provider Turn Ledger、证据完成直停与显式测试不可变约束 | production_verified | 对每个主模型调用记录 investigation/implementation/verification/repair/convergence 原因与结构化产出；当前代 exact acceptance + ledger + completion review 齐全时在 tool boundary 直接结束；“不修改测试”不再被 pytest 路径误解为新增测试要求，并由工具策略硬阻断 | 5 个全新 DeepSeek 真实任务主模型 3/3/3/5/3 calls，全部外部验收通过且零测试改动；同任务失败样本 7 coding + sidecar/64,201 tokens → 3 coding/22,115；完整门禁见详细记录 |
+| A277 | 2026-08-25 | 大窗口模型 Replay-Cost Semantic Compaction | production_verified | 将物理窗口与重复回放成本分离；24K provider-visible history 默认触发原子语义压缩，固定 system/tool schema 不计阈值；单真实用户长任务仍保留近期原子尾部，durable-only metadata 不挤占预算；0 可关闭 | A279 首次触发 25,009→5,090 history tokens；真实 DeepSeek 摘要后 continuation=`CONTEXT_OK`；后续 9 calls 反事实少重放 142,960；2363 项全量、Ruff、compileall、diff check 通过 |
+| A276 | 2026-08-25 | Provider-only Write Receipt Projection | production_verified | 仅在真实 provider assistant 已观察成功写入后压缩下一请求中的 diff 回执；当前批次/失败/读取/验证证据与 durable Session 全保留；trace 分原因统计 token savings | A277/A279 反事实累计少重放 57,409/48,332 history tokens；真实 A279 completed、94 passed、semantic 12/12；2355 项全量、Ruff、compileall、diff check 通过 |
 | A247 | 2026-08-11 | Core Coding Capability Sprint：Repo Intelligence V3、Tool/Context Scale V2、A–H Benchmark | production_wired（付费模型/SWE效果仍未知） | AST+多语言低置信词法调用图、完整Symbol/Module/Process/Changed Scope/Impact capsule、共享prewarm/watcher；真实Context压力工具暴露、批量结果总预算；统一Trajectory诊断与真实native Runner/验证/冲突A–H基准 | 1741项全量、Ruff、compileall通过；A–H 8/8，300模块、200工具、41模型/40工具轮；未跑付费Provider/SWE，不声称榜单等价 |
 | A238 | 2026-08-11 | Native Runtime 去 Host 化与 Child Session 单一真源 | production_wired（七阶段范围完成；AgentLoop 尚非纯 facade） | 新增 `RunRequest + RunOptions` 原生入口；无 AgentLoop 完成 Model→Tool→Model→Final；Main 单向适配原生 Runner；Runner callback bag 45→0；Child 首次/恢复均以 Session 为 transcript/usage 真源，TaskRecord 删除 messages 与顶层 usage 副本；同步 Tool 与 legacy coding host 明确保留为后续债务 | 1613 项全量、Native/Child/architecture 专项、Ruff、compileall、import smoke、diff check 通过；未跑付费 Provider/SWE，不声称榜单等价 |
 | A237 | 2026-08-10 | Session-first Runtime 最终生产边界收口 | production_wired（当前提示词核心架构验收完成；兼容 API/全局工具注册/外部成绩不在此结论内） | ModelExecutionContext、RunnerExecutionContext、LifecycleExecutionContext 接入生产；Runner turn/Model/Lifecycle/异步Tool核心均零host；child/background 使用parent-linked原生Session，task state退出transcript ownership；RuntimeServices删除第二SessionRepository owner | 1605项全量、152项Runtime/architecture专项、Ruff、compile/import、diff check通过；离线6任务peak=3、顺序保持、2.77x；未跑付费Provider/SWE |
@@ -259,6 +263,7 @@
 | A220 | 2026-08-09 | SWE-bench可复现身份清单 | 已完成验证入口 | 主CLI接入swebench；first-pass生成source/config/instance secret-free manifest | CLI help通过；300实例未执行 |
 | A221 | 2026-08-09 | 真实Provider、终端与SWE小样本证据闭环 | 已完成首轮真实证据 | DeepSeek text/tool/stream、真实PTY read_file、官方SWE固定前10题first-pass全部闭环 | 1335项干净环境回归；官方10题6 resolved/4 unresolved/0 errors |
 | A222 | 2026-08-09 | SWE-bench Verified严格主榜流程 | 已完成代码闭环，待500题实跑 | Verified 500设为主榜、Lite 300仅冒烟；严格pass@1禁hints/官方测试反馈/答案联网，exact-once恢复、公开轨迹、官方提交包fail-closed | 22项严格契约、203项聚焦与1357项完整回归通过；未运行500题或付费推理 |
+| A274 | 2026-08-24 | 顺序编辑合同与既有语义 Oracle | 已完成真实闭环 | DeepSeek mutation description 明确非重叠/append；syntax alias 测试以现有 canonical/numeric 行为为 oracle | 真实 Session 13+1 calls、21 tools；独立 90 passed、semantic 10/10；TP-025 closed |
 
 状态含义：
 
@@ -12189,6 +12194,10 @@ Session Message/Part graph
 
 ## 125. A131–A133：InfCodeX Agent Core 在途协作、停止协议与结果谱系
 
+> 2026-08-28 范围审计纠偏：A131 中针对本机损坏 Python `.pth` 的 traceback 过滤不属于
+> InfCodeX 产品能力，而且会把真实解释器环境损坏误记为有效验证。该生产分支和对应“忽略警告”测试已
+> 回退；`.pth` traceback 现在按普通失败证据处理。下文保留当时历史经过与测试快照，不再代表当前合同。
+
 ### 125.1 InfCodeX 参考能力
 
 本轮改用官方开源 InfCodeX 快照 `d3a81237` 作为 Agent Core 行为规格，重点阅读：
@@ -15038,3 +15047,1718 @@ same-directory idempotency defects. Final evidence and the strict gap matrix are
   DACL 持久化和当前 Session 即时切换。
 - 新增冻结树资产契约、构建证据、安装→产品命令→覆盖升级→卸载生命周期证据，
   并保留语言服务器为 Doctor 可诊断的可选外部能力。
+
+## A252 — InfCodeX / infcode-dev 终态协议与运行预算融合（2026-08-14）
+
+- InfCodeX 的关键能力不是一处 `CancelledError` catch，而是
+  `tool-cancellation -> catch cleanup -> terminal -> snapshot/event` 的有序协议；
+  infcode-dev 进一步把已开始的 assistant 标为 `MessageAbortedError`。NZ-Coder
+  现在让 Provider/tool 取消先结算未完成 part，再由 ProductionRunLifecycle 写
+  `run_end(status=cancelled)`，SessionRuntime 只做一次最终持久化，run middleware
+  发 cancelled 而不误报 model/tool failure。
+- 真实 TUI 取消验证了 trace 最后一项、Session assistant error、tool part 终态和
+  REPL 返回；同时 HTTP legacy abort 合同保持 `message.part.removed` 早于
+  `session.run.cancelled`，避免“只修 native、旧入口退化”。
+- Broad Test Gate 原来只有 run-local 布尔值，无法区分“用户指定的目录 suite”与
+  “模型自行扩大到全仓”。新增结构化 pytest target 提取和 ContextVar scope containment：
+  `cron_engine/tests` 可包含其测试文件，但不能授权空目标 pytest、父目录或 sibling。
+- InfCodeX 普通 Runner 的默认 20 次 tool-loop 上限与 managed budget 的
+  green/yellow/orange/red 区间被组合到 NZ-Coder：默认终端上限为 20，70%/85%/95%
+  分别注入一次收敛提示，已发 zone 随 active RuntimeState 持久化；显式用户/评测预算
+  仍通过 per-request override 覆盖。
+- 真实长任务揭示 headless `--max-turns` 曾停留在 `RunRequest.metadata`，Runtime
+  仍使用默认 50，造成 30+ Provider 调用和约 1.1M input tokens。修复后受控真实
+  `--max-turns 4` 严格只有 4 次请求，并在第 4 次前产生 yellow trace。这个过程说明
+  产品预算必须做端到端 trace 验证，不能只检查 argparse 或单元测试中的 metadata。
+- CLI 只在正常完成的 substantial run 后注入 memory reminder；typed cancelled
+  result 不再被追加 synthetic user tail，避免恢复时把取消轮误当成待续任务。
+- 最终完整回归为 `2126 passed, 21 skipped`；TP-023、TP-024 已有真实产品证据关闭，
+  TP-025 保留 verify，等待默认 20 轮下完整长编辑任务达到调用数/工具数性能门槛。
+
+## A253 — 默认 20 轮真实长编辑复测（2026-08-14）
+
+- Session `default20-long-20260814` 在隔离副本完成月份/星期名称解析、CLI、三类测试
+  与 README 修改，外部验收 `103 passed`；但 Runtime 用满 20 次模型调用和 26 次
+  工具调用，最终明确报告尚未完成整目录回归，因此不能判定终端长任务闭环达标。
+- 轨迹显示主要恢复成本不是代码理解，而是用户声明测试范围的自然语言解析：中文逗号
+  没有结束 pytest 命令，Broad Test Gate 错误拒绝明确要求的目录 suite；拆分运行又
+  揭示目标仓库 CLI 测试硬编码旧 cwd，Agent 为定位和修复消耗到 red budget。
+- `declared_test_scopes()` 现在把中英文逗号都视为命令边界，并以失败先行的回归测试
+  固化。结论是安全 gate 必须解析“命令边界”，不能只识别 runner 和 path；否则一个
+  中文连接句就会让已经正确的 scope containment 在真实产品里失效。
+- 修复后的真实 Session `chinese-scope-real-20260814` 在 README 编辑后原样运行
+  `python -m pytest -q cron_engine/tests`，得到 `103 passed`；轨迹为 6 次模型调用、
+  5 次工具调用且无失败，确认不是只修了 parser 单测，而是完整产品链已经生效。
+
+## A254 — Runtime-Owned Verification Contract + DeepSeek Replay（2026-08-14）
+
+- 对照 InfCodeX `deterministic-evaluator.ts` 的核心思想，把“用户明确写出的验收命令”
+  从 prompt 建议提升为 Runtime contract；没有复制 managed task host，而是组合进
+  NZ-Coder 已有 RuntimeState、WorkBudget、ToolExecutionContext 和 SessionProcessor。
+- `verification_contract.py` 只解析有明确 workspace-relative target 的 pytest 命令，
+  拒绝 pathless pytest、绝对/父目录 path 及 pipe/redirect/command chaining。状态记录
+  attempted generation、次数、通过状态和有界输出，支持 Session 中断恢复。
+- Runner 在 yellow/orange/red 预算区以及提前自然完成边界检查 contract；命令通过正常
+  Bash pipeline，因此权限、workspace safety、取消、timeout、trace、result projection
+  与模型调用完全一致。同一修改代次不重复执行，新的 edit generation 会重新启用。
+- 第一轮真实产品运行证明自动测试本身成功，却暴露 DeepSeek V4 thinking replay 400。
+  源码对照确认 InfCodeX `openai.ts` 的 load-bearing 规则是：opt-in provider 的每条
+  assistant history 都必须有 `reasoning_content`，没有 thinking 时也发送空字符串。
+  NZ-Coder 过去只保留已有值；现在统一在 `message_projection.py` provider-aware 地补齐，
+  GPT 等未 opt-in 模型仍剥离该字段。
+- 最终 Session `verification-contract-state-fixed-20260814`：4 次 model calls、4 次 tools
+  （2 个首轮并行 reads、1 次 edit、1 次 Runtime 自动 Bash），1 行 diff，
+  自动命令 `python -m pytest -q tests` 得到 `3 passed`，模型随后正常总结，exit code 0，
+  trace 的 contract zone 为 `completion` 且没有 API error。
+- 第二轮真实核验发现旧 VerificationManager 仍把推断出的 static command 标成 pending，
+  导致 `run_end=completed` 却报告 `verification_state=verifying`。新增明确的 acceptance
+  settlement：通过的用户 contract 结算 planner-only required stage，并记录
+  `satisfied_by=user_acceptance_contract`。最终 trace 为 `verification_needed=false`、
+  `verification_state=passed`、`next_required_stage=null`，状态与行为一致。
+- 聚焦回归 47 项和 Ruff 通过；首次 full suite 为 `2139 passed, 1 failed, 21 skipped`，
+  唯一失败是架构测试把合法 Runner tool path 数量硬编码为 2。护栏现改为遍历所有调用并
+  逐一验证 run-scoped context，不再绑定数量；最终完整回归为
+  `2141 passed, 21 skipped, 7 known fork warnings`，耗时 162.62 秒。
+
+## A255 — Long-Task Phase Convergence + Honest Terminal State（2026-08-14）
+
+- 对照 InfCodeX 的 task phase/deterministic evaluator 思路后，真实 trace 证明 NZ-Coder
+  的主要问题不是缺一个新框架，而是阶段事实没有成为确定性消费条件：源码证据已充分仍
+  探测环境、Provider 轻微偏离 patch schema 就整轮失败、显式验收太晚、最大步数摘要被
+  误记成完成。
+- 新增窄范围 implementation phase gate：仅对有安全显式验收契约的修改任务，在首次
+  edit 前已有 8 次 repository investigation 时拒绝 Bash 环境探测。它把基线的 6 次
+  pre-edit shell 回合压到最多 2 次，不限制 structured read/write，也不作用于新项目。
+- `apply_patch` schema/handler 支持单文件顶层 `path` fallback，并保留标准 per-hunk path。
+  这不是静默猜测目标：只有明确顶层 path 时才继承，所有路径仍逐项安全验证、全部 hunk
+  成功后才写入。真实 trace 中四次 `change requires path` 因此消失。
+- Recovery 新增 `subprocess_package_root` 与 `workspace_boundary` 分类。pytest 主进程可
+  import、CLI subprocess 却 `No module named` 时，直接审查 helper cwd/env 和 package
+  parent，不再错误建议读生产源码或运行 pip metadata；越界 workdir 则使用默认 workspace。
+- Runner 最后一轮注入 `_MAX_STEPS_PROMPT` 后，若最终文本明确承认达到最大步数，则以
+  `max_turns` 终止；最后一轮正常返回 `done/finished` 的短 child 仍是 completed。该边界
+  修复了“工具已禁用/任务未完成，headless 却 exit 0”，也避免误伤合法 1-turn 子 Agent。
+- WorkBudget yellow 从 70% 提前到 60%，orange/red 保持 85%/95%。这让 20 轮任务在第
+  12 轮执行用户契约，而非第 14 轮才暴露回归；最终真实运行在第 12 轮发现 scheduler
+  bug，第 13 轮修复，独立验收 105 passed。
+- 五次同任务数据从 `20/32 + 不完整` 收敛到 `19/26 + 完整`，最终随机样本为
+  `18 model calls / 28 tools + 完整`。因此源码级能力和终态诚实性有实证提升，但没有
+  达到 15/25 数值门，TP-025 仍为 verify。下一步应让普通模型执行的同一显式 acceptance
+  回写 contract generation，并在非 Git workspace 消费已通过证据，避免通过后的重复
+  pytest/diff/compile，而不是继续增加 prompt 或压低 max turns。
+- 最终完整回归为 `2151 passed, 21 skipped, 7 known fork warnings`；新增/变更 Python
+  文件 Ruff 与全工作区 `git diff --check` 通过。
+
+## A256 — Mutation-Scoped Acceptance Consumption + Tool Schema Closure（2026-08-14）
+
+- 对照 InfCodeX deterministic evaluator 的“确定性结果由 Runtime 消费、Worker 只负责
+  下一步行动”原则，补齐了模型主动 Bash 与 Runtime synthetic Bash 的来源边界。显式
+  pytest 采用 `shlex.split` 后的严格 token 等价，不接受 pipe、redirect、额外目标或不同
+  runner；成功/失败均绑定当前 mutation generation，后续 edit 自动重新激活。
+- `AgentLoop` 现在把模型执行的精确 acceptance observation 同步给 VerificationManager；
+  Runner synthetic call 带 `_nz_runtime_contract` marker 并保留原手动结算路径，因此 native
+  fake service 与生产 Tool Runtime 都不会双计数。证据额外记录 `source`/`zone`：budget-zone
+  pass 是中间证据，model-issued 或 completion pass 才能触发最终总结提示。
+- 第一轮真实 trace 暴露“parser 刚改完、测试和 README 未做，yellow 旧 59 项却通过”的
+  假收口。RuntimeState 因此直接观察并持久化 Todo open count：预算区在 Todo 未完成时
+  defer，completion 仍强制执行。没有 Todo 的任务不伪造完成度，预算区 pass 只提醒继续
+  outstanding requirements。
+- 三轮相同 59-pass baseline 长任务分别为 20/31、20/29、20/30，全部诚实返回 max_turns；
+  独立结果为 94/108、91/92、93/107。三轮没有达到 TP-025 的 15/25 与全绿门，说明状态
+  消费正确不等于规划和补丁生成已经成熟。
+- 第二轮真实 trace 有 6 次 `apply_patch` change 缺 path。根因不是 handler 不兼容，而是
+  provider schema 的嵌套 item 没把 path 声明为 required；DeepSeek 因此合法地产生省略
+  path 的对象。schema 收紧后第三轮该失败降为 0，证明源码级对齐必须检查 provider 实际
+  看到的 JSON schema，不能只检查 Python handler signature。
+- 第三轮剩余两次 patch 失败都是“向测试文件末尾追加内容”却复制错一个 docstring 引号。
+  `apply_patch` 新增路径安全、事务化、原子验证的 `op=append`，Recovery 只在纯 EOF 追加
+  场景推荐它；replace/create/delete 语义与 top-level single-file compatibility 保持不变。
+  该项有单元红绿证据，尚无第四次真实长任务证据，文档不把它写成已验证性能收益。
+- subprocess package-root 诊断现在输出 active workspace root 与检测到的 package directory，
+  明确要求使用“包含 package 的目录”作为 cwd，不再让模型猜 `parents[...]`。真实三轮仍
+  表明 DeepSeek 对 dirname/parents off-by-one 很敏感，下一阶段应把 package-root 修复做成
+  结构化 workspace evidence，而不是继续堆自然语言说明。
+- 最终完整仓库回归为 `2173 passed, 21 skipped, 7 known fork warnings`，Ruff 与
+  `git diff --check` 通过。TP-025 继续 `verify`；剩余重点是减少首轮读取、让追加型 patch
+  使用稳定 op，以及在无 Todo 时建立可验证的 requirement/artifact completion state。
+
+## A257 — Contract-Led Runtime Convergence（2026-08-14）
+
+- 本轮没有继续复制某个仓库的目录形状，而是把 InfCodeX 的 deterministic evaluator、
+  task contract 与 infcode-dev/OpenCode 的 provider projection、context/tool-schema 边界
+  组合进 NZ-Coder 现有 Native Runtime。关键原则是：计划仍只调用模型一次，Runtime
+  持有可验证事实，模型负责语义决策，不新增线性 workflow host。
+- `TaskContract` 把需求分成 artifact/test/verification/compatibility/documentation/mixed，
+  `RequirementLedger` 将文件写入、目标测试与 exact acceptance 绑定到 mutation generation。
+  写入只能让行为需求成为 candidate；静态检查或无关测试不能冒充语义完成；后续编辑会
+  使旧验证证据失效。`CompletionGate` 因此可以独立于 Todo 阻止“只改了部分文件就总结”。
+- `ProjectExecutionFacts` 将 workspace root、project root、source/test roots、Python 包的
+  module name/package path/module cwd、Node package 与验证命令变成结构化事实；
+  `ImplementationBundle` 只在中高复杂度多产物任务首轮注入，并保持有界，避免把 Repo Map
+  全量塞进 prompt。
+- Verification scheduler 不再在每个预算区重复跑用户整套验收：yellow=static、
+  orange=targeted、red=convergence，只有账本无硬缺口时 red 才可 exact；completion 始终
+  exact。通过后 Runner 直接保留已有 final text，避免“测试已绿还再问模型一次”。
+- WorkBudget 的产品默认值收口为 13 normal + 2 closure，20 仍是 emergency hard cap。
+  closure 的工具可见性与执行策略同时收窄，最后一轮仍允许一次已知路径修复，而不是把
+  tools 全关掉后要求模型用文本假装完成。
+- 工具 durable message 增加 resource/evidence/generation metadata；provider projection
+  只压缩已经被后续 mutation 或成功验证取代的证据，Session 原始消息不改。这样既保留
+  trace/恢复能力，又防止模型反复依据旧文件或旧失败做决策。
+- Provider schema 在 model-facing boundary 深拷贝适配，DeepSeek 简化 `anyOf/oneOf/allOf`
+  和冗余描述时仍保留递归 `required`、enum；recursive linter 能发现嵌套 item 与 handler
+  所需字段不一致。Canonical registry 与工具 handler 没有 provider 特例。
+- 聚焦回归 `218 passed`；完整仓库回归 `2212 passed, 21 skipped, 7 known fork warnings`。
+  fake-provider 证明 planner 没有新增调用、自然结束边界的 exact acceptance 能进入最终
+  Session 且无需第三次模型调用；Ruff 与 `git diff --check` 通过。
+  外部 DeepSeek 同任务 A/B 明确延后，因此 TP-025 仍是 `verify`，不能用静态架构完成度
+  代替真实调用数、token、wall time 或 SWE-bench 成绩。
+
+## A258 — Contract-Led Runtime 真实 Provider 反证（2026-08-14）
+
+- 同一 `59 passed` fixture 和同一长任务运行两次。默认配置得到 20 execution calls / 32
+  tools、493,135 tokens、独立 94/100；显式开启 planning 得到 20/28、417,010 tokens、
+  独立 80/85。两轮都 `max_turns`，因此 A257 的模块和 fake-provider 绿灯不能视为产品闭环。
+- 根因不是 RequirementLedger 规则本身，而是它没有获得 contract：默认
+  `NZ_PLANNING_ENABLED=false`；手动开启后 DeepSeek 返回的 3672 字符 planner JSON 在字符串
+  中截断，fallback 保存 plan 文本却清空 contract。两轮均没有
+  `implementation_bundle_ready`，ProjectExecutionFacts 自然也没有纠正 CLI subprocess cwd。
+- 开启 planning 的运行除 20 个 execution calls 外还发生 1 次 planning 与 2 次 replanning；
+  现有 `llm_request`/headless usage 没有统计这些控制面调用。以后“模型调用数”必须区分
+  execution turns 与全部 Provider calls，不能只挑较小的数字报告。
+- Runtime 的正面证据是：workspace 外 Bash 被拒绝、自然/硬上限验收确实运行、失败终态
+  为 `max_turns` 而非伪 completed。负面证据是 contract 主链未激活、首 6 轮仍读 12 个文件、
+  package root 恢复失败和 closure 不足。下一步优先修 planner contract 的默认启用与截断
+  恢复，再做第三轮同题 A/B；此时 TP-025、TP-028、TP-029 均不能关闭。
+
+## A259 — Default Contract Activation + Purpose Accounting（2026-08-15）
+
+- 参照 InfCodeX deterministic contract 的原则，把 contract owner 从可选 planner 移回
+  Runtime：存在安全精确验收命令时，默认产品路径零调用生成保守 contract；合法 planner
+  只做 enrichment，截断 JSON 保留 bootstrap contract。这样不再用 feature flag 决定硬
+  完成语义，也没有为了“启用规划”额外购买一次模型调用。
+- contract 结构本身可激活 ImplementationBundle；ProjectExecutionFacts 能识别唯一嵌套
+  Python project，并输出正确 project root、module cwd、test root 与 test command。
+  ModelGateway 的 buffered/streaming completion、planning/replanning、stall sidecar 统一通过
+  purpose observer 进入 RuntimeState 和 headless metadata，控制面 usage 只加入 RunContext
+  一次。自然完成的组合测试证明 exact acceptance 先更新 ledger，再由 CompletionGate 决策。
+- TDD 红绿证据覆盖默认 bootstrap、planner malformed fallback、rich contract bundle、嵌套
+  project facts、buffered/streaming/sidecar accounting 和 headless output。聚焦 `215 passed`，
+  完整仓库 `2224 passed, 21 skipped, 7 warnings`，Ruff 与 `git diff --check` 通过。
+- 第三轮相同真实任务从 `59 passed` baseline 开始。trace 确认
+  `task_contract_bootstrapped=1`、`implementation_bundle_ready=1`，所以 A258 的默认激活缺陷
+  已被真实 Provider 关闭；headless 报告 20 个 coding calls、20 attempts、699,514 Provider
+  total tokens。不过运行仍为 20 calls / 35 tools / max_turns，独立验收只有 92 passed、5 failed。
+- 5 个失败全部来自 CLI test helper 保留旧绝对 cwd，子进程导入旧 fixture。模型已经读到
+  helper，却走向越界 `cd` 和 editable pip install。bootstrap 没有 expected artifacts，bundle
+  因此 candidate_count=0；正确 project facts 没有转化成一行确定性 cwd 修复。
+- 新的 Runtime 反证是 hard cap：模型最后仍返回 tools 时，Runner 没有进入 natural-stop exact
+  acceptance 路径，最终 contract attempts=0、ledger pending、final text 为空。pytest 管道又
+  因缺少 pipefail 把失败命令呈现为 shell success，Recovery 没有注入 stale-workspace
+  subprocess 诊断。TP-025/TP-028 不能关闭；后续先修 hard-cap acceptance settlement 和
+  pipeline/subprocess recovery，再增强零调用 candidate/artifact inference。
+
+## A260 — Deterministic Terminal Boundary + Bootstrap Evidence（2026-08-15）
+
+- 这次没有继续增加 prompt 或 planner，而是修复第三轮 trace 已证明的控制流事实。参考
+  InfCodeX 的 deterministic evaluator 思路，Runner 现在把 natural、buffered tools、streamed
+  tools 与 exhaustion 都投影到同一 Terminal Boundary：exact acceptance、ledger observation、
+  completion decision、persistence 的顺序固定，最后一轮工具调用不再绕过验收。
+- `15 coding calls` 是产品 SLA，`20` 只是证据充分的局部修复安全帽。第 16-20 次调用改名为
+  `bounded_emergency`，进入条件必须同时满足 diff、失败证据、已知目标、无需广搜；工具 schema
+  和执行 policy 同时只留已知路径 read/edit、diff 与定向/精确验证。runaway model 没有这些
+  事实时在 15 次结束，不再无条件消耗 20 次。
+- Bash 的 canonical outcome 来自 `ToolOutput.metadata.exit`，可见文本只负责 UI/模型投影；
+  POSIX Bash 通过 pipefail 保留 pipeline 上游 pytest 的退出码。这个边界同时进入 parent 与
+  child executor，避免子 Agent 继续沿用字符串前缀判断。
+- 新增的 subprocess workspace diagnostic 不执行测试代码，只解析失败 helper AST 中有限的
+  Path/cwd 表达式。它能识别“旧 fixture 仍可 import，但 cwd 指向旧 workspace”的情况，直接
+  给出 helper、旧/新 cwd 和 module，避免错误走向 pip install 或 production patch。
+- BootstrapArtifactResolver 在 RI/LSP/embedding 之前，根据显式路径、唯一 stem、请求测试
+  surface、README 与入口点生成分级证据。cron fixture 的 parser、三个 test 文件、nested
+  README 成为 hard artifacts，scheduler/CLI/entrypoint 只是 candidates。Ledger 相应收紧：
+  acceptance 可直接支持 artifact-free behavior/compatibility/verification，但 docs/artifact/test
+  必须先有对应 mutation evidence。
+- G1-G7 均以先失败后实现的测试固定；本节记录的是本地源码闭环，不冒充第四轮真实 Provider
+  成绩。下一步必须先通过完整 pytest、Ruff 与 diff review，再决定是否花费真实调用成本。
+
+## A261 — 第四轮真实反证：Terminal 已收口，但补丁生成与恢复排序未达产品门（2026-08-15）
+
+- 相同 59-pass cron fixture 的第四轮结果是 20 coding calls、1 stall sidecar、32 个工具调用、
+  930,399 个互斥 bucket tokens，独立验收 `34 passed / 61 failed`，终态 `max_turns`。所以
+  A260 的确定性边界通过了真实链路，但 15/25/全绿产品门仍然明确失败。
+- Terminal Boundary 与 InfCodeX-style evidence ownership 已得到正面实证：最后一轮仍有工具时
+  Runtime 在 generation 5/6 都运行 exact acceptance，contract attempts=2，ledger 保持
+  unresolved，失败没有被 summary 或模型措辞覆盖。说明这轮不是终态 false-pass，而是补丁
+  本身真实错误。
+- 最终根因只是 parser 循环多出一行 `expanded.append(vals)`。DeepSeek 把一处实现拆成多轮
+  replace/read/static micro-step，py_compile 只能发现中间 SyntaxError，不能发现字段错位；直到
+  第 15 call 才跑语义测试。当前最直接的对齐方向是更早消费聚焦测试证据和减少同文件往返，
+  不是引入新的 planner/router call。
+- subprocess workspace drift 诊断本身是正确的，但在 CLI/parser/scheduler 同时大面积失败时
+  优先级错误。参照 InfCodeX“先消费全局确定性 evidence，再做局部 recovery”的思想，现改为
+  多测试文件失败先报告 `widespread_test_regression`，要求检查本轮共享 production surface；
+  精确 target 只保留每文件一个、最多三个，避免几十条失败节点污染 verification context。
+- bootstrap 的 slash token 误判和 synthetic flag 可复制问题说明：确定性字段存在不等于它们
+  可以被信任。现在 artifact 必须是现存文件或明确文件名；`_nz_runtime_contract`/
+  `_nz_runtime_verification_stage` 只有与 stored contract/classifier 一致才有权限。模型复制内部
+  字段不能重新开放 emergency shell exploration。
+- ModelGateway 的 usage buckets 本来互斥，但 RunResult total 仍沿用 raw input+output 旧语义，
+  导致第四轮 headless 顶层显示 722,619，而 purpose total 为正确的 930,399。TokenUsage total
+  已统一为 input/output/reasoning/cache-read/cache-write 五桶之和，后续产品与 trace 数字一致。
+- 本轮没有进入 DeepSeek Harness-style Code Mode：20 calls 中可确认的浪费主要来自 2 次额外
+  首轮探索、同 parser 的多轮 read/edit micro-step、以及错误 recovery 优先级。先验证这些
+  确定性修复；只有仍存在大量必要的 LLM→tool 往返，才有 Code Mode 的证据基础。
+- 后续确定性修复通过 `158` 项聚焦回归；完整仓库为 `2247 passed, 21 skipped, 7 known
+  fork warnings`（114.88 秒），Ruff 与 `git diff --check` 通过。真实第四轮仍按失败记录，
+  没有用这些本地绿灯改写它的产品结论。
+
+## A262 — 第五轮：suite 全绿不等于产品门或兼容契约通过（2026-08-15）
+
+- 新隔离 fixture 由 `59 passed` 开始，第五轮最终为 19 coding calls、1 stall sidecar、31
+  tools、871,743 tokens、207.10 秒；Runtime exact 和外部独立 suite 都是 `102 passed`，状态
+  `completed`。相较第四轮 `34/95` 是真实能力提升，但仍违反 15/25 性能 SLA。
+- InfCodeX-style contract evidence 本轮完整工作：parser、三类 test、README mutation evidence
+  齐全，generation 4 acceptance 失败、generation 5 acceptance 通过，ledger 七项才一起转为
+  satisfied。这证明 Terminal settlement 修复已穿过真实 Provider，不再是 fake test 结论。
+- recovery 不能只选择一个全局标签。CLI stale cwd 是 AST 可证明的局部事实，scheduler hour
+  快速路径是共享 production failure；`widespread_test_regression` 覆盖前者后，模型浪费两个
+  emergency calls 探测旧目录。更合理的对齐是 composite evidence：同时给出已证明的 helper
+  drift 和跨文件 failure fanout，让模型直接做两个已知目标修复。
+- 102 项测试是 Agent 自己扩出的 suite，仍存在共同盲区。原数字 `5-1` 从拒绝变成环绕接受，
+  破坏“保持现有数字 API”；名称环绕步长 `FRI-MON/2` 又使用数值差而非序列位置计算，结果
+  `[0,1,5]`。这说明 RequirementLedger 的 compatibility requirement 不能只凭整个新增 suite
+  PASS；应把 baseline behavior probe 或原测试集差分证据纳入 compatibility satisfaction。
+- Terminal settler 已产生 deterministic content，但 Lifecycle raw result 没持久化
+  `content_text`，所以 headless `text` 为空。运行时控制流正确不代表产品 envelope 正确；
+  InfCode/OpenCode 的 server/session result 边界值得继续借鉴，终态正文必须成为 durable result
+  field，而不是只通过 UI callback 临时投影。
+- 下一步仍不是 Code Mode。可确认的多余成本包括：首次编辑前 4 calls/11 tools、两次错误
+  append anchor、一次 non-Git `git diff`、以及两个被 emergency gate 拦截的目录探测。先修
+  early targeted verification、append schema consumption、composite recovery 和 result envelope，
+  再看是否还剩大量不可消除的必要 LLM↔tool 往返。
+
+## A263 — Terminal efficiency closure 与第六至八轮真实反证（2026-08-16）
+
+- 本轮组合 InfCodeX 的 authoritative `RunResult.output` / deterministic evaluator 与
+  infcode-dev/OpenCode 的 Assistant terminal persistence 顺序，而不是增加新的 Host。Lifecycle
+  现在把 terminal content 写入 Assistant、`last_status.content` 和 headless envelope；tool-call
+  边界不会再把“接下来更新 README”之类过渡文本当最终回答，而是生成只陈述持久事实的摘要。
+- 失败恢复从互斥早返回改成 specificity 排序的 composite diagnostic。AST 可证明的
+  `subprocess_workspace_drift` 成为 primary，`widespread_test_regression` 可作为 supporting，
+  helper path 成为 durable repair target；新诊断先清空旧分类，避免普通 parser 失败沿用前一轮
+  workspace-drift 标签。
+- Runtime 只在成功写入后推进 mutation generation，并额外记录
+  `source_mutation_generation`。static/targeted stage 因生产源码变化才重新调度；测试或文档修改
+  不会反复执行较弱验证，exact 已失败后的 test-only repair 直接回到 exact。非 Git workspace
+  在 orange/red/closure 阶段拒绝无效 `git diff/status`，引导使用 `diff_status` 与
+  `verify_changed_files`。
+- 有安全 exact contract 的修改任务在首次编辑前收集 6 次结构化调查后，下一次 Provider 请求
+  隐藏更多调查工具，只保留写入、Todo 与验证工具。该限制只作用于尚无 mutation 的
+  bugfix/feature/refactor/test，不影响无 contract、新项目或编辑后的定向恢复。
+
+三轮都从独立 `59 passed` fixture、相同中文任务、DeepSeek V4 Flash、auto 权限和 20-turn
+hard cap 开始，且用外部进程重跑 Agent 新增后的完整 suite：
+
+| Session | coding / sidecar calls | tools | Provider tokens | 独立 suite | 终态正文 |
+|---|---:|---:|---:|---|---|
+| `efficiency-sixth-real-20260816` | 19 / 4 | 37 | 628,234 | 97 passed | 过渡文本，促成后续修复 |
+| `efficiency-seventh-real-20260816` | 16 / 0 | 26 | 529,028 | 96 passed | durable factual summary |
+| `efficiency-eighth-real-20260816` | 15 / 0 | 24 | 455,057 | 92 passed | durable factual summary |
+
+- 第八轮首次达到 TP-025 的 `<=15 coding calls / <=25 tools` 数值门；相比第六轮减少 4 次
+  coding calls、13 次 tools 和约 173k tokens。trace 只有一次 static、一次 targeted，
+  `emergency_broad_exploration=0`，无 non-Git `git diff/status`。
+- 该结果不能外推为所有任务稳定达标：第七轮仍为 16/26，说明 Provider 行为有一轮波动。
+  额外兼容探针确认数字 `5-1` 继续按旧 API 拒绝、`0/7/SUN` 等价，但三轮生成补丁都没有支持
+  `FRI-MON/2` 跨周名称范围。因此 TP-025 继续 `verify`，且不能只用新增 suite 全绿宣称语义完整。
+- 本地 TDD 同时修复了 synthetic verification 被计入 child Provider iterations 的观测错误；
+  合成 Assistant Part 仍保留在 Session/trace，但 route facts 只统计真实 Provider Assistant 回合。
+- 最终静态门为 compileall、Ruff 与 `git diff --check` 全绿；完整仓库回归为
+  `2267 passed, 21 skipped, 7 known fork warnings`，耗时 151.40 秒。一次中间全量运行出现
+  Workflow 并发时序用例 flake，隔离连续 5 次和最终全量均通过，未将其误归因为本轮 Runtime 回归。
+
+## A264 — Mutation-Scoped Semantic Evidence 与 Provider 自愈（2026-08-17）
+
+- 第六至八轮的外部探针证明了一个架构漏洞：exact pytest 可以满足没有 artifact 的
+  compatibility requirement，导致 Agent 自己新增的 suite 即使遗漏 `FRI-MON/2`，Runtime
+  仍会直接完成。源码对照后采用 InfCodeX 的三层边界：deterministic evaluator 只拥有命令
+  真值，TaskVerificationContract/Sidecar 拥有语义标准，Terminal Boundary 只消费两类证据；
+  同时保留 infcode-dev/OpenCode 的 step snapshot → patch → normalized terminal 顺序。
+- `TaskContract` 升级到 version 2。compatibility requirement 无论 planner 是否显式给出空
+  数组，都会要求 `semantic_review`；exact acceptance 只能把它推进到 `candidate`。真实
+  verifier accept 为当前 mutation generation 写入 `semantic_review_passed`，后续任何 mutation
+  都会使该证据失效。provider error、timeout、无 tool call 等 fail-open accept 不能成为证据。
+- Sidecar 现在获得 task objective、逐项 requirement/required evidence、constraint、当前代 exact
+  acceptance 状态和最多 6 KB 的真实 unified diff。自然停止和 nominal tool-batch settlement
+  共用同一 completion verifier，review 后重新计算 ledger；accept/revise/unavailable 分别进入
+  独立 trace reason，不再让工具终态绕过语义审查。
+- 真实第九轮使用规范化过硬编码 CLI cwd 的独立 `59 passed` fixture，Session
+  `semantic-closure-ninth-real-20260817`。Agent 补丁本身达到 `101 passed`，外部探针确认数字
+  `5-1` 继续拒绝、`0/7/SUN` 等价、`FRI-MON/2 -> [0,5]`、`JAN-MAR/2 -> [1,3]`，关闭了前三轮
+  的具体语义盲区。但原运行仍诚实结束为 `max_turns`：20 coding calls、6 sidecar attempts、
+  28 tools、951,595 tokens，R6 留在 candidate，没有伪造 completed。
+- trace 证明 6 次 sidecar 都在约 70–123 ms 内得到 400：
+  `Thinking mode does not support this tool_choice`。InfCodeX 的 OpenAI Provider 已有同能力的
+  forced-tool-choice fallback；NZ-Coder 因此在 buffered/streaming Gateway 增加一次兼容重试：
+  保留 tools、移除 named tool choice，并发出 `model_call_tool_choice_fallback`。无关 400 仍不重试。
+- 真实端点进一步显示固定 1024 verifier 输出预算会被 DeepSeek reasoning 全部吃掉并以
+  `finish_reason=length` 结束。对 `deepseek-v4*` 的结构化 verifier 请求现在使用该端点支持的
+  `thinking={type: disabled}`，仍保持 1024 bounded output。用第九轮完整 transcript、diff 和
+  contract 做后置真实审查，2.63 秒得到 `verifier_ok/accept`，一次调用、184 output tokens，
+  不再经过 400 fallback，也不是 synthetic verdict。
+- 同一真实启动还发现帮助宣称 `nz-coder run --prompt TEXT`，headless parser 却只接受位置参数。
+  `-p/--prompt` 已成为正式入口，并可与位置参数/stdin 按稳定顺序组合；帮助输出使用
+  `--prompt TEXT`，不再显示内部 dest 名。
+- 本轮没有重写第九轮原始失败状态，也没有重新购买整轮 coding calls。post-fix 证据由真实
+  Sidecar 请求和本地 Terminal settlement 回归共同组成；只有后续全新端到端任务也在首次
+  semantic review 后稳定完成，TP-025 才能从 `verify` 关闭。
+- 最终聚焦链为 `154 passed`；完整仓库回归为 `2282 passed, 21 skipped, 7 known fork
+  warnings`（119.45 秒）。Ruff、compileall 与 `git diff --check` 全部通过。
+
+## A265 — Bounded Revise、Stall Ownership 与 Terminal Truth 收口（2026-08-17）
+
+- 本轮继续做源码行为对齐，不把目录或类名相似当作完成。InfCodeX 的
+  `stall-detector.ts` 只观察 Assistant tool use，`stall-sidecar/orchestrator.ts` 每次只做一个
+  bounded review cycle，`primitives/runner.ts` 保留 20 total loop 与 2 次 stop-hook reanimate；
+  infcode-dev/OpenCode 的 `session/processor.ts`、`context-budget.ts` 和
+  `agent-loop/stability.ts` 则把 durable Session、context pruning 与终态稳定性分开。NZ-Coder
+  因此没有盲目增加 turn cap，而是修 ownership、反例检测、缺项反馈与事实终态。
+- 第十六轮虽 `114 passed/completed`，外部反例仍证明 `FRI-MON/2` 错误；第十七轮修好名称
+  step 后又放宽 numeric `5-1`，且 20 coding calls 后 `max_turns`；第十八轮因
+  package-root repair target 丢失在 16 calls 提前终止；第十九轮 99 tests 通过但 README
+  写错层级、名称 step 再回归，并在 `max_turns` 中透传模型的虚假完成文本。这四轮再次证明
+  “测试绿/模块存在/模型说完成”都不能替代独立行为探针和 Runtime-owned evidence。
+- Sidecar deterministic compatibility review 现在识别 alias normalization 与 index step 的
+  先后顺序，也识别旧 numeric descending guard 被 conjoined field wrap gate 吞并。合法的
+  ordered de-dup 不误报；确定性风险会与 LLM revise 原因聚合，且在风险已确定时短路本代
+  Provider judge，避免为确定结论再付一次模型调用。
+- StallDetector 的输入所有权与 InfCodeX 对齐：只有 call id 与 canonical marker 同时证明是
+  Runtime verification 的工具调用才排除；模型复制内部 marker 仍按普通 Assistant call 观察。
+  第十七轮 trace 证明第十六轮那两次 Runtime acceptance 假 stall 已消失。
+- Recovery 把 `subprocess_package_root` 的 failed helper 变为 durable repair target，并阻止
+  通用 `No module named` 覆盖“已知局部修复”事实。这样 bounded emergency 消费的是结构化
+  evidence，不是模糊错误字符串。
+- Completion feedback 从 legacy adapter 下沉到统一 CompletionGate helper，并由 Native Runner
+  在 natural boundary 消费。提示包含精确 expected artifact，按 mutation generation + missing
+  IDs 去重；名义边界第一次发现缺项时可有界 reanimate。legacy-backed CLI 与 native SDK
+  因此共享同一事实，不再出现 Native/Legacy 能力分叉。
+- `max_turns` 结果统一为 Runtime-owned deterministic summary。自然停止也不能保留模型自报的
+  “全部完成”；摘要按当前 mutation generation 区分 exact acceptance passed/failed，并列出
+  unresolved IDs。这对应 InfCodeX deterministic evaluator 与 OpenCode durable terminal result
+  的职责分离，而不是复制 TypeScript 表面结构。
+- 聚焦链为 `130 passed`；完整仓库为 `2304 passed, 21 skipped, 7 known fork warnings`
+  （117.18 秒），Ruff、compileall 与 `git diff --check` 全绿。尚未做新的付费端到端运行，
+  所以 TP-025/TP-035 保持 `verify`，不把本地门禁写成产品稳定性结论。
+
+## A266 — CompletionGate Bounded Reanimation 与 Durable Terminal Truth（2026-08-17）
+
+- A265 的 generation-scoped 单次提示解决了“完全没有缺项反馈”，但对第十九轮 trace 做控制流
+  重放后发现仍会空转：模型忽略第一条提示再次自然停止时，相同 signature 不再注入 user turn，
+  Runner 又因未到 nominal turn 15 继续调用。参照 InfCodeX Runner 的
+  `stopHookReanimateBudget=2`，CompletionGate 改为全 run 最多两次 correction；第三次无新证据
+  立即 `max_turns`，reason 为 `completion_gate_reanimate_budget_exhausted`。这不是提高 hard cap，
+  而是把隐藏的 11→15 空转压缩成有界协议。
+- Native Terminal Boundary 与 legacy `_PolicyService` 消费同一个
+  `COMPLETION_GATE_REANIMATE_BUDGET`。adapter 在预算耗尽时不再返回 `continue`；review stop 与
+  ordinary unresolved stop 都生成 Runtime-owned failure summary，模型“已完成”正文不能越过任一
+  分支。红绿测试分别复现了三次 continue、adapter continue 和 review false text 三个旧行为。
+- CompletionGate 不再把所有 unresolved requirement 都当成 Worker action。当前代已有
+  `verification_passed`、只缺 `semantic_review` 的项目进入 Runtime-owned evidence 分区，明确
+  “不要为此单独改代码”；文档/artifact/test 等可执行项仍给出精确 expected path。这个边界与
+  InfCodeX Worker/Sidecar Evaluator 分工一致，也避免 R5 未完成时主 Agent为 R6 再改 parser。
+- 新的 mixed-ledger Runner 集成测试覆盖：错误层级 README → synthetic R5 指引 → 正确 README
+  mutation → 当前代 exact acceptance → R6 semantic-only → verifier evidence → completed。它验证
+  的是一次 Runner 内的数据流，不是几个互不相连的 helper 单测。
+- Terminal truth 继续向产品边界收口。natural、streamed tool terminal、buffered tool terminal
+  的 `max_turns` 都把配置 cap 交给 Lifecycle；有 deterministic content 时 UI 直接展示事实摘要，
+  不再用 `Agent stopped after reaching max_turns=None/N` 覆盖。`max_turns` 还会把最后 durable
+  Assistant content 替换成同一摘要，因此 headless、TUI、Session resume 三个消费者看见同一真值。
+- 聚焦链（含 Loop fake、Lifecycle、Sidecar、Recovery）为 `221 passed`；完整仓库为
+  `2310 passed, 21 skipped, 7 known fork warnings`（112.57 秒）。没有新外部 Provider run，
+  TP-025/TP-035 仍为 `verify`，TP-038 仍是 `fixed locally，待真实复测`。
+
+## A267 — 第十九轮续跑反证：Contract Input 与 Tool-Batch Terminal Protocol（2026-08-18）
+
+- 本轮没有创建新 fixture，也没有重跑原任务；使用第十九轮同一 workspace 和 Session
+  `semantic-closure-nineteenth-real-20260817` 做 8-turn continuation。运行 116.18 秒，8 次
+  coding Provider calls、12 个 tool events（其中 1 个 Runtime static verification）、
+  536,527 个互斥 bucket tokens，终态为 `max_turns`。这符合“只续之前进度”的测试口径。
+- Agent 的实际代码结果已明显好于终态：指定的 `cron_engine/README.md` 得到更新，独立 suite
+  从 99 增至 `109 passed`；外部探针确认 numeric `5-1` 继续拒绝、`0/7/SUN` 等价、
+  `FRI-MON/2 -> [0,5]`、`FRI-MON/3 -> [1,5]`、`JAN-MAR/2 -> [1,3]`。因此这次
+  `max_turns` 不是补丁错误，而是 Runtime 没能消费已经存在的验收事实。
+- trace 给出直接根因：`ProductionRunLifecycle.last_user_text()` 把真实 continuation 硬截到
+  300 字，恰好只保留到单词 `prese`。尾部“regression coverage +
+  `python -m pytest -q cron_engine/tests`”全部丢失，导致 `task_mode=unknown`、
+  `wants_tests=false`、declared test scopes/VerificationContract/TaskContract/RequirementLedger 全空。
+  模型随后两次运行同一精确目录命令都被 Broad Test Gate 拒绝，又在 non-Git workspace 调用
+  `verify_changed_files` 失败，最终耗尽第 8 轮。
+- Contract ownership 现在与 retrieval query 分离：Lifecycle 保留完整真实 User instruction；仅
+  memory/repo retrieval 使用已有 300 字有界投影。英文未加反引号的 pytest 命令解析也改为
+  选择“最长且所有位置参数均为 workspace 内 test path”的安全前缀，因此句尾
+  `Do not claim completion...` 不会再被误吞为测试目标。相同 606 字输入已独立投影为
+  `task_mode=test`、scope `cron_engine/tests`、精确 VerificationContract 和包含
+  docs/compatibility/semantic_review 的五项 contract。
+- A266 的 terminal truth 在真实 headless envelope 中已生效：模型没有再次留下“全部完成”，
+  JSON `text` 为 Runtime 的 `Stopped at the work limit without claiming completion...`。但
+  Session 结构暴露了更细的协议 bug：Runtime 把这段正文写进最后一个仍带
+  `verify_changed_files` tool call 的 Assistant，后面仍跟对应 Tool result 和 synthetic
+  diagnostic。正文真实不等于消息顺序合法。
+- Terminal persistence 现在只复用没有 `tool_calls` 的 settled Assistant；若终态发生在 tool
+  batch 边界，则在全部 Tool results 之后追加独立、带 message identity/parent/time/end-state
+  和 text part 的 Runtime Assistant。旧 tool owner 保持空 content 与原 tool call，不再产生
+  “看起来已经终止但后面还有工具结果”的 durable transcript。
+- 上下文成本也按源码核对，而不是凭 token 数猜测。该 Session 的 content 约 106K chars、
+  tool-call arguments 约 38K chars；新 run 从约 40K input 增至 64K。trace 中没有 prune/compact，
+  因为会话恰有两个真实 User turns。NZ-Coder 的 recent-two-turn 保护与 infcode-dev
+  `SessionCompaction.prune` 反向扫描到第二个 User 前不裁剪的规则一致；当前证据不支持为降成本
+  擅自改成只保留一轮。TP-025 继续 `verify`，后续应评估 terminal/max-turn continuation 的
+  显式 summary boundary，而不是破坏正常两轮推理证据。
+- 三个根因均走过红绿：长 continuation 尾部 scope 丢失、英文命令后 prose 误吞、tool owner
+  被终态正文覆盖最初共同得到 `3 failed`；实现后相关 Lifecycle/Contract/ExecutionContext/
+  RuntimeState 链为 `80 passed`。第一次全仓验证暴露 queued-followup 旧测试仍要求把
+  `interrupted` end-state 写在 tool owner；协议断言改为“settled tool owner + 独立 terminal
+  Assistant”并补齐空正文分支后，最终全仓为 `2313 passed, 21 skipped, 7 known fork
+  warnings`（111.41 秒）。Ruff、compileall 与 `git diff --check` 全绿。
+
+## A268 — Unfinished-run Continuation Boundary（2026-08-24）
+
+- A267 的 8-turn 续跑不是模型单次异常：durable Session 有 71 条消息，Provider view 每一轮仍
+  重放上一段未完成运行的全部 tool transcript，input 从约 40K 增至 64K，累计 536,527 tokens。
+  ContextManager 没有失效；当时会话尚未达到 model-aware compact 阈值，而且 recent-turn 保护本来
+  就不应被粗暴删除。真正缺少的是 `max_turns` / `interrupted` 的显式 continuation boundary。
+- 源码对照采用 InfCodeX `primitives/compaction.ts`、`auto-resume.ts` 的 anchored summary / bounded
+  resume 思路，以及 infcode-dev/OpenCode `projectors.ts`、`context-budget.ts`、`compaction.ts` 的
+  durable Session 与 Provider projection 分层。NZ-Coder 没把参考项目的 TypeScript 表面结构硬搬
+  进来，而是在已有 Lifecycle、message projection 和 ContextManager 边界内完成同一职责分离。
+- Lifecycle 在未完成终态的独立 Runtime Assistant 上写入 `_nz_continuation`。summary 是确定性的，
+  不调用付费模型，最多 6,000 字；包含完整且有界的最新真实 User instruction、目标、未解决
+  Requirement、验收标准、修改文件、repair target、验证证据、最后失败与下一步。durable User
+  message 是任务权威来源，优先级高于旧 runtime state 中历史遗留的 300 字 `initial_task_text`。
+- 下一条真实 User 到来时，只在 Provider view 中把旧 prefix 替换为
+  `<continuation-context>`，随后原样放入 `<current-user-instruction>`。旧 summary 中的控制标签会
+  转义，当前 User 明确拥有最高权限；durable transcript 本身不删、不改，正常 `completed` 边界
+  也不会启用该投影。这样审计/恢复仍有完整事实，模型却不必反复购买旧工具输出。
+- ContextManager 检测到 active boundary 后不再对已经从 Provider view 隐藏的 durable prefix 做
+  time-based micro-compaction，避免“模型没看到但存档被悄悄改写”。trace 分别记录 context boundary
+  与一次性的 provider projection，包含 status、丢弃消息数和 summary 字符数。
+- 用 A267 同一份 817 KB Session 做纯离线投影测量：provider messages 从 68 降至 1，估算 input
+  从 60,535 tokens 降至 573，减少 99.05%；boundary 为 1,823 字，606 字真实续跑要求末尾的验收
+  命令仍保留。该数字只证明 projection 成本边界，不等价于新的 Provider/SWE-bench 成绩。
+- 本轮按 root-cause-first 与 TDD 收口：先复现 prefix 重放、legacy task 截断、标签注入、重复 trace
+  和 hidden-prefix micro-compaction，再实现边界。首次全仓验证的唯一失败是架构守卫发现
+  `_sanitize_messages` 超过 20 行；trace 被提取为独立方法后门面恢复为薄投影入口。没有重新购买
+  DeepSeek 整轮调用，产品状态仍需一次低成本真实 resume 复测后才能把 TP-041 关闭。
+- 修正架构守卫后完整仓库回归为 `2319 passed, 21 skipped, 7 known fork warnings`
+  （150.93 秒）；Ruff、compileall 与 `git diff --check` 也全部通过。
+
+## A269 — 真实 Continuation 复测与 DeepSeek Wire Boundary 修复（2026-08-24）
+
+- 在 `/home/pyh/test_nzcoder/.continuation-boundary-smoke-20260824` 创建只读小型 fixture，使用
+  Session `continuation-boundary-real-20260824` 和显式 `--max-turns 1` 做低成本真实端点测试。
+  首次运行按预期持久化 717 字的 `_nz_continuation`，但 Provider 在 357 ms 内返回 400：
+  `reasoning_content in the thinking mode must be passed back`。0 usage 不是低成本成功，而是请求
+  在生成前被拒绝；原 trace 和 Session 均保留该失败事实。
+- 数据流回溯确认不是 continuation summary 内容错误。`ProductionPromptBuilder` 已按模型能力
+  投影 history；`AgentRunner` 随后才在 emergency hard-cap request 末尾追加 role=Assistant 的
+  `_MAX_STEPS_PROMPT`，这条 late Runtime message 没有 `reasoning_content`。因此 wire 实际为
+  `system -> user -> assistant-without-reasoning`，绕过了较早的 Session projection 不变量。
+- InfCodeX `openai.ts` 的 load-bearing 设计是在最终 OpenAI wire serializer 对每一条 Assistant
+  强制附加 `reasoning_content`，没有内容就发送空字符串；其测试也覆盖 thinking-less、tool-only、
+  redacted-only 和 cross-provider history。NZ-Coder 因此把同一 capability invariant 补到
+  `prepare_openai_request()` 最终边界，而不是只给 `_MAX_STEPS_PROMPT` 打局部补丁。输入 messages
+  会复制后投影，不修改 durable/caller 数据；未声明 replay capability 的 GPT wire 不增加字段。
+- 修复后的同 Session 真实 resume 一次成功：trace 为 `continuation_context_projected`、
+  `dropped_messages=3`、summary 717 字，`llm_request` 只有 system + 1 条有界 User view；Provider
+  一次完成，无 retry/400，执行一次 `read_file README.md` 并读到
+  `NZ-CONTINUATION-20260824`。Provider 报告 input 12,559、output 45、reasoning 29、total 12,633；
+  该 input 主要包含生产 system prompt 和完整 tool schema，不再包含被边界隐藏的旧 Session prefix。
+- 本次显式只有 1 turn，模型选择先读文件，所以 Runtime 诚实返回 `max_turns`，不能把它写成任务
+  completed；本次验收目标是 wire 接受、真实工具执行和 resume prefix 隔离。聚焦回归为
+  `112 passed`。TP-041 由“大 Session 离线量化 + 小 Session 真实 Provider 数据流”关闭；通用
+  长任务效率 TP-025 仍保持 `verify`。
+- 最终完整仓库回归为 `2321 passed, 21 skipped, 7 known fork warnings`（146.16 秒）；
+  Ruff、compileall 与 `git diff --check` 全绿。
+
+## A270 — Progressive Tool Exposure 成本闭环（2026-08-24）
+
+- A269 的真实单文件只读调用仍报告 12,559 input tokens；同一 trace 的 `llm_request` 却只有
+  3,112。离线拆分 63 个实际工具 schema 后得到 10,063 tokens，几乎完整解释差值：历史 prefix
+  已被 continuation boundary 隔离，剩余主要成本不是 memory/context，而是每轮全量工具定义。
+- NZ-Coder 已存在 `ToolExposurePlanner`、`tool_search` 与 RunContext-owned unlock，但默认策略把
+  “1M context 仍宽松”直接等同于“63 个 schema 全部展开”；而 20 个可延迟工具又因默认
+  `minimum_deferred_tools=20` 和小 MCP surface 保护回退为全部可见。机制模块存在，但产品默认路径
+  没有产生任何成本收益。
+- 源码对照 InfCodeX `tool-exposure-planner.ts`、`deferred-tools.ts`、`tool-search.ts` 和
+  `tool-resolution.ts` 后保留同一安全边界：read/edit/write/grep/glob/bash/todo/tool_search 等核心工具
+  常驻；repo intelligence、workflow 和较少使用的能力由 compact discovery bridge 按 Session
+  解锁。没有按 prompt 关键词猜测并删除写工具，也没有改变 registry、handler 或权限接口。
+- Planner 现在把 6K schema budget 同时作为调用成本边界：即使 context window 尚未承压，只要
+  tool schema 超预算，也启用 progressive exposure；最小延迟规模降为 8，避免真实的 19 个稀有
+  工具再次被阈值回退。小型 role 或单个 MCP surface 仍保持直接可见，已解锁工具下一轮恢复完整
+  schema。
+- 过去只有 buffered/native 路径消费 `expose_specs()`；TUI streaming 直接调用
+  `host._active_tool_specs()`，会绕过同一策略。streaming 现在也通过 run-scoped exposure，避免终端
+  产品与 headless/SWE 形成成本分叉。
+- `llm_request` trace 现在同时记录 message count/tokens、model-visible tool count/schema tokens 和
+  合计估算。真实复测的 trace 为 2 messages、3,291 message tokens、46 tools、7,474 schema tokens、
+  10,765 total estimate；Provider 实际 input 为 10,190，误差约 5.6%，不再出现 3K 对 12K 的观测
+  缺口。
+- 同一 Session、相同 1-turn read 模式的真实 A/B：修复前 input 12,559，修复后 10,190，减少
+  2,369 tokens（18.9%）；两次均一次 Provider completed、执行一次 `read_file README.md` 并读到
+  marker，因显式 1-turn 上限诚实返回 `max_turns`。本地全 catalog 测量为 63/10,063 tokens 降至
+  44/7,185，节省 2,878。聚焦回归为 `200 passed`；没有继续购买额外调用追求更激进的 task-specific
+  allowlist，避免以能力召回率换一个更漂亮的单题数字。
+- 首次全量回归暴露 core-capability benchmark 仍把“低压力全量暴露 100/200 工具”当作成功；口径已
+  改为 20/50 小 catalog 全量、100/200 超 6K budget 时只保留核心入口，并新增
+  `schema_budget_enforced` 证据。另一项 fork SQLite `disk I/O error` 隔离连续 5 次通过，按既有
+  并发 flake 记录且未改 repo intelligence。最终全仓为
+  `2324 passed, 21 skipped, 7 known fork warnings`（150.73 秒），静态门禁全绿。
+
+## A271 — Progressive Exposure 召回审计与 InfCodeX Hint 语义纠偏（2026-08-24）
+
+- A270 的 18.9% 单文件成本下降只证明“隐藏 19 个 schema 后核心读取仍可运行”，没有证明模型能在
+  workflow、verification、symbol、semantic 等任务里重新找到被隐藏能力。本轮先对真实 63-tool
+  catalog 做 8 类自然语言检索矩阵：repo overview、symbol source/callers、changed-file verify、
+  workflow execute/history、semantic lookup、project profile。词法索引 8/8 命中，最差目标排名为
+  2，说明 `ToolSearchIndex` 本身没有丢召回。
+- 真正失败发生在 Agent 可见协议。修复前用 DeepSeek 对
+  `exposure-workflow-real-20260824` 做只读 workflow history 查询，模型没有调用 `tool_search`，而是
+  绕到 `list_directory -> glob_search -> bash -> read_file`；后两轮又进入 closure reserve，3 次调用
+  被拒绝，最终 4 个 Provider calls、6 个工具调用、`max_turns`。所以“搜索 helper 能找到”不能当作
+  “模型能发现”。
+- 重新逐行核对 InfCodeX `deferred-tools.ts`、`tool-search.ts`、`tool-exposure-planner.ts` 和
+  `tool-resolution.ts` 后确认 A270 有语义偏差：InfCodeX 的普通 deferred path 不删除工具，而是保留
+  工具名与 parameter schema，只把 rich description 换成明确指向 `tool_search select:NAME` 的 compact
+  hint；解锁后恢复完整 description。其 planner 只有在 portable bridge/native-deferred 条件成立时
+  才允许把模型可见项降为 bridge/hidden。
+- NZ-Coder 的 deferred projection 已改成相同的 callable-hint 语义。19 个延迟工具仍在 Provider
+  schema 内，参数结构不变；description 使用项目自有的短用途提示与 exact search 指令；unlock
+  继续由 RunContext metadata 隔离，下一轮只对本 Session 恢复完整描述。streaming 与 buffered
+  路径继续共用 `expose_specs()`。
+- 不能机械复制 InfCodeX 的 hint 长度。NZ-Coder 的原始 workflow 描述只有 53–146 字，第一版长 hint
+  反而把 schema 估算从 9,532 增到 9,610 tokens；改为项目适配的短 hint 后为 9,245，首轮约省 3.0%。
+  8 类 exact unlock 的两回合 schema + search-result 仍全部为正收益，最差 1.3%、最好 2.6%。该数字
+  小于 A270 的 18.9%，但不再用工具不可达换取漂亮的单题成本。
+- 相同 workflow 任务在修复后使用新 Session `exposure-workflow-hint-real-20260824`：首轮直接按 compact
+  callable schema 调用 `workflow_runs(action=list, limit=50)`，第二轮完成；共 2 个 Provider calls、
+  1 个工具调用、0 个 policy block、状态 `completed`，正确报告 0 条持久化 run 且无文件变更。修复前
+  的 4-call/6-tool `max_turns` 因而得到真实产品级反证与正证据，而不是只靠 prompt 单测。
+- 核心能力 Case D 已固化 8 类 recall、target rank、Session unlock、hint 数量和两回合成本下界；
+  100/200-tool catalog 在低上下文压力但超过 schema budget 时仍启用 compact hint，而不是删除工具。
+  写文档前相关 Tool Platform、Core Capability、Behavioral Runtime 与 Prompt Builder 回归为
+  `46 passed`。最终完整仓库回归为 `2325 passed, 21 skipped, 7 known fork warnings`
+  （143.07 秒）；Ruff、compileall 与 `git diff --check` 随后重新执行并通过。
+
+## A272 — Contract-owned 首轮路由与确定性 Subprocess 恢复（2026-08-24）
+
+- 对当前 Runtime 重跑 cron 多文件真实任务后，发现两个“架构已有、数据没有连起来”的问题：
+  TaskContract 已持有 5 个精确 artifacts，RepoRetrievalPolicy 却只从原始中文 query 猜路径；
+  failure diagnostics 能分类 subprocess cwd 错位，却只说“使用 workspace root”，让模型继续猜相对层级。
+- 路由修复保持职责边界：Loop 只在首次 mutation 前取最多 12 个受 TaskContract 校验的
+  workspace-relative paths；RetrievalPolicy 自己再拒绝 absolute/`..`、去重并纳入 cache key。
+  有 declared artifacts 时路由为 `known-location/read/read_file`，不要求 broad orientation。
+  这对应 InfCodeX/infcode-dev 中 planner/session state 是下游 retrieval 的权威输入，而不是各层重新从文本猜测状态。
+- cwd 恢复修复也不把 Linux 绝对路径写进代码。Runtime 用 helper 的相对路径深度产生精确
+  `Path(__file__).resolve().parents[N]`，同时告诉模型该表达式的实际解析值。
+  这与参考项目的“deterministic host/runtime facts 先于 model guess”原则一致，但使用 NZ-Coder 现有
+  `RecoveryState -> failure_diagnostics -> synthetic diagnostic` 链路实现，没有添加新框架或旁路。
+- 两项修复都先写失败测试：一组锁定三层 helper 必须给 `parents[2]`，另一组锁定
+  contract artifacts 必须路由为 known location，并通过 AgentLoop 集成测试证明 paths 真正传到 policy，
+  而不是只扩展 helper 签名。受控真实 cwd 烟雾在首次 pytest 失败后只改一行并通过。
+- 同一长任务修复后为 17 次 coding calls + 1 次 sidecar、27 次 tools、607,150 total tokens，
+  终态 `completed`，exact/independent suite 为 `93 passed`，外部语义矩阵 `9/9 passed`。
+  它证明 correctness 链路已恢复，也同时证明 TP-025 仍不能关闭：超过 15/25 的原因是多轮读取、
+  一次错误 README 定位和重复 todo 管理，不是 context window 压力。
+- 本轮没有为压低一次费用而启用激进 time-based tool-result deletion。InfCodeX
+  `microcompaction.ts` 默认关闭并明确说“证据年龄不等于删除后端到端更便宜”；
+  infcode-dev 也按 token pressure 与 recent user turns 裁剪。因此下一轮优化应面向“减少不必要回合”，
+  而不是破坏当前 run 的证据完整性。
+- 最终验证为聚焦 `130 passed`；全仓 `2328 passed, 21 skipped, 7 known fork warnings`
+  （142.83 秒）；Ruff、compileall 与 `git diff --check` 全绿。
+
+## A273 — Provider-specific Mutation Shape + Per-run Read State（2026-08-24）
+
+- 源码级对照暴露了“模块都有但 wire shape 不等价”的问题。NZ-Coder 的 canonical
+  `apply_patch` 支持多文件，因此 path 位于 `changes[]`；InfCodeX 的 `edit/multi_edit` 把 path
+  放在顶层，只让 nested items 表达文本变更。DeepSeek 真实响应连续 3 次漏 nested path，虽然
+  Provider 最终看到的 schema 明确保留了 nested `required`。这证明不能把 schema lint 通过当成
+  模型实际会遵循复杂 shape。
+- `adapt_tool_specs()` 现在只为 DeepSeek family 把 `apply_patch` 投影为单文件批量编辑：顶层
+  `required=[path, changes]`，nested items 不再重复 path；handler 原有兼容入口直接消费该 shape。
+  GPT/OpenAI 与 canonical catalog 仍保留原多文件定义，适配过程继续 deep-copy，不修改注册表。
+  真实同题复测中所有 patch 参数有效，上一轮 3 个 `change 0 requires path` 全部消失。
+- 对照 InfCodeX `read-file-state-cache.ts`、`read.ts`、Edit/Write invalidation 和 compaction hook 后，
+  NZ-Coder 把 unchanged-read suppression 放进 per-Agent `ToolExecutor`，而不是 files.py 模块全局。
+  cache key 是绝对安全路径 + offset + limit，identity 使用 mtime/ctime/size；只记录成功文本读取。
+  同路径写入、外部变化、compaction、新 run 均失效，`NZ_READ_DEDUP_ENABLED=0` 是产品 killswitch。
+- Runtime TaskContract 已是完整 Requirement ledger，因此 todo 不再与它双写；只有用户明确要求
+  todo/checklist 时才恢复 todo tool 与 reminder。这不是删除计划能力，而是消除两个状态 owner。
+  同一真实任务从 4 个 todo calls 降到 0。
+- 最新真实 Session `tp025-readcache-real-20260824` 为 15 coding + 1 stall sidecar、27 tools、
+  512,532 provider tokens、终态 completed。独立 suite `87 passed`、semantic `9/9`；前一可比轮为
+  15 + 1、28 tools、683,602 tokens。25.0% token 下降包含模型输出随机性，文档只把“1 次重复全文
+  读取被短路、3 次 malformed patch 归零”认作直接因果证据。
+- trace 同时暴露新的首要浪费：旧 fixture 源码里的硬编码 cwd 被模型复制成 shell `cd`，policy
+  拒绝后又进入 package 目录运行 import，随后才 `pwd`。Recovery 因此新增 workspace-boundary 与
+  direct-command package-root 两个精确诊断：给出 active root、要求去掉 `cd/workdir`，并禁止无关
+  source/install/environment 探索。该修复已确定性测试，完整付费复测保留到下一次必要产品验收。
+- TP-025 仍不关闭：coding calls 已到 15，但 tools=27 尚未达到 25，且单轮 token 下降不是跨任务
+  稳定性证据。对齐工作的标准继续是 wire 行为、真实 trace 与独立验收，不是“存在同名模块”。
+- 最终全仓验证为 `2341 passed, 21 skipped, 7 known fork warnings`（143.14 秒）；Ruff、
+  compileall 与 `git diff --check` 全绿。
+
+## A274 — Sequential Mutation Contract + Existing-semantics Oracle（2026-08-24）
+
+- A273 后的同题失败 trace 证明，剩余两个 patch failure 不是 edit matcher 太严格：一个 batch 的
+  第二段 `old_text` 与第一段替换区域重叠，另一个追加测试时猜错精确 anchor。InfCodeX
+  `multi_edit` 同样按顺序执行并警告后序 edit 不得重叠，append 场景由独立能力表达；因此没有引入
+  可能掩盖错误目标的宽松 fuzzy edit。
+- DeepSeek 单文件 `apply_patch` 投影的 description 现在写明 sequential/non-overlapping 约束，并要求
+  文件尾新增使用 `op=append`、省略 `old_text`。这只是 Provider wire guidance；canonical catalog、
+  GPT/OpenAI 投影和 handler 兼容接口不变。
+- 更严重的 correctness 根因是模型为 named form 自行发明语义。Runtime prompt 现在给出通用规则：
+  新增 syntax alias 或名称形式前，先 probe 等价的现有 canonical/numeric 形式，以观察结果作为测试
+  oracle；保留既有拒绝行为，不发明 range、step 或 scheduler 语义。规则不包含 cron 专有常量。
+- 红绿回归首先锁定 DeepSeek description 和 oracle 文本，修复前 2 项失败，修复后与 schema、prompt、
+  recovery、hook 组合共 `59 passed`。
+- 修复前真实 Session `tp025-boundary-real-20260824` 为 15 coding calls、23 tools、455,435 tokens、
+  `max_turns`，产品外验收 `12 failed, 88 passed`；修复后全新 Session
+  `tp025-oracle-real-20260824` 为 13 coding + 1 stall sidecar、21 tools、422,892 tokens、
+  `completed`。后者所有 6 次 patch 一次成功，产品外 `90 passed`、semantic `10/10` 和真实 CLI
+  均通过。
+- 因而 TP-025 按原始 15/25 与独立正确性门关闭。剩余成本不再混入该问题：当前首轮仍暴露
+  62 tools、约 9.6K schema tokens；是否进一步做动态 tool-set slicing 必须单独设计并证明工具仍可达。
+- 最终门禁为聚焦 `59 passed`，相关文件 Ruff、compileall、`git diff --check` 通过；完整仓库
+  `2342 passed, 21 skipped, 7 known fork warnings`（142.69 秒）。
+
+## A275 — Task-family Tool Slicing 与 Requirement Ledger 幂等闭环（2026-08-25）
+
+- A274 后仍有 62 个 Provider-visible tools、约 9.6K schema tokens。源码核对 InfCodeX
+  `tool-exposure-planner.ts`、`tool-resolution.ts`、`deferred-tools.ts`、`tool-search.ts` 与
+  infcode-dev `tool/registry.ts`、Agent/tool blocklist 后，NZ-Coder 不再把“所有稀有能力都提示”当作
+  唯一安全策略：核心编码 surface resident；匹配 task family 使用 callable hint；不相关 audited
+  family 通过 portable `tool_search` bridge 隐藏；未知/宽泛任务回退旧策略。
+- exposure 决策属于 RunContext，不修改全局 registry。隐藏项仍进入 run-local search index，exact
+  select 后下一轮恢复完整 schema；trace 记录 visible/deferred/hidden 与 token delta。确定性测试覆盖
+  core reachability、workflow intent、unknown fallback、hidden exact unlock 和生产 catalog 6K 门。
+  实际离线 catalog 为 63 / 9,532 → 23 / 3,850 tokens；真实 DeepSeek coding 首轮为
+  22 visible、39 hidden、9,290 → 3,730。
+- 完成前全仓门禁先得到 `1 failed, 2350 passed, 21 skipped`，证明单个已连接 MCP tool 被“不相关
+  family”误隐藏。按 InfCodeX portable bridge 边界修正后，小于 8 项的动态 MCP surface 保持 direct
+  visible；只有大 surface 才进入 hint/bridge 成本策略。该修复由原有 MCP Runtime 集成测试直接锁定，
+  不是只在 planner helper 中自证。
+- 第一次真实运行 `a275-tool-slicing-real-20260825` 是必要反证：没有缺失能力，却因一个违背现有排序
+  API 的新增测试在 15 calls 后成为 `max_turns`，独立 `1 failed, 87 passed`。trace 还找到三个非模型
+  随机问题：pre-edit schema 暴露必被 policy 拒绝的 Bash；非 Git verifier 与 `diff_status` 契约分叉；
+  DeepSeek 不理解 exact `old_text` 必须为连续片段。三项均先写失败测试再修复。
+- 第二次 `a276-tool-slicing-followup-20260825` 已独立 `88 passed`，但仍诚实返回 `max_turns`。根因是
+  exact acceptance 先把 R1–R7 结算，后续只读 `diff_status` 却以同 generation 再调用
+  `observe_mutation()`，把 R1–R5 从 satisfied 降回 candidate。Ledger 现在只在真正的新 generation
+  撤销旧结论；同 generation changed-path refresh 只补证据、不重开已验收 requirement。
+- 第三次全新 59-test fixture `a277-tool-slicing-closure-20260825` 得到 `completed`：15 coding + 1
+  stall sidecar、26 tools；内外部 suite 均 `102 passed`，独立语义矩阵 `12/12`。首次 source mutation
+  前 Provider schema 从未暴露 Bash，之后才恢复验证能力；无 dispatch/schema/permission failure，
+  两次 nonzero pytest 均为真实回归并在同 run 修复。
+- 不能把最后的 438,126 total tokens 写成整体成本已经稳定下降。task slicing 的可归因收益是每个早期
+  coding call 少约 5.56K schema tokens，并保持隐藏工具可搜索/解锁；总成本仍受 15 轮消息重放、模型
+  输出随机性和测试修复次数影响。下一项效率工作应依据多任务 trace 处理 recent-turn/tool-result
+  retention，而不是继续无证据缩 resident coding surface。
+- 最终门禁为 `2351 passed, 21 skipped, 7 known fork warnings`（145.53 秒）；相关 Ruff、compileall
+  与 `git diff --check` 全绿。
+
+## A276 — Provider-only Write Receipt Projection（2026-08-25）
+
+- A277 的逐轮 trace 分解显示，最后一次请求的 durable history 约 33.7K tokens，其中成功
+  `apply_patch` 回执本身约占 12.8K；这些回执主要是模型已在上一轮看过的完整 diff。只按 1M
+  context window 等到 overflow 才 compaction，不会降低 15 轮任务的二次重放成本。
+- 源码核对 InfCodeX `compaction.ts`、`microcompaction.ts`、`file-tracker.ts`、
+  `result-extractors.ts` 和 infcode-dev `session/compaction.ts` 后保留其核心约束：microcompaction
+  默认不按年龄清空；失败、MCP、控制面和高密度 repo intelligence 证据受保护；语义压缩前先保留
+  artifact/file/verification ledger；不删除 tool_call/result 协议对。
+- NZ-Coder 没有把参考项目的 pressure-only prune 生搬到 1M context。现有
+  `message_projection.py` 已是 durable Session 到 provider wire 的唯一投影层，因此只在这里把
+  “已被后续真实 provider assistant 观察过”的成功 file-write 回执换成短 receipt。Runtime 合成的
+  verification assistant 不算观察边界；当前工具批次、读取、失败、测试和未知工具结果仍保持完整。
+  Provider-facing message 数量、tool_call_id 与 tool result 配对不变。
+- 该策略不修改 Session：A279 Session 为 508,164 bytes，7 份完整 write results 共 33,000 chars，
+  durable JSON 中短 receipt 数为 0。trace 新增 `context_evidence_projected`，分别记录 acknowledged
+  writes、superseded reads/failures 及各自 token savings，避免把既有 stale-read 收益算到新策略上。
+- A277 历史离线反事实回放中，最后一轮 history 33,734 → 23,684 tokens（-29.8%），15 轮累计少
+  重放约 57,409 tokens。新的真实 A279 反事实为峰值 history 32,537 → 25,009（-23.1%），15 轮
+  acknowledged-write 累计少重放约 48,332 tokens；这是相同 Session 前缀的投影 A/B，不受模型输出
+  随机性影响。
+- 首次 A278 真实运行因用无 TTY 的 `acceptEdits` 启动而把 Bash/verifier 权限询问的 EOF 当拒绝，
+  终态 `max_turns`；该轮不能作为能力验收。全新 fixture A279 改用 headless `auto` 权限后为
+  15 coding + 1 sidecar、23 tools、7 edits、`completed`，exact acceptance 和产品外 suite 均
+  `94 passed`，独立语义矩阵 `12/12`。全程无 DeepSeek replay 400 或 tool protocol failure。
+- 最终质量门为 `2355 passed, 21 skipped, 7 known fork warnings`（130.02 秒）；全仓 Ruff、
+  `compileall` 与 `git diff --check` 全部通过。
+
+## A277 — 大窗口模型 Replay-Cost Semantic Compaction（2026-08-25）
+
+- A279 在 provider-only write receipt 生效后，后半程 history 仍有 22–25K tokens。逐字段统计显示，
+  旧 reasoning 约 10.7K、旧 tool-call arguments 约 5.3K；二者是下一项主要重复成本。由于 DeepSeek
+  V4 capability 声明 1M context，原 85% soft/usable hard 阈值在常规长任务中都不会触发。
+- 源码审计否决了字段级裁剪。InfCodeX `microcompaction.ts` 明确说明 thinking 不能随意清空，Kimi
+  类 provider 会因 tool-call assistant 缺少非空 reasoning 而 400；其 `compaction.ts` 使用 atomic
+  blocks 和 rolling semantic summary。infcode-dev `provider/transform.ts` 也会在 replay 时显式保留
+  `reasoning_content`，`session/compaction.ts` 保护 recent tail。安全方向是摘要完整旧块，而不是改写
+  历史参数或制造孤立 tool result。
+- `PromptBudget` 现在同时拥有物理 `usable_input_tokens` 与成本
+  `replay_compaction_tokens`。后者默认 24K，可由 `NZ_CONTEXT_REPLAY_COMPACTION_TOKENS` 覆盖，`0`
+  完全关闭。Context Runtime 通过独立 `projected_replay_tokens` capability 只估算 provider-visible
+  history；system prompt、instructions 和当前 tool catalog 继续只参与物理 request limit，不参与成本
+  阈值，因此大型工具 schema 不会让短对话无意义地调用摘要模型。
+- replay 超阈值时沿用既有 `auto_compact`：原 transcript 写入 Session artifact，旧头部生成 anchored
+  semantic summary，最新 provider-visible suffix 原样保留。marker 新增 `trigger=replay_cost` 且
+  `overflow=false`；provider usage/request hard-limit 触发仍分别记录 `provider_usage`/
+  `request_estimate` 和真实 overflow。
+- 实现中额外发现并修复两个旧压缩边界：只有一个真实 user turn 时，切分器也必须从该 turn 内寻找
+  assistant/user 合法 suffix；tail token 估算必须排除 `_nz_*` 与 `_timestamp` 等 durable-only metadata。
+  否则 A279 会得到空 tail，或因 Session parts 重复体积把刚完成的写入挤出保护区。
+- A279 离线触发点在第 7 次真实模型调用前：history 25,009 tokens；head 15 messages，保留
+  diagnostic + write tool call + full result 三条，tail 约 3,821 tokens，summary input 约 18,974。
+  真实 DeepSeek V4 Flash 在 14.62 秒生成 4,775-char summary，压缩后 provider history 5,090；随后
+  携同一原子 tool pair 请求，prompt usage 5,355、completion 17，返回 `CONTEXT_OK`。
+- 用真实 summary 大小代回后续 9 calls，history 累计少重放 142,960 tokens，单轮峰值
+  25,009 → 10,490；扣除摘要请求后净收益仍约 12 万 tokens。该反事实只证明 A279 这一条轨迹的成本
+  因果，不宣称所有任务或 SWE-bench 分数同步提升。
+- 新行为遵循 TDD：先红后绿覆盖 replay-cost、固定 request overhead 不误触发、sync/async parity、
+  非 overflow marker、禁用开关、single-human-turn atomic tail、durable metadata 排除和 legacy host
+  optional capability。真实 Provider 通过后，最终全量为
+  `2363 passed, 21 skipped, 7 known fork warnings`（142.85 秒）；全仓 Ruff、`compileall`、
+  `git diff --check` 全部通过。
+
+## A278 — Provider Turn Ledger、证据完成直停与用户约束守卫（2026-08-25）
+
+- A279 虽已正确完成，但 15 个主模型调用都只有 `purpose=coding`，无法区分调查、实现、失败修复、
+  验证与收尾。源码核对 InfCodeX 的 iteration/live-turn 一等事件与 infcode-dev 在下次模型调用前检查
+  已持久化 terminal facts 的循环后，NZ-Coder 新增 `turn_economy.py`：每轮在 canonical
+  `AgentRunner` 入口记录 reason，工具批次结算后再按结构化 tool calls 与 mutation generation 记录
+  outcome。记录进入 RuntimeState、有 200 条上限、可中断恢复，并同步进入 trace/headless runtime
+  metadata；不靠模型自述推断“做了什么”。
+- 原 terminal settler 在第 15 轮前对任何 tool boundary 都无条件继续，即使当前 mutation generation
+  已通过用户声明的 exact command 且 ledger 已清空。现在只有 `has_diff + current-generation exact
+  acceptance + 无 actionable requirement` 同时成立时，才允许提前进入原 completion review；通过后
+  使用 Runtime 确定性摘要直接完成。Review 拒绝后同一 generation 不会反复购买 sidecar 判断，只有
+  新 mutation 或真正 natural completion 才能再次审查，原 turn-16 定点修复储备保持不变。
+- 第一条真实复测提供了必要反证。用户明确“不修改测试”，但旧 `task_wants_tests()` 看到 pytest 和
+  `tests/test_text_utils.py` 就生成 R2“Add or update tests”；Agent 已在第 3 轮通过 4 项验收、第 4 轮
+  final，却被 CompletionGate 强制继续，最终第 6 轮新增测试。该次为 7 coding + 1 sidecar、64,201
+  tokens，虽然 5 passed，却违反用户约束，因此不计成功样本。
+- 根因修复不是增加 prompt 句子：test work 现在只由“add/write/update tests/补充测试”等明确修改意图
+  触发，pytest 命令只属于 verification；英文/中文“do not modify tests/不修改测试”进入
+  `TaskContract.constraints` 和 RuntimeState。`ProductionToolPolicy` 在 sync/async 唯一分发链上硬阻断
+  `write_file/edit_file/apply_patch/write_files_batch` 等对测试路径的写入，源码写入与 pytest 仍可用。
+- 同任务在全新 workspace 复测为 3 coding calls、4 tools、22,115 tokens，只改 `text_utils.py`，外部
+  `4 passed`；相对错误轨迹 coding calls 7→3、总 Provider calls 8→3、tokens 下降 65.6%。新 trace
+  正好是并行读取源码/测试、一次源码写入、一次 exact pytest，第三轮 tool result 后直接 terminal。
+- 随后四个全新任务覆盖 query decoding、TTL+LRU、安全路径与三模块 retry queue。五项主模型 calls
+  为 3/3/3/5/3（平均 3.4），总 Provider calls 含两个 sidecar 为 19（平均 3.8），总 tokens
+  22,115/22,101/28,151/50,726/23,960（平均 29,411）；工具共 26（平均 5.2）。外部独立 pytest
+  分别为 4/4、4/4、3/3、12/12、6/6，全部只修改目标源码，exact contract 当前代通过、ledger 无
+  unresolved requirement，且都以 `early_tool_completion_candidate=true` 在 tool boundary 完成。
+- 这些结果证明简单/中等本地修复不再固定烧到 15 轮，也证明多模块任务能以“批量读取→批量修改→一次
+  验收”完成；它们不是 SWE-bench 分数，也不外推为所有模型稳定 3.4 calls。最终门禁为轮次/约束聚焦
+  `198 + 108 passed`，完整仓库 `2375 passed, 21 skipped, 7 known fork warnings`（136.40 秒）；
+  Ruff、compileall 与 `git diff --check` 全部通过。
+
+## A279 — SWE Trace驱动的Runtime/Repo/Verification收口（2026-08-25）
+
+- A278的20题真实轨迹证明“模块存在”不等于生产路径可用：Matplotlib/Flask冷索引因重名symbol主键
+  碰撞失败，targeted test被prompt主动跳过，80轮hard cap前还有隐藏的15轮nominal SLA，公开轨迹又
+  使用外层Tracer session。此次以真实失败路径为验收对象，没有继续横向增加新模块。
+- Symbol identity现在由各语言analyzer在声明产生时结算：第一次声明保留原稳定ID，后续同名同kind
+  声明使用按源码顺序稳定的`duplicate-N` discriminator。这样call/reference在生成时就引用正确ID，
+  不需要在数据库写入时事后猜测映射。相同规则覆盖Python AST、Tree-sitter和lexical fallback；真实
+  Matplotlib冷索引1,219文件、16,646符号成功，补足了小fixture无法暴露的C++重复类型边界。
+- Verification不再把“能编译”误当成“行为正确”。strict SWE组装把`require_targeted`沿
+  `execution context → AgentLoop → VerificationManager → planner`传入；planner扩展package-local
+  tests发现，但只提升一个最相关候选为required。Scheduler、环境阻塞降级和terminal gate继续复用统一
+  生产链，CLI/HTTP的普通任务不因此强制增加pytest成本。
+- Work budget沿context-local配置进入canonical `AgentRunner`，普通产品的15轮收敛SLA与SWE的20轮
+  诊断SLA分离，二者都受hard cap约束。manifest把nominal budget作为pass@1身份字段，恢复运行时发生
+  改变会被拒绝，避免评测口径悄然漂移。
+- Benchmark session在Tracer之前显式创建，并同时注入Agent；raw/public trajectory、Session artifact
+  与返回metadata因此共享同一`swe-*`身份。strict协议同步声明不可用工具和唯一允许的窄测试路径，减少
+  模型通过失败调用才学习本地边界的token浪费。
+- TDD先观察manifest、strict protocol、session binding、Python/C++重复符号和targeted verification
+  的失败，再做最小实现。最终聚焦组合212项、全仓`2385 passed, 21 skipped`；7条告警均为既有
+  Python 3.13 fork弃用提示。未运行付费Provider或官方SWE harness，不能把架构闭环外推成分数提升。
+
+## A280 — 真实续片后的故障语义与首轮热路径收口（2026-08-25）
+
+- 固定顺序第156--175题建立独立诊断续片`lite20-dsv4flash-20260825-a280`，没有重跑A278。
+  用户发现余额问题后安全中止：journal保留8个claim、7个result，第8题
+  `pylint-dev__pylint-6506`是未结算claim；prediction为7行，raw archive约111 MiB，且没有残留
+  `run-agent`进程。该续片不是完整20题，更没有官方Docker harness结果。
+- 余额耗尽前只有4题是有效Provider运行：Requests 863生成551字符patch；Xarray 3364和4094分别在
+  20轮调查后空patch；Xarray 4248生成1,442字符patch，targeted pytest为18 passed。随后4493、5131、
+  Pylint 5859各自把HTTP 402误当可修请求并重复20次，得到的3个`empty_patch`不是Agent能力结果。
+- Provider错误边界现在只把400/422和无status的malformed/invalid-request视作可诊断请求；401/402/
+  403/404、insufficient balance、payment required、invalid API key和authentication错误直接fatal。
+  SWE orchestrator把aborted/error/cancelled/timeout/exception统一记作`agent_failed`，不会再伪装成模型
+  生成空patch。该修复不重跑、也不改写已经持久化的pass@1历史。
+- Targeted verification新增旧依赖与Python 3.13标准库兼容故障识别：测试收集阶段从`collections`、
+  `inspect`、`asyncio`或`typing`导入已删除名字，且没有指向changed file时，记为环境阻塞而不是可继续
+  修复的patch失败。普通缺少第三方依赖仍保持repairable，防止过宽降级。
+- Closure reserve的`Denied...`属于策略拒绝而不是工具执行错误；因此Xarray 4248这类已有非空diff和
+  18项targeted pass的轨迹不会仅因终局预算门被标成patch risk。strict首次写入门在source文件和test
+  文件都已定位时从20次提前到12次；测试范围尚未知时仍保留20次，避免用任意读取假装已经定位。
+- 完整回归暴露HTTP测试实际选择了默认项目根而不是临时workspace。项目根索引为5,000文件、74,672条
+  调用边，原语言路由会在首轮反序列化完整snapshot。测试已按opaque workspace ID选择真实目标；生产
+  路由新增SQL distinct语言元数据，并由Repo Intelligence后台状态发布，前台不再等待索引锁或加载
+  symbol/call graph。原稳定失败约7--8秒的HTTP流式首包用例降到0.81秒内通过；Repo/HTTP组合144项通过。
+- 最终完整仓库门禁为`2393 passed, 21 skipped`，7条告警均是已知Python 3.13多线程进程中`fork`
+  的弃用提示；Ruff、compileall和diff whitespace检查同时通过。
+- 这里证明的是错误语义、成本止损与首轮延迟边界，不证明patch resolved。剩余最重要的真实问题仍是
+  Xarray 3364/4094在20轮内没有形成首次编辑；后续有余额时应只跑新的未尝试题，观察12次局部收敛门
+  是否降低空patch，而不是重跑A280美化结果。
+
+## A281 — Compaction任务锚定与Workspace证据完整性（2026-08-25）
+
+- A280的Xarray 3364/4094并非单纯“模型不肯编辑”。逐轮trace显示每次只读调用后都有
+  `workspace_patch_created files=1`；Session summary里的所谓diff实际是正在增长的
+  `.nz-coder-runs/*.jsonl`。`WorkspaceSnapshotStore`遗漏了这一内部运行目录，而搜索、索引、worktree
+  与SWE diff早已排除它。现在快照排除集完成统一，trace增长不再改变snapshot identity，也不会把
+  Agent自己的观测日志重放给自己。
+- InfCodeX `DefaultSummaryCompaction`的关键契约是只替换旧message entries并保留recent messages；
+  infcode-dev进一步用`ContextBudget`、turn-aware tail、2K字符tool输出上限、previous-summary更新和
+  single-shot payload recovery构成生产闭环。NZ-Coder原有实现已覆盖这些结构，但`_select_summary_input`
+  只逆序选择head，无法保证首条任务进入摘要请求。单一长turn里近期工具证据占满预算时，任务会丢失。
+- 选择器现在先预留首个非synthetic human task，再装填最新证据。若首条消息包含显式file expansion且
+  整体可放入预算，则仍保留完整内容，维持原payload recovery契约；只有超限时才使用`_nz_user_text`
+  作为有界锚点。这是对参考实现“anchored summary”语义的代码级补足，不是新增第二套上下文系统。
+- A280还给出一个参考仓库单测未覆盖的Provider边界：DeepSeek在compaction调用没有tools时仍返回
+  `<｜｜DSML｜｜tool_calls>`文本。旧代码把任意非空字符串当摘要，压缩后原任务彻底消失。现在空输出、
+  DSML/tool-call协议输出会被语义门拒绝；Runtime不重试以避免额外token，而是优先复用合法previous
+  summary，否则从首条真实用户任务生成完整固定章节的确定性fallback，并持久化
+  `summary_recovery.fallback`供trace审计。
+- TDD证据先得到三个预期失败：trace进入manifest、长head请求缺少original task、DSML进入summary；
+  修复后相关context/workspace/native组合`68 passed`。最终完整仓库为
+  `2395 passed, 21 skipped, 7 known fork warnings`，相关Ruff与compileall通过。本轮完全离线，未恢复
+  SWE批次，也不把上下文闭环修复外推成SWE resolved分数。
+
+## A282 — Task Query Authority与工具证据数据流（2026-08-25）
+
+- 三个无上下文审计从不同入口得到同一结论：参考架构中compaction/summary是派生continuity state，
+  不能取代用户任务authority。NZ-Coder虽然已经把原任务持久化到`RuntimeState.initial_task_text`，但
+  `ProductionPromptBuilder`的memory、implementation bundle和repo retrieval仍分别调用
+  `_last_user_text(messages)`；带`_nz_compaction`的User-role summary因此同时污染三条检索链。
+- 修复没有增加一个新的“记忆模块”，而是统一现有authority：每轮只解析一次`task_query`，跳过
+  synthetic、compaction及legacy`<session-summary>`，优先真正的后续用户指令，否则回退initial task，
+  最后统一截断到300字符。三个动态上下文消费者共享同一值，避免同轮语义分叉。
+- 同一规则进入unfinished-run continuation builder。过去max-turn发生在compaction后时，boundary会把
+  summary wrapper写入`## Latest User Instruction`；现在它回退canonical task，恢复时仍由真正的新
+  user follow-up拥有最高authority。
+- A280的4094还暴露了状态证据断链：精确测试文件的成功content grep能证明该文件已被检查，但
+  `observe_tool()`只保存pattern。现在只有“单文件路径 + content模式 + 非空成功匹配”才进入
+  `read_files`；目录泛搜、No files found、Error/Denied和失败调用均不计。这样直接复用现有
+  `pre_edit_scope_localized()`与12次strict limit，而不是再叠加一个模型sidecar。
+- 这轮学习的重点是：源码级对齐不能只看是否存在compaction、memory或stall detector模块，必须沿
+  `消息authority → query消费者`以及`工具结果 → RuntimeState → admission policy`检查证据是否真的
+  到达决策点。InfCodeX与infcode-dev的exact-input doom-loop检测也不能识别不断变化pattern的语义漂移，
+  因此把已有客观定位证据接入确定性状态机比复制另一个重复检测器更可靠、更省token。
+- 四个RED测试分别锁定三路query回退、continuation authority、精确grep定位和负例边界；聚焦组合
+  `173 passed`，全仓`2399 passed, 21 skipped, 7 known fork warnings`。Ruff、compileall和diff检查
+  均通过；未调用Provider或官方SWE harness，不宣称分数提升。
+
+## A283 — Terminal metadata必须到达SessionProcessor（2026-08-25）
+
+- A282接通`grep result → RuntimeState → strict policy`后，继续向下追踪发现最后一段仍断开：policy在
+  第二次strict违规时已产生`strict_terminal_blocker=true`，result projector却只消费
+  `stall_kind=consecutive`。因此trace里的“terminal”只是名称，processor仍可能返回continue。
+- `ProductionToolResultProjector`现在集中判定terminal denial；consecutive doom loop与
+  strict terminal blocker都会令batch `blocked=true`，并以`continue_on_deny=false`结算tool part。
+  第一次strict反馈和普通permission denial维持可恢复语义，避免把一次无害拒绝升级成整次run失败。
+- 端到端测试没有依赖mock状态字段：真实读取`app.py`与`tests/test_app.py`，在首批累积12次调查，再用
+  两个不同grep参数确认exact-repeat detector不会介入。最终状态为blocked且Provider calls精确等于3，
+  第四个响应未消费，证明SessionProcessor真正收到了终止事实。
+- 全量回归反过来发现LSP错误报告的旧竞态。stdout EOF线程可能在stderr线程写入deque前结算pending
+  initialize request，缓存错误因而丢掉server stderr。初始化异常清理现在有界join stderr reader，测试
+  人为延迟reader 50ms锁定该时序；等待上限仅0.2秒，只影响启动失败路径。
+- 这一轮说明源码级对齐必须一直跟到终端消费者：`guardrail metadata`存在并不等于lifecycle已经执行，
+  `stderr pipe`存在也不等于诊断已经排空。最终全仓`2401 passed, 21 skipped, 7 known fork warnings`，
+  静态门禁通过；没有付费Provider或官方SWE评测证据，不外推分数。
+
+## A284 — Terminal State必须保持语义类型（2026-08-26）
+
+- A283只证明raw lifecycle能够返回`blocked`。继续沿native consumer审计发现，Runner显式把它映射为
+  `RunStatus.ERROR`，而Durable Session枚举也无法表示blocked。模块存在、raw JSON正确，都不代表产品
+  客户端看见了正确终态。
+- 参考架构保留了“被策略停止”和“运行故障”的区别：InfCodeX通过hook stop reason保留来源，
+  infcode-dev/OpenCode在session context中保留blocked事实。NZ-Coder采用与现有typed contract一致的
+  最小做法，为Run与Session各增加同名状态，不另建一套停止协议。
+- 行为测试必须越过private mapper：让native lifecycle返回blocked，并同时断言`RunResult`、
+  `RunContext`和session finalizer；另用真实`SessionRuntime`确认磁盘快照可表达该状态。
+
+## A285 — Repository Scope不是File Evidence（2026-08-26）
+
+- `read_file(path="tests/runtime")`成功并不表示任何测试文件内容被读取；`repo_map(path="src")`只证明
+  浏览了结构；`read_symbol`返回available-symbol列表也不证明目标声明已定位。旧状态机把这些path统一
+  填入`read_files`，会让确定性收敛策略建立在错误前提上。
+- 修复边界放在`tool result → RuntimeState`适配处，而不是给`pre_edit_scope_localized()`增加更多路径
+  猜测。`read_file`消费自身`<type>file</type>`协议，`read_symbol`排除not-found，repo/ref scope完全不
+  进入exact-read ledger。这样下游closure paths与strict policy自动获得同一份可信证据。
+- 这条经验适用于继续对齐InfCodeX/infcode-dev：Repo Intelligence的能力不取决于工具数量，而取决于
+  每类结果在进入状态机时是否带有可验证语义。导航信号、定位证据和修改证据不能共用一个模糊path列表。
+
+## A286 — Compaction只能是Context，不能成为Task Authority（2026-08-26）
+
+- A282修过PromptBuilder和continuation，但lifecycle还是独立解析最新User消息。该重复selector位于
+  `RuntimeState.initial_task_text`的生产入口，因此summary污染会重新传播到task mode、acceptance、
+  declared test scope和planner；只修下游query consumer不够。
+- lifecycle现在复用相同语义边界：跳过synthetic、`_nz_compaction`和legacy session-summary。真正的新
+  用户follow-up仍优先，更早真实任务可回退，纯派生消息不能创建canonical task。
+- 本轮三项RED分别锁定typed terminal、exact read evidence和canonical producer。相关组合
+  `116 passed`，全仓`2407 passed, 21 skipped, 7 known fork warnings`，静态门禁全绿。这里的对齐含义
+  是“同一事实穿透生产者与最终消费者”，不是简单拥有同名模块；未运行Provider或SWE harness。
+
+## A287 — Resume是新Activation，不是新Task（2026-08-26）
+
+- 离线生产复现得到明确事实：max-turn收口后的inactive RuntimeState返回`loaded=false`；随后
+  `initial_task_text`变为`go on`，PromptBuilder三条task-aware query也全部是`go on`。Continuation summary
+  正确存在并不足以修复这两个authority消费者。
+- InfCodeX的managed role prompt同时呈现`Original user request`和仅在不同文本时出现的
+  `Current round instructions`；infcode-dev用synthetic compaction-continue part承载自动续跑。共同原则是
+  continuation可以触发新一轮执行，但不能获得original-task authority。
+- NZ-Coder将boundary识别、纯继续判断和task recovery收口到`continuation_context`。Lifecycle负责恢复
+  task state，PromptBuilder负责task-aware retrieval，Tool Exposure负责schema family，但三者消费同一
+  resolver。绿色重构删除了PromptBuilder旧的重复selector。
+- RuntimeState的`active`现在表示“任务是否仍可恢复”，而不是“Python调用栈是否仍在运行”。max-turn和
+  interrupted保持active；completed/error/blocked仍关闭。新activation重置turn/time与budget phase，
+  保留contract、ledger和证据，避免既丢任务又复用耗尽预算的两种错误极端。
+
+## A288 — 收敛依据应是可信Evidence，而不是配置字段存在（2026-08-26）
+
+- 旧门把`verification_contract.command`当作唯一收敛资格，实际等价于“用户写了测试命令才控制成本”。
+  SWE题目经常只描述行为和目标文件，Xarray 3364/4094正属于没有显式contract但已有精确定位的情况。
+- A285先解决evidence quality，本轮才安全扩大consumer：只有协议证明读过精确源码和测试文件时，
+  `pre_edit_scope_localized()`才能替代contract；目录、scope和未命中仍被排除。顺序不能反过来，否则效率
+  门会把错误证据放大成错误阻断。
+- Model-facing schema删除与execution-time policy必须同时生效。前者降低下一轮schema/token并引导模型，
+  后者处理模型从历史记住旧工具的情况；只做任一层都会留下可绕过路径。所有write/edit工具保持可用，
+  所以这是convergence gate而不是run termination。
+- A287/A288合计七个测试均完成RED→GREEN，相关组合`202 passed`，全仓
+  `2414 passed, 21 skipped, 7 known fork warnings`。本轮完全离线，不把确定性控制流修复外推成
+  SWE-bench分数或真实Provider token节省比例。
+
+## A289 — Original Task与Current Round Instruction必须分层（2026-08-26）
+
+- A287只覆盖纯继续消息。对`Continue ... Do not modify tests. Run pytest ...`做真实Lifecycle复现后，
+  新指令在restore之前解析正确，但随后被旧快照的`verification_contract`、`forbids_test_changes`和
+  `requested_paths`逐字段覆盖。说明“能恢复原任务”与“能接收本轮约束”是两条独立的数据流。
+- InfCodeX `role-prompt.ts`保留`originalTask`作为contract objective，并在prompt不同时额外呈现
+  `Current round instructions`；后者没有替换前者，但拥有当前执行轮的指令权威。NZ-Coder现在把同一
+  区分落实到Lifecycle参数，而不是靠模型从混合summary里猜优先级。
+- 恢复时保持`initial_task_text`、TaskContract、RequirementLedger、workspace mutation和read evidence；
+  对当前轮只合并可确定提取的criteria/path，并让最新显式测试修改约束与pytest verification contract
+  覆盖旧策略事实。新命令从attempts=0的合同开始，避免把旧命令的pass错误迁移到新命令。
+- 最新User约束按同级authority处理冲突：`do not modify tests`会关闭测试修改；后续明确`add tests`又能
+  解除旧限制。没有显式相关语义时保持旧值，纯`go on`不触碰任何合同事实。
+- 两项RED分别锁定生产Lifecycle的旧命令覆盖和相反测试约束更新；相关组合`163 passed`，全仓
+  `2416 passed, 21 skipped, 7 known fork warnings`，静态门禁通过。没有付费Provider或官方SWE评测，
+  因而这里只声明源码数据流对齐，不声明分数等价。
+
+## A290 — Current Round也必须进入确定性Completion Authority（2026-08-26）
+
+- A289之后，消息与运行策略已经同时看到follow-up，但`TaskContract/RequirementLedger`仍是旧快照。
+  当旧items全部satisfied时，新增docs交付与新pytest命令不会阻止`CompletionGate.ready=true`。这是
+  prompt authority和deterministic authority分叉，不是模型遵循度问题。
+- InfCodeX让当前worker/evaluator同时看到`originalTask`与round instruction；NZ-Coder的completion gate
+  是不读消息的本地判定器，因此采用等价的显式投影：原objective不变，旧ledger evidence按ID保留，
+  本轮带精确acceptance command的新增requirements以pending加入，新verification替换旧命令证据。
+- 合并只消费现有`derive_task_contract`可验证的结构，不新增planner调用。没有精确pytest命令时仍不把
+  自然语言推断升级成不可满足的硬gate，维持原来的保守边界。
+- 直接复用初始Repo artifact resolution一度产生假目标：`update docs/parser.md`会命中仓库中无关
+  `update.py/update.ts`。第二个RED把这一点稳定复现；round contract现在只接受当前User文本显式路径，
+  防止检索候选变成completion硬要求。
+- 相关组合`189 passed`，全仓`2417 passed, 21 skipped, 7 known fork warnings`，Ruff、compileall与
+  whitespace门禁通过。没有Provider或官方SWE运行，不把控制流修复外推成成绩。
+
+## A291 — 没有精确测试命令时，Hard Gate只能承诺可观测事实（2026-08-26）
+
+- A290保守地拒绝把无命令自然语言变成硬合同，但这也让`update docs/parser.md`只停留在prompt层；旧
+  ledger已经satisfied时，本地CompletionGate无需读取消息便会直接放行。避免误判与避免漏判必须拆成
+  两种authority，不能简单选择其中一个。
+- 新的artifact-only round contract只消费同一句中的明确修改动词和明确路径。`docs/artifact`使用
+  deterministic模式，由成功write/edit证据满足；行为描述仍交给Sidecar语义审查。纯读取、解释以及
+  被`do not/without/不要修改`否定的路径不升级为交付物，正向路径位于否定短语之前时仍被保留。
+- `merge_round_task_contract`现在也接受没有verification requirement的增量合同：保留原objective、旧
+  acceptance command和verification item，只追加去重后的artifact requirement；初始合同为空时使用
+  original task建立最小artifact合同。这使重复resume幂等，也不虚构新的测试证据。
+- `current_round_instruction_text`作为RuntimeState中的独立有界字段持久化，并进入Sidecar真实请求的
+  additional criteria。原任务仍是canonical objective，当前轮指令只拥有本轮执行/完成审查authority，
+  与InfCodeX同时展示Original Task和Current Round Instructions的分层语义一致。
+- 相关组合`218 passed`，全仓`2421 passed, 21 skipped, 7 known fork warnings`；Ruff、compileall均
+  通过。全程离线，未运行Provider、SWE实例或Docker harness。
+
+## A292 — Evidence失效必须跟随Mutation Scope，而不是任意写入计数（2026-08-26）
+
+- A291新增docs artifact后暴露了旧generation模型的过度失效：任意文件写入都会推进全局generation，
+  ledger、exact acceptance和Sidecar遂同时认定旧源码证据过期。结果虽然安全，但会让“代码已验证后补
+  文档”重复跑pytest、重复调用Verifier，形成确定性的token与工具浪费。
+- InfCodeX没有相同的Python RequirementLedger可直接复制，但其源码给出明确边界：
+  `ManagedMutationTracker`保留逐路径mutation，Verifier Context消费真实file-edit summary，docs-only
+  policy按路径限制写入。对齐的重点因此是保留mutation attribution，而不是照搬一个全局计数器。
+- NZ-Coder保留`mutation_generation`作为全部工作区变化/Sidecar review代际，新增
+  `acceptance_mutation_generation`表示exact acceptance有效性。文档路径不会推进后者；source、test、
+  config、mixed和pathless写入会推进。首次docs-only任务仍在generation 0执行一次用户声明验收，之后
+  继续补文档不会重复执行。
+- RequirementLedger的`latest_generation`同步改为最后一次会使行为证据失效的代际。docs requirement
+  仍记录其真实mutation generation并由写入满足；已验证behavior/verification保持satisfied。Semantic
+  review也绑定acceptance generation，因此在源码验证后补文档不会让兼容性证据陷入永远candidate。
+- 兼容性边界采用显式未初始化值：旧快照迁移时保守使用原全局generation；未经过reset的手工/native
+  state也回退旧语义；正常activation从0初始化scoped generation。未知路径写入绝不视作docs-only。
+- 系统化调试沿`write result → RuntimeState → RequirementLedger → exact contract → Sidecar → native
+  terminal`逐层复现，TDD先获得七类预期失败再实现。相关组合`183 passed`，全仓
+  `2434 passed, 21 skipped, 7 known fork warnings`；全程离线，未运行Provider或SWE harness。
+
+## A293 — Tool Execution Mode不等于Workspace Side Effect（2026-08-26）
+
+- 源码枚举先排除了“照着名字抄”的错误方向：NZ-Coder没有注册`delete_file`、`rename_file`、
+  `multi_edit`或`insert_after_anchor`，但旧`turn_economy`却保留这些InfCodeX名字；与此同时，真实的
+  `write_files_batch`和`apply_agent_changes`没有进入该分类。模块对齐不能用参考仓库的tool name替代
+  本项目注册表中的真实effect。
+- 根因是NZ注册器只有调度维度`read/serial/write`。`apply_agent_changes`与`workflow_save`同为
+  `execution=write`，前者改任务workspace，后者只改产品私有状态；MCP write又可能修改远端。一个布尔
+  write无法同时服务事务、权限、验收失效、Provider-turn归因和Verifier规模判断。
+- InfCodeX `tools/side-effect.ts`把dominant effect声明为`readonly/reads-network/mutates-fs/
+  mutates-shell/mutates-network/mutates-state`，`registry.ts::isToolFileMutation()`从注册metadata派生；
+  managed wrapper只因循环依赖保留一份`MUTATES_FS_TOOL_NAMES`，并用registry-parity test防漂移。
+  NZ-Coder采用同一边界：注册器保存六类effect，保留一份cycle-safe核心filesystem catalog并以真实注册
+  parity测试约束，所有决策消费者调用统一predicate。
+- 统一`collect_filesystem_mutation_paths()`递归消费path-shaped fields，覆盖`path/file_path`、
+  batch/patch item及child merge的`reviewed_files`。无法得到路径不是“没有修改”，而是unattributed
+  mutation：RequirementLedger和acceptance保守失效；明确全部为文档时才沿用A292的scoped evidence。
+- 这条数据流已贯穿RuntimeState、TurnEconomy、RunEvidence、Admission invariant、child postcondition、
+  ToolExecutor read cache、Loop code-index/LSP refresh与SWE trace generation。`apply_patch(dry_run=true)`
+  被明确排除；内部workflow persistence标为`mutates-state`；非事务MCP write标为
+  `mutates-network`，不会伪造本地diff。
+- InfCodeX的`ManagedMutationTracker.riskyShellOps/unattributedWriteOps`提示了另一个盲区：Bash命令即使
+  无法提取文件也可能已改变workspace。NZ现在以现有command policy为唯一classifier，mutating shell
+  作为pathless mutation推进generation并清除旧verification；read/test命令不推进。非零命令也可能
+  部分写入，因此只要已执行且被策略判为mutating就保守记录。
+- RED测试顺带证明旧exact-test heuristic把`touch src/generated.py`和`cat src/app.py`当成测试，因为它
+  只搜索`.py`参数。修复后必须先出现真实test runner，再判断文件/符号filter；这避免mutation命令错误
+  增加verification计数。相关完整组合`342 passed`，最终全仓
+  `2448 passed, 21 skipped, 7 known fork warnings`；Ruff、compileall和diff检查通过。未调用Provider或
+  SWE harness，不把控制流正确性外推成resolved率。
+
+## A294 — Side Effect之外还需要Plan-mode Override（2026-08-26）
+
+- A293只完成了effect“生产”，并未证明所有授权消费者已经迁移。源码审计发现
+  `permissioning/checker.py`和read-only subagent仍读取`execution=read/write/serial`。这个字段只描述
+  scheduler能否并发、是否需要串行，不能回答用户是否批准本地编辑、远端写或内部状态迁移。
+- InfCodeX `tools/types.ts`把`sideEffect`设为必需字段，同时保留独立`planModeAllowed?: boolean`；
+  `registry.ts::isToolPlanModeAllowed()`规则是：显式true优先、显式false禁止、否则仅readonly允许、未知
+  fail-closed。NZ采用同一语义，而没有把question/todo/plan_exit等规划环状态写错误重标成readonly。
+- 新的`get_tool_policy_snapshot()`一次性投影active builtin与dynamic tool的`side_effect`和最终
+  `plan_mode_allowed`。Plan schema exposure、permission checker与read-only child都消费注册metadata；
+  compatibility `READ_TOOLS/WRITE_TOOLS`仍可供旧扩展import，但不再决定权限。动态MCP定义也进入同一
+  snapshot，read与remote mutation不再靠`mcp_`名字或execution猜测。
+- `acceptEdits`语义被收窄为“自动接受本地文件编辑”，不是“自动接受任何execution=write”。安全的
+  session-state工具保留显式小型例外；其余mutates-state/mutates-shell/mutates-network在default与
+  acceptEdits下仍需批准，auto模式才全自动。Plan则在permission和model-facing schema两层执行同一门，
+  防止历史schema重放与下一轮无效调用。
+- read-only child只按`readonly/reads-network`自动开放；Bash因已有强制read-only command classifier而
+  保留，skill/optional loader与project-profile cache是明确的私有状态例外。write child不受该筛选。
+  这比不断维护`_SUBAGENT_READ_ONLY_BLOCKED_TOOLS`更能覆盖以后新增的插件工具。
+- 全量回归暴露了两个重要迁移经验：声明式`emit_handoff`虽然是mutates-state，但其authority已被
+  AgentGraph限制，属于显式安全状态操作；optional LSP即使尚未import，permission仍需读取optional-pack
+  声明的read effect。两者都通过补全metadata链解决，没有恢复“unknown默认allow”。最终全仓
+`2453 passed, 21 skipped, 7 known fork warnings`，静态门禁通过；未调用Provider或SWE harness。
+
+## A295–A299 — Tool Policy从声明到执行闭环（2026-08-26）
+
+- AgentGraph admission不再维护另一份工具名分类：builtin、optional和MCP工具统一从注册器的
+  `side_effect/plan_mode_allowed`投影read、network、shell、filesystem和state capability；交互与子Agent
+  只保留窄的显式语义例外。
+- `session.tool.*`事件与ToolExecutor共享同一个category投影，授权时解析出的动态工具代际会随
+  `ToolExecutionResult`保存，不会在完成事件阶段重新查询已经热更新的MCP定义。
+- optional pack新增单一owner、幂等同定义和active registration优先级；动态工具不能占用尚未加载的
+  optional名称。权限规则改为显式ask先于安全状态默认值，Bash/process也不能用宽泛allow绕过命令级
+  安全检查或Plan Mode。
+- 这些修改对齐的是InfCodeX把调度、side effect、Plan authority和事件语义分开的源码边界；不是复制
+  参考仓库的工具名表。
+
+## A300–A310 — Provider/Tool-call边界与上下文一致性（2026-08-26）
+
+- 每个tool batch使用`scoped_dynamic_tool_snapshot()`冻结一代MCP目录，permission、scheduler、handler
+  和结果事件不会发生TOCTOU；postponed annotation和bool/int等JSON标量按真实handler签名校验。
+- Provider返回非object arguments、缺失function/name、重复/缺失/超长call id，乃至`tool_calls`数组中的
+  `null`时，都会形成合法可配对的assistant/tool历史和模型可见修复诊断，不再在SessionProcessor或权限
+  层抛`KeyError/AttributeError`。所有修复均记录trace且不修改原Provider对象。
+- CJK token估算改用非ASCII原文而非`\uXXXX`膨胀；大型tool output用内容hash避免同ID覆盖；同workspace
+  的HTTP/CLI Session共享MemoryManager与mutation lock。Shell拒绝command/process substitution、backtick、
+  独立`&`和换行逃逸，workspace/home/symlink与大型输入边界同步收紧。
+- TraceRecorder对循环、深层、超大容器和坏`__str__`做有界降级，观测失败不再终止Agent。
+
+## A311–A322 — 生命周期、Session identity与并发所有权（2026-08-26）
+
+- process start先执行shell/workspace/Plan硬门，再应用用户allow/ask；BackgroundAgentManager拥有
+  closing/closed状态和可重试close，关闭一个Session不会持有全局registry lock阻塞其他workspace。
+- AgentLoop只有在child manager成功settle后才释放repo/event/MCP/tracer资源；随后按精确manager identity
+  从workspace registry移除，重新打开同一Session会得到新的live manager。
+- `ensure/save/rename/activate/scoped/delete`要求精确、非保留Session ID；`active/latest`只作为只读alias，
+  损坏alias不再被lossy sanitization映射到另一个Session。Repo intelligence acquire的lookup/create/refcount
+  在一把锁内完成，消除了最终release与新acquire之间的KeyError竞态。
+- legacy streaming watchdog复用canonical gateway timeout iterator，timeout/cancel会关闭上游stream；Event
+  replay和Trace summary的`limit=0`不再因Python `[-0:]`返回全部历史；Session枚举可容忍并发删除。
+
+## A323–A336 — 长任务持久化与诊断抗损坏（2026-08-26）
+
+- Trace轮转在`glob()`与`stat()`之间删除文件时会跳过失效候选；summary忽略标量JSON行，并安全解析损坏
+  duration/ts/token/attempts。Event journal是明确的best-effort边界：循环或无法deepcopy的插件metadata只
+  降级该记录，不会打断live Agent fan-out。
+- 静态工具注册增加一致性锁；optional pack导入以事务快照提交，import失败不会留下半套handler/schema/
+  effect。`tool_search`把exposure导入延迟到调用期，消除了直接导入progressive exposure时的循环依赖。
+- Session JSON即使语法合法但根节点不是object也按损坏处理。Git tracked instruction缓存现在绑定worktree
+  index代际、清理同文件旧键并限制2048项，`git add/rm`后authority label立即更新且不再无界增长。
+- Markdown Memory记录、索引、auto-dream报告和状态改为`fsync + atomic replace`；提交点失败保留上一版本
+  并清理临时文件。损坏assistant timestamp不会让micro-compaction崩溃。
+- ChildAgentResult忽略NaN/Infinity usage和伪布尔字段；Workflow终态持久化处理短写、提交失败清理、损坏
+  ended_at排序和非有限cost metrics，因此旧/手工状态不能阻止child settle或历史查看。
+- 本轮每项生产修复都先用确定性RED复现。首次全仓回归为
+  `2534 passed, 21 skipped, 2 failed, 7 known fork warnings`；两项失败是动态工具snapshot wrapper引入后
+  源码架构守卫仍扫描旧函数体，守卫现同时验证public wrapper与snapshot implementation（相关
+  `34 passed`）。修复后第二次全仓为`2541 passed, 21 skipped, 7 known fork warnings`，Ruff、compileall
+  与diff检查通过；全程未调用付费Provider、SWE实例或Docker harness。
+
+## A337–A341 — 最后一轮API零值、Session提交与Schema隔离（2026-08-26）
+
+- Workflow store与`workflow_runs`工具过去都把`limit=0/-1`强制成1，和已经修复的Session/Event/Trace
+  API语义不一致；现在底层与active+persistent合并层都返回空列表，不会意外暴露一条历史记录。
+- `activate_session()`原先先设置ContextVar再写active alias；磁盘失败会留下仅进程内可见的幽灵Session。
+  提交顺序现改为先完成原子持久化，再发布process-local identity。
+- `get_catalog_specs()`原先只复制list，嵌套schema仍指向全局对象；一个Provider adapter修改description或
+  properties会污染其他Session。现在builtin/dynamic schema均深拷贝，且register入口验证参数schema为
+  有限、JSON可序列化对象，非法set/NaN/循环结构在暴露前失败且不产生部分注册。
+- exposure-first与runtime-first分别在全新Python进程导入成功；最终全仓为
+  `2546 passed, 21 skipped, 7 known fork warnings`，Ruff、compileall与diff whitespace门禁通过。仍未调用
+  Provider、SWE实例或Docker harness。已安装真实入口在`/home/pyh/test_nzcoder`运行`nz-coder --help`、
+  `doctor --help`、secret-free `doctor --json`、`config show`和`models list`均为exit 0；doctor确认Python、
+  workspace/state security、三类parser、watcher、LSP、model配置与credential presence通过，仅对未配置的
+  experimental semantic provider和非交互终端给出预期warning。
+
+## A342 — Repo Map必须排除产品临时副本并补偿Watcher启动窗口（2026-08-26）
+
+> 2026-08-28 范围审计纠偏：`.product-*` 是手工产品测试产生的临时目录，不是 NZ-Coder 管理目录，
+> 也没有 InfCodeX 保留字依据。A342 的“所有未知 dot-directory”剪枝、A343 的 `.product-*` 特判及
+> A345 的 snapshot 特判已回退；用户拥有的 `.product-*`、`.ci-tools` 等隐藏源码重新可见。Watcher
+> 启动窗口补偿与 `.nz-coder`、`.nz-coder-runs`、缓存、依赖和构建目录排除仍保留。
+
+- 在`/home/pyh/test_nzcoder`走真实`dispatch("repo_map")`发现，未知`.product-*`目录不在静态exclude表中，
+  旧实现扫描80个临时副本文件并报告另有316个被额度截断，真实`cron_engine/taskr`几乎没有进入上下文。
+  这会直接放大token、误导搜索并让Agent修改过期副本。
+- PersistentCodeIndex现在默认剪枝所有未知dot-directory（显式扫描某个hidden base仍可用），native watcher
+  的event eligibility消费同一predicate，避免初始索引和增量索引出现不同目录语义。
+- 组合回归暴露`start_watching()`返回与OS watch真正安装之间可丢失立即创建事件；native watcher启动时
+  先比较传入known fingerprint与当前快照并增量补偿。相关组合`22 passed`，启动竞态测试另连续通过两次。
+- 真实refresh后repo map从`80 scanned / 316 omitted / only python temporary copies`变为
+  `24 scanned / bash+cpp+python`，首个结果为真实`cron_engine/cli.py`。最终全仓仍为
+  `2546 passed, 21 skipped, 7 known fork warnings`，静态门禁通过；没有Provider/SWE/Docker运行。
+
+## A343 — Repo Intelligence入口统一排除产品运行时副本（2026-08-26）
+
+- A342只收口了持久索引；确定性RED证明`smart_search`的非Git回退仍会返回
+  `.product-stale/stale.py`，ProjectProfile语言采样也会把临时副本中的Go误报为当前项目语言。
+- `smart_search`、`find_symbol_callers`、变更文件过滤，以及ProjectProfile的语言采样、source-root、
+  Python package和single nested project探测现统一排除`.product-*`目录；规则没有扩展到`.github`
+  等合法隐藏源码目录。
+- 两项RED转绿后最终全仓为`2548 passed, 21 skipped, 7 known fork warnings in 132.46s`；Ruff、
+  compileall和diff whitespace门禁通过。真实`/home/pyh/test_nzcoder`调用`smart_search`返回当前
+  `cron_engine/parser.py`等源码且不含`.product-*`。全程没有Provider、SWE实例或Docker运行。
+
+## A344 — SWE超时隔离从隐式Fork迁移到显式Spawn（2026-08-26）
+
+- 根因不是单一warning：SWE单题执行器硬编码`fork`，依赖它隐式继承workspace/ContextVar并绕过
+  `TraceRecorder`线程锁的pickle边界；在Python 3.13多线程父进程中存在真实死锁风险。
+- Agent timeout与Docker pull timeout现统一使用显式`spawn`。父进程把workspace、全部runtime overrides、
+  broad-test guard和declared test scopes作为可序列化快照传入；TraceRecorder只序列化durable identity，
+  子进程重建本地锁。Windows也不再因缺少`os.fork`而退化为无硬超时。
+- 两轮确定性RED分别证明旧实现请求`fork`、tracer无法pickle、无`os.fork`时绕过process timeout，以及
+  Docker worker使用平台默认context。聚焦`76 passed`；全仓为
+  `2552 passed, 21 skipped, 1 intentional fork-compat warning in 193.06s`。唯一warning来自明确验证
+  `register_at_fork`清理的兼容测试，现只在该测试调用边界局部过滤，生产路径不吞警告。
+
+## A345 — 真实终端任务收口Tool Schema与Workspace Snapshot（2026-08-26）
+
+- 在`/home/pyh/test_nzcoder`用已安装的`nz-coder run`执行同一条只读代码理解任务，首次真实trace显示
+  5次Provider请求均携带约5908 token的41项完整工具schema，schema累计29540 token；根因是“小于
+  6000 token”单一门槛把41/42项目录错误视为可一次性暴露。对照InfCodeX deferred tools的紧凑提示
+  设计，progressive exposure新增32项eager上限，并把`control flow/控制流/代码流程`纳入repo
+  intelligence意图。修复后同任务schema累计降至15635 token，下降47.1%；总usage从73071降至
+  63737，下降12.8%，同时保留Repo Map、文件读取、grep/glob等任务相关能力。
+- 同一真实运行还发现workspace snapshot把历史`.product-*`副本作为用户交付物复制，artifact从约
+  2.9 MiB膨胀。Snapshot现只新增明确的产品临时目录排除规则，不泛化排除`.github`等合法隐藏源码；
+  重跑后`.product-*`计数为0，snapshot约524 KiB。
+- 真实写任务在独立fixture中修复`normalize_query`的Unicode空白折叠与casefold：4个coding turn、5次
+  工具调用完成read→search→edit→精确pytest闭环，fresh manual verification为`2 passed in 0.00s`，
+  仅`query.py`发生最小修改；无工具失败、重试、压缩或重复搜索。该运行证明native write、权限、
+  patch、精确验证与Sidecar在真实Provider路径闭合，不只依赖mock测试。
+
+## A346 — Resumed Session的Grounded History Report不再重复调用Sidecar（2026-08-26）
+
+- 对上述真实Session执行“禁止工具和文件修改，只复述上一轮函数与测试结果”的续聊时，旧InfCodeX式
+  `default-fire`仍额外调用Verifier；本轮没有任何新工作，Sidecar却消耗1873 token，总usage为11277。
+  根因是gate只计算最后一条真实User消息之后的工具证据，忽略Session历史中已经持久化的edit与pytest。
+- 新规则没有放宽“文本声称完成但无证据必须复核”的安全底线。只有同时满足以下条件才跳过：历史中
+  确有assistant tool call、当前明确禁止调用工具、明确禁止修改文件、请求report/summary/复述历史结果、
+  且没有新的action imperative。无历史证据和`implement endpoint`等新动作仍走`default-fire`。
+- 同一Session、同一提示真实重跑后，trace明确记录
+  `sidecar_gate_decision fire=false reason=grounded-history-report`：1次coding请求、0工具、0 Sidecar、
+  0文件变化，正确返回上一轮`2 passed in 0.00s`证据；总usage为9490，较修复前下降15.8%。
+- 最终门禁：`2554 passed, 21 skipped in 199.93s`，无warning；全仓Ruff、compileall及本轮文件
+  `git diff --check`全部通过。本轮运行了三个小型真实Provider任务，没有启动SWE实例、Docker harness
+  或恢复批量评测，因此不外推SWE resolved率。
+
+## A347–A348 — Lite开发轨迹驱动的验证收敛与仓库缓存（2026-08-27）
+
+- A347是12题开发观察窗口，不是官方Docker harness成绩：2项内部`completed`、7项`risky`、1项
+  empty patch、2项setup failure；10项进入Agent的实例累计205次coding请求、32次辅助sidecar请求、
+  266次工具调用和约366万Provider token。上述终态不能换算成resolved或pass@1。
+- 逐条回放真实trace后确认四个Runtime根因。第一，verification planner在缺少exact filename时，会把
+  Repo Intelligence返回的通用调用图测试升级为唯一required targeted test；pytest旧仓库因此运行了
+  `doc/en/example/assertion/test_setup_flow_example.py`，即使通过也不能证明`rewrite.py`补丁。第二，
+  strict离线运行把checkout缺少`astroid`和宿主pytest无法解析旧warning category判为可修复代码错误，
+  触发无意义重试。第三，InfCodeX式Sidecar gate位于NZ新增的strict generation gate之前，语义judge
+  accept后仍被确定性gate复活，重复付费。第四，`repo-cache`只会读取已有mirror，从未在首次远程clone
+  成功时创建mirror，后续同仓库实例继续承担TLS失败风险。
+- 对照InfCodeX的Sidecar verifier adapter与observer composition后，NZ没有机械照搬其“Sidecar first”
+  顺序：参考实现没有NZ的strict generation verification，因此这里必须按本项目所有权组合。严格状态为
+  `unverified/verifying/failed_repairable`时，Sidecar先返回fall-through，由确定性gate负责修复提示；证据
+  收敛后才调用语义judge。普通终端模式与`blocked_environment`语义复核保持原行为。
+- targeted planner新增最多2500个Python测试文件的有界path-affinity排序，source stem权重大于父目录词；
+  `assertion/rewrite.py`现在优先`testing/test_assertrewrite.py`，通用graph候选仍保留为optional证据。该规则
+  不依赖Git历史、网络、embedding或新依赖。
+- environment classifier只在strict offline边界识别“未出现在本轮changed files中的缺失模块”和明确的
+  host-pytest warning API不兼容；补丁自己新增坏import，或本轮修改了`tox.ini/pytest.ini/setup.cfg/
+  pyproject.toml`，仍保持`failed_repairable`，没有用宽泛`ImportError`吞掉真实回归。
+- 首次仓库准备现用临时目录执行`git clone --mirror`并原子发布到repo-cache；并发worker不会读到半成品，
+  cache创建失败或已有cache损坏仍回退原远程clone路径。后续同仓库实例使用本地clone，避免重复下载。
+- TDD分别先复现错误required test、环境误判、Sidecar提前调用和cache不落盘。相关验证/planner/Sidecar/
+  SWE/hooks组合为`255 passed`；全仓为`2562 passed, 21 skipped in 194.98s`，本轮文件Ruff、compileall与
+  `git diff --check`通过。本轮没有重跑付费SWE或官方harness，因此只确认源码控制流闭环，成本和resolved
+  改善必须由下一次独立小批量轨迹验证。
+
+## A349 — Sidecar证据Authority与Pytest目录语义收口（2026-08-27）
+
+- 继续回放A347而不是立即付费重跑后，确认`pylint-7114`存在Runtime内部指令冲突：strict system明确
+  禁止安装/联网，但Sidecar把checkout缺少依赖判成可修复并要求`pip install -e .`；随后通用失败诊断又要求
+  “修复根因”。现在`blocked_environment`作为Runtime-owned事实进入Verifier criteria，明确禁止提出主
+  Agent无权执行的操作；相同blocked command的通用失败诊断直接跳过，避免再生成相反指令。
+- A347中22次“证据足够，请开始修改”的拒绝仍可能被Provider历史工具调用重复触发。Implementation phase
+  现在拥有独立的代际计数：第一次给可恢复收敛提示，同一mutation generation第二次转为terminal blocker；
+  成功写入后清零。该计数不再复用strict-progress counter，避免同一个调用被两层policy重复计数而提前终止。
+- `pytest-5103`的真实patch为5086字节，但旧Sidecar先把普通diff截到2400字节，渲染时又截到1600字节；
+  Verifier因此连续三次声称`_visit_any_all_call`方法体不完整，并要求主Agent重复展示源码。InfCodeX原实现只
+  提供mutation数量和最多400字符hint，本来不做源码语义证明；NZ在其上增加语义审查后却没有同步升级证据
+  合同。现在单文件证据上限为8KB、总diff证据仍封顶12KB，中等补丁完整可见，超大/多文件任务仍有硬预算。
+- `pytest-5221`的另一条根因是项目目录约定：测试位于`testing/python/fixtures.py`，而通用分类器只认识
+  `test/tests`，导致source+test scope永远不算localized，Agent探索17轮后才被20-call硬门截停。`testing/`
+  现进入跨项目测试目录集合；同时`fixture`不再因包含子串`fix`误判，SWE包装输入会提取Problem statement
+  首行作为验收项，并在其他marker均不命中时仍归为coding feature。确定性回放证明同样的source/test证据
+  在第6次调查后进入implementation phase。
+- 相关组合回归`318 passed`，最终全仓`2568 passed, 21 skipped in 200.57s`；Ruff、目标模块compileall和
+  本轮diff whitespace门禁均通过。没有调用Provider、恢复Lite批次或运行Docker harness；这里记录的是
+  trace-supported源码修复和离线反事实，不宣称实际token下降、patch正确率或resolved率已经提升。
+
+## A350 — Strict Pytest从“拒绝模型习惯”收口为本地源码执行合同（2026-08-27）
+
+- A347的7次`network-capable or indirect shell syntax`拒绝逐条分类后，5次是合法窄pytest后追加
+  `2>&1 | tail -N`，另2次是包安装或分号连接的任意Python探测。直接放开管道会让tail退出码掩盖pytest
+  失败；全部拒绝又浪费模型轮次。Runtime现在只规范化“单一、已经通过strict grammar的pytest + 有界
+  head/tail显示后缀”，去掉后缀后执行生产者。包安装、任意Python、多命令、其他pipeline保持原样拒绝；
+  实际执行命令、原请求和规范化事实进入Tool metadata，失败pytest仍返回真实非零exit。
+- `pytest-11148`的20项失败显示测试文件来自checkout，但`_pytest.pathlib`来自主机pytest 9，产生本分支
+  API中不存在的required keyword错误。strict policy同时禁止editable install，却没有为src-layout测试
+  进程提供本地导入路径。现在只有strict pytest且workspace/workdir内确有`src/`时，Runtime在子进程环境
+  前置该绝对本地路径；不修改父进程环境、不联网、不安装依赖，普通终端Bash保持原继承语义。测试用唯一
+  本地包先RED复现collection error，再证明checkout source被正确导入。
+- 另一处冲突位于Provider wire：通用Bash schema仍写“用于安装packages”，与strict system禁令相反。
+  `_active_tool_specs()`现在只在strict context投影直接本地命令描述，明确安装、网络、Git history/remotes、
+  `cd`、重定向、任意Python和broad suite禁令；退出strict context后原schema不被全局污染。
+- Sidecar 12KB预算也改为真正硬界：`[diff truncated]`标记计算在per-file/total额度内，而不是每个文件再
+  超出一个marker。A349的中等单文件完整证据不受影响。
+- A350聚焦组合`114 passed`；包含A349/A350的最终全仓为
+  `2573 passed, 21 skipped in 189.35s`。Ruff、compileall及本轮文档/源码diff whitespace门禁通过。
+  全程未调用Provider、未跑SWE实例或Docker harness；5个历史pytest拒绝和host-package shadowing只是
+  trace-supported候选收益，必须由下一次固定小批量验证实际轮次与token变化。
+
+## A351 — Policy诊断单一Authority与Sidecar接受证据复用（2026-08-27）
+
+- A347原始trace共有55次`tool_failure_diagnostic`。逐项与对应`tool_call`对齐后，31次来自已经包含明确
+  下一步的`Denied`策略结果，13次来自已经包含合法命令改写建议的strict Bash拒绝，只有11次是真实
+  command failure。旧Recovery把前44次再次包装成泛化User消息，造成同一拒绝被Provider历史重复消费。
+  当前hook对policy/guardrail/invariant及strict shell的actionable结果只保留原始工具输出，trace记录
+  `tool_failure_diagnostic_skipped`；测试失败、环境失败、`old_text`错误和专用Doom-loop换路诊断仍保留。
+- A347的Sidecar事件进一步证明“语义judge已接受”没有被当作当前patch generation的事实：7080、11143、
+  5227、5413、5495、5692以及7114修复后，同一未变化diff共得到18次accept，其中11次是重复accept，
+  没有任何文件写入发生在这些重复审查之间。Sidecar现在缓存由当前User要求、task contract、mutation
+  generation、实际diff和风险计数组成的accepted evidence key；仅final wording变化时直接完成。用户要求、
+  diff/generation或风险事实变化都会重新调用Verifier，`revise/blocked/provider_error`从不作为accept缓存。
+- strict pytest的`src/`识别原本虽然声明有界，却先`list(directory.iterdir())`再切片，面对巨型生成目录仍会
+  物化全部entry。当前使用`islice(..., 256)`，整棵探测仍维持512 entry/有限深度上限；纯C/C++ `src/`
+  不会误注入PYTHONPATH。
+- TDD先得到3个预期失败，再完成实现。首次全仓回归暴露Doom-loop专用诊断被过宽去重规则吞掉，随即把它
+  恢复为高价值结构化恢复并通过原端到端用例；最终全仓为`2578 passed, 21 skipped in 238.38s`。Ruff、
+  compileall与`git diff --check`全部通过。本轮未调用Provider、未重跑Lite或官方harness；44/55与11/22
+  是对保存A347事件的控制流反事实，不冒充新运行的token或resolved结果。
+
+## A352 — “文本中出现路径”不再等于“用户授权修改该路径”（2026-08-27）
+
+- A347 report暴露了另一类跨层authority污染：10项Agent运行的`requested_paths`大多来自issue证据而非
+  用户指定目标。典型值包括宿主`/usr/local/.../_pytest/runner.py`、开发者`/Users/.../test_commands.py`、
+  traceback里的`collector.c`、Pylint最小复现里的`a.py/a/a.py`以及pytest命令目标。Runtime随后把这些值
+  作为“User named target files”写回system reminder，并供closure known-path、implementation bundle、
+  hook exact/basename matching消费，真正目标甚至可能因5项上限被挤出。
+- `requested_paths`现在只接受与正向写入动词同一有效片段绑定的workspace-relative路径。pytest/tox/nox
+  执行片段、`Traceback/stack trace`之后的frame、否定修改片段、Unix绝对路径、Windows drive路径和`..`
+  均不能获得mutation authority。验收命令仍由`VerificationContract.targets`保存，普通trace文本仍留在
+  Session/Repo检索上下文中，因此这是所有权拆分，不是删除问题证据。
+- Bootstrap artifact原先还会把路径组件二次当成semantic surface：即使literal path被过滤，`runner.py`
+  中的`runner`或`collector.c`中的`collector`仍可能被全局`fix`动词提升为required behavior artifact。
+  新的`explicit_path_allowlist`由Runtime强路径事实传入TaskContract；路径/basename token先从semantic
+  surface文本移除，只有allowlist中的literal可成为required artifact。裸`parser/CLI/README`等项目创建
+  语义推断仍保持，明确`Fix parser.py`和`update src/parser.py`也保持确定性artifact。
+- 续跑场景同步收口：`run pytest tests/test_new_parser.py`只更新verification contract，不再覆盖上一轮
+  `parser.py`目标；明确`Continue ... in parser_v2.py`仍会置顶新目标。相关合同/续跑/路径组合`118 passed`，
+  最终全仓`2589 passed, 21 skipped in 243.50s`，Ruff、compileall和`git diff --check`通过。本轮仍是
+  保存report驱动的离线修复，没有Provider调用或新SWE成绩。
+
+## A353 — Stall Sidecar结构化判定与闭环工具成本去重（2026-08-27）
+
+- A347的10条`stall_sidecar_verdict`全部失败开放：`trace=provider_error`且错误均为JSON空正文解析失败。
+  这10条只来自`diff_status`（6次）与`verify_changed_files`（4次），累计34,417.832ms；没有一条提供有效
+  nudge。根因是NZ旧实现要求Provider自由返回JSON正文，而InfCodeX FEATURE_178/215明确使用强制
+  `report_stall_judgment`工具调用，再交给统一LLM Judge内核做工具名模糊匹配、布尔纠正、超时和失败开放。
+- Provider stall路径现使用同一结构化合同：强制report tool、300 token硬上限、5秒双层时间边界，并保留
+  旧JSON正文作为兼容回退。DeepSeek V4判定请求关闭thinking，避免短结构化结果落在reasoning-only字段；
+  空正文或错误tool call只产生`no_tool_call/provider_error`安全默认值，不再把JSON异常抛回orchestrator。
+- `diff_status`和`verify_changed_files`是确定性的本地闭环摘要，不需要付费语义judge。它们现在跳过L2记录，
+  但仍进入本地`RecoveryState`连续重复检测：相同调用第三次依然由Doom-loop门禁拦截。因此省掉外部调用
+  没有取消无限重复保护；真实read/search等语义重复仍保留InfCodeX的L1→L2路径。
+- TDD先稳定复现“结构化tool call + 空content触发JSON异常”和“闭环工具误入L2”两项失败；相关Sidecar、
+  Judge、Tool Policy组合`51 passed`，最终全仓`2591 passed, 21 skipped in 219.13s`。Ruff、compileall与
+  `git diff --check`通过。按A347保存轨迹反事实，这一规则会消除10/10无效stall调用和34.418秒等待；本轮
+  未调用Provider、未重跑SWE或官方harness，不把反事实写成真实token收益。
+
+## A354–A356 — Provider用途账本、Compaction观测与取消闭环（2026-08-27）
+
+- A347的`model_call_*`把22次Completion Verifier和10次Stall Judge全部标成`stall_sidecar`；只能通过
+  独立的`sidecar_started`事件反推真实职责。运行时明明已有`ModelCallPurpose.VERIFIER`，Provider adapter
+  却传了错误枚举。当前Verifier使用独立`verifier` purpose，后续calls/tokens/latency/error可以直接按职责
+  聚合，不再把完成语义审查伪装成卡死检测。
+- 更大的账本遗漏位于自动压缩：A347有11条`compact`事件、0条`purpose=compaction` model start，且没有
+  payload recovery；源码确认每次都由`auto_compact()`另建一个无observer的Gateway。原报表205 coding +
+  32 auxiliary = 237个可见调用，实际还执行了11次summary模型请求，即至少248个逻辑调用；原
+  3,662,817 Provider token没有压缩usage，只能作为下界，不能继续称为完整总量。
+- `auto_compact`现接收Agent-owned Gateway observer，所有压缩attempts/usage/duration/status进入统一trace、
+  `RuntimeState.provider_*`与headless runtime summary，purpose固定为`compaction`。没有把压缩算成coding，
+  也没有从`compact`控制事件估算或伪造usage。
+- 异步Context Runtime取消现在通过新增窄能力`cancel_compaction`设置当前Gateway cancel event；Gateway在
+  调度前或poll边界返回cancelled，`to_thread_settled`等待线程安全结算后再传播`CancelledError`。因此用户
+  Ctrl+C不再可能被压缩请求的600秒hard timeout拖住；普通同步压缩和已有Context接口保持兼容。
+- TDD先分别复现错误purpose、silent compaction和取消不下传；相关Provider/Context/observability组合
+  `115 passed`，最终全仓`2595 passed, 21 skipped in 213.38s`。Ruff、compileall和diff check通过。本轮
+  没有发起新Provider调用；248与token下界是对旧保存轨迹和当时代码路径的审计修正，不是新成绩。
+
+## A357–A360 — Vision/Memory统一Provider边界与真正终态账本（2026-08-27）
+
+- 对全仓`ProductionModelGateway`构造点逐一审计后，确认主coding、Completion Verifier、Stall Judge和
+  Compaction已经接入Agent observer，但可选Vision描述与LLM Memory提取/重排仍是silent调用。Memory还
+  固定退化到OpenAI Chat Completions bridge，即使当前Session实际使用Anthropic/Gemini/Responses原生
+  adapter，也会绕过相应wire协议和capability snapshot。
+- Vision与Memory现在显式接收当前Resolved Provider、模型能力快照和Gateway observer；purpose分别为
+  `vision`与`memory`。因此attempt、真实usage、duration、status进入同一trace和RuntimeState，不再靠
+  功能事件猜测成本。Vision和异步Memory同时把task取消下传到Gateway polling边界，避免等待600秒hard
+  timeout。
+- 终态顺序原先是“先冻结runtime并发出`run_end`，再运行Memory finalize”。即使Memory调用已经可观测，
+  返回结果与`run_end`仍会少算最后一笔。Lifecycle现在先构造Assistant终态、再结算同步/awaited Memory，
+  最后刷新runtime、持久化并发布唯一`run_end`。若`MEMORY_ASYNC_WRITE`与LLM提取同时开启，Provider工作
+  不再脱离run后台执行，避免延迟调用污染下一轮已reset的可变账本；纯本地Memory写入仍可异步。
+- Memory取消过去会被“LLM失败则规则回退”的宽泛异常捕获，随后仍保存候选并推进processed-message cursor；
+  下次运行永远不会重试该对话增量。现在cancelled outcome使用内部协作取消信号穿透fallback，在候选提交
+  和cursor写入前都有取消检查，锁正常释放但不提交任何状态。
+- 第二次全仓回归还发现Focused Lifecycle adapter在terminal assertion后把host上的admission violations
+  用旧state快照覆盖。adapter现同步该证据到唯一LifecycleRunState，重复runtime summary保持幂等。
+- TDD覆盖Vision observer/取消、Memory原生Provider/observer、Service依赖传递、同步/异步终态账本、LLM
+  Memory不得detach以及取消不得推进cursor。最终全仓`2603 passed, 21 skipped in 219.68s`；Ruff、
+  compileall与`git diff --check`通过。本轮没有调用真实Provider或重跑SWE，结论只证明未来账本完整性与
+  生命周期控制流，不补造旧轨迹的Vision/Memory token。
+
+## A361–A364 — 终态语义、模型归因与Sidecar并发所有权（2026-08-27）
+
+- `aborted`现在保留VM/runtime与`last_error`并映射typed `RunStatus.ERROR`；cancelled/interrupted/aborted
+  不启动新的终态学习。Memory收尾失败只形成`terminal_learning_failed`，不会抹掉已完成正文或阻止
+  `run_end`。
+- `doctor --cwd/--workspace`统一目标目录；显式`.product-*` Repo Map可以冷扫描，但不会把私有副本注入
+  根图cache，关闭TP-021/TP-022。
+- 所有Gateway事件携带provider/model/request-model/variant，Runtime同时按purpose和provider/model汇总
+  call、usage与duration，避免辅助模型被误归到主模型。
+- Stall L2增加cooperative cancel，终态/初始化/close均先cancel-and-settle。Provider observer和typed
+  RunContext加入run-local锁；确定性并发测试证明旧read-modify-write会丢增量，修复后不再发生。
+
+## A365–A368 — Token/Cost账本与Repo后台回调收口（2026-08-27）
+
+- 对照infcode-dev逐step usage结算后，修正Anthropic cache token未进入`total_tokens`的问题。统一归一化
+  保证总数不小于input/output/reasoning/cache read/cache write五个互斥桶之和，避免context pressure低估。
+- Streaming在稳定边界前失败并转buffered时，内部fallback不再提前发布finish；外层只发布一次合并后的
+  logical-call记录，attempts与duration覆盖stream失败和buffered成功两段。
+- Gateway已有的provider/registry cost进入Runtime总账，按purpose和provider/model聚合USD，并保留
+  unknown-call与cost source计数；Headless JSON在新字段存在时投影，旧fixture/客户端保持兼容。
+- Repo预热失败不再无条件启动Watcher；workspace或SQLite在done-callback边界失效时转为可观测的
+  `watcher_failed`，不抛Future callback异常或创建幽灵线程。
+- 最终全仓`2618 passed, 21 skipped in 213.17s`；Ruff、compileall和diff whitespace门禁通过。本轮没有
+  调用真实Provider、恢复Lite批次或运行官方Docker harness，故只证明离线账本与生命周期闭环。
+
+## A369–A370 — Plan审批所有权与窄屏完整信息（2026-08-27）
+
+- `plan_exit`由产品Runtime构造稳定的三分支审批，而不是让模型临时决定问题文案：明确批准后退出Plan、
+  当前Session直接实施、或保留Plan继续修改。计划摘要作为完整detail传给交互层，终态选择可持久恢复。
+- Fullscreen selector把长问题/计划正文放入独立虚拟化Markdown视口；`PgUp/PgDn/Home/End`滚动详情，
+  option区只承担选择。80列下不再以截断的单行description充当审批证据。
+- 这两项关闭源码与确定性UI合同差距，但没有调用真实Provider或运行80×24 PTY时延用例，因此真实问题清单
+  保持`verify`，不提前写成产品实测closed。
+
+## A371–A376 — Provider逻辑调用账本与RuntimeState持久化（2026-08-27）
+
+- RuntimeState加载时逐字段验证provider ledger；坏的purpose/model bucket、非数值usage、旧版本缺字段
+  都在边界降级，不能让一次损坏状态阻断Session恢复。observer对malformed callback也fail-closed。
+- Streaming重试及stream→buffered fallback现在聚合为一个logical call：attempts、duration、首token、
+  usage和最终状态覆盖全部尝试，只发布一次finish。observer本身抛错不会改变Provider请求结果。
+- buffered Provider返回非对象或缺失必要envelope时形成结构化abort，不再在Runner深处以属性错误崩溃。
+  RuntimeState写入采用同目录临时文件、flush/fsync、原子replace；部分写入不会破坏上一个可恢复快照。
+
+## A377–A379 — 空完成、输出截断与工具批次容量（2026-08-27）
+
+- `finish_reason=stop`但既无正文又无工具调用不再被当作完成；Runtime先给Provider一次有界恢复机会，重复空
+  响应才形成明确错误。`length/max_tokens`保留已生成文本并带continuation context续写，而不是伪装终态。
+- 输出限制发生在尚未闭合的tool-call JSON时，截断调用绝不进入dispatch；只有完整且已验证的工具envelope
+  才能执行。工具批次容量按“即将调度的完整批次”严格检查，不能在边界多执行一项写操作。
+
+## A380–A382 — Catch历史清理、作用域释放与Provider输入合同（2026-08-27）
+
+- 逐行对照InfCodeX `history-cleanup.ts`/`catch-terminals.ts`后确认：NZ过去只在下次initialize合成缺失结果，
+  generic catch仍可先保存Provider-invalid history。新增不可变清理器，只保留与紧邻tool result一一配对的
+  非空call ID，保留assistant可见正文；resume、terminal persistence和每次wire projection构成三重防线。
+- Native Runner与Production Host对runtime override、broad-test guard和declared test scopes统一使用成对
+  context manager；确定性同Task异常测试证明调用者原作用域会恢复。Legacy入口也使用同一execution context，
+  Cancelled/KeyboardInterrupt/generic error分别结算typed Session且始终清除host active context。
+- Session finalize改为持久化事务：save失败恢复Session status/usage且RunContext仍可重试；再次成功只累加一次
+  usage。catch中的trace/save次生失败不覆盖原异常。Provider wire清理会报告移除的孤立call/result数量，
+  但不修改durable Session。
+- Typed model boundary拒绝bool、NaN、Inf、负duration/cost和非正attempts，防止非有限数进入重试、账本或
+  JSON。聚焦Model Gateway为`62 passed`；其余catch/session/projection组合也通过。全仓数字将在本批最终
+  fresh run后更新；本段不宣称真实Provider、SWE实例或官方Docker成绩。
+
+## A383–A390 — 损坏状态恢复、可取消重试与严格JSON协议（2026-08-27）
+
+- 自定义`ModelPort`返回的usage、attempt、duration和cost在Runner边界逐字段修复；答案正文不会因坏指标
+  丢失，修复事实进入trace。`ModelCapabilities`快照在SDK client创建前验证窗口、输出预算、布尔能力、
+  token参数和有限temperature；失败初始化不再先分配再泄漏client。
+- Provider投影对异常遗留的孤立tool call执行wire-only清理；若assistant正文为空且调用全被移除，只在请求
+  视图补`...`协议占位，不篡改durable Session。终态顺序改为“自定义after hook → Session原子落盘 →
+  completed/failed/cancelled事件”，原生`KeyboardInterrupt`也先持久化`INTERRUPTED`。
+- RuntimeState、Session transcript、SessionProcessor、Memory proposal/cursor和Context metric ports统一处理
+  bool、字符串、NaN与Inf。旧Session按条目隔离坏消息并记录`session_recovery`，不再因一个损坏entry丢失
+  整段会话；Context projector异常或非法token值使用本地保守估算并留下`context_metric_repaired`。
+- 对照InfCodeX `retry-after.ts`与recovery coordinator后，Provider `Retry-After`只接受正有限值，header最多
+  等待120秒；真实sleep使用`Event.wait`或50ms合作轮询，Ctrl+C可中断限流等待。Bash timeout、RunRequest
+  `max_turns`、工具曝光pressure和continuation timestamp也补齐`OverflowError`边界。
+- 新增共享`json_safety`：结构化Agent输出严格拒绝Python额外接受的`NaN/Infinity`；Session event live树、
+  journal与SSE、HTTP请求/响应、headless JSON/JSONL、MCP三种transport、Child Result与Workflow record
+  均保证有限、无环、`allow_nan=False`。循环引用形成明确占位，非有限扩展指标降为`null`。
+- 以上仍是源码与确定性回归闭环，没有调用真实Provider、恢复SWE批次或运行Docker harness；产品取消时延、
+  自定义网关和第三方MCP的真实兼容性仍需下一轮受控实测确认。
+
+## A391–A395 — 恢复所有权、隔离路径与外部进程边界收口（2026-08-27）
+
+- Memory proposal恢复不再信任磁盘中的`confidence/risk/fingerprint/status`组合：候选内容重新规范化并计算
+  fingerprint，持久化risk只能提高、不能降低重算风险；非有限置信度降为0并进入高风险人工审核。Change
+  manifest、undo state、child state统一使用私有原子JSON写入，崩溃不会覆盖上一份可恢复checkpoint。
+- Session Event Bus对replay容量、subscriber queue、recent limit、heartbeat和blocking get timeout逐项验证；
+  HTTP service/client、ManagedSession wait、SessionManager close及daemon start/status/stop同样拒绝bool、负数、
+  NaN、Infinity和平台不可等待的超长值。由此消除`deque`类型异常、`thread.join(inf)`、socket无限timeout与
+  关闭阶段busy loop等跨平台差异。
+- Lineage与Agent call stack使用严格JSON并拒绝旧的非标准数值；模型发现/registry缓存、daemon state及
+  Provider原生JSON/SSE也改为严格读写。原生Provider响应和SSE累计上限64 MiB，错误正文上限64 KiB；
+  Anthropic/Gemini畸形usage逐字段修复，不再因`int("Infinity")`丢弃已成功生成的正文。
+- 子Agent恢复新增worktree ownership校验：direct必须等于父workspace，git/copy必须是当前child唯一拥有的
+  `.nz-coder/worktrees/<session>`即时子目录。篡改state不能再把resume工具切到workspace外部，也不能在fork
+  或reviewed apply时从外部路径复制文件。BackgroundAgentManager的应用入口复用同一ownership authority；
+  WorktreeManager同时拒绝目标symlink/非目录和不安全base ref，并给Git参数加`--`边界。
+- Workflow project library拒绝`.nz-coder/workflows` symlink逃逸；精确load直接定位project/personal候选，
+  不再为加载一个胶囊扫描整个目录；list扫描最多保留4096项内存，胶囊读写严格JSON且原子失败清理临时文件。
+  MCP和LSP的startup/request/tool timeout在创建进程前统一验证，非法配置不会遗留半启动server。
+  `web_search`与`webfetch`也拒绝bool或非有限/非正timeout，非法工具输入不会被静默夹取后发起网络请求。
+- 本阶段首次全仓回归为`2797 passed, 21 skipped in 138.67s`；新增wait、MCP、LSP与apply ownership边界后，
+  最终fresh回归为`2831 passed, 21 skipped in 139.49s`。全程没有调用真实Provider、SWE实例或Docker harness，只表示
+  源码与确定性恢复合同闭环，不宣称SWE分数或第三方服务实测表现。
+
+## A396 — 三回合预算边界的真实Provider闭环（2026-08-27）
+
+- 在`/home/pyh/test_nzcoder/cron_engine`用真实`openai-compatible/deepseek-v4-flash`执行只读任务：
+  “读取README并只报告首个Markdown标题”，显式`--max-turns 3`。修复前运行依次完成`glob_search`，随后
+  `read_file`在第2、3回合连续被closure reserve拒绝，最终`status=max_turns`；共3次Provider调用、
+  17,511 tokens、0文件修改。trace证明问题发生在Runtime预算门，而不是模型没有找到文件。
+- 根因是`WorkBudgetController`在3回合上限仍固定预留2个closure回合，使正常工作窗口只剩1回合。
+  TDD新增`test_three_turn_cap_preserves_two_normal_work_calls_before_closure`，RED时`normal_turns=1`；最小修复
+  将reserve限制为`min(configured_reserve, nominal_turns // 2)`，因此3回合合同变为“两次正常工作 + 一次
+  closure”，4回合及默认15回合的既有两次closure语义保持不变。
+- 同任务真实A/B重跑`a396-provider-smoke-fixed-20260827`后，工具链为
+  `glob_search → read_file → final`，三回合phase为`normal → normal → closure_repair`，
+  `closure_tool_blocked=0`，输出`# cron_engine`，终态`completed/completion_gate_satisfied`且0文件修改。
+  `run_end`与终态账本一致：3次coding Provider调用，usage为input 5,125、output 131、reasoning 96、
+  cache-read 14,592、total 19,944。
+- 定向回归首次暴露一条仍按旧预算算法期待第2回合`convergence`的native-runner断言；同步为
+  `investigation`后，相关预算/native/runtime/headless/tool-policy组合为`167 passed`。最终fresh全仓为
+  `2832 passed, 21 skipped in 139.36s`，Ruff、compileall和`git diff --check`均通过。全量测试新建的
+  `subagent-7e09c202`在确认0编辑、tracked diff哈希一致且57个untracked文件逐一一致后移除，worktree数量
+  恢复为74、可用空间恢复到8.7 GB。
+- 本项只关闭真实Provider三回合读取链的产品bug；没有执行SWE-bench实例或官方Docker harness，不产生新的
+  resolved/pass@1结论。固定SWE观察窗口仍需在磁盘风险处理并完成PTY取消/Plan复测后启动。
+
+## A397 — Plan/取消真实PTY与终态notice持久化（2026-08-27）
+
+- 在真实`openai-compatible/deepseek-v4-flash`与80×24 PTY中复测Plan。Session
+  `session-20260827_115550-74ac999b`从`run_start`到审批结算10.97秒，其中`plan_exit`等待用户选择
+  628.803ms；按`End`可读到21行摘要末尾`PTY-END-MARKER-8F3C`，按`Home`返回并批准后
+  `run_end=completed`。全程4次Provider调用、0编辑，README SHA-256保持
+  `9950905ee3c0931d24150018d8cb6e4dc3cd61dd7782f7ba60adfe39830fd0e0`，关闭TP-016/TP-026。
+- 运行中Ctrl+C首先证明控制面已正确：0.184秒回到IDLE，Provider finish、run_end和Session assistant均为
+  cancelled，0 tools、0 edits、无迟到事件；但80×24 idle屏没有持久终态卡，只短暂显示CANCELLING。
+  根因是`TerminalRunRenderer`把`Run cancelled`写入`_run_output`后，`StreamingRenderer.finish()`调用
+  `surface.end_run()`立即清空同一临时列表。
+- TDD先复现“end_run后只剩Session文本”的RED。Fullscreen新增独立terminal notice通道：终态summary/footer/
+  changed-file信息进入idle notice，工具卡和stream仍按原逻辑清空。修复后真实Session
+  `session-20260827_120940-4707f0df`在Ctrl+C后0.204秒回到IDLE；PTY resize触发完整重绘仍包含
+  `Run cancelled`，进程exit 0且无traceback。trace仅1次303.405ms cancelled Provider调用、0 tools、
+  0 edits、唯一`run_end=cancelled`，其后0事件。
+- 聚焦回归暴露一条既有测试隐式依赖其他文件先注册`bash`；按项目副作用注册规则在测试内显式import后，
+  单独与组合均稳定。UI/renderer/CLI/headless/smoke组合为`136 passed`，fresh全仓为
+  `2833 passed, 21 skipped in 139.61s`。全量与聚焦测试生成的4个`find a symbol`夹具worktree均为
+  `edits_this_run=0`、`changed_files=[]`、`has_diff=false`，清理后恢复74个历史worktree和约8.5 GB空间。
+- 本轮没有运行SWE-bench实例或官方Docker harness；关闭的是恢复评测前的Plan与取消产品门禁，不产生新的
+  resolved/pass@1或token效率结论。
+
+## 2026-08-28 — InfCodeX 产品对齐范围审计与回退（不计对齐编号）
+
+- 放弃并删除未实现的 A398 workspace snapshot shared-blob/硬链接压缩规格。它源于当前机器磁盘占用，
+  不是 InfCodeX 产品差距；此前没有修改生产代码或执行存量迁移。
+- 回退 `.product-*` 测试目录特判和 Repo Map 对所有未知隐藏目录的剪枝。该前缀由手工测试夹具产生，
+  不是产品所有权边界；保留真正的 NZ-Coder 内部目录与依赖/缓存排除，以及独立成立的 watcher 竞态修复。
+- 回退 Python `.pth` 启动 traceback 过滤。解释器启动损坏即使进程退出码为 0，仍不能作为通过的验证证据。
+- 复核已记录的早期误实现：A009 formatter/fixer 扩展、A047 read-episode/语义失败熔断、A105 普通 fork
+  task-child 建模均已在原轮次撤回，当前源码搜索没有残留对应字段或分支，因此未做二次回退。
+- 新增行为回归证明 `.product-catalog`、`.ci-tools` 等用户目录可被 profile/search/repo-map/snapshot读取，
+  而 `.nz-coder`、`.nz-coder-runs`、缓存和依赖目录仍按产品合同排除。此项是范围纠偏，不宣称新增
+  InfCodeX parity、Provider/SWE 成绩或磁盘治理能力。
+
+## A398 — 基于物理容量的工具结果准入与最大项优先溢出（2026-08-29）
+
+- **InfCodeX capability：** v0.7.69 `applyToolResultBatchGuardrail`先计算下一次请求可用的真实容量；完整批次
+  能放下时逐字保留，只有总量越界才按原始结果从大到小逐项spill，并在每次替换后按实际artifact marker
+  重新计数。批次固定外壳为4 tokens，每个`tool_result`再预留4 tokens。
+- **NZ gap：** `ProductionToolResultProjector`过去取`min(fallback_cap, physical_capacity)`，导致大窗口即使有
+  100,000 tokens可用，18,750-token结果仍会被压到约6,704 tokens；Bash还会先按
+  `CONTEXT_TRUNCATE_CHARS`截断，统一投影器永远看不到完整子进程输出。旧的adaptive water-fill会在只spill
+  一个最大结果即可解除压力时仍同时截断多个较小结果；`on_post_tool_use`也绕过投影文本读取raw output。
+- **NZ implementation：** 有真实capacity callback时由它成为批次正文的唯一预算来源，并扣除`4 + 4N`
+  协议外壳；批次完整可放下时不再受fallback cap限制。越界时改为largest-first逐项spill，每次按实际投影
+  token重新结算，artifact writer接收完整原文。Bash最终`ToolOutput`保留完整捕获内容，仅实时progress
+  metadata保持有界；所有post-result hook统一消费已准入文本。
+- **Why not mechanically copied：** 没有复制InfCodeX Bash独立spool路径。NZ已有完整stdout/stderr捕获、
+  Session级artifact writer和统一`ToolResultProjector`，因此继续只保留一个spill/provenance owner，避免
+  Bash层与投影层产生两份artifact、两种路径和不一致生命周期。
+- **Verification：** 严格TDD分别观察到大窗口仍spill、外壳未预留、Bash提前截断、hook读取raw output、
+  water-fill误伤较小结果和Subagent阈值预写重复artifact六类RED，再以最小改动转GREEN；混合批次断言只有
+  最大结果落artifact，writer收到完整原文。真实`deepseek-v4-flash`三题Session保留了10,198和32,928字符
+  tool result，均无旧4,015字符模型侧截断或spill marker；trace中的4,015仅是诊断预览。评测同时暴露当前
+  `swebench`要求`--clean true`，wrapper合同经RED→GREEN修复。最终Ruff、compileall、diff check、相关
+  `386 passed`与fresh全仓`2841 passed, 21 skipped in 210.62s`全部通过。
+- **Remaining gap：** 固定样本实际是历史上已评测过的seen regression smoke，不是此前误判的unseen样本；
+  3题各一次真实推理后，官方Docker harness为`1 resolved / 2 unresolved / 0 errors`，仅
+  `django__django-11001`通过，不能外推Lite 300或归因成相对旧版本提升。三题都耗尽20次coding call，另有
+  1–3次compaction，合计记账1,357,999 tokens；结果容量已对齐但收敛效率仍未闭环。artifact持久化失败时的
+  fail-loud/数据保全语义仍与InfCodeX不同，留待独立设计，避免在本轮无边界扩张。
+
+## A399 — InfCodeX式软收敛与验证命令来源边界（2026-08-29）
+
+- **InfCodeX capability：** V2 Worker的工具面不按阶段裁掉调查工具；`planBeforeMutate`只返回warning，
+  managed-task budget注入剩余预算提示而不拒绝阶段工具，文本完成再交给Sidecar Verifier作
+  `accept/revise/blocked`判定。只读inspection明确包含`git status/diff`。因此“已经知道得够多”不能成为
+  runtime替模型决定何时首次修改的硬门；安全、显式任务约束和精确重复检测仍是独立边界。
+- **NZ gap与根因：** A398三题中，10924和11019都在第6次调查后触发`implementation_phase_blocked`，
+  Provider schema还同步隐藏Bash/read/search；11001直到第13次调查才修改并通过。第12次本地化调查又会进入
+  第二个硬block。closure阶段连Git-backed workspace的本地`git diff/status`也被当成非验证命令拒绝。
+  另一方面，verification scheduler会把文件名/静态图猜出的唯一required pytest当成系统可自动执行命令，
+  Django实际出现`tests/admin_scripts/complex_app/models/__init__.py`和
+  `tests/admin_autodiscover/models.py`等错误入口。
+- **NZ implementation：** pre-edit phase policy保留兼容no-op外壳，不再产生拒绝；首次写入前调查工具与Bash
+  始终保留在Provider schema。第12次只注入`STRICT CONVERGENCE`软提醒，只有全局第20次调查硬上限仍可阻止
+  无限读取；安全、不可修改测试约束、精确重复和总回合上限未回退。删除对应dead state、旧计数器和旧硬门
+  测试。Git-backed closure现在允许经过现有shell只读分类器确认的`git diff/status`，非Git workspace仍引导
+  `diff_status`，命令链中的Git写操作仍被拒绝。
+- **Verification provenance：** targeted命令新增显式`automation_provenance`；scheduler只自动执行
+  `user_declared`、`model_execution`或`failure_evidence`来源，静态图/文件名候选仍能作为建议显示但不会由系统
+  擅自运行。精确失败输出标记`failure_evidence`；模型实际执行过的target标记`model_execution`并跨后续写入
+  保留。TDD先分别观察到无来源target被scheduler选中、失败/模型命令没有provenance，再以最小改动转绿。
+- **Offline verification：** policy/runtime/context/hooks组合为`129 passed`，verification/planner/scheduler/
+  native-runner组合为`161 passed`。fresh全仓为`2835 passed, 21 skipped in 161.58s`；全仓Ruff、compileall、
+  `git diff --check`均通过。完整回归中唯一旧失败仍要求第12次本地化后直接blocked，已改为端到端软边界合同；
+  第20次全局调查后的重复拒绝终止测试继续通过。
+- **Seen regression A/B：** 使用与A398相同的`openai-compatible/deepseek-v4-flash`、strict、SWE nominal 20配置，
+  对同一组历史seen样本各运行一次。10924在11次工具调查后于第8个coding turn首次源码修改，11001在第4个
+  turn修改；两题官方Docker均resolved。11019获得完整20次coding call但没有源码写入，最终empty patch。
+  官方报告因此为`2 resolved / 3`，通过ID为10924和11001；不能外推Lite 300，也不能把单次随机模型A/B视为
+  稳定提升。三题均为`implementation_phase_blocked=0`、`strict_progress_blocks=0`。
+- **Attribution与remaining gap：** trace中所有错误pytest都没有`_nz_runtime_verification_stage`，是模型自行
+  调用；自动scheduler只在10924运行一次static `py_compile`，证明静态图pytest自动执行已关闭。三题共63次
+  coding、3次compaction、1,150,399 tokens；相较A398本组三题少207,600 tokens，但样本太小且模型随机，
+  只作观测。10924在nominal 20后获准3个bounded-emergency回合并有3次宽泛工具拒绝；11019末尾仍有2次closure
+  拒绝且无patch。下一步应解决“模型反复选择错误Django pytest入口”和“有充分定位证据仍不写”的决策质量，
+  而不是恢复基于调查次数猜测的首次修改硬门。
+
+## A400 — Capacity-only压缩与仓库原生验证入口（2026-08-29）
+
+- **InfCodeX capability与范围：** InfCodeX默认只在物理上下文容量不足时压缩，长上下文的replay成本优化不是
+  默认的有损边界；压缩请求由专用summary角色完成而不是继续coding/tool use。验证命令必须来自仓库事实或
+  真实失败证据，不能仅因存在`tests/`就假定pytest，也不能把文件名/Repo Graph推测升级成必须通过的硬门。
+- **A399暴露的NZ gap：** 三题默认在约24K replay触发提前compaction；模型执行
+  `pytest ... 2>&1 | tail`时，FD duplication被shell分类器误报为workspace mutation，造成没有文件改动的
+  phantom mutation。Django仓库明示`tests/runtests.py`，但profile仍仅因`tests/`目录推荐pytest；静态推测
+  的related test在strict产品组合中又会被升级为required。结果是错误runner、错误target和无补丁收敛互相
+  放大，而不是安全拒绝真正阻止了修复。
+- **NZ implementation：** replay-cost压缩默认值改为0，仅由
+  `NZ_CONTEXT_REPLAY_COMPACTION_TOKENS`显式opt-in；压缩请求加入`TEXT ONLY / Do NOT call any tools`专用
+  system约束。命令策略区分`2>&1`/`1>&2`等FD duplication与`> file`真实写入。Python profile检测到
+  `tests/runtests.py`后优先提供原生runner；planner把Django测试路径转换成dotted selector，并始终保持
+  filename/graph候选optional，只有真实失败等provenance-backed目标才required。pytest若命中Django
+  settings/bootstrap特征且仓库存在原生runner，Recovery直接给出精确native命令并明确不修改production source。
+- **Offline verification：** TDD覆盖默认压缩、专用summary角色、FD duplication、真实重定向、Django profile、
+  dotted selector、strict advisory target和runner-mismatch recovery。相关组合为`353 passed`；fresh全仓为
+  `2842 passed, 21 skipped in 156.18s`，全仓Ruff、compileall与`git diff --check`均通过。旧的production
+  composition测试仍要求把静态猜测升级为required，根因审计后将其改为验证“目标可发现但保持optional”，
+  单测与planner/manager组合为`112 passed`。本段只证明离线合同，真实Provider与官方Docker结果见后续实测。
+- **Seen regression实测：** 与A399保持同三题、`openai-compatible/deepseek-v4-flash`、strict pass@1、每题
+  一次、nominal 20和900秒题级超时。10924在第7 turn首次编辑，11次coding加1次Verifier后完成；11001也在
+  第7 turn编辑，8次coding后完成。11019执行完整20次coding，直到第20 turn才首次`apply_patch`，因此虽然
+  从A399的empty patch变成5,960字符非空patch，仍以`max_turns`结束且没有机会运行targeted native test。
+  三题均为0次compaction，证明默认capacity-only路径真实生效；Runtime记录的4次edit与实际文件修改一致，
+  没有由FD duplication制造phantom mutation。
+- **Official Docker结果：** harness一次运行完成`3/3`、`2 resolved / 1 unresolved / 0 empty / 0 errors`，
+  通过ID仍为10924和11001，分数与A399的`2/3`持平。差异只在11019从empty变为可判分但错误的patch；这不是
+  pass@1提升。官方FAIL_TO_PASS中5项成功、11项失败，PASS_TO_PASS全部成功。失败补丁保留二参
+  `Media.merge(list_1, list_2)`而另设私有`_merge_lists(*lists)`，官方测试直接调用`Media.merge(*lists)`时
+  报错；独立列表tie-break得到`[1, 2, 3, 4]`而不是`[1, 3, 2, 4]`，冲突warning文案也不符合合同。
+- **Cost与remaining gap：** A399为63次coding、3次compaction、1,150,399 tokens；A400降至39次coding、
+  0次compaction并增加1次Verifier，但总量升至1,313,630 tokens（+163,231），其中11019单题930,627。
+  capacity-only避免了有损summary，却让未收敛任务持续回放增长的上下文，不能单凭调用数下降宣称更高效。
+  11019已经读过正确的`tests/forms_tests/tests/test_media.py`，planner最终仍只把`test_widgets`/`admin_widgets`
+  当optional候选；第19次调查后的`grep_search`与`read_file`又分别被closure/global investigation硬边界拒绝，
+  将唯一修改挤到最后一回合。下一步应把“模型实际检查过的测试文件”提升为强验证provenance，并继续对照
+  InfCodeX把末端调查硬拒绝改为软预算/终态判断；不能恢复早期强制修改门，也不能把静态猜测重新设为required。

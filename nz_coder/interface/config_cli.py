@@ -10,10 +10,10 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.mcp.config import load_mcp_server_configs
 from nz_coder.providers.models import active_model_selection
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 
 
 def collect_effective_config(workspace: Path | None = None) -> dict[str, dict]:

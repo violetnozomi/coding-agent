@@ -88,7 +88,7 @@ def test_index_rejects_workspace_state_symlink_escape(tmp_path):
 
 
 def test_code_references_tool_uses_persistent_index(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.repo_map import code_references
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
@@ -274,8 +274,8 @@ def test_structural_search_localizes_symbol_without_known_file_or_exact_name(tmp
 
 
 def test_loop_refreshes_index_from_successful_write_results(tmp_path, monkeypatch):
-    import nz_coder.runtime.loop as loop_module
-    from nz_coder import config
+    import nz_coder.runtime.execution.loop as loop_module
+    from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)

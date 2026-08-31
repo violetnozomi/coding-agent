@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from nz_coder.mcp.config import load_mcp_server_configs
-from nz_coder.runtime.hooks import load_configured_hooks_from_settings
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.verification.hooks import load_configured_hooks_from_settings
+from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.skills import SkillLoader, current_skill_loader
 from nz_coder.tools import list_optional_packs
 

@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import json
 import multiprocessing
-import os
 import queue as queue_module
 import shutil
 import signal
@@ -26,10 +25,25 @@ from typing import TYPE_CHECKING
 from nz_coder.swebench.adapter import SWEBenchAdapter, _safe_name
 from nz_coder.swebench.guardrail import PatchGuardrail
 from nz_coder.swebench.models import FailureFeedback, PatchRiskReport, RetryPlan
-from nz_coder.runtime.execution_context import scoped_runtime_overrides
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.core.execution_context import (
+    agent_timeout_seconds,
+    broad_tests_blocked,
+    declared_test_scopes,
+    max_agent_turns,
+    max_parallel_tasks,
+    nominal_agent_turns,
+    repo_intelligence_mode,
+    repo_retrieval_strategy,
+    scoped_broad_test_guard,
+    scoped_declared_test_scopes,
+    scoped_runtime_overrides,
+    strict_local_tools,
+)
+from nz_coder.runtime.process.workdir import current_workdir, scoped_workdir
+from nz_coder.state.sessions import create_session_id
 from nz_coder.swebench.artifacts import AttemptJournal, export_public_trajectory
 from nz_coder.swebench.policy import STRICT_ALLOWED_TOOLS
+from nz_coder.tools import is_filesystem_mutation_tool
 from nz_coder.swebench.trace_budget import (
     TraceBudget,
     archive_instance_diagnostics,
@@ -43,6 +57,19 @@ if TYPE_CHECKING:
 
 DEFAULT_BENCH_DIR = Path.cwd() / ".nz-coder" / "swebench-lite"
 DEFAULT_REPO_CACHE_DIR = DEFAULT_BENCH_DIR / "repo-cache"
+
+
+def default_swe_work_root(run_id: str, *, workspace: Path | None = None) -> Path:
+    """Place ephemeral benchmark checkouts beside, never inside, the workspace."""
+    start = Path(workspace or Path.cwd()).resolve()
+    root = next(
+        (candidate for candidate in (start, *start.parents)
+         if (candidate / ".git").exists()),
+        start,
+    )
+    project = _safe_name(root.name).strip(".") or "workspace"
+    run = _safe_name(str(run_id)).strip(".") or "run"
+    return root.parent / f".nz-coder-swebench-{project}" / "runs" / run
 
 
 class AgentRunTimeout(TimeoutError):
@@ -62,7 +89,15 @@ def _strict_agent_protocol() -> str:
         "- Allowed Python verification: python3 -m py_compile | compileall | pytest. "
         "Do not use python3 -c, scripts, package installation, redirects, command "
         "substitution, or URLs.\n"
+        "- web_search and every network tool are unavailable. Git history/remotes, "
+        "package installation, absolute or outside-workspace paths, and full test "
+        "suites are forbidden; calling them only wastes a turn.\n"
+        "- After verify_changed_files, run at most one workspace-relative targeted "
+        "pytest recommended by the verification pipeline. Never run broad pytest or "
+        "tox.\n"
         "Structured navigation decisions:\n"
+        "- If the exact file is unknown, call repo_map once on the smallest relevant "
+        "directory, then narrow with grep_search.\n"
         "- Before reading 3 or more files in one module, call repo_map on the smallest "
         "relevant directory.\n"
         "- When the known function, class, or method name is available, call read_symbol "
@@ -76,7 +111,7 @@ def _classify_tool_log_status(output: str) -> str:
     """Separate strict process-policy feedback from execution failures."""
     value = str(output or "")
     if value.startswith(("Error:", "Denied")):
-        if "SWE-bench strict mode" in value:
+        if value.startswith("Denied") or "SWE-bench strict mode" in value:
             return "policy_rejected"
         return "error"
     if value.startswith("Command exited with code"):
@@ -284,17 +319,19 @@ class RetryOrchestrator:
 
         # ── Agent setup ───────────────────────────────────────────────────────
         trace_dir = repo_dir / ".nz-coder-runs"
-        tracer = trace_cls(trace_dir=trace_dir, enabled=True)
+        benchmark_session_id = create_session_id("swe")
+        tracer = trace_cls(
+            trace_dir=trace_dir,
+            enabled=True,
+            session_id=benchmark_session_id,
+        )
         tool_log: list[dict] = []
         tool_generation = 0
 
         def log_tool(name: str, output: str) -> None:
             nonlocal tool_generation
             status = _classify_tool_log_status(output)
-            if status == "ok" and name in {
-                "write_file", "edit_file", "apply_patch", "replace_lines",
-                "python_structural_edit", "scaffold_project", "write_files_batch",
-            }:
+            if status == "ok" and is_filesystem_mutation_tool(name):
                 tool_generation += 1
             tool_log.append({
                 "tool": name,
@@ -329,12 +366,10 @@ class RetryOrchestrator:
                 "4. After any source edit, call diff_status.\n"
                 "5. If diff_status shows a non-empty source-only diff, call "
                 "verify_changed_files.\n"
-                "6. Do NOT run pytest, tox, or full test suites after a source diff "
-                "exists — they often fail due to missing dependencies, import errors, "
-                "display backend issues, database setup, or package installation "
-                "problems that are NOT caused by your patch.\n"
-                "7. If verify_changed_files passes, finalize the patch.\n"
-                "8. If local tests fail due to environment issues (missing modules, "
+                "6. verify_changed_files may schedule one narrow related pytest target; "
+                "run that exact target when requested, but never run broad pytest or tox.\n"
+                "7. If static checks and the requested target pass, finalize the patch.\n"
+                "8. If targeted verification is blocked by environment issues (missing modules, "
                 "import errors, database config, display backends), stop verifying "
                 "and leave the source patch for official SWE-bench evaluation.\n"
                 "9. A plausible non-empty source patch is better than no patch."
@@ -355,6 +390,7 @@ class RetryOrchestrator:
             "prompt": messages[0]["content"],
             "strict": bool(strict),
             "attempts": 1,
+            "session_id": benchmark_session_id,
         }, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
         tracer.log(
             "benchmark_instance",
@@ -363,6 +399,7 @@ class RetryOrchestrator:
             prompt=messages[0]["content"],
             strict=bool(strict),
             attempts=1,
+            session_id=benchmark_session_id,
         )
 
         # ── Agent run ─────────────────────────────────────────────────────────
@@ -370,6 +407,9 @@ class RetryOrchestrator:
         effective_retries = plan.empty_patch_retries if plan else empty_patch_retries
 
         def run_attempt() -> dict:
+            agent_kwargs = {"session_id": benchmark_session_id}
+            if strict:
+                agent_kwargs["tool_allowlist"] = STRICT_ALLOWED_TOOLS
             with (
                 scoped_workdir(repo_dir),
                 scoped_runtime_overrides(
@@ -384,11 +424,7 @@ class RetryOrchestrator:
                     messages,
                     log_tool,
                     agent_timeout,
-                    agent_kwargs=(
-                        {"tool_allowlist": STRICT_ALLOWED_TOOLS}
-                        if strict
-                        else None
-                    ),
+                    agent_kwargs=agent_kwargs,
                 )
 
         try:
@@ -414,9 +450,12 @@ class RetryOrchestrator:
             risk_report = self.guardrail.analyze(model_patch, regression_context=has_regressions)
             risk_reasons = _agent_status_risk_labels(agent_status, tool_log) + risk_report.risk_labels()
 
-            status = "completed" if not risk_reasons else "risky"
-            if not model_patch.strip():
-                status = "empty_patch"
+            status = _benchmark_result_status(
+                agent_status,
+                model_patch=model_patch,
+                risk_reasons=risk_reasons,
+                blocking_risk=risk_report.has_blocking,
+            )
             summary = f"patch_chars={len(model_patch)}, tools={len(tool_log)}"
             if empty_retry_count:
                 summary += f", empty_patch_retries={empty_retry_count}"
@@ -442,6 +481,7 @@ class RetryOrchestrator:
             "status": status,
             "summary": summary,
             "agent_status": agent_status,
+            "session_id": locals().get("benchmark_session_id", ""),
             "trace": str(tracer.path),
             "workdir": str(repo_dir),
             "duration": round(time.time() - started, 1),
@@ -484,10 +524,10 @@ class RetryOrchestrator:
     ) -> list[dict]:
         """First-pass: run agent on each instance without previous predictions."""
         results = []
-        attempted_ids = attempt_journal.attempted_ids() if attempt_journal else set()
+        completed_ids = attempt_journal.completed_ids() if attempt_journal else set()
         for index, instance in enumerate(instances, start=1):
-            if instance["instance_id"] in attempted_ids:
-                print(f"[RESUME] {instance['instance_id']}: pass@1 attempt already claimed; never rerunning.")
+            if instance["instance_id"] in completed_ids:
+                print(f"[RESUME] {instance['instance_id']}: durable result already recorded; skipping.")
                 continue
             if trace_budget is not None:
                 pressure = evaluate_trace_budget(trace_budget)
@@ -684,7 +724,7 @@ def _run_agent_attempt(
     agent_cls, system_prompt: str, tracer, messages: list[dict], log_tool,
     timeout: int, agent_kwargs: dict | None = None,
 ) -> dict:
-    if timeout > 0 and hasattr(os, "fork"):
+    if timeout > 0:
         return _run_agent_attempt_in_subprocess(
             agent_cls, system_prompt, tracer, messages, log_tool, timeout,
             agent_kwargs=agent_kwargs,
@@ -704,11 +744,33 @@ def _run_agent_attempt_in_subprocess(
     timeout: int,
     agent_kwargs: dict | None = None,
 ) -> dict:
-    ctx = multiprocessing.get_context("fork")
+    ctx = multiprocessing.get_context("spawn")
     result_queue = ctx.Queue()
+    execution_snapshot = {
+        "workdir": str(current_workdir()),
+        "runtime_overrides": {
+            "max_agent_turns": max_agent_turns(),
+            "nominal_agent_turns": nominal_agent_turns(),
+            "agent_timeout_seconds": agent_timeout_seconds(),
+            "max_parallel_tasks": max_parallel_tasks(),
+            "strict_local_tools": strict_local_tools(),
+            "repo_intelligence_mode": repo_intelligence_mode(),
+            "repo_retrieval_strategy": repo_retrieval_strategy(),
+        },
+        "broad_tests_blocked": broad_tests_blocked(),
+        "declared_test_scopes": declared_test_scopes(),
+    }
     process = ctx.Process(
         target=_agent_attempt_worker,
-        args=(agent_cls, system_prompt, tracer, messages, result_queue, agent_kwargs),
+        args=(
+            agent_cls,
+            system_prompt,
+            tracer,
+            messages,
+            result_queue,
+            execution_snapshot,
+            agent_kwargs,
+        ),
     )
     process.start()
     try:
@@ -732,7 +794,6 @@ def _run_agent_attempt_in_subprocess(
         process.join(5)
         if process.is_alive():
             _stop_agent_process(process)
-            raise RuntimeError("agent subprocess returned a result but did not exit")
         for event in payload.get("tool_events", []):
             log_tool(event["name"], event.get("output", ""))
         if not payload.get("ok"):
@@ -757,6 +818,7 @@ def _stop_agent_process(process) -> None:
 
 def _agent_attempt_worker(
     agent_cls, system_prompt: str, tracer, messages: list[dict], queue,
+    execution_snapshot: dict,
     agent_kwargs: dict | None = None,
 ) -> None:
     tool_events: list[dict] = []
@@ -765,12 +827,24 @@ def _agent_attempt_worker(
         tool_events.append({"name": name, "output": output[:512]})
 
     try:
-        agent = agent_cls(
-            system_prompt, permission_mode="auto", tracer=tracer,
-            **(agent_kwargs or {}),
-        )
-        agent_status = asyncio.run(agent.run(messages, on_tool=child_log_tool, stream=False))
-        queue.put({"ok": True, "agent_status": agent_status, "tool_events": tool_events})
+        with (
+            scoped_workdir(execution_snapshot["workdir"]),
+            scoped_runtime_overrides(**execution_snapshot["runtime_overrides"]),
+            scoped_broad_test_guard(execution_snapshot["broad_tests_blocked"]),
+            scoped_declared_test_scopes(execution_snapshot["declared_test_scopes"]),
+        ):
+            agent = agent_cls(
+                system_prompt, permission_mode="auto", tracer=tracer,
+                **(agent_kwargs or {}),
+            )
+            agent_status = asyncio.run(
+                agent.run(messages, on_tool=child_log_tool, stream=False)
+            )
+            queue.put({
+                "ok": True,
+                "agent_status": agent_status,
+                "tool_events": tool_events,
+            })
     except BaseException as exc:
         queue.put({"ok": False, "error": repr(exc), "tool_events": tool_events})
 
@@ -824,6 +898,34 @@ def _format_empty_patch_retry_feedback(attempt: int, max_retries: int) -> str:
 
 
 # ── Agent-status risk labels (non-patch risks) ────────────────────────────────
+
+def _benchmark_result_status(
+    agent_status: dict,
+    *,
+    model_patch: str,
+    risk_reasons: list[str],
+    blocking_risk: bool = False,
+) -> str:
+    """Preserve terminal runtime failures instead of reporting empty work."""
+    terminal = str((agent_status or {}).get("status") or "")
+    if terminal in {
+        "aborted", "error", "cancelled", "timeout", "exception", "max_turns",
+    }:
+        return "agent_failed"
+    if not str(model_patch or "").strip():
+        return "empty_patch"
+    if blocking_risk:
+        return "agent_failed"
+    if (agent_status or {}).get("verification_needed"):
+        if (
+            (agent_status or {}).get("verification_state")
+            == "blocked_environment"
+            and terminal == "completed_unverified"
+        ):
+            return "risky"
+        return "agent_failed"
+    return "risky" if risk_reasons else "completed"
+
 
 def _agent_status_risk_labels(agent_status: dict, tool_log: list[dict]) -> list[str]:
     """Return risk labels derived from agent execution status (not patch content).
@@ -925,8 +1027,8 @@ def _prepare_repo(
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
     repo = instance["repo"]
     url = f"https://github.com/{repo}.git"
-    cache_dir = _repo_cache_dir(repo)
-    clone_url = str(cache_dir) if cache_dir.exists() else url
+    cache_dir = _ensure_repo_cache(repo, url, timeout)
+    clone_url = str(cache_dir) if cache_dir is not None else url
     clone = _run(["git", "clone", "--quiet", clone_url, str(repo_dir)], cwd=repo_dir.parent, timeout=timeout)
     if clone.returncode != 0 and clone_url != url:
         shutil.rmtree(repo_dir, ignore_errors=True)
@@ -967,6 +1069,42 @@ def _reinitialize_repo_at_base(repo_dir: Path, timeout: int) -> subprocess.Compl
 
 def _repo_cache_dir(repo: str) -> Path:
     return DEFAULT_REPO_CACHE_DIR / f"{_safe_name(repo)}.git"
+
+
+def _ensure_repo_cache(repo: str, url: str, timeout: int) -> Path | None:
+    """Return a local mirror, creating it atomically on the first checkout.
+
+    Concurrent batch workers clone into independent temporary directories.  A
+    single rename publishes the complete mirror; a worker that loses that race
+    discards its staging directory and reuses the winner.  Cache setup is an
+    optimization, so filesystem or clone failures fall back to the existing
+    direct remote-clone path.
+    """
+    cache_dir = _repo_cache_dir(repo)
+    if cache_dir.exists():
+        return cache_dir
+    try:
+        cache_dir.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix=f".{cache_dir.name}-",
+            dir=cache_dir.parent,
+        ) as staging:
+            mirror_dir = Path(staging) / "repo.git"
+            cloned = _run(
+                ["git", "clone", "--mirror", "--quiet", url, str(mirror_dir)],
+                cwd=cache_dir.parent,
+                timeout=timeout,
+            )
+            if cloned.returncode != 0:
+                return None
+            try:
+                mirror_dir.rename(cache_dir)
+            except OSError:
+                if not cache_dir.exists():
+                    return None
+    except OSError:
+        return None
+    return cache_dir if cache_dir.exists() else None
 
 
 def _apply_patch_text(repo_dir: Path, patch_text: str, timeout: int) -> subprocess.CompletedProcess:

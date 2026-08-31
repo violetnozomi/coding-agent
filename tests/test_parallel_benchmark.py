@@ -5,7 +5,7 @@ import asyncio
 
 import pytest
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.evaluation.parallel_benchmark import (
     run_parallel_benchmark,
     run_parallel_benchmark_async,

@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.providers.configuration import (
     clear_provider_connection_overrides,
     provider_connection,
@@ -107,7 +107,7 @@ def test_windows_credential_write_fails_before_replace_when_acl_cannot_apply(
     tmp_path, monkeypatch,
 ):
     import nz_coder.providers.connect as connect
-    from nz_coder.private_paths import PrivatePathSecurity
+    from nz_coder.foundation.private_paths import PrivatePathSecurity
 
     target = tmp_path / ".env"
     target.write_text("KEEP=old\n", encoding="utf-8")

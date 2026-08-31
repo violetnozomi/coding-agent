@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import nturl2path
 import os
 import queue
@@ -13,8 +14,25 @@ from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
-from nz_coder import config
-from nz_coder.runtime.platform_runtime import executable_argv, terminate_process_tree
+from nz_coder.foundation import config
+from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
+
+
+_STDERR_DRAIN_TIMEOUT_SECONDS = 0.2
+
+
+def _validated_timeout(value: Any) -> float:
+    if isinstance(value, bool):
+        raise ValueError("LSP timeout must be a positive finite number")
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("LSP timeout must be a positive finite number") from exc
+    if not math.isfinite(timeout) or timeout <= 0 or timeout > 600:
+        raise ValueError(
+            "LSP timeout must be a positive finite number no greater than 600 seconds"
+        )
+    return timeout
 
 
 class LSPError(RuntimeError):
@@ -62,6 +80,7 @@ class LSPClient:
         command: tuple[str, ...],
         root: Path,
         language_id: str,
+        analysis_paths: tuple[Path, ...] = (),
         initialize_timeout: float | None = None,
         request_timeout: float | None = None,
     ):
@@ -69,12 +88,13 @@ class LSPClient:
         self.command = tuple(command)
         self.root = root.resolve()
         self.language_id = language_id
-        self.initialize_timeout = float(
+        self.analysis_paths = tuple(Path(path).resolve() for path in analysis_paths)
+        self.initialize_timeout = _validated_timeout(
             initialize_timeout
             if initialize_timeout is not None
             else config.LSP_INITIALIZE_TIMEOUT_SECONDS
         )
-        self.request_timeout = float(
+        self.request_timeout = _validated_timeout(
             request_timeout
             if request_timeout is not None
             else config.LSP_REQUEST_TIMEOUT_SECONDS
@@ -163,8 +183,22 @@ class LSPClient:
                 timeout=self.initialize_timeout,
             ) or {}
             self.notify("initialized", {})
-        except Exception:
+            if self.language_id == "python" and self.analysis_paths:
+                self.notify("workspace/didChangeConfiguration", {
+                    "settings": {
+                        "python": {
+                            "analysis": {
+                                "extraPaths": [str(path) for path in self.analysis_paths],
+                            },
+                        },
+                    },
+                })
+        except Exception as exc:
             self.close(force=True)
+            self._stderr_reader.join(timeout=_STDERR_DRAIN_TIMEOUT_SECONDS)
+            detail = self.stderr_tail
+            if detail and detail not in str(exc):
+                raise LSPError(f"{exc}: {detail}") from exc
             raise
 
     @property

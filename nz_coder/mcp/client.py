@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import queue
 import subprocess
@@ -10,9 +11,24 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Callable
 
-from nz_coder.runtime.platform_runtime import executable_argv, terminate_process_tree
+from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
 
 _NOTIFICATION_CLOSED = object()
+
+
+def _validated_timeout(value: Any) -> float:
+    if isinstance(value, bool):
+        raise ValueError("MCP timeout must be a positive finite number")
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("MCP timeout must be a positive finite number") from exc
+    if not math.isfinite(timeout) or timeout <= 0 or timeout > 3600:
+        raise ValueError(
+            "MCP timeout must be a positive finite number no greater than 3600 seconds"
+        )
+    return timeout
 
 
 class MCPError(RuntimeError):
@@ -50,8 +66,8 @@ class MCPClient:
         self.command = tuple(command)
         self.cwd = Path(cwd)
         self.environment = dict(environment or {})
-        self.startup_timeout_seconds = float(startup_timeout_seconds)
-        self.tool_timeout_seconds = float(tool_timeout_seconds)
+        self.startup_timeout_seconds = _validated_timeout(startup_timeout_seconds)
+        self.tool_timeout_seconds = _validated_timeout(tool_timeout_seconds)
         self.process: subprocess.Popen | None = None
         self.server_info: dict[str, Any] = {}
         self.server_capabilities: dict[str, Any] = {}
@@ -350,7 +366,15 @@ class MCPClient:
         process = self.process
         if self._closed or process is None or process.stdin is None:
             raise MCPError(f"MCP server '{self.name}' is not running")
-        payload = json.dumps(message, ensure_ascii=False, separators=(",", ":"))
+        try:
+            payload = json.dumps(
+                message,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        except (TypeError, ValueError) as exc:
+            raise MCPError("MCP request must contain valid JSON values") from exc
         with self._write_lock:
             try:
                 process.stdin.write(payload + "\n")
@@ -369,8 +393,11 @@ class MCPClient:
                 if not value:
                     continue
                 try:
-                    message = json.loads(value)
-                except json.JSONDecodeError as exc:
+                    message = json.loads(
+                        value,
+                        parse_constant=reject_nonstandard_json_constant,
+                    )
+                except (json.JSONDecodeError, ValueError) as exc:
                     error = MCPError(
                         f"MCP server '{self.name}' wrote invalid JSON to stdout: {exc}"
                     )

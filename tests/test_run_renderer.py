@@ -10,14 +10,14 @@ from types import SimpleNamespace
 from rich.console import Console
 
 from nz_coder.permissions import PermissionManager
-from nz_coder.session_events import SessionEventBus, scoped_session_event_bus
+from nz_coder.protocol.session_events import SessionEventBus, scoped_session_event_bus
 from nz_coder.interface.run_renderer import (
     TerminalRunRenderer,
     _sanitize,
     render_permission_request,
     render_question_request,
 )
-from nz_coder.runtime import tool_executor
+from nz_coder.runtime.execution import tool_executor
 
 
 class FakeStreamingRenderer:
@@ -568,6 +568,8 @@ def test_rich_permission_and_question_render_as_cards():
 
 
 def test_tool_executor_publishes_started_event_from_active_session_context(monkeypatch):
+    import nz_coder.tools.bash  # noqa: F401
+
     bus = SessionEventBus(session_id="session-1")
     subscription = bus.subscribe({"session.tool.started"})
     monkeypatch.setattr(tool_executor, "dispatch", lambda _name, _input: "ok")

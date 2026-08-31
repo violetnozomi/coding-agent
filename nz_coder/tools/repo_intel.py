@@ -15,8 +15,8 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.task_policy import (
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.runtime.agent.task_policy import (
     is_source_file,
     is_test_file as _policy_is_test_file,
     language_for_path,
@@ -96,6 +96,34 @@ def diff_status() -> str:
     and a recommendation for the next step.
     """
     try:
+        repository = _run_git(["rev-parse", "--is-inside-work-tree"])
+        if repository.returncode != 0 or repository.stdout.strip() != "true":
+            from nz_coder.state.changes import (
+                current_changed_files,
+                render_current_change_diff,
+            )
+
+            changed_files = [
+                path for path in current_changed_files() if not _is_excluded(path)
+            ]
+            diff_text = render_current_change_diff() if changed_files else ""
+            lines = [
+                "workspace_mode: non_git",
+                "diff_source: change_tracker",
+                f"has_non_empty_diff: {str(bool(changed_files)).lower()}",
+                f"diff_chars: {len(diff_text)}",
+                f"changed_files_count: {len(changed_files)}",
+                "",
+                "Changed files:",
+            ]
+            lines.extend(f"  {path}" for path in changed_files)
+            if not changed_files:
+                lines.append("  (none tracked in this run)")
+            lines.extend([
+                "",
+                "Recommendation: Git is not required; use the tracked workspace diff and verification evidence.",
+            ])
+            return "\n".join(lines)
         # Tracked changes
         name_result = _run_git([
             "diff", "--name-only", "--",
@@ -189,19 +217,32 @@ def diff_status() -> str:
 
 def _changed_files_for_verification(include_tests: bool) -> list[str]:
     """返回需要低噪音验证的 changed source files。"""
-    diff_result = _run_git([
-        "diff", "--name-only", "--",
-        ".", ":!.nz-coder", ":!.nz-coder-runs",
-    ])
-    if diff_result.returncode not in (0, 1):
-        raise RuntimeError(f"git diff failed (returncode={diff_result.returncode})")
-    changed = [f for f in diff_result.stdout.splitlines() if f and not _is_excluded(f)]
+    repository = _run_git(["rev-parse", "--is-inside-work-tree"])
+    if repository.returncode != 0 or repository.stdout.strip() != "true":
+        from nz_coder.state.changes import current_changed_files
 
-    untracked = _run_git(["ls-files", "--others", "--exclude-standard"])
-    if untracked.returncode in (0, 1):
-        for rel in untracked.stdout.splitlines():
-            if rel and not _is_excluded(rel) and rel not in changed:
-                changed.append(rel)
+        changed = [
+            path for path in current_changed_files() if not _is_excluded(path)
+        ]
+    else:
+        diff_result = _run_git([
+            "diff", "--name-only", "--",
+            ".", ":!.nz-coder", ":!.nz-coder-runs",
+        ])
+        if diff_result.returncode not in (0, 1):
+            raise RuntimeError(
+                f"git diff failed (returncode={diff_result.returncode})"
+            )
+        changed = [
+            f for f in diff_result.stdout.splitlines()
+            if f and not _is_excluded(f)
+        ]
+
+        untracked = _run_git(["ls-files", "--others", "--exclude-standard"])
+        if untracked.returncode in (0, 1):
+            for rel in untracked.stdout.splitlines():
+                if rel and not _is_excluded(rel) and rel not in changed:
+                    changed.append(rel)
 
     return [
         f for f in changed
@@ -990,6 +1031,7 @@ register(
         },
     },
     handler=verify_changed_files,
+    side_effect="mutates-shell",
 )
 
 register(

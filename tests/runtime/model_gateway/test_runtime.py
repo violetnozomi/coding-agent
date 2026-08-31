@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from nz_coder.providers.capabilities import ModelCapabilities
 from nz_coder.providers.registry import ModelPricing, RegistryModel
 from nz_coder.runtime.model_gateway.runtime import (
     ModelSelectionRequest,
     resolve_model_runtime,
 )
+from nz_coder.runtime.model_gateway import ProductionModelGateway
 
 
 class _Client:
@@ -133,3 +136,65 @@ def test_async_created_client_is_closed_once() -> None:
     asyncio.run(runtime.aclose())
 
     assert client.close_calls == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("context_tokens", float("inf")),
+        ("output_tokens", float("nan")),
+        ("default_temperature", float("nan")),
+    ],
+)
+def test_resolver_rejects_nonfinite_capabilities_before_client_creation(
+    field: str,
+    value: float,
+) -> None:
+    """An invalid adapter snapshot must fail before allocating its SDK client."""
+    class MalformedProvider(_Provider):
+        def capabilities(self, model_id: str) -> ModelCapabilities:
+            values = {field: value}
+            return ModelCapabilities(
+                provider=self.name,
+                model_id=model_id,
+                **values,
+            )
+
+    provider = MalformedProvider()
+
+    with pytest.raises(ValueError, match=field):
+        resolve_model_runtime(
+            ModelSelectionRequest(
+                provider_name="example",
+                model_id="logical-model",
+                provider=provider,
+            ),
+            registry_resolver=lambda *_args, **_kwargs: None,
+        )
+
+    assert provider.create_calls == 0
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"max_retries": float("inf")},
+        {"max_retries": True},
+        {"poll_interval": float("nan")},
+        {"backoff_base": float("inf")},
+    ],
+)
+def test_gateway_rejects_malformed_runtime_policy(kwargs) -> None:
+    provider = _Provider()
+    runtime = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=provider,
+            client=provider.client,
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(ValueError):
+        ProductionModelGateway(runtime, **kwargs)

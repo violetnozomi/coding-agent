@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import json
+
+import pytest
 
 from nz_coder.state.memory_control import MemoryControlPlane
 
@@ -91,6 +94,58 @@ def test_low_confidence_or_poisoned_candidate_fails_closed(tmp_path) -> None:
     assert outcome.status == "pending_review"
     assert outcome.risk == "high"
     assert sink.saved == []
+
+
+@pytest.mark.parametrize("confidence", [float("nan"), float("inf")])
+def test_nonfinite_confidence_never_bypasses_memory_review(
+    tmp_path,
+    confidence,
+) -> None:
+    """Malformed model confidence is unknown, never automatic approval."""
+    sink = _MemorySink()
+    control = MemoryControlPlane(tmp_path, sink)
+    candidate = _candidate()
+    candidate["confidence"] = confidence
+
+    outcome = control.submit(candidate, source_session="malformed-confidence")
+
+    assert outcome.confidence == 0.0
+    assert outcome.risk == "high"
+    assert outcome.status == "pending_review"
+    assert sink.saved == []
+
+
+def test_persisted_nonfinite_confidence_recomputes_risk_fail_closed(tmp_path):
+    control = MemoryControlPlane(tmp_path, _MemorySink())
+    proposal = control.submit(
+        _candidate("feedback"),
+        source_session="persisted-corrupt",
+    )
+    path = tmp_path / "memory-control" / "proposals" / f"{proposal.fingerprint}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["confidence"] = float("nan")
+    payload["risk"] = "low"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    restored = control.get(proposal.fingerprint)
+
+    assert restored is not None
+    assert restored.confidence == 0.0
+    assert restored.risk == "high"
+
+
+def test_persisted_memory_fingerprint_mismatch_is_rejected(tmp_path):
+    control = MemoryControlPlane(tmp_path, _MemorySink())
+    proposal = control.submit(
+        _candidate("feedback"),
+        source_session="persisted-mismatch",
+    )
+    path = tmp_path / "memory-control" / "proposals" / f"{proposal.fingerprint}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["fingerprint"] = "0" * 64
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert control.get(proposal.fingerprint) is None
 
 
 def test_concurrent_duplicate_submission_applies_at_most_once(tmp_path) -> None:

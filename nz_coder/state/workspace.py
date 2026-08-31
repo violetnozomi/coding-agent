@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import subprocess
-from nz_coder import __version__, config
+from nz_coder import __version__
+from nz_coder.foundation import config
 from nz_coder.state.workdir import current_workdir
-from nz_coder.changes import latest_change_file
-from nz_coder.sessions import active_session_id, session_runtime_state_path
-from nz_coder.trace import latest_trace
+from nz_coder.state.changes import latest_change_file
+from nz_coder.state.sessions import active_session_id, session_runtime_state_path
+from nz_coder.state.trace import latest_trace
 
 
 def is_git_repo() -> bool:

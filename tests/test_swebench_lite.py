@@ -1,6 +1,8 @@
 import json
 import subprocess
+import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 
@@ -52,6 +54,19 @@ class _AbruptExitAgent:
         import os
 
         os._exit(7)
+
+
+class _LingeringThreadAgent:
+    """Return a result while a non-daemon dependency thread stays alive."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def run(self, messages, on_tool=None, stream=False):
+        threading.Thread(target=time.sleep, args=(30,), daemon=False).start()
+        if on_tool:
+            on_tool("lsp", "analysis complete")
+        return {"status": "completed"}
 
 
 # ── FailureFeedback / adapter / feedback formatting ───────────────────────────
@@ -704,6 +719,49 @@ def test_check_docker_requires_daemon_access(monkeypatch):
     assert "permission denied" in detail
 
 
+def test_docker_pull_timeout_uses_spawn_context(monkeypatch):
+    from nz_coder.swebench import adapter as adapter_mod
+
+    requested = []
+
+    class FakeQueue:
+        def empty(self):
+            return True
+
+    class FakeProcess:
+        exitcode = 0
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            pass
+
+        def join(self, timeout=None):
+            pass
+
+        def is_alive(self):
+            return False
+
+    class FakeContext:
+        Queue = FakeQueue
+        Process = FakeProcess
+
+    monkeypatch.setattr(adapter_mod.multiprocessing, "Queue", FakeQueue)
+    monkeypatch.setattr(adapter_mod.multiprocessing, "Process", FakeProcess)
+    monkeypatch.setattr(
+        adapter_mod.multiprocessing,
+        "get_context",
+        lambda name: requested.append(name) or FakeContext(),
+    )
+
+    assert adapter_mod._docker_pull_with_timeout("example/image", 1) == (
+        True,
+        "completed",
+    )
+    assert requested == ["spawn"]
+
+
 def test_run_evaluation_stops_before_harness_when_docker_unusable(tmp_path, monkeypatch, capsys):
     from nz_coder.swebench import adapter as adapter_mod
 
@@ -740,6 +798,50 @@ def test_run_evaluation_stops_before_harness_when_docker_unusable(tmp_path, monk
 
     assert result == 2
     assert "Docker daemon is not usable" in capsys.readouterr().out
+
+
+def test_run_harness_passes_explicit_clean_value(tmp_path, monkeypatch):
+    """The official harness parses --clean as a boolean value, not a flag."""
+    from nz_coder.swebench import adapter as adapter_mod
+
+    predictions = tmp_path / "predictions.jsonl"
+    predictions.write_text("{}\n", encoding="utf-8")
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        adapter_mod.SWEBenchAdapter,
+        "_check_module",
+        staticmethod(lambda name: (True, name, "installed")),
+    )
+    monkeypatch.setattr(
+        adapter_mod.SWEBenchAdapter,
+        "_check_docker",
+        staticmethod(lambda: (True, "docker", "ready")),
+    )
+    monkeypatch.setattr(
+        adapter_mod.subprocess,
+        "run",
+        lambda command: (
+            commands.append(command)
+            or subprocess.CompletedProcess(command, 0, "", "")
+        ),
+    )
+
+    result = adapter_mod.SWEBenchAdapter("lite").run_harness(
+        predictions,
+        SimpleNamespace(
+            profile="lite",
+            prepull_timeout=0,
+            instance_ids=[],
+            max_workers=1,
+            run_id="clean-contract",
+            timeout=60,
+            clean=True,
+        ),
+    )
+
+    assert result == 0
+    clean_index = commands[0].index("--clean")
+    assert commands[0][clean_index:clean_index + 2] == ["--clean", "true"]
 
 
 # ── orchestrator helpers ──────────────────────────────────────────────────────
@@ -819,6 +921,60 @@ def test_run_agent_attempt_replays_child_tool_events():
     assert events == [("bash", "ok")]
 
 
+def test_run_agent_attempt_uses_spawn_context(monkeypatch):
+    from nz_coder.swebench import orchestrator
+
+    requested = []
+    real_get_context = orchestrator.multiprocessing.get_context
+
+    def capture_context(name):
+        requested.append(name)
+        return real_get_context(name)
+
+    monkeypatch.setattr(orchestrator.multiprocessing, "get_context", capture_context)
+
+    status = orchestrator._run_agent_attempt(
+        _NoopAgent,
+        "system",
+        None,
+        [{"role": "user", "content": "work"}],
+        lambda _name, _output: None,
+        timeout=5,
+    )
+
+    assert status == {"status": "completed"}
+    assert requested == ["spawn"]
+
+
+def test_run_agent_attempt_keeps_process_timeout_without_os_fork(monkeypatch):
+    from nz_coder.swebench import orchestrator
+
+    monkeypatch.setattr(orchestrator, "os", SimpleNamespace(), raising=False)
+    observed = []
+
+    def fake_subprocess(*args, **kwargs):
+        observed.append((args, kwargs))
+        return {"status": "isolated"}
+
+    monkeypatch.setattr(
+        orchestrator,
+        "_run_agent_attempt_in_subprocess",
+        fake_subprocess,
+    )
+
+    status = orchestrator._run_agent_attempt(
+        _NoopAgent,
+        "system",
+        None,
+        [{"role": "user", "content": "work"}],
+        lambda _name, _output: None,
+        timeout=5,
+    )
+
+    assert status == {"status": "isolated"}
+    assert len(observed) == 1
+
+
 def test_run_agent_attempt_drains_large_child_result_before_joining():
     """A completed child must not be timed out while its Queue feeder is blocked."""
     from nz_coder.swebench.orchestrator import _run_agent_attempt
@@ -837,6 +993,24 @@ def test_run_agent_attempt_drains_large_child_result_before_joining():
     assert len(events) == 24
     assert events[0][0] == "read_file"
     assert events[-1][1].startswith("event-23:")
+
+
+def test_run_agent_attempt_keeps_result_when_dependency_thread_lingers():
+    """A delivered result survives cleanup of a child with live resources."""
+    from nz_coder.swebench.orchestrator import _run_agent_attempt
+
+    events = []
+    status = _run_agent_attempt(
+        _LingeringThreadAgent,
+        "system",
+        None,
+        [{"role": "user", "content": "work"}],
+        lambda name, output: events.append((name, output)),
+        timeout=2,
+    )
+
+    assert status == {"status": "completed"}
+    assert events == [("lsp", "analysis complete")]
 
 
 def test_run_agent_attempt_surfaces_child_exception():
@@ -882,6 +1056,26 @@ def test_strict_policy_rejection_is_a_process_warning_not_patch_risk():
     )
 
     output = "Error: shell executable 'cd' is not allowed in SWE-bench strict mode"
+    status = _classify_tool_log_status(output)
+    labels = _agent_status_risk_labels(
+        {"status": "completed", "verification_needed": False},
+        [{"name": "bash", "status": status, "output": output}],
+    )
+
+    assert status == "policy_rejected"
+    assert labels == []
+
+
+def test_closure_reserve_denial_is_policy_rejection_not_patch_risk():
+    from nz_coder.swebench.orchestrator import (
+        _agent_status_risk_labels,
+        _classify_tool_log_status,
+    )
+
+    output = (
+        "Denied: closure reserve permits only a narrow repair using known files "
+        "and focused verification."
+    )
     status = _classify_tool_log_status(output)
     labels = _agent_status_risk_labels(
         {"status": "completed", "verification_needed": False},
@@ -1001,6 +1195,83 @@ def test_prepare_repo_uses_local_cache_when_present(tmp_path, monkeypatch):
     assert calls[1] == ["git", "checkout", "--quiet", "abc123"]
 
 
+def test_prepare_repo_populates_missing_cache_before_checkout(tmp_path, monkeypatch):
+    """The first checkout seeds an atomic mirror reused by later instances."""
+    from nz_coder.swebench import orchestrator as orch_mod
+
+    cache_root = tmp_path / "cache"
+    cached_repo = cache_root / "pylint-dev_pylint.git"
+    repo_dir = tmp_path / "work" / "pylint-dev__pylint-5859"
+    calls = []
+
+    monkeypatch.setattr(orch_mod, "DEFAULT_REPO_CACHE_DIR", cache_root)
+
+    def fake_run(cmd, *, cwd, timeout):
+        calls.append(cmd)
+        if cmd[:4] == ["git", "clone", "--mirror", "--quiet"]:
+            Path(cmd[-1]).mkdir(parents=True)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(orch_mod, "_run", fake_run)
+
+    result = orch_mod._prepare_repo(
+        {"repo": "pylint-dev/pylint", "base_commit": "abc123"},
+        repo_dir,
+        timeout=10,
+    )
+
+    assert result["returncode"] == 0
+    assert calls[0][:5] == [
+        "git", "clone", "--mirror", "--quiet",
+        "https://github.com/pylint-dev/pylint.git",
+    ]
+    assert Path(calls[0][-1]).name == "repo.git"
+    assert cached_repo.is_dir()
+    assert calls[1] == ["git", "clone", "--quiet", str(cached_repo), str(repo_dir)]
+    assert calls[2] == ["git", "checkout", "--quiet", "abc123"]
+
+
+def test_prepare_repo_falls_back_when_initial_mirror_clone_fails(
+    tmp_path,
+    monkeypatch,
+):
+    """A cache-seeding failure must not prevent a direct checkout retry."""
+    from nz_coder.swebench import orchestrator as orch_mod
+
+    cache_root = tmp_path / "cache"
+    repo_dir = tmp_path / "work" / "pylint-dev__pylint-5859"
+    calls = []
+
+    monkeypatch.setattr(orch_mod, "DEFAULT_REPO_CACHE_DIR", cache_root)
+
+    def fake_run(cmd, *, cwd, timeout):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(
+            cmd,
+            128 if cmd[:4] == ["git", "clone", "--mirror", "--quiet"] else 0,
+            "",
+            "mirror TLS failure",
+        )
+
+    monkeypatch.setattr(orch_mod, "_run", fake_run)
+
+    result = orch_mod._prepare_repo(
+        {"repo": "pylint-dev/pylint", "base_commit": "abc123"},
+        repo_dir,
+        timeout=10,
+    )
+
+    assert result["returncode"] == 0
+    assert calls[0][2:4] == ["--mirror", "--quiet"]
+    assert calls[1] == [
+        "git", "clone", "--quiet",
+        "https://github.com/pylint-dev/pylint.git",
+        str(repo_dir),
+    ]
+    assert calls[2] == ["git", "checkout", "--quiet", "abc123"]
+    assert not (cache_root / "pylint-dev_pylint.git").exists()
+
+
 def test_prepare_repo_falls_back_to_remote_when_cache_clone_fails(tmp_path, monkeypatch):
     from nz_coder.swebench import orchestrator as orch_mod
 
@@ -1064,3 +1335,103 @@ def test_write_prediction_discards_agent_failed_patch(tmp_path):
     row = json.loads(path.read_text(encoding="utf-8"))
 
     assert row["model_patch"] == ""
+
+
+def test_terminal_provider_abort_is_agent_failed_not_empty_patch():
+    from nz_coder.swebench.orchestrator import _benchmark_result_status
+
+    status = _benchmark_result_status(
+        {"status": "aborted"},
+        model_patch="",
+        risk_reasons=["agent_status:aborted"],
+    )
+
+    assert status == "agent_failed"
+
+
+def test_max_turns_patch_is_not_publishable():
+    from nz_coder.swebench.orchestrator import _benchmark_result_status
+
+    status = _benchmark_result_status(
+        {"status": "max_turns"},
+        model_patch="diff --git a/x.py b/x.py\n",
+        risk_reasons=["agent_status:max_turns"],
+    )
+
+    assert status == "agent_failed"
+
+
+def test_blocking_quality_gate_patch_is_not_publishable():
+    from nz_coder.swebench.orchestrator import _benchmark_result_status
+
+    status = _benchmark_result_status(
+        {"status": "completed"},
+        model_patch="diff --git a/x.py b/x.py\n",
+        risk_reasons=["risky_added_methods"],
+        blocking_risk=True,
+    )
+
+    assert status == "agent_failed"
+
+
+def test_unverified_patch_is_not_publishable():
+    from nz_coder.swebench.orchestrator import _benchmark_result_status
+
+    status = _benchmark_result_status(
+        {"status": "stopped_by_hook", "verification_needed": True},
+        model_patch="diff --git a/x.py b/x.py\n",
+        risk_reasons=["agent_status:stopped_by_hook", "verification_needed"],
+    )
+
+    assert status == "agent_failed"
+
+
+def test_environment_blocked_non_empty_patch_is_risky():
+    from nz_coder.swebench.orchestrator import _benchmark_result_status
+
+    status = _benchmark_result_status(
+        {
+            "status": "completed_unverified",
+            "verification_needed": True,
+            "verification_state": "blocked_environment",
+        },
+        model_patch="diff --git a/x.py b/x.py\n",
+        risk_reasons=[
+            "agent_status:completed_unverified",
+            "verification_needed",
+        ],
+    )
+
+    assert status == "risky"
+
+
+def test_environment_blocked_empty_patch_stays_empty_patch():
+    from nz_coder.swebench.orchestrator import _benchmark_result_status
+
+    status = _benchmark_result_status(
+        {
+            "status": "completed_unverified",
+            "verification_needed": True,
+            "verification_state": "blocked_environment",
+        },
+        model_patch="",
+        risk_reasons=["verification_needed"],
+    )
+
+    assert status == "empty_patch"
+
+
+def test_untrusted_environment_blocked_status_is_agent_failed():
+    from nz_coder.swebench.orchestrator import _benchmark_result_status
+
+    status = _benchmark_result_status(
+        {
+            "status": "stopped_by_hook",
+            "verification_needed": True,
+            "verification_state": "blocked_environment",
+        },
+        model_patch="diff --git a/x.py b/x.py\n",
+        risk_reasons=["verification_needed"],
+    )
+
+    assert status == "agent_failed"

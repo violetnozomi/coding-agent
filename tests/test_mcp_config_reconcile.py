@@ -30,7 +30,7 @@ def test_layered_configs_replace_by_name_and_require_project_command_trust(
     tmp_path,
     monkeypatch,
 ):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.mcp import MCPTrustStore, load_mcp_server_configs
 
     workspace = tmp_path / "workspace"
@@ -93,7 +93,7 @@ def stat_mode(path: Path) -> int:
 
 
 def test_project_config_symlink_escape_is_rejected_before_read(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.mcp import load_mcp_server_configs
 
     workspace = tmp_path / "workspace"
@@ -164,7 +164,7 @@ def test_runtime_reconcile_add_change_remove_and_untrusted_status(tmp_path):
 
 
 def test_real_project_stdio_server_trust_and_file_reconcile(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.mcp import MCPRuntime, MCPTrustStore, load_mcp_server_configs
     from nz_coder.tools import dispatch, scoped_dynamic_tool_provider
 
@@ -268,7 +268,7 @@ def test_mcp_cli_lists_trusts_and_untrusts_project_command(
     monkeypatch,
     capsys,
 ):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.mcp import load_mcp_server_configs
     from nz_coder.mcp.cli import mcp_main
 

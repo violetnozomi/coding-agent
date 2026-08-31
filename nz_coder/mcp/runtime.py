@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from nz_coder import config
-from nz_coder.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
+from nz_coder.foundation import config
+from nz_coder.protocol.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
 from nz_coder.mcp.client import MCPClient, MCPError, MCPRequestError
 from nz_coder.mcp.config import (
     MCPServerConfig,
@@ -28,7 +28,7 @@ from nz_coder.mcp.oauth import (
     MCPAuthenticationRequired,
     MCPOAuthManager,
 )
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import ToolOutput
 
 
@@ -84,6 +84,8 @@ class MCPRuntime:
         self.statuses: dict[str, MCPServerStatus] = {}
         self._bindings: list[dict[str, Any]] = []
         self._definitions: dict[str, list[dict[str, Any]]] = {}
+        self._server_generations: dict[str, int] = {}
+        self._next_server_generation = 0
         self._prompts: dict[str, list[dict[str, Any]]] = {}
         self._resources: dict[str, list[dict[str, Any]]] = {}
         self._start_state = "new"
@@ -188,6 +190,7 @@ class MCPRuntime:
                                 accepted = True
                                 self._pending_clients.pop(server.name, None)
                                 self.clients[server.name] = client
+                                self._advance_server_generation_locked(server.name)
                                 self._definitions[server.name] = definitions
                                 self._prompts[server.name] = prompts
                                 self._resources[server.name] = resources
@@ -365,6 +368,7 @@ class MCPRuntime:
                 accepted = True
                 self._pending_clients.pop(server_name, None)
                 self.clients[server_name] = client
+                self._advance_server_generation_locked(server_name)
                 self._definitions[server_name] = definitions
                 self._prompts[server_name] = prompts
                 self._resources[server_name] = resources
@@ -755,6 +759,11 @@ class MCPRuntime:
             )
         self._bindings = bindings
 
+    def _advance_server_generation_locked(self, server_name: str) -> None:
+        """Assign a never-reused identity generation to one accepted client."""
+        self._next_server_generation += 1
+        self._server_generations[server_name] = self._next_server_generation
+
     def _server_config(self, server_name: str) -> MCPServerConfig:
         for server in self.configs:
             if server.name == server_name:
@@ -826,6 +835,19 @@ class MCPRuntime:
                     "parameters": schema,
                     "execution": effect,
                     "transactional": False,
+                    "side_effect": (
+                        "reads-network" if effect == "read" else "mutates-network"
+                    ),
+                    "plan_mode_allowed": effect == "read",
+                    "binding_identity": _binding_identity(
+                        server_name=server.name,
+                        original_name=original,
+                        public_name=public_name,
+                        generation=self._server_generations.get(server.name, 0),
+                        schema=schema,
+                        effect=effect,
+                        description=description,
+                    ),
                     "handler": _tool_handler(
                         client,
                         server_name=server.name,
@@ -836,6 +858,35 @@ class MCPRuntime:
             )
         public_names.update(binding["name"] for binding in bindings)
         return bindings
+
+
+def _binding_identity(
+    *,
+    server_name: str,
+    original_name: str,
+    public_name: str,
+    generation: int,
+    schema: dict,
+    effect: str,
+    description: str,
+) -> str:
+    """Return an opaque identity for one immutable MCP tool binding."""
+    payload = json.dumps(
+        {
+            "server": server_name,
+            "tool": original_name,
+            "public_tool": public_name,
+            "generation": int(generation),
+            "schema": schema,
+            "effect": effect,
+            "description": description,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _tool_handler(

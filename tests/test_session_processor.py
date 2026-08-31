@@ -1,14 +1,17 @@
 """Code-level lifecycle tests for the durable Agent Session processor."""
 from __future__ import annotations
 
+import json
+import math
+
 import pytest
 
-from nz_coder.message_schema import (
+from nz_coder.protocol.message_schema import (
     attach_message_identity,
     message_records,
     set_assistant_error,
 )
-from nz_coder.runtime.session_processor import SessionProcessor
+from nz_coder.runtime.session.session_processor import SessionProcessor
 
 
 def _assistant() -> dict:
@@ -438,3 +441,28 @@ def test_empty_tool_calls_finish_is_downgraded_to_stop():
     finish = processor.finish_step("tool_calls")
 
     assert finish["reason"] == "stop"
+
+
+def test_processor_repairs_nonfinite_persisted_timing_and_usage():
+    """Corrupt resume metadata cannot create another non-JSON Session state."""
+    message = _assistant()
+    message["_nz_time"] = {"created": float("inf")}
+    message["_nz_parts"] = [{
+        "id": "part-corrupt-start",
+        "message_id": message["_nz_message_id"],
+        "type": "step-start",
+        "time": {"start": float("nan")},
+    }]
+
+    processor = SessionProcessor(message)
+    finish = processor.finish_step(
+        "stop",
+        input_tokens=float("nan"),
+        output_tokens=float("inf"),
+        total_tokens=-1,
+    )
+
+    assert math.isfinite(message["_nz_time"]["created"])
+    assert math.isfinite(message["_nz_parts"][0]["time"]["start"])
+    assert finish["tokens"] == {"input": 0, "output": 0, "total": 0}
+    json.dumps(message, allow_nan=False)

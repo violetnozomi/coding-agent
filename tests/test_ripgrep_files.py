@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from nz_coder.runtime.ripgrep import (
+from nz_coder.capabilities.ripgrep import (
     decode_ripgrep_event,
     list_ripgrep_files,
     search_ripgrep,
@@ -71,7 +71,7 @@ def test_shared_files_filters_before_limit_and_detects_truncation(tmp_path, monk
             "three.txt",
         ],
     )
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake))
 
     result = list_ripgrep_files(
         tmp_path,
@@ -92,7 +92,7 @@ def test_shared_files_without_user_glob_preserves_core_args_and_clean_env(
 ):
     marker = tmp_path / "invocation.json"
     fake = _fake_rg(tmp_path, ["resource.txt"], marker=marker)
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake))
     monkeypatch.setenv("RIPGREP_CONFIG_PATH", "/tmp/untrusted-rg-config")
 
     result = list_ripgrep_files(
@@ -126,7 +126,7 @@ def test_shared_fallback_honors_hidden_depth_and_follow_false(tmp_path, monkeypa
     outside.write_text("", encoding="utf-8")
     link = tmp_path / "linked.txt"
     link.symlink_to(outside)
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
 
     result = list_ripgrep_files(
         tmp_path,
@@ -171,7 +171,7 @@ def test_shared_real_rg_without_positive_glob_honors_ignore_and_git(tmp_path):
 def test_shared_search_preserves_args_clean_env_and_typed_result(tmp_path, monkeypatch):
     marker = tmp_path / "search-invocation.json"
     fake = _fake_rg(tmp_path, [json.dumps(_match())], marker=marker, code=2)
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake))
     monkeypatch.setenv("RIPGREP_CONFIG_PATH", "/tmp/untrusted-rg-config")
 
     result = search_ripgrep(
@@ -207,7 +207,7 @@ def test_shared_search_preserves_args_clean_env_and_typed_result(tmp_path, monke
 
 def test_shared_search_code_one_discards_emitted_match_rows(tmp_path, monkeypatch):
     fake = _fake_rg(tmp_path, [json.dumps(_match())], code=1)
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake))
 
     result = search_ripgrep(tmp_path, "needle")
 
@@ -264,8 +264,8 @@ def test_shared_search_timeout_terminates_and_settles_process(tmp_path, monkeypa
         processes.append(process)
         return process
 
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake))
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.subprocess.Popen", observed_popen)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.subprocess.Popen", observed_popen)
 
     with pytest.raises(subprocess.TimeoutExpired):
         search_ripgrep(tmp_path, "needle", timeout=0.05)

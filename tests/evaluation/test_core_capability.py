@@ -107,6 +107,13 @@ def test_local_runner_is_reproducible_and_exercises_scale_cases(tmp_path) -> Non
     assert first["manifest_hash"] == second["manifest_hash"]
     assert first["cases"]["D"]["catalog_sizes"] == [20, 50, 100, 200]
     assert first["cases"]["D"]["low_pressure_visible"] == [21, 51, 101, 201]
+    assert first["cases"]["D"]["low_pressure_hinted"] == [0, 50, 100, 200]
+    assert first["cases"]["D"]["schema_budget_enforced"] is True
+    assert first["cases"]["D"]["discovery_recall_cases"] == 8
+    assert first["cases"]["D"]["discovery_recall_hits"] == 8
+    assert first["cases"]["D"]["worst_target_rank"] <= 2
+    assert first["cases"]["D"]["next_turn_unlocks"] == 8
+    assert first["cases"]["D"]["two_turn_token_savings_min_pct"] > 0
     assert first["cases"]["C"]["module_count"] >= 250
     assert first["cases"]["E"]["aggregate_budget_respected"] is True
     assert first["cases"]["G"]["verification_recovered"] is True
@@ -114,6 +121,10 @@ def test_local_runner_is_reproducible_and_exercises_scale_cases(tmp_path) -> Non
     assert first["cases"]["F"]["production_projection_calls"] == 40
     assert first["cases"]["F"]["agent_runner_model_calls"] == 41
     assert first["cases"]["F"]["agent_runner_tool_results"] == 40
+    assert first["cases"]["F"]["nominal_sla_enforced"] is False
+    assert first["cases"]["F"]["nominal_sla_advisory"] is True
+    assert first["cases"]["F"]["agent_runner_result"]["status"] == "completed"
+    assert first["cases"]["F"]["passed"] is True
     assert first["trajectory_metrics"]["model_calls"] == 41
     assert first["trajectory_metrics"]["tool_calls"] == 40
     assert first["trajectory_metrics"]["success"] is True

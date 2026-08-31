@@ -7,18 +7,19 @@ from pathlib import Path
 import tempfile
 import time
 
+from rich.console import Group
 from rich.markup import escape
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.changes import (
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.state.changes import (
     redo_latest,
     render_latest_diff,
     undo_latest,
 )
-from nz_coder.memory import memory_mgr
+from nz_coder.state.memory import memory_mgr
 from nz_coder.providers.models import (
     active_model_selection,
     cached_models,
@@ -46,11 +47,11 @@ from nz_coder.interface.preferences import (
     update_terminal_preferences,
 )
 from nz_coder.interface.selector import SelectorActionResult
-from nz_coder.runtime.async_utils import to_thread_settled
-from nz_coder.sessions import (
+from nz_coder.foundation.async_utils import to_thread_settled
+from nz_coder.runtime.session.lifecycle import delete_session
+from nz_coder.state.sessions import (
     activate_session,
     create_session_id,
-    delete_session,
     load_session,
     rename_session,
     save_session,
@@ -66,8 +67,8 @@ from nz_coder.interface.timeline import (
     session_options,
 )
 from nz_coder.tools.todo import render as render_todo
-from nz_coder.trace import latest_trace, summarize_trace
-from nz_coder.workspace import status_report
+from nz_coder.state.trace import latest_trace, summarize_trace
+from nz_coder.state.workspace import status_report
 
 from ..registry import (
     Command,
@@ -1451,13 +1452,13 @@ def _render_memory_proposal(ctx: CommandContext, proposal) -> None:
 
 
 def handle_profile(ctx: CommandContext) -> None:
-    from nz_coder.project_profile import project_profile
+    from nz_coder.intelligence.project_profile import project_profile
 
     ctx.console.print(project_profile(save=True, rebuild=True))
 
 
 def handle_stats(ctx: CommandContext) -> None:
-    from nz_coder.session_stats import aggregate_session_stats, render_session_stats
+    from nz_coder.state.session_stats import aggregate_session_stats, render_session_stats
 
     raw = ctx.args.strip()
     try:
@@ -1536,7 +1537,7 @@ def handle_diff(ctx: CommandContext) -> None:
 def handle_undo(ctx: CommandContext) -> None:
     reverter = getattr(ctx.agent, "session_reverter", None)
     if reverter is not None:
-        from nz_coder.runtime.workspace_snapshot import SnapshotError
+        from nz_coder.runtime.process.workspace_snapshot import SnapshotError
         try:
             result = (
                 ctx.controller.undo(ctx.history)
@@ -1570,7 +1571,7 @@ def handle_redo(ctx: CommandContext) -> None:
     reverter = getattr(ctx.agent, "session_reverter", None)
     state_path = getattr(reverter, "state_path", None)
     if reverter is not None and state_path is not None and state_path.exists():
-        from nz_coder.runtime.workspace_snapshot import SnapshotError
+        from nz_coder.runtime.process.workspace_snapshot import SnapshotError
         try:
             result = (
                 ctx.controller.redo(ctx.history)
@@ -1618,7 +1619,29 @@ def handle_save_session(ctx: CommandContext) -> None:
 
 
 def handle_sessions(ctx: CommandContext) -> None:
-    ctx.console.print(render_sessions())
+    width = int(getattr(ctx.console, "width", 100) or 100)
+    ctx.console.print(
+        _render_session_options(session_options())
+        if width < 100
+        else render_sessions()
+    )
+
+
+def _render_session_options(options):  # noqa: ANN001, ANN202
+    """Use stacked Session cards where a seven-column table cannot stay legible."""
+    cards = []
+    for option in options:
+        marker = "● " if option.active else ""
+        body = (
+            f"[bold cyan]{marker}{escape(option.session_id)}[/bold cyan]\n"
+            f"{escape(option.title or '(untitled)')}\n"
+            f"[dim]{escape(option.timestamp)} · {option.message_count} messages · "
+            f"{escape(option.mode)}\n{escape(option.model)}[/dim]"
+        )
+        cards.append(Panel(body, border_style="cyan", expand=True, padding=(0, 1)))
+    if not cards:
+        cards.append(Panel("No saved sessions.", border_style="cyan"))
+    return Group(*cards)
 
 
 def handle_processes(ctx: CommandContext) -> None:
@@ -1636,27 +1659,10 @@ def handle_processes(ctx: CommandContext) -> None:
             if not values:
                 ctx.console.print("[info]No persistent processes for this Session.[/info]")
                 return
-            table = Table(title="Persistent processes", show_lines=False, expand=True)
-            table.add_column("Process", style="cyan", no_wrap=True)
-            table.add_column("Status", no_wrap=True)
-            table.add_column("Command")
-            table.add_column("CWD")
-            table.add_column("Uptime", no_wrap=True)
-            table.add_column("Exit", no_wrap=True)
-            table.add_column("Owner", no_wrap=True)
-            table.add_column("PTY", no_wrap=True)
-            for item in values:
-                table.add_row(
-                    str(item.get("process_id") or ""),
-                    str(item.get("status") or "unknown").upper(),
-                    str(item.get("command") or ""),
-                    str(item.get("cwd") or ""),
-                    _process_uptime(item.get("started_at")),
-                    str(item.get("exit_code") if item.get("exit_code") is not None else "-"),
-                    str(item.get("owner_session_id") or "-"),
-                    str(item.get("pty_tier") or ("pty" if item.get("tty") else "pipe")),
-                )
-            ctx.console.print(table)
+            ctx.console.print(_render_processes(
+                values,
+                width=int(getattr(ctx.console, "width", 100) or 100),
+            ))
             return
         if operation in {"inspect", "status"} and process_id:
             item = next(
@@ -1719,6 +1725,48 @@ def _process_uptime(started_at: object) -> str:
     hours, remainder = divmod(seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours:d}:{minutes:02d}:{seconds:02d}"
+
+
+def _render_processes(values: list[dict], *, width: int = 100):
+    """Render complete process identities even in an 80-column terminal."""
+    if width < 100:
+        cards = []
+        for item in values:
+            process_id = str(item.get("process_id") or "")
+            status = str(item.get("status") or "unknown").upper()
+            command = str(item.get("command") or "")
+            cwd = str(item.get("cwd") or "")
+            exit_code = item.get("exit_code")
+            pty = str(item.get("pty_tier") or ("pty" if item.get("tty") else "pipe"))
+            body = (
+                f"[bold cyan]{escape(process_id)}[/bold cyan]  [bold]{escape(status)}[/bold]\n"
+                f"{escape(command or '(no command)')}\n"
+                f"[dim]cwd {escape(cwd or '-')} · {_process_uptime(item.get('started_at'))}"
+                f" · exit {escape(str(exit_code if exit_code is not None else '-'))} · {escape(pty)}[/dim]"
+            )
+            cards.append(Panel(body, border_style="cyan", expand=True, padding=(0, 1)))
+        return Group(*cards)
+    table = Table(title="Persistent processes", show_lines=False, expand=True)
+    table.add_column("Process", style="cyan", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Command")
+    table.add_column("CWD")
+    table.add_column("Uptime", no_wrap=True)
+    table.add_column("Exit", no_wrap=True)
+    table.add_column("Owner", no_wrap=True)
+    table.add_column("PTY", no_wrap=True)
+    for item in values:
+        table.add_row(
+            str(item.get("process_id") or ""),
+            str(item.get("status") or "unknown").upper(),
+            str(item.get("command") or ""),
+            str(item.get("cwd") or ""),
+            _process_uptime(item.get("started_at")),
+            str(item.get("exit_code") if item.get("exit_code") is not None else "-"),
+            str(item.get("owner_session_id") or "-"),
+            str(item.get("pty_tier") or ("pty" if item.get("tty") else "pipe")),
+        )
+    return table
 
 
 def handle_timeline(ctx: CommandContext) -> None:
@@ -1802,7 +1850,7 @@ def handle_agents(ctx: CommandContext) -> None:
 
 async def handle_subagents(ctx: CommandContext) -> None:
     """Select and render a child Session without replacing the parent Agent."""
-    from nz_coder.runtime.subagent import (
+    from nz_coder.runtime.agent.subagent import (
         list_subagent_sessions,
         load_subagent_session,
     )
@@ -1861,7 +1909,7 @@ async def handle_subagents(ctx: CommandContext) -> None:
 
 async def handle_subagent_route(ctx: CommandContext) -> None:
     """Continue one child without replacing the parent Session runtime."""
-    from nz_coder.runtime.subagent import (
+    from nz_coder.runtime.agent.subagent import (
         list_subagent_sessions,
         load_subagent_session,
         run_subagent_async,
@@ -1963,7 +2011,7 @@ def handle_fork(ctx: CommandContext) -> None:
             new_session_id,
             permission_mode=ctx.agent.permissions.mode,
         )
-        from nz_coder.runtime.subagent import clone_referenced_subagents
+        from nz_coder.runtime.agent.subagent import clone_referenced_subagents
 
         clone_referenced_subagents(
             old_session_id,

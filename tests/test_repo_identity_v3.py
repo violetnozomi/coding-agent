@@ -22,6 +22,21 @@ def test_symbol_id_is_stable_across_rebuild_and_line_shift(tmp_path) -> None:
     assert first == second
 
 
+def test_index_languages_reads_distinct_file_metadata(tmp_path) -> None:
+    """Language routing metadata must not require a full index snapshot."""
+    from nz_coder.intelligence.code_index import PersistentCodeIndex
+
+    (tmp_path / "app.py").write_text("def run(): return 1\n", encoding="utf-8")
+    (tmp_path / "main.go").write_text(
+        "package main\nfunc main() {}\n",
+        encoding="utf-8",
+    )
+    index = PersistentCodeIndex(tmp_path)
+    index.scan(tmp_path, max_files=20)
+
+    assert index.languages() == ("go", "python")
+
+
 def test_duplicate_names_resolve_import_aliases_and_qualified_calls(tmp_path) -> None:
     from nz_coder.intelligence.code_index import PersistentCodeIndex
 

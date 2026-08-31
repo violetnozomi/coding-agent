@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from nz_coder import config
+from nz_coder.foundation import config
 
 
 _CHILD_DESCRIPTIONS = {
@@ -21,7 +21,7 @@ def agent_catalog(agent: Any, workspace: Path) -> list[dict[str, Any]]:
     This is presentation-only data. It does not create Agents or own routing
     state; child names are read from the canonical subagent runtime.
     """
-    from nz_coder.runtime.subagent import (
+    from nz_coder.runtime.agent.subagent import (
         _CANONICAL_SUBAGENT_TYPES,
         _READ_ONLY_TYPES,
     )

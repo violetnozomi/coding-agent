@@ -10,9 +10,9 @@ from tests.test_loop_fake import FakeClient, FakeMessage, FakeResponse
 
 
 def test_coding_runtime_is_single_native_control_plane(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.composition import build_coding_agent
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.composition import build_coding_agent
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     old_workdir = config.WORKDIR
     config.WORKDIR = tmp_path
@@ -43,8 +43,8 @@ def test_coding_runtime_is_single_native_control_plane(tmp_path):
 
 
 def test_declared_runtime_makes_graph_the_authoritative_control_plane():
-    from nz_coder.runtime.composition import declared_runtime
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.execution.composition import declared_runtime
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
 
     graph = AgentGraph([AgentSpec("worker", "DECLARED_ROLE")], start="worker")
     captured = {}
@@ -63,8 +63,8 @@ def test_declared_runtime_makes_graph_the_authoritative_control_plane():
 
 
 def test_runtime_assembly_rejects_mixed_control_planes():
-    from nz_coder.runtime.composition import AgentRuntimeAssembly, coding_runtime
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.execution.composition import AgentRuntimeAssembly, coding_runtime
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
 
     graph = AgentGraph([AgentSpec("worker", "ROLE")], start="worker")
     with pytest.raises(ValueError, match="cannot also install"):
@@ -79,10 +79,10 @@ def test_runtime_assembly_rejects_mixed_control_planes():
 
 
 def test_coding_runtime_assembles_strict_generation_stop_consumer(tmp_path):
-    from nz_coder import config
-    from nz_coder.runtime.composition import build_coding_agent
-    from nz_coder.runtime.execution_context import scoped_runtime_overrides
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.composition import build_coding_agent
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     old_workdir = config.WORKDIR
     config.WORKDIR = tmp_path
@@ -107,11 +107,54 @@ def test_coding_runtime_assembles_strict_generation_stop_consumer(tmp_path):
     assert "diff_status" in messages[-1]["content"]
 
 
+def test_strict_product_runtime_requires_evidence_without_promoting_inferred_target(
+    tmp_path,
+):
+    """Strict SWE requires behavior evidence while filename guesses stay advisory."""
+    from nz_coder.runtime.execution.composition import build_product_environment
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    source = tmp_path / "src" / "widget.py"
+    test = tmp_path / "tests" / "test_widget.py"
+    source.parent.mkdir()
+    test.parent.mkdir()
+    source.write_text("def widget(): return 1\n", encoding="utf-8")
+    test.write_text("def test_widget(): assert True\n", encoding="utf-8")
+    (tmp_path / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+
+    with (
+        scoped_workdir(tmp_path),
+        scoped_runtime_overrides(strict_local_tools=True),
+    ):
+        agent = build_product_environment(
+            "CODING_ROLE",
+            client=FakeClient([]),
+            trace_enabled=False,
+            sidecar_verifier=False,
+        )
+        try:
+            agent.vm.mark_write("edit_file", {"path": "src/widget.py"})
+            agent.vm.observe_verify_changed_files("OK: py_compile changed files")
+            verification_needed = agent.vm.should_gate()
+            pipeline = agent.vm.status()["verification_pipeline"]
+        finally:
+            agent.close()
+
+    targeted = next(stage for stage in pipeline["stages"] if stage["name"] == "targeted")
+    assert verification_needed is True
+    assert targeted["required"] is True
+    assert targeted["evidence_required"] is True
+    assert targeted["status"] == "pending"
+    assert targeted["commands"][0]["command"] == "pytest tests/test_widget.py"
+    assert targeted["commands"][0]["required"] is False
+
+
 def test_coding_and_declared_profiles_share_services_runner_and_trace(tmp_path):
-    from nz_coder.runtime.composition import build_coding_agent, build_declared_agent
-    from nz_coder.runtime.handoffs import AgentGraph, AgentSpec
-    from nz_coder.runtime.workdir import scoped_workdir
-    from nz_coder.trace import TraceRecorder
+    from nz_coder.runtime.execution.composition import build_coding_agent, build_declared_agent
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.trace import TraceRecorder
 
     graph = AgentGraph([AgentSpec("worker", "DECLARED_ROLE")], start="worker")
     observed = []

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.lsp import (
     LSPError,
     available_server_summary,
@@ -13,7 +13,7 @@ from nz_coder.lsp import (
     get_client_for_file,
 )
 from nz_coder.lsp.client import path_to_uri, uri_to_path
-from nz_coder.runtime.workdir import current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
 
 _OPERATIONS = {
@@ -227,4 +227,5 @@ register(
         "required": ["operation", "file_path"],
     },
     handler=lsp,
+    execution="read",
 )

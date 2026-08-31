@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from nz_coder import config
+from nz_coder.foundation import config
 
 
 def test_effective_config_reports_values_sources_and_no_credentials(
@@ -35,7 +35,7 @@ def test_effective_config_reports_values_sources_and_no_credentials(
 
 def test_config_show_json_and_sources_are_machine_clean(monkeypatch, tmp_path, capsys):
     from nz_coder.interface.config_cli import config_main
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     monkeypatch.setattr(config, "MCP_ENABLED", False)
     monkeypatch.setattr(config, "MCP_USER_CONFIG", str(tmp_path / "missing-mcp.json"))

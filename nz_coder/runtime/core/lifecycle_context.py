@@ -74,6 +74,7 @@ class LifecycleExecutionContext:
     current_agent_name: LifecycleCallback
     structured_outputs: LifecycleCallback
     clear_reverter: LifecycleCallback
+    clear_read_cache: LifecycleCallback
     reset_hooks: LifecycleCallback
     clear_reasoning_escalation: LifecycleCallback
     restore_agent_role: LifecycleCallback
@@ -85,6 +86,8 @@ class LifecycleExecutionContext:
     publish_started: LifecycleCallback
     assert_terminal: LifecycleCallback
     finish_lineage: LifecycleCallback
+    # (messages, status, content_text="") -> bool; True means terminal text was
+    # projected into an otherwise-empty final Assistant message.
     persist_assistant_end: LifecycleCallback
     runtime_summary: LifecycleCallback
     run_evidence: LifecycleCallback

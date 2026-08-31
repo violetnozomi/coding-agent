@@ -23,6 +23,7 @@ _RESUME_IDENTITY_FIELDS = (
     "provider",
     "model_id",
     "max_agent_turns",
+    "nominal_agent_turns",
     "agent_timeout_seconds",
     "source_sha256",
     "attempts_per_instance",
@@ -60,6 +61,7 @@ def build_swebench_manifest(
     provider: str,
     model_id: str,
     max_agent_turns: int,
+    nominal_agent_turns: int,
     agent_timeout_seconds: int,
     benchmark_profile: str = "lite",
     expected_instances: int | None = None,
@@ -90,6 +92,9 @@ def build_swebench_manifest(
         "provider": str(provider),
         "model_id": str(model_id),
         "max_agent_turns": int(max_agent_turns),
+        "nominal_agent_turns": min(
+            int(max_agent_turns), max(1, int(nominal_agent_turns))
+        ),
         "agent_timeout_seconds": int(agent_timeout_seconds),
         "nz_coder_version": __version__,
         "source_sha256": source_tree_digest(),

@@ -4,9 +4,9 @@ from __future__ import annotations
 import json
 
 from nz_coder.permissions import PermissionManager
-from nz_coder.runtime.loop import AgentLoop
-from nz_coder.runtime.subagent import _subagent_tools
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.execution.loop import AgentLoop
+from nz_coder.runtime.agent.subagent import _subagent_tools
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools import dispatch, get_execution_mode, get_specs
 from nz_coder.tools.plan_mode import (
     PlanModeController,
@@ -111,6 +111,8 @@ def test_plan_enter_write_and_approve_are_a_deferred_transition(tmp_path):
         approved = controller.exit("Parser update", "- Change parser\n- Run tests")
         assert "Plan approved" in approved
         assert "sha256:" in approved
+        assert approved.metadata["plan_exit_approved"] is True
+        assert approved.metadata["title"] == "Parser update"
         assert permissions.mode == "plan"
 
         assert controller.apply_pending_mode() == ("plan", "auto")
@@ -137,6 +139,24 @@ def test_plan_exit_requires_content_and_rejection_stays_read_only(tmp_path):
         assert rejected.startswith("Plan was not approved")
         assert permissions.mode == "plan"
         assert controller.apply_pending_mode() is None
+
+
+def test_plan_exit_can_continue_implementation_in_the_same_session(tmp_path):
+    """Approval and implementation continuation are separate user choices."""
+    with scoped_workdir(tmp_path):
+        permissions, controller = _controller(
+            tmp_path,
+            mode="plan",
+            answers=("Implement in This Session",),
+        )
+        controller.write("# Plan\n\n1. Implement\n2. Verify")
+
+        result = controller.exit("Ready", "- Implement\n- Verify")
+
+        assert result.metadata["plan_exit_approved"] is True
+        assert result.metadata["plan_exit_terminal"] is False
+        assert controller.apply_pending_mode() == ("plan", "default")
+        assert permissions.mode == "default"
 
 
 def test_plan_edit_during_approval_requires_a_fresh_review(tmp_path):
@@ -191,6 +211,24 @@ def test_active_plan_boundary_is_injected_as_a_system_message(tmp_path):
         assert "BASE SYSTEM" in api_messages[0]["content"]
         assert "<plan-mode>" in api_messages[0]["content"]
         assert "write_plan" in api_messages[0]["content"]
+
+
+def test_active_plan_tool_exposure_hides_non_planning_side_effects(tmp_path):
+    """Blocked tools should not consume schema budget or tempt invalid calls."""
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop(
+            "BASE SYSTEM",
+            permission_mode="plan",
+            client=object(),
+            trace_enabled=False,
+        )
+
+        names = {
+            spec["function"]["name"] for spec in agent._active_tool_specs()
+        }
+
+        assert {"read_file", "write_plan", "plan_exit", "question", "todo"} <= names
+        assert not {"write_file", "task", "agent_manager", "workflow_save"} & names
 
 
 def test_plan_exit_then_write_in_same_batch_keeps_write_blocked(tmp_path):

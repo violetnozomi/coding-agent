@@ -149,3 +149,50 @@ def test_active_run_rejects_missing_session_checkpoint_callback() -> None:
         )
 
     assert harness.legacy_checkpoints == []
+
+
+def test_async_tool_batch_freezes_one_dynamic_provider_generation() -> None:
+    """Scheduling, permission metadata, and dispatch share one MCP snapshot."""
+    from nz_coder.tools import (
+        dispatch,
+        get_tool_side_effect,
+        scoped_dynamic_tool_provider,
+    )
+
+    provider_calls = []
+
+    def provider():
+        provider_calls.append(len(provider_calls) + 1)
+        return [{
+            "name": "mcp_batch_snapshot",
+            "description": "test",
+            "parameters": {"type": "object", "properties": {}},
+            "handler": lambda: "ok",
+            "execution": "read",
+            "side_effect": "reads-network",
+        }]
+
+    class SnapshotHarness(_Harness):
+        async def _dispatch_tool_calls_async(self, _calls, _has_write, _messages):
+            assert get_tool_side_effect("mcp_batch_snapshot") == "reads-network"
+            assert get_tool_side_effect("mcp_batch_snapshot") == "reads-network"
+            assert dispatch("mcp_batch_snapshot", {}) == "ok"
+            return []
+
+    async def checkpoint(_status: str) -> None:
+        return None
+
+    with scoped_dynamic_tool_provider(provider):
+        provider_calls.clear()  # Ignore eager scope validation.
+        result = asyncio.run(
+            ProductionToolRuntime().execute_batch_async(
+                SnapshotHarness(),
+                [],
+                [],
+                processor=_Processor(),
+                checkpoint=checkpoint,
+            )
+        )
+
+    assert result == "continue"
+    assert provider_calls == [1]

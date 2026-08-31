@@ -12,15 +12,16 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Callable
 
-from nz_coder import config
-from nz_coder.message_schema import (
+from nz_coder.foundation import config
+from nz_coder.foundation.json_safety import json_safe_value
+from nz_coder.protocol.message_schema import (
     MESSAGE_SCHEMA_VERSION,
     is_synthetic_user_message,
     session_diffs,
     session_summary,
 )
 from nz_coder.state.workdir import current_workdir
-from nz_coder.private_paths import harden_private_path
+from nz_coder.foundation.private_paths import harden_private_path
 
 _DEFAULT_SESSION_DIR = Path(config.SESSION_DIR)
 _DEFAULT_SESSION_TITLE = "New Session"
@@ -71,7 +72,9 @@ def create_session_id(prefix: str = "session") -> str:
 
 
 def ensure_session(session_id: str | None = None) -> str:
-    current = _safe_session_id(session_id or active_session_id() or create_session_id())
+    current = _exact_session_id(
+        session_id or active_session_id() or create_session_id()
+    )
     activate_session(current)
     return current
 
@@ -88,7 +91,9 @@ def save_session(
     session_metadata: dict | None = None,
     model: str | None = None,
 ) -> Path:
-    session_id = _safe_session_id(session_id or active_session_id() or create_session_id())
+    session_id = _exact_session_id(
+        session_id or active_session_id() or create_session_id()
+    )
     base = session_dir()
     base.mkdir(parents=True, exist_ok=True)
     _harden_session_directory(base)
@@ -119,7 +124,7 @@ def save_session(
     if run_status is not None:
         payload["run_status"] = str(run_status)
     resolved_parent = (
-        _safe_session_id(parent_session_id)
+        _exact_session_id(parent_session_id)
         if parent_session_id is not None
         else existing.get("parent_session_id")
     )
@@ -166,7 +171,7 @@ def save_session(
 
 def rename_session(session_id: str, title: str) -> str:
     """Atomically update one Session title and matching convenience aliases."""
-    safe = _safe_session_id(session_id)
+    safe = _exact_session_id(session_id)
     normalized = _normalize_title(title)
     if not normalized:
         raise ValueError("Session title cannot be empty")
@@ -266,14 +271,23 @@ def load_session(session_id: str = "latest") -> dict:
 
 
 def list_sessions(limit: int = 10) -> list[Path]:
+    bounded = max(0, int(limit))
+    if bounded == 0:
+        return []
     base = session_dir()
     if not base.exists():
         return []
-    files = [
-        p for p in base.glob("*.json")
-        if p.name not in {"latest.json", "active.json"}
-    ]
-    return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)[:limit]
+    dated: list[tuple[float, Path]] = []
+    for path in base.glob("*.json"):
+        if path.name in {"latest.json", "active.json"}:
+            continue
+        try:
+            modified = path.stat().st_mtime
+        except OSError:
+            continue
+        dated.append((modified, path))
+    dated.sort(key=lambda item: (item[0], item[1].name), reverse=True)
+    return [path for _modified, path in dated[:bounded]]
 
 
 def describe_sessions(limit: int = 10) -> str:
@@ -300,12 +314,16 @@ def active_session_id() -> str | None:
     if not isinstance(payload, dict):
         return None
     session_id = payload.get("session_id")
-    return _safe_session_id(session_id) if session_id else None
+    if not session_id:
+        return None
+    try:
+        return _exact_session_id(session_id)
+    except ValueError:
+        return None
 
 
 def activate_session(session_id: str) -> str:
-    safe = _safe_session_id(session_id)
-    _ACTIVE_SESSION.set((current_workdir(), safe))
+    safe = _exact_session_id(session_id)
     session_dir().mkdir(parents=True, exist_ok=True)
     _harden_session_directory(session_dir())
     session_runtime_dir(safe).mkdir(parents=True, exist_ok=True)
@@ -321,13 +339,16 @@ def activate_session(session_id: str) -> str:
         "runtime_dir": str(session_runtime_dir(safe)),
     }
     _write_json(_active_path(), payload)
+    # Publish the process-local identity only after the durable alias reaches
+    # its commit point; otherwise a disk failure creates a phantom Session.
+    _ACTIVE_SESSION.set((current_workdir(), safe))
     return safe
 
 
 @contextmanager
 def scoped_session(session_id: str):
     """Bind an active session to the current thread or async task."""
-    safe = _safe_session_id(session_id)
+    safe = _exact_session_id(session_id)
     token = _ACTIVE_SESSION.set((current_workdir(), safe))
     try:
         yield safe
@@ -409,6 +430,9 @@ def session_plan_path(session_id: str | None = None) -> Path:
 
 def write_session_runtime_json(path: Path, payload: dict) -> None:
     """Atomically replace a small JSON checkpoint with a unique temp file."""
+    normalized = json_safe_value(payload)
+    if not isinstance(normalized, dict):
+        raise ValueError("Session runtime checkpoint must be a JSON object")
     path.parent.mkdir(parents=True, exist_ok=True)
     _harden_session_directory(path.parent)
     fd, temp_name = tempfile.mkstemp(
@@ -419,7 +443,14 @@ def write_session_runtime_json(path: Path, payload: dict) -> None:
     temp_path = Path(temp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2, default=str)
+            json.dump(
+                normalized,
+                handle,
+                ensure_ascii=False,
+                indent=2,
+                default=str,
+                allow_nan=False,
+            )
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
@@ -470,7 +501,7 @@ def _session_path(session_id: str) -> Path:
         return _latest_path()
     if session_id == "active":
         return _active_path()
-    safe = _safe_session_id(session_id)
+    safe = _exact_session_id(session_id)
     return session_dir() / f"{safe}.json"
 
 
@@ -485,6 +516,15 @@ def _active_path() -> Path:
 def _safe_session_id(session_id: str) -> str:
     safe = "".join(c for c in str(session_id or "") if c.isalnum() or c in ("_", "-"))
     return safe or "session"
+
+
+def _exact_session_id(session_id: str) -> str:
+    """Validate one owned identity without aliasing or lossy sanitization."""
+    raw = str(session_id or "")
+    safe = _safe_session_id(raw)
+    if not raw or raw != safe or safe in {"active", "latest"}:
+        raise ValueError("Session ID must be an exact non-reserved identifier")
+    return safe
 
 
 def _normalize_title(title: object) -> str:
@@ -539,9 +579,11 @@ def _repair_alias_after_delete(alias: Path, deleted_id: str) -> None:
 
 def _read_json(path: Path) -> dict:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
+    normalized = json_safe_value(payload)
+    return normalized if isinstance(normalized, dict) else {}
 
 
 def _write_json(path: Path, payload: dict) -> None:

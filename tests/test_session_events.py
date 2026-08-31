@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from nz_coder.session_events import (
+from nz_coder.protocol.session_events import (
     EventCursorExpiredError,
     EventSubscriptionGapError,
     SessionEventBus,
@@ -98,6 +98,132 @@ def test_session_event_cursor_replays_strictly_after_and_expires():
         bus.subscribe(after_event_id=expired.event_id)
     with pytest.raises(ValueError, match="cannot be combined"):
         bus.subscribe(replay=1, after_event_id=second.event_id)
+
+
+def test_session_event_recent_zero_does_not_expand_to_full_history():
+    """Python's ``[-0:]`` edge must not turn a zero limit into unbounded replay."""
+    bus = SessionEventBus(replay_capacity=4)
+    bus.publish("session.worker.event", {"index": 1})
+    bus.publish("session.worker.event", {"index": 2})
+
+    assert bus.recent(0) == []
+    assert bus.recent(-1) == []
+    assert len(bus.recent(1)) == 1
+
+
+@pytest.mark.parametrize("capacity", [-1, True, 1.5, float("inf")])
+def test_session_event_bus_rejects_invalid_replay_capacity(capacity):
+    """A malformed capacity must fail before deque/journal allocation."""
+    with pytest.raises(ValueError, match="non-negative integer"):
+        SessionEventBus(replay_capacity=capacity)
+
+
+@pytest.mark.parametrize("max_queue", [0, -1, True, 1.5, float("inf")])
+def test_session_subscription_rejects_invalid_queue_capacity(max_queue):
+    """Subscriber queues stay explicitly bounded by a positive integer."""
+    bus = SessionEventBus()
+
+    with pytest.raises(ValueError, match="positive integer"):
+        bus.subscribe(max_queue=max_queue)
+
+
+@pytest.mark.parametrize("limit", [True, 1.5, float("inf")])
+def test_session_event_recent_rejects_non_integer_limit(limit):
+    """Public inspection cannot leak raw int conversion exceptions."""
+    bus = SessionEventBus()
+
+    with pytest.raises(ValueError, match="integer"):
+        bus.recent(limit)
+
+
+@pytest.mark.parametrize("heartbeat", [0, -1, float("inf"), float("nan")])
+def test_session_event_sse_rejects_invalid_heartbeat(heartbeat):
+    """Invalid heartbeat values must not turn the stream into a busy loop."""
+    bus = SessionEventBus()
+    stream = iter_sse(bus.subscribe(), heartbeat_seconds=heartbeat)
+
+    assert "server.connected" in next(stream)
+    with pytest.raises(ValueError, match="positive finite"):
+        next(stream)
+
+
+@pytest.mark.parametrize("timeout", [-1, True, float("inf"), float("nan")])
+def test_session_subscription_rejects_invalid_wait_timeout(timeout):
+    subscription = SessionEventBus().subscribe()
+
+    with pytest.raises(ValueError, match="timeout"):
+        subscription.get(timeout=timeout)
+
+
+def test_unserializable_journal_properties_do_not_break_live_event_delivery(tmp_path):
+    """Best-effort replay persistence must not crash the running Agent."""
+    bus = SessionEventBus(
+        session_id="session",
+        replay_capacity=4,
+        journal_path=tmp_path / "events.jsonl",
+    )
+    cyclic = {}
+    cyclic["self"] = cyclic
+
+    event = bus.publish("session.test", {"cyclic": cyclic})
+
+    assert event.sequence == 1
+    assert bus.recent(1)[0].event_id == event.event_id
+    bus.close()
+
+
+def test_uncopyable_event_property_isolated_from_live_agent():
+    """Extension metadata cannot abort fan-out merely by rejecting deepcopy."""
+    bus = SessionEventBus(replay_capacity=4)
+
+    class Uncopyable:
+        def __deepcopy__(self, _memo):
+            raise RuntimeError("cannot copy")
+
+        def __str__(self):
+            return "uncopyable-value"
+
+    event = bus.publish("session.test", {"value": Uncopyable()})
+
+    assert event.properties == {"value": "uncopyable-value"}
+
+
+def test_event_properties_are_strict_json_at_live_journal_and_sse_boundaries(
+    tmp_path,
+):
+    """Provider/tool NaN values must not poison attach replay or SSE clients."""
+    journal = tmp_path / "events.jsonl"
+    bus = SessionEventBus(
+        session_id="strict-json",
+        replay_capacity=4,
+        journal_path=journal,
+    )
+
+    event = bus.publish("session.test", {
+        "usage": [float("nan"), float("inf"), -float("inf")],
+    })
+    bus.close()
+
+    assert event.properties == {"usage": [None, None, None]}
+    json.dumps(event.to_dict(), allow_nan=False)
+    payload = encode_sse(event).split("data: ", 1)[1].strip()
+    json.loads(payload, parse_constant=lambda value: (_ for _ in ()).throw(
+        ValueError(value)
+    ))
+    for line in journal.read_text(encoding="utf-8").splitlines():
+        json.loads(line, parse_constant=lambda value: (_ for _ in ()).throw(
+            ValueError(value)
+        ))
+
+
+@pytest.mark.parametrize("replay", [-1, True, 1.5])
+def test_session_subscription_rejects_invalid_replay_limit(replay):
+    """Invalid replay values must not become an accidental full-history slice."""
+    bus = SessionEventBus(replay_capacity=4)
+    bus.publish("session.worker.event", {"index": 1})
+
+    with pytest.raises(ValueError, match="non-negative integer"):
+        bus.subscribe(replay=replay)
 
 
 def test_session_event_journal_restores_sequence_and_cursor(tmp_path):
@@ -258,6 +384,26 @@ def test_session_event_checkpoint_is_atomic_with_later_publish():
     bus.close()
 
 
+def test_checkpoint_with_replay_publishes_one_cursor_event():
+    """Remote attach must not emit the same snapshot boundary twice."""
+    bus = SessionEventBus(session_id="attach-checkpoint")
+    subscription = bus.subscribe()
+    try:
+        snapshot, cursor, replay = bus.checkpoint_with_replay(
+            lambda: {"messages": ["stable"]},
+            event_type="session.snapshot.created",
+            replay=10,
+        )
+
+        assert snapshot == {"messages": ["stable"]}
+        assert replay == []
+        assert subscription.get(timeout=0) == cursor
+        with pytest.raises(queue.Empty):
+            subscription.get(timeout=0)
+    finally:
+        bus.close()
+
+
 def test_session_event_context_scope_restores_parent_bus():
     parent = SessionEventBus(session_id="parent")
     child = SessionEventBus(session_id="child")
@@ -274,6 +420,155 @@ def test_session_event_context_scope_restores_parent_bus():
 
     assert parent_sub.get(timeout=0.1).properties["scope"] == "parent"
     assert child_sub.get(timeout=0.1).properties["scope"] == "child"
+
+
+def test_tool_started_event_classifies_serial_readonly_extension_as_read(
+    monkeypatch,
+):
+    """Public event categories describe effects, not scheduler parallelism."""
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.execution import tool_executor
+    from nz_coder.tools import (
+        TOOL_EXECUTION_MODES,
+        TOOL_HANDLERS,
+        TOOL_PLAN_MODE_ALLOWED,
+        TOOL_SIDE_EFFECTS,
+        TOOL_SPECS,
+        register,
+    )
+
+    name = "_test_serial_read_event"
+    bus = SessionEventBus(session_id="serial-read-event")
+    subscription = bus.subscribe({"session.tool.started"})
+    try:
+        register(
+            name,
+            "test",
+            {"type": "object", "properties": {}},
+            lambda: "ok",
+            execution="serial",
+            side_effect="readonly",
+        )
+        monkeypatch.setattr(tool_executor, "dispatch", lambda _name, _input: "ok")
+        with scoped_session_event_bus(bus):
+            tool_executor.ToolExecutor(PermissionManager("auto")).execute_one({
+                "id": "serial-read",
+                "function": {"name": name, "arguments": "{}"},
+            }, 0)
+
+        assert subscription.get(timeout=0).properties["category"] == "read"
+    finally:
+        TOOL_HANDLERS.pop(name, None)
+        TOOL_EXECUTION_MODES.pop(name, None)
+        TOOL_SIDE_EFFECTS.pop(name, None)
+        TOOL_PLAN_MODE_ALLOWED.pop(name, None)
+        TOOL_SPECS[:] = [
+            spec for spec in TOOL_SPECS
+            if spec["function"]["name"] != name
+        ]
+        bus.close()
+
+
+def test_tool_completed_event_classifies_serial_readonly_extension_as_read():
+    """Completed and started event projections must use the same semantics."""
+    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.tools import (
+        TOOL_EXECUTION_MODES,
+        TOOL_HANDLERS,
+        TOOL_PLAN_MODE_ALLOWED,
+        TOOL_SIDE_EFFECTS,
+        TOOL_SPECS,
+        register,
+    )
+
+    name = "_test_serial_read_completed"
+    events = []
+    try:
+        register(
+            name,
+            "test",
+            {"type": "object", "properties": {}},
+            lambda: "ok",
+            execution="serial",
+            side_effect="readonly",
+        )
+        agent = AgentLoop.__new__(AgentLoop)
+        agent.tracer = SimpleNamespace(log=lambda *_args, **_kwargs: None)
+        agent._emit_session_event = lambda event, properties: events.append(
+            (event, properties)
+        )
+        result = SimpleNamespace(
+            name=name,
+            executed=True,
+            dispatch_failed=False,
+            command_failed=False,
+            is_write=False,
+            tool_input={},
+            duration_ms=1.0,
+            queue_wait_ms=0.0,
+        )
+
+        agent._trace_tool_result(result, "ok")
+
+        assert events[0][0] == "session.tool.completed"
+        assert events[0][1]["category"] == "read"
+    finally:
+        TOOL_HANDLERS.pop(name, None)
+        TOOL_EXECUTION_MODES.pop(name, None)
+        TOOL_SIDE_EFFECTS.pop(name, None)
+        TOOL_PLAN_MODE_ALLOWED.pop(name, None)
+        TOOL_SPECS[:] = [
+            spec for spec in TOOL_SPECS
+            if spec["function"]["name"] != name
+        ]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["agent_manager", "workflow_run", "send_message", "emit_handoff"],
+)
+def test_tool_event_category_marks_agent_control_tools_as_agent(name):
+    """Child orchestration and communication must render as Agent activity."""
+    from nz_coder.runtime.execution.tool_executor import tool_category
+
+    assert tool_category(name) == "agent"
+
+
+def test_completed_event_keeps_authorized_dynamic_tool_generation():
+    """A live MCP refresh must not relabel a call after it has executed."""
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.tools import scoped_dynamic_tool_provider
+
+    generation = {"effect": "reads-network", "execution": "read"}
+
+    def provider():
+        return [{
+            "name": "mcp_event_generation",
+            "description": "test",
+            "parameters": {"type": "object", "properties": {}},
+            "handler": lambda: "ok",
+            "execution": generation["execution"],
+            "side_effect": generation["effect"],
+        }]
+
+    events = []
+    with scoped_dynamic_tool_provider(provider):
+        result = ToolExecutor(PermissionManager("default")).execute_one({
+            "id": "generation-event",
+            "function": {"name": "mcp_event_generation", "arguments": "{}"},
+        }, 0)
+        generation.update(effect="mutates-network", execution="write")
+
+        agent = AgentLoop.__new__(AgentLoop)
+        agent.tracer = SimpleNamespace(log=lambda *_args, **_kwargs: None)
+        agent._emit_session_event = lambda event, properties: events.append(
+            (event, properties)
+        )
+        agent._trace_tool_result(result, result.output)
+
+    assert events[0][1]["category"] == "read"
 
 
 def test_session_event_concurrent_publish_has_unique_order():
@@ -366,8 +661,8 @@ def test_session_event_bus_close_disposes_subscribers():
 
 
 def test_agent_loop_publishes_native_session_lifecycle(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     class Message:
         content = "done"
@@ -447,8 +742,8 @@ def test_agent_loop_publishes_native_session_lifecycle(tmp_path, monkeypatch):
 
 
 def test_agent_stream_publishes_incremental_text_part_lifecycle(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     chunks = [
         SimpleNamespace(
@@ -528,8 +823,8 @@ def test_agent_stream_publishes_incremental_text_part_lifecycle(tmp_path, monkey
 
 
 def test_stream_tool_input_is_durable_before_tool_dispatch(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     tool_start = SimpleNamespace(
         index=0,
@@ -622,8 +917,8 @@ def test_stream_tool_input_is_durable_before_tool_dispatch(tmp_path, monkeypatch
 
 
 def test_stream_executes_tool_before_consuming_trailing_usage(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     order = []
     tool_call = SimpleNamespace(
@@ -708,8 +1003,8 @@ def test_stream_executes_tool_before_consuming_trailing_usage(tmp_path, monkeypa
 
 
 def test_stream_error_after_write_tool_does_not_retry_side_effect(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     tool_call = SimpleNamespace(
         index=0,
@@ -767,8 +1062,8 @@ def test_stream_error_after_write_tool_does_not_retry_side_effect(tmp_path, monk
 
 
 def test_stream_tool_bridge_cancellation_settles_async_handler(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     tool_call = SimpleNamespace(
         index=0,
@@ -836,10 +1131,10 @@ def test_stream_tool_bridge_cancellation_settles_async_handler(tmp_path, monkeyp
 
 
 def test_bash_running_metadata_reaches_durable_session_events(tmp_path):
-    from nz_coder.message_schema import attach_message_identity
-    from nz_coder.runtime.loop import AgentLoop
-    from nz_coder.runtime.session_processor import SessionProcessor
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.protocol.message_schema import attach_message_identity
+    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.runtime.session.session_processor import SessionProcessor
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     bus = SessionEventBus(session_id="bash-progress-session")
     subscription = bus.subscribe()
@@ -903,8 +1198,8 @@ def test_bash_running_metadata_reaches_durable_session_events(tmp_path):
 
 
 def test_stream_retry_removes_partial_part_before_new_attempt(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     def chunk(text):
         return SimpleNamespace(
@@ -942,6 +1237,13 @@ def test_stream_retry_removes_partial_part_before_new_attempt(tmp_path, monkeypa
         session_id="retry-session",
         event_bus=bus,
     )
+    monkeypatch.setattr(
+        agent,
+        "_model_gateway_observer",
+        lambda _name, _payload: (_ for _ in ()).throw(
+            RuntimeError("trace sink failed")
+        ),
+    )
     monkeypatch.setattr(agent, "_handle_api_error", lambda _error: True)
     message_part = agent._new_message_part(1)
 
@@ -968,8 +1270,8 @@ def test_stream_retry_removes_partial_part_before_new_attempt(tmp_path, monkeypa
 
 
 def test_stream_retry_settles_incomplete_tool_part(tmp_path, monkeypatch):
-    from nz_coder import config
-    from nz_coder.runtime.loop import AgentLoop
+    from nz_coder.foundation import config
+    from nz_coder.runtime.execution.loop import AgentLoop
 
     tool_start = SimpleNamespace(
         index=0,

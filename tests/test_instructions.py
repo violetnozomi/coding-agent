@@ -118,6 +118,38 @@ def test_instruction_labels_tracked_and_private_project_sources(
     assert "user's private project instructions, not checked in" in bundle.reminder
 
 
+def test_checked_in_cache_invalidates_when_git_index_changes(tmp_path, monkeypatch):
+    """A later git add/rm must update the instruction authority label."""
+    import os
+    from types import SimpleNamespace
+
+    import nz_coder.state.instructions as instructions
+
+    project = tmp_path / "project"
+    git_dir = project / ".git"
+    git_dir.mkdir(parents=True)
+    index = git_dir / "index"
+    index.write_bytes(b"first")
+    source = project / "AGENTS.md"
+    source.write_text("authority", encoding="utf-8")
+    responses = iter((1, 0))
+    calls = []
+
+    def fake_run(*args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=next(responses))
+
+    monkeypatch.setattr(instructions.subprocess, "run", fake_run)
+    instructions._TRACKED_CACHE.clear()
+
+    assert instructions._is_checked_in(project, source) is False
+    old = index.stat().st_mtime_ns
+    os.utime(index, ns=(old + 1_000_000, old + 1_000_000))
+    assert instructions._is_checked_in(project, source) is True
+    assert len(calls) == 2
+    assert len(instructions._TRACKED_CACHE) == 1
+
+
 def test_nested_instruction_discovery_remains_disabled_like_current_infcode(tmp_path):
     project = tmp_path / "project"
     nested = project / "src" / "feature"

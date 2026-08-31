@@ -7,7 +7,7 @@ import pytest
 
 
 def test_write_files_batch_creates_files_without_overwrite(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools.files import write_files_batch
 
     old = config.WORKDIR
@@ -25,7 +25,7 @@ def test_write_files_batch_creates_files_without_overwrite(tmp_path):
 
 
 def test_write_files_batch_rolls_back_on_write_failure(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.tools import files as files_mod
 
     old = config.WORKDIR

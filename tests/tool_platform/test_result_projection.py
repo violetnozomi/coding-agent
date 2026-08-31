@@ -77,8 +77,49 @@ def test_batch_budget_bounds_aggregate_results_and_preserves_pairing(tmp_path: P
 
     assert [item.metadata["tool_call_id"] for item in projected] == [item[0] for item in items]
     assert sum(item.metadata["projected_tokens"] for item in projected) <= 600
-    assert "FAIL-19" in projected[-1].text
-    assert str(tmp_path / "call-19.txt") in projected[-1].text
+    visible = max(projected, key=lambda item: item.metadata["projected_tokens"])
+    visible_index = int(visible.metadata["tool_call_id"].removeprefix("call-"))
+    assert f"FAIL-{visible_index}" in visible.text
+    assert str(tmp_path / f"call-{visible_index}.txt") in visible.text
+
+
+def test_batch_budget_remains_strict_when_smaller_than_result_count() -> None:
+    """Irreducible pressure keeps every pairing without inventing capacity."""
+    projector = ToolResultProjector(
+        budget=ToolResultBudget(max_tokens=64),
+        artifact_writer=lambda call_id, _output: (
+            f".nz-coder/tool-results/{call_id}-full-output.txt"
+        ),
+    )
+    items = [
+        (f"call-{index}", "bash", "x" * 1000)
+        for index in range(5)
+    ]
+
+    projected = projector.project_batch(items, max_tokens=2)
+
+    assert len(projected) == 5
+    assert sum(item.metadata["projected_tokens"] for item in projected) <= 2
+    assert [item.metadata["tool_call_id"] for item in projected] == [
+        item[0] for item in items
+    ]
+    assert all(item.metadata["artifact_path"] for item in projected)
+
+
+def test_tiny_share_never_overflows_on_long_artifact_pointer() -> None:
+    """A pointer that cannot fit remains in metadata instead of overflowing text."""
+    projector = ToolResultProjector(
+        budget=ToolResultBudget(max_tokens=64),
+        artifact_writer=lambda _call_id, _output: "very/" + ("long/" * 100),
+    )
+
+    projected = projector.project_batch(
+        [("call", "bash", "failure\n" * 1000)],
+        max_tokens=1,
+    )[0]
+
+    assert projected.metadata["projected_tokens"] <= 1
+    assert projected.metadata["artifact_path"].startswith("very/long/")
 
 
 def test_named_projection_policies_keep_the_most_useful_evidence() -> None:

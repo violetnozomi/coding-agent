@@ -41,10 +41,15 @@ class WorktreeManager:
 
     def create(self, worktree_id: str, base_ref: str = "HEAD") -> Worktree:
         safe_id = _safe_slug(worktree_id)
+        base_ref = _validated_base_ref(base_ref)
+        wt_path = self.worktree_dir / safe_id
+        if wt_path.is_symlink():
+            raise WorktreeError("Managed worktree target must not be a symbolic link")
+        if wt_path.exists() and not wt_path.is_dir():
+            raise WorktreeError("Managed worktree target must be a directory")
         if not self.is_git_repo():
             return self._copy_worktree(safe_id, base_ref)
 
-        wt_path = self.worktree_dir / safe_id
         branch_name = f"subagent-{safe_id}"
         head_sha = self.read_worktree_head_sha(wt_path)
         if head_sha is not None:
@@ -58,7 +63,9 @@ class WorktreeManager:
             )
 
         self.worktree_dir.mkdir(parents=True, exist_ok=True)
-        result = self._run_git(["worktree", "add", "-B", branch_name, str(wt_path), base_ref])
+        result = self._run_git([
+            "worktree", "add", "-B", branch_name, "--", str(wt_path), base_ref,
+        ])
         if result.returncode != 0:
             return self._copy_worktree(safe_id, base_ref)
 
@@ -80,6 +87,10 @@ class WorktreeManager:
     def _copy_worktree(self, safe_id: str, base_ref: str) -> Worktree:
         """Create a filesystem snapshot when Git worktrees are unavailable."""
         wt_path = self.worktree_dir / safe_id
+        if wt_path.is_symlink():
+            raise WorktreeError("Managed worktree target must not be a symbolic link")
+        if wt_path.exists() and not wt_path.is_dir():
+            raise WorktreeError("Managed worktree target must be a directory")
         if not wt_path.exists():
             wt_path.mkdir(parents=True, exist_ok=False)
             self._sync_snapshot(wt_path, preserve_git=False)
@@ -270,3 +281,16 @@ def _safe_slug(value: str) -> str:
         safe = safe.replace("--", "-")
     safe = safe.strip("-") or "subagent"
     return safe
+
+
+def _validated_base_ref(value: str) -> str:
+    if not isinstance(value, str):
+        raise WorktreeError("Worktree base ref must be a string")
+    if (
+        not value
+        or len(value) > 500
+        or value.startswith("-")
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
+        raise WorktreeError("Worktree base ref is invalid")
+    return value

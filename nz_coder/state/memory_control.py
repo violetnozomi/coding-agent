@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -16,6 +17,15 @@ _RISK_MARKERS = (
     "ignore previous", "bypass", "disable security", "allow every",
     "all projects", "across all projects", "shell command",
 )
+_PROPOSAL_STATUSES = frozenset({
+    "proposed",
+    "pending_review",
+    "duplicate",
+    "applied",
+    "apply_failed",
+    "rejected",
+})
+_RISK_RANK = {"low": 0, "medium": 1, "high": 2}
 
 
 @dataclass(frozen=True)
@@ -53,7 +63,13 @@ class MemoryProposal:
             raise ValueError("Memory proposal requires name, description, type, and content")
         if normalized["type"] not in {"user", "project", "feedback", "reference"}:
             raise ValueError("Memory proposal type is invalid")
-        confidence = float(candidate.get("confidence", 0.75) or 0.0)
+        raw_confidence = candidate.get("confidence", 0.75)
+        try:
+            confidence = float(raw_confidence)
+        except (TypeError, ValueError, OverflowError):
+            confidence = 0.0
+        if not math.isfinite(confidence):
+            confidence = 0.0
         confidence = min(1.0, max(0.0, confidence))
         reason = str(candidate.get("reason") or "automatic extraction").strip()[:1000]
         canonical = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
@@ -183,18 +199,50 @@ class MemoryControlPlane:
 
     def _load(self, fingerprint: str) -> MemoryProposal | None:
         path = self._proposals / f"{fingerprint}.json"
-        return self._decode(_read_json(path)) if path.exists() else None
+        proposal = self._decode(_read_json(path)) if path.exists() else None
+        if proposal is None or proposal.fingerprint != fingerprint:
+            return None
+        return proposal
 
     @staticmethod
     def _decode(payload: dict) -> MemoryProposal | None:
         if not isinstance(payload, dict) or not payload:
             return None
         try:
-            payload = dict(payload)
-            payload["source_message_ids"] = tuple(payload.get("source_message_ids", ()))
-            return MemoryProposal(**payload)
-        except (TypeError, ValueError):
+            source_ids = payload.get("source_message_ids")
+            source_ids = source_ids if isinstance(source_ids, (list, tuple)) else ()
+            normalized = MemoryProposal.from_candidate(
+                payload,
+                source_session=str(payload.get("source_session") or "")[:200],
+                source_message_ids=tuple(
+                    str(item)[:200]
+                    for item in source_ids[:50]
+                    if str(item).strip()
+                ),
+            )
+        except (TypeError, ValueError, OverflowError):
             return None
+        if payload.get("fingerprint") != normalized.fingerprint:
+            return None
+        status = str(payload.get("status") or "")
+        if status not in _PROPOSAL_STATUSES:
+            return None
+        created_at = _finite_nonnegative_float(payload.get("created_at"))
+        persisted_risk = str(payload.get("risk") or "high")
+        if persisted_risk not in _RISK_RANK:
+            persisted_risk = "high"
+        risk = max(
+            (normalized.risk, persisted_risk),
+            key=lambda value: _RISK_RANK[value],
+        )
+        return replace(
+            normalized,
+            created_at=(
+                normalized.created_at if created_at is None else created_at
+            ),
+            risk=risk,
+            status=status,
+        )
 
     def _store(self, proposal: MemoryProposal) -> None:
         self._proposals.mkdir(parents=True, exist_ok=True)
@@ -216,7 +264,12 @@ class MemoryControlPlane:
             **{key: str(value)[:1000] for key, value in extra.items()},
         }
         with self._ledger_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+            handle.write(json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                allow_nan=False,
+            ) + "\n")
             handle.flush()
             os.fsync(handle.fileno())
 
@@ -242,6 +295,16 @@ def _can_auto_apply(proposal: MemoryProposal) -> bool:
     return proposal.reason == "explicit user memory request"
 
 
+def _finite_nonnegative_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) and number >= 0 else None
+
+
 def _read_json(path: Path) -> dict:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -259,7 +322,14 @@ def _atomic_json(path: Path, payload: dict) -> None:
     )
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            json.dump(
+                payload,
+                handle,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            )
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)

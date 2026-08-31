@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 def test_inspect_generated_project_reports_fastapi_crud(tmp_path):
-    from nz_coder import config
+    from nz_coder.foundation import config
     from nz_coder.project_creation.templates import scaffold_project
     from nz_coder.project_creation.inspector import inspect_generated_project
 

@@ -6,7 +6,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _disable_reflection_by_default():
-    from nz_coder import config
+    from nz_coder.foundation import config
 
     old_enabled = config.REFLECTION_ENABLED
     old_attempts = config.REFLECTION_MAX_ATTEMPTS

@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from nz_coder.runtime.process_service import (
+from nz_coder.runtime.process.process_service import (
     ProcessOwnershipError,
     ProcessService,
     ProcessStatus,
@@ -161,7 +161,7 @@ def test_process_service_crash_status_and_output_are_retained(tmp_path):
 
 
 def test_process_service_decodes_configured_legacy_output(tmp_path, monkeypatch):
-    from nz_coder import config
+    from nz_coder.foundation import config
 
     payload = "中文错误".encode("gbk")
     script = tmp_path / "legacy.py"
@@ -210,7 +210,7 @@ def test_windows_conpty_unavailable_uses_actionable_pipe_fallback(tmp_path, monk
             return None
 
     monkeypatch.setattr(
-        "nz_coder.runtime.process_service.create_process_backend",
+        "nz_coder.runtime.process.process_service.create_process_backend",
         lambda *_args, **_kwargs: PipeFallback(),
     )
     service = ProcessService(tmp_path)
@@ -299,7 +299,7 @@ def test_workspace_registry_shares_service_and_session_cleanup_kills_only_owner(
 
 
 def test_process_events_do_not_include_output_contents(tmp_path):
-    from nz_coder.session_events import SessionEventBus
+    from nz_coder.protocol.session_events import SessionEventBus
 
     script = tmp_path / "events.py"
     script.write_text("print('secret-value', flush=True)\n", encoding="utf-8")

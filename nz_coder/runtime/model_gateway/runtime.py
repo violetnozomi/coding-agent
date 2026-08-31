@@ -102,10 +102,6 @@ def resolve_model_runtime(
         raise ValueError("Model id must not be empty")
 
     provider = request.provider or provider_factory(provider_id)
-    created_client = request.client is None
-    client = request.client if request.client is not None else provider.create_client()
-    owns_client = created_client if request.owns_client is None else request.owns_client
-
     provider_id = str(getattr(provider, "name", provider_id) or provider_id).strip().lower()
     registry_model = registry_resolver(provider_id, model_id, request.workspace)
     request_model_id = (
@@ -120,6 +116,9 @@ def resolve_model_runtime(
             model_id,
             variant=variant,
         )
+    created_client = request.client is None
+    client = request.client if request.client is not None else provider.create_client()
+    owns_client = created_client if request.owns_client is None else request.owns_client
     return ResolvedModelRuntime(
         provider_id=provider_id,
         model_id=model_id,

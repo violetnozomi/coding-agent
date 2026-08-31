@@ -8,7 +8,7 @@ import pytest
 
 
 def test_attempt_controller_uses_single_pre_boundary_fallback_then_retries():
-    from nz_coder.runtime.agent_resilience import ProviderAttemptController
+    from nz_coder.runtime.agent.agent_resilience import ProviderAttemptController
 
     controller = ProviderAttemptController(max_retries=2)
     first = controller.decide(
@@ -40,7 +40,7 @@ def test_attempt_controller_uses_single_pre_boundary_fallback_then_retries():
 
 def test_stream_watchdog_detects_idle_and_observes_cancellation():
     import time
-    from nz_coder.runtime.loop import _iter_completion_with_timeouts
+    from nz_coder.runtime.execution.loop import _iter_completion_with_timeouts
 
     def stalled():
         time.sleep(0.1)
@@ -59,10 +59,39 @@ def test_stream_watchdog_detects_idle_and_observes_cancellation():
     )) == []
 
 
+def test_legacy_stream_watchdog_delegates_close_to_canonical_boundary():
+    import time
+    from nz_coder.runtime.execution.loop import _iter_completion_with_timeouts
+
+    class StalledStream:
+        def __init__(self):
+            self.closed = False
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            time.sleep(0.1)
+            return "late"
+
+        def close(self):
+            self.closed = True
+
+    stream = StalledStream()
+    with pytest.raises(TimeoutError, match="Stream stalled"):
+        list(_iter_completion_with_timeouts(
+            stream,
+            idle_timeout_seconds=0.01,
+            hard_timeout_seconds=1,
+        ))
+
+    assert stream.closed is True
+
+
 def test_agent_stream_failure_falls_back_once_to_buffered_provider(tmp_path):
     from nz_coder.providers.capabilities import resolve_model_capabilities
-    from nz_coder.runtime.loop import AgentLoop
-    from nz_coder.runtime.workdir import scoped_workdir
+    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     class Provider:
         name = "fake"
@@ -110,7 +139,7 @@ def test_agent_stream_failure_falls_back_once_to_buffered_provider(tmp_path):
 
 
 def test_provider_workflow_generation_repairs_and_times_out():
-    from nz_coder.runtime.workflow_generation import generate_workflow_with_provider
+    from nz_coder.runtime.workflows.workflow_generation import generate_workflow_with_provider
 
     outputs = iter([
         "not-json",
@@ -145,7 +174,7 @@ def test_provider_workflow_generation_repairs_and_times_out():
 def test_workflow_sdk_publishes_first_started_and_terminal_result(
     tmp_path, monkeypatch
 ):
-    from nz_coder.runtime.workflow_sdk import WorkflowHostSDK
+    from nz_coder.runtime.workflows.workflow_sdk import WorkflowHostSDK
     from tests.test_workflow_runtime import _install_fake_child, _manager
 
     _install_fake_child(monkeypatch, tmp_path)
@@ -215,7 +244,7 @@ def test_terminal_registry_and_safe_live_smoke_entrypoints(capsys):
     assert mcp_main(["smoke", "example"]) == 0
     assert "Dry run only" in capsys.readouterr().out
 
-    from nz_coder.runtime.workflow_contracts import workflow_contract
+    from nz_coder.runtime.workflows.workflow_contracts import workflow_contract
 
     contract = workflow_contract()
     assert contract["version"] == "1.6"
@@ -274,6 +303,7 @@ def test_swebench_manifest_is_secret_free_and_source_bound(tmp_path):
         provider="fake",
         model_id="model",
         max_agent_turns=80,
+        nominal_agent_turns=20,
         agent_timeout_seconds=900,
     )
     target = write_reproducibility_manifest(tmp_path / "run.manifest.json", manifest)
@@ -281,4 +311,16 @@ def test_swebench_manifest_is_secret_free_and_source_bound(tmp_path):
 
     assert len(loaded["source_sha256"]) == 64
     assert loaded["instance_ids"] == ["repo__issue-1"]
+    assert loaded["nominal_agent_turns"] == 20
     assert "api_key" not in json.dumps(loaded).lower()
+
+
+def test_swebench_resume_rejects_nominal_budget_changes():
+    from nz_coder.evaluation.reproducibility import validate_swebench_resume
+
+    existing = {"nominal_agent_turns": 15}
+    candidate = {"nominal_agent_turns": 20}
+
+    errors = validate_swebench_resume(existing, candidate)
+
+    assert "nominal_agent_turns changed: 15 -> 20" in errors

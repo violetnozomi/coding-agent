@@ -13,9 +13,15 @@ from nz_coder.runtime.core.result import RunResult, RunStatus, TokenUsage
 
 
 class FakeClient:
-    def __init__(self, result: RunResult | None = None, error: Exception | None = None):
+    def __init__(
+        self,
+        result: RunResult | None = None,
+        error: Exception | None = None,
+        event_payload: dict | None = None,
+    ):
         self.result = result
         self.error = error
+        self.event_payload = event_payload or {}
         self.requests = []
 
     async def run(self, request, **kwargs):
@@ -26,6 +32,7 @@ class FakeClient:
                 name=RuntimeEventName.RUN_STARTED,
                 run_id=request.session_id,
                 session_id=request.session_id,
+                payload=self.event_payload,
             ))
         if self.error is not None:
             raise self.error
@@ -69,6 +76,19 @@ def test_headless_text_combines_positional_prompt_and_piped_stdin(tmp_path):
     )
 
 
+def test_headless_accepts_documented_prompt_option(tmp_path):
+    code, stdout, stderr, client = _run(
+        ["--prompt", "inspect repository"], tmp_path,
+    )
+
+    assert code == 0
+    assert stdout == "done\n"
+    assert stderr == ""
+    assert client.requests[0].messages[0]["content"].endswith(
+        "inspect repository"
+    )
+
+
 def test_headless_json_is_one_clean_machine_record(tmp_path):
     code, stdout, stderr, _client = _run(
         ["--output", "json", "summarize"], tmp_path,
@@ -95,6 +115,80 @@ def test_headless_json_is_one_clean_machine_record(tmp_path):
     }
 
 
+def test_headless_json_exposes_provider_call_breakdown_when_available(tmp_path):
+    result = RunResult(
+        status=RunStatus.COMPLETED,
+        final_text="done",
+        messages=(),
+        usage=TokenUsage(input_tokens=13, output_tokens=3),
+        session_id="provider-accounting",
+        active_agent="headless",
+        metadata={
+            "runtime": {
+                "provider_calls": 2,
+                "provider_attempts": 3,
+                "provider_calls_by_purpose": {"planning": 1, "coding": 1},
+                "provider_calls_by_model": {
+                    "openai-responses/gpt-planner": 1,
+                    "anthropic/claude-coder": 1,
+                },
+                "provider_usage_by_purpose": {
+                    "planning": {"input": 3, "output": 1, "total": 4},
+                    "coding": {"input": 10, "output": 2, "total": 12},
+                },
+                "provider_usage_by_model": {
+                    "openai-responses/gpt-planner": {
+                        "input": 3, "output": 1, "total": 4,
+                    },
+                    "anthropic/claude-coder": {
+                        "input": 10, "output": 2, "total": 12,
+                    },
+                },
+                "provider_cost_usd": 0.125,
+                "provider_cost_usd_by_purpose": {
+                    "planning": 0.025,
+                    "coding": 0.1,
+                },
+                "provider_cost_usd_by_model": {
+                    "openai-responses/gpt-planner": 0.025,
+                    "anthropic/claude-coder": 0.1,
+                },
+                "provider_cost_unknown_calls": 0,
+                "provider_cost_sources": {"provider": 1, "registry": 1},
+            },
+        },
+    )
+
+    code, stdout, stderr, _client = _run(
+        ["--output", "json", "summarize"],
+        tmp_path,
+        client=FakeClient(result=result),
+    )
+
+    payload = json.loads(stdout)
+    assert code == 0
+    assert stderr == ""
+    assert payload["provider"] == {
+        "calls": 2,
+        "attempts": 3,
+        "calls_by_purpose": {"planning": 1, "coding": 1},
+        "calls_by_model": result.metadata["runtime"]["provider_calls_by_model"],
+        "usage_by_purpose": result.metadata["runtime"]["provider_usage_by_purpose"],
+        "usage_by_model": result.metadata["runtime"]["provider_usage_by_model"],
+        "cost_usd": 0.125,
+        "cost_usd_by_purpose": {
+            "planning": 0.025,
+            "coding": 0.1,
+        },
+        "cost_usd_by_model": {
+            "openai-responses/gpt-planner": 0.025,
+            "anthropic/claude-coder": 0.1,
+        },
+        "cost_unknown_calls": 0,
+        "cost_sources": {"provider": 1, "registry": 1},
+    }
+
+
 def test_headless_jsonl_projects_runtime_events_then_result(tmp_path):
     code, stdout, stderr, _client = _run(
         ["--output", "jsonl", "fix"], tmp_path,
@@ -107,6 +201,24 @@ def test_headless_jsonl_projects_runtime_events_then_result(tmp_path):
     assert records[0]["event"] == "session.run.started"
     assert records[-1]["type"] == "result"
     assert records[-1]["status"] == "completed"
+
+
+def test_headless_jsonl_repairs_nonfinite_extension_event_payload(tmp_path):
+    client = FakeClient(event_payload={"latency": float("nan")})
+
+    code, stdout, stderr, _client = _run(
+        ["--output", "jsonl", "fix"],
+        tmp_path,
+        client=client,
+    )
+
+    records = [json.loads(
+        line,
+        parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
+    ) for line in stdout.splitlines()]
+    assert code == 0
+    assert stderr == ""
+    assert records[0]["payload"]["latency"] is None
 
 
 def test_headless_flags_map_to_native_run_request(tmp_path):
@@ -130,6 +242,19 @@ def test_headless_flags_map_to_native_run_request(tmp_path):
     assert request.metadata["permission_mode"] == "plan"
     assert request.metadata["max_turns"] == 7
     assert request.metadata["persist_session"] is False
+
+
+def test_headless_auto_permission_mode_does_not_enable_classifier(tmp_path):
+    """Headless keeps legacy auto semantics with zero interactive classifier."""
+    code, _stdout, _stderr, client = _run([
+        "--permission-mode", "auto",
+        "inspect",
+    ], tmp_path)
+
+    request = client.requests[0]
+    assert code == 0
+    assert request.metadata["permission_mode"] == "auto"
+    assert not request.metadata.get("auto_mode_classifier_enabled", False)
 
 
 def test_headless_file_and_attach_share_filepart_pipeline(tmp_path):
@@ -232,6 +357,7 @@ def test_headless_help_uses_injected_clean_stdout(tmp_path):
     code, stdout, stderr, client = _run(["--help"], tmp_path)
     assert code == 0
     assert stdout.startswith("usage: nz-coder run")
+    assert "--prompt TEXT" in stdout
     assert stderr == ""
     assert client.requests == []
 
@@ -280,10 +406,10 @@ def test_headless_native_path_completes_model_tool_model_without_agentloop(
         owns_client=False,
     )
     monkeypatch.setattr(
-        "nz_coder.runtime.native_sdk.resolve_model_runtime", lambda _request: runtime,
+        "nz_coder.runtime.execution.native_sdk.resolve_model_runtime", lambda _request: runtime,
     )
     monkeypatch.setattr(
-        "nz_coder.runtime.loop.AgentLoop.__init__",
+        "nz_coder.runtime.execution.loop.AgentLoop.__init__",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("headless must not construct AgentLoop")
         ),
@@ -337,7 +463,7 @@ def test_headless_native_image_reaches_vision_provider(monkeypatch, tmp_path):
         owns_client=False,
     )
     monkeypatch.setattr(
-        "nz_coder.runtime.native_sdk.resolve_model_runtime", lambda _request: runtime,
+        "nz_coder.runtime.execution.native_sdk.resolve_model_runtime", lambda _request: runtime,
     )
     stdout = io.StringIO()
     stderr = io.StringIO()

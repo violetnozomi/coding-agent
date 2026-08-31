@@ -7,7 +7,7 @@ import pytest
 
 from nz_coder.interface.questions import _parse_answer, build_terminal_question_asker
 from nz_coder.permissions import PermissionManager
-from nz_coder.subagent import _subagent_tools
+from nz_coder.runtime.agent.subagent import _subagent_tools
 from nz_coder.tools import dispatch, get_execution_mode, get_specs
 from nz_coder.tools.question import scoped_question_asker
 from nz_coder.tools import ToolOutput

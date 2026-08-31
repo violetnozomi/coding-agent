@@ -12,8 +12,8 @@ import time
 import weakref
 
 from nz_coder.intelligence.code_index import (
-    EXCLUDED_DIRS,
     PersistentCodeIndex,
+    is_excluded_directory,
     structural_match_score,
 )
 from nz_coder.intelligence.repository_graph import RepositoryGraph
@@ -36,6 +36,7 @@ class RepoIntelligenceState:
     worker_queue: int = 0
     watcher_backend: str = "none"
     lsp_augmented_calls: int = 0
+    languages: tuple[str, ...] = ()
 
 
 class RepoIntelligenceService:
@@ -125,6 +126,7 @@ class RepoIntelligenceService:
                 call_edges=metrics["call_edges"], worker_queue=0,
                 watcher_backend=previous.watcher_backend,
                 lsp_augmented_calls=previous.lsp_augmented_calls,
+                languages=self.index.languages(),
             )
             with self._lock:
                 self.graph = graph
@@ -155,7 +157,7 @@ class RepoIntelligenceService:
             return self.state
         state = future.result(timeout=timeout)
         config = self._deferred_watch
-        if config is not None:
+        if config is not None and state.status == "ready":
             self.start_watching(interval=config[0], debounce=config[1], max_files=config[2])
         return state
 
@@ -220,28 +222,48 @@ class RepoIntelligenceService:
         self, *, interval: float = 1.0, debounce: float = 0.5, max_files: int = 5000,
     ) -> None:
         """Start native events when available, otherwise adaptive polling."""
+        failure: Exception | None = None
         with self._lock:
             if self._closed or (self._watch_thread and self._watch_thread.is_alive()):
                 return
             self._watch_stop.clear()
             try:
-                import watchfiles  # noqa: F401
-                target = self._native_watch_loop
-                args = (
-                    max(0.01, float(interval)), max(0.0, float(debounce)),
-                    max(1, int(max_files)), self._indexed_fingerprints(),
+                if not self.workspace.is_dir():
+                    raise OSError("repository workspace is unavailable")
+                try:
+                    import watchfiles  # noqa: F401
+                except ImportError:
+                    initial = self._fingerprints(max(1, int(max_files)))
+                    target = self._poll_watch_loop
+                    args = (
+                        max(0.25, float(interval)),
+                        max(0.0, float(debounce)),
+                        max(1, int(max_files)),
+                        initial,
+                    )
+                    backend = "adaptive-polling"
+                else:
+                    target = self._native_watch_loop
+                    args = (
+                        max(0.01, float(interval)), max(0.0, float(debounce)),
+                        max(1, int(max_files)), self._indexed_fingerprints(),
+                    )
+                    backend = "watchfiles"
+                self._state = replace(self._state, watcher_backend=backend)
+                self._watch_thread = Thread(
+                    target=target, args=args, name="nz-repo-watch", daemon=True,
                 )
-                backend = "watchfiles"
-            except ImportError:
-                initial = self._fingerprints(max(1, int(max_files)))
-                target = self._poll_watch_loop
-                args = (max(0.25, float(interval)), max(0.0, float(debounce)), max(1, int(max_files)), initial)
-                backend = "adaptive-polling"
-            self._state = replace(self._state, watcher_backend=backend)
-            self._watch_thread = Thread(
-                target=target, args=args, name="nz-repo-watch", daemon=True,
+                self._watch_thread.start()
+            except Exception as exc:
+                failure = exc
+                self._state = replace(self._state, watcher_backend="none")
+                self._watch_thread = None
+        if failure is not None:
+            self._emit(
+                "repo_intelligence_watcher_failed",
+                error=f"{type(failure).__name__}: {failure}",
             )
-            self._watch_thread.start()
+            return
         self._emit("repo_intelligence_watcher_started", backend=backend)
 
     def _eligible_event(self, value: str) -> str | None:
@@ -250,7 +272,7 @@ class RepoIntelligenceService:
             relative = target.relative_to(self.workspace).as_posix()
         except (OSError, ValueError):
             return None
-        if any(part in EXCLUDED_DIRS for part in Path(relative).parts):
+        if any(is_excluded_directory(part) for part in Path(relative).parts):
             return None
         if target.exists() and not target.is_file():
             return None
@@ -265,6 +287,18 @@ class RepoIntelligenceService:
         try:
             from watchfiles import watch
 
+            # start_watching() returns after launching this thread, before the
+            # native backend has necessarily installed its OS watch. Reconcile
+            # that startup window so an immediate file create cannot vanish.
+            current = self._fingerprints(max_files)
+            startup_changes = tuple(sorted(
+                path
+                for path in set(known) | set(current)
+                if known.get(path) != current.get(path)
+            ))
+            if startup_changes:
+                self._apply_incremental(startup_changes, max_files)
+            known = current
             for changes in watch(
                 self.workspace, stop_event=self._watch_stop,
                 debounce=max(1, int(debounce * 1000)),
@@ -358,6 +392,7 @@ class RepoIntelligenceService:
                 call_edges=metrics["call_edges"], worker_queue=0,
                 watcher_backend=previous.watcher_backend,
                 lsp_augmented_calls=previous.lsp_augmented_calls,
+                languages=self.index.languages(),
             )
             with self._lock:
                 self.graph = graph
@@ -843,6 +878,28 @@ def _reset_registry_after_fork() -> None:
     _REGISTRY = {}
 
 
+def _start_watcher_after_prewarm(
+    future: Future,
+    service: RepoIntelligenceService,
+    *,
+    interval: float,
+    debounce: float,
+    max_files: int,
+) -> None:
+    """Start a deferred watcher only for a successfully built live index."""
+    try:
+        state = future.result()
+    except Exception:
+        return
+    if state.status != "ready":
+        return
+    service.start_watching(
+        interval=interval,
+        debounce=debounce,
+        max_files=max_files,
+    )
+
+
 if hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_child=_reset_registry_after_fork)
 
@@ -873,8 +930,12 @@ def workspace_repo_intelligence(
         _REGISTRY[key] = (service, 0)
     future = service.prewarm(max_files=max_files)
     if start_watcher:
-        future.add_done_callback(lambda _future: service.start_watching(
-            interval=interval, debounce=max(0.05, interval * 2), max_files=max_files,
+        future.add_done_callback(lambda completed: _start_watcher_after_prewarm(
+            completed,
+            service,
+            interval=interval,
+            debounce=max(0.05, interval * 2),
+            max_files=max_files,
         ))
     return service
 
@@ -884,13 +945,43 @@ def acquire_repo_intelligence(
 ) -> RepoIntelligenceService:
     """Lease the single service shared by all agents in a workspace."""
     key = Path(workspace).resolve()
-    service = workspace_repo_intelligence(
-        key, create=True, interval=interval, max_files=max_files, start_watcher=True,
-    )
-    assert service is not None
     with _REGISTRY_LOCK:
-        current, count = _REGISTRY[key]
-        _REGISTRY[key] = (current, count + 1)
+        existing = _REGISTRY.get(key)
+        if existing is not None:
+            service, count = existing
+            _REGISTRY[key] = (service, count + 1)
+            service._deferred_watch = (
+                interval,
+                max(0.05, interval * 2),
+                max_files,
+            )
+            start_watcher = service.state.status == "ready"
+            created = False
+        else:
+            service = RepoIntelligenceService(key)
+            service._deferred_watch = (
+                interval,
+                max(0.05, interval * 2),
+                max_files,
+            )
+            _REGISTRY[key] = (service, 1)
+            start_watcher = False
+            created = True
+    if created:
+        future = service.prewarm(max_files=max_files)
+        future.add_done_callback(lambda completed: _start_watcher_after_prewarm(
+            completed,
+            service,
+            interval=interval,
+            debounce=max(0.05, interval * 2),
+            max_files=max_files,
+        ))
+    elif start_watcher:
+        service.start_watching(
+            interval=interval,
+            debounce=max(0.05, interval * 2),
+            max_files=max_files,
+        )
     return service
 
 

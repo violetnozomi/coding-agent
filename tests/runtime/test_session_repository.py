@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import asyncio
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.core.state import RunState
-from nz_coder.runtime.session_repository import FileSessionRepository
+from nz_coder.runtime.session.session_repository import FileSessionRepository
 
 
 def _request(tmp_path, session_id="session-runtime"):

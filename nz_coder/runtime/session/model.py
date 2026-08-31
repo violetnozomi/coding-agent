@@ -19,6 +19,7 @@ class SessionStatus(str, Enum):
     COMPLETED = "completed"
     INTERRUPTED = "interrupted"
     CANCELLED = "cancelled"
+    BLOCKED = "blocked"
     ERROR = "error"
     ABORTED = "aborted"
     MAX_TURNS = "max_turns"

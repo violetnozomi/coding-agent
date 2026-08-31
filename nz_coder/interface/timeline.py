@@ -9,7 +9,7 @@ import re
 from rich.table import Table
 
 from nz_coder.interface.presentation_tokens import clip_terminal_text
-from nz_coder.message_schema import (
+from nz_coder.protocol.message_schema import (
     ASSISTANT_PARENT_KEY,
     MESSAGE_ID_KEY,
     PARTS_KEY,
@@ -17,7 +17,7 @@ from nz_coder.message_schema import (
     is_synthetic_user_message,
     rebind_fork_history as rebind_fork_history,
 )
-from nz_coder.sessions import active_session_id, list_sessions, load_session
+from nz_coder.state.sessions import active_session_id, list_sessions, load_session
 
 
 @dataclass(frozen=True)
@@ -439,7 +439,10 @@ def _message_text(message: dict) -> str:
         return "\n".join(parts).strip()
     if content is None:
         return ""
-    return json.dumps(content, ensure_ascii=False, default=str)
+    # Provider-native structured payloads are durable protocol state, not
+    # terminal prose. Serializing them here leaked orphan JSON tails after a
+    # resumed Session when the viewport started in the middle of the block.
+    return ""
 
 
 def _turn_diff(message: dict) -> tuple[tuple[str, ...], int, int]:

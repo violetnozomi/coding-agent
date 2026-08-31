@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import threading
 
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools import ToolOutput, scoped_tool_cancellation
 from nz_coder.tools.search import (
     _SearchInterrupted,
@@ -37,8 +37,8 @@ def test_grep_subprocess_is_terminated_on_tool_cancel(tmp_path, monkeypatch):
         started.set()
         return process
 
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake_rg))
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.subprocess.Popen", observed_popen)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake_rg))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.subprocess.Popen", observed_popen)
     cancel_event = threading.Event()
     interrupted = []
 
@@ -74,8 +74,8 @@ def test_glob_scan_observes_tool_cancel_between_paths(tmp_path, monkeypatch):
         release.wait(1)
         yield second
 
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: None)
-    monkeypatch.setattr("nz_coder.runtime.ripgrep._iter_fallback_paths", slow_files)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep._iter_fallback_paths", slow_files)
     cancel_event = threading.Event()
     result = []
 
@@ -98,7 +98,7 @@ def test_python_grep_fallback_returns_error_when_cancelled(tmp_path, monkeypatch
     (tmp_path / "source.py").write_text("needle\n", encoding="utf-8")
     cancel_event = threading.Event()
 
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
     cancel_event.set()
     with scoped_workdir(tmp_path), scoped_tool_cancellation(cancel_event):
         result = grep_search("needle")
@@ -134,6 +134,50 @@ def test_glob_basename_patterns_recurse_like_ripgrep_globset(tmp_path):
     assert "src/deep/nested.py" in recursive
 
 
+def test_glob_defaults_exclude_managed_state_and_repository_noise(tmp_path, monkeypatch):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("", encoding="utf-8")
+    for directory in (
+        ".nz-coder", ".git", ".pytest_cache", "node_modules",
+    ):
+        target = tmp_path / directory
+        target.mkdir()
+        (target / "private.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
+
+    with scoped_workdir(tmp_path):
+        result = glob_search("*")
+
+    assert "src/app.py" in result
+    assert ".nz-coder" not in result
+    assert ".git" not in result
+    assert ".pytest_cache" not in result
+    assert "node_modules" not in result
+def test_glob_explicit_private_scope_can_inspect_product_state(tmp_path, monkeypatch):
+    private = tmp_path / ".nz-coder"
+    private.mkdir()
+    (private / "trace.jsonl").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
+
+    with scoped_workdir(tmp_path):
+        result = glob_search("*.jsonl", ".nz-coder")
+
+    assert ".nz-coder/trace.jsonl" in result
+
+
+def test_glob_keeps_unmanaged_product_prefixed_directories(tmp_path, monkeypatch):
+    """Only NZ-Coder-managed paths are private by default."""
+    source = tmp_path / ".product-catalog"
+    source.mkdir()
+    (source / "catalog.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
+
+    with scoped_workdir(tmp_path):
+        result = glob_search("*")
+
+    assert ".product-catalog/catalog.py" in result
+
+
 def test_glob_returns_only_absolute_files_sorted_by_mtime_with_metadata(
     tmp_path,
     monkeypatch,
@@ -147,7 +191,7 @@ def test_glob_returns_only_absolute_files_sorted_by_mtime_with_metadata(
     newest.write_text("", encoding="utf-8")
     os.utime(old, (10, 10))
     os.utime(newest, (20, 20))
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
 
     with scoped_workdir(tmp_path):
         result = glob_search("*.py")
@@ -169,7 +213,7 @@ def test_glob_path_scope_braces_and_empty_result_match_infcode_shape(
     text_file = source / "notes.txt"
     python_file.write_text("", encoding="utf-8")
     text_file.write_text("", encoding="utf-8")
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
 
     with scoped_workdir(tmp_path):
         selected = glob_search("*.{py,txt}", "src")
@@ -241,8 +285,8 @@ def test_glob_ripgrep_process_is_terminated_on_tool_cancel(tmp_path, monkeypatch
         started.set()
         return process
 
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: str(fake_rg))
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.subprocess.Popen", observed_popen)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: str(fake_rg))
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.subprocess.Popen", observed_popen)
     cancel_event = threading.Event()
     result = []
 
@@ -260,7 +304,7 @@ def test_glob_ripgrep_process_is_terminated_on_tool_cancel(tmp_path, monkeypatch
     assert result == ["Error: Search cancelled"]
 
 
-def test_glob_system_ripgrep_positive_glob_overrides_ignore_rules(tmp_path):
+def test_glob_system_ripgrep_keeps_repository_metadata_private_by_default(tmp_path):
     if shutil.which("rg") is None:
         return
     (tmp_path / ".hidden.py").write_text("", encoding="utf-8")
@@ -275,5 +319,5 @@ def test_glob_system_ripgrep_positive_glob_overrides_ignore_rules(tmp_path):
 
     assert ".hidden.py" in files
     assert "ignored.py" in files
-    assert ".git/internal.py" in files
+    assert ".git/internal.py" not in files
     assert truncated is False

@@ -113,6 +113,7 @@ class ToolProjectionContext:
     stall_orchestrator: object | None
     after_result: Callable[[list[dict], object, str], None]
     available_result_tokens: Callable[[list[dict]], int] | None = None
+    runtime_state: object | None = None
 
     def __post_init__(self) -> None:
         for name in (

@@ -5,18 +5,20 @@ import asyncio
 
 from nz_coder.runtime.core.memory_context import MemoryExecutionContext, MemoryRecallState
 from nz_coder.runtime.core.verification_context import VerificationExecutionContext
-from nz_coder.runtime.services import ProductionCompletionVerifier, ProductionMemoryService
+from nz_coder.runtime.execution.services import ProductionCompletionVerifier, ProductionMemoryService
 
 
 class _Manager:
     def __init__(self) -> None:
         self.calls = 0
+        self.kwargs = {}
 
     def has_memories(self):
         return True
 
-    def build_prompt_block(self, **_kwargs):
+    def build_prompt_block(self, **kwargs):
         self.calls += 1
+        self.kwargs = kwargs
         return "remembered"
 
 
@@ -70,3 +72,123 @@ def test_completion_verifier_awaits_focused_review_callback() -> None:
 
 async def _async_value(value):
     return value
+
+
+def test_memory_service_threads_provider_runtime_to_rerank(monkeypatch) -> None:
+    from nz_coder.foundation import config
+
+    monkeypatch.setattr(config, "MEMORY_LLM_RERANK", True)
+    manager = _Manager()
+    provider = object()
+    capabilities = object()
+
+    def observer(_name, _payload):
+        return None
+
+    context = MemoryExecutionContext(
+        manager=manager,
+        session_id="s-provider",
+        client=object(),
+        model_id="native-model",
+        tracer=None,
+        lineage=None,
+        recall=MemoryRecallState(),
+        provider=provider,
+        capabilities=capabilities,
+        observer=observer,
+    )
+
+    ProductionMemoryService().prompt_block(context, "query")
+
+    assert manager.kwargs["rerank_provider"] is provider
+    assert manager.kwargs["rerank_capabilities"] is capabilities
+    assert manager.kwargs["rerank_observer"] is observer
+
+
+def test_memory_finalize_threads_provider_runtime_to_extraction(monkeypatch) -> None:
+    import nz_coder.state.memory as memory_module
+    from nz_coder.foundation import config
+
+    monkeypatch.setattr(config, "MEMORY_LLM_EXTRACT", True)
+    monkeypatch.setattr(config, "MEMORY_ASYNC_WRITE", False)
+    captured = {}
+
+    async def fake_pipeline(_session_id, _messages, **kwargs):
+        captured.update(kwargs)
+        return {"status": "ok", "saved_count": 0}
+
+    monkeypatch.setattr(memory_module, "run_auto_memory_pipeline_async", fake_pipeline)
+    provider = object()
+    capabilities = object()
+
+    def observer(_name, _payload):
+        return None
+
+    context = MemoryExecutionContext(
+        manager=_Manager(),
+        session_id="s-extract",
+        client=object(),
+        model_id="native-model",
+        tracer=None,
+        lineage=None,
+        recall=MemoryRecallState(),
+        provider=provider,
+        capabilities=capabilities,
+        observer=observer,
+    )
+
+    asyncio.run(ProductionMemoryService().finalize(
+        context,
+        [{"role": "user", "content": "Remember this preference."}],
+        "completed",
+    ))
+
+    assert captured["provider"] is provider
+    assert captured["capabilities"] is capabilities
+    assert captured["observer"] is observer
+
+
+def test_llm_memory_finalize_is_not_detached_from_run_accounting(
+    monkeypatch,
+) -> None:
+    """Provider-backed memory work must settle inside the terminal boundary."""
+    import nz_coder.state.memory as memory_module
+    import nz_coder.runtime.execution.services as services_module
+    from nz_coder.foundation import config
+
+    monkeypatch.setattr(config, "MEMORY_LLM_EXTRACT", True)
+    monkeypatch.setattr(config, "MEMORY_ASYNC_WRITE", True)
+    captured = []
+    detached = []
+
+    async def fake_pipeline(_session_id, _messages, **_kwargs):
+        captured.append("settled")
+        return {"status": "ok", "saved_count": 0}
+
+    def reject_background(coro):
+        detached.append(True)
+        coro.close()
+
+    monkeypatch.setattr(memory_module, "run_auto_memory_pipeline_async", fake_pipeline)
+    monkeypatch.setattr(services_module, "start_background_coro", reject_background)
+    context = MemoryExecutionContext(
+        manager=_Manager(),
+        session_id="s-accounted-extract",
+        client=object(),
+        model_id="native-model",
+        tracer=None,
+        lineage=None,
+        recall=MemoryRecallState(),
+        provider=object(),
+        capabilities=object(),
+        observer=lambda _name, _payload: None,
+    )
+
+    asyncio.run(ProductionMemoryService().finalize(
+        context,
+        [{"role": "user", "content": "Remember the Provider boundary."}],
+        "completed",
+    ))
+
+    assert captured == ["settled"]
+    assert detached == []

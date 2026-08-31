@@ -9,9 +9,9 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
-from nz_coder.runtime.workdir import current_workdir
-from nz_coder.sessions import session_plan_path
-from nz_coder.tools import register
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.state.sessions import session_plan_path
+from nz_coder.tools import ToolOutput, register
 from nz_coder.tools.files import _safe_path
 
 
@@ -73,6 +73,8 @@ class PlanModeController:
             permissions.mode if permissions.mode != "plan" else "default"
         )
         self._pending_build_mode: str | None = None
+        self._pending_terminal_summary = ""
+        self._pending_exit_terminal = False
 
     @staticmethod
     def _validated_path(path: Path) -> Path:
@@ -137,6 +139,8 @@ class PlanModeController:
 
         self._build_mode = self.permissions.mode
         self._pending_build_mode = None
+        self._pending_terminal_summary = ""
+        self._pending_exit_terminal = False
         _atomic_write(self._validated_path(self.plan_path), "")
         self.permissions.mode = "plan"
         return (
@@ -175,13 +179,18 @@ class PlanModeController:
 
         digest = hashlib.sha256(content.strip().encode("utf-8")).hexdigest()[:16]
         approve_label = "Approve Plan (Recommended)"
+        implement_label = "Implement in This Session"
         status, answer = self._ask({
             "header": "Plan ready",
             "question": f"{title[:200]}\n\n{summary[:1200]}",
             "options": [
                 {
                     "label": approve_label,
-                    "description": "Approve this plan and continue in Build mode.",
+                    "description": "Approve and finish this planning run.",
+                },
+                {
+                    "label": implement_label,
+                    "description": "Approve and immediately continue implementation.",
                 },
                 {
                     "label": "Keep Planning",
@@ -197,7 +206,7 @@ class PlanModeController:
                 "User dismissed plan approval. Stay in Plan mode and ask what should "
                 "change before calling plan_exit again."
             )
-        if answer != approve_label:
+        if answer not in {approve_label, implement_label}:
             detail = f" Response: {answer}" if answer else ""
             return f"Plan was not approved; remain in Plan mode.{detail}"
 
@@ -215,11 +224,37 @@ class PlanModeController:
             )
 
         self._pending_build_mode = self._build_mode
-        return (
-            f"Plan approved at {self._display_path()} (sha256:{digest}). "
-            "Build mode will activate after this tool batch. Do not call implementation "
-            "tools in the same response."
+        self._pending_exit_terminal = answer == approve_label
+        self._pending_terminal_summary = (
+            f"Plan approved: {title}\n\n{summary}\n\n"
+            f"Plan file: `{self._display_path()}`"
         )
+        return ToolOutput(
+            (
+                f"Plan approved at {self._display_path()} (sha256:{digest}). "
+                "Build mode will activate after this tool batch. Do not call "
+                "implementation tools in the same response."
+            ),
+            title="Plan approved",
+            metadata={
+                "plan_exit_approved": True,
+                "plan_exit_terminal": self._pending_exit_terminal,
+                "title": title,
+                "summary": summary,
+                "plan_path": self._display_path(),
+                "plan_digest": digest,
+            },
+        )
+
+    @property
+    def pending_terminal_summary(self) -> str:
+        """Return the approved product-authored terminal presentation."""
+        return self._pending_terminal_summary
+
+    @property
+    def pending_exit_terminal(self) -> bool:
+        """Return whether approval ends planning instead of continuing Build."""
+        return self._pending_exit_terminal
 
     def apply_pending_mode(self) -> tuple[str, str] | None:
         """Apply an approved exit only after every call in its tool batch completes."""
@@ -306,6 +341,7 @@ register(
     },
     handler=plan_enter,
     execution="serial",
+    plan_mode_allowed=True,
 )
 
 register(
@@ -326,6 +362,7 @@ register(
     },
     handler=write_plan,
     execution="serial",
+    plan_mode_allowed=True,
 )
 
 register(
@@ -348,4 +385,5 @@ register(
     },
     handler=plan_exit,
     execution="serial",
+    plan_mode_allowed=True,
 )

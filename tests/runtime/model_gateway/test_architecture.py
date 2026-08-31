@@ -30,7 +30,7 @@ def test_agent_core_has_one_model_sdk_boundary() -> None:
         for scope in SCOPES
         for path in scope.rglob("*.py")
         if "model_gateway" not in path.parts
-    ] + [ROOT / "nz_coder" / "vision.py"]
+    ] + [ROOT / "nz_coder" / "capabilities" / "vision.py"]
     for path in files:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):

@@ -5,7 +5,7 @@ import json
 import uuid
 
 from nz_coder.permissions import PermissionManager
-from nz_coder.runtime.tool_executor import ToolExecutionResult, ToolExecutor
+from nz_coder.runtime.execution.tool_executor import ToolExecutionResult, ToolExecutor
 import nz_coder.tools.bash  # noqa: F401  # register the canonical bash tool
 
 

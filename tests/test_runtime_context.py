@@ -7,30 +7,31 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Lock, get_ident
 from types import MethodType
 
-from nz_coder import config
-from nz_coder.memory import MemoryManager, bind_memory_manager, current_memory_manager
-from nz_coder.runtime.async_utils import start_background_coro
-from nz_coder.runtime.loop import (
+from nz_coder.foundation import config
+from nz_coder.state.memory import MemoryManager, bind_memory_manager, current_memory_manager
+from nz_coder.foundation.async_utils import start_background_coro
+from nz_coder.runtime.execution.loop import (
     AgentLoop,
     _execute_concurrent,
     _execute_scheduled,
     _execute_scheduled_async,
 )
-from nz_coder.runtime.workdir import current_derived_path, current_workdir, scoped_workdir
-from nz_coder.runtime.tool_executor import is_write_tool
-from nz_coder.sessions import active_session_id
-from nz_coder.skills import SkillLoader, current_skill_loader
-from nz_coder.subagent import _PARENT_CONTEXT
+from nz_coder.runtime.process.workdir import current_derived_path, current_workdir, scoped_workdir
+from nz_coder.runtime.execution.tool_executor import is_write_tool
+from nz_coder.state.sessions import active_session_id
+from nz_coder.state.skills import SkillLoader, current_skill_loader
+from nz_coder.runtime.agent.subagent import _PARENT_CONTEXT
 from nz_coder.tools import (
     TOOL_EXECUTION_MODES,
     TOOL_HANDLERS,
+    TOOL_SIDE_EFFECTS,
     TOOL_SPECS,
     get_execution_mode,
     register,
 )
 from nz_coder.tools.files import _get_change_tracker, _get_txn, bind_tool_state, write_file
 from nz_coder.tools.scratchpad import scratchpad
-from nz_coder.transaction import TransactionManager
+from nz_coder.state.transaction import TransactionManager
 
 
 class _Tracker:
@@ -98,6 +99,189 @@ def test_nested_scoped_workdir_restores_parent_context(tmp_path):
             assert current_workdir() == inner.resolve()
         assert current_workdir() == outer.resolve()
     assert current_workdir() == original
+
+
+def test_pre_edit_contract_keeps_investigation_tools_visible(monkeypatch):
+    from types import SimpleNamespace
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    state.task_mode = "feature"
+    state.verification_contract = {"command": "pytest tests/test_app.py"}
+    state.investigation_calls_since_edit = 6
+    agent = AgentLoop.__new__(AgentLoop)
+    agent.runtime_state = state
+    agent._structured_output_active_repair = ""
+    agent.repo_intelligence = SimpleNamespace(semantic_available=True)
+    agent.tool_allowlist = None
+    agent.agent_graph = None
+    agent.provider_id = "openai-compatible"
+    agent.model_id = "test-model"
+    monkeypatch.setattr(
+        "nz_coder.runtime.execution.loop.get_specs",
+        lambda: [
+            {"type": "function", "function": {
+                "name": name,
+                "description": name,
+                "parameters": {"type": "object", "properties": {}},
+            }}
+            for name in ("read_file", "repo_map", "edit_file", "bash", "todo")
+        ],
+    )
+
+    names = {
+        item["function"]["name"] for item in agent._active_tool_specs()
+    }
+
+    assert {"read_file", "repo_map", "edit_file", "bash", "todo"} <= names
+
+
+def test_localized_pre_edit_scope_keeps_investigation_without_contract(monkeypatch):
+    """Localization is evidence, not authority to withdraw distinct tools."""
+    from types import SimpleNamespace
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    state.task_mode = "bugfix"
+    state.read_files = ["src/parser.py", "tests/test_parser.py"]
+    state.investigation_calls_since_edit = 6
+    agent = AgentLoop.__new__(AgentLoop)
+    agent.runtime_state = state
+    agent._structured_output_active_repair = ""
+    agent.repo_intelligence = SimpleNamespace(semantic_available=True)
+    agent.tool_allowlist = None
+    agent.agent_graph = None
+    agent.provider_id = "openai-compatible"
+    agent.model_id = "test-model"
+    monkeypatch.setattr(
+        "nz_coder.runtime.execution.loop.get_specs",
+        lambda: [
+            {"type": "function", "function": {
+                "name": name,
+                "description": name,
+                "parameters": {"type": "object", "properties": {}},
+            }}
+            for name in ("read_file", "repo_map", "edit_file", "bash", "todo")
+        ],
+    )
+
+    names = {
+        item["function"]["name"] for item in agent._active_tool_specs()
+    }
+
+    assert {"read_file", "repo_map", "edit_file", "bash", "todo"} <= names
+
+
+def test_nominal_closure_keeps_full_worker_tool_surface(monkeypatch):
+    """Budget convergence must not hide investigation or dispatch schemas."""
+    from types import SimpleNamespace
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    agent = AgentLoop.__new__(AgentLoop)
+    agent.runtime_state = state
+    agent._structured_output_active_repair = ""
+    agent.repo_intelligence = SimpleNamespace(semantic_available=True)
+    agent.tool_allowlist = None
+    agent.agent_graph = None
+    agent.provider_id = "openai-compatible"
+    agent.model_id = "test-model"
+    expected = {"read_file", "grep_search", "repo_map", "task", "edit_file", "bash"}
+    monkeypatch.setattr(
+        "nz_coder.runtime.execution.loop.get_specs",
+        lambda: [
+            {"type": "function", "function": {
+                "name": name,
+                "description": name,
+                "parameters": {"type": "object", "properties": {}},
+            }}
+            for name in expected
+        ],
+    )
+
+    for phase in ("closure_repair", "closure_finalize"):
+        state.work_phase = phase
+        names = {item["function"]["name"] for item in agent._active_tool_specs()}
+
+        assert expected <= names
+
+
+def test_contract_led_task_keeps_bash_schema_before_first_mutation(monkeypatch):
+    """A declared check must not hide the shell needed to inspect its harness."""
+    from types import SimpleNamespace
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    state.task_mode = "feature"
+    state.verification_contract = {"command": "pytest tests/test_app.py"}
+    agent = AgentLoop.__new__(AgentLoop)
+    agent.runtime_state = state
+    agent._structured_output_active_repair = ""
+    agent.repo_intelligence = SimpleNamespace(semantic_available=True)
+    agent.tool_allowlist = None
+    agent.agent_graph = None
+    agent.provider_id = "openai-compatible"
+    agent.model_id = "test-model"
+    monkeypatch.setattr(
+        "nz_coder.runtime.execution.loop.get_specs",
+        lambda: [
+            {"type": "function", "function": {
+                "name": name,
+                "description": name,
+                "parameters": {"type": "object", "properties": {}},
+            }}
+            for name in ("read_file", "edit_file", "bash")
+        ],
+    )
+
+    before_edit = {
+        item["function"]["name"] for item in agent._active_tool_specs()
+    }
+    state.mutation_generation = 1
+    after_edit = {
+        item["function"]["name"] for item in agent._active_tool_specs()
+    }
+
+    assert "bash" in before_edit
+    assert "bash" in after_edit
+
+
+def test_strict_bash_schema_does_not_advertise_package_installation(monkeypatch):
+    """Provider-facing tool guidance must agree with strict runtime authority."""
+    from types import SimpleNamespace
+
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    agent = AgentLoop.__new__(AgentLoop)
+    agent.runtime_state = RuntimeState()
+    agent._structured_output_active_repair = ""
+    agent.repo_intelligence = SimpleNamespace(semantic_available=True)
+    agent.tool_allowlist = None
+    agent.agent_graph = None
+    agent.provider_id = "openai-compatible"
+    agent.model_id = "test-model"
+    monkeypatch.setattr(
+        "nz_coder.runtime.execution.loop.get_specs",
+        lambda: [{
+            "type": "function",
+            "function": {
+                "name": "bash",
+                "description": "Run tests or install packages.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }],
+    )
+
+    with scoped_runtime_overrides(strict_local_tools=True):
+        strict_description = agent._active_tool_specs()[0]["function"][
+            "description"
+        ]
+    normal_description = agent._active_tool_specs()[0]["function"]["description"]
+
+    assert "installation is forbidden" in strict_description
+    assert "direct narrow pytest" in strict_description
+    assert normal_description == "Run tests or install packages."
 
 
 def test_agent_loops_bind_their_own_runtime_context(tmp_path):
@@ -365,4 +549,5 @@ def test_tool_execution_metadata_is_idempotent_and_defaults_to_serial():
     finally:
         TOOL_HANDLERS.pop(name, None)
         TOOL_EXECUTION_MODES.pop(name, None)
+        TOOL_SIDE_EFFECTS.pop(name, None)
         TOOL_SPECS[:] = [spec for spec in TOOL_SPECS if spec["function"]["name"] != name]

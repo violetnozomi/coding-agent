@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import pickle
 import time
 from pathlib import Path
 
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 class _AllowPermissions:
@@ -28,7 +29,7 @@ def _mixed_calls():
 
 
 def test_tool_executor_records_duration_without_changing_result_contract():
-    from nz_coder.runtime.tool_executor import ToolExecutor
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
     from nz_coder.tools import register
 
     def slow_probe():
@@ -59,7 +60,7 @@ def test_tool_executor_records_duration_without_changing_result_contract():
 
 
 def test_sync_and_async_schedulers_report_parallel_segments_and_barrier_wait():
-    from nz_coder.runtime.loop import _execute_scheduled, _execute_scheduled_async
+    from nz_coder.runtime.execution.loop import _execute_scheduled, _execute_scheduled_async
 
     def predicate(call):
         return call["function"]["name"] == "read"
@@ -92,7 +93,7 @@ def test_sync_and_async_schedulers_report_parallel_segments_and_barrier_wait():
 
 
 def test_recovery_reports_streak_reset_reason_without_changing_observe_result():
-    from nz_coder.recovery import RecoveryState
+    from nz_coder.runtime.verification.recovery import RecoveryState
 
     recovery = RecoveryState()
     assert recovery.observe_tool_call("read_file", {"path": "a.py"}, threshold=3) == {
@@ -117,7 +118,7 @@ def test_recovery_reports_streak_reset_reason_without_changing_observe_result():
 def test_agent_trace_and_summary_expose_a013_observability(tmp_path):
     from nz_coder.loop import AgentLoop
     from nz_coder.tools import register
-    from nz_coder.trace import TraceRecorder, summarize_trace
+    from nz_coder.state.trace import TraceRecorder, summarize_trace
 
     def read_probe():
         time.sleep(0.01)
@@ -188,7 +189,7 @@ def test_agent_trace_and_summary_expose_a013_observability(tmp_path):
 
 
 def test_trace_summary_exposes_model_wait_context_and_child_span(tmp_path):
-    from nz_coder.trace import TraceRecorder, summarize_trace
+    from nz_coder.state.trace import TraceRecorder, summarize_trace
 
     tracer = TraceRecorder(trace_dir=tmp_path / "traces", enabled=True)
     tracer.log("run_start")
@@ -223,8 +224,78 @@ def test_trace_summary_exposes_model_wait_context_and_child_span(tmp_path):
     assert "Child agent wait" in summary
 
 
+def test_trace_summary_zero_recent_limit_emits_no_event_rows(tmp_path):
+    from nz_coder.state.trace import TraceRecorder, summarize_trace
+
+    tracer = TraceRecorder(trace_dir=tmp_path / "traces", enabled=True)
+    tracer.log("run_start")
+    tracer.log("run_end", status="completed")
+
+    summary = summarize_trace(tracer.path, max_events=0)
+
+    assert summary.endswith("=== Recent events ===")
+
+
+def test_trace_summary_skips_structurally_corrupt_numeric_rows(tmp_path):
+    """Hand-edited or old extension rows must not break trace diagnostics."""
+    from nz_coder.state.trace import summarize_trace
+
+    path = tmp_path / "trace.jsonl"
+    rows = [
+        [],
+        {"event": "run_start", "ts": "bad"},
+        {"event": "llm_request", "token_estimate": "bad", "ts": "bad"},
+        {
+            "event": "llm_response",
+            "duration_ms": "bad",
+            "first_token_ms": "bad",
+            "attempts": "bad",
+            "ts": "bad",
+        },
+        {"event": "tool_call", "name": "read_file", "duration_ms": "bad"},
+        {
+            "event": "tool_batch_completed",
+            "peak_concurrency": "bad",
+            "wall_ms": "bad",
+            "barrier_wait_ms": "bad",
+        },
+        {"event": "run_end", "ts": "bad"},
+    ]
+    path.write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    summary = summarize_trace(path)
+
+    assert "Total tool calls : 1" in summary
+    assert "Model calls      : 1" in summary
+    assert "Tool scheduling  : batches=1 peak=0" in summary
+
+
+def test_latest_trace_tolerates_concurrent_rotation_deletion(tmp_path, monkeypatch):
+    from nz_coder.state.trace import latest_trace
+
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    stale = trace_dir / "stale.jsonl"
+    keep = trace_dir / "keep.jsonl"
+    stale.write_text("{}\n", encoding="utf-8")
+    keep.write_text("{}\n", encoding="utf-8")
+    original_stat = Path.stat
+
+    def racing_stat(path, *args, **kwargs):
+        if path == stale:
+            raise FileNotFoundError(str(path))
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", racing_stat)
+
+    assert latest_trace(trace_dir=trace_dir) == keep
+
+
 def test_trace_write_failure_is_best_effort(tmp_path, monkeypatch):
-    from nz_coder.trace import TraceRecorder
+    from nz_coder.state.trace import TraceRecorder
 
     tracer = TraceRecorder(trace_dir=tmp_path / "traces", enabled=True)
     original_open = Path.open
@@ -240,3 +311,70 @@ def test_trace_write_failure_is_best_effort(tmp_path, monkeypatch):
 
     assert tracer.dropped_events == 1
     assert tracer.last_write_error == "trace disk unavailable"
+
+
+def test_trace_sanitizes_recursive_and_unbounded_extension_metadata(tmp_path):
+    """A third-party tool payload must not recurse forever or explode trace size."""
+    from nz_coder.state.trace import TraceRecorder
+
+    recursive = {"items": list(range(1000))}
+    recursive["self"] = recursive
+    tracer = TraceRecorder(trace_dir=tmp_path / "traces", enabled=True)
+
+    tracer.log("extension_metadata", metadata=recursive)
+
+    row = json.loads(tracer.path.read_text(encoding="utf-8"))
+    assert row["metadata"]["self"] == "[circular reference]"
+    assert len(row["metadata"]["items"]) < 250
+    assert row["metadata"]["items"][-1].endswith("more items)")
+
+
+def test_trace_replaces_nonfinite_numbers_with_strict_json_null(tmp_path):
+    """Public JSONL trajectories remain consumable by strict JSON parsers."""
+    from nz_coder.state.trace import TraceRecorder
+
+    tracer = TraceRecorder(trace_dir=tmp_path / "traces", enabled=True)
+    tracer.log(
+        "provider_metrics",
+        duration_ms=float("nan"),
+        usage={"cost": float("inf")},
+    )
+
+    def reject_constant(value):
+        raise ValueError(f"non-standard JSON constant: {value}")
+
+    row = json.loads(
+        tracer.path.read_text(encoding="utf-8"),
+        parse_constant=reject_constant,
+    )
+    assert row["duration_ms"] is None
+    assert row["usage"]["cost"] is None
+
+
+def test_trace_serialization_failure_never_escapes_agent_control_flow(tmp_path):
+    """Observability is best effort even when an extension object has a bad repr."""
+    from nz_coder.state.trace import TraceRecorder
+
+    class BrokenString:
+        def __str__(self):
+            raise RuntimeError("broken repr")
+
+    tracer = TraceRecorder(trace_dir=tmp_path / "traces", enabled=True)
+
+    tracer.log("extension_metadata", value=BrokenString())
+
+    assert tracer.dropped_events == 1
+    assert "broken repr" in str(tracer.last_write_error)
+
+
+def test_trace_recorder_can_cross_spawn_process_boundary(tmp_path):
+    from nz_coder.state.trace import TraceRecorder
+
+    tracer = TraceRecorder(trace_dir=tmp_path / "traces", enabled=True)
+
+    restored = pickle.loads(pickle.dumps(tracer))
+    restored.log("spawn_child", status="ok")
+
+    row = json.loads(tracer.path.read_text(encoding="utf-8"))
+    assert row["event"] == "spawn_child"
+    assert row["status"] == "ok"

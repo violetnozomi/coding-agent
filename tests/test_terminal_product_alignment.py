@@ -4,13 +4,13 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from nz_coder import config
+from nz_coder.foundation import config
 from nz_coder.interface.commands import CommandContext, build_default_registry
 from nz_coder.interface.commands.handlers import core
 from nz_coder.interface.preferences import load_terminal_preferences
 from nz_coder.interface.terminal_input import TerminalInput
 from nz_coder.providers.models import DiscoveredModel, ModelSelection
-from nz_coder.runtime.workdir import scoped_workdir
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 class Console:

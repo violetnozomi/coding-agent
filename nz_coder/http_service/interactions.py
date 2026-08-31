@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from nz_coder.session_events import SessionEventBus
+from nz_coder.protocol.session_events import SessionEventBus
 
 
 class InteractionNotFoundError(LookupError):

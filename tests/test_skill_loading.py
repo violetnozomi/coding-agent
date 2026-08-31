@@ -60,8 +60,8 @@ def test_skill_file_sampling_observes_tool_cancel(tmp_path, monkeypatch):
         release.wait(1)
         yield second
 
-    monkeypatch.setattr("nz_coder.runtime.ripgrep.shutil.which", lambda _name: None)
-    monkeypatch.setattr("nz_coder.runtime.ripgrep._iter_fallback_paths", slow_files)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.capabilities.ripgrep._iter_fallback_paths", slow_files)
     cancel_event = threading.Event()
     result = []
 
