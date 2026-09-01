@@ -11,6 +11,8 @@ from nz_coder.http_service.manager import SessionManager
 from nz_coder.interface.run_renderer import TerminalRunRenderer
 from nz_coder.protocol.message_schema import (
     attach_message_identity,
+    legacy_messages,
+    message_records,
     set_assistant_error,
 )
 from nz_coder.protocol.public_error import (
@@ -143,6 +145,25 @@ def test_provider_secret_not_present_in_trace(tmp_path):
     _assert_private_diagnostic_absent(recorder.path.read_text(encoding="utf-8"))
 
 
+def test_provider_extra_secret_not_present_in_trace(tmp_path):
+    recorder = TraceRecorder(trace_dir=tmp_path / "traces")
+    recorder.log(
+        "provider_result",
+        reasoning_content=_SECRET,
+        provider_extra={"raw_prompt": "PRIVATE-PROMPT"},
+        part={
+            "type": "reasoning",
+            "text": _SECRET,
+            "internal": True,
+            "visible": False,
+        },
+    )
+
+    _assert_private_diagnostic_absent(
+        recorder.path.read_text(encoding="utf-8")
+    )
+
+
 def _exercise_finalize_secondary_failure():
     from nz_coder.runtime.execution.runner import AgentRunner
 
@@ -248,6 +269,157 @@ def test_provider_secret_not_present_in_http_snapshot(tmp_path):
         _assert_private_diagnostic_absent(session.attach_snapshot())
     finally:
         manager.close()
+
+
+def _provider_private_assistant() -> dict:
+    assistant = {
+        "role": "assistant",
+        "content": "safe answer",
+        "reasoning_content": _SECRET,
+        "provider_extra": {
+            "authorization": "Bearer SECRET-123",
+            "raw_prompt": "PRIVATE-PROMPT",
+        },
+        "tool_calls": [{
+            "id": "call-private",
+            "type": "function",
+            "function": {"name": "read_file", "arguments": "{}"},
+            "provider_extra": {"thoughtSignature": _SECRET},
+        }],
+    }
+    attach_message_identity(assistant, session_id="session-secret")
+    return assistant
+
+
+def test_provider_extra_secret_not_present_in_snapshot():
+    assistant = _provider_private_assistant()
+    assistant["_nz_parts"].append({
+        "id": "part-private-reasoning",
+        "message_id": assistant["_nz_message_id"],
+        "type": "reasoning",
+        "text": _SECRET,
+        "internal": True,
+        "visible": False,
+    })
+
+    snapshot = {"messages": message_records([assistant], "session-secret")}
+
+    _assert_private_diagnostic_absent(snapshot)
+    assert snapshot["messages"][0]["info"]["content"] == "safe answer"
+
+
+def test_provider_extra_secret_not_present_in_session_event():
+    bus = SessionEventBus(session_id="session-secret")
+    try:
+        event = bus.publish("message.part.updated", {
+            "message_id": "msg-secret",
+            "reasoning_content": _SECRET,
+            "provider_extra": {"authorization": "Bearer SECRET-123"},
+            "part": {
+                "id": "part-private",
+                "type": "reasoning",
+                "text": _SECRET,
+                "internal": True,
+                "visible": False,
+                "_nz_provider_metadata": {"raw_prompt": "PRIVATE-PROMPT"},
+            },
+        })
+
+        _assert_private_diagnostic_absent(event.to_dict())
+    finally:
+        bus.close()
+
+
+def test_provider_extra_secret_not_present_in_export():
+    exported = legacy_messages([_provider_private_assistant()])
+
+    _assert_private_diagnostic_absent(exported)
+    assert exported == [{
+        "role": "assistant",
+        "content": "safe answer",
+        "tool_calls": [{
+            "id": "call-private",
+            "type": "function",
+            "function": {"name": "read_file", "arguments": "{}"},
+        }],
+    }]
+
+
+def test_raw_reasoning_is_internal_by_default():
+    assistant = {"role": "assistant", "content": "safe answer"}
+    attach_message_identity(assistant, session_id="session-secret")
+    events = []
+    processor = SessionProcessor(
+        assistant,
+        publish=lambda event, properties: events.append((event, properties)),
+    )
+
+    part = processor.add_reasoning(_SECRET)
+
+    assert part is not None
+    assert part["internal"] is True
+    assert part["visible"] is False
+    assert events == []
+    _assert_private_diagnostic_absent(
+        message_records([assistant], "session-secret")
+    )
+
+
+def test_raw_reasoning_requires_policy_before_public_projection():
+    assistant = _provider_private_assistant()
+    processor = SessionProcessor(assistant)
+    processor.add_reasoning(_SECRET)
+
+    public = message_records([assistant], "session-secret")[0]
+
+    assert public["info"]["content"] == "safe answer"
+    assert not any(part.get("type") == "reasoning" for part in public["parts"])
+    _assert_private_diagnostic_absent(public)
+
+
+def test_tool_provider_metadata_is_not_exposed_publicly():
+    assistant = _provider_private_assistant()
+    processor = SessionProcessor(assistant)
+    processor.register_tool_calls(assistant["tool_calls"])
+
+    durable = next(
+        part for part in assistant["_nz_parts"] if part["type"] == "tool"
+    )
+    public = message_records([assistant], "session-secret")[0]
+    projected = next(part for part in public["parts"] if part["type"] == "tool")
+
+    assert durable["_nz_provider_metadata"]["thoughtSignature"] == _SECRET
+    assert "_nz_provider_metadata" not in projected
+    assert "metadata" not in projected
+    _assert_private_diagnostic_absent(public)
+
+
+def test_private_provider_metadata_survives_provider_round_trip():
+    from nz_coder.runtime.conversation.message_projection import (
+        project_provider_messages,
+    )
+
+    assistant = _provider_private_assistant()
+    projected = project_provider_messages(
+        [
+            assistant,
+            {
+                "role": "tool",
+                "tool_call_id": "call-private",
+                "content": "ok",
+            },
+        ],
+        capabilities=SimpleNamespace(
+            preserve_reasoning_content=True,
+            supports_image_input=False,
+        ),
+    )[0]
+
+    assert projected["reasoning_content"] == _SECRET
+    assert projected["provider_extra"]["raw_prompt"] == "PRIVATE-PROMPT"
+    assert projected["tool_calls"][0]["provider_extra"][
+        "thoughtSignature"
+    ] == _SECRET
 
 
 def test_provider_secret_not_rendered_locally():

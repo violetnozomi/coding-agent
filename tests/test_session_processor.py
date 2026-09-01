@@ -48,10 +48,14 @@ def test_processor_persists_complete_step_and_tool_lifecycle():
 
     parts = message_records([message], "session-a")[0]["parts"]
     assert {part["type"] for part in parts} == {
-        "step-start", "reasoning", "tool", "step-finish",
+        "step-start", "tool", "step-finish",
     }
-    reasoning = next(part for part in parts if part["type"] == "reasoning")
-    assert reasoning["text"] == "private chain"
+    private_reasoning = next(
+        part for part in message["_nz_parts"] if part["type"] == "reasoning"
+    )
+    assert private_reasoning["internal"] is True
+    assert private_reasoning["visible"] is False
+    assert private_reasoning["text"] == "private chain"
     tool = next(part for part in parts if part["type"] == "tool")
     assert tool["state"]["status"] == "completed"
     assert tool["state"]["input"] == {"path": "a.py"}
@@ -231,13 +235,16 @@ def test_processor_preserves_provider_and_result_metadata():
     )
 
     tool = next(part for part in message["_nz_parts"] if part["type"] == "tool")
-    assert tool["metadata"] == {"thoughtSignature": "provider-signature"}
+    assert tool["_nz_provider_metadata"] == {
+        "thoughtSignature": "provider-signature",
+    }
     assert tool["state"]["title"] == "Question dismissed"
     assert tool["state"]["metadata"] == {"answers": [], "dismissed": True}
 
     projected = message_records([message], "session-a")[0]["parts"]
     persisted = next(part for part in projected if part["type"] == "tool")
-    assert persisted["metadata"] == {"thoughtSignature": "provider-signature"}
+    assert "_nz_provider_metadata" not in persisted
+    assert "metadata" not in persisted
     assert persisted["state"]["metadata"]["dismissed"] is True
 
 

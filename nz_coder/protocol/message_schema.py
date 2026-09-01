@@ -55,6 +55,9 @@ INTERACTION_RUN_ID_KEY = "_nz_interaction_run_id"
 VISIBLE_KEY = "_nz_visible"
 INTERNAL_KEY = "_nz_internal"
 AUTHORITATIVE_KEY = "_nz_authoritative"
+PROVIDER_EXTRA_KEY = "_nz_provider_extra"
+PROVIDER_REASONING_KEY = "_nz_provider_reasoning_content"
+PROVIDER_TOOL_METADATA_KEY = "_nz_provider_metadata"
 
 RESERVED_MESSAGE_KEYS = frozenset({
     "role",
@@ -98,6 +101,43 @@ def sanitize_provider_extra(extra: object) -> dict[str, object]:
         if accepted:
             selected[raw_key] = safe
     return selected
+
+
+def provider_private_state(extra: object) -> dict[str, object]:
+    """Map JSON-safe Provider continuation state onto private durable keys."""
+    selected = sanitize_provider_extra(extra)
+    private: dict[str, object] = {}
+    if "reasoning_content" in selected:
+        private[PROVIDER_REASONING_KEY] = selected["reasoning_content"]
+    if "provider_extra" in selected:
+        private[PROVIDER_EXTRA_KEY] = selected["provider_extra"]
+    return private
+
+
+def project_public_protocol_value(value: object) -> object:
+    """Recursively remove Provider-private and NZ-private protocol fields."""
+    if isinstance(value, dict):
+        return {
+            str(key): project_public_protocol_value(item)
+            for key, item in value.items()
+            if isinstance(key, str)
+            and not key.startswith("_nz_")
+            and key not in _SUPPORTED_PROVIDER_EXTENSION_KEYS
+        }
+    if isinstance(value, (list, tuple)):
+        return [project_public_protocol_value(item) for item in value]
+    return value
+
+
+def project_public_message_part(part: object) -> dict:
+    """Return one visible Part without Provider continuation state."""
+    if not isinstance(part, dict):
+        return {}
+    if part.get("internal") is True or part.get("visible") is False:
+        return {}
+    projected = project_public_tool_part(part)
+    safe = project_public_protocol_value(projected)
+    return safe if isinstance(safe, dict) else {}
 
 
 def project_public_tool_part(part: object) -> dict:
@@ -848,15 +888,18 @@ def cleanup_incomplete_tool_history(messages: list[dict]) -> list[dict]:
 
 def legacy_messages(messages: list[dict]) -> list[dict]:
     """Return the pre-A022 conversation shape for backward compatibility."""
-    return [
-        {
+    projected = [
+        project_public_protocol_value({
             key: copy.deepcopy(value)
             for key, value in message.items()
             if not key.startswith("_nz_")
-        }
+        })
         for message in messages
         if isinstance(message, dict)
+        and message.get(INTERNAL_KEY) is not True
+        and message.get(VISIBLE_KEY) is not False
     ]
+    return [item for item in projected if isinstance(item, dict)]
 
 
 def message_records(messages: list[dict], session_id: str) -> list[dict]:
@@ -867,11 +910,13 @@ def message_records(messages: list[dict], session_id: str) -> list[dict]:
         if message.get(INTERNAL_KEY) is True or message.get(VISIBLE_KEY) is False:
             continue
         message_id = message[MESSAGE_ID_KEY]
-        info = {
+        raw_info = {
             key: copy.deepcopy(value)
             for key, value in message.items()
             if not key.startswith("_nz_")
         }
+        info = project_public_protocol_value(raw_info)
+        info = info if isinstance(info, dict) else {}
         info.update({"id": message_id, "session_id": session_id})
         interaction_run_id = message.get(INTERACTION_RUN_ID_KEY)
         if isinstance(interaction_run_id, str) and interaction_run_id:
@@ -953,10 +998,9 @@ def message_records(messages: list[dict], session_id: str) -> list[dict]:
         records.append({
             "info": info,
             "parts": [
-                project_public_tool_part(part)
-                if isinstance(part, dict) and part.get("type") == "tool"
-                else copy.deepcopy(part)
+                projected
                 for part in message[PARTS_KEY]
+                if (projected := project_public_message_part(part))
             ],
         })
     return records
@@ -1757,6 +1801,10 @@ def _tool_part(value: dict, message_id: str) -> dict | None:
         result["index"] = index
     if isinstance(value.get("metadata"), dict):
         result["metadata"] = copy.deepcopy(value["metadata"])
+    private_metadata = value.get(PROVIDER_TOOL_METADATA_KEY)
+    safe_private, accepted = _json_safe_provider_value(private_metadata)
+    if accepted and isinstance(safe_private, dict) and safe_private:
+        result[PROVIDER_TOOL_METADATA_KEY] = safe_private
     return result
 
 

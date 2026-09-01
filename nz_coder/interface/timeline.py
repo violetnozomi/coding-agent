@@ -267,7 +267,15 @@ def build_transcript_document(
         elif role == "assistant":
             navigable = bool(_message_text(message))
             lines.extend(("## Assistant", ""))
-            reasoning = str(message.get("reasoning_content") or "").strip()
+            reasoning = "\n".join(
+                str(part.get("text") or "").strip()
+                for part in message.get(PARTS_KEY, []) or []
+                if isinstance(part, dict)
+                and part.get("type") == "reasoning"
+                and part.get("internal") is not True
+                and part.get("visible") is not False
+                and str(part.get("text") or "").strip()
+            )
             if thinking and reasoning:
                 lines.extend(("_Thinking:_", "", reasoning, ""))
             text = _message_text(message)

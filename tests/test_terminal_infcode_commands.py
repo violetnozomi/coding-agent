@@ -120,7 +120,15 @@ def test_transcript_formats_roles_tools_and_safe_fences():
         {
             "role": "assistant",
             "content": "done",
-            "reasoning_content": "considered",
+            "reasoning_content": "private raw reasoning",
+            "_nz_parts": [{
+                "id": "part-public-reasoning",
+                "message_id": "msg-public-reasoning",
+                "type": "reasoning",
+                "text": "considered",
+                "internal": False,
+                "visible": True,
+            }],
             "tool_calls": [{
                 "function": {
                     "name": "bash",
@@ -138,6 +146,8 @@ def test_transcript_formats_roles_tools_and_safe_fences():
     assert "## User\n\ninspect" in transcript
     assert "## Assistant" in transcript
     assert "_Thinking:_" in transcript
+    assert "considered" in transcript
+    assert "private raw reasoning" not in transcript
     assert "**Tool: bash**" in transcript
     assert "output ``` value" in transcript
     assert "hidden" not in transcript

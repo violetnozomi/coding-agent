@@ -11,6 +11,7 @@ from nz_coder.protocol.message_schema import (
     AUTHORITATIVE_KEY,
     INTERNAL_KEY,
     VISIBLE_KEY,
+    provider_private_state,
     sanitize_provider_extra,
     set_assistant_error,
 )
@@ -104,7 +105,7 @@ def commit_approved_model_result(
     internal = approved.visibility is not OutputVisibility.USER_VISIBLE
     if internal and not result.tool_calls:
         assistant_message["content"] = result.content or ""
-        assistant_message.update(result.extra)
+        assistant_message.update(provider_private_state(result.extra))
         assistant_message["role"] = "assistant"
         assistant_message[VISIBLE_KEY] = False
         assistant_message[INTERNAL_KEY] = True

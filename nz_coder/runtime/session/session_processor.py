@@ -23,7 +23,11 @@ from nz_coder.protocol.message_schema import (
     ASSISTANT_TIME_KEY,
     MESSAGE_ID_KEY,
     PARTS_KEY,
+    PROVIDER_EXTRA_KEY,
+    PROVIDER_REASONING_KEY,
+    PROVIDER_TOOL_METADATA_KEY,
     assistant_error_from_exception,
+    project_public_message_part,
     publish_assistant_state,
     remove_message_part,
     upsert_message_part,
@@ -164,12 +168,19 @@ class SessionProcessor:
                     "raw": raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False),
                 },
                 **(
-                    {"metadata": dict(tool_call["provider_extra"])}
+                    {PROVIDER_TOOL_METADATA_KEY: dict(tool_call["provider_extra"])}
                     if isinstance(tool_call.get("provider_extra"), dict)
                     and tool_call["provider_extra"]
                     else (
-                        {"metadata": dict(existing["metadata"])}
-                        if isinstance((existing or {}).get("metadata"), dict)
+                        {
+                            PROVIDER_TOOL_METADATA_KEY: dict(
+                                existing[PROVIDER_TOOL_METADATA_KEY]
+                            )
+                        }
+                        if isinstance(
+                            (existing or {}).get(PROVIDER_TOOL_METADATA_KEY),
+                            dict,
+                        )
                         else {}
                     )
                 ),
@@ -206,11 +217,18 @@ class SessionProcessor:
                 "raw": str(arguments),
             },
             **(
-                {"metadata": dict(metadata)}
+                {PROVIDER_TOOL_METADATA_KEY: dict(metadata)}
                 if isinstance(metadata, dict) and metadata
                 else (
-                    {"metadata": dict(existing["metadata"])}
-                    if isinstance((existing or {}).get("metadata"), dict)
+                    {
+                        PROVIDER_TOOL_METADATA_KEY: dict(
+                            existing[PROVIDER_TOOL_METADATA_KEY]
+                        )
+                    }
+                    if isinstance(
+                        (existing or {}).get(PROVIDER_TOOL_METADATA_KEY),
+                        dict,
+                    )
                     else {}
                 )
             ),
@@ -267,6 +285,8 @@ class SessionProcessor:
             self.message.pop("tool_calls", None)
             self.message.pop("reasoning_content", None)
             self.message.pop("provider_extra", None)
+            self.message.pop(PROVIDER_REASONING_KEY, None)
+            self.message.pop(PROVIDER_EXTRA_KEY, None)
             self._notify_message_updated()
         return settled
 
@@ -279,6 +299,8 @@ class SessionProcessor:
             "message_id": self.message_id,
             "type": "reasoning",
             "text": text,
+            "internal": True,
+            "visible": False,
             "time": {"start": self._step_started_at, "end": time.time()},
         })
 
@@ -825,10 +847,16 @@ class SessionProcessor:
             part.setdefault("internal", internal)
             part.setdefault("authoritative", True)
             normalized = upsert_message_part(self.message, part)
-            if publish and self.publish is not None and not internal:
+            public_part = project_public_message_part(normalized)
+            if (
+                publish
+                and self.publish is not None
+                and not internal
+                and public_part
+            ):
                 self.publish("message.part.updated", {
                     "message_id": self.message_id,
-                    "part": normalized,
+                    "part": public_part,
                 })
             self._notify_message_updated()
             return normalized

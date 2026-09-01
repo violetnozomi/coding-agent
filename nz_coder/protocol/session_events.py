@@ -21,6 +21,7 @@ from typing import Any, Callable, Iterator
 from nz_coder.foundation.json_safety import json_safe_value
 from nz_coder.protocol.message_schema import (
     normalize_assistant_error,
+    project_public_protocol_value,
     project_public_tool_part,
 )
 from nz_coder.protocol.public_error import (
@@ -55,6 +56,7 @@ def _critical_journal_event(event_type: str) -> bool:
 def _safe_event_properties(properties: dict[str, Any]) -> dict[str, Any]:
     """Detach metadata and guarantee strict-JSON live/replay transport values."""
     projected = _project_public_failures(properties)
+    projected = project_public_protocol_value(projected)
     if isinstance(projected, dict) and str(projected.get("status") or "").casefold() in {
         "error",
         "failed",
@@ -96,6 +98,11 @@ def _project_public_failures(
     }:
         return "[private diagnostic omitted]"
     if isinstance(value, dict):
+        if (
+            "type" in value
+            and (value.get("internal") is True or value.get("visible") is False)
+        ):
+            return {}
         if value.get("type") == "tool" and isinstance(value.get("state"), dict):
             value = project_public_tool_part(value)
         seen = _seen if _seen is not None else set()

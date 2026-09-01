@@ -906,14 +906,20 @@ def test_stream_tool_input_is_durable_before_tool_dispatch(tmp_path, monkeypatch
         "path": ".",
         "depth": 1,
     }
-    assert events[pending_indexes[-1]].properties["part"]["metadata"] == {
+    assert "metadata" not in events[pending_indexes[-1]].properties["part"]
+    first_assistant = next(
+        message for message in messages if message.get("role") == "assistant"
+    )
+    assert first_assistant["tool_calls"][0]["provider_extra"] == {
         "thoughtSignature": "stream-signature",
     }
     first_assistant = next(message for message in messages if message.get("role") == "assistant")
     tool = next(part for part in first_assistant["_nz_parts"] if part["type"] == "tool")
     assert tool["state"]["status"] == "completed"
     assert tool["call_id"] == "call-live"
-    assert tool["metadata"] == {"thoughtSignature": "stream-signature"}
+    assert tool["_nz_provider_metadata"] == {
+        "thoughtSignature": "stream-signature",
+    }
 
     agent.close()
 

@@ -10,6 +10,8 @@ from nz_coder.state.context import estimate_tokens
 from nz_coder.protocol.message_schema import (
     MESSAGE_ID_KEY,
     PARTS_KEY,
+    PROVIDER_EXTRA_KEY,
+    PROVIDER_REASONING_KEY,
     cleanup_incomplete_tool_history,
 )
 from nz_coder.runtime.conversation.continuation_context import project_continuation_messages
@@ -51,7 +53,7 @@ def project_provider_messages(
         if capabilities is not None
         else getattr(config, "PASS_REASONING_CONTENT", True)
     )
-    strip_extra = set() if preserve_reasoning else {"reasoning_content"}
+    strip_extra = {"provider_extra", "reasoning_content"}
     supports_images = bool(
         getattr(capabilities, "supports_image_input", False)
     )
@@ -151,6 +153,11 @@ def project_provider_messages(
             key for key in message if key.startswith("_nz_")
         } | {"_timestamp"} | strip_extra
         clean = {key: value for key, value in message.items() if key not in strip_keys}
+        private_provider_extra = message.get(PROVIDER_EXTRA_KEY)
+        if not isinstance(private_provider_extra, dict):
+            private_provider_extra = message.get("provider_extra")
+        if isinstance(private_provider_extra, dict) and private_provider_extra:
+            clean["provider_extra"] = dict(private_provider_extra)
         if role == "tool":
             replacement = _superseded_tool_marker(
                 message,
@@ -224,11 +231,16 @@ def project_provider_messages(
                 # still removed below because they never had tool calls.
                 clean["content"] = "..."
                 stats["empty_assistant_placeholders"] += 1
-            if preserve_reasoning and "reasoning_content" not in clean:
-                # DeepSeek V4 thinking mode requires the field on every
-                # replayed assistant turn, including runtime-synthesized tool
-                # calls that did not originate from model reasoning.
-                clean["reasoning_content"] = ""
+            private_reasoning = message.get(PROVIDER_REASONING_KEY)
+            legacy_reasoning = message.get("reasoning_content")
+            if preserve_reasoning:
+                clean["reasoning_content"] = str(
+                    private_reasoning
+                    if isinstance(private_reasoning, str)
+                    else legacy_reasoning
+                    if isinstance(legacy_reasoning, str)
+                    else ""
+                )
             clean["_timestamp"] = message.get("_timestamp", now)
             assistant_ordinal += 1
         base.append(clean)

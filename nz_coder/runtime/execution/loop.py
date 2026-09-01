@@ -157,7 +157,7 @@ from nz_coder.protocol.message_schema import (
     assistant_error_from_exception,
     attach_message_identity,
     attach_text_part,
-    sanitize_provider_extra,
+    provider_private_state,
     bind_assistant_context,
     bind_user_context,
     ensure_message_identities,
@@ -2634,6 +2634,8 @@ class ProductRunEnvironment:
                 self.tracer.log("tool_name_repaired", **repair)
             for repair in id_repairs:
                 self.tracer.log("tool_call_id_repaired", **repair)
+        assistant_message.pop("reasoning_content", None)
+        assistant_message.pop("provider_extra", None)
         assistant_message.update(self._make_assistant_message(result))
         processor.add_reasoning(str(result.extra.get("reasoning_content") or ""))
         processor.register_tool_calls(result.tool_calls or [])
@@ -2728,6 +2730,8 @@ class ProductRunEnvironment:
         messages: list,
     ) -> None:
         """Apply stream-tail text/usage without reopening completed ToolParts."""
+        assistant_message.pop("reasoning_content", None)
+        assistant_message.pop("provider_extra", None)
         assistant_message.update(self._make_assistant_message(result))
         processor.add_reasoning(str(result.extra.get("reasoning_content") or ""))
         completed_part = self._finish_message_part(
@@ -2745,7 +2749,7 @@ class ProductRunEnvironment:
             content = result.content or ""
         assistant_msg = {"role": "assistant", "content": content}
         if result.extra:
-            assistant_msg.update(sanitize_provider_extra(result.extra))
+            assistant_msg.update(provider_private_state(result.extra))
         if result.tool_calls:
             assistant_msg["tool_calls"] = result.tool_calls
         if (
