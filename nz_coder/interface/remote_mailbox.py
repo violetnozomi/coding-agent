@@ -5,7 +5,7 @@ import asyncio
 import copy
 import threading
 import time
-from collections import OrderedDict, deque
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,14 +39,12 @@ def is_critical_remote_payload(payload: dict) -> bool:
 
 
 class RemoteEventMailbox:
-    """Store critical events separately and coalesce reconstructible deltas."""
+    """Preserve semantic order while reserving capacity for critical events."""
 
     def __init__(self, capacity: int = 512, critical_reserve: int = 16) -> None:
         self.capacity = max(1, int(capacity))
         self.critical_reserve = max(1, int(critical_reserve))
-        self._critical: deque[dict] = deque()
-        self._deltas: OrderedDict[tuple[str, ...], dict] = OrderedDict()
-        self._status: deque[dict] = deque()
+        self._queue: deque[dict] = deque()
         self._gap_pending = False
         self._gap_interaction = ""
         self._last_applied_sequence = 0
@@ -87,18 +85,14 @@ class RemoteEventMailbox:
             return self._offer_status_locked(selected)
 
     def pop(self) -> dict | None:
-        """Pop critical work first, then the gap boundary, then ordinary state."""
+        """Pop local recovery control first, otherwise preserve arrival order."""
         with self._condition:
             payload: dict | None
-            if self._critical:
-                payload = self._critical.popleft()
-            elif self._gap_pending:
+            if self._gap_pending:
                 payload = self._gap_payload_locked()
                 self._gap_pending = False
-            elif self._status:
-                payload = self._status.popleft()
-            elif self._deltas:
-                _key, payload = self._deltas.popitem(last=False)
+            elif self._queue:
+                payload = self._queue.popleft()
             else:
                 return None
             self._condition.notify_all()
@@ -107,11 +101,10 @@ class RemoteEventMailbox:
     def snapshot(self) -> list[dict]:
         """Return the current delivery order for tests and diagnostics."""
         with self._condition:
-            result = [copy.deepcopy(item) for item in self._critical]
+            result = []
             if self._gap_pending:
                 result.append(self._gap_payload_locked())
-            result.extend(copy.deepcopy(item) for item in self._status)
-            result.extend(copy.deepcopy(item) for item in self._deltas.values())
+            result.extend(copy.deepcopy(item) for item in self._queue)
             return result
 
     def clear_gap(self) -> None:
@@ -131,36 +124,47 @@ class RemoteEventMailbox:
             if not self._discard_oldest_ordinary_locked():
                 return False
             self._mark_gap_locked(payload)
-        self._critical.append(payload)
+        self._queue.append(payload)
         self._condition.notify_all()
         return True
 
     def _offer_delta_locked(self, payload: dict) -> bool:
-        key = self._delta_key(payload)
-        existing = self._deltas.get(key)
-        if existing is not None:
-            self._deltas[key] = self._merge_delta(existing, payload)
+        existing = self._queue[-1] if self._queue else None
+        if (
+            isinstance(existing, dict)
+            and self._delta_key(existing) == self._delta_key(payload)
+            and self._sequence(payload) == self._sequence_to(existing) + 1
+            and self._sequence(payload) > 0
+        ):
+            self._queue[-1] = self._merge_delta(existing, payload)
             return True
-        if self._ordinary_count_locked() >= self.capacity:
-            self._discard_oldest_ordinary_locked()
-            self._mark_gap_locked(payload)
-        self._deltas[key] = payload
-        return True
+        return self._offer_ordinary_locked(payload)
 
     def _offer_status_locked(self, payload: dict) -> bool:
-        if self._ordinary_count_locked() >= self.capacity:
-            self._discard_oldest_ordinary_locked()
+        return self._offer_ordinary_locked(payload)
+
+    def _offer_ordinary_locked(self, payload: dict) -> bool:
+        total_limit = self.capacity + self.critical_reserve
+        while (
+            self._ordinary_count_locked() >= self.capacity
+            or self._count_locked() >= total_limit
+        ):
+            if not self._discard_oldest_ordinary_locked():
+                # Critical work owns every available slot. Dropping this
+                # reconstructible event is safe only with an explicit rebase.
+                self._mark_gap_locked(payload)
+                self._condition.notify_all()
+                return True
             self._mark_gap_locked(payload)
-        self._status.append(payload)
+        self._queue.append(payload)
+        self._condition.notify_all()
         return True
 
     def _discard_oldest_ordinary_locked(self) -> bool:
-        if self._status:
-            self._status.popleft()
-            return True
-        if self._deltas:
-            self._deltas.popitem(last=False)
-            return True
+        for index, item in enumerate(self._queue):
+            if not is_critical_remote_payload(item):
+                del self._queue[index]
+                return True
         return False
 
     def _mark_gap_locked(self, payload: dict) -> None:
@@ -191,10 +195,31 @@ class RemoteEventMailbox:
         }
 
     def _count_locked(self) -> int:
-        return len(self._critical) + self._ordinary_count_locked()
+        return len(self._queue)
 
     def _ordinary_count_locked(self) -> int:
-        return len(self._status) + len(self._deltas)
+        return sum(
+            1 for item in self._queue
+            if not is_critical_remote_payload(item)
+        )
+
+    @staticmethod
+    def _sequence(payload: dict) -> int:
+        meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+        value = meta.get("sequence")
+        return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+    @classmethod
+    def _sequence_to(cls, payload: dict) -> int:
+        properties = (
+            payload.get("properties")
+            if isinstance(payload.get("properties"), dict)
+            else {}
+        )
+        value = properties.get("to_sequence")
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        return cls._sequence(payload)
 
     @staticmethod
     def _delta_key(payload: dict) -> tuple[str, ...]:
@@ -231,6 +256,24 @@ class RemoteEventMailbox:
         new_delta = properties.get("delta")
         if isinstance(old_delta, str) and isinstance(new_delta, str):
             properties["delta"] = old_delta + new_delta
+        existing_from = old_properties.get("from_sequence")
+        if not isinstance(existing_from, int) or isinstance(existing_from, bool):
+            old_meta = (
+                existing.get("meta")
+                if isinstance(existing.get("meta"), dict)
+                else {}
+            )
+            existing_from = old_meta.get("sequence")
+        incoming_meta = (
+            incoming.get("meta")
+            if isinstance(incoming.get("meta"), dict)
+            else {}
+        )
+        incoming_sequence = incoming_meta.get("sequence")
+        if isinstance(existing_from, int) and not isinstance(existing_from, bool):
+            properties["from_sequence"] = existing_from
+        if isinstance(incoming_sequence, int) and not isinstance(incoming_sequence, bool):
+            properties["to_sequence"] = incoming_sequence
         merged["properties"] = properties
         return merged
 

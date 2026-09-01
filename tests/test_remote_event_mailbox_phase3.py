@@ -84,6 +84,88 @@ def test_remote_delta_is_coalesced_by_part_identity():
     assert mailbox.pop() is None
 
 
+def test_mailbox_preserves_global_sequence_across_critical_and_delta():
+    from nz_coder.interface.remote_mailbox import RemoteEventMailbox
+
+    mailbox = RemoteEventMailbox(capacity=4, critical_reserve=2)
+    delta = _delta(10, "FINAL ANSWER")
+    terminal = _event("session.run.settled", sequence=11, status="completed")
+
+    assert mailbox.offer(delta)
+    assert mailbox.offer(terminal)
+
+    assert mailbox.pop() == delta
+    assert mailbox.pop() == terminal
+
+
+def test_terminal_does_not_overtake_prior_text_delta():
+    from nz_coder.interface.remote_mailbox import RemoteEventMailbox
+
+    mailbox = RemoteEventMailbox(capacity=2, critical_reserve=1)
+    assert mailbox.offer(_delta(1, "answer"))
+    assert mailbox.offer(_event("session.run.completed", sequence=2))
+
+    assert [mailbox.pop()["type"], mailbox.pop()["type"]] == [
+        "message.part.delta",
+        "session.run.completed",
+    ]
+
+
+def test_status_event_does_not_overtake_prior_delta():
+    from nz_coder.interface.remote_mailbox import RemoteEventMailbox
+
+    mailbox = RemoteEventMailbox(capacity=3)
+    assert mailbox.offer(_delta(1, "A"))
+    assert mailbox.offer(_event(
+        "message.updated",
+        sequence=2,
+        info={"id": "message-1", "content": "A"},
+    ))
+
+    assert [mailbox.pop()["type"], mailbox.pop()["type"]] == [
+        "message.part.delta",
+        "message.updated",
+    ]
+
+
+def test_delta_coalescing_stops_at_authoritative_part_barrier():
+    from nz_coder.interface.remote_mailbox import RemoteEventMailbox
+
+    mailbox = RemoteEventMailbox(capacity=4)
+    assert mailbox.offer(_delta(1, "A"))
+    assert mailbox.offer(_event(
+        "message.part.updated",
+        sequence=2,
+        part={
+            "id": "part-1",
+            "message_id": "message-1",
+            "type": "text",
+            "text": "A",
+        },
+    ))
+    assert mailbox.offer(_delta(3, "B"))
+
+    first, barrier, last = mailbox.pop(), mailbox.pop(), mailbox.pop()
+
+    assert first["properties"]["delta"] == "A"
+    assert barrier["type"] == "message.part.updated"
+    assert last["properties"]["delta"] == "B"
+
+
+def test_contiguous_delta_merge_records_sequence_window():
+    from nz_coder.interface.remote_mailbox import RemoteEventMailbox
+
+    mailbox = RemoteEventMailbox(capacity=2)
+    assert mailbox.offer(_delta(7, "A"))
+    assert mailbox.offer(_delta(8, "B"))
+
+    merged = mailbox.pop()
+
+    assert merged["properties"]["delta"] == "AB"
+    assert merged["properties"]["from_sequence"] == 7
+    assert merged["properties"]["to_sequence"] == 8
+
+
 def test_remote_overflow_emits_single_gap_marker():
     from nz_coder.interface.remote_mailbox import RemoteEventMailbox
 
