@@ -47,6 +47,7 @@ _EVENT_TYPES = {
     "question.replied",
     "question.rejected",
     "agent.handoff",
+    "server.snapshot",
 }
 _ANSI_ESCAPE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -74,6 +75,8 @@ class TerminalRunRenderer:
         self._run_reducer = RunViewReducer()
         self._part_reducer = self._run_reducer.text
         self._projected_text = ""
+        self._gap_recovery_pending = False
+        self._gap_recovery_after = 0.0
 
     @property
     def logical_text(self) -> str:
@@ -105,6 +108,8 @@ class TerminalRunRenderer:
         self._seen_event_order.clear()
         self._run_reducer.clear()
         self._projected_text = ""
+        self._gap_recovery_pending = False
+        self._gap_recovery_after = 0.0
         self._agent = agent
         event_bus = getattr(agent, "event_bus", None)
         if event_bus is not None:
@@ -227,6 +232,11 @@ class TerminalRunRenderer:
     def drain(self, *, render_completed: bool = True) -> None:
         subscription = self._subscription
         if subscription is None:
+            if (
+                self._gap_recovery_pending
+                and time.monotonic() >= self._gap_recovery_after
+            ):
+                self._rebase_local_after_gap(None)
             return
         while True:
             try:
@@ -352,48 +362,71 @@ class TerminalRunRenderer:
 
     def _rebase_local_after_gap(
         self,
-        old_subscription: SessionSubscription,
+        old_subscription: SessionSubscription | None,
     ) -> bool:
-        """Resubscribe before rebuilding from the live transcript snapshot."""
+        """Atomically rebuild state/cursor before switching subscriptions."""
         agent = self._agent
         event_bus = getattr(agent, "event_bus", None)
         context = getattr(agent, "active_run_context", None)
-        messages = getattr(agent, "_active_processor_messages", None)
-        if not isinstance(messages, list):
-            messages = getattr(context, "transcript", None)
-        if event_bus is None or not isinstance(messages, list):
+        if event_bus is None:
             return False
         replacement = None
         try:
-            # Subscribe first. Events racing the snapshot are queued and then
-            # rejected by reducer version/identity fences when already present.
             replacement = event_bus.subscribe(_EVENT_TYPES, max_queue=512)
-            records = message_records(
-                copy.deepcopy(messages),
-                str(getattr(agent, "session_id", "") or event_bus.session_id),
-            )
             interaction_run_id = str(
                 getattr(context, "interaction_run_id", "")
                 if context is not None
-                else getattr(event_bus, "run_id", "")
+                else getattr(getattr(agent, "event_publisher", None), "run_id", "")
             )
-            self._run_reducer.replace_snapshot({
-                "interaction_run_id": interaction_run_id,
-                "messages": records,
-                "status": "running",
-                "snapshot_sequence": max(
-                    (event.sequence for event in event_bus.recent()),
-                    default=0,
-                ),
-            })
+
+            def capture() -> dict:
+                messages = getattr(agent, "_active_processor_messages", None)
+                if not isinstance(messages, list):
+                    messages = getattr(context, "transcript", None)
+                if not isinstance(messages, list):
+                    raise RuntimeError("active transcript is unavailable")
+                return {
+                    "interaction_run_id": interaction_run_id,
+                    "messages": message_records(
+                        copy.deepcopy(messages),
+                        str(
+                            getattr(agent, "session_id", "")
+                            or event_bus.session_id
+                        ),
+                    ),
+                    "status": "running",
+                }
+
+            publisher = getattr(agent, "event_publisher", None)
+            snapshot, cursor, replay = event_bus.checkpoint_with_replay(
+                capture,
+                event_type="server.snapshot",
+                properties={"reason": "local_subscriber_gap"},
+                replay=512,
+                publisher=publisher,
+            )
+            snapshot_sequence = max(0, cursor.sequence - 1)
+            snapshot["snapshot_sequence"] = snapshot_sequence
+            self._run_reducer.replace_snapshot(snapshot)
+            for event in replay:
+                if event.sequence > snapshot_sequence:
+                    self._run_reducer.apply_event(event)
             self._sync_text_projection()
             self._refresh_status()
         except (RuntimeError, TypeError, ValueError):
             if replacement is not None:
                 replacement.close()
+            if old_subscription is not None:
+                old_subscription.close()
+            self._subscription = None
+            self._gap_recovery_pending = True
+            self._gap_recovery_after = time.monotonic() + 0.25
             return False
         self._subscription = replacement
-        old_subscription.close()
+        if old_subscription is not None:
+            old_subscription.close()
+        self._gap_recovery_pending = False
+        self._gap_recovery_after = 0.0
         return True
 
     def _flush_completed(self) -> None:

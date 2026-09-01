@@ -16,13 +16,23 @@ class RunViewState:
     status: str = "idle"
     tool_parts: dict[str, dict] = field(default_factory=dict)
     retries: dict[str, dict] = field(default_factory=dict)
-    pending_question: dict | None = None
-    pending_permission: dict | None = None
+    pending_questions: dict[str, dict] = field(default_factory=dict)
+    pending_permissions: dict[str, dict] = field(default_factory=dict)
     assistant_errors: dict[str, dict] = field(default_factory=dict)
     assistant_messages: dict[str, dict] = field(default_factory=dict)
     active_agent: str = ""
     terminal: dict | None = None
     last_sequence: int = 0
+
+    @property
+    def pending_question(self) -> dict | None:
+        """Compatibility view of the earliest pending question."""
+        return next(iter(self.pending_questions.values()), None)
+
+    @property
+    def pending_permission(self) -> dict | None:
+        """Compatibility view of the earliest pending permission."""
+        return next(iter(self.pending_permissions.values()), None)
 
 
 class RunViewReducer:
@@ -79,20 +89,17 @@ class RunViewReducer:
         pending = run.get("pending") if isinstance(run.get("pending"), dict) else {}
         permissions = pending.get("permissions")
         questions = pending.get("questions")
-        if isinstance(permissions, list) and permissions:
-            state.pending_permission = copy.deepcopy(permissions[0])
-        if isinstance(questions, list) and questions:
-            state.pending_question = copy.deepcopy(questions[0])
+        if isinstance(permissions, list):
+            state.pending_permissions = self._pending_map(permissions)
+        if isinstance(questions, list):
+            state.pending_questions = self._pending_map(questions)
         self._state = state
 
     def apply_event(self, event: Any) -> bool:
         event_type, properties, interaction, sequence = self._fields(event)
-        if (
-            self._state.interaction_run_id
-            and interaction
-            and interaction != self._state.interaction_run_id
-        ):
-            return False
+        if self._state.interaction_run_id:
+            if not interaction or interaction != self._state.interaction_run_id:
+                return False
         if sequence and sequence <= self._state.last_sequence:
             return False
         if sequence:
@@ -108,6 +115,7 @@ class RunViewReducer:
             status = str(properties.get("status") or self._state.status)
             self._state.status = status
             if status in {"completed", "failed", "cancelled"}:
+                self._clear_pending()
                 self._state.terminal = {
                     "status": status,
                     **copy.deepcopy(properties),
@@ -122,6 +130,7 @@ class RunViewReducer:
                 "session.run.cancelled": "cancelled",
             }[event_type]
             self._state.status = status
+            self._clear_pending()
             self._state.terminal = {"status": status, **copy.deepcopy(properties)}
             return True
         if event_type == "message.updated":
@@ -217,21 +226,17 @@ class RunViewReducer:
             self._state.retries.pop(part_id, None)
             return changed
         if event_type in {"permission.asked", "session.permission.asked"}:
-            self._state.pending_permission = copy.deepcopy(properties)
-            return True
+            return self._upsert_pending(self._state.pending_permissions, properties)
         if event_type in {
             "permission.replied", "permission.resolved", "permission.rejected",
         }:
-            self._state.pending_permission = None
-            return True
+            return self._resolve_pending(self._state.pending_permissions, properties)
         if event_type in {"question.asked", "session.question.asked"}:
-            self._state.pending_question = copy.deepcopy(properties)
-            return True
+            return self._upsert_pending(self._state.pending_questions, properties)
         if event_type in {
             "question.replied", "question.resolved", "question.rejected",
         }:
-            self._state.pending_question = None
-            return True
+            return self._resolve_pending(self._state.pending_questions, properties)
         if event_type in {
             "agent.switched", "session.agent.switched", "agent.handoff",
         }:
@@ -257,7 +262,43 @@ class RunViewReducer:
         elif part_type == "retry" and part_id:
             state.retries[part_id] = copy.deepcopy(part)
         elif part_type == "question" and part.get("status") == "pending":
-            state.pending_question = copy.deepcopy(part)
+            request_id = str(part.get("request_id") or part.get("id") or "")
+            if request_id:
+                state.pending_questions[request_id] = copy.deepcopy(part)
+
+    def _clear_pending(self) -> None:
+        self._state.pending_permissions.clear()
+        self._state.pending_questions.clear()
+
+    @staticmethod
+    def _pending_map(values: list) -> dict[str, dict]:
+        pending: dict[str, dict] = {}
+        for value in values:
+            if not isinstance(value, dict):
+                continue
+            request_id = str(value.get("request_id") or value.get("id") or "")
+            if request_id:
+                pending[request_id] = copy.deepcopy(value)
+        return pending
+
+    @staticmethod
+    def _upsert_pending(target: dict[str, dict], properties: dict) -> bool:
+        request_id = str(properties.get("request_id") or properties.get("id") or "")
+        if not request_id:
+            return False
+        selected = copy.deepcopy(properties)
+        if target.get(request_id) == selected:
+            return False
+        target[request_id] = selected
+        return True
+
+    @staticmethod
+    def _resolve_pending(target: dict[str, dict], properties: dict) -> bool:
+        request_id = str(properties.get("request_id") or properties.get("id") or "")
+        if not request_id or request_id not in target:
+            return False
+        target.pop(request_id, None)
+        return True
 
     @staticmethod
     def _fields(event: Any) -> tuple[str, dict, str, int]:

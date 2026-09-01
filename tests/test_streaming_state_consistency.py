@@ -197,13 +197,26 @@ def test_part_order_is_stable_on_update():
                 "id": "msg-stream-state",
                 "role": "assistant",
                 "content": "onetwo",
+                "interaction_run_id": "run-stream-state",
             },
             "parts": [
-                _text_part("part-first", "one", generation=1, version=1),
-                _text_part("part-second", "two", generation=1, version=1),
+                _text_part(
+                    "part-first",
+                    "one",
+                    interaction_run_id="run-stream-state",
+                    generation=1,
+                    version=1,
+                ),
+                _text_part(
+                    "part-second",
+                    "two",
+                    interaction_run_id="run-stream-state",
+                    generation=1,
+                    version=1,
+                ),
             ],
         },
-    ])
+    ], interaction_run_id="run-stream-state")
 
     reducer.apply_event(_event(
         "message.part.updated",

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 from collections import deque
 from typing import Any
 
@@ -20,6 +22,7 @@ class MessagePartReducer:
         self._message_order: list[str] = []
         self._generation: dict[str, int] = {}
         self._interaction_run_id = ""
+        self._legacy_mode = True
         self._tombstones: set[tuple[str, str]] = set()
         self._last_sequence = 0
         self._seen_event_ids: set[str] = set()
@@ -43,12 +46,18 @@ class MessagePartReducer:
         """Return a defensive snapshot of one message's ordered parts."""
         return copy.deepcopy(self._messages.get(str(message_id), []))
 
+    @property
+    def interaction_run_id(self) -> str:
+        """Return the stable interaction identity bound to this projection."""
+        return self._interaction_run_id
+
     def clear(self) -> None:
         """Discard authoritative state and all replay identities."""
         self._messages.clear()
         self._message_order.clear()
         self._generation.clear()
         self._interaction_run_id = ""
+        self._legacy_mode = True
         self._tombstones.clear()
         self._last_sequence = 0
         self._seen_event_ids.clear()
@@ -64,23 +73,40 @@ class MessagePartReducer:
         last_sequence: int = 0,
     ) -> None:
         """Atomically replace state from an authoritative message snapshot."""
+        source_records = records if isinstance(records, list) else []
+        selected_interaction = str(interaction_run_id or "")
+        if not selected_interaction and source_records:
+            encoded = json.dumps(
+                source_records,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            ).encode("utf-8", errors="replace")
+            selected_interaction = f"legacy-{hashlib.sha256(encoded).hexdigest()[:20]}"
         messages: dict[str, list[dict]] = {}
         order: list[str] = []
         generations: dict[str, int] = {}
-        for record in records if isinstance(records, list) else ():
+        for record in source_records:
             if not isinstance(record, dict):
                 continue
             info = record.get("info")
             if not isinstance(info, dict) or info.get("role") != "assistant":
                 continue
             record_interaction = str(info.get("interaction_run_id") or "")
-            if interaction_run_id and record_interaction != interaction_run_id:
+            if (
+                interaction_run_id
+                and record_interaction != selected_interaction
+            ):
                 continue
             message_id = str(info.get("id") or "")
             if not message_id or message_id in messages:
                 continue
             selected = [
-                self._snapshot_part(part)
+                self._snapshot_part(
+                    part,
+                    interaction_run_id=selected_interaction,
+                )
                 for part in record.get("parts", ())
                 if isinstance(part, dict)
                 and str(part.get("message_id") or message_id) == message_id
@@ -98,6 +124,7 @@ class MessagePartReducer:
                         "status": "completed",
                         "visible": True,
                         "authoritative": True,
+                        "interaction_run_id": selected_interaction,
                     })
             messages[message_id] = selected
             order.append(message_id)
@@ -108,7 +135,8 @@ class MessagePartReducer:
         self._messages = messages
         self._message_order = order
         self._generation = generations
-        self._interaction_run_id = str(interaction_run_id or "")
+        self._interaction_run_id = selected_interaction
+        self._legacy_mode = not bool(selected_interaction)
         self._last_sequence = max(0, self._integer(last_sequence))
         self._tombstones.clear()
         self._seen_deltas.clear()
@@ -129,12 +157,22 @@ class MessagePartReducer:
             or meta_interaction
             or ""
         )
-        if (
-            self._interaction_run_id
-            and event_interaction
-            and event_interaction != self._interaction_run_id
-        ):
+        if self._interaction_run_id:
+            if not event_interaction or event_interaction != self._interaction_run_id:
+                return False
+        elif event_interaction:
+            self._interaction_run_id = event_interaction
+            self._legacy_mode = False
+        elif not self._legacy_mode:
             return False
+        properties = copy.deepcopy(properties)
+        if event_interaction:
+            properties.setdefault("interaction_run_id", event_interaction)
+            if isinstance(properties.get("part"), dict):
+                properties["part"].setdefault(
+                    "interaction_run_id",
+                    event_interaction,
+                )
         if event_id and not self._remember_event(event_id):
             return False
         if sequence and sequence <= self._last_sequence:
@@ -305,6 +343,8 @@ class MessagePartReducer:
                 "authoritative": True,
             }
             parts.append(part)
+        if not self._same_attempt(part, properties):
+            return False
         if self._integer(part.get("generation")) != generation:
             return False
         if attempt_id and str(part.get("attempt_id") or "") not in {"", attempt_id}:
@@ -363,7 +403,7 @@ class MessagePartReducer:
 
     @staticmethod
     def _same_attempt(current: dict, incoming: dict) -> bool:
-        """Require all supplied opaque identities to agree."""
+        """Fail closed once any opaque identity is bound on current state."""
         for key in (
             "interaction_run_id",
             "attempt_id",
@@ -371,7 +411,7 @@ class MessagePartReducer:
         ):
             existing = str(current.get(key) or "")
             candidate = str(incoming.get(key) or "")
-            if existing and candidate and existing != candidate:
+            if existing and (not candidate or existing != candidate):
                 return False
         return True
 
@@ -437,8 +477,14 @@ class MessagePartReducer:
         )
 
     @staticmethod
-    def _snapshot_part(part: dict) -> dict:
+    def _snapshot_part(
+        part: dict,
+        *,
+        interaction_run_id: str = "",
+    ) -> dict:
         selected = copy.deepcopy(part)
+        if interaction_run_id:
+            selected.setdefault("interaction_run_id", interaction_run_id)
         selected.setdefault(
             "status",
             MessagePartReducer._updated_status(selected, snapshot=True),
