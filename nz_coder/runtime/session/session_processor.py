@@ -228,6 +228,48 @@ class SessionProcessor:
                 count += 1
         return count
 
+    def settle_policy_failure(self, error: object) -> int:
+        """Hide an unapproved attempt and terminally settle every ToolPart."""
+        public = to_public_error(error)
+        tool_status = (
+            "blocked"
+            if public.code in {"guardrail_blocked", "guardrail_review_required"}
+            else "error"
+        )
+        settled = 0
+        with self._lock:
+            for part in list(self.message.get(PARTS_KEY, [])):
+                if not isinstance(part, dict):
+                    continue
+                if part.get("type") in {"text", "reasoning"}:
+                    if self.remove_part(str(part.get("id") or ""), "policy_failed"):
+                        settled += 1
+                    continue
+                if part.get("type") != "tool":
+                    continue
+                state = part.get("state")
+                if not isinstance(state, dict):
+                    continue
+                timing = state.get("time") if isinstance(state.get("time"), dict) else {}
+                start = timing.get("start", time.time())
+                self._update({
+                    **part,
+                    "state": {
+                        "status": tool_status,
+                        "input": {},
+                        "error": public.message,
+                        "interrupted": False,
+                        "time": {"start": start, "end": time.time()},
+                    },
+                })
+                settled += 1
+            self.message["content"] = ""
+            self.message.pop("tool_calls", None)
+            self.message.pop("reasoning_content", None)
+            self.message.pop("provider_extra", None)
+            self._notify_message_updated()
+        return settled
+
     def add_reasoning(self, text: str) -> dict | None:
         """Persist provider reasoning separately from user-visible text."""
         if not isinstance(text, str) or not text:

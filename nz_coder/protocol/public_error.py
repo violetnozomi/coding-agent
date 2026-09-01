@@ -87,10 +87,12 @@ def to_public_error(error: object) -> PublicError:
             },
         )
     if error_name == "GuardrailEscalateError":
+        name = _safe_name(getattr(error, "guardrail_name", "policy"))
         return PublicError(
             "guardrail_review_required",
             "Output requires policy review.",
             metadata={
+                "guardrail": name,
                 "hook_point": str(getattr(error, "hook_point", "output")),
             },
         )

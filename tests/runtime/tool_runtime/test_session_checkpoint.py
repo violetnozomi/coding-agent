@@ -5,7 +5,15 @@ import asyncio
 
 import pytest
 
+from nz_coder.runtime.agent.guardrails import GuardrailEscalateError
+from nz_coder.runtime.core.tool_context import (
+    ToolExecutionContext,
+    ToolLifecycleContext,
+    ToolProjectionContext,
+)
+from nz_coder.tool_platform.execution import ToolExecutionResult
 from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
+from tests.runtime.tool_runtime.test_focused_policy import _context
 
 
 class _Processor:
@@ -134,6 +142,104 @@ def test_async_tool_cancellation_checkpoints_interrupted_through_session_runtime
     assert processor.interrupted is True
 
 
+def test_tool_guardrail_escalation_defers_settlement_to_run_boundary() -> None:
+    """The tool pipeline must not checkpoint before the atomic run settler."""
+    processor = _Processor()
+    statuses: list[str] = []
+
+    async def checkpoint(status: str) -> None:
+        statuses.append(status)
+
+    async def noop_async(*_args):
+        return None
+
+    class Observer:
+        post_write = staticmethod(lambda *_args: None)
+        after_batch = staticmethod(lambda *_args: None)
+        apply_plan_mode = staticmethod(lambda *_args: None)
+        capture_snapshot = staticmethod(lambda *_args: None)
+        record_patch = staticmethod(lambda *_args: None)
+
+    class Executor:
+        @staticmethod
+        def execute_one(_tool_call, _index, _messages):
+            return ToolExecutionResult(
+                name="read_file",
+                tool_input={"path": "private.py"},
+                output="PRIVATE-TOOL-RESULT",
+                executed=True,
+                dispatch_failed=False,
+                command_failed=False,
+                is_write=False,
+            )
+
+    async def after_tool(_tool_call, _result, _messages):
+        raise GuardrailEscalateError(
+            "reviewer",
+            "tool",
+            "Authorization=Bearer PRIVATE",
+        )
+
+    lifecycle = ToolLifecycleContext(
+        checkpoint=checkpoint,
+        processor_for_messages=lambda _messages: processor,
+        write_override=None,
+        begin_transaction=lambda: None,
+        transaction_active=lambda: False,
+        finish_transaction=lambda *_args: None,
+        metadata_reporter=lambda *_args: (lambda *_a, **_k: None),
+        question_reporter=lambda *_args: (lambda *_a, **_k: None),
+        dispatch_override_async=None,
+        consume_override=None,
+        model_capabilities=None,
+        describe_read_results=noop_async,
+        strict_completed=lambda _results: False,
+        apply_transition=noop_async,
+        observer=Observer(),
+        has_pre_tool_hooks=lambda: False,
+        executor=Executor(),
+        execute_one=Executor.execute_one,
+        before_tool=lambda call, _messages: _async_pair(call, None),
+        after_tool=after_tool,
+        trace=lambda *_args, **_kwargs: None,
+    )
+    projection = ToolProjectionContext(
+        signal_from_metadata=lambda _metadata: None,
+        record_result=lambda _result: False,
+        trace_result=lambda *_args, **_kwargs: None,
+        stall_orchestrator=None,
+        after_result=lambda *_args: None,
+    )
+    context = ToolExecutionContext(
+        run=None,
+        policy=_context(),
+        lifecycle=lifecycle,
+        projection=projection,
+    )
+    calls = [{
+        "id": "call-after-tool",
+        "function": {
+            "name": "read_file",
+            "arguments": {"path": "private.py"},
+        },
+    }]
+
+    async def scenario() -> None:
+        with pytest.raises(GuardrailEscalateError):
+            await ProductionToolRuntime().execute_batch_async(
+                context,
+                calls,
+                [],
+                processor=processor,
+                checkpoint=checkpoint,
+            )
+
+    asyncio.run(scenario())
+
+    assert statuses == ["running"]
+    assert processor.interrupted is False
+
+
 def test_active_run_rejects_missing_session_checkpoint_callback() -> None:
     """An active production run must not silently fall back to legacy storage."""
     harness = _Harness()
@@ -196,3 +302,7 @@ def test_async_tool_batch_freezes_one_dynamic_provider_generation() -> None:
 
     assert result == "continue"
     assert provider_calls == [1]
+
+
+async def _async_pair(first, second):
+    return first, second

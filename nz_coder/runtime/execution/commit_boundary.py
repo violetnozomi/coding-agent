@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 
 from nz_coder.runtime.conversation.model_result import LLMResult
+from nz_coder.protocol.message_schema import set_assistant_error
+from nz_coder.protocol.public_error import PublicError, to_public_error
 
 
 class OutputVisibility(str, Enum):
@@ -30,6 +32,15 @@ class ApprovedModelResult:
 
     result: LLMResult
     visibility: OutputVisibility
+
+
+@dataclass
+class FailedAttemptSettlement:
+    """Exactly-once claim for one Assistant attempt failure."""
+
+    settled: bool = False
+    checkpointed: bool = False
+    finish_reason: str = ""
 
 
 async def approve_model_result(
@@ -96,3 +107,67 @@ def commit_approved_model_result(
         message_part=message_part,
         messages=messages,
     )
+
+
+async def settle_failed_attempt(
+    *,
+    context,
+    services,
+    run_context,
+    assistant_message: dict,
+    processor,
+    message_part: dict,
+    public_error: PublicError | object,
+    failure_kind: str,
+    settlement: FailedAttemptSettlement,
+    snapshot_task=None,
+    snapshot_cancel=None,
+) -> bool:
+    """Atomically close one failed pre-commit policy attempt exactly once."""
+    if not isinstance(settlement, FailedAttemptSettlement):
+        raise TypeError("settlement must be a FailedAttemptSettlement")
+    if settlement.settled:
+        return False
+    settlement.settled = True
+    public = to_public_error(public_error)
+    hook_point = str(public.metadata.get("hook_point") or "")
+    policy_failure = public.code in {
+        "guardrail_blocked",
+        "guardrail_review_required",
+    }
+    finish_reason = (
+        "cancelled"
+        if public.code == "cancelled"
+        else "blocked"
+        if policy_failure
+        else "error"
+    )
+    error_name = (
+        "MessageAbortedError"
+        if finish_reason == "cancelled"
+        else "ToolGuardrailError"
+        if hook_point == "tool"
+        else "OutputGuardrailError"
+        if hook_point == "output"
+        else "UnknownError"
+    )
+
+    retire_snapshot = getattr(context.snapshots, "retire", None)
+    if callable(retire_snapshot):
+        retire_snapshot(snapshot_task, snapshot_cancel)
+    context.messages.retire_message_part(
+        message_part,
+        f"{str(failure_kind or 'attempt')}_failed",
+    )
+    processor.settle_policy_failure(public)
+    set_assistant_error(
+        assistant_message,
+        public,
+        name=error_name,
+        publish=context.messages.publish_event,
+    )
+    processor.finish_step(finish_reason)
+    settlement.finish_reason = finish_reason
+    await services.session_runtime.checkpoint(run_context, "error")
+    settlement.checkpointed = True
+    return True

@@ -1045,6 +1045,7 @@ def test_agent_as_tool_result_is_guarded_before_parent_commit():
 
 def test_guardrail_failure_settles_current_step(tmp_path: Path):
     from nz_coder.runtime.agent.guardrails import GuardrailBlockedError
+    from nz_coder.protocol.public_error import PublicRuntimeError
 
     class OneAnswer:
         async def complete_turn(self, _context, _messages, **_kwargs):
@@ -1078,7 +1079,7 @@ def test_guardrail_failure_settles_current_step(tmp_path: Path):
             "run_output_guardrail": block,
         }))
 
-    with pytest.raises(GuardrailBlockedError):
+    with pytest.raises(PublicRuntimeError):
         asyncio.run(AgentRunner(
             services,
             execution_context_factory=execution_context,

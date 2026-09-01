@@ -20,7 +20,12 @@ from nz_coder.protocol.message_schema import (
     set_assistant_error,
     stamp_user_message,
 )
-from nz_coder.protocol.public_error import PublicError, TrustedPublicMessage
+from nz_coder.protocol.public_error import (
+    PublicError,
+    PublicRuntimeError,
+    TrustedPublicMessage,
+    to_public_error,
+)
 from nz_coder.runtime.verification.recovery import is_context_overflow_error
 from nz_coder.foundation.async_utils import to_thread_settled as _to_thread_settled
 from nz_coder.runtime.conversation.context_manager import (
@@ -43,9 +48,11 @@ from nz_coder.runtime.execution.turn_economy import (
 )
 from nz_coder.runtime.execution.work_budget import WorkBudgetController
 from nz_coder.runtime.execution.commit_boundary import (
+    FailedAttemptSettlement,
     OutputVisibility,
     approve_model_result,
     commit_approved_model_result,
+    settle_failed_attempt,
 )
 from nz_coder.runtime.core.contracts import RuntimeServices
 from nz_coder.runtime.core.request import RunOptions, RunRequest
@@ -665,6 +672,7 @@ class AgentRunner:
                 model_result_materialized = False
                 approved_tool_batch = None
                 record_provider_turn = None
+                failure_settlement = FailedAttemptSettlement()
 
                 async def approve_tool_batch(tool_calls: list) -> object | None:
                     approve = getattr(
@@ -679,6 +687,60 @@ class AgentRunner:
                         tool_calls,
                         messages,
                     )
+
+                async def settle_policy_exception(
+                    exc: BaseException,
+                    failure_kind: str,
+                ) -> PublicError:
+                    public = to_public_error(exc)
+                    if callable(record_provider_turn):
+                        record_provider_turn(finish_reason="error")
+                    await settle_failed_attempt(
+                        context=context,
+                        services=services,
+                        run_context=run_context,
+                        assistant_message=assistant_message,
+                        processor=processor,
+                        message_part=message_part,
+                        public_error=public,
+                        failure_kind=failure_kind,
+                        settlement=failure_settlement,
+                        snapshot_task=start_snapshot_task,
+                        snapshot_cancel=start_snapshot_cancel,
+                    )
+                    return public
+
+                async def approve_policy_stage(
+                    candidate,
+                    visibility: OutputVisibility,
+                ):
+                    nonlocal approved_tool_batch
+                    failure_kind = "output_guardrail"
+                    try:
+                        if candidate.tool_calls and approved_tool_batch is None:
+                            failure_kind = "tool_guardrail"
+                            approved_tool_batch = await approve_tool_batch(
+                                candidate.tool_calls,
+                            )
+                        if approved_tool_batch is not None:
+                            candidate.tool_calls = approved_tool_batch.calls
+                        failure_kind = "output_guardrail"
+                        approved = await approve_model_result(
+                            context=context,
+                            result=candidate,
+                            messages=messages,
+                            visibility=visibility,
+                        )
+                        return approved
+                    except (asyncio.CancelledError, KeyboardInterrupt) as exc:
+                        await settle_policy_exception(exc, "policy")
+                        raise
+                    except BaseException as exc:
+                        public = await settle_policy_exception(
+                            exc,
+                            failure_kind,
+                        )
+                        raise PublicRuntimeError(public) from None
 
                 async def resolve_start_snapshot() -> str | None:
                     nonlocal start_snapshot, start_snapshot_awaited
@@ -696,21 +758,14 @@ class AgentRunner:
                 async def execute_stream_tools(stream_result: object) -> str:
                     nonlocal model_result_materialized, approved_tool_batch
                     await resolve_start_snapshot()
-                    approved_tool_batch = await approve_tool_batch(
-                        stream_result.tool_calls,
-                    )
-                    if approved_tool_batch is not None:
-                        stream_result.tool_calls = approved_tool_batch.calls
                     visibility = (
                         OutputVisibility.INTERNAL_AGENT_RESULT
                         if context.control.has_agent_call_stack()
                         else OutputVisibility.USER_VISIBLE
                     )
-                    approved = await approve_model_result(
-                        context=context,
-                        result=stream_result,
-                        messages=messages,
-                        visibility=visibility,
+                    approved = await approve_policy_stage(
+                        stream_result,
+                        visibility,
                     )
                     if output_guarded:
                         # A tool-forming response is not a completed user answer.
@@ -888,50 +943,14 @@ class AgentRunner:
                         tool_calls=result.tool_calls,
                         finish_reason="error",
                     )
-                    if result.tool_calls and approved_tool_batch is None:
-                        approved_tool_batch = await approve_tool_batch(
-                            result.tool_calls,
-                        )
-                    if approved_tool_batch is not None:
-                        result.tool_calls = approved_tool_batch.calls
-                    try:
-                        approved = await approve_model_result(
-                            context=context,
-                            result=result,
-                            messages=messages,
-                            visibility=(
-                                OutputVisibility.INTERNAL_AGENT_RESULT
-                                if context.control.has_agent_call_stack()
-                                else OutputVisibility.USER_VISIBLE
-                            ),
-                        )
-                    except BaseException as exc:
-                        context.snapshots.retire(
-                            start_snapshot_task,
-                            start_snapshot_cancel,
-                        )
-                        context.messages.retire_message_part(
-                            message_part,
-                            "output_guardrail_failed",
-                        )
-                        set_assistant_error(
-                            assistant_message,
-                            exc,
-                            name="OutputGuardrailError",
-                            publish=context.messages.publish_event,
-                        )
-                        processor.fail_unsettled(
-                            TrustedPublicMessage(
-                                "guardrail_blocked",
-                                "Output policy blocked this response",
-                            )
-                        )
-                        processor.finish_step("blocked")
-                        await services.session_runtime.checkpoint(
-                            run_context,
-                            "error",
-                        )
-                        raise
+                    approved = await approve_policy_stage(
+                        result,
+                        (
+                            OutputVisibility.INTERNAL_AGENT_RESULT
+                            if context.control.has_agent_call_stack()
+                            else OutputVisibility.USER_VISIBLE
+                        ),
+                    )
                     result = approved.result
                     commit_approved_model_result(
                         approved,
@@ -1159,47 +1178,12 @@ class AgentRunner:
                     context.messages.inject_api_diagnostic(messages, result.diagnostic)
                     continue
 
-                if result.tool_calls:
-                    if approved_tool_batch is None:
-                        approved_tool_batch = await approve_tool_batch(
-                            result.tool_calls,
-                        )
-                    if approved_tool_batch is not None:
-                        result.tool_calls = approved_tool_batch.calls
                 visibility = (
                     OutputVisibility.INTERNAL_AGENT_RESULT
                     if context.control.has_agent_call_stack()
                     else OutputVisibility.USER_VISIBLE
                 )
-                try:
-                    approved = await approve_model_result(
-                        context=context,
-                        result=result,
-                        messages=messages,
-                        visibility=visibility,
-                    )
-                except BaseException as exc:
-                    context.snapshots.retire(
-                        start_snapshot_task,
-                        start_snapshot_cancel,
-                    )
-                    context.messages.retire_message_part(
-                        message_part,
-                        "output_guardrail_failed",
-                    )
-                    set_assistant_error(
-                        assistant_message,
-                        exc,
-                        name="OutputGuardrailError",
-                        publish=context.messages.publish_event,
-                    )
-                    processor.fail_unsettled(TrustedPublicMessage(
-                        "guardrail_blocked",
-                        "Output policy blocked this response",
-                    ))
-                    processor.finish_step("blocked")
-                    await services.session_runtime.checkpoint(run_context, "error")
-                    raise
+                approved = await approve_policy_stage(result, visibility)
                 result = approved.result
                 commit_approved_model_result(
                     approved,
@@ -1659,9 +1643,21 @@ class AgentRunner:
                         on_tool, on_text, processor=processor, usage=result,
                         approved_batch=approved_tool_batch,
                     )
-                step_result = await self._middleware.run(
-                    "tool_batch", run_context, execute_batch,
-                )
+                try:
+                    step_result = await self._middleware.run(
+                        "tool_batch", run_context, execute_batch,
+                    )
+                except (asyncio.CancelledError, KeyboardInterrupt):
+                    raise
+                except BaseException as exc:
+                    public = to_public_error(exc)
+                    if public.code not in {
+                        "guardrail_blocked",
+                        "guardrail_review_required",
+                    }:
+                        raise
+                    await settle_policy_exception(exc, "tool_guardrail")
+                    raise PublicRuntimeError(public) from None
                 record_provider_turn(
                     tool_calls=result.tool_calls,
                     finish_reason=result.finish_reason or "tool-calls",

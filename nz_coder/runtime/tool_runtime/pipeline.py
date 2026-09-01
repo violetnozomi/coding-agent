@@ -20,6 +20,7 @@ from nz_coder.runtime.adapters.tool import (
     tool_context_from_legacy_host,
 )
 from nz_coder.runtime.core.tool_context import ToolExecutionContext, ToolPolicyContext
+from nz_coder.runtime.agent.guardrails import GuardrailEscalateError
 from nz_coder.runtime.agent.guardrail_runtime import ProductionGuardrailRuntime
 from nz_coder.runtime.agent.auto_mode import parse_tool_arguments
 from nz_coder.runtime.conversation.input_preflight import ProductionInputPreflight
@@ -479,10 +480,15 @@ class ProductionToolRuntime:
                 )
             if describe_interrupted:
                 raise asyncio.CancelledError
-        except BaseException:
+        except BaseException as exc:
+            policy_escalation = isinstance(exc, GuardrailEscalateError)
             if processor is not None:
-                processor.interrupt_unsettled()
-                await checkpoint_state("interrupted")
+                # Escalation belongs to the Runner's atomic policy boundary.
+                # Settling here would publish an intermediate checkpoint and
+                # make the same failed attempt observable twice.
+                if not policy_escalation:
+                    processor.interrupt_unsettled()
+                    await checkpoint_state("interrupted")
             # Executor cancellation cannot stop an already-running write. The
             # scheduler drains it before re-raising, then this rollback keeps
             # late side effects from escaping an interrupted Agent turn.
