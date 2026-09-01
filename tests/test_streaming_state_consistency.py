@@ -385,10 +385,8 @@ def test_output_guardrail_never_leaks_raw_delta(tmp_path, monkeypatch):
 
 def test_output_guardrail_reject_discards_entire_attempt(tmp_path, monkeypatch):
     from nz_coder.foundation import config
-    from nz_coder.runtime.agent.guardrails import (
-        GuardrailBlockedError,
-        OutputGuardrail,
-    )
+    from nz_coder.protocol.public_error import PublicRuntimeError
+    from nz_coder.runtime.agent.guardrails import OutputGuardrail
     from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
     from nz_coder.runtime.execution.loop import AgentLoop
     from nz_coder.runtime.process.workdir import scoped_workdir
@@ -427,7 +425,7 @@ def test_output_guardrail_reject_discards_entire_attempt(tmp_path, monkeypatch):
             agent_graph=graph,
         )
         try:
-            with pytest.raises(GuardrailBlockedError):
+            with pytest.raises(PublicRuntimeError):
                 asyncio.run(agent.run(messages, stream=True))
             events = _drain(subscription)
         finally:

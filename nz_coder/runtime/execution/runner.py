@@ -207,9 +207,16 @@ class AgentRunner:
         run_context.cancellation = options.cancellation
         event_bus = options.event_bus
         if event_bus is not None:
-            bind_identity = getattr(event_bus, "bind_identity", None)
-            if callable(bind_identity):
-                bind_identity(run_id=run_context.interaction_run_id)
+            create_publisher = getattr(event_bus, "for_interaction", None)
+            if callable(create_publisher):
+                run_context.metadata["event_publisher"] = create_publisher(
+                    run_context.interaction_run_id,
+                    agent_invocation_id=request.agent.name,
+                    parent_interaction_run_id=str(
+                        request.parent_interaction_run_id or ""
+                    ),
+                    parent_agent_invocation_id=str(request.parent_agent_id or ""),
+                )
         execution_context = factory(run_context, services)
         if not isinstance(execution_context, RunnerExecutionContext):
             raise TypeError("execution context factory must return RunnerExecutionContext")
@@ -363,9 +370,17 @@ class AgentRunner:
             raise TypeError("AgentRunner requires a RuntimeServices graph")
         request = run_request_from_legacy_host(host, messages, stream)
         run_context = await services.session_runtime.open(request)
-        bind_identity = getattr(getattr(host, "event_bus", None), "bind_identity", None)
-        if callable(bind_identity):
-            bind_identity(run_id=run_context.interaction_run_id)
+        event_bus = getattr(host, "event_bus", None)
+        create_publisher = getattr(event_bus, "for_interaction", None)
+        if callable(create_publisher):
+            host.event_publisher = create_publisher(
+                run_context.interaction_run_id,
+                agent_invocation_id=str(getattr(host, "agent_id", "") or ""),
+            )
+            background = getattr(host, "background_agents", None)
+            bind_publisher = getattr(background, "bind_event_publisher", None)
+            if callable(bind_publisher):
+                bind_publisher(host.event_publisher)
         # The legacy lifecycle already owns the mature SessionEventBus facts.
         # Suppress only the additive core projection to avoid duplicate UI events.
         run_context.metadata["suppress_runtime_events"] = True

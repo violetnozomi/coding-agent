@@ -190,6 +190,7 @@ class ManagedSession:
         self._run_phase = "idle"
         self._run_event_floor = 0
         self._active_interaction_run_id = ""
+        self._active_event_publisher = None
         self._cancel_requested = False
         self._disposed = False
         self._run_gate = run_gate
@@ -458,6 +459,7 @@ class ManagedSession:
                     "message_count": len(self.history),
                 },
                 replay=256,
+                publisher=self._active_event_publisher,
             )
             result["pending"] = _merge_replayed_interactions(
                 result["pending"], replay_events
@@ -732,13 +734,16 @@ class ManagedSession:
             self._gate_acquired = True
             previous_history = copy.deepcopy(self.history)
             try:
-                self.interactions.begin_run()
                 self._active_interaction_run_id = (
                     f"interaction-{uuid.uuid4().hex}"
                 )
-                self.event_bus.bind_identity(
-                    run_id=self._active_interaction_run_id,
+                self._active_event_publisher = self.event_bus.for_interaction(
+                    self._active_interaction_run_id,
+                    agent_invocation_id=str(
+                        getattr(self.agent, "agent_id", "worker") or "worker"
+                    ),
                 )
+                self.interactions.begin_run(self._active_event_publisher)
                 recent = self.event_bus.recent(1)
                 self._run_event_floor = recent[-1].sequence if recent else 0
                 provider_id, model_id, variant = self._model_identity()
@@ -1016,7 +1021,7 @@ class ManagedSession:
                     self._run_event_floor = 0
                     self._release_run_gate()
                     try:
-                        self.event_bus.publish(
+                        (self._active_event_publisher or self.event_bus).publish(
                             "session.run.settled",
                             {"status": status, "persisted": persisted},
                         )

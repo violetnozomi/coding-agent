@@ -39,6 +39,11 @@ class ProductionRuntimeHost:
                 run_id=getattr(agent, "trace_id", ""),
                 agent_id=getattr(agent, "agent_id", ""),
             )
+        if not hasattr(agent, "event_publisher"):
+            agent.event_publisher = agent.event_bus.for_interaction(
+                str(getattr(agent, "trace_id", "") or getattr(agent, "session_id", "session")),
+                agent_invocation_id=str(getattr(agent, "agent_id", "") or ""),
+            )
         agent._rotate_change_tracker_if_needed()
         agent.change_tracker.history_start = _last_user_message_position(messages)
         from nz_coder.state.memory import bind_memory_manager
@@ -65,6 +70,7 @@ class ProductionRuntimeHost:
         if not hasattr(agent, "background_agents"):
             agent.background_agents = background_agent_manager(agent.workdir, agent.session_id)
         agent.background_agents.bind_event_bus(agent.event_bus)
+        agent.background_agents.bind_event_publisher(agent.event_publisher)
         if hasattr(agent, "lineage"):
             agent.background_agents.bind_lineage(agent.lineage)
         try:
@@ -74,7 +80,7 @@ class ProductionRuntimeHost:
                 stack.enter_context(scoped_broad_test_guard())
                 stack.enter_context(scoped_declared_test_scopes())
                 stack.enter_context(scoped_session(agent.session_id))
-                stack.enter_context(scoped_session_event_bus(agent.event_bus))
+                stack.enter_context(scoped_session_event_bus(agent.event_publisher))
                 stack.enter_context(scoped_background_agent_manager(agent.background_agents))
                 stack.enter_context(scoped_agent_message_sender(
                     getattr(agent, "_background_message_manager", agent.background_agents),

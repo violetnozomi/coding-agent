@@ -131,6 +131,8 @@ class BackgroundAgentManager:
         self._message_sequence = 0
         self._mailboxes: dict[str, list[dict]] = {}
         self._event_bus = None
+        self._event_publisher = None
+        self._task_publishers: dict[str, object] = {}
         self._lineage = None
         self._managed_runs: dict[str, _ManagedWorkflowRun] = {}
         self._agent_cap = max(
@@ -219,6 +221,18 @@ class BackgroundAgentManager:
         """Attach the owning Session's already-existing live event bus."""
         self._event_bus = event_bus
 
+    def bind_event_publisher(self, publisher) -> None:
+        """Attach the immutable publisher for newly-created background work."""
+        self._event_publisher = publisher
+
+    def _remember_task_publisher(self, task_id: str, publisher) -> None:
+        """Freeze one child task's event identity for its entire lifetime."""
+        task = str(task_id or "").strip()
+        if not task or publisher is None:
+            return
+        with self._lock:
+            self._task_publishers.setdefault(task, publisher)
+
     def bind_lineage(self, lineage) -> None:
         """Attach the owning Session's append-only outcome journal."""
         self._lineage = lineage
@@ -280,11 +294,15 @@ class BackgroundAgentManager:
         return entry
 
     def _bridge_workflow_event(self, event: dict, snapshot: dict) -> None:
-        bus = self._event_bus
+        task_id = str(event.get("task_id") or "")
+        with self._lock:
+            bus = self._task_publishers.get(task_id) or self._event_publisher
         if bus is None:
             from nz_coder.protocol.session_events import current_session_event_bus
 
             bus = current_session_event_bus()
+        if bus is None:
+            bus = self._event_bus
         if bus is None:
             return
         bus.publish(
@@ -687,6 +705,9 @@ class BackgroundAgentManager:
             _overlapping_paths,
         )
 
+        from nz_coder.protocol.session_events import current_session_event_publisher
+
+        origin_publisher = current_session_event_publisher() or self._event_publisher
         with self._lock:
             if self._closing or self._closed:
                 return "Error: background Agent manager is closed"
@@ -768,6 +789,23 @@ class BackgroundAgentManager:
                 prepared.append((state, item))
 
             for state, _ in prepared:
+                if origin_publisher is not None:
+                    child_publisher = origin_publisher.for_child(
+                        str(state["session_id"]),
+                    )
+                    self._remember_task_publisher(
+                        str(state["session_id"]),
+                        child_publisher,
+                    )
+                    state.update({
+                        "origin_interaction_run_id": (
+                            child_publisher.interaction_run_id
+                        ),
+                        "agent_invocation_id": child_publisher.agent_invocation_id,
+                        "parent_agent_invocation_id": (
+                            child_publisher.parent_agent_invocation_id
+                        ),
+                    })
                 self._save(state)
                 self._workflow.record_task(
                     "task_queued",

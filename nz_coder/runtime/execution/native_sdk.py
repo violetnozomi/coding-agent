@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import uuid
 from dataclasses import replace
 
 from nz_coder.runtime.execution.composition import declared_runtime
@@ -78,6 +79,18 @@ def build_product_run_environment(request: RunRequest, options: RunOptions):
                 model_runtime=runtime,
                 runtime_services=services,
             )
+            if request.interaction_run_id:
+                environment.event_publisher = event_bus.for_interaction(
+                    request.interaction_run_id,
+                    agent_invocation_id=environment.agent_id,
+                    parent_interaction_run_id=str(
+                        request.parent_interaction_run_id or ""
+                    ),
+                    parent_agent_invocation_id=str(request.parent_agent_id or ""),
+                )
+                environment.background_agents.bind_event_publisher(
+                    environment.event_publisher
+                )
     except BaseException:
         if owns_event_bus:
             event_bus.close()
@@ -120,13 +133,21 @@ class NativeSDKRunner:
         if not isinstance(request, RunRequest):
             raise TypeError("NativeSDKRunner requires RunRequest")
         selected = options or RunOptions()
-        environment = self._environment or build_product_run_environment(request, selected)
-        owns_environment = self._environment is None
-        messages = copy.deepcopy(list(request.messages))
         effective_request = request
+        if request.interaction_run_id is None:
+            effective_request = replace(
+                request,
+                interaction_run_id=f"interaction-{uuid.uuid4().hex}",
+            )
+        environment = self._environment or build_product_run_environment(
+            effective_request,
+            selected,
+        )
+        owns_environment = self._environment is None
+        messages = copy.deepcopy(list(effective_request.messages))
         if selected.event_bus is not None:
-            effective_request = replace(request, metadata={
-                **request.metadata,
+            effective_request = replace(effective_request, metadata={
+                **effective_request.metadata,
                 # The product SessionEventBus already receives the mature
                 # lifecycle stream; do not duplicate core projection events.
                 "suppress_runtime_events": True,
@@ -142,7 +163,11 @@ class NativeSDKRunner:
                 on_tool=selected.on_tool,
                 on_text=selected.on_text,
                 on_token=selected.on_token,
-                stream=request.stream if selected.stream is None else selected.stream,
+                stream=(
+                    effective_request.stream
+                    if selected.stream is None
+                    else selected.stream
+                ),
                 execute=execute,
             )
             return replace(result, metadata={

@@ -522,7 +522,7 @@ def test_http_attach_snapshot_is_available_while_run_is_active(local_service):
     session_id = client.create_session("auto")["id"]
     client.run(session_id, "wait")
     _wait_for_status(client, session_id, "running")
-    local_service.manager.get(session_id).event_bus.publish(
+    local_service.manager.get(session_id)._active_event_publisher.publish(
         "message.part.delta",
         {"message_id": "msg-live", "part_id": "part-live", "delta": "partial"},
     )

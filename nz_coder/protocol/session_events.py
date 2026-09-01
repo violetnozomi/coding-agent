@@ -166,22 +166,32 @@ class SessionEvent:
     agent_id: str
     event_id: str
     schema_version: int = 1
+    agent_invocation_id: str = ""
+    parent_interaction_run_id: str = ""
+    parent_agent_invocation_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         """Return the stable wire envelope used by adapters and SSE."""
+        meta = {
+            "schema_version": self.schema_version,
+            "event_id": self.event_id,
+            "sequence": self.sequence,
+            "timestamp": self.timestamp,
+            "session_id": self.session_id,
+            "run_id": self.run_id,
+            "interaction_run_id": self.run_id,
+            "agent_id": self.agent_id,
+        }
+        if self.agent_invocation_id:
+            meta["agent_invocation_id"] = self.agent_invocation_id
+        if self.parent_interaction_run_id:
+            meta["parent_interaction_run_id"] = self.parent_interaction_run_id
+        if self.parent_agent_invocation_id:
+            meta["parent_agent_invocation_id"] = self.parent_agent_invocation_id
         return {
             "type": self.type,
             "properties": copy.deepcopy(self.properties),
-            "meta": {
-                "schema_version": self.schema_version,
-                "event_id": self.event_id,
-                "sequence": self.sequence,
-                "timestamp": self.timestamp,
-                "session_id": self.session_id,
-                "run_id": self.run_id,
-                "interaction_run_id": self.run_id,
-                "agent_id": self.agent_id,
-            },
+            "meta": meta,
         }
 
     @classmethod
@@ -208,6 +218,11 @@ class SessionEvent:
             meta.get("interaction_run_id") or meta.get("run_id"),
             meta.get("agent_id"),
         ]
+        lineage = [
+            meta.get("agent_invocation_id", ""),
+            meta.get("parent_interaction_run_id", ""),
+            meta.get("parent_agent_invocation_id", ""),
+        ]
         if (
             not isinstance(sequence, int)
             or isinstance(sequence, bool)
@@ -221,6 +236,7 @@ class SessionEvent:
             or not isinstance(event_id, str)
             or not _EVENT_ID_RE.fullmatch(event_id)
             or not all(isinstance(value, str) for value in identity)
+            or not all(isinstance(value, str) for value in lineage)
         ):
             return None
         return cls(
@@ -233,6 +249,9 @@ class SessionEvent:
             agent_id=identity[2],
             event_id=event_id,
             schema_version=schema_version,
+            agent_invocation_id=lineage[0],
+            parent_interaction_run_id=lineage[1],
+            parent_agent_invocation_id=lineage[2],
         )
 
 
@@ -627,13 +646,41 @@ class SessionEventBus:
         self._subscriptions: set[SessionSubscription] = set()
         self._recent: deque[SessionEvent] = deque(restored, maxlen=capacity)
 
-    def bind_identity(self, *, run_id: str = "", agent_id: str = "") -> None:
-        """Attach run/agent identity before the first public event."""
-        with self._lock:
-            if run_id:
-                self.run_id = str(run_id)
-            if agent_id:
-                self.agent_id = str(agent_id)
+    def for_interaction(
+        self,
+        interaction_run_id: str,
+        *,
+        agent_invocation_id: str = "",
+        parent_interaction_run_id: str = "",
+        parent_agent_invocation_id: str = "",
+    ) -> "SessionEventPublisher":
+        """Create an immutable publisher for one interaction invocation."""
+        interaction = str(interaction_run_id or "").strip()
+        if not interaction:
+            raise ValueError("interaction_run_id must be non-empty")
+        return SessionEventPublisher(
+            bus=self,
+            interaction_run_id=interaction,
+            agent_invocation_id=str(agent_invocation_id or ""),
+            parent_interaction_run_id=str(parent_interaction_run_id or ""),
+            parent_agent_invocation_id=str(parent_agent_invocation_id or ""),
+        )
+
+    def bind_identity(
+        self,
+        *,
+        run_id: str = "",
+        agent_id: str = "",
+    ) -> "SessionEventPublisher":
+        """Return a fixed publisher without mutating this Session-scoped bus.
+
+        This compatibility method deliberately cannot relabel the bus or any
+        publisher already handed to a running/background task.
+        """
+        return self.for_interaction(
+            str(run_id or self.run_id),
+            agent_invocation_id=str(agent_id or self.agent_id),
+        )
 
     def publish(self, event_type: str, properties: dict[str, Any] | None = None) -> SessionEvent:
         """Publish without allowing a slow subscriber to block the Agent."""
@@ -652,6 +699,7 @@ class SessionEventBus:
         *,
         event_type: str,
         properties: dict[str, Any] | None = None,
+        publisher: "SessionEventPublisher | None" = None,
     ) -> tuple[Any, SessionEvent]:
         """Capture state and append its cursor event in one publish boundary.
 
@@ -668,7 +716,12 @@ class SessionEventBus:
             if self._closed:
                 raise RuntimeError("Session event bus is closed")
             snapshot = copy.deepcopy(snapshot_factory())
-            event = self._publish_locked(event_type, properties or {})
+            identity = self._publisher_identity(publisher)
+            event = self._publish_locked(
+                event_type,
+                properties or {},
+                **identity,
+            )
         return snapshot, event
 
     def checkpoint_with_replay(
@@ -678,6 +731,7 @@ class SessionEventBus:
         event_type: str,
         properties: dict[str, Any] | None = None,
         replay: int = 256,
+        publisher: "SessionEventPublisher | None" = None,
     ) -> tuple[Any, SessionEvent, list[SessionEvent]]:
         """Capture state, bounded prior events, and a cursor atomically.
 
@@ -698,8 +752,29 @@ class SessionEventBus:
                 raise RuntimeError("Session event bus is closed")
             snapshot = copy.deepcopy(snapshot_factory())
             recent = list(self._recent)[-replay:] if replay else []
-            event = self._publish_locked(event_type, properties or {})
+            identity = self._publisher_identity(publisher)
+            event = self._publish_locked(
+                event_type,
+                properties or {},
+                **identity,
+            )
         return snapshot, event, recent
+
+    def _publisher_identity(
+        self,
+        publisher: "SessionEventPublisher | None",
+    ) -> dict[str, str | None]:
+        if publisher is None:
+            return {}
+        if publisher.bus is not self:
+            raise ValueError("event publisher belongs to a different bus")
+        return {
+            "run_id": publisher.interaction_run_id,
+            "agent_id": publisher.agent_invocation_id,
+            "agent_invocation_id": publisher.agent_invocation_id,
+            "parent_interaction_run_id": publisher.parent_interaction_run_id,
+            "parent_agent_invocation_id": publisher.parent_agent_invocation_id,
+        }
 
     def subscribe(
         self,
@@ -778,6 +853,12 @@ class SessionEventBus:
         self,
         event_type: str,
         properties: dict[str, Any],
+        *,
+        run_id: str | None = None,
+        agent_id: str | None = None,
+        agent_invocation_id: str = "",
+        parent_interaction_run_id: str = "",
+        parent_agent_invocation_id: str = "",
     ) -> SessionEvent:
         self._sequence += 1
         event = SessionEvent(
@@ -786,9 +867,12 @@ class SessionEventBus:
             sequence=self._sequence,
             timestamp=time.time(),
             session_id=self.session_id,
-            run_id=self.run_id,
-            agent_id=self.agent_id,
+            run_id=self.run_id if run_id is None else str(run_id),
+            agent_id=self.agent_id if agent_id is None else str(agent_id),
             event_id=uuid.uuid4().hex,
+            agent_invocation_id=str(agent_invocation_id or ""),
+            parent_interaction_run_id=str(parent_interaction_run_id or ""),
+            parent_agent_invocation_id=str(parent_agent_invocation_id or ""),
         )
         self._recent.append(event)
         if self._journal is not None:
@@ -819,16 +903,89 @@ class SessionEventBus:
         with self._lock:
             self._subscriptions.discard(subscription)
 
+    def _publish_for_interaction(
+        self,
+        publisher: "SessionEventPublisher",
+        event_type: str,
+        properties: dict[str, Any] | None = None,
+    ) -> SessionEvent:
+        """Publish with identity captured by an immutable publisher."""
+        if publisher.bus is not self:
+            raise ValueError("event publisher belongs to a different bus")
+        if not isinstance(event_type, str) or not _EVENT_TYPE_RE.fullmatch(event_type):
+            raise ValueError(f"Invalid session event type: {event_type!r}")
+        if properties is not None and not isinstance(properties, dict):
+            raise ValueError("Session event properties must be an object")
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Session event bus is closed")
+            return self._publish_locked(
+                event_type,
+                properties or {},
+                run_id=publisher.interaction_run_id,
+                agent_id=publisher.agent_invocation_id,
+                agent_invocation_id=publisher.agent_invocation_id,
+                parent_interaction_run_id=publisher.parent_interaction_run_id,
+                parent_agent_invocation_id=publisher.parent_agent_invocation_id,
+            )
 
-_CURRENT_EVENT_BUS: ContextVar[SessionEventBus | None] = ContextVar(
+
+@dataclass(frozen=True)
+class SessionEventPublisher:
+    """Immutable identity handle used by one run or child invocation."""
+
+    bus: SessionEventBus
+    interaction_run_id: str
+    agent_invocation_id: str = ""
+    parent_interaction_run_id: str = ""
+    parent_agent_invocation_id: str = ""
+
+    @property
+    def session_id(self) -> str:
+        return self.bus.session_id
+
+    @property
+    def run_id(self) -> str:
+        """Compatibility alias for the immutable interaction identity."""
+        return self.interaction_run_id
+
+    @property
+    def agent_id(self) -> str:
+        """Compatibility alias for the immutable invocation identity."""
+        return self.agent_invocation_id
+
+    def publish(
+        self,
+        event_type: str,
+        properties: dict[str, Any] | None = None,
+    ) -> SessionEvent:
+        return self.bus._publish_for_interaction(self, event_type, properties)
+
+    def for_child(self, agent_invocation_id: str) -> "SessionEventPublisher":
+        """Create a child publisher while preserving the originating run."""
+        child = str(agent_invocation_id or "").strip()
+        if not child:
+            raise ValueError("agent_invocation_id must be non-empty")
+        return SessionEventPublisher(
+            bus=self.bus,
+            interaction_run_id=self.interaction_run_id,
+            agent_invocation_id=child,
+            parent_interaction_run_id=(
+                self.parent_interaction_run_id or self.interaction_run_id
+            ),
+            parent_agent_invocation_id=self.agent_invocation_id,
+        )
+
+
+_CURRENT_EVENT_BUS: ContextVar[SessionEventBus | SessionEventPublisher | None] = ContextVar(
     "nz_coder_session_event_bus",
     default=None,
 )
 
 
 @contextmanager
-def scoped_session_event_bus(bus: SessionEventBus):
-    """Bind the active session bus for tools and optional adapters."""
+def scoped_session_event_bus(bus: SessionEventBus | SessionEventPublisher):
+    """Bind the active session publisher (or legacy bus) for adapters."""
     token = _CURRENT_EVENT_BUS.set(bus)
     try:
         yield bus
@@ -836,8 +993,14 @@ def scoped_session_event_bus(bus: SessionEventBus):
         _CURRENT_EVENT_BUS.reset(token)
 
 
-def current_session_event_bus() -> SessionEventBus | None:
+def current_session_event_bus() -> SessionEventBus | SessionEventPublisher | None:
     return _CURRENT_EVENT_BUS.get()
+
+
+def current_session_event_publisher() -> SessionEventPublisher | None:
+    """Return the fixed publisher bound to the current run, if available."""
+    current = _CURRENT_EVENT_BUS.get()
+    return current if isinstance(current, SessionEventPublisher) else None
 
 
 def publish_session_event(

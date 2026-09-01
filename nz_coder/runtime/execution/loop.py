@@ -14,6 +14,7 @@ import re as _re
 import threading
 import time
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -468,7 +469,10 @@ class ProductRunEnvironment:
         self.tracer = tracer or _build_default_tracer(enabled, self.session_id)
         self.agent_id = getattr(self.tracer, "agent_id", f"agent-{self.session_id}")
         self.trace_id = getattr(self.tracer, "trace_id", self.tracer.run_id)
-        self.event_bus.bind_identity(run_id=self.tracer.run_id, agent_id=self.agent_id)
+        self.event_publisher = self.event_bus.for_interaction(
+            self.tracer.run_id,
+            agent_invocation_id=self.agent_id,
+        )
         self._owns_change_tracker = change_tracker is None
         self.change_tracker = change_tracker or ChangeTracker(
             run_id=self.tracer.run_id,
@@ -989,10 +993,18 @@ class ProductRunEnvironment:
     def _native_execution_context(self, run_context, services):
         """Bind legacy coding capabilities once at the compatibility edge."""
         self.active_run_context = run_context
-        self.event_bus.bind_identity(
-            run_id=run_context.interaction_run_id,
-            agent_id=self.agent_id,
+        self.event_publisher = self.event_bus.for_interaction(
+            run_context.interaction_run_id,
+            agent_invocation_id=self.agent_id,
+            parent_interaction_run_id=str(
+                getattr(run_context.request, "parent_interaction_run_id", "")
+                or ""
+            ),
+            parent_agent_invocation_id=str(
+                getattr(run_context.request, "parent_agent_id", "") or ""
+            ),
         )
+        self.background_agents.bind_event_publisher(self.event_publisher)
         return runner_context_from_legacy_host(self, services, run_context)
 
     async def _run_native_facade(
@@ -1008,6 +1020,26 @@ class ProductRunEnvironment:
                 ),
             )
         request = run_request_from_legacy_host(self, messages, stream)
+        if request.interaction_run_id is None:
+            request = replace(
+                request,
+                interaction_run_id=f"interaction-{uuid.uuid4().hex}",
+            )
+        event_bus = getattr(self, "event_bus", None)
+        create_publisher = getattr(event_bus, "for_interaction", None)
+        if callable(create_publisher):
+            self.event_publisher = create_publisher(
+                request.interaction_run_id,
+                agent_invocation_id=self.agent_id,
+                parent_interaction_run_id=str(
+                    request.parent_interaction_run_id or ""
+                ),
+                parent_agent_invocation_id=str(request.parent_agent_id or ""),
+            )
+            background = getattr(self, "background_agents", None)
+            bind_publisher = getattr(background, "bind_event_publisher", None)
+            if callable(bind_publisher):
+                bind_publisher(self.event_publisher)
         options = RunOptions(
             stream=stream,
             on_tool=on_tool,
@@ -1044,13 +1076,13 @@ class ProductRunEnvironment:
     def _emit_session_event(self, event_type: str, properties: dict) -> None:
         """Publish a public session event without affecting Agent control flow."""
         try:
-            self.event_bus.publish(event_type, properties)
+            self.event_publisher.publish(event_type, properties)
         except Exception:
             return
 
     def _new_message_part(self, turn: int) -> dict:
         """Create stable IDs for one assistant text part."""
-        interaction_run_id = str(getattr(self.event_bus, "run_id", "") or "")
+        interaction_run_id = self.event_publisher.interaction_run_id
         return {
             "run_id": interaction_run_id,
             "interaction_run_id": interaction_run_id,

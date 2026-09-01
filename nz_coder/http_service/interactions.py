@@ -56,12 +56,15 @@ class InteractionBroker:
         self._pending: dict[str, _PendingInteraction] = {}
         self._closed = False
         self._accepting = False
+        self._publisher = None
 
-    def begin_run(self) -> None:
+    def begin_run(self, publisher=None) -> None:
         """Allow interaction requests for one newly accepted Agent run."""
         with self._lock:
             if self._closed:
                 raise RuntimeError("interaction broker is closed")
+            if publisher is not None:
+                self._publisher = publisher
             self._accepting = True
 
     def ask_permission(self, tool_name: str, tool_input: dict) -> str:
@@ -293,7 +296,7 @@ class InteractionBroker:
 
     def _publish(self, event_type: str, properties: dict[str, Any]) -> bool:
         try:
-            self.event_bus.publish(event_type, properties)
+            (self._publisher or self.event_bus).publish(event_type, properties)
         except RuntimeError:
             return False
         return True
