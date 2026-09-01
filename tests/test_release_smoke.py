@@ -42,10 +42,14 @@ def test_core_runtime_exercises_declared_python_floor():
         / "core-runtime.yml"
     ).read_text(encoding="utf-8")
 
-    assert 'python-version: "3.9"' in workflow
+    assert 'python-version: "3.10"' in workflow
     assert "python-compatibility" in workflow
     assert "tests/runtime/test_native_runner.py" in workflow
     assert "python -m build --wheel --sdist" in workflow
+    project = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(
+        encoding="utf-8"
+    )
+    assert 'requires-python = ">=3.10"' in project
 
 
 def test_declared_dev_dependencies_are_sufficient_for_full_suite():

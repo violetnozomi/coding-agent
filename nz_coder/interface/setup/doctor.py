@@ -114,12 +114,12 @@ def doctor_main(
 
 def _check_python() -> DoctorCheck:
     version = sys.version_info
-    supported = version >= (3, 9)
+    supported = version >= (3, 10)
     return DoctorCheck(
         "python",
         "pass" if supported else "fail",
         f"{version.major}.{version.minor}.{version.micro}",
-        "Install Python 3.9 or newer." if not supported else "",
+        "Install Python 3.10 or newer." if not supported else "",
     )
 
 
