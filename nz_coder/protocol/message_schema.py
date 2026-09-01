@@ -16,7 +16,11 @@ from nz_coder.protocol.attachments import (
     normalize_document_attachments,
     normalize_user_file_parts,
 )
-from nz_coder.protocol.public_error import to_public_error
+from nz_coder.protocol.public_error import (
+    PublicError,
+    public_error_from_wire,
+    to_public_error,
+)
 
 MESSAGE_SCHEMA_VERSION = 1
 MESSAGE_ID_KEY = "_nz_message_id"
@@ -338,28 +342,50 @@ def set_assistant_end_state(
 
 def set_assistant_error(
     message: dict,
-    error: Exception | str,
+    error: object,
     *,
     name: str = "UnknownError",
     data: dict[str, Any] | None = None,
     publish: Callable[[str, dict], None] | None = None,
 ) -> dict:
-    """Persist a typed assistant error while retaining the legacy string."""
-    public = to_public_error(error) if isinstance(error, BaseException) else None
-    detail = public.message if public is not None else str(error)
+    """Persist only an explicitly projected, public-safe Assistant error."""
+    public = to_public_error(error)
+    supplied_public = (
+        public_error_from_wire(data.get("public_error"))
+        if isinstance(data, dict)
+        else None
+    )
+    if supplied_public is not None:
+        public = supplied_public
+    detail = public.message
+    public_data: dict[str, Any] = {
+        "message": detail,
+        "public_error": public.to_dict(),
+    }
+    if name == "APIError":
+        public_data["isRetryable"] = public.retryable
+    if isinstance(data, dict):
+        status = data.get("statusCode")
+        if isinstance(status, int) and not isinstance(status, bool) and status >= 0:
+            public_data["statusCode"] = status
+        provider_id = data.get("providerID")
+        if isinstance(provider_id, str) and provider_id:
+            public_data["providerID"] = _bounded_string(provider_id, 200)
+        retries = data.get("retries")
+        if isinstance(retries, int) and not isinstance(retries, bool) and retries >= 0:
+            public_data["retries"] = retries
     payload = {
         "name": name,
-        "data": (
-            public.to_dict()
-            if public is not None
-            else (dict(data) if isinstance(data, dict) else {"message": detail})
-        ),
+        "data": public_data,
     }
     normalized = _assistant_error(payload)
     if normalized is None:
         normalized = {
             "name": "UnknownError",
-            "data": {"message": detail[:4000]},
+            "data": {
+                "message": detail[:4000],
+                "public_error": public.to_dict(),
+            },
         }
     message["_nz_error"] = detail
     message[ASSISTANT_ERROR_KEY] = normalized
@@ -386,12 +412,24 @@ def assistant_error_from_exception(
         else None
     )
     if status in {401, 403} and provider_id:
-        return {
+        public = PublicError(
+            public.code,
+            public.message,
+            public.retryable,
+            {**public.metadata, "provider_id": _bounded_string(provider_id, 200)},
+        )
+        return _assistant_error({
             "name": "ProviderAuthError",
-            "data": {"providerID": provider_id[:200], "message": message[:4000]},
+            "data": {
+                "providerID": provider_id[:200],
+                "message": message[:4000],
+                "public_error": public.to_dict(),
+            },
+        }) or {
+            "name": "UnknownError",
+            "data": {"message": message, "public_error": public.to_dict()},
         }
 
-    code = getattr(error, "code", None)
     class_name = type(error).__name__
     api_shaped = (
         status is not None
@@ -412,28 +450,39 @@ def assistant_error_from_exception(
                     for marker in ("timeout", "connection", "ratelimit")
                 )
             )
+        if bool(retryable) != public.retryable:
+            public = PublicError(
+                public.code,
+                public.message,
+                bool(retryable),
+                public.metadata,
+            )
         data: dict[str, Any] = {
             "message": message,
             "isRetryable": bool(retryable),
-            "metadata": {
-                "name": class_name,
-                **({"code": str(code)} if code is not None else {}),
-            },
+            "public_error": public.to_dict(),
         }
         if status is not None:
             data["statusCode"] = status
         return _assistant_error({"name": "APIError", "data": data}) or {
             "name": "UnknownError",
-            "data": {"message": message[:4000]},
+            "data": {"message": message[:4000], "public_error": public.to_dict()},
         }
     return _assistant_error({
         "name": "UnknownError",
         "data": {
             "message": message,
-            "name": class_name,
-            **({"code": str(code)} if code is not None else {}),
+            "public_error": public.to_dict(),
         },
-    }) or {"name": "UnknownError", "data": {"message": message[:4000]}}
+    }) or {
+        "name": "UnknownError",
+        "data": {"message": message[:4000], "public_error": public.to_dict()},
+    }
+
+
+def normalize_assistant_error(value: object) -> dict | None:
+    """Return the public-safe Assistant error union used on wire surfaces."""
+    return _assistant_error(value)
 
 
 def publish_assistant_state(
@@ -855,11 +904,28 @@ def _normalize_assistant_state(message: dict) -> None:
     if error is None and isinstance(legacy, str) and legacy:
         if finish == "cancelled":
             name = "MessageAbortedError"
+            public = PublicError(
+                "cancelled",
+                "Request interrupted by user",
+                retryable=True,
+            )
         elif finish == "context-overflow":
             name = "ContextOverflowError"
+            public = PublicError(
+                "context_overflow",
+                "The request exceeded the model context window.",
+                retryable=True,
+            )
         else:
             name = "UnknownError"
-        error = _assistant_error({"name": name, "data": {"message": legacy}})
+            public = to_public_error(None)
+        error = _assistant_error({
+            "name": name,
+            "data": {
+                "message": public.message,
+                "public_error": public.to_dict(),
+            },
+        })
     if error is not None:
         message[ASSISTANT_ERROR_KEY] = error
     else:
@@ -924,78 +990,59 @@ def _assistant_error(value: Any) -> dict | None:
     data = value.get("data")
     if not isinstance(name, str) or not isinstance(data, dict):
         return None
-    message = data.get("message")
+    public = public_error_from_wire(data.get("public_error"))
+    if public is None:
+        public = to_public_error(None)
+    message = public.message
+    base_data: dict[str, Any] = {
+        "message": message,
+        "public_error": public.to_dict(),
+    }
     if name == "MessageOutputLengthError":
-        return {"name": name, "data": {}}
+        return {"name": name, "data": base_data}
     if name == "ProviderAuthError":
-        provider = data.get("providerID")
-        if not isinstance(provider, str) or not provider or not isinstance(message, str):
-            return None
+        provider = public.metadata.get("provider_id")
+        if not isinstance(provider, str) or not provider:
+            return {"name": "UnknownError", "data": base_data}
         return {
             "name": name,
-            "data": {"providerID": provider[:200], "message": message[:4000]},
+            "data": {
+                **base_data,
+                "providerID": _bounded_string(provider, 200),
+            },
         }
     if name == "APIError":
-        if not isinstance(message, str) or not isinstance(data.get("isRetryable"), bool):
-            return None
         result: dict[str, Any] = {
-            "message": message[:4000],
-            "isRetryable": data["isRetryable"],
+            **base_data,
+            "isRetryable": public.retryable,
         }
         status = data.get("statusCode")
         if isinstance(status, int) and not isinstance(status, bool) and status >= 0:
             result["statusCode"] = status
-        for key in ("responseHeaders", "metadata"):
-            mapping = data.get(key)
-            if isinstance(mapping, dict):
-                result[key] = _safe_error_mapping(mapping)
-        body = data.get("responseBody")
-        if isinstance(body, str):
-            result["responseBody"] = body[:8000]
         return {"name": name, "data": result}
     if name == "StructuredOutputError":
         retries = data.get("retries")
         if (
-            not isinstance(message, str)
-            or not isinstance(retries, int)
+            not isinstance(retries, int)
             or isinstance(retries, bool)
             or retries < 0
         ):
             return None
         return {
             "name": name,
-            "data": {"message": message[:4000], "retries": retries},
+            "data": {**base_data, "retries": retries},
         }
-    if name not in {"UnknownError", "MessageAbortedError", "ContextOverflowError"}:
+    if name not in {
+        "UnknownError",
+        "MessageAbortedError",
+        "ContextOverflowError",
+        "OutputGuardrailError",
+        "ToolGuardrailError",
+        "ModelOutputLimitError",
+        "EmptyModelResponseError",
+    }:
         return None
-    if not isinstance(message, str):
-        return None
-    result = {"message": message[:4000]}
-    if name == "UnknownError":
-        for key in ("name", "code"):
-            identity = data.get(key)
-            if isinstance(identity, str) and identity:
-                result[key] = identity[:200]
-    body = data.get("responseBody")
-    if name == "ContextOverflowError" and isinstance(body, str):
-        result["responseBody"] = body[:8000]
-    return {"name": name, "data": result}
-
-
-def _safe_error_mapping(value: dict) -> dict[str, str]:
-    """Bound diagnostic maps and redact credential-shaped fields."""
-    result: dict[str, str] = {}
-    for raw_key, raw_value in list(value.items())[:100]:
-        key = str(raw_key)[:200]
-        lowered = key.lower()
-        if any(
-            marker in lowered
-            for marker in ("authorization", "cookie", "password", "secret", "token", "api-key", "apikey")
-        ):
-            result[key] = "[REDACTED]"
-        else:
-            result[key] = str(raw_value)[:1000]
-    return result
+    return {"name": name, "data": base_data}
 
 
 def _assistant_cost(value: Any) -> float | None:

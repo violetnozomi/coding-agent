@@ -20,6 +20,7 @@ from nz_coder.protocol.message_schema import (
     set_assistant_error,
     stamp_user_message,
 )
+from nz_coder.protocol.public_error import PublicError, TrustedPublicMessage
 from nz_coder.runtime.verification.recovery import is_context_overflow_error
 from nz_coder.foundation.async_utils import to_thread_settled as _to_thread_settled
 from nz_coder.runtime.conversation.context_manager import (
@@ -821,7 +822,11 @@ class AgentRunner:
                     context.snapshots.retire(start_snapshot_task, start_snapshot_cancel)
                     set_assistant_error(
                         assistant_message,
-                        "Request interrupted by user",
+                        TrustedPublicMessage(
+                            "cancelled",
+                            "Request interrupted by user",
+                            retryable=True,
+                        ),
                         name="MessageAbortedError",
                         publish=context.messages.publish_event,
                     )
@@ -835,7 +840,11 @@ class AgentRunner:
                     context.snapshots.retire(start_snapshot_task, start_snapshot_cancel)
                     set_assistant_error(
                         assistant_message,
-                        "Request interrupted by user",
+                        TrustedPublicMessage(
+                            "cancelled",
+                            "Request interrupted by user",
+                            retryable=True,
+                        ),
                         name="MessageAbortedError",
                         publish=context.messages.publish_event,
                     )
@@ -862,7 +871,11 @@ class AgentRunner:
                     context.snapshots.retire(start_snapshot_task, start_snapshot_cancel)
                     set_assistant_error(
                         assistant_message,
-                        "Request interrupted by user",
+                        TrustedPublicMessage(
+                            "cancelled",
+                            "Request interrupted by user",
+                            retryable=True,
+                        ),
                         name="MessageAbortedError",
                         publish=context.messages.publish_event,
                     )
@@ -908,7 +921,10 @@ class AgentRunner:
                             publish=context.messages.publish_event,
                         )
                         processor.fail_unsettled(
-                            "Output policy blocked this response"
+                            TrustedPublicMessage(
+                                "guardrail_blocked",
+                                "Output policy blocked this response",
+                            )
                         )
                         processor.finish_step("blocked")
                         await services.session_runtime.checkpoint(
@@ -988,7 +1004,10 @@ class AgentRunner:
                     }
                     set_assistant_error(
                         assistant_message,
-                        "Provider request failed after retries",
+                        TrustedPublicMessage(
+                            "provider_error",
+                            "Provider request failed after retries",
+                        ),
                         name=str(structured.get("name") or "UnknownError"),
                         data=(
                             structured.get("data")
@@ -997,7 +1016,10 @@ class AgentRunner:
                         ),
                         publish=context.messages.publish_event,
                     )
-                    processor.fail_unsettled("Provider request failed after retries")
+                    processor.fail_unsettled(TrustedPublicMessage(
+                        "provider_error",
+                        "Provider request failed after retries",
+                    ))
                     processor.finish_step(
                         "error",
                         snapshot=(
@@ -1010,7 +1032,11 @@ class AgentRunner:
                     return await context.lifecycle.finalize(messages, "aborted", on_text, on_token, stream)
                 if result.needs_compaction:
                     record_provider_turn(finish_reason="error")
-                    error = result.compaction_error or "Input exceeds context window of this model"
+                    error = PublicError(
+                        "context_overflow",
+                        "The request exceeded the model context window.",
+                        retryable=True,
+                    )
                     set_assistant_error(
                         assistant_message,
                         error,
@@ -1167,7 +1193,10 @@ class AgentRunner:
                         name="OutputGuardrailError",
                         publish=context.messages.publish_event,
                     )
-                    processor.fail_unsettled("Output policy blocked this response")
+                    processor.fail_unsettled(TrustedPublicMessage(
+                        "guardrail_blocked",
+                        "Output policy blocked this response",
+                    ))
                     processor.finish_step("blocked")
                     await services.session_runtime.checkpoint(run_context, "error")
                     raise
@@ -1196,8 +1225,11 @@ class AgentRunner:
                     )
                     if result.tool_calls and not result.tools_executed_in_stream:
                         processor.fail_unsettled(
-                            "Tool call was not executed because the Provider response "
-                            f"finished with {result.finish_reason!r}"
+                            TrustedPublicMessage(
+                                "tool_not_executed",
+                                "Tool call was not executed because the Provider "
+                                f"response finished with {result.finish_reason!r}",
+                            )
                         )
                     finish_snapshot = (
                         await context.snapshots.capture_async(
@@ -1224,7 +1256,10 @@ class AgentRunner:
                         )
                         set_assistant_error(
                             assistant_message,
-                            provider_error,
+                            TrustedPublicMessage(
+                                "provider_error",
+                                provider_error,
+                            ),
                             name="APIError",
                             data={"message": provider_error, "isRetryable": False},
                             publish=context.messages.publish_event,
@@ -1340,7 +1375,11 @@ class AgentRunner:
                     final_output = f"{visible}\n\n{exhausted}"
                     set_assistant_error(
                         assistant_message,
-                        exhausted,
+                        TrustedPublicMessage(
+                            "output_limit_recovery_exhausted",
+                            exhausted,
+                            retryable=True,
+                        ),
                         name="ModelOutputLimitError",
                         data={"message": exhausted, "isRetryable": True},
                         publish=context.messages.publish_event,
@@ -1518,7 +1557,11 @@ class AgentRunner:
                         )
                         set_assistant_error(
                             assistant_message,
-                            empty_error,
+                            TrustedPublicMessage(
+                                "empty_model_response",
+                                empty_error,
+                                retryable=True,
+                            ),
                             name="EmptyModelResponseError",
                             data={
                                 "message": empty_error,

@@ -15,6 +15,7 @@ from nz_coder.protocol.message_schema import (
     set_assistant_end_state,
     stamp_user_message,
 )
+from nz_coder.protocol.public_error import PublicError, TrustedPublicMessage
 
 
 def test_synthetic_user_detection_supports_marker_and_legacy_sessions():
@@ -126,7 +127,11 @@ def test_assistant_finish_and_typed_error_are_projected_without_legacy_breakage(
     message["_nz_finish"] = "error"
     set_assistant_error(
         message,
-        "rate limited",
+        TrustedPublicMessage(
+            "rate_limited",
+            "rate limited",
+            retryable=True,
+        ),
         name="APIError",
         data={
             "message": "rate limited",
@@ -148,10 +153,11 @@ def test_assistant_finish_and_typed_error_are_projected_without_legacy_breakage(
             "message": "rate limited",
             "statusCode": 429,
             "isRetryable": True,
-            "responseHeaders": {
-                "retry-after": "2",
-                "set-cookie": "[REDACTED]",
-            },
+            "public_error": PublicError(
+                "rate_limited",
+                "rate limited",
+                retryable=True,
+            ).to_dict(),
         },
     }
     assert legacy_messages([message]) == [
@@ -274,7 +280,14 @@ def test_legacy_assistant_error_migrates_from_step_finish_reason():
     assert record["info"]["finish"] == "cancelled"
     assert record["info"]["error"] == {
         "name": "MessageAbortedError",
-        "data": {"message": "Request interrupted by user"},
+        "data": {
+            "message": "Request interrupted by user",
+            "public_error": PublicError(
+                "cancelled",
+                "Request interrupted by user",
+                retryable=True,
+            ).to_dict(),
+        },
     }
 
 
@@ -298,7 +311,15 @@ def test_provider_exception_normalization_preserves_safe_identity_and_auth_bound
             "message": "The provider request failed.",
             "isRetryable": True,
             "statusCode": 429,
-            "metadata": {"name": "ProviderFailure", "code": "rate_limit"},
+            "public_error": PublicError(
+                "provider_error",
+                "The provider request failed.",
+                retryable=True,
+                metadata={
+                    "error_type": "ProviderFailure",
+                    "status_code": 429,
+                },
+            ).to_dict(),
         },
     }
     assert assistant_error_from_exception(auth, provider_id="demo") == {
@@ -306,6 +327,15 @@ def test_provider_exception_normalization_preserves_safe_identity_and_auth_bound
         "data": {
             "providerID": "demo",
             "message": "The provider request failed.",
+            "public_error": PublicError(
+                "provider_error",
+                "The provider request failed.",
+                metadata={
+                    "error_type": "ProviderFailure",
+                    "status_code": 401,
+                    "provider_id": "demo",
+                },
+            ).to_dict(),
         },
     }
 

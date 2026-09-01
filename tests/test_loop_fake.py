@@ -1016,15 +1016,21 @@ def test_exhausted_provider_error_keeps_safe_status_and_identity(monkeypatch):
                 "message": "The provider request failed.",
                 "isRetryable": False,
                 "statusCode": 429,
-                "metadata": {
-                    "name": "RateLimitFailure",
-                    "code": "rate_limit",
+                "public_error": {
+                    "schema": "nz.public_error.v1",
+                    "code": "provider_error",
+                    "message": "The provider request failed.",
+                    "retryable": False,
+                    "metadata": {
+                        "error_type": "RateLimitFailure",
+                        "status_code": 429,
+                    },
                 },
             },
         }
         assert "slow down" not in str(info)
         assert "quota" not in str(info)
-        assert assistant["_nz_error"] == "Provider request failed after retries"
+        assert assistant["_nz_error"] == "The provider request failed."
     finally:
         _restore_workdir(old, tmp)
 
@@ -1701,7 +1707,8 @@ def test_loop_retries_transient_api_errors():
             if part["type"] == "retry"
         ]
         assert [part["attempt"] for part in retries] == [1, 2]
-        assert all("temporary outage" in part["message"] for part in retries)
+        assert all(part["message"] == "An internal error occurred." for part in retries)
+        assert all("temporary outage" not in str(part) for part in retries)
         assert all(part["error"]["name"] == "APIError" for part in retries)
         assert all(part["error"]["data"]["isRetryable"] is True for part in retries)
         assert all(part["time"]["created"] >= 0 for part in retries)

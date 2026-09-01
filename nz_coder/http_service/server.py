@@ -133,16 +133,36 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
             )
         except ProcessNotFoundError:
             self._error(HTTPStatus.NOT_FOUND, "process_not_found", "process was not found")
-        except ProcessOwnershipError as exc:
-            self._error(HTTPStatus.FORBIDDEN, "process_forbidden", str(exc))
-        except ProcessStateError as exc:
-            self._error(HTTPStatus.CONFLICT, "process_state_error", str(exc))
-        except SessionBusyError as exc:
-            self._error(HTTPStatus.CONFLICT, "session_busy", str(exc))
-        except ValueError as exc:
-            self._error(HTTPStatus.BAD_REQUEST, "invalid_request", str(exc))
-        except PermissionError as exc:
-            self._error(HTTPStatus.FORBIDDEN, "forbidden", str(exc))
+        except ProcessOwnershipError:
+            self._error(
+                HTTPStatus.FORBIDDEN,
+                "process_forbidden",
+                "The process is owned by another session.",
+            )
+        except ProcessStateError:
+            self._error(
+                HTTPStatus.CONFLICT,
+                "process_state_error",
+                "The process is not in a valid state for this operation.",
+            )
+        except SessionBusyError:
+            self._error(
+                HTTPStatus.CONFLICT,
+                "session_busy",
+                "The session or workspace is busy.",
+            )
+        except ValueError:
+            self._error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "The request is invalid.",
+            )
+        except PermissionError:
+            self._error(
+                HTTPStatus.FORBIDDEN,
+                "forbidden",
+                "The request is forbidden.",
+            )
         except _ResponseSent:
             return
         except (BrokenPipeError, ConnectionResetError, TimeoutError):

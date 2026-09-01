@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from rich.console import Console
 
 from nz_coder.permissions import PermissionManager
+from nz_coder.protocol.public_error import PublicError
 from nz_coder.protocol.session_events import SessionEventBus, scoped_session_event_bus
 from nz_coder.interface.run_renderer import (
     TerminalRunRenderer,
@@ -234,7 +235,15 @@ def test_run_renderer_projects_typed_assistant_error_and_terminal_footer_once():
         "time": {"created": 10.0, "completed": 12.5},
         "error": {
             "name": "ProviderAuthError",
-            "data": {"providerID": "provider", "message": "credential rejected"},
+            "data": {
+                "providerID": "provider",
+                "message": "credential rejected",
+                    "public_error": PublicError(
+                        "provider_auth_error",
+                        "credential rejected",
+                        metadata={"provider_id": "provider"},
+                    ).to_dict(),
+            },
         },
         "end_state": {"reason": "errored"},
     }

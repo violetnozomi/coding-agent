@@ -19,6 +19,14 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from nz_coder.foundation.json_safety import json_safe_value
+from nz_coder.protocol.message_schema import normalize_assistant_error
+from nz_coder.protocol.public_error import (
+    PublicError,
+    PublicRuntimeError,
+    TrustedPublicMessage,
+    public_error_from_wire,
+    to_public_error,
+)
 
 _EVENT_TYPE_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,127}$")
 _EVENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
@@ -38,8 +46,83 @@ def _critical_journal_event(event_type: str) -> bool:
 
 def _safe_event_properties(properties: dict[str, Any]) -> dict[str, Any]:
     """Detach metadata and guarantee strict-JSON live/replay transport values."""
-    payload = json_safe_value(properties)
+    projected = _project_public_failures(properties)
+    if isinstance(projected, dict) and str(projected.get("status") or "").casefold() in {
+        "error",
+        "failed",
+        "nonzero",
+        "blocked",
+    }:
+        if "output" in projected:
+            projected["output"] = "Tool execution failed."
+    payload = json_safe_value(projected)
     return payload if isinstance(payload, dict) else {}
+
+
+def _project_public_failures(
+    value: object,
+    *,
+    field: str = "",
+    _seen: set[int] | None = None,
+    _depth: int = 0,
+) -> object:
+    """Prevent private diagnostics from crossing the SessionEvent boundary."""
+    if _depth >= 16:
+        return "[maximum event nesting depth reached]"
+    normalized_field = field.casefold().replace("-", "_")
+    if normalized_field in {"error", "last_error", "public_error"}:
+        if normalized_field == "error":
+            assistant_error = normalize_assistant_error(value)
+            if assistant_error is not None:
+                return assistant_error
+        if isinstance(value, (PublicError, PublicRuntimeError, TrustedPublicMessage)):
+            return to_public_error(value).to_dict()
+        public = public_error_from_wire(value)
+        return (public or to_public_error(value)).to_dict()
+    if normalized_field in {
+        "private_diagnostic",
+        "response_body",
+        "responsebody",
+        "response_headers",
+        "responseheaders",
+    }:
+        return "[private diagnostic omitted]"
+    if isinstance(value, dict):
+        seen = _seen if _seen is not None else set()
+        identity = id(value)
+        if identity in seen:
+            return "[circular reference]"
+        seen.add(identity)
+        try:
+            return {
+                str(key): _project_public_failures(
+                    item,
+                    field=str(key),
+                    _seen=seen,
+                    _depth=_depth + 1,
+                )
+                for key, item in value.items()
+            }
+        finally:
+            seen.remove(identity)
+    if isinstance(value, (list, tuple)):
+        seen = _seen if _seen is not None else set()
+        identity = id(value)
+        if identity in seen:
+            return "[circular reference]"
+        seen.add(identity)
+        try:
+            return [
+                _project_public_failures(
+                    item,
+                    _seen=seen,
+                    _depth=_depth + 1,
+                )
+                for item in value
+            ]
+        finally:
+            seen.remove(identity)
+    return value
 
 
 class EventCursorExpiredError(LookupError):

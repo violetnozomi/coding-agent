@@ -1059,7 +1059,8 @@ def test_stream_error_after_write_tool_does_not_retry_side_effect(tmp_path, monk
     assert len(tools) == 1
     assert tools[0]["state"]["status"] == "completed"
     assert finish["reason"] == "error"
-    assert "stream failed after tool result" in assistant["_nz_error"]
+    assert assistant["_nz_error"] == "An internal error occurred."
+    assert "stream failed after tool result" not in str(assistant)
     agent.close()
 
 

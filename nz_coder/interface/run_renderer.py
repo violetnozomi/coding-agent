@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from nz_coder.interface.presentation_tokens import clip_terminal_text
-from nz_coder.protocol.message_schema import message_records
+from nz_coder.protocol.message_schema import message_records, normalize_assistant_error
 from nz_coder.protocol.run_view_reducer import RunViewReducer
 from nz_coder.protocol.public_error import public_error_message, to_public_error
 from nz_coder.protocol.session_events import (
@@ -270,12 +270,13 @@ class TerminalRunRenderer:
             if not message_id:
                 return
             error = info.get("error")
+            safe_error = normalize_assistant_error(error)
             if (
-                isinstance(error, dict)
-                and error.get("name") != "MessageAbortedError"
+                safe_error is not None
+                and safe_error.get("name") != "MessageAbortedError"
                 and message_id not in self._rendered_error_ids
             ):
-                self._pending_errors[message_id] = error
+                self._pending_errors[message_id] = safe_error
             else:
                 self._pending_errors.pop(message_id, None)
             return
@@ -611,11 +612,17 @@ class TerminalRunRenderer:
 
     def _render_assistant_error(self, error: dict) -> None:
         """Render the durable Assistant error once, like InfCode's error block."""
+        error = normalize_assistant_error(error) or {
+            "name": "UnknownError",
+            "data": {},
+        }
         name = _sanitize(str(error.get("name") or "UnknownError"), 100)
         data = error.get("data") if isinstance(error.get("data"), dict) else {}
         message = _safe_error_message(
-            str(data.get("message") or _error_fallback(name)), 2_000
+            public_error_message(data.get("public_error")), 2_000
         )
+        if message == "Request failed.":
+            message = _error_fallback(name)
         status = data.get("statusCode")
         title = _error_category(name, status)
         if isinstance(status, int) and not isinstance(status, bool):

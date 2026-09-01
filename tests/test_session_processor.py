@@ -11,6 +11,7 @@ from nz_coder.protocol.message_schema import (
     message_records,
     set_assistant_error,
 )
+from nz_coder.protocol.public_error import TrustedPublicMessage
 from nz_coder.runtime.session.session_processor import SessionProcessor
 
 
@@ -94,8 +95,16 @@ def test_processor_retry_part_is_stable_and_replaced_by_attempt():
     message = _assistant()
     processor = SessionProcessor(message)
 
-    first = processor.add_retry(1, "first", next_at=10)
-    second = processor.add_retry(1, "updated", next_at=20)
+    first = processor.add_retry(
+        1,
+        TrustedPublicMessage("retry", "first", retryable=True),
+        next_at=10,
+    )
+    second = processor.add_retry(
+        1,
+        TrustedPublicMessage("retry", "updated", retryable=True),
+        next_at=20,
+    )
 
     retries = [part for part in message["_nz_parts"] if part["type"] == "retry"]
     assert first["id"] == second["id"]
@@ -104,7 +113,16 @@ def test_processor_retry_part_is_stable_and_replaced_by_attempt():
     assert retries[0]["next"] == 20.0
     assert retries[0]["error"] == {
         "name": "UnknownError",
-        "data": {"message": "updated"},
+        "data": {
+            "message": "updated",
+            "public_error": {
+                "schema": "nz.public_error.v1",
+                "code": "retry",
+                "message": "updated",
+                "retryable": True,
+                "metadata": {},
+            },
+        },
     }
     assert retries[0]["time"]["created"] >= 0
 
@@ -120,7 +138,7 @@ def test_assistant_error_and_finish_publish_live_message_updates():
     processor.start_step()
     set_assistant_error(
         message,
-        "provider failed",
+        TrustedPublicMessage("provider_error", "provider failed"),
         name="APIError",
         data={"message": "provider failed", "isRetryable": False},
         publish=publish,

@@ -29,7 +29,11 @@ from nz_coder.interface.remote_mailbox import (
     RemoteTransportBridge,
     is_critical_remote_payload,
 )
-from nz_coder.protocol.public_error import public_error_message, to_public_error
+from nz_coder.protocol.public_error import (
+    PublicRuntimeError,
+    public_error_from_wire,
+    to_public_error,
+)
 from nz_coder.interface.terminal_input import TerminalInput
 from nz_coder.interface.commands.registry import Command, CommandRegistry
 from nz_coder.interface.timeline import format_transcript
@@ -394,7 +398,8 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 reader_done = True
                 continue
             if payload.get("_error"):
-                raise RuntimeError(public_error_message(payload["_error"]))
+                public = public_error_from_wire(payload["_error"])
+                raise PublicRuntimeError(public or to_public_error(None))
             event_type = payload.get("type")
             if event_type == "server.snapshot":
                 latest = payload.get("properties") or {}

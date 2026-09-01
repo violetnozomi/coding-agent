@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from nz_coder.foundation import config
+from nz_coder.protocol.public_error import public_error_from_wire, to_public_error
 from nz_coder.state.workdir import current_workdir
 from nz_coder.state.sessions import active_session_id, session_trace_dir
 
@@ -81,6 +82,14 @@ class TraceRecorder:
         if not self.enabled:
             return
         try:
+            projected = _project_trace_diagnostics(payload)
+            if (
+                isinstance(projected, dict)
+                and str(projected.get("status") or "").casefold()
+                in {"error", "failed", "nonzero", "blocked"}
+                and "output" in projected
+            ):
+                projected["output"] = "Tool execution failed."
             row = {
                 "ts": time.time(),
                 "run_id": self.run_id,
@@ -91,7 +100,7 @@ class TraceRecorder:
                 "parent_trace_id": self.parent_trace_id,
                 "agent_type": self.agent_type,
                 "event": event,
-                **_sanitize(payload),
+                **_sanitize(projected),
             }
             encoded = json.dumps(
                 row,
@@ -401,6 +410,68 @@ def _sanitize(
         return value
     if isinstance(value, float) and not math.isfinite(value):
         return None
+    return value
+
+
+def _project_trace_diagnostics(
+    value: object,
+    *,
+    field: str = "",
+    _seen: set[int] | None = None,
+    _depth: int = 0,
+) -> object:
+    """Keep ordinary trace exports structural rather than diagnostic-bearing."""
+    if _depth >= MAX_NESTING_DEPTH:
+        return "[maximum trace nesting depth reached]"
+    normalized_field = field.casefold().replace("-", "_")
+    if normalized_field in {"error", "last_error", "public_error"}:
+        public = public_error_from_wire(value)
+        return (public or to_public_error(value)).to_dict()
+    if normalized_field in {
+        "private_diagnostic",
+        "response_body",
+        "responsebody",
+        "response_headers",
+        "responseheaders",
+        "headers",
+        "authorization",
+    }:
+        return "[private diagnostic omitted]"
+    if isinstance(value, dict):
+        seen = _seen if _seen is not None else set()
+        identity = id(value)
+        if identity in seen:
+            return "[circular reference]"
+        seen.add(identity)
+        try:
+            return {
+                str(key): _project_trace_diagnostics(
+                    item,
+                    field=str(key),
+                    _seen=seen,
+                    _depth=_depth + 1,
+                )
+                for key, item in value.items()
+            }
+        finally:
+            seen.remove(identity)
+    if isinstance(value, (list, tuple, set, frozenset)):
+        seen = _seen if _seen is not None else set()
+        identity = id(value)
+        if identity in seen:
+            return "[circular reference]"
+        seen.add(identity)
+        try:
+            return [
+                _project_trace_diagnostics(
+                    item,
+                    _seen=seen,
+                    _depth=_depth + 1,
+                )
+                for item in value
+            ]
+        finally:
+            seen.remove(identity)
     return value
 
 

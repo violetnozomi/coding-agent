@@ -2208,6 +2208,7 @@ def test_http_restore_marks_an_unsettled_accepted_run_as_interrupted(tmp_path):
 
 def test_http_restore_projects_typed_assistant_finish_and_error(tmp_path):
     from nz_coder.protocol.message_schema import attach_message_identity, set_assistant_error
+    from nz_coder.protocol.public_error import PublicError, TrustedPublicMessage
     from nz_coder.runtime.session.session_processor import SessionProcessor
 
     workspace = tmp_path / "project"
@@ -2222,7 +2223,7 @@ def test_http_restore_projects_typed_assistant_finish_and_error(tmp_path):
     processor.start_step()
     set_assistant_error(
         assistant,
-        "provider unavailable",
+        TrustedPublicMessage("provider_error", "provider unavailable"),
         name="APIError",
         data={"message": "provider unavailable", "isRetryable": False},
     )
@@ -2255,6 +2256,10 @@ def test_http_restore_projects_typed_assistant_finish_and_error(tmp_path):
             "data": {
                 "message": "provider unavailable",
                 "isRetryable": False,
+                "public_error": PublicError(
+                    "provider_error",
+                    "provider unavailable",
+                ).to_dict(),
             },
         }
         assert restored.messages()[1] == {

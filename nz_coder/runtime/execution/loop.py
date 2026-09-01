@@ -72,6 +72,7 @@ from nz_coder.runtime.model_gateway import (
     resolve_model_runtime,
 )
 from nz_coder.runtime.session.session_processor import SessionProcessor
+from nz_coder.protocol.public_error import TrustedPublicMessage
 from nz_coder.runtime.session.session_revert import SessionReverter
 from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
 from nz_coder.state.sessions import (
@@ -1707,7 +1708,11 @@ class ProductRunEnvironment:
             processor.finish_step("error")
         set_assistant_error(
             owner,
-            detail,
+            TrustedPublicMessage(
+                "compaction_exhausted",
+                "Compaction exhausted: context still exceeds model limits after "
+                "the bounded recovery attempts.",
+            ),
             name="ContextOverflowError",
             publish=self._emit_session_event,
         )
@@ -2553,10 +2558,11 @@ class ProductRunEnvironment:
         return outcome.content.strip()
 
     def _inject_api_diagnostic(self, messages: list, diagnostic: str) -> None:
-        """把 400/422 诊断注入对话，让模型下一轮自我修正。"""
+        """Inject structural recovery guidance without persisting Provider text."""
+        safe_diagnostic = self._make_client_error_diag("")
         messages.append(stamp_user_message({
             "role": "user",
-            "content": diagnostic,
+            "content": safe_diagnostic,
             "_nz_synthetic": True,
         }))
         self.tracer.log("api_error_injected_diagnostic")
@@ -4280,10 +4286,11 @@ class ProductRunEnvironment:
         )
 
     def _make_client_error_diag(self, error_str: str) -> str:
-        """生成 400/422 错误的诊断消息，注入对话让模型自行修正。"""
+        """Build Provider-independent guidance safe for durable history."""
         return (
             "<api-error-diagnostic>\n"
-            f"Your last request was rejected by the API with an error:\n{error_str}\n\n"
+            "Your last request was rejected by the API. The private Provider "
+            "diagnostic was not persisted.\n\n"
             "This usually means a tool call argument contained invalid JSON "
             "(e.g. unescaped quotes, raw newlines inside a string, trailing comma). "
             "Do NOT retry the same call. Instead:\n"

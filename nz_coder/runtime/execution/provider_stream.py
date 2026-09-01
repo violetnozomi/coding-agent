@@ -256,6 +256,18 @@ def _settle_stream_tools(
         result.duration_ms = round(max(0.0, result.duration_ms - wait_ms), 3)
         stream_error = outcome.provider_metadata.get("stream_error")
         if isinstance(stream_error, dict):
+            # ``stream_error`` is private Provider diagnostic state. The
+            # result may retain other continuation metadata, but this field
+            # must not cross the model-to-Message commit boundary.
+            result.extra = dict(result.extra or {})
+            provider_extra = result.extra.get("provider_extra")
+            if isinstance(provider_extra, dict):
+                provider_extra = dict(provider_extra)
+                provider_extra.pop("stream_error", None)
+                if provider_extra:
+                    result.extra["provider_extra"] = provider_extra
+                else:
+                    result.extra.pop("provider_extra", None)
             result.post_tool_stream_error = str(
                 stream_error.get("message") or "provider stream failed"
             )

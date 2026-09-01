@@ -28,6 +28,7 @@ from nz_coder.protocol.message_schema import (
     remove_message_part,
     upsert_message_part,
 )
+from nz_coder.protocol.public_error import TrustedPublicMessage, to_public_error
 
 
 OUTPUT_LENGTH_WARNING = (
@@ -215,7 +216,7 @@ class SessionProcessor:
             ),
         })
 
-    def fail_unsettled(self, error: str, *, interrupted: bool = False) -> int:
+    def fail_unsettled(self, error: object, *, interrupted: bool = False) -> int:
         """Settle all pending/running tools after a failed provider/tool attempt."""
         count = 0
         for part in list(self.message.get(PARTS_KEY, [])):
@@ -463,18 +464,18 @@ class SessionProcessor:
         """Mark a dismissed, timed-out, or cancelled question as terminated."""
         return self._settle_question_display(call_id, status="terminated")
 
-    def fail_question(self, call_id: str, error: str) -> dict | None:
+    def fail_question(self, call_id: str, error: object) -> dict | None:
         """Persist an interaction-service or answer-shape failure."""
         return self._settle_question_display(
             call_id,
             status="error",
-            error=str(error),
+            error=to_public_error(error).message,
         )
 
     def fail_tool(
         self,
         call_id: str,
-        error: str,
+        error: object,
         *,
         interrupted: bool = False,
     ) -> None:
@@ -488,7 +489,7 @@ class SessionProcessor:
             "state": {
                 "status": "error",
                 "input": dict(part.get("state", {}).get("input") or {}),
-                "error": str(error),
+                "error": to_public_error(error).message,
                 "interrupted": bool(interrupted),
                 "time": {"start": start, "end": time.time()},
             },
@@ -530,7 +531,14 @@ class SessionProcessor:
 
     def interrupt_unsettled(self) -> int:
         """Turn every pending/running tool into a terminal interrupted error."""
-        count = self.fail_unsettled("Tool execution aborted", interrupted=True)
+        count = self.fail_unsettled(
+            TrustedPublicMessage(
+                "tool_cancelled",
+                "Tool execution aborted",
+                retryable=True,
+            ),
+            interrupted=True,
+        )
         for part in list(self.message.get(PARTS_KEY, [])):
             if (
                 isinstance(part, dict)
@@ -550,7 +558,8 @@ class SessionProcessor:
         provider_id: str = "",
     ) -> dict:
         """Persist a provider retry decision on the current assistant step."""
-        detail = str(error) or type(error).__name__
+        public = to_public_error(error)
+        detail = public.message
         typed_error = (
             assistant_error_from_exception(
                 error,
@@ -558,7 +567,13 @@ class SessionProcessor:
                 is_retryable=True,
             )
             if isinstance(error, Exception)
-            else {"name": "UnknownError", "data": {"message": detail[:4000]}}
+            else {
+                "name": "UnknownError",
+                "data": {
+                    "message": detail[:4000],
+                    "public_error": public.to_dict(),
+                },
+            }
         )
         part = {
             "id": self._part_id("retry", str(attempt)),
