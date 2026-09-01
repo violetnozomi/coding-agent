@@ -30,6 +30,7 @@ from nz_coder.interface.remote_mailbox import (
     is_critical_remote_payload,
 )
 from nz_coder.protocol.public_error import (
+    PublicError,
     PublicRuntimeError,
     public_error_from_wire,
     to_public_error,
@@ -323,6 +324,29 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
     return 0
 
 
+def _pump_remote_stream(stream: Any, transport: RemoteTransportBridge) -> None:
+    """Copy one SSE stream into the bridge and fail closed on backpressure."""
+    try:
+        for payload in stream:
+            accepted = transport.offer(payload)
+            if not accepted:
+                transport.fail_closed(
+                    PublicError(
+                        "remote_transport_overflow",
+                        "The remote event stream requires resynchronization.",
+                        retryable=True,
+                    ),
+                    reconnect_required=True,
+                )
+                break
+            if payload.get("type") == "session.run.settled":
+                break
+    except Exception as exc:
+        transport.fail_closed(to_public_error(exc), reconnect_required=True)
+    finally:
+        transport.close_reader()
+
+
 async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
     baseline = await asyncio.to_thread(backend.attach_snapshot)
     cursor = str((baseline.get("cursor") or {}).get("event_id") or "") or None
@@ -349,25 +373,16 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
     )
     stream = None
 
-    def pump() -> None:
-        try:
-            for payload in stream:
-                transport.offer(payload)
-                if payload.get("type") == "session.run.settled":
-                    break
-        except Exception as exc:
-            transport.offer({"_error": to_public_error(exc).to_dict()})
-        finally:
-            transport.offer({"_transport_done": True})
-
     terminal_status = "completed"
     reconnecting = False
     interaction_tasks = _InteractionTaskRegistry(
-        on_error=lambda exc: transport.offer({
-            "_error": to_public_error(exc).to_dict(),
-        }),
+        on_error=lambda exc: transport.fail_closed(
+            to_public_error(exc),
+            reconnect_required=False,
+        ),
     )
     reader_done = False
+    transport_reconnects = 0
     try:
         _feed_snapshot_events(run_view, baseline)
         if not bool((baseline.get("session") or {}).get("running")):
@@ -380,7 +395,12 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
             await interaction_tasks.wait()
             return
         stream = backend.events(last_event_id=cursor)
-        thread = threading.Thread(target=pump, name="nz-remote-events", daemon=True)
+        thread = threading.Thread(
+            target=_pump_remote_stream,
+            args=(stream, transport),
+            name="nz-remote-events",
+            daemon=True,
+        )
         thread.start()
         _register_pending_interactions(
             backend,
@@ -399,6 +419,49 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 continue
             if payload.get("_error"):
                 public = public_error_from_wire(payload["_error"])
+                if payload.get("_reconnect_required") and transport_reconnects < 3:
+                    transport_reconnects += 1
+                    reconnecting = True
+                    console.print("[info]Reconnecting…[/info]")
+                    await asyncio.to_thread(stream.close)
+                    latest = await asyncio.to_thread(backend.attach_snapshot)
+                    _feed_snapshot_events(run_view, latest)
+                    _register_pending_interactions(
+                        backend,
+                        latest.get("pending") or {},
+                        bridge,
+                        interaction_tasks,
+                    )
+                    session = (
+                        latest.get("session")
+                        if isinstance(latest.get("session"), dict)
+                        else {}
+                    )
+                    if bool(latest.get("settled")) or not bool(session.get("running")):
+                        terminal_status = str(
+                            session.get("status") or terminal_status
+                        )
+                        reader_done = True
+                        break
+                    cursor = str(
+                        (latest.get("cursor") or {}).get("event_id") or ""
+                    ) or None
+                    transport = RemoteTransportBridge(
+                        loop,
+                        capacity=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512),
+                        critical_reserve=16,
+                    )
+                    stream = backend.events(last_event_id=cursor)
+                    thread = threading.Thread(
+                        target=_pump_remote_stream,
+                        args=(stream, transport),
+                        name="nz-remote-events",
+                        daemon=True,
+                    )
+                    thread.start()
+                    console.print("[success]Reconnected[/success]")
+                    reconnecting = False
+                    continue
                 raise PublicRuntimeError(public or to_public_error(None))
             event_type = payload.get("type")
             if event_type == "server.snapshot":

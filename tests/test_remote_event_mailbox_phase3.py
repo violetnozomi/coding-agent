@@ -186,6 +186,126 @@ def test_remote_transport_survives_pending_user_input():
     assert permission in bridge.snapshot()
 
 
+def test_critical_reserve_exhaustion_is_not_silent():
+    from nz_coder.interface.remote_mailbox import RemoteEventMailbox
+
+    mailbox = RemoteEventMailbox(capacity=1, critical_reserve=1)
+    assert mailbox.offer(_event("permission.asked", request_id="permission-1"))
+    assert mailbox.offer(_event("permission.asked", request_id="permission-2"))
+
+    assert not mailbox.offer(_event("permission.asked", request_id="permission-3"))
+
+
+def test_terminal_offer_failure_forces_reconnect():
+    from nz_coder.interface.remote import _pump_remote_stream
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+
+    loop = SimpleNamespace(call_soon_threadsafe=lambda callback, *_args: callback())
+    bridge = RemoteTransportBridge(
+        loop,
+        capacity=1,
+        critical_reserve=1,
+        critical_offer_timeout=0,
+    )
+    bridge.mailbox.offer(_event("permission.asked", request_id="permission-1"))
+    bridge.mailbox.offer(_event("permission.asked", request_id="permission-2"))
+
+    _pump_remote_stream(iter([_event("session.run.settled")]), bridge)
+
+    assert bridge.state.closed is True
+    assert bridge.state.reconnect_required is True
+    assert bridge.state.fatal_error.code == "remote_transport_overflow"
+
+
+def test_transport_done_uses_out_of_band_control_state():
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+
+    async def exercise():
+        bridge = RemoteTransportBridge(asyncio.get_running_loop(), capacity=1)
+        bridge.close_reader()
+        return await bridge.get(timeout=0.1), bridge.snapshot()
+
+    payload, queued = asyncio.run(exercise())
+    assert payload == {"_transport_done": True}
+    assert queued == []
+
+
+def test_transport_error_uses_out_of_band_control_state():
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+    from nz_coder.protocol.public_error import PublicError
+
+    async def exercise():
+        bridge = RemoteTransportBridge(asyncio.get_running_loop(), capacity=1)
+        bridge.fail_closed(
+            PublicError(
+                "remote_transport_overflow",
+                "The remote event stream requires resynchronization.",
+                retryable=True,
+            ),
+            reconnect_required=True,
+        )
+        return await bridge.get(timeout=0.1), bridge.snapshot()
+
+    payload, queued = asyncio.run(exercise())
+    assert payload["_error"]["code"] == "remote_transport_overflow"
+    assert payload["_reconnect_required"] is True
+    assert queued == []
+
+
+def test_critical_offer_failure_stops_sse_reader():
+    from nz_coder.interface.remote import _pump_remote_stream
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+
+    observed = []
+
+    def stream():
+        for item in (
+            _event("permission.asked", request_id="permission-3"),
+            _event("message.part.delta", sequence=4, delta="must-not-read"),
+        ):
+            observed.append(item["type"])
+            yield item
+
+    loop = SimpleNamespace(call_soon_threadsafe=lambda callback, *_args: callback())
+    bridge = RemoteTransportBridge(
+        loop,
+        capacity=1,
+        critical_reserve=1,
+        critical_offer_timeout=0,
+    )
+    bridge.mailbox.offer(_event("permission.asked", request_id="permission-1"))
+    bridge.mailbox.offer(_event("permission.asked", request_id="permission-2"))
+
+    _pump_remote_stream(stream(), bridge)
+
+    assert observed == ["permission.asked"]
+    assert bridge.state.reader_done is True
+
+
+def test_permission_burst_beyond_reserve_recovers_from_snapshot():
+    calls, _registry = asyncio.run(_exercise_pending_burst("permissions"))
+    assert sorted(calls) == [
+        ("permission", "permission-1", "allow"),
+        ("permission", "permission-2", "allow"),
+        ("permission", "permission-3", "allow"),
+    ]
+
+
+def test_question_burst_beyond_reserve_recovers_from_snapshot():
+    calls, _registry = asyncio.run(_exercise_pending_burst("questions"))
+    assert sorted(calls) == [
+        ("question", "question-1", [["answer"]]),
+        ("question", "question-2", [["answer"]]),
+        ("question", "question-3", [["answer"]]),
+    ]
+
+
+def test_reconnected_snapshot_restores_all_pending_interactions():
+    permission_calls, _ = asyncio.run(_exercise_pending_burst("permissions"))
+    question_calls, _ = asyncio.run(_exercise_pending_burst("questions"))
+    assert len(permission_calls) + len(question_calls) == 6
+
+
 def test_remote_terminal_event_not_starved_by_delta_burst():
     from nz_coder.interface.remote_mailbox import RemoteTransportBridge
 
@@ -235,6 +355,50 @@ async def _exercise_pending(kind: str):
     }
     registry = _InteractionTaskRegistry()
     _register_pending_interactions(Backend(), pending, Bridge(), registry)
+    _register_pending_interactions(Backend(), pending, Bridge(), registry)
+    await registry.wait()
+    return calls, registry
+
+
+async def _exercise_pending_burst(kind: str):
+    from nz_coder.interface.remote import (
+        _InteractionTaskRegistry,
+        _register_pending_interactions,
+    )
+
+    calls = []
+
+    class Backend:
+        def reply_permission(self, request_id, reply):
+            calls.append(("permission", request_id, reply))
+            return True
+
+        def reply_question(self, request_id, reply):
+            calls.append(("question", request_id, reply))
+            return True
+
+        def reject_question(self, request_id):
+            calls.append(("question-rejected", request_id))
+            return True
+
+    class Bridge:
+        async def _ask_permission(self, *_args):
+            return "allow"
+
+        async def _ask_questions(self, _questions):
+            return [["answer"]]
+
+    pending = {
+        kind: [
+            {
+                "id": f"{kind[:-1]}-{number}",
+                "permission": "write",
+                "questions": [{"question": "Continue?"}],
+            }
+            for number in range(1, 4)
+        ]
+    }
+    registry = _InteractionTaskRegistry()
     _register_pending_interactions(Backend(), pending, Bridge(), registry)
     await registry.wait()
     return calls, registry

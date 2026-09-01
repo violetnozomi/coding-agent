@@ -6,7 +6,10 @@ import copy
 import threading
 import time
 from collections import OrderedDict, deque
+from dataclasses import dataclass
 from typing import Any
+
+from nz_coder.protocol.public_error import PublicError, to_public_error
 
 
 _CRITICAL_EVENTS = frozenset({
@@ -232,6 +235,17 @@ class RemoteEventMailbox:
         return merged
 
 
+@dataclass
+class RemoteTransportState:
+    """Out-of-band control state that cannot consume mailbox capacity."""
+
+    closed: bool = False
+    reader_done: bool = False
+    reconnect_required: bool = False
+    fatal_error: PublicError | None = None
+    failure_reason: str = ""
+
+
 class RemoteTransportBridge:
     """Thread-safe bounded bridge with one coalesced event-loop wakeup."""
 
@@ -241,23 +255,41 @@ class RemoteTransportBridge:
         *,
         capacity: int = 512,
         critical_reserve: int = 16,
+        critical_offer_timeout: float = 5.0,
     ) -> None:
         self.loop = loop
         self.mailbox = RemoteEventMailbox(capacity, critical_reserve)
         self._ready = asyncio.Event()
         self._lock = threading.Lock()
         self._wake_scheduled = False
+        self._state = RemoteTransportState()
+        self._error_delivered = False
+        self._done_delivered = False
+        self._critical_offer_timeout = max(0.0, float(critical_offer_timeout))
 
     @property
     def buffered_count(self) -> int:
         return self.mailbox.buffered_count
 
+    @property
+    def state(self) -> RemoteTransportState:
+        """Return a detached snapshot of the transport control plane."""
+        with self._lock:
+            return copy.deepcopy(self._state)
+
     def offer(self, payload: dict) -> bool:
         """Receive from the SSE thread and schedule at most one pending wakeup."""
+        with self._lock:
+            if self._state.closed:
+                return False
         accepted = self.mailbox.offer(
             payload,
             block_critical=is_critical_remote_payload(payload),
-            timeout=5.0 if is_critical_remote_payload(payload) else None,
+            timeout=(
+                self._critical_offer_timeout
+                if is_critical_remote_payload(payload)
+                else None
+            ),
         )
         with self._lock:
             if accepted and not self._wake_scheduled:
@@ -265,9 +297,36 @@ class RemoteTransportBridge:
                 self.loop.call_soon_threadsafe(self._ready.set)
             return accepted
 
+    def close_reader(self) -> None:
+        """Publish reader completion without requiring a mailbox slot."""
+        with self._lock:
+            self._state.reader_done = True
+            self._schedule_wakeup_locked()
+
+    def fail_closed(
+        self,
+        error: PublicError,
+        *,
+        reconnect_required: bool,
+    ) -> None:
+        """Stop the current stream and publish one safe fatal control error."""
+        public = to_public_error(error)
+        with self._lock:
+            if self._state.fatal_error is None:
+                self._state.fatal_error = public
+                self._state.failure_reason = public.code
+            self._state.closed = True
+            self._state.reconnect_required = bool(
+                self._state.reconnect_required or reconnect_required
+            )
+            self._schedule_wakeup_locked()
+
     async def get(self, timeout: float | None = None) -> dict:
         """Return the next semantic payload without callback-per-delta fanout."""
         while True:
+            control = self._pop_control()
+            if control is not None:
+                return control
             payload = self.mailbox.pop()
             if payload is not None:
                 with self._lock:
@@ -276,6 +335,9 @@ class RemoteTransportBridge:
                         self._ready.clear()
                 return payload
             with self._lock:
+                control = self._pop_control_locked(mailbox_empty=True)
+                if control is not None:
+                    return control
                 if self.mailbox.buffered_count:
                     continue
                 self._wake_scheduled = False
@@ -285,6 +347,30 @@ class RemoteTransportBridge:
                 await waiter
             else:
                 await asyncio.wait_for(waiter, timeout=timeout)
+
+    def _pop_control(self) -> dict | None:
+        with self._lock:
+            return self._pop_control_locked(
+                mailbox_empty=self.mailbox.buffered_count == 0,
+            )
+
+    def _pop_control_locked(self, *, mailbox_empty: bool) -> dict | None:
+        if self._state.fatal_error is not None and not self._error_delivered:
+            self._error_delivered = True
+            return {
+                "_error": self._state.fatal_error.to_dict(),
+                "_reconnect_required": self._state.reconnect_required,
+            }
+        if mailbox_empty and self._state.reader_done and not self._done_delivered:
+            self._done_delivered = True
+            return {"_transport_done": True}
+        return None
+
+    def _schedule_wakeup_locked(self) -> None:
+        if self._wake_scheduled:
+            return
+        self._wake_scheduled = True
+        self.loop.call_soon_threadsafe(self._ready.set)
 
     def snapshot(self) -> list[dict]:
         return self.mailbox.snapshot()
