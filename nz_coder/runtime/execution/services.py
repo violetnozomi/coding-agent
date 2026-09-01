@@ -222,19 +222,30 @@ class ProductionTurnModelRuntime:
                 bridge.cancel()
             if message_part is not None:
                 context.retire_message_part(message_part, "cancelled")
-            while not future.done():
+            grace = max(
+                0.0,
+                float(getattr(config, "PROVIDER_CANCEL_GRACE_SECONDS", 0.25)),
+            )
+            if not future.done() and grace > 0:
                 try:
-                    await asyncio.shield(future)
-                except asyncio.CancelledError:
-                    continue
-                except BaseException:
-                    break
-            if future.done():
-                try:
-                    future.result()
+                    await asyncio.wait_for(asyncio.shield(future), timeout=grace)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
                 except BaseException:
                     pass
+            if future.done():
+                _consume_future_result(future)
+            else:
+                future.add_done_callback(_consume_future_result)
             raise cancel_error
+
+
+def _consume_future_result(future) -> None:  # noqa: ANN001
+    """Observe a fenced late worker result without reviving its generation."""
+    try:
+        future.result()
+    except BaseException:
+        pass
 
 
 class ProductionRuntimeEventSink:

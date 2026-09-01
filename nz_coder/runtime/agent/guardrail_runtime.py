@@ -253,11 +253,16 @@ class ProductionGuardrailRuntime:
 
     @staticmethod
     def _trace(host, guardrail: object, hook_point: str, verdict: dict) -> None:
+        reason = str(verdict.get("reason") or "")
         host.tracer.log(
             "agent_guardrail",
             guardrail=str(getattr(guardrail, "name", "unknown")),
             hook_point=hook_point,
             decision=str(verdict.get("action") or "error"),
             agent=host.current_agent_name,
-            reason=str(verdict.get("reason") or "")[:1000],
+            # Output policy callbacks have access to the private Provider body.
+            # Keep their audit record structural even if a policy accidentally
+            # echoes that body into its reason string.
+            reason=("" if hook_point == "output" else reason[:1000]),
+            reason_provided=bool(reason),
         )

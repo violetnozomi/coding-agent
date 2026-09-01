@@ -15,8 +15,10 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
 from rich.panel import Panel
+from rich.text import Text
 
 from nz_coder.http_service.client import NZCoderClient, NZCoderHTTPError
+from nz_coder.foundation import config
 from nz_coder.http_service.daemon import daemon_paths, daemon_status
 from nz_coder.interface.backend import RemoteTerminalBackend
 from nz_coder.interface.cli import StreamingRenderer
@@ -40,7 +42,7 @@ def attach_main(argv: list[str] | None = None, *, console: Console | None = None
     try:
         return asyncio.run(_attach(args, console or Console()))
     except (OSError, RuntimeError, ValueError) as exc:
-        (console or Console()).print(f"[error]Attach failed: {exc}[/error]")
+        (console or Console()).print(Text(f"Attach failed: {exc}", style="error"))
         return 2
 
 
@@ -119,7 +121,7 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                 break
             submission_error = _remote_submission_error(text, (), local_daemon)
             if submission_error:
-                console.print(f"[error]{submission_error}[/error]")
+                console.print(Text(submission_error, style="error"))
                 continue
             if text in {"/help", "/keys"}:
                 _render_remote_help(console, remote_registry)
@@ -146,7 +148,10 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                 raw = text.split(maxsplit=1)[1] if " " in text else ""
                 info = await asyncio.to_thread(backend.fork, int(raw) if raw else None)
                 await asyncio.to_thread(backend.select_session, str(info["id"]))
-                console.print(f"[success]Forked into {backend.session_id}.[/success]")
+                console.print(Text(
+                    f"Forked into {backend.session_id}.",
+                    style="success",
+                ))
                 continue
             if text == "/delete-session":
                 confirmed = await terminal_input.prompt_text_async(
@@ -156,7 +161,10 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                     console.print("[info]Session deletion cancelled.[/info]")
                     continue
                 if await asyncio.to_thread(backend.delete):
-                    console.print(f"[success]Deleted {backend.session_id}.[/success]")
+                    console.print(Text(
+                        f"Deleted {backend.session_id}.",
+                        style="success",
+                    ))
                     break
                 continue
             if text == "/timeline":
@@ -234,7 +242,7 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                 if raw:
                     target = Path(raw).expanduser().resolve()
                     target.write_text(str(payload.get("markdown") or ""), encoding="utf-8")
-                    console.print(f"[success]Session exported: {target}[/success]")
+                    console.print(Text(f"Session exported: {target}", style="success"))
                 else:
                     console.print(Markdown(str(payload.get("markdown") or "")))
                 continue
@@ -268,7 +276,7 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                         local_daemon,
                     )
                     if submission_error:
-                        console.print(f"[error]{submission_error}[/error]")
+                        console.print(Text(submission_error, style="error"))
                         continue
                     await asyncio.to_thread(
                         backend.start_run,
@@ -291,7 +299,7 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                 local_daemon,
             )
             if submission_error:
-                console.print(f"[error]{submission_error}[/error]")
+                console.print(Text(submission_error, style="error"))
                 continue
             await asyncio.to_thread(
                 backend.start_run,
@@ -324,18 +332,32 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
     )
     interaction_input = bridge.terminal_input
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue = asyncio.Queue()
+    queue: asyncio.Queue = asyncio.Queue(
+        maxsize=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512)
+    )
     done = asyncio.Event()
     stream = None
 
     def pump() -> None:
         try:
             for payload in stream:
-                loop.call_soon_threadsafe(queue.put_nowait, payload)
+                delivery = asyncio.run_coroutine_threadsafe(queue.put(payload), loop)
+                try:
+                    delivery.result(timeout=30.0)
+                except Exception:
+                    delivery.cancel()
+                    raise
                 if payload.get("type") == "session.run.settled":
                     break
         except Exception as exc:
-            loop.call_soon_threadsafe(queue.put_nowait, {"_error": str(exc)})
+            try:
+                delivery = asyncio.run_coroutine_threadsafe(
+                    queue.put({"_error": str(exc)}),
+                    loop,
+                )
+                delivery.result(timeout=1.0)
+            except Exception:
+                pass
         finally:
             loop.call_soon_threadsafe(done.set)
 
@@ -345,11 +367,6 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
         _feed_snapshot_events(run_view, baseline)
         await _resolve_pending(backend, baseline.get("pending") or {}, bridge)
         if not bool((baseline.get("session") or {}).get("running")):
-            messages = await asyncio.to_thread(backend.messages)
-            if messages:
-                answer = str(messages[-1].get("content") or "")
-                if answer:
-                    renderer.on_token(answer)
             return
         stream = backend.events(last_event_id=cursor)
         thread = threading.Thread(target=pump, name="nz-remote-events", daemon=True)
@@ -363,7 +380,6 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 raise RuntimeError(payload["_error"])
             event_type = payload.get("type")
             if event_type == "server.snapshot":
-                run_view.rebase_remote()
                 _feed_snapshot_events(run_view, payload.get("properties") or {})
                 await _resolve_pending(
                     backend,
@@ -408,25 +424,31 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
         await asyncio.to_thread(stream.close)
     finally:
         if stream is not None:
-            stream.close()
-        messages = await asyncio.to_thread(backend.messages)
-        if messages:
-            answer = str(messages[-1].get("content") or "")
-            streamed = "".join(getattr(renderer, "_buffer", []))
-            if answer and answer != streamed:
-                if answer.startswith(streamed):
-                    renderer.on_token(answer[len(streamed):])
-                elif not streamed:
-                    renderer.on_token(answer)
-                else:
-                    renderer.on_token("\n\n" + answer)
-        renderer.on_token(None)
-        run_view.finish({"status": terminal_status})
-        run_view.close()
-        await interaction_input.close_async()
+            try:
+                stream.close()
+            except Exception:
+                pass
+        try:
+            final_snapshot = await asyncio.to_thread(backend.attach_snapshot)
+            _feed_snapshot_events(run_view, final_snapshot)
+        except Exception:
+            # Final reconciliation is best effort; cleanup and the original
+            # stream outcome are more authoritative than a second HTTP error.
+            pass
+        try:
+            renderer.finish()
+        finally:
+            try:
+                run_view.finish({"status": terminal_status})
+            finally:
+                run_view.close()
+                await interaction_input.close_async()
 
 
 def _feed_snapshot_events(run_view: TerminalRunRenderer, snapshot: dict[str, Any]) -> None:
+    run_view.rebase_remote(
+        snapshot.get("messages") if isinstance(snapshot, dict) else None
+    )
     for payload in snapshot.get("events", []) if isinstance(snapshot, dict) else []:
         if not isinstance(payload, dict):
             continue
@@ -626,7 +648,7 @@ async def _workflow_command(
     if action in {"pause", "resume", "stop"} and run_id:
         result = await asyncio.to_thread(backend.control_workflow, run_id, action)
         status = str(result.get("status") or "unknown")
-        console.print(f"[success]Workflow {run_id}: {status}.[/success]")
+        console.print(Text(f"Workflow {run_id}: {status}.", style="success"))
         return
     console.print(
         "[error]Usage: /workflow [list|show ID|run NAME [JSON_ARGS|REQUEST]|"
@@ -874,12 +896,18 @@ async def _process_command(
         return
     if operation == "kill" and process_id:
         result = await asyncio.to_thread(backend.process_kill, process_id)
-        console.print(f"[success]{process_id}: {str(result.get('status') or '').upper()}[/success]")
+        console.print(Text(
+            f"{process_id}: {str(result.get('status') or '').upper()}",
+            style="success",
+        ))
         return
     if operation == "write" and process_id and len(parts) > 3:
         data = text.split(maxsplit=3)[3]
         result = await asyncio.to_thread(backend.process_write, process_id, data)
-        console.print(f"[success]{process_id}: {str(result.get('status') or '').upper()}[/success]")
+        console.print(Text(
+            f"{process_id}: {str(result.get('status') or '').upper()}",
+            style="success",
+        ))
         return
     if operation == "resize" and process_id and len(parts) == 5:
         result = await asyncio.to_thread(
@@ -888,7 +916,10 @@ async def _process_command(
             rows=int(parts[3]),
             cols=int(parts[4]),
         )
-        console.print(f"[success]{process_id}: resized to {parts[4]}x{parts[3]}[/success]")
+        console.print(Text(
+            f"{process_id}: resized to {parts[4]}x{parts[3]}",
+            style="success",
+        ))
         return
     console.print(
         "[error]Usage: /processes [list|inspect|logs|follow|write ID DATA|"

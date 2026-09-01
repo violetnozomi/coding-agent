@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 from collections import deque
 import json
 import queue
@@ -13,6 +14,8 @@ from rich.panel import Panel
 from rich.text import Text
 
 from nz_coder.interface.presentation_tokens import clip_terminal_text
+from nz_coder.protocol.message_schema import message_records
+from nz_coder.protocol.message_part_reducer import MessagePartReducer
 from nz_coder.protocol.session_events import (
     EventSubscriptionGapError,
     SessionEvent,
@@ -28,8 +31,11 @@ _EVENT_TYPES = {
     "session.tool.started",
     "session.tool.completed",
     "message.updated",
+    "message.part.created",
     "message.part.updated",
     "message.part.delta",
+    "message.part.completed",
+    "message.part.removed",
     "process.started",
     "process.exited",
     "process.killed",
@@ -62,6 +68,13 @@ class TerminalRunRenderer:
         self._agent = None
         self._seen_event_ids: set[str] = set()
         self._seen_event_order: deque[str] = deque()
+        self._part_reducer = MessagePartReducer()
+        self._projected_text = ""
+
+    @property
+    def logical_text(self) -> str:
+        """Return the renderer's authoritative Message/Part text projection."""
+        return self._part_reducer.visible_text
 
     def begin(self, agent) -> None:
         """Subscribe before a run so no lifecycle event is missed."""
@@ -80,6 +93,8 @@ class TerminalRunRenderer:
         self._pending_terminal = None
         self._seen_event_ids.clear()
         self._seen_event_order.clear()
+        self._part_reducer.clear()
+        self._projected_text = ""
         self._agent = agent
         event_bus = getattr(agent, "event_bus", None)
         if event_bus is not None:
@@ -87,7 +102,9 @@ class TerminalRunRenderer:
         self._refresh_status()
         if not callable(getattr(self.streaming_renderer, "set_status", None)):
             model = str(getattr(agent, "model_id", "model"))
-            self.console.print(f"[info]● Working[/info] [dim]with {model}[/dim]")
+            line = Text("● Working", style="info")
+            line.append(f" with {model}", style="dim")
+            self.console.print(line)
 
     def begin_remote(self, agent) -> None:
         """Start the same renderer state machine for an external event source."""
@@ -96,7 +113,7 @@ class TerminalRunRenderer:
             "model_id": getattr(agent, "model_id", "model"),
         })())
 
-    def rebase_remote(self) -> None:
+    def rebase_remote(self, messages: list[dict] | None = None) -> None:
         """Reset transient reducer state at an authoritative remote snapshot.
 
         Event identities and already-rendered cards are retained so events shared
@@ -109,10 +126,16 @@ class TerminalRunRenderer:
         self._pending_errors.clear()
         self._pending_completed.clear()
         self._pending_terminal = None
-        self._terminal_seen = False
+        self._part_reducer.replace_snapshot(messages)
+        self._sync_text_projection()
         self._refresh_status()
 
-    def feed(self, event: SessionEvent | dict) -> None:
+    def feed(
+        self,
+        event: SessionEvent | dict,
+        *,
+        render_completed: bool = True,
+    ) -> None:
         """Project one event supplied by a remote backend.
 
         Remote SSE uses the same ``SessionEvent`` wire envelope as the local
@@ -130,15 +153,18 @@ class TerminalRunRenderer:
             self._seen_event_order.append(event.event_id)
             while len(self._seen_event_order) > 4096:
                 self._seen_event_ids.discard(self._seen_event_order.popleft())
-        if event.type == "message.part.delta":
-            delta = event.properties.get("delta")
-            if isinstance(delta, str) and delta:
-                on_token = getattr(self.streaming_renderer, "on_token", None)
-                if callable(on_token):
-                    on_token(delta)
-            return
+        if event.type in {
+            "message.part.created",
+            "message.part.updated",
+            "message.part.delta",
+            "message.part.completed",
+            "message.part.removed",
+        }:
+            if self._part_reducer.apply_event(event):
+                self._sync_text_projection()
         self._handle_event(event)
-        self._flush_completed()
+        if render_completed:
+            self._flush_completed()
 
     async def watch(self, stop: asyncio.Event, interval: float = 0.08) -> None:
         """Continuously project running Part updates while the Agent is busy."""
@@ -203,10 +229,14 @@ class TerminalRunRenderer:
             except EventSubscriptionGapError as exc:
                 self.console.print(
                     f"[error]Terminal event view lost {exc.dropped_events} update(s); "
-                    "use /status or /trace to resync.[/error]"
+                    "rebuilding from the authoritative transcript.[/error]"
                 )
+                if self._rebase_local_after_gap(subscription):
+                    subscription = self._subscription
+                    if subscription is not None:
+                        continue
                 break
-            self._handle_event(event)
+            self.feed(event, render_completed=False)
         if render_completed:
             self._flush_completed()
 
@@ -257,9 +287,18 @@ class TerminalRunRenderer:
             })
             self._refresh_status()
             return
-        if event.type == "message.part.updated":
+        if event.type == "message.part.removed":
+            self._refresh_status()
+            return
+        if event.type in {
+            "message.part.created",
+            "message.part.updated",
+            "message.part.completed",
+        }:
             part = properties.get("part")
             if not isinstance(part, dict):
+                if event.type == "message.part.completed":
+                    self._refresh_status()
                 return
             if part.get("type") == "retry":
                 self._retry_part = part
@@ -299,6 +338,53 @@ class TerminalRunRenderer:
         if event.type == "session.run.cancelled":
             self._retry_part = None
             self._pending_terminal = ("cancelled", "")
+
+    def _sync_text_projection(self) -> None:
+        """Project reducer text without treating an append buffer as truth."""
+        text = self._part_reducer.visible_text
+        if text == self._projected_text:
+            return
+        replace_text = getattr(self.streaming_renderer, "replace_text", None)
+        if callable(replace_text):
+            replace_text(text)
+        elif text.startswith(self._projected_text):
+            on_token = getattr(self.streaming_renderer, "on_token", None)
+            if callable(on_token):
+                on_token(text[len(self._projected_text):])
+        self._projected_text = text
+
+    def _rebase_local_after_gap(
+        self,
+        old_subscription: SessionSubscription,
+    ) -> bool:
+        """Resubscribe before rebuilding from the live transcript snapshot."""
+        agent = self._agent
+        event_bus = getattr(agent, "event_bus", None)
+        messages = getattr(agent, "_active_processor_messages", None)
+        if not isinstance(messages, list):
+            context = getattr(agent, "active_run_context", None)
+            messages = getattr(context, "transcript", None)
+        if event_bus is None or not isinstance(messages, list):
+            return False
+        replacement = None
+        try:
+            # Subscribe first. Events racing the snapshot are queued and then
+            # rejected by reducer version/identity fences when already present.
+            replacement = event_bus.subscribe(_EVENT_TYPES, max_queue=512)
+            records = message_records(
+                copy.deepcopy(messages),
+                str(getattr(agent, "session_id", "") or event_bus.session_id),
+            )
+            self._part_reducer.replace_snapshot(records)
+            self._sync_text_projection()
+            self._refresh_status()
+        except (RuntimeError, TypeError, ValueError):
+            if replacement is not None:
+                replacement.close()
+            return False
+        self._subscription = replacement
+        old_subscription.close()
+        return True
 
     def _flush_completed(self) -> None:
         pending, self._pending_completed = self._pending_completed, {}

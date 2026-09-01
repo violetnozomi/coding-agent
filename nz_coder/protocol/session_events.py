@@ -23,6 +23,7 @@ from nz_coder.foundation.json_safety import json_safe_value
 _EVENT_TYPE_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,127}$")
 _EVENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _CLOSED = object()
+_JOURNAL_CLOSED = object()
 _JOURNAL_READ_BYTES = 16 * 1024 * 1024
 
 
@@ -149,6 +150,11 @@ class _EventJournal:
         self.last_sequence = 0
         self._handle = None
         self._entry_count = 0
+        self._queue: queue.Queue = queue.Queue()
+        self._worker: threading.Thread | None = None
+        self._worker_lock = threading.Lock()
+        self._closing = False
+        self._failed = False
 
     def load(self) -> list[SessionEvent]:
         # Only expose the final contiguous, valid suffix for cursor replay. If
@@ -192,6 +198,34 @@ class _EventJournal:
         return list(recent)
 
     def append(self, event: SessionEvent, recent: list[SessionEvent]) -> None:
+        """Queue one immutable record without blocking the EventBus lock."""
+        with self._worker_lock:
+            if self._closing or self._failed:
+                return
+            if self._worker is None:
+                self._worker = threading.Thread(
+                    target=self._run_writer,
+                    name=f"nz-event-journal-{self.session_id[:24] or 'session'}",
+                    daemon=True,
+                )
+                self._worker.start()
+        self._queue.put_nowait((event, recent))
+
+    def _run_writer(self) -> None:
+        """Serialize journal records in event order on the sole writer thread."""
+        while True:
+            item = self._queue.get()
+            try:
+                if item is _JOURNAL_CLOSED:
+                    return
+                if self._failed:
+                    continue
+                event, recent = item
+                self._append_sync(event, recent)
+            finally:
+                self._queue.task_done()
+
+    def _append_sync(self, event: SessionEvent, recent: list[SessionEvent]) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if self._handle is None:
@@ -210,9 +244,23 @@ class _EventJournal:
         except Exception:
             # Journaling is a replay optimization. Extension metadata with an
             # unsupported or cyclic value must not abort live Agent delivery.
-            self.close()
+            self._failed = True
+            self._close_handle()
 
     def close(self) -> None:
+        """Drain queued records and close the writer at the ownership boundary."""
+        with self._worker_lock:
+            if self._closing:
+                return
+            self._closing = True
+            worker = self._worker
+            if worker is not None:
+                self._queue.put_nowait(_JOURNAL_CLOSED)
+        if worker is not None and worker is not threading.current_thread():
+            worker.join()
+        self._close_handle()
+
+    def _close_handle(self) -> None:
         handle = self._handle
         self._handle = None
         if handle is not None:
@@ -222,7 +270,7 @@ class _EventJournal:
                 pass
 
     def _compact(self, recent: list[SessionEvent]) -> None:
-        self.close()
+        self._close_handle()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, temp_name = tempfile.mkstemp(
             dir=self.path.parent,
@@ -543,6 +591,7 @@ class SessionEventBus:
 
     def close(self) -> None:
         """Dispose subscribers; the Agent owns when this lifecycle ends."""
+        journal = None
         with self._lock:
             if self._closed:
                 return
@@ -550,8 +599,9 @@ class SessionEventBus:
             self._closed = True
             subscriptions = list(self._subscriptions)
             self._subscriptions.clear()
-            if self._journal is not None:
-                self._journal.close()
+            journal = self._journal
+        if journal is not None:
+            journal.close()
         for subscription in subscriptions:
             subscription._closed = True
             if not subscription.accepts(disposed) or subscription._queue.empty():

@@ -57,6 +57,13 @@ core-capability-report.json
 trajectory.jsonl
 sources/
 
+# Repository-only public surface
+# Keep local development material available without publishing it.
+docs/*
+!docs/struct.md
+examples/
+scripts/
+
 # Merge/editor recovery files
 *.orig
 *.rej

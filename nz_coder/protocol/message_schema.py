@@ -464,11 +464,13 @@ def attach_text_part(message: dict, part: dict[str, Any]) -> None:
     normalized = _validate_part(part, message_id=message_id)
     if normalized is None:
         raise ValueError("part must contain matching valid message/part IDs")
-    retained = [
-        item for item in message.get(PARTS_KEY, [])
-        if isinstance(item, dict) and item.get("id") != normalized["id"]
-    ]
-    message[PARTS_KEY] = [normalized, *retained]
+    parts = [item for item in message.get(PARTS_KEY, []) if isinstance(item, dict)]
+    for index, item in enumerate(parts):
+        if item.get("id") == normalized["id"]:
+            parts[index] = normalized
+            message[PARTS_KEY] = parts
+            return
+    message[PARTS_KEY] = [normalized, *parts]
 
 
 def attach_file_parts(message: dict, attachments: list[dict]) -> list[dict]:
@@ -515,12 +517,51 @@ def upsert_message_part(message: dict, part: dict[str, Any]) -> dict:
     normalized = _validate_part(part, message_id=message_id)
     if normalized is None:
         raise ValueError("part must contain matching valid message/part IDs")
-    retained = [
-        item for item in message.get(PARTS_KEY, [])
-        if isinstance(item, dict) and item.get("id") != normalized["id"]
-    ]
-    message[PARTS_KEY] = [*retained, normalized]
+    parts = [item for item in message.get(PARTS_KEY, []) if isinstance(item, dict)]
+    for index, item in enumerate(parts):
+        if item.get("id") == normalized["id"]:
+            parts[index] = normalized
+            message[PARTS_KEY] = parts
+            break
+    else:
+        message[PARTS_KEY] = [*parts, normalized]
     return normalized
+
+
+def remove_message_part(message: dict, part_id: str) -> dict | None:
+    """Remove one durable part and re-project legacy assistant text.
+
+    A retry/removal event is not authoritative unless the owning message loses
+    the same part.  Recomputing ``content`` here keeps legacy provider/session
+    consumers aligned with the WithParts projection.
+    """
+    if not isinstance(part_id, str) or not part_id:
+        return None
+    parts = message.get(PARTS_KEY)
+    if not isinstance(parts, list):
+        return None
+    removed = None
+    retained = []
+    for item in parts:
+        if (
+            removed is None
+            and isinstance(item, dict)
+            and item.get("id") == part_id
+        ):
+            removed = item
+            continue
+        if isinstance(item, dict):
+            retained.append(item)
+    if removed is None:
+        return None
+    message[PARTS_KEY] = retained
+    if message.get("role") == "assistant" and removed.get("type") == "text":
+        message["content"] = "".join(
+            str(item.get("text") or "")
+            for item in retained
+            if item.get("type") == "text" and item.get("ignored") is not True
+        )
+    return copy.deepcopy(removed)
 
 
 def settle_interrupted_parts(messages: list[dict]) -> int:
@@ -1233,6 +1274,15 @@ def _textual_part(value: dict, message_id: str, part_type: str) -> dict | None:
     }
     if part_type == "text" and value.get("ignored") is True:
         result["ignored"] = True
+    if part_type == "text":
+        for key in ("run_id", "attempt_id", "generation_id"):
+            item = value.get(key)
+            if isinstance(item, str) and 0 < len(item) <= 200:
+                result[key] = item
+        for key in ("generation", "version"):
+            item = value.get(key)
+            if isinstance(item, int) and not isinstance(item, bool) and item >= 0:
+                result[key] = item
     timing = value.get("time")
     if isinstance(timing, dict):
         normalized_time = {}

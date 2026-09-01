@@ -595,6 +595,8 @@ class AgentRunner:
                 context.hooks.on_pre_send(messages)
                 context.messages.bind_user_contexts(messages)
                 message_part = context.messages.new_message_part(turn_index + 1)
+                output_guarded = context.policy.has_output_guardrail()
+                message_part["public_streaming"] = not output_guarded
                 assistant_message = {"role": "assistant", "content": ""}
                 context.messages.bind_assistant_context(assistant_message)
                 attach_message_identity(
@@ -655,6 +657,13 @@ class AgentRunner:
                 async def execute_stream_tools(stream_result: object) -> str:
                     nonlocal model_result_materialized
                     await resolve_start_snapshot()
+                    if output_guarded:
+                        # Text and reasoning that accompany a tool call are an
+                        # intermediate Provider attempt, not an approved user
+                        # answer. Keep only the tool envelope public.
+                        stream_result.content = ""
+                        stream_result.extra = dict(stream_result.extra or {})
+                        stream_result.extra.pop("reasoning_content", None)
                     context.messages.materialize_llm_result(
                         stream_result,
                         assistant_message=assistant_message,
@@ -726,13 +735,18 @@ class AgentRunner:
                         return await services.model.complete_turn(
                             resolve_model_runtime_context(), api_messages,
                             stream=stream,
-                            on_token=(None if context.policy.has_output_guardrail() else on_token),
+                            on_token=(None if output_guarded else on_token),
                             message_part=message_part,
                             stream_tool_handler=execute_stream_tools,
                         )
                     result = await self._middleware.run(
                         "model", run_context, execute_model,
                     )
+                    if output_guarded:
+                        result.extra = dict(result.extra or {})
+                        result.extra.pop("reasoning_content", None)
+                        if result.tool_calls:
+                            result.content = ""
                     repaired_metrics = _normalize_llm_result_metrics(result)
                     if repaired_metrics:
                         context.hooks.trace(

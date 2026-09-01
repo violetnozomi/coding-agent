@@ -24,6 +24,7 @@ from nz_coder.protocol.message_schema import (
     PARTS_KEY,
     assistant_error_from_exception,
     publish_assistant_state,
+    remove_message_part,
     upsert_message_part,
 )
 
@@ -280,7 +281,17 @@ class SessionProcessor:
         })
         return warning
 
-    def stream_text(self, text: str, *, part_id: str) -> dict:
+    def stream_text(
+        self,
+        text: str,
+        *,
+        part_id: str,
+        run_id: str = "",
+        attempt_id: str = "",
+        generation_id: str = "",
+        generation: int = 0,
+        version: int = 0,
+    ) -> dict:
         """Persist accumulated visible text while delta events remain incremental."""
         self.message["content"] = str(text)
         return self._update({
@@ -289,7 +300,38 @@ class SessionProcessor:
             "type": "text",
             "text": str(text),
             "time": {"start": self._step_started_at},
+            **({"run_id": run_id} if run_id else {}),
+            **({"attempt_id": attempt_id} if attempt_id else {}),
+            **({"generation_id": generation_id} if generation_id else {}),
+            "generation": max(0, int(generation)),
+            "version": max(0, int(version)),
         }, publish=False)
+
+    def remove_part(self, part_id: str, reason: str) -> dict | None:
+        """Remove a failed attempt from durable state and publish its tombstone."""
+        with self._lock:
+            removed = remove_message_part(self.message, part_id)
+            if removed is None:
+                return None
+            if self.publish is not None:
+                self.publish("message.part.removed", {
+                    "message_id": self.message_id,
+                    "part_id": part_id,
+                    "reason": str(reason),
+                    **{
+                        key: removed[key]
+                        for key in (
+                            "run_id",
+                            "attempt_id",
+                            "generation_id",
+                            "generation",
+                            "version",
+                        )
+                        if key in removed
+                    },
+                })
+            self._notify_message_updated()
+            return removed
 
     def start_tools(self, tool_calls: list[dict]) -> None:
         """Move registered tool calls to running immediately before dispatch."""

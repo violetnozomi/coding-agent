@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 
 import select
 import sys
@@ -87,37 +88,50 @@ class _SurfaceConsole:
 # 流式预览的最小刷新间隔（秒）。每个 token 都 refresh 既浪费 CPU 也会在
 # 终端高度不足时放大重复打印问题，节流到 ~12fps 肉眼无感知差异。
 _LIVE_REFRESH_INTERVAL = 0.08
+_STREAM_ANSI_ESCAPE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_STREAM_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _safe_stream_text(value: object) -> str:
+    """Remove terminal control bytes while preserving Markdown/newlines."""
+    return _STREAM_CONTROL.sub("", _STREAM_ANSI_ESCAPE.sub("", str(value or "")))
 
 
 def print_banner(session_id: str = "", output_console=None):  # noqa: ANN001
     from nz_coder.providers.models import active_model_selection
 
     selection = active_model_selection()
-    session_line = f"Session: {session_id}\n" if session_id else ""
+    banner = Text()
+    banner.append("NZ-Coder", style="bold cyan")
+    banner.append(f" v{__version__}\n")
+    banner.append(f"Model: {selection.provider}/{selection.model_id}\n")
+    banner.append(f"Workspace: {current_workdir()}\n")
+    banner.append(f"Mode: {config.PERMISSION_MODE}\n")
+    if session_id:
+        banner.append(f"Session: {session_id}\n")
+    banner.append("Type /help for commands · /keys for shortcuts · exit to quit")
     (output_console or console).print(Panel.fit(
-        f"[bold cyan]NZ-Coder[/] v{__version__}\n"
-        f"Model: {selection.provider}/{selection.model_id}\n"
-        f"Workspace: {current_workdir()}\n"
-        f"Mode: {config.PERMISSION_MODE}\n"
-        f"{session_line}"
-        f"Type /help for commands · /keys for shortcuts · exit to quit",
+        banner,
         border_style="cyan",
     ))
 
 
 def on_tool(name: str, output: str):
-    console.print(f"  [tool]▶ {name}[/tool]", highlight=False)
+    heading = Text("  ▶ ", style="tool")
+    heading.append(str(name))
+    console.print(heading, highlight=False)
     truncated = output[:500]
     if len(output) > 500:
         truncated += f"\n  ... ({len(output)} chars total)"
     for line in truncated.splitlines():
-        console.print(f"    {line}", highlight=False)
+        console.print(Text(f"    {_safe_stream_text(line)}"), highlight=False)
 
 
 def on_text(text: str, output_console=None):  # noqa: ANN001
     target = output_console or console
+    text = _safe_stream_text(text)
     if text.startswith("["):
-        target.print(f"[info]{text}[/info]")
+        target.print(Text(text, style="info"))
     else:
         try:
             target.print(Markdown(text))
@@ -234,7 +248,10 @@ class StreamingRenderer:
             # End of stream
             self.finish()
             return
-        self._buffer.append(token)  # 关键：暂停期间也要入缓冲，否则最终渲染缺字
+        value = _safe_stream_text(token)
+        if not value:
+            return
+        self._buffer.append(value)  # 关键：暂停期间也要入缓冲，否则最终渲染缺字
         surface = getattr(self.console, "surface", None)
         if surface is not None:
             surface.set_stream("".join(self._buffer))
@@ -242,6 +259,24 @@ class StreamingRenderer:
         if self._pause_depth:
             return
         if time.monotonic() - self._last_refresh >= _LIVE_REFRESH_INTERVAL:
+            self._refresh()
+
+    @property
+    def text(self) -> str:
+        """Return the current projection without exposing the mutable buffer."""
+        return "".join(self._buffer)
+
+    def replace_text(self, value: str) -> None:
+        """Replace the transient projection from authoritative Message/Part state."""
+        text = _safe_stream_text(value)
+        if text == self.text:
+            return
+        self._buffer = [text] if text else []
+        surface = getattr(self.console, "surface", None)
+        if surface is not None:
+            surface.set_stream(text)
+            return
+        if not self._pause_depth:
             self._refresh()
 
     def set_status(self, lines) -> None:  # noqa: ANN001
@@ -308,7 +343,10 @@ class StreamingRenderer:
             try:
                 self.console.print(Markdown(full_text))
             except Exception:
-                self.console.print(full_text)
+                try:
+                    self.console.print(Text(full_text))
+                except Exception:
+                    pass
 
     # ── 内部 ─────────────────────────────────────────────────────────────
 
@@ -653,7 +691,10 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
                 history,
                 on_tool=_on_tool,
                 on_text=_on_text,
-                on_token=renderer.on_token,
+                # Terminal text is reduced from Session Message/Part events by
+                # TerminalRunRenderer. Direct callbacks remain available to SDK
+                # callers without double-appending the local CLI projection.
+                on_token=None,
                 stream=True,
                 allowed_tools=command_allowed_tools,
                 model=command_model,
@@ -1000,7 +1041,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if args:
-        console.print(f"[error]Unknown argument: {args[0]}[/error]")
+        console.print(Text(f"Unknown argument: {args[0]}", style="error"))
         return 2
     try:
         asyncio.run(_run_cli())

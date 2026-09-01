@@ -11,6 +11,10 @@ from nz_coder.runtime.execution.services import (
     StreamToolExecutionCancelled,
     StreamToolExecutionFailed,
 )
+from nz_coder.runtime.execution.stream_state import (
+    StreamAttemptBuffer,
+    StreamCheckpointScheduler,
+)
 from nz_coder.runtime.session.session_processor import SessionProcessor
 from nz_coder.tool_platform.exposure import expose_specs
 
@@ -23,13 +27,37 @@ def project_streaming_turn(
     stream_tool_handler=None,
 ) -> LLMResult:
     """Run a Gateway stream and settle its Session/tool projection."""
-    streamed_text: list[str] = []
-    streamed_reasoning: list[str] = []
-    streamed_tools: dict[int, dict] = {}
     tools_executed = False
     tool_outcome = ""
     tool_error: BaseException | None = None
     tool_wait_ms = 0.0
+    processor = getattr(host, "_active_session_processor", None)
+    attempt = StreamAttemptBuffer(
+        host,
+        message_part,
+        processor=(processor if isinstance(processor, SessionProcessor) else None),
+        publish=bool(
+            message_part is None or message_part.get("public_streaming", True)
+        ),
+        delta_interval_seconds=getattr(
+            config,
+            "STREAM_DELTA_INTERVAL_SECONDS",
+            0.05,
+        ),
+        delta_min_chars=getattr(config, "STREAM_DELTA_MIN_CHARS", 256),
+    )
+    active_messages = getattr(host, "_active_processor_messages", None)
+    checkpoints = StreamCheckpointScheduler(
+        host,
+        active_messages,
+        enabled=attempt.publish,
+        interval_seconds=getattr(
+            config,
+            "STREAM_CHECKPOINT_INTERVAL_SECONDS",
+            0.5,
+        ),
+        min_chars=getattr(config, "STREAM_CHECKPOINT_MIN_CHARS", 4096),
+    )
 
     class RetiredEvent:
         def is_set(self) -> bool:
@@ -37,46 +65,41 @@ def project_streaming_turn(
 
     def on_event(event):
         nonlocal tools_executed, tool_outcome, tool_error, tool_wait_ms
-        processor = getattr(host, "_active_session_processor", None)
-        active_messages = getattr(host, "_active_processor_messages", None)
+        mutation_chars = 0
         if event.kind == "text":
             delta = str(event.data.get("delta") or "")
-            streamed_text.append(delta)
-            if message_part is not None:
-                host._emit_message_delta(message_part, delta)
-            if isinstance(processor, SessionProcessor) and message_part is not None:
-                processor.stream_text(
-                    "".join(streamed_text),
-                    part_id=message_part["part_id"],
-                )
+            if not attempt.append_text(delta):
+                return None
+            mutation_chars = attempt.flush_text()
         elif event.kind == "reasoning":
             delta = str(event.data.get("delta") or "")
-            streamed_reasoning.append(delta)
-            if isinstance(processor, SessionProcessor):
-                processor.add_reasoning("".join(streamed_reasoning))
+            if not attempt.append_reasoning(delta):
+                return None
+            mutation_chars = attempt.flush_reasoning()
         elif event.kind == "tool_delta":
             index = int(event.data.get("index") or 0)
-            streamed_tools[index] = _streamed_tool(event.data)
-            if isinstance(processor, SessionProcessor):
-                processor.stream_tool_delta(
-                    index,
-                    call_id=str(event.data.get("call_id") or ""),
-                    name=str(event.data.get("name") or ""),
-                    arguments=str(event.data.get("arguments") or ""),
-                    metadata=(event.data.get("metadata") or None),
-                )
+            if not attempt.update_tool(index, _streamed_tool(event.data)):
+                return None
+            mutation_chars = len(str(event.data.get("arguments") or ""))
         elif (
             event.kind == "finish"
             and stream_tool_handler is not None
-            and streamed_tools
+            and attempt.tools
             and not tools_executed
         ):
+            flushed = (
+                attempt.flush_text(force=True)
+                + attempt.flush_reasoning(force=True)
+            )
+            if flushed:
+                checkpoints.note(flushed)
+                checkpoints.flush(force=True)
             partial = LLMResult(
-                content="".join(streamed_text),
-                tool_calls=[streamed_tools[index] for index in sorted(streamed_tools)],
+                content=attempt.content,
+                tool_calls=[attempt.tools[index] for index in sorted(attempt.tools)],
                 extra=(
-                    {"reasoning_content": "".join(streamed_reasoning)}
-                    if streamed_reasoning else {}
+                    {"reasoning_content": attempt.reasoning_content}
+                    if attempt.reasoning else {}
                 ),
                 finish_reason=str(event.data.get("reason") or "tool-calls"),
             )
@@ -90,10 +113,10 @@ def project_streaming_turn(
             finally:
                 tool_wait_ms += (time.perf_counter() - started) * 1000
             return True
-        if isinstance(active_messages, list) and event.kind in {
+        if attempt.publish and mutation_chars and event.kind in {
             "text", "reasoning", "tool_delta",
         }:
-            host._checkpoint_messages(active_messages, "running")
+            checkpoints.note(mutation_chars)
         return None
 
     call = ModelCall(
@@ -123,14 +146,11 @@ def project_streaming_turn(
                 pass
         if name != "model_call_retry" or not payload.get("streaming"):
             return
-        processor = getattr(host, "_active_session_processor", None)
-        if isinstance(processor, SessionProcessor):
-            processor.fail_unsettled(str(payload.get("error") or "stream retry"))
-        if message_part is not None:
-            host._discard_message_part(message_part, "stream_retry")
-        streamed_text.clear()
-        streamed_reasoning.clear()
-        streamed_tools.clear()
+        active_processor = getattr(host, "_active_session_processor", None)
+        if isinstance(active_processor, SessionProcessor):
+            active_processor.fail_unsettled(str(payload.get("error") or "stream retry"))
+        attempt.reset_after_retry("stream_retry")
+        checkpoints.flush(force=True)
 
     gateway.observer = stream_observer
     try:
@@ -150,10 +170,18 @@ def project_streaming_turn(
         processor = getattr(host, "_active_session_processor", None)
         if isinstance(processor, SessionProcessor):
             processor.interrupt_unsettled()
+        checkpoints.flush(force=True)
         raise
 
     result = host._gateway_outcome_result(outcome)
     if outcome.status is ModelCallStatus.COMPLETED:
+        flushed = (
+            attempt.flush_text(force=True)
+            + attempt.flush_reasoning(force=True)
+        )
+        if flushed:
+            checkpoints.note(flushed)
+        checkpoints.flush()
         host.recovery.record_success()
         return _settle_stream_tools(
             host,
@@ -175,6 +203,7 @@ def project_streaming_turn(
             ModelCallStatus.CANCELLED: "cancelled",
         }.get(outcome.status, "stream_error")
         host._discard_message_part(message_part, reason)
+    checkpoints.flush(force=True)
     return result
 
 

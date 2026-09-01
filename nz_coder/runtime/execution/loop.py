@@ -1045,12 +1045,19 @@ class ProductRunEnvironment:
     def _new_message_part(self, turn: int) -> dict:
         """Create stable IDs for one assistant text part."""
         return {
+            "run_id": str(getattr(self.event_bus, "run_id", "") or ""),
             "message_id": f"msg-{uuid.uuid4().hex}",
             "part_id": f"part-{uuid.uuid4().hex}",
+            "attempt_id": f"attempt-{uuid.uuid4().hex}",
+            "generation_id": f"generation-{uuid.uuid4().hex}",
+            "generation": 1,
+            "version": 0,
+            "delta_sequence": 0,
             "turn": turn,
             "started": False,
             "started_at": time.time(),
             "retired": False,
+            "public_streaming": True,
             "lock": threading.RLock(),
         }
 
@@ -1072,6 +1079,8 @@ class ProductRunEnvironment:
                         "part": self._message_part_payload(message_part, ""),
                     },
                 )
+            message_part["version"] += 1
+            message_part["delta_sequence"] += 1
             self._emit_session_event(
                 "message.part.delta",
                 {
@@ -1080,6 +1089,12 @@ class ProductRunEnvironment:
                     "turn": message_part["turn"],
                     "field": "text",
                     "delta": delta,
+                    "run_id": message_part["run_id"],
+                    "attempt_id": message_part["attempt_id"],
+                    "generation_id": message_part["generation_id"],
+                    "generation": message_part["generation"],
+                    "version": message_part["version"],
+                    "delta_sequence": message_part["delta_sequence"],
                 },
             )
 
@@ -1089,6 +1104,7 @@ class ProductRunEnvironment:
                 return None
             if not text and not message_part["started"]:
                 return None
+            message_part["version"] += 1
             part = self._message_part_payload(
                 message_part,
                 text,
@@ -1108,17 +1124,35 @@ class ProductRunEnvironment:
         with message_part["lock"]:
             if message_part["retired"]:
                 return
-            if message_part["started"]:
+            old_part_id = message_part["part_id"]
+            processor = getattr(self, "_active_session_processor", None)
+            removed = None
+            if (
+                isinstance(processor, SessionProcessor)
+                and processor.message_id == message_part["message_id"]
+            ):
+                removed = processor.remove_part(old_part_id, reason)
+            if message_part["started"] and removed is None:
                 self._emit_session_event(
                     "message.part.removed",
                     {
                         "message_id": message_part["message_id"],
-                        "part_id": message_part["part_id"],
+                        "part_id": old_part_id,
                         "turn": message_part["turn"],
                         "reason": reason,
+                        "run_id": message_part["run_id"],
+                        "attempt_id": message_part["attempt_id"],
+                        "generation_id": message_part["generation_id"],
+                        "generation": message_part["generation"],
+                        "version": message_part["version"],
                     },
                 )
             message_part["part_id"] = f"part-{uuid.uuid4().hex}"
+            message_part["attempt_id"] = f"attempt-{uuid.uuid4().hex}"
+            message_part["generation_id"] = f"generation-{uuid.uuid4().hex}"
+            message_part["generation"] += 1
+            message_part["version"] = 0
+            message_part["delta_sequence"] = 0
             message_part["started"] = False
             message_part["started_at"] = time.time()
 
@@ -1128,7 +1162,14 @@ class ProductRunEnvironment:
             if message_part["retired"]:
                 return
             message_part["retired"] = True
-            if message_part["started"]:
+            processor = getattr(self, "_active_session_processor", None)
+            removed = None
+            if (
+                isinstance(processor, SessionProcessor)
+                and processor.message_id == message_part["message_id"]
+            ):
+                removed = processor.remove_part(message_part["part_id"], reason)
+            if message_part["started"] and removed is None:
                 self._emit_session_event(
                     "message.part.removed",
                     {
@@ -1136,8 +1177,15 @@ class ProductRunEnvironment:
                         "part_id": message_part["part_id"],
                         "turn": message_part["turn"],
                         "reason": reason,
+                        "run_id": message_part["run_id"],
+                        "attempt_id": message_part["attempt_id"],
+                        "generation_id": message_part["generation_id"],
+                        "generation": message_part["generation"],
+                        "version": message_part["version"],
                     },
                 )
+            message_part["generation"] += 1
+            message_part["generation_id"] = f"generation-{uuid.uuid4().hex}"
 
     @staticmethod
     def _message_part_is_retired(message_part: dict | None) -> bool:
@@ -1145,6 +1193,40 @@ class ProductRunEnvironment:
             return False
         with message_part["lock"]:
             return bool(message_part["retired"])
+
+    @staticmethod
+    def _message_part_identity(message_part: dict) -> dict:
+        """Capture the immutable identity expected by one worker callback set."""
+        with message_part["lock"]:
+            return {
+                key: message_part[key]
+                for key in (
+                    "run_id",
+                    "message_id",
+                    "part_id",
+                    "attempt_id",
+                    "generation_id",
+                    "generation",
+                )
+            }
+
+    @staticmethod
+    def _message_part_matches(message_part: dict, identity: dict | None) -> bool:
+        """Fence callbacks from retired or superseded Provider attempts."""
+        if not isinstance(identity, dict):
+            return False
+        with message_part["lock"]:
+            return not message_part["retired"] and all(
+                message_part.get(key) == identity.get(key)
+                for key in (
+                    "run_id",
+                    "message_id",
+                    "part_id",
+                    "attempt_id",
+                    "generation_id",
+                    "generation",
+                )
+            )
 
     @staticmethod
     def _message_part_payload(
@@ -1162,6 +1244,11 @@ class ProductRunEnvironment:
             "type": "text",
             "text": text,
             "time": timing,
+            "run_id": message_part["run_id"],
+            "attempt_id": message_part["attempt_id"],
+            "generation_id": message_part["generation_id"],
+            "generation": message_part["generation"],
+            "version": message_part["version"],
         }
 
     def close(self) -> None:
