@@ -16,6 +16,11 @@ from nz_coder.runtime.agent.child_result import (
     child_result_from_state,
 )
 from nz_coder.runtime.agent.child_contracts import presentation_excerpt
+from nz_coder.protocol.public_error import (
+    PublicError,
+    public_error_from_wire,
+    to_public_error,
+)
 from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import ToolOutput, dispatch, register
@@ -38,6 +43,7 @@ _MESSAGE_ROUTE: ContextVar[tuple[object, str] | None] = ContextVar(
 )
 _INSTANCE_LOCK = threading.Lock()
 _INSTANCES: dict[tuple[Path, str], BackgroundAgentManager] = {}
+_CHILD_PROCESS_RESULT_SCHEMA = "nz.child_result.v1"
 
 
 @dataclass
@@ -80,11 +86,44 @@ def _run_subagent_process(connection, payload: dict) -> None:
                 verification=payload.get("verification"),
                 cancel_event=threading.Event(),
             )
-        connection.send({"ok": True, "result": str(result)[:2_000_000]})
+        connection.send({
+            "schema": _CHILD_PROCESS_RESULT_SCHEMA,
+            "ok": True,
+            "result": str(result)[:2_000_000],
+        })
     except BaseException as exc:
-        connection.send({"ok": False, "result": f"Error: {exc}"[:20_000]})
+        connection.send({
+            "schema": _CHILD_PROCESS_RESULT_SCHEMA,
+            "ok": False,
+            "public_error": to_public_error(exc).to_dict(),
+        })
     finally:
         connection.close()
+
+
+def _decode_child_process_envelope(
+    envelope: object,
+) -> tuple[str, PublicError | None]:
+    """Validate the spawn wire contract and fail closed on malformed data."""
+    invalid = PublicError(
+        "child_process_protocol_error",
+        "The child process returned an invalid result.",
+    )
+    if (
+        not isinstance(envelope, dict)
+        or envelope.get("schema") != _CHILD_PROCESS_RESULT_SCHEMA
+        or not isinstance(envelope.get("ok"), bool)
+    ):
+        return invalid.message, invalid
+    if envelope["ok"] is True:
+        result = envelope.get("result")
+        if not isinstance(result, str):
+            return invalid.message, invalid
+        return result[:2_000_000], None
+    public = public_error_from_wire(envelope.get("public_error"))
+    if public is None:
+        return invalid.message, invalid
+    return public.message, public
 
 
 def _digest(path: Path) -> str | None:
@@ -880,6 +919,7 @@ class BackgroundAgentManager:
 
         def worker() -> None:
             acquired = False
+            process_public_error: PublicError | None = None
             try:
                 while not self._slots.acquire(timeout=0.1):
                     if cancel_event.is_set():
@@ -940,9 +980,16 @@ class BackgroundAgentManager:
                         result = "Cancelled; isolated child process terminated."
                     elif parent_connection.poll():
                         envelope = parent_connection.recv()
-                        result = str(envelope.get("result") or "")
+                        result, process_public_error = (
+                            _decode_child_process_envelope(envelope)
+                        )
                     else:
-                        result = f"Error: isolated child exited with code {process.exitcode}"
+                        process_public_error = PublicError(
+                            "child_process_exit",
+                            "The isolated child process exited unexpectedly.",
+                            metadata={"exit_code": process.exitcode},
+                        )
+                        result = process_public_error.message
                     parent_connection.close()
                 else:
                     result = context.run(
@@ -961,13 +1008,15 @@ class BackgroundAgentManager:
                 latest = self._load_raw(session_id) or state
                 if state.get("isolation") == "process" and cancel_event.is_set():
                     latest["status"] = "cancelled"
+                elif process_public_error is not None:
+                    latest["status"] = "error"
                 elif latest.get("status") in _LIVE_STATUSES:
                     latest["status"] = "error"
                 persist_terminal(latest, result)
             except Exception as exc:
                 latest = self._load_raw(session_id) or state
                 latest["status"] = "error"
-                persist_terminal(latest, f"Error: {exc}")
+                persist_terminal(latest, to_public_error(exc).message)
             finally:
                 # Publish the terminal transition before making execution
                 # capacity available.  The event projection can therefore

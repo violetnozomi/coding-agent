@@ -19,7 +19,10 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from nz_coder.foundation.json_safety import json_safe_value
-from nz_coder.protocol.message_schema import normalize_assistant_error
+from nz_coder.protocol.message_schema import (
+    normalize_assistant_error,
+    project_public_tool_part,
+)
 from nz_coder.protocol.public_error import (
     PublicError,
     PublicRuntimeError,
@@ -93,6 +96,8 @@ def _project_public_failures(
     }:
         return "[private diagnostic omitted]"
     if isinstance(value, dict):
+        if value.get("type") == "tool" and isinstance(value.get("state"), dict):
+            value = project_public_tool_part(value)
         seen = _seen if _seen is not None else set()
         identity = id(value)
         if identity in seen:

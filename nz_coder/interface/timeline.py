@@ -371,7 +371,12 @@ def _tool_block(
                 pass
         rendered = json.dumps(arguments, ensure_ascii=False, indent=2, default=str)
         lines.extend(("**Input:**", _fenced(rendered, "json"), ""))
-        output = state.get("output") if status == "completed" else state.get("error")
+        if status == "completed":
+            output = state.get("output")
+        else:
+            from nz_coder.protocol.public_error import public_error_message
+
+            output = public_error_message(state.get("error"))
         if output:
             lines.extend(("**Output:**", _fenced(str(output)), ""))
     lines.extend(("---", ""))

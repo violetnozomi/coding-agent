@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from nz_coder.foundation import config
+from nz_coder.protocol.message_schema import project_public_tool_part
 from nz_coder.protocol.public_error import public_error_from_wire, to_public_error
 from nz_coder.state.workdir import current_workdir
 from nz_coder.state.sessions import active_session_id, session_trace_dir
@@ -457,6 +458,8 @@ def _project_trace_diagnostics(
     }:
         return "[private diagnostic omitted]"
     if isinstance(value, dict):
+        if value.get("type") == "tool" and isinstance(value.get("state"), dict):
+            value = project_public_tool_part(value)
         seen = _seen if _seen is not None else set()
         identity = id(value)
         if identity in seen:

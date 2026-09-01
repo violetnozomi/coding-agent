@@ -18,6 +18,8 @@ from nz_coder.protocol.attachments import (
 )
 from nz_coder.protocol.public_error import (
     PublicError,
+    PublicRuntimeError,
+    TrustedPublicMessage,
     public_error_from_wire,
     to_public_error,
 )
@@ -96,6 +98,45 @@ def sanitize_provider_extra(extra: object) -> dict[str, object]:
         if accepted:
             selected[raw_key] = safe
     return selected
+
+
+def project_public_tool_part(part: object) -> dict:
+    """Project nested ToolPart failures through the typed public boundary."""
+    if not isinstance(part, dict):
+        return {}
+    projected = copy.deepcopy(part)
+    if projected.get("type") != "tool":
+        return projected
+    state = projected.get("state")
+    if not isinstance(state, dict):
+        projected["state"] = {}
+        return projected
+    status = str(state.get("status") or "").casefold()
+    if status not in {"error", "failed", "blocked", "nonzero", "interrupted"}:
+        return projected
+    public = None
+    for candidate in (
+        state.get("public_error"),
+        state.get("error"),
+        state.get("output"),
+    ):
+        if isinstance(
+            candidate,
+            (PublicError, PublicRuntimeError, TrustedPublicMessage),
+        ):
+            public = to_public_error(candidate)
+            break
+        public = public_error_from_wire(candidate)
+        if public is not None:
+            break
+    if public is None:
+        public = PublicError("tool_execution_failed", "Tool execution failed.")
+    state.pop("raw", None)
+    state.pop("public_error", None)
+    state["output"] = public.message
+    state["error"] = public.to_dict()
+    projected["state"] = state
+    return projected
 
 
 def _json_safe_provider_value(
@@ -1656,6 +1697,7 @@ def _handoff_part(value: dict, message_id: str) -> dict | None:
 def _tool_part(value: dict, message_id: str) -> dict | None:
     tool = value.get("tool")
     call_id = value.get("call_id")
+    value = project_public_tool_part(value)
     state = value.get("state")
     if not isinstance(tool, str) or not tool or not isinstance(call_id, str) or not call_id:
         return None
@@ -1693,7 +1735,13 @@ def _tool_part(value: dict, message_id: str) -> dict | None:
         if attachments:
             clean_state["attachments"] = attachments
     if status == "error":
-        clean_state["error"] = str(state.get("error") or "Tool execution failed")[:4000]
+        public = public_error_from_wire(state.get("error"))
+        clean_state["error"] = (
+            public or PublicError("tool_execution_failed", "Tool execution failed.")
+        ).to_dict()
+        clean_state["output"] = str(state.get("output") or "Tool execution failed.")[
+            :4000
+        ]
         if isinstance(state.get("interrupted"), bool):
             clean_state["interrupted"] = state["interrupted"]
     result = {
