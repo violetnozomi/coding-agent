@@ -37,10 +37,15 @@ _JOURNAL_READ_BYTES = 16 * 1024 * 1024
 
 def _critical_journal_event(event_type: str) -> bool:
     return event_type in {
+        "permission.asked",
+        "question.asked",
         "session.run.completed",
         "session.run.failed",
         "session.run.cancelled",
+        "session.run.settled",
         "session.disposed",
+        "server.snapshot",
+        "server.event_gap",
     }
 
 
@@ -271,8 +276,13 @@ class _EventJournal:
         # events are rejected at the soft limit and may be reconstructed from
         # the authoritative snapshot.
         self._ordinary_queue_limit = max(1024, self.max_entries * 4)
+        self._critical_reserve = 64
+        self._event_queue_limit = (
+            self._ordinary_queue_limit + self._critical_reserve
+        )
         self._queue: queue.Queue = queue.Queue(
-            maxsize=self._ordinary_queue_limit + 64
+            # One slot belongs exclusively to the close sentinel.
+            maxsize=self._event_queue_limit + 1
         )
         self._worker: threading.Thread | None = None
         self._worker_lock = threading.Lock()
@@ -342,55 +352,35 @@ class _EventJournal:
             # The enqueue belongs to the same state transition as the closing
             # check. This guarantees the close sentinel follows every accepted
             # record.
-            if (
-                not _critical_journal_event(event.type)
-                and self._queue.qsize() >= self._ordinary_queue_limit
-            ):
+            critical = _critical_journal_event(event.type)
+            limit = (
+                self._event_queue_limit
+                if critical
+                else self._ordinary_queue_limit
+            )
+            if self._queue.qsize() >= limit:
                 return False
             try:
                 self._queue.put_nowait(event)
                 return True
             except queue.Full:
-                if not _critical_journal_event(event.type):
-                    return False
-                # Reaching the physical limit requires either a burst of
-                # terminal events or an out-of-band queue producer: ordinary
-                # append() calls stop at the lower soft limit. Preserve the
-                # terminal transition by replacing one reconstructible event.
-                if not self._discard_one_ordinary_queued_event():
-                    return False
-                try:
-                    self._queue.put_nowait(event)
-                    return True
-                except queue.Full:
-                    return False
-
-    def _discard_one_ordinary_queued_event(self) -> bool:
-        """Make emergency room for a terminal event at physical capacity."""
-        with self._queue.mutex:
-            for index, queued in enumerate(self._queue.queue):
-                if (
-                    isinstance(queued, SessionEvent)
-                    and not _critical_journal_event(queued.type)
-                ):
-                    del self._queue.queue[index]
-                    self._queue.unfinished_tasks -= 1
-                    self._queue.not_full.notify()
-                    return True
-        return False
+                return False
 
     def _run_writer(self) -> None:
         """Serialize journal records in event order on the sole writer thread."""
-        while True:
-            item = self._queue.get()
-            try:
-                if item is _JOURNAL_CLOSED:
-                    return
-                if self._failed:
-                    continue
-                self._append_sync(item)
-            finally:
-                self._queue.task_done()
+        try:
+            while True:
+                item = self._queue.get()
+                try:
+                    if item is _JOURNAL_CLOSED:
+                        return
+                    if self._failed:
+                        continue
+                    self._append_sync(item)
+                finally:
+                    self._queue.task_done()
+        finally:
+            self._flush_and_close_handle()
 
     def _append_sync(self, event: SessionEvent) -> None:
         try:
@@ -439,7 +429,8 @@ class _EventJournal:
                 self._failure = RuntimeError(
                     "event journal writer did not close within timeout"
                 )
-        self._close_handle()
+        # The handle belongs exclusively to _run_writer(). A timed-out join
+        # reports a durable failure but never races a cross-thread close.
 
     @property
     def failure(self) -> BaseException | None:
@@ -454,6 +445,20 @@ class _EventJournal:
                 handle.close()
             except OSError:
                 pass
+
+    def _flush_and_close_handle(self) -> None:
+        """Flush/fsync/close the journal handle on the writer thread only."""
+        handle = self._handle
+        if handle is None:
+            return
+        try:
+            handle.flush()
+            os.fsync(handle.fileno())
+        except OSError:
+            self._failed = True
+            self._failure = RuntimeError("event journal durable flush failed")
+        finally:
+            self._close_handle()
 
     def _compact(self, recent: list[SessionEvent]) -> None:
         self._close_handle()

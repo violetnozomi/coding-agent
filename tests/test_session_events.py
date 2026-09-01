@@ -1353,6 +1353,9 @@ def test_journal_append_close_race_does_not_lose_accepted_event(tmp_path):
         def put(self, item, timeout=None) -> None:
             self.put_nowait(item)
 
+        def qsize(self) -> int:
+            return len(self.items)
+
     class JoinedWorker:
         def join(self, timeout=None) -> None:
             return None
@@ -1409,7 +1412,7 @@ def test_journal_terminal_event_is_not_dropped(tmp_path):
 
     journal = _EventJournal(tmp_path / "terminal.jsonl", 1, "session")
     journal._worker = SimpleNamespace(join=lambda timeout=None: None)
-    for index in range(journal._queue.maxsize):
+    for index in range(journal._ordinary_queue_limit):
         journal._queue.put_nowait(SessionEvent(
             type="message.part.delta",
             properties={"index": index},
@@ -1423,7 +1426,7 @@ def test_journal_terminal_event_is_not_dropped(tmp_path):
     terminal = SessionEvent(
         type="session.run.completed",
         properties={"status": "completed"},
-        sequence=journal._queue.maxsize + 1,
+        sequence=journal._ordinary_queue_limit + 1,
         timestamp=2.0,
         session_id="session",
         run_id="interaction",
