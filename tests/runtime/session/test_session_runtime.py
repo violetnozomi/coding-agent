@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+from dataclasses import replace
 
 import pytest
 
@@ -130,6 +131,163 @@ def test_each_user_submission_gets_new_interaction_run_id(tmp_path):
     assert first.interaction_run_id.startswith("interaction-")
     assert second.transcript[-1]["_nz_interaction_run_id"] == (
         second.interaction_run_id
+    )
+
+
+def _legacy_active_session(tmp_path):
+    return Session.create(
+        "legacy-session",
+        [
+            {"role": "user", "content": "continue legacy work"},
+            {
+                "role": "assistant",
+                "content": "partial",
+                "_nz_message_id": "msg-legacy",
+                "_nz_parts": [
+                    {
+                        "id": "part-legacy",
+                        "message_id": "msg-legacy",
+                        "type": "text",
+                        "text": "partial",
+                    }
+                ],
+            },
+        ],
+        workspace=tmp_path,
+    )
+
+
+def test_legacy_session_resume_creates_persisted_interaction_identity(tmp_path):
+    existing = _legacy_active_session(tmp_path)
+    existing.mark_persisted()
+    store = MemorySessionStore(existing)
+    runtime = SessionRuntime(store)
+    context = asyncio.run(runtime.open(_request(
+        tmp_path,
+        copy.deepcopy(existing.transcript),
+        session_id="legacy-session",
+    )))
+
+    asyncio.run(runtime.checkpoint(context))
+
+    assert context.interaction_run_id.startswith("interaction-")
+    assert context.transcript[-1]["_nz_interaction_run_id"] == (
+        context.interaction_run_id
+    )
+    assert context.transcript[-1]["_nz_parts"][0]["interaction_run_id"] == (
+        context.interaction_run_id
+    )
+    assert store.saved[-1].metadata["active_interaction_run_id"] == (
+        context.interaction_run_id
+    )
+
+
+def test_legacy_session_live_events_use_migrated_identity(tmp_path):
+    from nz_coder.protocol.session_events import SessionEventBus
+
+    existing = _legacy_active_session(tmp_path)
+    existing.mark_persisted()
+    context = asyncio.run(SessionRuntime(MemorySessionStore(existing)).open(
+        _request(
+            tmp_path,
+            copy.deepcopy(existing.transcript),
+            session_id="legacy-session",
+        )
+    ))
+    bus = SessionEventBus(session_id="legacy-session")
+    try:
+        publisher = bus.for_interaction(context.interaction_run_id)
+        event = publisher.publish("message.part.delta", {
+            "part_id": "part-legacy",
+            "delta": " resumed",
+        })
+    finally:
+        bus.close()
+
+    assert event.run_id == context.interaction_run_id
+
+
+def test_legacy_snapshot_then_live_delta_updates_reducer(tmp_path):
+    from nz_coder.protocol.message_schema import message_records
+    from nz_coder.protocol.run_view_reducer import RunViewReducer
+
+    existing = _legacy_active_session(tmp_path)
+    existing.mark_persisted()
+    context = asyncio.run(SessionRuntime(MemorySessionStore(existing)).open(
+        _request(
+            tmp_path,
+            copy.deepcopy(existing.transcript),
+            session_id="legacy-session",
+        )
+    ))
+    reducer = RunViewReducer()
+    records = message_records(context.transcript, "legacy-session")
+    assert records[-1]["parts"][0]["interaction_run_id"] == (
+        context.interaction_run_id
+    )
+    message_id = records[-1]["info"]["id"]
+    part_id = records[-1]["parts"][0]["id"]
+    reducer.replace_snapshot({
+        "interaction_run_id": context.interaction_run_id,
+        "messages": records,
+    })
+
+    accepted = reducer.apply_event({
+        "type": "message.part.delta",
+        "properties": {
+            "message_id": message_id,
+            "part_id": part_id,
+            "field": "text",
+            "delta": " resumed",
+            "interaction_run_id": context.interaction_run_id,
+        },
+        "meta": {
+            "event_id": "event-legacy-live",
+            "sequence": 1,
+            "interaction_run_id": context.interaction_run_id,
+        },
+    })
+
+    assert accepted is True
+    assert reducer.state.interaction_run_id == context.interaction_run_id
+
+
+def test_legacy_migration_identity_survives_reconnect(tmp_path):
+    existing = _legacy_active_session(tmp_path)
+    existing.mark_persisted()
+    first_store = MemorySessionStore(existing)
+    runtime = SessionRuntime(first_store)
+    first = asyncio.run(runtime.open(_request(
+        tmp_path,
+        copy.deepcopy(existing.transcript),
+        session_id="legacy-session",
+    )))
+    asyncio.run(runtime.checkpoint(first))
+    persisted = Session(
+        identity=first_store.saved[-1].identity,
+        workspace=first_store.saved[-1].workspace,
+        transcript=list(first_store.saved[-1].transcript),
+        status=first_store.saved[-1].status,
+        metadata=first_store.saved[-1].metadata,
+    )
+    persisted.mark_persisted()
+    reconnect_request = _request(
+        tmp_path,
+        copy.deepcopy(persisted.transcript),
+        session_id="legacy-session",
+    )
+    reconnect_request = replace(
+        reconnect_request,
+        interaction_run_id=first.interaction_run_id,
+    )
+
+    second = asyncio.run(SessionRuntime(MemorySessionStore(persisted)).open(
+        reconnect_request
+    ))
+
+    assert second.interaction_run_id == first.interaction_run_id
+    assert second.transcript[-1]["_nz_parts"][0]["interaction_run_id"] == (
+        first.interaction_run_id
     )
 
 

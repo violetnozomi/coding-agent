@@ -8,6 +8,7 @@ from nz_coder.protocol.message_schema import (
     INTERACTION_RUN_ID_KEY,
     MESSAGE_ID_KEY,
     cleanup_incomplete_tool_history,
+    ensure_message_identities,
 )
 from nz_coder.runtime.core.request import RunRequest
 from nz_coder.runtime.core.result import RunStatus
@@ -52,14 +53,7 @@ class SessionRuntime:
         )
         metadata["interaction_run_id"] = interaction_run_id
         metadata["session_open"] = open_state
-        for message in reversed(session.transcript):
-            if (
-                isinstance(message, dict)
-                and message.get("role") == "user"
-                and not message.get("_nz_synthetic")
-            ):
-                message[INTERACTION_RUN_ID_KEY] = interaction_run_id
-                break
+        _migrate_active_interaction_identity(session, interaction_run_id)
         return RunContext(
             request=request,
             session=session,
@@ -126,6 +120,34 @@ def _parent_session_id(metadata: dict) -> str | None:
 
 def _interaction_id(value: object) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
+
+
+def _migrate_active_interaction_identity(
+    session: Session,
+    interaction_run_id: str,
+) -> None:
+    """Upgrade one resumed legacy activation to a durable live identity."""
+    ensure_message_identities(session.transcript, session.session_id)
+    start = next(
+        (
+            index
+            for index in range(len(session.transcript) - 1, -1, -1)
+            if isinstance(session.transcript[index], dict)
+            and session.transcript[index].get("role") == "user"
+            and not session.transcript[index].get("_nz_synthetic")
+        ),
+        max(0, len(session.transcript) - 1),
+    )
+    for message in session.transcript[start:]:
+        if not isinstance(message, dict):
+            continue
+        message[INTERACTION_RUN_ID_KEY] = interaction_run_id
+        for part in message.get("_nz_parts", []) or []:
+            if not isinstance(part, dict):
+                continue
+            part["interaction_run_id"] = interaction_run_id
+    session.metadata["active_interaction_run_id"] = interaction_run_id
+    session.mark_dirty()
 
 
 def _session_metadata(request: RunRequest) -> dict:

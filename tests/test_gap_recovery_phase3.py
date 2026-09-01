@@ -307,7 +307,7 @@ def test_missing_identity_cannot_remove_current_part():
     assert reducer.visible_text == "base"
 
 
-def test_snapshot_migration_produces_stable_identity():
+def test_legacy_snapshot_read_only_identity_is_stable():
     old = [{
         "info": {"id": "legacy-message", "role": "assistant"},
         "parts": [{
