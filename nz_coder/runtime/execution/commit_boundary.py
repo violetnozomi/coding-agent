@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from enum import Enum
 
 from nz_coder.runtime.conversation.model_result import LLMResult
-from nz_coder.protocol.message_schema import set_assistant_error
+from nz_coder.protocol.message_schema import (
+    AUTHORITATIVE_KEY,
+    INTERNAL_KEY,
+    VISIBLE_KEY,
+    sanitize_provider_extra,
+    set_assistant_error,
+)
 from nz_coder.protocol.public_error import PublicError, to_public_error
 
 
@@ -81,19 +87,19 @@ def commit_approved_model_result(
     """
     if not isinstance(approved, ApprovedModelResult):
         raise TypeError("commit requires ApprovedModelResult")
-    result = approved.result
+    result = copy.deepcopy(approved.result)
+    result.extra = sanitize_provider_extra(result.extra)
     internal = approved.visibility is not OutputVisibility.USER_VISIBLE
-    assistant_message["_nz_visible"] = not internal
-    assistant_message["_nz_internal"] = internal
-    assistant_message["_nz_authoritative"] = True
     if internal and not result.tool_calls:
         assistant_message["content"] = result.content or ""
-        assistant_message.update(copy.deepcopy(result.extra or {}))
+        assistant_message.update(result.extra)
+        assistant_message["role"] = "assistant"
+        assistant_message[VISIBLE_KEY] = False
+        assistant_message[INTERNAL_KEY] = True
+        assistant_message[AUTHORITATIVE_KEY] = True
         return
     if internal:
-        result = copy.deepcopy(result)
         result.content = ""
-        result.extra = dict(result.extra or {})
         result.extra.pop("reasoning_content", None)
     operation = (
         context.messages.reconcile_llm_result
@@ -107,6 +113,10 @@ def commit_approved_model_result(
         message_part=message_part,
         messages=messages,
     )
+    assistant_message["role"] = "assistant"
+    assistant_message[VISIBLE_KEY] = not internal
+    assistant_message[INTERNAL_KEY] = internal
+    assistant_message[AUTHORITATIVE_KEY] = True
 
 
 async def settle_failed_attempt(

@@ -54,6 +54,81 @@ VISIBLE_KEY = "_nz_visible"
 INTERNAL_KEY = "_nz_internal"
 AUTHORITATIVE_KEY = "_nz_authoritative"
 
+RESERVED_MESSAGE_KEYS = frozenset({
+    "role",
+    "content",
+    "tool_calls",
+    MESSAGE_ID_KEY,
+    SESSION_ID_KEY,
+    INTERACTION_RUN_ID_KEY,
+    VISIBLE_KEY,
+    INTERNAL_KEY,
+    AUTHORITATIVE_KEY,
+    PARTS_KEY,
+    ASSISTANT_ERROR_KEY,
+    "_nz_error",
+    ASSISTANT_FINISH_KEY,
+    ASSISTANT_END_STATE_KEY,
+    ASSISTANT_PARENT_KEY,
+    ASSISTANT_TIME_KEY,
+})
+_SUPPORTED_PROVIDER_EXTENSION_KEYS = frozenset({
+    "provider_extra",
+    "reasoning_content",
+})
+
+
+def sanitize_provider_extra(extra: object) -> dict[str, object]:
+    """Keep only JSON-safe Provider extensions outside Agent Core state."""
+    if not isinstance(extra, dict):
+        return {}
+    selected: dict[str, object] = {}
+    for raw_key, raw_value in extra.items():
+        if not isinstance(raw_key, str):
+            continue
+        if (
+            raw_key in RESERVED_MESSAGE_KEYS
+            or raw_key.startswith("_nz_")
+            or raw_key not in _SUPPORTED_PROVIDER_EXTENSION_KEYS
+        ):
+            continue
+        safe, accepted = _json_safe_provider_value(raw_value)
+        if accepted:
+            selected[raw_key] = safe
+    return selected
+
+
+def _json_safe_provider_value(
+    value: object,
+    *,
+    _depth: int = 0,
+) -> tuple[object, bool]:
+    if _depth >= 12:
+        return None, False
+    if value is None or isinstance(value, (str, bool, int)):
+        return value, True
+    if isinstance(value, float):
+        return (value, True) if math.isfinite(value) else (None, False)
+    if isinstance(value, (list, tuple)):
+        result = []
+        for item in value[:200]:
+            safe, accepted = _json_safe_provider_value(item, _depth=_depth + 1)
+            if not accepted:
+                return None, False
+            result.append(safe)
+        return result, True
+    if isinstance(value, dict):
+        result = {}
+        for key, item in list(value.items())[:200]:
+            if not isinstance(key, str):
+                return None, False
+            safe, accepted = _json_safe_provider_value(item, _depth=_depth + 1)
+            if not accepted:
+                return None, False
+            result[key] = safe
+        return result, True
+    return None, False
+
 _LEGACY_SYNTHETIC_USER_PREFIXES = (
     "<api-error-diagnostic",
     "<context-injection",

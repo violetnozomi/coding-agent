@@ -298,9 +298,11 @@ class AgentRunner:
                     execution_context.hooks.trace(
                         "session_error_finalize_failed",
                         original_error_type=type(original_error).__name__,
-                        original_error=str(original_error)[:1000],
+                        original_error=to_public_error(original_error).to_dict(),
                         finalization_error_type=type(finalization_error).__name__,
-                        finalization_error=str(finalization_error)[:1000],
+                        finalization_error=to_public_error(
+                            finalization_error
+                        ).to_dict(),
                     )
             except BaseException:
                 pass

@@ -143,6 +143,77 @@ def test_provider_secret_not_present_in_trace(tmp_path):
     _assert_private_diagnostic_absent(recorder.path.read_text(encoding="utf-8"))
 
 
+def _exercise_finalize_secondary_failure():
+    from nz_coder.runtime.execution.runner import AgentRunner
+
+    traced = []
+
+    class SessionRuntime:
+        async def finalize(self, _context, _status):
+            raise RuntimeError('body={"prompt":"SECRET-FINALIZE"}')
+
+    async def exercise():
+        await AgentRunner._finalize_after_run_error(
+            SimpleNamespace(session_runtime=SessionRuntime()),
+            SimpleNamespace(),
+            "error",
+            SimpleNamespace(
+                hooks=SimpleNamespace(
+                    trace=lambda event, **payload: traced.append((event, payload))
+                )
+            ),
+            RuntimeError("Authorization=Bearer SECRET-ORIGINAL"),
+        )
+
+    import asyncio
+
+    asyncio.run(exercise())
+    return traced
+
+
+def test_finalize_secondary_failure_does_not_trace_original_exception_text():
+    traced = _exercise_finalize_secondary_failure()
+    rendered = json.dumps(traced, ensure_ascii=False)
+
+    assert "SECRET-ORIGINAL" not in rendered
+    assert "Authorization" not in rendered
+    assert traced[0][1]["original_error"]["schema"] == PUBLIC_ERROR_SCHEMA
+
+
+def test_finalize_secondary_failure_does_not_trace_finalize_exception_text():
+    traced = _exercise_finalize_secondary_failure()
+    rendered = json.dumps(traced, ensure_ascii=False)
+
+    assert "SECRET-FINALIZE" not in rendered
+    assert "prompt" not in rendered
+    assert traced[0][1]["finalization_error"]["schema"] == PUBLIC_ERROR_SCHEMA
+
+
+def test_trace_error_like_string_is_fail_closed(tmp_path):
+    recorder = TraceRecorder(trace_dir=tmp_path / "traces")
+    recorder.log(
+        "finalize",
+        original_error="Authorization=Bearer SECRET-123",
+        retry_failure='body={"prompt":"PRIVATE-PROMPT"}',
+        exception="Authorization=Bearer SECRET-123",
+        diagnostic='body={"prompt":"PRIVATE-PROMPT"}',
+    )
+
+    row = json.loads(recorder.path.read_text(encoding="utf-8"))
+    _assert_private_diagnostic_absent(row)
+    assert row["original_error"]["schema"] == PUBLIC_ERROR_SCHEMA
+    assert row["retry_failure"]["schema"] == PUBLIC_ERROR_SCHEMA
+
+
+def test_trace_numeric_error_count_is_preserved(tmp_path):
+    recorder = TraceRecorder(trace_dir=tmp_path / "traces")
+    recorder.log("summary", error_count=3, failure_count=4)
+
+    row = json.loads(recorder.path.read_text(encoding="utf-8"))
+    assert row["error_count"] == 3
+    assert row["failure_count"] == 4
+
+
 def test_provider_secret_not_present_in_http_snapshot(tmp_path):
     class Agent:
         provider_id = "provider"

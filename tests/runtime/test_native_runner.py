@@ -1043,6 +1043,134 @@ def test_agent_as_tool_result_is_guarded_before_parent_commit():
     assert assistant["_nz_visible"] is False
 
 
+def _commit_internal_extra(extra):
+    from nz_coder.runtime.execution.commit_boundary import (
+        ApprovedModelResult,
+        OutputVisibility,
+        commit_approved_model_result,
+    )
+
+    context = SimpleNamespace(
+        messages=SimpleNamespace(
+            materialize_llm_result=lambda *_args, **_kwargs: None,
+            reconcile_llm_result=lambda *_args, **_kwargs: None,
+        )
+    )
+    assistant = {
+        "role": "assistant",
+        "content": "",
+        "_nz_message_id": "message-safe",
+        "_nz_parts": [],
+    }
+    commit_approved_model_result(
+        ApprovedModelResult(
+            LLMResult(content="child result", extra=extra),
+            OutputVisibility.INTERNAL_AGENT_RESULT,
+        ),
+        context=context,
+        assistant_message=assistant,
+        processor=object(),
+        message_part={},
+        messages=[],
+    )
+    return assistant
+
+
+def test_internal_result_extra_cannot_override_visibility():
+    assistant = _commit_internal_extra({"_nz_visible": True})
+    assert assistant["_nz_visible"] is False
+
+
+def test_internal_result_extra_cannot_override_internal_flag():
+    assistant = _commit_internal_extra({"_nz_internal": False})
+    assert assistant["_nz_internal"] is True
+
+
+def test_internal_result_extra_cannot_override_authoritative_state():
+    assistant = _commit_internal_extra({"_nz_authoritative": False})
+    assert assistant["_nz_authoritative"] is True
+
+
+def test_provider_extra_cannot_replace_parts():
+    assistant = _commit_internal_extra({
+        "_nz_parts": [{"type": "text", "text": "LEAK"}],
+    })
+    assert assistant["_nz_parts"] == []
+
+
+def test_provider_extra_cannot_replace_content():
+    assistant = _commit_internal_extra({"content": "OVERRIDE"})
+    assert assistant["content"] == "child result"
+
+
+def test_user_visible_result_extra_cannot_override_message_identity():
+    from nz_coder.runtime.execution.commit_boundary import (
+        ApprovedModelResult,
+        OutputVisibility,
+        commit_approved_model_result,
+    )
+
+    observed = {}
+
+    def materialize(result, *, assistant_message, **_kwargs):
+        observed.update(result.extra)
+        assistant_message.update(result.extra)
+
+    assistant = {"role": "assistant", "content": "", "_nz_message_id": "safe"}
+    commit_approved_model_result(
+        ApprovedModelResult(
+            LLMResult(content="answer", extra={"_nz_message_id": "attacker"}),
+            OutputVisibility.USER_VISIBLE,
+        ),
+        context=SimpleNamespace(
+            messages=SimpleNamespace(
+                materialize_llm_result=materialize,
+                reconcile_llm_result=materialize,
+            )
+        ),
+        assistant_message=assistant,
+        processor=object(),
+        message_part={},
+        messages=[],
+    )
+
+    assert observed == {}
+    assert assistant["_nz_message_id"] == "safe"
+
+
+def test_reserved_message_keys_are_rejected_from_provider_extra():
+    from nz_coder.protocol.message_schema import sanitize_provider_extra
+
+    assert sanitize_provider_extra({
+        "role": "user",
+        "content": "override",
+        "tool_calls": [],
+        "_nz_visible": True,
+    }) == {}
+
+
+def test_safe_provider_extra_is_preserved():
+    from nz_coder.protocol.message_schema import sanitize_provider_extra
+
+    assert sanitize_provider_extra({
+        "reasoning_content": "safe reasoning",
+        "provider_extra": {"response_id": "response-1"},
+    }) == {
+        "reasoning_content": "safe reasoning",
+        "provider_extra": {"response_id": "response-1"},
+    }
+
+
+def test_malicious_child_extra_never_enters_snapshot():
+    assistant = _commit_internal_extra({
+        "_nz_parts": [{"type": "text", "text": "LEAK"}],
+        "_nz_visible": True,
+        "role": "user",
+    })
+    assert "LEAK" not in repr(assistant)
+    assert assistant["role"] == "assistant"
+
+
 def test_guardrail_failure_settles_current_step(tmp_path: Path):
     from nz_coder.runtime.agent.guardrails import GuardrailBlockedError
     from nz_coder.protocol.public_error import PublicRuntimeError

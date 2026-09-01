@@ -424,7 +424,26 @@ def _project_trace_diagnostics(
     if _depth >= MAX_NESTING_DEPTH:
         return "[maximum trace nesting depth reached]"
     normalized_field = field.casefold().replace("-", "_")
-    if normalized_field in {"error", "last_error", "public_error"}:
+    error_like = bool(
+        normalized_field in {"error", "exception", "failure", "diagnostic"}
+        or normalized_field.startswith(
+            ("error_", "exception_", "failure_", "diagnostic_")
+        )
+        or normalized_field.endswith(
+            ("_error", "_exception", "_failure", "_diagnostic")
+        )
+    )
+    safe_error_scalar = bool(
+        isinstance(value, bool)
+        or isinstance(value, (int, float))
+        or (
+            normalized_field.endswith(("_type", "_code", "_kind", "_status", "_phase"))
+            and isinstance(value, str)
+            and 0 < len(value) <= 120
+            and all(character.isalnum() or character in "._-" for character in value)
+        )
+    )
+    if error_like and not safe_error_scalar:
         public = public_error_from_wire(value)
         return (public or to_public_error(value)).to_dict()
     if normalized_field in {

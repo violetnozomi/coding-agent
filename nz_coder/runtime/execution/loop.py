@@ -157,6 +157,7 @@ from nz_coder.protocol.message_schema import (
     assistant_error_from_exception,
     attach_message_identity,
     attach_text_part,
+    sanitize_provider_extra,
     bind_assistant_context,
     bind_user_context,
     ensure_message_identities,
@@ -2744,7 +2745,7 @@ class ProductRunEnvironment:
             content = result.content or ""
         assistant_msg = {"role": "assistant", "content": content}
         if result.extra:
-            assistant_msg.update(result.extra)
+            assistant_msg.update(sanitize_provider_extra(result.extra))
         if result.tool_calls:
             assistant_msg["tool_calls"] = result.tool_calls
         if (
