@@ -27,6 +27,8 @@ def _delta(sequence: int, text: str = "x", *, part_id: str = "part-1"):
         part_id=part_id,
         attempt_id="attempt-1",
         generation_id="generation-1",
+        generation=1,
+        version=sequence,
         delta_sequence=sequence,
         field="text",
         delta=text,
@@ -164,6 +166,78 @@ def test_contiguous_delta_merge_records_sequence_window():
     assert merged["properties"]["delta"] == "AB"
     assert merged["properties"]["from_sequence"] == 7
     assert merged["properties"]["to_sequence"] == 8
+
+
+def test_remote_final_text_does_not_depend_on_final_snapshot():
+    from nz_coder.interface.remote_mailbox import RemoteEventMailbox
+    from nz_coder.protocol.run_view_reducer import RunViewReducer
+
+    created = _event(
+        "message.part.created",
+        sequence=1,
+        message_id="message-1",
+        part={
+            "id": "part-1",
+            "message_id": "message-1",
+            "type": "text",
+            "text": "",
+            "attempt_id": "attempt-1",
+            "generation_id": "generation-1",
+            "generation": 1,
+            "version": 1,
+        },
+    )
+    delta = _delta(2, "FINAL ANSWER")
+    terminal = _event("session.run.settled", sequence=3, status="completed")
+    mailbox = RemoteEventMailbox(capacity=4, critical_reserve=1)
+    reducer = RunViewReducer()
+
+    for event in (created, delta, terminal):
+        assert mailbox.offer(event)
+    while (event := mailbox.pop()) is not None:
+        reducer.apply_event(event)
+
+    assert reducer.visible_text == "FINAL ANSWER"
+    assert reducer.state.status == "completed"
+
+
+def test_local_and_remote_apply_identical_ordered_event_stream():
+    from nz_coder.interface.remote_mailbox import RemoteEventMailbox
+    from nz_coder.protocol.run_view_reducer import RunViewReducer
+
+    events = [
+        _event(
+            "message.part.created",
+            sequence=1,
+            message_id="message-1",
+            part={
+                "id": "part-1",
+                "message_id": "message-1",
+                "type": "text",
+                "text": "",
+                "attempt_id": "attempt-1",
+                "generation_id": "generation-1",
+                "generation": 1,
+                "version": 1,
+            },
+        ),
+        _delta(2, "same "),
+        _delta(3, "answer"),
+        _event("session.run.status", sequence=4, status="running"),
+        _event("session.run.settled", sequence=5, status="completed"),
+    ]
+    local = RunViewReducer()
+    remote = RunViewReducer()
+    mailbox = RemoteEventMailbox(capacity=8, critical_reserve=2)
+
+    for event in events:
+        local.apply_event(event)
+        assert mailbox.offer(event)
+    while (event := mailbox.pop()) is not None:
+        remote.apply_event(event)
+
+    assert remote.visible_text == local.visible_text == "same answer"
+    assert remote.state == local.state
 
 
 def test_remote_overflow_emits_single_gap_marker():

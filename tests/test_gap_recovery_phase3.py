@@ -1,9 +1,12 @@
 """Lossless gap recovery, reducer fencing, and pending interaction tests."""
 from __future__ import annotations
 
+import asyncio
 import queue
 import threading
 from types import SimpleNamespace
+
+import pytest
 
 from nz_coder.interface.run_renderer import TerminalRunRenderer
 from nz_coder.protocol.message_part_reducer import MessagePartReducer
@@ -63,8 +66,143 @@ class _Streaming:
 
 
 class _Console:
+    def __init__(self):
+        self.lines = []
+
     def print(self, *_args, **_kwargs):
+        self.lines.extend(_args)
         return None
+
+
+class _RemoteStream:
+    def __init__(self, events):
+        self.events = list(events)
+        self.closed = False
+
+    def __iter__(self):
+        yield from self.events
+
+    def close(self):
+        self.closed = True
+
+
+class _RemoteBackend:
+    def __init__(self, snapshots, streams):
+        self.snapshots = list(snapshots)
+        self.streams = dict(streams)
+        self.attach_calls = 0
+        self.cursors = []
+
+    def attach_snapshot(self):
+        selected = self.snapshots[min(self.attach_calls, len(self.snapshots) - 1)]
+        self.attach_calls += 1
+        if isinstance(selected, BaseException):
+            raise selected
+        return selected
+
+    def events(self, *, last_event_id=None):
+        self.cursors.append(last_event_id)
+        return self.streams[last_event_id]
+
+
+def _remote_gap_exercise(monkeypatch, *, rebase_snapshot=None):
+    import nz_coder.interface.remote as remote
+
+    baseline = {
+        "cursor": {"event_id": "cursor-old"},
+        "session": {"running": True, "status": "running"},
+        "pending": {},
+    }
+    latest = rebase_snapshot or {
+        "cursor": {"event_id": "cursor-new"},
+        "session": {"running": True, "status": "running"},
+        "pending": {"permissions": [{"id": "permission-restored"}]},
+    }
+    final = {
+        "cursor": {"event_id": "cursor-final"},
+        "session": {"running": False, "status": "completed"},
+        "settled": True,
+        "pending": {},
+    }
+    gap = _event("server.event_gap", {
+        "interaction_run_id": "interaction-1",
+        "overflow_reason": "remote_mailbox_overflow",
+        "resume_required": True,
+    }, sequence=2)
+    settled = _event("session.run.settled", {
+        "interaction_run_id": "interaction-1",
+        "status": "completed",
+    }, sequence=3)
+    old_stream = _RemoteStream([gap])
+    new_stream = _RemoteStream([settled])
+    backend = _RemoteBackend(
+        [baseline, latest, final],
+        {"cursor-old": old_stream, "cursor-new": new_stream},
+    )
+    snapshots = []
+    pending = []
+    fed = []
+
+    class Renderer:
+        def __init__(self, _console):
+            pass
+
+        def start(self):
+            pass
+
+        def finish(self):
+            pass
+
+    class RunView:
+        def __init__(self, _console, _renderer):
+            pass
+
+        def begin_remote(self, _agent):
+            pass
+
+        def feed(self, payload):
+            fed.append(payload)
+
+        def finish(self, _result):
+            pass
+
+        def close(self):
+            pass
+
+    class Input:
+        async def close_async(self):
+            pass
+
+    monkeypatch.setattr(remote, "StreamingRenderer", Renderer)
+    monkeypatch.setattr(remote, "TerminalRunRenderer", RunView)
+    monkeypatch.setattr(remote, "TerminalInput", lambda **_kwargs: Input())
+    monkeypatch.setattr(
+        remote,
+        "TerminalInteractionBridge",
+        lambda terminal_input, *_args: SimpleNamespace(terminal_input=terminal_input),
+    )
+    monkeypatch.setattr(
+        remote,
+        "_feed_snapshot_events",
+        lambda _view, snapshot: snapshots.append(snapshot),
+    )
+    monkeypatch.setattr(
+        remote,
+        "_register_pending_interactions",
+        lambda _backend, value, *_args: pending.append(value),
+    )
+
+    console = _Console()
+    asyncio.run(remote._follow_run(backend, console))
+    return SimpleNamespace(
+        backend=backend,
+        old_stream=old_stream,
+        new_stream=new_stream,
+        snapshots=snapshots,
+        pending=pending,
+        fed=fed,
+        console=console,
+    )
 
 
 def _local_view(bus: SessionEventBus) -> tuple[TerminalRunRenderer, object]:
@@ -82,6 +220,105 @@ def _local_view(bus: SessionEventBus) -> tuple[TerminalRunRenderer, object]:
     view.begin(agent)
     assert view._subscription is not None
     return view, agent
+
+
+def test_mailbox_gap_causes_authoritative_snapshot_rebase(monkeypatch):
+    result = _remote_gap_exercise(monkeypatch)
+
+    assert result.old_stream.closed is True
+    assert result.snapshots[1]["cursor"]["event_id"] == "cursor-new"
+    assert any(item["type"] == "session.run.settled" for item in result.fed)
+
+
+def test_mailbox_gap_replaces_sse_cursor(monkeypatch):
+    result = _remote_gap_exercise(monkeypatch)
+
+    assert result.backend.cursors == ["cursor-old", "cursor-new"]
+
+
+def test_mailbox_gap_restores_pending_interactions(monkeypatch):
+    result = _remote_gap_exercise(monkeypatch)
+
+    assert {item["id"] for item in result.pending[1]["permissions"]} == {
+        "permission-restored",
+    }
+
+
+def test_mailbox_gap_does_not_only_print_reconnecting(monkeypatch):
+    result = _remote_gap_exercise(monkeypatch)
+
+    rendered = " ".join(str(item) for item in result.console.lines)
+    assert "Reconnecting" in rendered
+    assert "Reconnected" in rendered
+    assert result.backend.attach_calls >= 3
+
+
+def test_rebase_failure_surfaces_safe_remote_error(monkeypatch):
+    import nz_coder.interface.remote as remote
+    from nz_coder.protocol.public_error import PublicRuntimeError
+
+    baseline = {
+        "cursor": {"event_id": "cursor-old"},
+        "session": {"running": True, "status": "running"},
+        "pending": {},
+    }
+    gap = _event("server.event_gap", {
+        "interaction_run_id": "interaction-1",
+        "overflow_reason": "remote_mailbox_overflow",
+        "resume_required": True,
+    }, sequence=2)
+    stream = _RemoteStream([gap])
+    backend = _RemoteBackend(
+        [baseline, RuntimeError("Authorization=Bearer REBASE-SECRET")],
+        {"cursor-old": stream},
+    )
+
+    class Renderer:
+        def __init__(self, _console):
+            pass
+
+        def start(self):
+            pass
+
+        def finish(self):
+            pass
+
+    class RunView:
+        def __init__(self, _console, _renderer):
+            pass
+
+        def begin_remote(self, _agent):
+            pass
+
+        def feed(self, _payload):
+            pass
+
+        def finish(self, _result):
+            pass
+
+        def close(self):
+            pass
+
+    class Input:
+        async def close_async(self):
+            pass
+
+    monkeypatch.setattr(remote, "StreamingRenderer", Renderer)
+    monkeypatch.setattr(remote, "TerminalRunRenderer", RunView)
+    monkeypatch.setattr(remote, "TerminalInput", lambda **_kwargs: Input())
+    monkeypatch.setattr(
+        remote,
+        "TerminalInteractionBridge",
+        lambda terminal_input, *_args: SimpleNamespace(terminal_input=terminal_input),
+    )
+    monkeypatch.setattr(remote, "_feed_snapshot_events", lambda *_args: None)
+    monkeypatch.setattr(remote, "_register_pending_interactions", lambda *_args: None)
+
+    with pytest.raises(PublicRuntimeError) as captured:
+        asyncio.run(remote._follow_run(backend, _Console()))
+
+    assert "REBASE-SECRET" not in str(captured.value)
+    assert stream.closed is True
 
 
 def test_local_gap_snapshot_sequence_matches_snapshot_state():

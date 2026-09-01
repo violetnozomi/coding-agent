@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import threading
 import json
+from dataclasses import dataclass
 from pathlib import Path
 import time
 from types import SimpleNamespace
@@ -347,6 +348,97 @@ def _pump_remote_stream(stream: Any, transport: RemoteTransportBridge) -> None:
         transport.close_reader()
 
 
+@dataclass(frozen=True)
+class _ReconnectedRemoteStream:
+    """Authoritative replacement for one invalidated remote SSE stream."""
+
+    stream: Any | None
+    transport: RemoteTransportBridge
+    cursor: str | None
+    settled: bool
+    terminal_status: str
+
+
+def _remote_gap_requires_rebase(properties: object) -> bool:
+    """Return whether a gap proves the current stream is non-contiguous."""
+    value = properties if isinstance(properties, dict) else {}
+    reason = str(value.get("overflow_reason") or value.get("reason") or "")
+    return bool(
+        value.get("resume_required") is True
+        or value.get("local_queue_overflow") is True
+        or reason in {
+            "remote_mailbox_overflow",
+            "subscriber_queue_overflow",
+            "cursor_expired",
+        }
+    )
+
+
+async def _rebase_remote_stream(
+    *,
+    backend: RemoteTerminalBackend,
+    stream: Any,
+    transport: RemoteTransportBridge,
+    run_view: TerminalRunRenderer,
+    bridge: TerminalInteractionBridge,
+    interaction_tasks: "_InteractionTaskRegistry",
+    loop: asyncio.AbstractEventLoop,
+) -> _ReconnectedRemoteStream:
+    """Close a gapped stream and resume from one authoritative snapshot."""
+    try:
+        await asyncio.to_thread(stream.close)
+        latest = await asyncio.to_thread(backend.attach_snapshot)
+        if not isinstance(latest, dict):
+            raise ValueError("remote snapshot must be an object")
+        _feed_snapshot_events(run_view, latest)
+        _register_pending_interactions(
+            backend,
+            latest.get("pending") or {},
+            bridge,
+            interaction_tasks,
+        )
+        session = (
+            latest.get("session")
+            if isinstance(latest.get("session"), dict)
+            else {}
+        )
+        terminal_status = str(session.get("status") or "completed")
+        settled = bool(latest.get("settled")) or not bool(session.get("running"))
+        cursor = str((latest.get("cursor") or {}).get("event_id") or "") or None
+        transport.clear_gap()
+        if settled:
+            return _ReconnectedRemoteStream(
+                stream=None,
+                transport=transport,
+                cursor=cursor,
+                settled=True,
+                terminal_status=terminal_status,
+            )
+        replacement = RemoteTransportBridge(
+            loop,
+            capacity=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512),
+            critical_reserve=16,
+        )
+        replacement_stream = backend.events(last_event_id=cursor)
+        threading.Thread(
+            target=_pump_remote_stream,
+            args=(replacement_stream, replacement),
+            name="nz-remote-events",
+            daemon=True,
+        ).start()
+        return _ReconnectedRemoteStream(
+            stream=replacement_stream,
+            transport=replacement,
+            cursor=cursor,
+            settled=False,
+            terminal_status=terminal_status,
+        )
+    except PublicRuntimeError:
+        raise
+    except Exception as exc:
+        raise PublicRuntimeError(to_public_error(exc)) from exc
+
+
 async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
     baseline = await asyncio.to_thread(backend.attach_snapshot)
     cursor = str((baseline.get("cursor") or {}).get("event_id") or "") or None
@@ -423,42 +515,23 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                     transport_reconnects += 1
                     reconnecting = True
                     console.print("[info]Reconnecting…[/info]")
-                    await asyncio.to_thread(stream.close)
-                    latest = await asyncio.to_thread(backend.attach_snapshot)
-                    _feed_snapshot_events(run_view, latest)
-                    _register_pending_interactions(
-                        backend,
-                        latest.get("pending") or {},
-                        bridge,
-                        interaction_tasks,
+                    replacement = await _rebase_remote_stream(
+                        backend=backend,
+                        stream=stream,
+                        transport=transport,
+                        run_view=run_view,
+                        bridge=bridge,
+                        interaction_tasks=interaction_tasks,
+                        loop=loop,
                     )
-                    session = (
-                        latest.get("session")
-                        if isinstance(latest.get("session"), dict)
-                        else {}
-                    )
-                    if bool(latest.get("settled")) or not bool(session.get("running")):
-                        terminal_status = str(
-                            session.get("status") or terminal_status
-                        )
+                    stream = replacement.stream
+                    transport = replacement.transport
+                    cursor = replacement.cursor
+                    terminal_status = replacement.terminal_status
+                    if replacement.settled:
                         reader_done = True
                         break
-                    cursor = str(
-                        (latest.get("cursor") or {}).get("event_id") or ""
-                    ) or None
-                    transport = RemoteTransportBridge(
-                        loop,
-                        capacity=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512),
-                        critical_reserve=16,
-                    )
-                    stream = backend.events(last_event_id=cursor)
-                    thread = threading.Thread(
-                        target=_pump_remote_stream,
-                        args=(stream, transport),
-                        name="nz-remote-events",
-                        daemon=True,
-                    )
-                    thread.start()
+                    reader_done = False
                     console.print("[success]Reconnected[/success]")
                     reconnecting = False
                     continue
@@ -481,16 +554,33 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
             if event_type == "server.event_gap":
                 console.print("[info]Reconnecting…[/info]")
                 reconnecting = True
-                if (payload.get("properties") or {}).get("local_queue_overflow"):
-                    latest = await asyncio.to_thread(backend.attach_snapshot)
-                    _feed_snapshot_events(run_view, latest)
-                    _register_pending_interactions(
-                        backend,
-                        latest.get("pending") or {},
-                        bridge,
-                        interaction_tasks,
+                if _remote_gap_requires_rebase(payload.get("properties")):
+                    if transport_reconnects >= 3:
+                        raise PublicRuntimeError(PublicError(
+                            "remote_reconnect_exhausted",
+                            "The remote event stream could not be resynchronized.",
+                            retryable=True,
+                        ))
+                    transport_reconnects += 1
+                    replacement = await _rebase_remote_stream(
+                        backend=backend,
+                        stream=stream,
+                        transport=transport,
+                        run_view=run_view,
+                        bridge=bridge,
+                        interaction_tasks=interaction_tasks,
+                        loop=loop,
                     )
-                    transport.clear_gap()
+                    stream = replacement.stream
+                    transport = replacement.transport
+                    cursor = replacement.cursor
+                    terminal_status = replacement.terminal_status
+                    if replacement.settled:
+                        reader_done = True
+                        break
+                    reader_done = False
+                    console.print("[success]Reconnected[/success]")
+                    reconnecting = False
                 continue
             if event_type in {"permission.asked", "question.asked"}:
                 _register_interaction_payload(
@@ -514,7 +604,8 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 if event_type == "session.run.settled":
                     reader_done = True
                 interaction_tasks.cancel()
-        await asyncio.to_thread(stream.close)
+        if stream is not None:
+            await asyncio.to_thread(stream.close)
     finally:
         interaction_tasks.cancel()
         await interaction_tasks.wait(return_exceptions=True)
