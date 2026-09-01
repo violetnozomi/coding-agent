@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from threading import Event, RLock, Thread
+import atexit
 import os
 import time
 import weakref
@@ -872,6 +873,20 @@ _REGISTRY_LOCK = RLock()
 _REGISTRY: dict[Path, tuple[RepoIntelligenceService, int]] = {}
 
 
+def _close_all_repo_intelligence_services() -> None:
+    """Stop every process-owned worker before native modules are finalized."""
+    with _REGISTRY_LOCK:
+        services = tuple({id(item[0]): item[0] for item in _REGISTRY.values()}.values())
+        _REGISTRY.clear()
+    for service in services:
+        try:
+            service.close()
+        except Exception:
+            # Interpreter teardown is best-effort, but each close() signals the
+            # native watcher before any operation that may itself fail.
+            continue
+
+
 def _reset_registry_after_fork() -> None:
     global _REGISTRY_LOCK, _REGISTRY
     _REGISTRY_LOCK = RLock()
@@ -902,6 +917,8 @@ def _start_watcher_after_prewarm(
 
 if hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_child=_reset_registry_after_fork)
+
+atexit.register(_close_all_repo_intelligence_services)
 
 
 def workspace_repo_intelligence(

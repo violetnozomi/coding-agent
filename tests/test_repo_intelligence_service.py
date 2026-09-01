@@ -219,6 +219,65 @@ def test_workspace_registry_shares_worker_and_closes_after_last_release(tmp_path
     assert first._watch_stop.is_set()
 
 
+def test_process_shutdown_closes_leaked_workspace_leases(tmp_path) -> None:
+    """Interpreter teardown must stop native watchers even after an owner leak."""
+    import nz_coder.intelligence.service as service_module
+
+    first = service_module.acquire_repo_intelligence(
+        tmp_path,
+        interval=0.02,
+        max_files=20,
+    )
+    second = service_module.acquire_repo_intelligence(
+        tmp_path,
+        interval=0.02,
+        max_files=20,
+    )
+    first.wait_ready(timeout=5)
+    assert first is second
+    assert first._watch_thread is not None
+    assert first._watch_thread.is_alive()
+
+    service_module._close_all_repo_intelligence_services()
+
+    assert first._watch_stop.is_set()
+    assert not first._watch_thread.is_alive()
+    assert service_module.workspace_repo_intelligence(tmp_path, create=False) is None
+
+
+def test_interpreter_exit_stops_native_watchers(tmp_path) -> None:
+    """Leaked owner leases must not let native watcher threads reach teardown."""
+    import subprocess
+    import sys
+
+    script = """
+import sys
+from pathlib import Path
+from nz_coder.intelligence.service import acquire_repo_intelligence
+
+root = Path(sys.argv[1])
+for index in range(6):
+    workspace = root / str(index)
+    workspace.mkdir()
+    service = acquire_repo_intelligence(workspace, interval=0.02, max_files=20)
+    service.wait_ready(timeout=5)
+    assert service._watch_thread is not None
+    assert service._watch_thread.is_alive()
+print("watchers-ready")
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-X", "faulthandler", "-c", script, str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == "watchers-ready"
+
+
 def test_workspace_lease_acquire_is_atomic_with_last_release(tmp_path, monkeypatch) -> None:
     """A new Session lease must not race a final release into a closed worker."""
     import nz_coder.intelligence.service as service_module
