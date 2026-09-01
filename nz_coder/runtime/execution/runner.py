@@ -712,20 +712,39 @@ class AgentRunner:
                     public = to_public_error(exc)
                     if callable(record_provider_turn):
                         record_provider_turn(finish_reason="error")
-                    await settle_failed_attempt(
-                        context=context,
-                        services=services,
-                        run_context=run_context,
-                        assistant_message=assistant_message,
-                        processor=processor,
-                        message_part=message_part,
-                        public_error=public,
-                        failure_kind=failure_kind,
-                        settlement=failure_settlement,
-                        snapshot_task=start_snapshot_task,
-                        snapshot_cancel=start_snapshot_cancel,
-                    )
-                    return public
+                    for settlement_attempt in range(1, 3):
+                        try:
+                            await settle_failed_attempt(
+                                context=context,
+                                services=services,
+                                run_context=run_context,
+                                assistant_message=assistant_message,
+                                processor=processor,
+                                message_part=message_part,
+                                public_error=public,
+                                failure_kind=failure_kind,
+                                settlement=failure_settlement,
+                                snapshot_task=start_snapshot_task,
+                                snapshot_cancel=start_snapshot_cancel,
+                            )
+                            return public
+                        except BaseException as settlement_error:
+                            try:
+                                context.hooks.trace(
+                                    "failed_attempt_settlement_failed",
+                                    settlement_error=to_public_error(
+                                        settlement_error
+                                    ).to_dict(),
+                                    settlement_attempt=settlement_attempt,
+                                    settlement_completed=(
+                                        failure_settlement.completed
+                                    ),
+                                )
+                            except BaseException:
+                                pass
+                    if isinstance(exc, (asyncio.CancelledError, KeyboardInterrupt)):
+                        raise exc
+                    raise PublicRuntimeError(public) from None
 
                 async def approve_policy_stage(
                     candidate,

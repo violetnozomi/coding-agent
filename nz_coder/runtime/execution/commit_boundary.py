@@ -1,8 +1,9 @@
 """Policy-approved publication boundaries for model output."""
 from __future__ import annotations
 
+import asyncio
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from nz_coder.runtime.conversation.model_result import LLMResult
@@ -42,11 +43,22 @@ class ApprovedModelResult:
 
 @dataclass
 class FailedAttemptSettlement:
-    """Exactly-once claim for one Assistant attempt failure."""
+    """Resumable phase ledger for one Assistant attempt failure."""
 
-    settled: bool = False
+    snapshot_retired: bool = False
+    part_retired: bool = False
+    policy_parts_settled: bool = False
+    error_attached: bool = False
+    step_finished: bool = False
     checkpointed: bool = False
+    completed: bool = False
     finish_reason: str = ""
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+
+    @property
+    def settled(self) -> bool:
+        """Compatibility view for callers that previously read ``settled``."""
+        return self.completed
 
 
 async def approve_model_result(
@@ -136,9 +148,6 @@ async def settle_failed_attempt(
     """Atomically close one failed pre-commit policy attempt exactly once."""
     if not isinstance(settlement, FailedAttemptSettlement):
         raise TypeError("settlement must be a FailedAttemptSettlement")
-    if settlement.settled:
-        return False
-    settlement.settled = True
     public = to_public_error(public_error)
     hook_point = str(public.metadata.get("hook_point") or "")
     policy_failure = public.code in {
@@ -162,22 +171,37 @@ async def settle_failed_attempt(
         else "UnknownError"
     )
 
-    retire_snapshot = getattr(context.snapshots, "retire", None)
-    if callable(retire_snapshot):
-        retire_snapshot(snapshot_task, snapshot_cancel)
-    context.messages.retire_message_part(
-        message_part,
-        f"{str(failure_kind or 'attempt')}_failed",
-    )
-    processor.settle_policy_failure(public)
-    set_assistant_error(
-        assistant_message,
-        public,
-        name=error_name,
-        publish=context.messages.publish_event,
-    )
-    processor.finish_step(finish_reason)
-    settlement.finish_reason = finish_reason
-    await services.session_runtime.checkpoint(run_context, "error")
-    settlement.checkpointed = True
-    return True
+    async with settlement.lock:
+        if settlement.completed:
+            return False
+        retire_snapshot = getattr(context.snapshots, "retire", None)
+        if not settlement.snapshot_retired:
+            if callable(retire_snapshot):
+                retire_snapshot(snapshot_task, snapshot_cancel)
+            settlement.snapshot_retired = True
+        if not settlement.part_retired:
+            context.messages.retire_message_part(
+                message_part,
+                f"{str(failure_kind or 'attempt')}_failed",
+            )
+            settlement.part_retired = True
+        if not settlement.policy_parts_settled:
+            processor.settle_policy_failure(public)
+            settlement.policy_parts_settled = True
+        if not settlement.error_attached:
+            set_assistant_error(
+                assistant_message,
+                public,
+                name=error_name,
+                publish=context.messages.publish_event,
+            )
+            settlement.error_attached = True
+        if not settlement.step_finished:
+            processor.finish_step(finish_reason)
+            settlement.step_finished = True
+            settlement.finish_reason = finish_reason
+        if not settlement.checkpointed:
+            await services.session_runtime.checkpoint(run_context, "error")
+            settlement.checkpointed = True
+        settlement.completed = True
+        return True

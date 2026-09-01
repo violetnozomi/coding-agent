@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -321,3 +322,216 @@ def test_settle_failed_attempt_is_idempotent():
 
 async def _record_async(values: list[str], value: str) -> None:
     values.append(value)
+
+
+def _run_faulted_settlement(phase: str):
+    calls = {
+        "snapshot": 0,
+        "part": 0,
+        "policy": 0,
+        "error": 0,
+        "finish": 0,
+        "checkpoint": 0,
+    }
+    failed = False
+
+    def step(name):
+        nonlocal failed
+        calls[name] += 1
+        if name == phase and not failed:
+            failed = True
+            raise RuntimeError(f"{name} failed once")
+
+    async def checkpoint(*_args):
+        step("checkpoint")
+
+    processor = SimpleNamespace(
+        settle_policy_failure=lambda _error: step("policy"),
+        finish_step=lambda _reason: step("finish"),
+    )
+    context = SimpleNamespace(
+        snapshots=SimpleNamespace(retire=lambda *_args: step("snapshot")),
+        messages=SimpleNamespace(
+            retire_message_part=lambda *_args: step("part"),
+            publish_event=lambda *_args: None,
+        ),
+    )
+    assistant = {"role": "assistant", "content": ""}
+    settlement = commit_boundary.FailedAttemptSettlement()
+    original_set_error = commit_boundary.set_assistant_error
+
+    def attach(*args, **kwargs):
+        step("error")
+        return original_set_error(*args, **kwargs)
+
+    kwargs = {
+        "context": context,
+        "services": SimpleNamespace(
+            session_runtime=SimpleNamespace(checkpoint=checkpoint)
+        ),
+        "run_context": object(),
+        "assistant_message": assistant,
+        "processor": processor,
+        "message_part": {},
+        "public_error": PublicError(
+            "guardrail_review_required",
+            "Output requires policy review.",
+            metadata={"hook_point": "tool"},
+        ),
+        "failure_kind": "tool_guardrail",
+        "settlement": settlement,
+    }
+
+    async def exercise():
+        with pytest.raises(RuntimeError, match="failed once"):
+            await commit_boundary.settle_failed_attempt(**kwargs)
+        assert settlement.completed is False
+        assert await commit_boundary.settle_failed_attempt(**kwargs) is True
+
+    with patch.object(commit_boundary, "set_assistant_error", attach):
+        asyncio.run(exercise())
+    assert settlement.completed is True
+    assert calls[phase] == 2
+    for name, count in calls.items():
+        if name != phase:
+            assert count == 1
+    return settlement, calls
+
+
+def test_settlement_recovers_when_snapshot_retire_fails_once():
+    _run_faulted_settlement("snapshot")
+
+
+def test_settlement_recovers_when_part_retire_fails_once():
+    _run_faulted_settlement("part")
+
+
+def test_settlement_recovers_when_policy_settle_fails_once():
+    _run_faulted_settlement("policy")
+
+
+def test_settlement_recovers_when_error_attachment_fails_once():
+    _run_faulted_settlement("error")
+
+
+def test_settlement_recovers_when_finish_step_fails_once():
+    _run_faulted_settlement("finish")
+
+
+def test_settlement_recovers_when_checkpoint_fails_once():
+    _run_faulted_settlement("checkpoint")
+
+
+def test_settlement_completed_only_after_all_phases():
+    settlement, _calls = _run_faulted_settlement("checkpoint")
+    assert all((
+        settlement.snapshot_retired,
+        settlement.part_retired,
+        settlement.policy_parts_settled,
+        settlement.error_attached,
+        settlement.step_finished,
+        settlement.checkpointed,
+        settlement.completed,
+    ))
+
+
+def test_concurrent_settlement_calls_do_not_duplicate_parts():
+    calls = []
+
+    async def checkpoint(*_args):
+        calls.append("checkpoint")
+        await asyncio.sleep(0)
+
+    settlement = commit_boundary.FailedAttemptSettlement()
+    kwargs = {
+        "context": SimpleNamespace(
+            snapshots=SimpleNamespace(
+                retire=lambda *_args: calls.append("snapshot")
+            ),
+            messages=SimpleNamespace(
+                retire_message_part=lambda *_args: calls.append("part"),
+                publish_event=lambda *_args: None,
+            ),
+        ),
+        "services": SimpleNamespace(
+            session_runtime=SimpleNamespace(checkpoint=checkpoint)
+        ),
+        "run_context": object(),
+        "assistant_message": {"role": "assistant", "content": ""},
+        "processor": SimpleNamespace(
+            settle_policy_failure=lambda _error: calls.append("policy"),
+            finish_step=lambda _reason: calls.append("finish"),
+        ),
+        "message_part": {},
+        "public_error": PublicError("internal_error", "Request failed."),
+        "failure_kind": "policy",
+        "settlement": settlement,
+    }
+
+    async def exercise():
+        return await asyncio.gather(
+            commit_boundary.settle_failed_attempt(**kwargs),
+            commit_boundary.settle_failed_attempt(**kwargs),
+        )
+
+    assert asyncio.run(exercise()) == [True, False]
+    assert calls.count("part") == 1
+    assert calls.count("finish") == 1
+    assert calls.count("checkpoint") == 1
+
+
+def test_original_policy_error_survives_secondary_settlement_failure(tmp_path):
+    active: dict[str, object] = {}
+    retired: list[str] = []
+    tools = _EscalatingTools()
+    services = RuntimeServices(
+        model=_EscalatingModel(active),
+        tools=tools,
+        context=_Context(),
+        session_runtime=_CheckpointSessions(),
+        events=_RecordingEvents(),
+        host=_UnusedHost(),
+        memory=_Memory(),
+        verifier=_Verifier(),
+        lifecycle=_Lifecycle(),
+        guardrails=_Guardrails(),
+        inputs=_Inputs(),
+        transitions=_Transitions(),
+    )
+    base_factory = _policy_execution_context(active, retired)
+    attempts = []
+
+    def execution_context(run_context, runtime_services):
+        context = base_factory(run_context, runtime_services)
+
+        def fail_retire(*_args):
+            attempts.append("retire")
+            raise RuntimeError("SECONDARY-SETTLEMENT-SECRET")
+
+        return replace(
+            context,
+            snapshots=SimpleNamespace(
+                **{
+                    **vars(context.snapshots),
+                    "retire": fail_retire,
+                }
+            ),
+        )
+
+    request = RunRequest(
+        agent=AgentDefinition(name="native", instructions="use one tool"),
+        profile=MAIN_PROFILE,
+        messages=({"role": "user", "content": "write"},),
+        workspace=tmp_path,
+        session_id="policy-settlement-secondary",
+        stream=True,
+    )
+
+    with pytest.raises(PublicRuntimeError) as raised:
+        asyncio.run(AgentRunner(
+            services,
+            execution_context_factory=execution_context,
+        ).run(request, options=RunOptions(stream=True)))
+
+    assert raised.value.public_error.code == "guardrail_review_required"
+    assert attempts == ["retire", "retire"]
