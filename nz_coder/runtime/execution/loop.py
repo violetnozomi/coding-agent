@@ -1,7 +1,7 @@
 """Core agent loop: user → model → tool_use → tool_result → continue.
 
 支持两种执行模式:
-  - Streaming（默认）: token 在到达时通过 on_token() 回调推送
+  - Streaming（默认）: SessionEvent 提供可回滚增量；on_token 仅回调已提交终稿
   - Non-streaming: 完整响应一次性返回（用于 benchmark）
 """
 
@@ -988,6 +988,10 @@ class ProductRunEnvironment:
     def _native_execution_context(self, run_context, services):
         """Bind legacy coding capabilities once at the compatibility edge."""
         self.active_run_context = run_context
+        self.event_bus.bind_identity(
+            run_id=run_context.interaction_run_id,
+            agent_id=self.agent_id,
+        )
         return runner_context_from_legacy_host(self, services, run_context)
 
     async def _run_native_facade(
@@ -1008,6 +1012,7 @@ class ProductRunEnvironment:
             on_tool=on_tool,
             on_text=on_text,
             on_token=on_token,
+            event_bus=getattr(self, "event_bus", None),
         )
 
         async def execute(_owner, _messages, *_callbacks):
@@ -1044,8 +1049,10 @@ class ProductRunEnvironment:
 
     def _new_message_part(self, turn: int) -> dict:
         """Create stable IDs for one assistant text part."""
+        interaction_run_id = str(getattr(self.event_bus, "run_id", "") or "")
         return {
-            "run_id": str(getattr(self.event_bus, "run_id", "") or ""),
+            "run_id": interaction_run_id,
+            "interaction_run_id": interaction_run_id,
             "message_id": f"msg-{uuid.uuid4().hex}",
             "part_id": f"part-{uuid.uuid4().hex}",
             "attempt_id": f"attempt-{uuid.uuid4().hex}",
@@ -1090,6 +1097,7 @@ class ProductRunEnvironment:
                     "field": "text",
                     "delta": delta,
                     "run_id": message_part["run_id"],
+                    "interaction_run_id": message_part["interaction_run_id"],
                     "attempt_id": message_part["attempt_id"],
                     "generation_id": message_part["generation_id"],
                     "generation": message_part["generation"],
@@ -1141,6 +1149,7 @@ class ProductRunEnvironment:
                         "turn": message_part["turn"],
                         "reason": reason,
                         "run_id": message_part["run_id"],
+                        "interaction_run_id": message_part["interaction_run_id"],
                         "attempt_id": message_part["attempt_id"],
                         "generation_id": message_part["generation_id"],
                         "generation": message_part["generation"],
@@ -1178,6 +1187,7 @@ class ProductRunEnvironment:
                         "turn": message_part["turn"],
                         "reason": reason,
                         "run_id": message_part["run_id"],
+                        "interaction_run_id": message_part["interaction_run_id"],
                         "attempt_id": message_part["attempt_id"],
                         "generation_id": message_part["generation_id"],
                         "generation": message_part["generation"],
@@ -1202,6 +1212,7 @@ class ProductRunEnvironment:
                 key: message_part[key]
                 for key in (
                     "run_id",
+                    "interaction_run_id",
                     "message_id",
                     "part_id",
                     "attempt_id",
@@ -1220,6 +1231,7 @@ class ProductRunEnvironment:
                 message_part.get(key) == identity.get(key)
                 for key in (
                     "run_id",
+                    "interaction_run_id",
                     "message_id",
                     "part_id",
                     "attempt_id",
@@ -1245,6 +1257,7 @@ class ProductRunEnvironment:
             "text": text,
             "time": timing,
             "run_id": message_part["run_id"],
+            "interaction_run_id": message_part["interaction_run_id"],
             "attempt_id": message_part["attempt_id"],
             "generation_id": message_part["generation_id"],
             "generation": message_part["generation"],

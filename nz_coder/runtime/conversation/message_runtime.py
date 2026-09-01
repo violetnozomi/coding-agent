@@ -29,6 +29,9 @@ class LegacyMessageRuntime:
     def reconcile_llm_result(self, *args, **kwargs):
         return self._required("_reconcile_materialized_llm_result")(*args, **kwargs)
 
+    def retire_message_part(self, *args, **kwargs):
+        return self._required("_retire_message_part")(*args, **kwargs)
+
     def bind_active_processor(self, processor, messages) -> None:
         self._host._active_session_processor = processor
         self._host._active_processor_messages = messages

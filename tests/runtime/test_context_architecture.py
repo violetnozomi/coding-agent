@@ -438,8 +438,12 @@ def test_guardrail_policy_is_owned_by_runtime_service() -> None:
     adapter_source = (
         ROOT / "nz_coder" / "runtime" / "adapters" / "runner.py"
     ).read_text(encoding="utf-8")
+    commit_source = (
+        ROOT / "nz_coder" / "runtime" / "execution" / "commit_boundary.py"
+    ).read_text(encoding="utf-8")
     assert "context.policy.run_input_guardrails" in runner_source
-    assert "context.policy.run_output_guardrail" in runner_source
+    assert "approve_model_result" in runner_source
+    assert "context.policy.run_output_guardrail" in commit_source
     assert "services.guardrails.run_input" in adapter_source
     assert "services.guardrails.run_output" in adapter_source
     assert "host._run_input_guardrails" not in runner_source

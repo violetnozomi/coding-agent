@@ -641,6 +641,7 @@ def _execution_context(run_context: RunContext, services: RuntimeServices):
             publish_event=lambda *_args, **_kwargs: None,
             materialize_llm_result=materialize,
             reconcile_llm_result=materialize,
+            retire_message_part=lambda *_args, **_kwargs: None,
             bind_active_processor=lambda *_args: None,
             build_api_messages=lambda messages: list(messages),
             apply_usage_cost=lambda _result: None,
@@ -885,6 +886,218 @@ def test_native_runner_bounds_repeated_output_limit_continuations(tmp_path: Path
         message.get("_nz_output_limit_continuation") is True
         for message in sessions.context.transcript
     ) == 2
+
+
+def test_output_guardrail_applies_to_length_result(tmp_path: Path):
+    """A truncated Provider segment is policy checked before publication."""
+    class LengthThenStop:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def complete_turn(self, _context, _messages, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return LLMResult(content="length-secret", finish_reason="length")
+            return LLMResult(content="final", finish_reason="stop")
+
+    observed: list[str] = []
+    sessions = _Sessions()
+    services = RuntimeServices(
+        model=LengthThenStop(), tools=_Tools(), context=_Context(),
+        session_runtime=sessions, events=_Events(), host=_UnusedHost(),
+        memory=_Memory(), verifier=_Verifier(), lifecycle=_Lifecycle(),
+        guardrails=_Guardrails(), inputs=_Inputs(), transitions=_Transitions(),
+    )
+    request = RunRequest(
+        agent=AgentDefinition(name="native", instructions="answer"),
+        profile=MAIN_PROFILE,
+        messages=({"role": "user", "content": "answer"},),
+        workspace=tmp_path,
+        session_id="native-length-guarded",
+        stream=False,
+    )
+
+    def execution_context(run_context, runtime_services):
+        context = _execution_context(run_context, runtime_services)
+
+        async def guard(content, _messages):
+            observed.append(content)
+            return content.replace("length-secret", "length-safe")
+
+        return replace(context, policy=SimpleNamespace(
+            **{
+                **vars(context.policy),
+                "has_output_guardrail": lambda: True,
+                "run_output_guardrail": guard,
+            }
+        ))
+
+    result = asyncio.run(AgentRunner(
+        services,
+        execution_context_factory=execution_context,
+    ).run(request, options=request_contracts.RunOptions(stream=False)))
+
+    assert result["status"] == "completed"
+    assert observed == ["length-secret", "final"]
+    assert "length-secret" not in repr(sessions.context.transcript)
+
+
+def test_output_guardrail_applies_to_error_partial_content(tmp_path: Path):
+    """Provider error partial text cannot bypass output policy."""
+    class ErrorPartial:
+        async def complete_turn(self, _context, _messages, **_kwargs):
+            return LLMResult(content="error-secret", finish_reason="error")
+
+    observed: list[str] = []
+    sessions = _Sessions()
+    services = RuntimeServices(
+        model=ErrorPartial(), tools=_Tools(), context=_Context(),
+        session_runtime=sessions, events=_Events(), host=_UnusedHost(),
+        memory=_Memory(), verifier=_Verifier(), lifecycle=_Lifecycle(),
+        guardrails=_Guardrails(), inputs=_Inputs(), transitions=_Transitions(),
+    )
+    request = RunRequest(
+        agent=AgentDefinition(name="native", instructions="answer"),
+        profile=MAIN_PROFILE,
+        messages=({"role": "user", "content": "answer"},),
+        workspace=tmp_path,
+        session_id="native-error-guarded",
+        stream=False,
+    )
+
+    def execution_context(run_context, runtime_services):
+        context = _execution_context(run_context, runtime_services)
+
+        async def guard(content, _messages):
+            observed.append(content)
+            return "error-safe"
+
+        return replace(context, policy=SimpleNamespace(
+            **{
+                **vars(context.policy),
+                "has_output_guardrail": lambda: True,
+                "run_output_guardrail": guard,
+            }
+        ))
+
+    result = asyncio.run(AgentRunner(
+        services,
+        execution_context_factory=execution_context,
+    ).run(request, options=request_contracts.RunOptions(stream=False)))
+
+    assert result["status"] == "error"
+    assert observed == ["error-secret"]
+    assert "error-secret" not in repr(sessions.context.transcript)
+
+
+def test_length_continuation_does_not_publish_unapproved_segments(
+    tmp_path: Path,
+):
+    """The integration proof above also covers the continuation transcript."""
+    test_output_guardrail_applies_to_length_result(tmp_path)
+
+
+def test_agent_as_tool_result_is_guarded_before_parent_commit():
+    from nz_coder.runtime.execution.commit_boundary import (
+        OutputVisibility,
+        approve_model_result,
+        commit_approved_model_result,
+    )
+
+    observed = []
+
+    async def guard(content, _messages):
+        observed.append(content)
+        return "parent-safe"
+
+    context = SimpleNamespace(
+        policy=SimpleNamespace(run_output_guardrail=guard),
+        messages=SimpleNamespace(
+            materialize_llm_result=lambda *_args, **_kwargs: pytest.fail(
+                "internal result became a public model commit"
+            ),
+            reconcile_llm_result=lambda *_args, **_kwargs: pytest.fail(
+                "internal result became a public model commit"
+            ),
+        ),
+    )
+    approved = asyncio.run(approve_model_result(
+        context=context,
+        result=LLMResult(content="child-secret", finish_reason="stop"),
+        messages=[],
+        visibility=OutputVisibility.INTERNAL_AGENT_RESULT,
+    ))
+    assistant = {"role": "assistant", "content": ""}
+    commit_approved_model_result(
+        approved,
+        context=context,
+        assistant_message=assistant,
+        processor=object(),
+        message_part={},
+        messages=[],
+    )
+
+    assert observed == ["child-secret"]
+    assert assistant["content"] == "parent-safe"
+    assert assistant["_nz_internal"] is True
+    assert assistant["_nz_visible"] is False
+
+
+def test_guardrail_failure_settles_current_step(tmp_path: Path):
+    from nz_coder.runtime.agent.guardrails import GuardrailBlockedError
+
+    class OneAnswer:
+        async def complete_turn(self, _context, _messages, **_kwargs):
+            return LLMResult(content="never-public", finish_reason="stop")
+
+    sessions = _Sessions()
+    services = RuntimeServices(
+        model=OneAnswer(), tools=_Tools(), context=_Context(),
+        session_runtime=sessions, events=_Events(), host=_UnusedHost(),
+        memory=_Memory(), verifier=_Verifier(), lifecycle=_Lifecycle(),
+        guardrails=_Guardrails(), inputs=_Inputs(), transitions=_Transitions(),
+    )
+    request = RunRequest(
+        agent=AgentDefinition(name="native", instructions="answer"),
+        profile=MAIN_PROFILE,
+        messages=({"role": "user", "content": "answer"},),
+        workspace=tmp_path,
+        session_id="native-guardrail-settle",
+        stream=False,
+    )
+
+    def execution_context(run_context, runtime_services):
+        context = _execution_context(run_context, runtime_services)
+
+        async def block(_content, _messages):
+            raise GuardrailBlockedError("redactor", "output", "private reason")
+
+        return replace(context, policy=SimpleNamespace(**{
+            **vars(context.policy),
+            "has_output_guardrail": lambda: True,
+            "run_output_guardrail": block,
+        }))
+
+    with pytest.raises(GuardrailBlockedError):
+        asyncio.run(AgentRunner(
+            services,
+            execution_context_factory=execution_context,
+        ).run(request, options=request_contracts.RunOptions(stream=False)))
+
+    assistant = sessions.context.transcript[-1]
+    parts = assistant.get("_nz_parts", [])
+    assert assistant["_nz_error"] == 'Output blocked by guardrail "redactor".'
+    assert any(
+        part.get("type") == "step-finish"
+        and part.get("reason") == "blocked"
+        for part in parts
+    )
+    assert not any(
+        part.get("type") == "tool"
+        and part.get("state", {}).get("status") in {"pending", "running"}
+        for part in parts
+    )
+    assert "never-public" not in repr(assistant)
 
 
 def test_native_runner_preserves_blocked_terminal_status(tmp_path: Path):

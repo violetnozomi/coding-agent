@@ -37,6 +37,86 @@ class _FixedController:
         return self.admission
 
 
+def _rewriting_tool_batch():
+    """Return one approved rewrite and the private source value."""
+    from nz_coder.runtime.agent.guardrails import ToolGuardrail
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+
+    raw_secret = "raw-tool-secret"
+
+    async def rewrite(call, _context):
+        selected = {
+            **call,
+            "function": {
+                **call["function"],
+                "arguments": {"path": "safe.py"},
+            },
+        }
+        return {"action": "rewrite", "payload": selected}
+
+    host = _GuardrailHost(
+        agent_graph=AgentGraph([
+            AgentSpec(
+                "worker",
+                "worker",
+                guardrails=(ToolGuardrail("rewrite", before_tool=rewrite),),
+            ),
+        ], start="worker"),
+        controller=None,
+    )
+    host.runtime_services = SimpleNamespace(
+        guardrails=ProductionGuardrailRuntime(),
+    )
+    batch = ProductionToolRuntime().approve_tool_calls_sync(
+        host,
+        [{
+            "id": "call-rewrite",
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "arguments": {"path": raw_secret},
+            },
+        }],
+        [],
+    )
+    return batch, raw_secret
+
+
+def test_raw_tool_arguments_not_persisted_before_guardrail():
+    from nz_coder.protocol.message_schema import attach_message_identity
+    from nz_coder.runtime.session.session_processor import SessionProcessor
+
+    batch, raw_secret = _rewriting_tool_batch()
+    message = {"role": "assistant", "content": ""}
+    attach_message_identity(message, session_id="tool-boundary")
+    processor = SessionProcessor(message)
+    processor.register_tool_calls(batch.calls)
+
+    assert raw_secret not in repr(message)
+
+
+def test_tool_guardrail_rewrite_is_the_only_persisted_input():
+    from nz_coder.protocol.message_schema import PARTS_KEY, attach_message_identity
+    from nz_coder.runtime.session.session_processor import SessionProcessor
+
+    batch, _raw_secret = _rewriting_tool_batch()
+    message = {"role": "assistant", "content": ""}
+    attach_message_identity(message, session_id="tool-rewrite")
+    processor = SessionProcessor(message)
+    processor.register_tool_calls(batch.calls)
+
+    part = next(item for item in message[PARTS_KEY] if item["type"] == "tool")
+    assert part["state"]["input"] == {"path": "safe.py"}
+    assert batch.calls[0]["function"]["arguments"] == {"path": "safe.py"}
+
+
+def test_tool_guardrail_rewrite_matches_executed_input():
+    batch, _raw_secret = _rewriting_tool_batch()
+    executed = dict(batch.calls[0]["function"]["arguments"])
+
+    assert executed == {"path": "safe.py"}
+
+
 async def _approve_once(_name, _tool_input, _details):
     return "once"
 

@@ -127,18 +127,22 @@ class ProductionGuardrailRuntime:
                 current.setdefault("id", tool_call.get("id"))
             elif action == "block":
                 name = str(current.get("function", {}).get("name") or "unknown")
-                return current, ToolExecutionResult(
+                safe_call = copy.deepcopy(current)
+                safe_call.setdefault("function", {})["arguments"] = "{}"
+                return safe_call, ToolExecutionResult(
                     name=name,
-                    tool_input=host._best_effort_tool_input(
-                        current.get("function", {}).get("arguments", {})
-                    ),
-                    output=f"[Guardrail {guardrail.name}] {verdict['reason']}",
+                    tool_input={},
+                    output=f'Tool blocked by guardrail "{guardrail.name}".',
                     executed=False,
                     dispatch_failed=True,
                     command_failed=False,
                     is_write=is_transactional_write_tool(name),
                     permission_denied=False,
-                    metadata={"guardrail": guardrail.name, "agent": host.current_agent_name},
+                    metadata={
+                        "guardrail": guardrail.name,
+                        "agent": host.current_agent_name,
+                        "reason_code": "policy_block",
+                    },
                 )
             elif action == "escalate":
                 raise GuardrailEscalateError(guardrail.name, "tool", verdict["reason"])
@@ -163,10 +167,12 @@ class ProductionGuardrailRuntime:
             messages,
         )
         if not admission.allowed:
-            return current, ToolExecutionResult(
+            safe_call = copy.deepcopy(current)
+            safe_call.setdefault("function", {})["arguments"] = "{}"
+            return safe_call, ToolExecutionResult(
                 name=name,
-                tool_input=tool_input,
-                output=f"Denied: {admission.reason}",
+                tool_input={},
+                output="Denied: tool invocation rejected by policy.",
                 executed=False,
                 dispatch_failed=True,
                 command_failed=False,
@@ -223,7 +229,7 @@ class ProductionGuardrailRuntime:
                 result.dispatch_failed = bool(payload.get("is_error", False))
                 result.command_failed = False
             elif action == "block":
-                result.output = f"[Guardrail {guardrail.name}] {verdict['reason']}"
+                result.output = f'Tool result blocked by guardrail "{guardrail.name}".'
                 result.dispatch_failed = True
                 result.command_failed = False
                 result.permission_denied = True
@@ -263,6 +269,6 @@ class ProductionGuardrailRuntime:
             # Output policy callbacks have access to the private Provider body.
             # Keep their audit record structural even if a policy accidentally
             # echoes that body into its reason string.
-            reason=("" if hook_point == "output" else reason[:1000]),
+            reason="",
             reason_provided=bool(reason),
         )

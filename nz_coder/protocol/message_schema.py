@@ -16,6 +16,7 @@ from nz_coder.protocol.attachments import (
     normalize_document_attachments,
     normalize_user_file_parts,
 )
+from nz_coder.protocol.public_error import to_public_error
 
 MESSAGE_SCHEMA_VERSION = 1
 MESSAGE_ID_KEY = "_nz_message_id"
@@ -44,6 +45,10 @@ ASSISTANT_END_STATE_KEY = "_nz_end_state"
 USER_TIME_KEY = ASSISTANT_TIME_KEY
 USER_AGENT_KEY = "_nz_user_agent"
 USER_MODEL_KEY = "_nz_user_model"
+INTERACTION_RUN_ID_KEY = "_nz_interaction_run_id"
+VISIBLE_KEY = "_nz_visible"
+INTERNAL_KEY = "_nz_internal"
+AUTHORITATIVE_KEY = "_nz_authoritative"
 
 _LEGACY_SYNTHETIC_USER_PREFIXES = (
     "<api-error-diagnostic",
@@ -340,10 +345,15 @@ def set_assistant_error(
     publish: Callable[[str, dict], None] | None = None,
 ) -> dict:
     """Persist a typed assistant error while retaining the legacy string."""
-    detail = str(error)
+    public = to_public_error(error) if isinstance(error, BaseException) else None
+    detail = public.message if public is not None else str(error)
     payload = {
         "name": name,
-        "data": dict(data) if isinstance(data, dict) else {"message": detail},
+        "data": (
+            public.to_dict()
+            if public is not None
+            else (dict(data) if isinstance(data, dict) else {"message": detail})
+        ),
     }
     normalized = _assistant_error(payload)
     if normalized is None:
@@ -364,7 +374,8 @@ def assistant_error_from_exception(
     is_retryable: bool | None = None,
 ) -> dict:
     """Normalize a Provider exception into the persisted assistant error union."""
-    message = str(error) or type(error).__name__
+    public = to_public_error(error)
+    message = public.message
     response = getattr(error, "response", None)
     status = getattr(error, "status_code", None)
     if status is None and response is not None:
@@ -380,12 +391,6 @@ def assistant_error_from_exception(
             "data": {"providerID": provider_id[:200], "message": message[:4000]},
         }
 
-    headers = getattr(error, "headers", None)
-    if headers is None and response is not None:
-        headers = getattr(response, "headers", None)
-    body = getattr(error, "body", None)
-    if body is None and response is not None:
-        body = getattr(response, "text", None)
     code = getattr(error, "code", None)
     class_name = type(error).__name__
     api_shaped = (
@@ -417,15 +422,6 @@ def assistant_error_from_exception(
         }
         if status is not None:
             data["statusCode"] = status
-        if isinstance(headers, dict) or hasattr(headers, "items"):
-            try:
-                data["responseHeaders"] = dict(headers.items())
-            except (AttributeError, TypeError, ValueError):
-                pass
-        if isinstance(body, (dict, list)):
-            body = json.dumps(body, ensure_ascii=False, default=str)
-        if isinstance(body, str):
-            data["responseBody"] = body
         return _assistant_error({"name": "APIError", "data": data}) or {
             "name": "UnknownError",
             "data": {"message": message[:4000]},
@@ -447,10 +443,15 @@ def publish_assistant_state(
     """Publish one sanitized assistant-info snapshot for live consumers."""
     if not callable(publish) or message.get("role") != "assistant":
         return None
+    if message.get(INTERNAL_KEY) is True or message.get(VISIBLE_KEY) is False:
+        return None
     session_id = message.get(SESSION_ID_KEY)
     if not isinstance(session_id, str) or not session_id:
         return None
-    info = message_records([message], session_id)[0]["info"]
+    records = message_records([message], session_id)
+    if not records:
+        return None
+    info = records[0]["info"]
     publish(
         "message.updated",
         {"message_id": info["id"], "info": copy.deepcopy(info)},
@@ -698,6 +699,8 @@ def message_records(messages: list[dict], session_id: str) -> list[dict]:
     ensure_message_identities(messages, session_id)
     records = []
     for message in messages:
+        if message.get(INTERNAL_KEY) is True or message.get(VISIBLE_KEY) is False:
+            continue
         message_id = message[MESSAGE_ID_KEY]
         info = {
             key: copy.deepcopy(value)
@@ -705,6 +708,12 @@ def message_records(messages: list[dict], session_id: str) -> list[dict]:
             if not key.startswith("_nz_")
         }
         info.update({"id": message_id, "session_id": session_id})
+        interaction_run_id = message.get(INTERACTION_RUN_ID_KEY)
+        if isinstance(interaction_run_id, str) and interaction_run_id:
+            info["interaction_run_id"] = interaction_run_id
+        info["visible"] = message.get(VISIBLE_KEY) is not False
+        info["internal"] = message.get(INTERNAL_KEY) is True
+        info["authoritative"] = message.get(AUTHORITATIVE_KEY) is not False
         summary = _summary_metadata(message.get(SUMMARY_KEY))
         if summary:
             info["summary"] = summary
@@ -1207,26 +1216,52 @@ def _validate_part(value: Any, *, message_id: Any) -> dict | None:
         return None
     part_type = value.get("type")
     if part_type == "compaction":
-        return _compaction_part(value, message_id, value)
-    if part_type in {"text", "reasoning"}:
-        return _textual_part(value, message_id, part_type)
-    if part_type == "file":
-        return _file_part(value, message_id)
-    if part_type == "tool":
-        return _tool_part(value, message_id)
-    if part_type == "question":
-        return _question_part(value, message_id)
-    if part_type == "question-summary":
-        return _question_summary_part(value, message_id)
-    if part_type == "patch":
-        return _patch_part(value, message_id)
-    if part_type == "handoff":
-        return _handoff_part(value, message_id)
-    if part_type in {"step-start", "step-finish"}:
-        return _step_part(value, message_id, part_type)
-    if part_type == "retry":
-        return _retry_part(value, message_id)
-    return None
+        result = _compaction_part(value, message_id, value)
+    elif part_type in {"text", "reasoning"}:
+        result = _textual_part(value, message_id, part_type)
+    elif part_type == "file":
+        result = _file_part(value, message_id)
+    elif part_type == "tool":
+        result = _tool_part(value, message_id)
+    elif part_type == "question":
+        result = _question_part(value, message_id)
+    elif part_type == "question-summary":
+        result = _question_summary_part(value, message_id)
+    elif part_type == "patch":
+        result = _patch_part(value, message_id)
+    elif part_type == "handoff":
+        result = _handoff_part(value, message_id)
+    elif part_type in {"step-start", "step-finish"}:
+        result = _step_part(value, message_id, part_type)
+    elif part_type == "retry":
+        result = _retry_part(value, message_id)
+    else:
+        result = None
+    if result is None:
+        return None
+    for key in (
+        "interaction_run_id",
+        "run_id",
+        "attempt_id",
+        "generation_id",
+    ):
+        item = value.get(key)
+        if isinstance(item, str) and 0 < len(item) <= 200:
+            result[key] = item
+    for key in ("generation", "version"):
+        item = value.get(key)
+        if isinstance(item, int) and not isinstance(item, bool) and item >= 0:
+            result[key] = item
+    for key in ("visible", "internal", "authoritative"):
+        item = value.get(key)
+        if isinstance(item, bool):
+            result[key] = item
+    status = value.get("status")
+    if isinstance(status, str) and status in {
+        "pending", "streaming", "completed", "error", "removed",
+    }:
+        result["status"] = status
+    return result
 
 
 def _file_part(value: dict, message_id: str) -> dict | None:

@@ -60,7 +60,11 @@ class AgentDefinition:
 
 @dataclass(frozen=True)
 class RunOptions:
-    """Caller interaction controls for one native Runner invocation."""
+    """Caller controls; ``on_token`` receives committed final text only.
+
+    Reversible incremental consumers must use ``on_event`` plus RunViewReducer.
+    Raw Provider deltas never cross this callback before output policy approval.
+    """
 
     stream: bool | None = None
     on_tool: Callable[..., object] | None = None
@@ -96,6 +100,8 @@ class RunRequest:
     session_id: str
     tool_names: tuple[str, ...] | list[str] = field(default_factory=tuple)
     stream: bool = True
+    interaction_run_id: str | None = None
+    parent_interaction_run_id: str | None = None
     parent_run_id: str | None = None
     parent_agent_id: str | None = None
     provider: str | None = None
@@ -128,3 +134,9 @@ class RunRequest:
         object.__setattr__(self, "tool_names", names)
         object.__setattr__(self, "workspace", Path(self.workspace).resolve())
         object.__setattr__(self, "metadata", copy.deepcopy(self.metadata))
+        for name in ("interaction_run_id", "parent_interaction_run_id"):
+            value = getattr(self, name)
+            if value is not None and (
+                not isinstance(value, str) or not value.strip()
+            ):
+                raise ValueError(f"RunRequest {name} must be non-empty or None")

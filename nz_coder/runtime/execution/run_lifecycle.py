@@ -355,6 +355,8 @@ def _terminal_content(
             break
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
+        if message.get("_nz_internal") is True or message.get("_nz_visible") is False:
+            continue
         content = message.get("content")
         if isinstance(content, str) and content.strip():
             return content, "assistant"

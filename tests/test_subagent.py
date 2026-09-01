@@ -875,8 +875,9 @@ def test_subagent_provider_failure_persists_typed_assistant_error(monkeypatch):
         assert state["status"] == "error"
         assert assistant["_nz_assistant_error"]["name"] == "APIError"
         assert assistant["_nz_assistant_error"]["data"]["message"] == (
-            "invalid api key"
+            "An internal error occurred."
         )
+        assert "invalid api key" not in str(assistant)
         assert assistant["_nz_assistant_error"]["data"]["isRetryable"] is False
         assert assistant["_nz_finish"] == "error"
         assert assistant["_nz_end_state"] == {"reason": "errored"}

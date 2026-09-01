@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Protocol, runtime_checkable
 
+from nz_coder.protocol.public_error import to_public_error
+
 
 def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -118,7 +120,9 @@ class RuntimeEventMiddleware:
                 },
             )
             return
-        self._emit(context, RuntimeEventName.RUN_FAILED, {"error": str(error)})
+        self._emit(context, RuntimeEventName.RUN_FAILED, {
+            "error": to_public_error(error).to_dict(),
+        })
 
     async def before_model(self, context) -> None:
         self._emit(context, RuntimeEventName.MODEL_STARTED)
@@ -129,7 +133,9 @@ class RuntimeEventMiddleware:
     async def on_model_error(self, context, error) -> None:
         if isinstance(error, asyncio.CancelledError):
             return
-        self._emit(context, RuntimeEventName.MODEL_FAILED, {"error": str(error)})
+        self._emit(context, RuntimeEventName.MODEL_FAILED, {
+            "error": to_public_error(error).to_dict(),
+        })
 
     async def before_tool_batch(self, context) -> None:
         self._emit(context, RuntimeEventName.TOOL_STARTED)
@@ -140,21 +146,32 @@ class RuntimeEventMiddleware:
     async def on_tool_batch_error(self, context, error) -> None:
         if isinstance(error, asyncio.CancelledError):
             return
-        self._emit(context, RuntimeEventName.TOOL_FAILED, {"error": str(error)})
+        self._emit(context, RuntimeEventName.TOOL_FAILED, {
+            "error": to_public_error(error).to_dict(),
+        })
 
     def _emit(self, context, name: RuntimeEventName, payload: dict | None = None) -> None:
         request = context.request
         metadata = getattr(context, "metadata", {})
         if metadata.get("suppress_runtime_events"):
             return
-        run_id = str(metadata.get("run_id") or request.session_id)
+        run_id = str(
+            getattr(context, "interaction_run_id", "")
+            or metadata.get("interaction_run_id")
+            or metadata.get("run_id")
+            or request.session_id
+        )
         try:
             self.sink.publish(RuntimeEvent(
                 name=name,
                 run_id=run_id,
                 session_id=request.session_id,
                 agent_id=getattr(request.agent, "name", ""),
-                parent_run_id=str(request.parent_run_id or ""),
+                parent_run_id=str(
+                    getattr(request, "parent_interaction_run_id", "")
+                    or getattr(request, "parent_run_id", "")
+                    or ""
+                ),
                 payload=payload or {},
             ))
         except Exception:

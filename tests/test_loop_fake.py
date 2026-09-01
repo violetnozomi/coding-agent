@@ -987,7 +987,7 @@ def test_provider_finish_error_is_not_reported_as_success():
         _restore_workdir(old, tmp)
 
 
-def test_exhausted_provider_error_keeps_status_headers_and_identity(monkeypatch):
+def test_exhausted_provider_error_keeps_safe_status_and_identity(monkeypatch):
     from nz_coder.loop import AgentLoop
     from nz_coder.protocol.message_schema import message_records
 
@@ -1013,17 +1013,17 @@ def test_exhausted_provider_error_keeps_status_headers_and_identity(monkeypatch)
         assert info["error"] == {
             "name": "APIError",
             "data": {
-                "message": "slow down",
+                "message": "The provider request failed.",
                 "isRetryable": False,
                 "statusCode": 429,
-                "responseHeaders": {"retry-after": "4"},
                 "metadata": {
                     "name": "RateLimitFailure",
                     "code": "rate_limit",
                 },
-                "responseBody": '{"error": "quota"}',
             },
         }
+        assert "slow down" not in str(info)
+        assert "quota" not in str(info)
         assert assistant["_nz_error"] == "Provider request failed after retries"
     finally:
         _restore_workdir(old, tmp)
@@ -2291,10 +2291,13 @@ def test_pre_send_compaction_failure_is_checkpointed_without_provider_call(monke
         assert status["status"] == "error"
         assert agent.client.chat.completions.calls == 0
         assert persisted["run_status"] == "error"
-        assert any(
-            message.get("_nz_error") == "summary unavailable"
+        errors = [
+            message.get("_nz_error")
             for message in persisted["messages"]
-        )
+            if message.get("_nz_error")
+        ]
+        assert "An internal error occurred." in errors
+        assert "summary unavailable" not in str(persisted)
     finally:
         _restore_workdir(old, tmp)
 

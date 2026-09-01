@@ -7,7 +7,9 @@ do not reimplement this lifecycle.
 from __future__ import annotations
 
 import asyncio
+import copy
 import threading
+from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from nz_coder.foundation import config
@@ -19,8 +21,12 @@ from nz_coder.runtime.adapters.tool import (
 )
 from nz_coder.runtime.core.tool_context import ToolExecutionContext, ToolPolicyContext
 from nz_coder.runtime.agent.guardrail_runtime import ProductionGuardrailRuntime
+from nz_coder.runtime.agent.auto_mode import parse_tool_arguments
 from nz_coder.runtime.conversation.input_preflight import ProductionInputPreflight
-from nz_coder.tool_platform.execution import ToolExecutionResult
+from nz_coder.tool_platform.execution import (
+    ToolExecutionResult,
+    is_transactional_write_tool,
+)
 from nz_coder.runtime.tool_runtime.scheduler import (
     _execute_scheduled,
     _execute_scheduled_async,
@@ -28,12 +34,25 @@ from nz_coder.runtime.tool_runtime.scheduler import (
 )
 from nz_coder.runtime.tool_runtime.policy import ProductionToolPolicy
 from nz_coder.runtime.tool_runtime.result_projection import ProductionToolResultProjector
+from nz_coder.runtime.tool_runtime.envelope import (
+    approved_tool_call,
+    normalize_raw_tool_calls,
+)
 from nz_coder.tools import (
     current_tool_cancel_event,
+    get_specs,
     scoped_dynamic_tool_snapshot,
     scoped_tool_metadata_reporter,
 )
 from nz_coder.tools.question import scoped_question_lifecycle_reporter
+
+
+@dataclass
+class ApprovedToolBatch:
+    """Tool calls that crossed repair/guardrail admission exactly once."""
+
+    calls: list[dict]
+    blocked: dict[int, ToolExecutionResult] = field(default_factory=dict)
 
 
 class ProductionToolRuntime:
@@ -70,6 +89,87 @@ class ProductionToolRuntime:
                 usage=usage,
             )
 
+    def approve_tool_calls_sync(
+        self,
+        host,
+        tool_calls_raw: list,
+        messages: list,
+    ) -> ApprovedToolBatch:
+        """Apply tool guardrails before any SessionProcessor publication."""
+        original, repairs = normalize_raw_tool_calls(
+            copy.deepcopy(list(tool_calls_raw[:config.MAX_TOOL_CALLS_PER_RESPONSE])),
+            _candidate_tool_names(),
+        )
+        trace = getattr(getattr(host, "tracer", None), "log", lambda *_a, **_k: None)
+        for repair in repairs:
+            trace("tool_call_repaired", **repair)
+        calls: list[dict] = []
+        blocked: dict[int, ToolExecutionResult] = {}
+        guardrails = _guardrail_runtime(host)
+        before_tool = getattr(guardrails, "before_tool_sync", guardrails.before_tool)
+        for index, tool_call in enumerate(original):
+            guarded, rejected = asyncio.run(before_tool(host, tool_call, messages))
+            function = guarded.get("function", {})
+            parsed = parse_tool_arguments(function.get("arguments", {}))
+            if parsed is None:
+                parsed = {}
+                rejected = rejected or _invalid_tool_arguments_result(guarded)
+            calls.append(approved_tool_call(guarded, parsed).to_wire())
+            if rejected is not None:
+                blocked[index] = rejected
+        blocked.update(self._static_policy_rejections(
+            policy_context_from_legacy_host(host),
+            calls,
+        ))
+        return ApprovedToolBatch(calls, blocked)
+
+    async def approve_tool_calls_async(
+        self,
+        context: ToolExecutionContext,
+        tool_calls_raw: list,
+        messages: list,
+    ) -> ApprovedToolBatch:
+        """Apply tool guardrails/admission while raw envelopes stay private."""
+        original, repairs = normalize_raw_tool_calls(
+            copy.deepcopy(list(tool_calls_raw[:config.MAX_TOOL_CALLS_PER_RESPONSE])),
+            _candidate_tool_names(),
+        )
+        for repair in repairs:
+            context.lifecycle.trace("tool_call_repaired", **repair)
+        calls: list[dict] = []
+        blocked: dict[int, ToolExecutionResult] = {}
+        for index, tool_call in enumerate(original):
+            guarded, rejected = await context.lifecycle.before_tool(
+                tool_call,
+                messages,
+            )
+            function = guarded.get("function", {})
+            parsed = parse_tool_arguments(function.get("arguments", {}))
+            if parsed is None:
+                parsed = {}
+                rejected = rejected or _invalid_tool_arguments_result(guarded)
+            calls.append(approved_tool_call(guarded, parsed).to_wire())
+            if rejected is not None:
+                blocked[index] = rejected
+        blocked.update(self._static_policy_rejections(context.policy, calls))
+        return ApprovedToolBatch(calls, blocked)
+
+    def _static_policy_rejections(
+        self,
+        context: ToolPolicyContext,
+        calls: list[dict],
+    ) -> dict[int, ToolExecutionResult]:
+        """Finish non-interactive admission before a ToolPart is registered."""
+        blocked: dict[int, ToolExecutionResult] = {}
+        blocked.update(self.policy.agent_tool_rejections(context, calls))
+        blocked.update(self.policy.admission_tool_rejections(context, calls))
+        blocked.update(self.policy.strict_private_path_rejections(context, calls))
+        blocked.update(self.policy.task_constraint_rejections(context, calls))
+        blocked.update(self.policy.implementation_phase_rejections(context, calls))
+        blocked.update(self.policy.closure_phase_rejections(context, calls))
+        blocked.update(self.policy.strict_progress_rejections(context, calls))
+        return blocked
+
     def _execute_batch_sync_snapshot(
         self,
         host,
@@ -80,6 +180,7 @@ class ProductionToolRuntime:
         *,
         processor: Any | None = None,
         usage: Any | None = None,
+        approved_batch: ApprovedToolBatch | None = None,
     ) -> str:
         """执行一批工具调用，并分发执行后的状态更新。"""
         policy_context = policy_context_from_legacy_host(host)
@@ -87,8 +188,14 @@ class ProductionToolRuntime:
         resolver = getattr(host, "_processor_for_latest_assistant", None)
         if processor is None and callable(resolver):
             processor = resolver(messages)
+        approved_batch = approved_batch or self.approve_tool_calls_sync(
+            host,
+            tool_calls_raw,
+            messages,
+        )
+        tool_calls_raw[:] = approved_batch.calls
         if processor is not None:
-            processor.start_tools(tool_calls_raw)
+            processor.start_tools(approved_batch.calls)
             host._checkpoint_messages(messages, "running")
         write_override = _legacy_dispatch_override(host, "_tool_batch_has_write")
         has_write = (
@@ -129,6 +236,7 @@ class ProductionToolRuntime:
                         has_write,
                         messages,
                         policy_context=policy_context,
+                        approved_batch=approved_batch,
                     )
                 )
             describe_interrupted = False
@@ -252,6 +360,7 @@ class ProductionToolRuntime:
         finish_step: bool = True,
         checkpoint: Callable[[str], Awaitable[None]] | None = None,
         tool_context: ToolExecutionContext | None = None,
+        approved_batch: ApprovedToolBatch | None = None,
     ) -> str:
         """Execute one async batch against one dynamic-tool generation."""
         with scoped_dynamic_tool_snapshot():
@@ -266,6 +375,7 @@ class ProductionToolRuntime:
                 finish_step=finish_step,
                 checkpoint=checkpoint,
                 tool_context=tool_context,
+                approved_batch=approved_batch,
             )
 
     async def _execute_batch_async_snapshot(
@@ -281,6 +391,7 @@ class ProductionToolRuntime:
         finish_step: bool = True,
         checkpoint: Callable[[str], Awaitable[None]] | None = None,
         tool_context: ToolExecutionContext | None = None,
+        approved_batch: ApprovedToolBatch | None = None,
     ) -> str:
         """Async variant of one tool batch execution."""
         context = (
@@ -299,8 +410,14 @@ class ProductionToolRuntime:
             else:
                 await lifecycle.checkpoint(messages, status)
 
+        approved_batch = approved_batch or await self.approve_tool_calls_async(
+            context,
+            tool_calls_raw,
+            messages,
+        )
+        tool_calls_raw[:] = approved_batch.calls
         if processor is not None:
-            processor.start_tools(tool_calls_raw)
+            processor.start_tools(approved_batch.calls)
             await checkpoint_state("running")
         write_override = lifecycle.write_override
         has_write = (
@@ -326,6 +443,7 @@ class ProductionToolRuntime:
                     else await self.dispatch_async(
                         context, tool_calls_raw, has_write, messages,
                         policy_context=policy_context,
+                        approved_batch=approved_batch,
                     )
                 )
             describe_interrupted = await lifecycle.describe_read_results(
@@ -416,25 +534,18 @@ class ProductionToolRuntime:
         messages: list,
         *,
         policy_context: ToolPolicyContext | None = None,
+        approved_batch: ApprovedToolBatch | None = None,
     ) -> list:
         """只分发本轮允许执行的工具调用前缀。"""
 
         policy_context = policy_context or policy_context_from_legacy_host(host)
-        original = tool_calls_raw[:config.MAX_TOOL_CALLS_PER_RESPONSE]
-        will_execute = []
-        guardrail_blocked: dict[int, ToolExecutionResult] = {}
-        guardrails = _guardrail_runtime(host)
-        before_tool = getattr(guardrails, "before_tool_sync", guardrails.before_tool)
-        for index, tool_call in enumerate(original):
-            guarded, rejected = asyncio.run(
-                before_tool(
-                    host, tool_call, messages,
-                )
-            )
-            tool_calls_raw[index] = guarded
-            will_execute.append(guarded)
-            if rejected is not None:
-                guardrail_blocked[index] = rejected
+        approved_batch = approved_batch or self.approve_tool_calls_sync(
+            host,
+            tool_calls_raw,
+            messages,
+        )
+        will_execute = approved_batch.calls
+        guardrail_blocked = dict(approved_batch.blocked)
         batch_id, started = self.policy.begin_tool_batch(
             policy_context, will_execute, has_write,
         )
@@ -443,21 +554,6 @@ class ProductionToolRuntime:
         blocked = self.policy.resolve_doom_loop_permissions(
             policy_context, blocked, will_execute,
         )
-        blocked.update(self.policy.agent_tool_rejections(policy_context, will_execute))
-        blocked.update(self.policy.admission_tool_rejections(policy_context, will_execute))
-        blocked.update(self.policy.strict_private_path_rejections(
-            policy_context, will_execute,
-        ))
-        blocked.update(self.policy.task_constraint_rejections(
-            policy_context, will_execute,
-        ))
-        blocked.update(self.policy.implementation_phase_rejections(
-            policy_context, will_execute,
-        ))
-        blocked.update(self.policy.closure_phase_rejections(
-            policy_context, will_execute,
-        ))
-        blocked.update(self.policy.strict_progress_rejections(policy_context, will_execute))
         blocked.update(guardrail_blocked)
         mode = "scheduled"
         try:
@@ -523,19 +619,18 @@ class ProductionToolRuntime:
         messages: list,
         *,
         policy_context: ToolPolicyContext | None = None,
+        approved_batch: ApprovedToolBatch | None = None,
     ) -> list:
         """Async variant for dispatching the executable tool prefix."""
         policy_context = policy_context or context.policy
         lifecycle = context.lifecycle
-        original = tool_calls_raw[:config.MAX_TOOL_CALLS_PER_RESPONSE]
-        will_execute = []
-        guardrail_blocked: dict[int, ToolExecutionResult] = {}
-        for index, tool_call in enumerate(original):
-            guarded, rejected = await lifecycle.before_tool(tool_call, messages)
-            tool_calls_raw[index] = guarded
-            will_execute.append(guarded)
-            if rejected is not None:
-                guardrail_blocked[index] = rejected
+        approved_batch = approved_batch or await self.approve_tool_calls_async(
+            context,
+            tool_calls_raw,
+            messages,
+        )
+        will_execute = approved_batch.calls
+        guardrail_blocked = dict(approved_batch.blocked)
         batch_id, started = self.policy.begin_tool_batch(
             policy_context, will_execute, has_write,
         )
@@ -544,21 +639,6 @@ class ProductionToolRuntime:
         blocked = await self.policy.resolve_doom_loop_permissions_async(
             policy_context, blocked, will_execute,
         )
-        blocked.update(self.policy.agent_tool_rejections(policy_context, will_execute))
-        blocked.update(self.policy.admission_tool_rejections(policy_context, will_execute))
-        blocked.update(self.policy.strict_private_path_rejections(
-            policy_context, will_execute,
-        ))
-        blocked.update(self.policy.task_constraint_rejections(
-            policy_context, will_execute,
-        ))
-        blocked.update(self.policy.implementation_phase_rejections(
-            policy_context, will_execute,
-        ))
-        blocked.update(self.policy.closure_phase_rejections(
-            policy_context, will_execute,
-        ))
-        blocked.update(self.policy.strict_progress_rejections(policy_context, will_execute))
         blocked.update(guardrail_blocked)
         mode = "scheduled"
         try:
@@ -625,6 +705,34 @@ def _has_read_image_result(dispatched: list, capabilities) -> bool:
         and not result.dispatch_failed
         and bool(result.attachments)
         for _index, _tool_call, result in dispatched
+    )
+
+
+def _candidate_tool_names() -> list[str]:
+    return [
+        str(spec.get("function", {}).get("name") or "")
+        for spec in get_specs()
+        if str(spec.get("function", {}).get("name") or "")
+    ]
+
+
+def _invalid_tool_arguments_result(tool_call: dict) -> ToolExecutionResult:
+    """Settle malformed Provider JSON before the call enters public state."""
+    function = tool_call.get("function", {})
+    name = str(function.get("name") or "unknown")
+    return ToolExecutionResult(
+        name=name,
+        tool_input={},
+        output=(
+            f"Error: Invalid JSON arguments for {name}: "
+            "tool arguments must be a valid JSON object."
+        ),
+        executed=False,
+        dispatch_failed=True,
+        command_failed=False,
+        is_write=is_transactional_write_tool(name),
+        permission_denied=False,
+        metadata={"reason_code": "invalid_tool_arguments"},
     )
 
 

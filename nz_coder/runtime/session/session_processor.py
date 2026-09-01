@@ -16,6 +16,7 @@ from collections.abc import Callable
 from typing import Any
 
 from nz_coder.protocol.message_schema import (
+    INTERACTION_RUN_ID_KEY,
     ASSISTANT_CHILD_COST_KEY,
     ASSISTANT_COST_KEY,
     ASSISTANT_FINISH_KEY,
@@ -759,8 +760,15 @@ class SessionProcessor:
 
     def _update(self, part: dict, *, publish: bool = True) -> dict:
         with self._lock:
+            interaction_run_id = self.message.get(INTERACTION_RUN_ID_KEY)
+            if isinstance(interaction_run_id, str) and interaction_run_id:
+                part.setdefault("interaction_run_id", interaction_run_id)
+            internal = self.message.get("_nz_internal") is True
+            part.setdefault("visible", not internal)
+            part.setdefault("internal", internal)
+            part.setdefault("authoritative", True)
             normalized = upsert_message_part(self.message, part)
-            if publish and self.publish is not None:
+            if publish and self.publish is not None and not internal:
                 self.publish("message.part.updated", {
                     "message_id": self.message_id,
                     "part": normalized,

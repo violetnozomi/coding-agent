@@ -57,6 +57,7 @@ def project_streaming_turn(
             0.5,
         ),
         min_chars=getattr(config, "STREAM_CHECKPOINT_MIN_CHARS", 4096),
+        active_check=attempt.is_active,
     )
 
     class RetiredEvent:
@@ -65,6 +66,8 @@ def project_streaming_turn(
 
     def on_event(event):
         nonlocal tools_executed, tool_outcome, tool_error, tool_wait_ms
+        if not attempt.is_active():
+            return None
         mutation_chars = 0
         if event.kind == "text":
             delta = str(event.data.get("delta") or "")
@@ -136,6 +139,8 @@ def project_streaming_turn(
     base_observer = gateway.observer
 
     def stream_observer(name: str, payload: dict) -> None:
+        if not attempt.is_active():
+            return
         if base_observer is not None:
             try:
                 base_observer(name, payload)
@@ -174,6 +179,8 @@ def project_streaming_turn(
         raise
 
     result = host._gateway_outcome_result(outcome)
+    if not attempt.is_active():
+        return result
     if outcome.status is ModelCallStatus.COMPLETED:
         flushed = (
             attempt.flush_text(force=True)

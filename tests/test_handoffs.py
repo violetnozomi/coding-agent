@@ -651,7 +651,8 @@ def test_agent_tool_guardrail_blocks_call_and_model_can_recover(tmp_path):
     assert result["status"] == "completed"
     assert seen_agents == ["worker"]
     tool_message = next(message for message in messages if message.get("role") == "tool")
-    assert tool_message["content"] == "[Guardrail read-policy] list_directory denied"
+    assert tool_message["content"] == 'Tool blocked by guardrail "read-policy".'
+    assert "list_directory denied" not in repr(messages)
 
 
 def test_tool_guardrail_selects_current_agent_after_handoff() -> None:

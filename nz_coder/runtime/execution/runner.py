@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from nz_coder.protocol.message_schema import (
     ASSISTANT_PARENT_KEY,
     ASSISTANT_TIME_KEY,
+    INTERACTION_RUN_ID_KEY,
     MESSAGE_ID_KEY,
     attach_message_identity,
     ensure_message_identities,
@@ -40,6 +41,11 @@ from nz_coder.runtime.execution.turn_economy import (
     settle_provider_turn,
 )
 from nz_coder.runtime.execution.work_budget import WorkBudgetController
+from nz_coder.runtime.execution.commit_boundary import (
+    OutputVisibility,
+    approve_model_result,
+    commit_approved_model_result,
+)
 from nz_coder.runtime.core.contracts import RuntimeServices
 from nz_coder.runtime.core.request import RunOptions, RunRequest
 from nz_coder.runtime.core.result import RunResult, RunStatus, TokenUsage
@@ -191,6 +197,11 @@ class AgentRunner:
             raise TypeError("Native AgentRunner requires an execution context factory")
         run_context = await services.session_runtime.open(request)
         run_context.cancellation = options.cancellation
+        event_bus = options.event_bus
+        if event_bus is not None:
+            bind_identity = getattr(event_bus, "bind_identity", None)
+            if callable(bind_identity):
+                bind_identity(run_id=run_context.interaction_run_id)
         execution_context = factory(run_context, services)
         if not isinstance(execution_context, RunnerExecutionContext):
             raise TypeError("execution context factory must return RunnerExecutionContext")
@@ -344,6 +355,9 @@ class AgentRunner:
             raise TypeError("AgentRunner requires a RuntimeServices graph")
         request = run_request_from_legacy_host(host, messages, stream)
         run_context = await services.session_runtime.open(request)
+        bind_identity = getattr(getattr(host, "event_bus", None), "bind_identity", None)
+        if callable(bind_identity):
+            bind_identity(run_id=run_context.interaction_run_id)
         # The legacy lifecycle already owns the mature SessionEventBus facts.
         # Suppress only the additive core projection to avoid duplicate UI events.
         run_context.metadata["suppress_runtime_events"] = True
@@ -596,8 +610,17 @@ class AgentRunner:
                 context.messages.bind_user_contexts(messages)
                 message_part = context.messages.new_message_part(turn_index + 1)
                 output_guarded = context.policy.has_output_guardrail()
-                message_part["public_streaming"] = not output_guarded
+                internal_agent_result = context.control.has_agent_call_stack()
+                message_part["public_streaming"] = not (
+                    output_guarded or internal_agent_result
+                )
                 assistant_message = {"role": "assistant", "content": ""}
+                assistant_message[INTERACTION_RUN_ID_KEY] = (
+                    run_context.interaction_run_id
+                )
+                assistant_message["_nz_visible"] = not internal_agent_result
+                assistant_message["_nz_internal"] = internal_agent_result
+                assistant_message["_nz_authoritative"] = True
                 context.messages.bind_assistant_context(assistant_message)
                 attach_message_identity(
                     assistant_message,
@@ -639,7 +662,22 @@ class AgentRunner:
                 start_snapshot: str | None = None
                 start_snapshot_awaited = False
                 model_result_materialized = False
+                approved_tool_batch = None
                 record_provider_turn = None
+
+                async def approve_tool_batch(tool_calls: list) -> object | None:
+                    approve = getattr(
+                        services.tools,
+                        "approve_tool_calls_async",
+                        None,
+                    )
+                    if not callable(approve):
+                        return None
+                    return await approve(
+                        resolve_tool_runtime_context(),
+                        tool_calls,
+                        messages,
+                    )
 
                 async def resolve_start_snapshot() -> str | None:
                     nonlocal start_snapshot, start_snapshot_awaited
@@ -655,17 +693,32 @@ class AgentRunner:
                     return start_snapshot
 
                 async def execute_stream_tools(stream_result: object) -> str:
-                    nonlocal model_result_materialized
+                    nonlocal model_result_materialized, approved_tool_batch
                     await resolve_start_snapshot()
+                    approved_tool_batch = await approve_tool_batch(
+                        stream_result.tool_calls,
+                    )
+                    if approved_tool_batch is not None:
+                        stream_result.tool_calls = approved_tool_batch.calls
+                    visibility = (
+                        OutputVisibility.INTERNAL_AGENT_RESULT
+                        if context.control.has_agent_call_stack()
+                        else OutputVisibility.USER_VISIBLE
+                    )
+                    approved = await approve_model_result(
+                        context=context,
+                        result=stream_result,
+                        messages=messages,
+                        visibility=visibility,
+                    )
                     if output_guarded:
-                        # Text and reasoning that accompany a tool call are an
-                        # intermediate Provider attempt, not an approved user
-                        # answer. Keep only the tool envelope public.
-                        stream_result.content = ""
-                        stream_result.extra = dict(stream_result.extra or {})
-                        stream_result.extra.pop("reasoning_content", None)
-                    context.messages.materialize_llm_result(
-                        stream_result,
+                        # A tool-forming response is not a completed user answer.
+                        approved.result.content = ""
+                        approved.result.extra = dict(approved.result.extra or {})
+                        approved.result.extra.pop("reasoning_content", None)
+                    commit_approved_model_result(
+                        approved,
+                        context=context,
                         assistant_message=assistant_message,
                         processor=processor,
                         message_part=message_part,
@@ -677,6 +730,7 @@ class AgentRunner:
                             resolve_tool_runtime_context(), stream_result.tool_calls,
                             messages, on_tool, on_text, processor=processor,
                             usage=stream_result, finish_step=False,
+                            approved_batch=approved_tool_batch,
                         )
                     return await self._middleware.run(
                         "tool_batch", run_context, execute_batch,
@@ -821,23 +875,58 @@ class AgentRunner:
                         tool_calls=result.tool_calls,
                         finish_reason="error",
                     )
-                    if not model_result_materialized:
-                        context.messages.materialize_llm_result(
-                            result,
-                            assistant_message=assistant_message,
-                            processor=processor,
-                            message_part=message_part,
-                            messages=messages,
+                    if result.tool_calls and approved_tool_batch is None:
+                        approved_tool_batch = await approve_tool_batch(
+                            result.tool_calls,
                         )
-                        model_result_materialized = True
-                    else:
-                        context.messages.reconcile_llm_result(
-                            result,
-                            assistant_message=assistant_message,
-                            processor=processor,
-                            message_part=message_part,
+                    if approved_tool_batch is not None:
+                        result.tool_calls = approved_tool_batch.calls
+                    try:
+                        approved = await approve_model_result(
+                            context=context,
+                            result=result,
                             messages=messages,
+                            visibility=(
+                                OutputVisibility.INTERNAL_AGENT_RESULT
+                                if context.control.has_agent_call_stack()
+                                else OutputVisibility.USER_VISIBLE
+                            ),
                         )
+                    except BaseException as exc:
+                        context.snapshots.retire(
+                            start_snapshot_task,
+                            start_snapshot_cancel,
+                        )
+                        context.messages.retire_message_part(
+                            message_part,
+                            "output_guardrail_failed",
+                        )
+                        set_assistant_error(
+                            assistant_message,
+                            exc,
+                            name="OutputGuardrailError",
+                            publish=context.messages.publish_event,
+                        )
+                        processor.fail_unsettled(
+                            "Output policy blocked this response"
+                        )
+                        processor.finish_step("blocked")
+                        await services.session_runtime.checkpoint(
+                            run_context,
+                            "error",
+                        )
+                        raise
+                    result = approved.result
+                    commit_approved_model_result(
+                        approved,
+                        context=context,
+                        assistant_message=assistant_message,
+                        processor=processor,
+                        message_part=message_part,
+                        messages=messages,
+                        reconcile=model_result_materialized,
+                    )
+                    model_result_materialized = True
                     error = result.post_tool_stream_error
                     structured = result.assistant_error or {
                         "name": "APIError",
@@ -1044,31 +1133,56 @@ class AgentRunner:
                     context.messages.inject_api_diagnostic(messages, result.diagnostic)
                     continue
 
-                if (
-                    not result.tool_calls
-                    and not context.control.has_agent_call_stack()
-                    and result.finish_reason not in {"error", "length"}
-                ):
-                    result.content = await context.policy.run_output_guardrail(
-                        result.content or "", messages,
+                if result.tool_calls:
+                    if approved_tool_batch is None:
+                        approved_tool_batch = await approve_tool_batch(
+                            result.tool_calls,
+                        )
+                    if approved_tool_batch is not None:
+                        result.tool_calls = approved_tool_batch.calls
+                visibility = (
+                    OutputVisibility.INTERNAL_AGENT_RESULT
+                    if context.control.has_agent_call_stack()
+                    else OutputVisibility.USER_VISIBLE
+                )
+                try:
+                    approved = await approve_model_result(
+                        context=context,
+                        result=result,
+                        messages=messages,
+                        visibility=visibility,
                     )
+                except BaseException as exc:
+                    context.snapshots.retire(
+                        start_snapshot_task,
+                        start_snapshot_cancel,
+                    )
+                    context.messages.retire_message_part(
+                        message_part,
+                        "output_guardrail_failed",
+                    )
+                    set_assistant_error(
+                        assistant_message,
+                        exc,
+                        name="OutputGuardrailError",
+                        publish=context.messages.publish_event,
+                    )
+                    processor.fail_unsettled("Output policy blocked this response")
+                    processor.finish_step("blocked")
+                    await services.session_runtime.checkpoint(run_context, "error")
+                    raise
+                result = approved.result
+                commit_approved_model_result(
+                    approved,
+                    context=context,
+                    assistant_message=assistant_message,
+                    processor=processor,
+                    message_part=message_part,
+                    messages=messages,
+                    reconcile=model_result_materialized,
+                )
                 if not model_result_materialized:
-                    context.messages.materialize_llm_result(
-                        result,
-                        assistant_message=assistant_message,
-                        processor=processor,
-                        message_part=message_part,
-                        messages=messages,
-                    )
                     model_result_materialized = True
-                else:
-                    context.messages.reconcile_llm_result(
-                        result,
-                        assistant_message=assistant_message,
-                        processor=processor,
-                        message_part=message_part,
-                        messages=messages,
-                    )
                 context.messages.observe_llm_result(
                     result,
                     message_part=message_part,
@@ -1500,6 +1614,7 @@ class AgentRunner:
                     return await services.tools.execute_batch_async(
                         resolve_tool_runtime_context(), result.tool_calls, messages,
                         on_tool, on_text, processor=processor, usage=result,
+                        approved_batch=approved_tool_batch,
                     )
                 step_result = await self._middleware.run(
                     "tool_batch", run_context, execute_batch,
@@ -2059,6 +2174,15 @@ class AgentRunner:
                 }, ensure_ascii=False),
             },
         }
+        approved_batch = None
+        approve = getattr(services.tools, "approve_tool_calls_async", None)
+        if callable(approve):
+            approved_batch = await approve(
+                resolve_tool_runtime_context(),
+                [tool_call],
+                messages,
+            )
+            tool_call = approved_batch.calls[0]
         message_part = context.messages.new_message_part(
             max(1, int(getattr(state, "turn_count", 0) or 0)),
         )
@@ -2068,6 +2192,7 @@ class AgentRunner:
             "tool_calls": [tool_call],
             "_nz_synthetic": True,
             "_nz_verification_stage": stage,
+            INTERACTION_RUN_ID_KEY: run_context.interaction_run_id,
         }
         context.messages.bind_assistant_context(assistant)
         attach_message_identity(
@@ -2095,6 +2220,7 @@ class AgentRunner:
                 on_tool,
                 on_text,
                 processor=processor,
+                approved_batch=approved_batch,
             )
 
         await self._middleware.run("tool_batch", run_context, execute_batch)
@@ -2190,6 +2316,15 @@ class AgentRunner:
                 ),
             },
         }
+        approved_batch = None
+        approve = getattr(services.tools, "approve_tool_calls_async", None)
+        if callable(approve):
+            approved_batch = await approve(
+                resolve_tool_runtime_context(),
+                [tool_call],
+                messages,
+            )
+            tool_call = approved_batch.calls[0]
         message_part = context.messages.new_message_part(
             max(1, int(getattr(state, "turn_count", 0) or 0)),
         )
@@ -2199,6 +2334,7 @@ class AgentRunner:
             "tool_calls": [tool_call],
             "_nz_synthetic": True,
             "_nz_verification_contract": True,
+            INTERACTION_RUN_ID_KEY: run_context.interaction_run_id,
         }
         context.messages.bind_assistant_context(assistant)
         attach_message_identity(
@@ -2226,6 +2362,7 @@ class AgentRunner:
                 on_tool,
                 on_text,
                 processor=processor,
+                approved_batch=approved_batch,
             )
 
         await self._middleware.run("tool_batch", run_context, execute_batch)
@@ -2342,6 +2479,11 @@ def _typed_result(
     if not final_text:
         for message in reversed(context.transcript):
             if isinstance(message, dict) and message.get("role") == "assistant":
+                if (
+                    message.get("_nz_internal") is True
+                    or message.get("_nz_visible") is False
+                ):
+                    continue
                 content = message.get("content")
                 if isinstance(content, str) and content:
                     final_text = content

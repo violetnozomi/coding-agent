@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import threading
+import uuid
 from dataclasses import dataclass, field
 
 from nz_coder.runtime.core.request import RunRequest
@@ -17,6 +18,7 @@ class RunContext:
     request: RunRequest
     session: Session
     active_agent: str
+    interaction_run_id: str = ""
     turn_count: int = 0
     iteration_count: int = 0
     usage: TokenUsage = field(default_factory=TokenUsage)
@@ -36,6 +38,16 @@ class RunContext:
         if not isinstance(self.active_agent, str) or not self.active_agent.strip():
             raise ValueError("RunContext active_agent must be non-empty")
         self.metadata = copy.deepcopy(dict(self.metadata))
+        if not isinstance(self.interaction_run_id, str):
+            raise ValueError("RunContext interaction_run_id must be a string")
+        if not self.interaction_run_id.strip():
+            selected = (
+                self.request.interaction_run_id
+                or self.metadata.get("interaction_run_id")
+                or f"interaction-{uuid.uuid4().hex}"
+            )
+            self.interaction_run_id = str(selected)
+        self.metadata["interaction_run_id"] = self.interaction_run_id
         self._state_lock = threading.RLock()
 
     @property

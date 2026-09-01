@@ -1,6 +1,7 @@
 """Native OpenAI Responses API adapter with provider-neutral normalization."""
 from __future__ import annotations
 
+import json
 from typing import Any, Callable, Iterable, Iterator
 
 from openai import OpenAI
@@ -168,6 +169,13 @@ def _message_input(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 raise ValueError("Responses assistant tool call is missing id/function")
             name = function.get("name")
             arguments = function.get("arguments", "")
+            if isinstance(arguments, dict):
+                arguments = json.dumps(
+                    arguments,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
             if not isinstance(name, str) or not name or not isinstance(arguments, str):
                 raise ValueError("Responses assistant tool call has invalid name/arguments")
             item = {

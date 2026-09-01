@@ -181,19 +181,8 @@ class StreamAttemptBuffer:
             if not self.is_active():
                 return False
             self.tools[selected] = dict(value)
-            if self.publish and self.processor is not None:
-                function = (
-                    value.get("function")
-                    if isinstance(value.get("function"), dict)
-                    else {}
-                )
-                self.processor.stream_tool_delta(
-                    selected,
-                    call_id=str(value.get("id") or ""),
-                    name=str(function.get("name") or ""),
-                    arguments=str(function.get("arguments") or ""),
-                    metadata=(value.get("provider_extra") or None),
-                )
+            # Tool envelopes are private Provider state. The first public
+            # ToolPart is created only after repair, guardrail, and admission.
             return True
 
     def reset_after_retry(self, reason: str) -> None:
@@ -230,6 +219,7 @@ class StreamCheckpointScheduler:
         enabled: bool,
         interval_seconds: float,
         min_chars: int,
+        active_check=None,
     ) -> None:
         self.host = host
         self.messages = messages
@@ -239,6 +229,7 @@ class StreamCheckpointScheduler:
         self._pending = False
         self._chars = 0
         self._last_flush = time.monotonic()
+        self._active_check = active_check
 
     def note(self, chars: int = 1) -> bool:
         """Record one mutation and flush only at a time/size boundary."""
@@ -256,6 +247,10 @@ class StreamCheckpointScheduler:
 
     def flush(self, *, force: bool = False) -> bool:
         """Persist the latest state once; ``force`` also commits removals."""
+        if callable(self._active_check) and not self._active_check():
+            self._pending = False
+            self._chars = 0
+            return False
         if not self.enabled or (not self._pending and not force):
             return False
         self.host._checkpoint_messages(self.messages, "running")

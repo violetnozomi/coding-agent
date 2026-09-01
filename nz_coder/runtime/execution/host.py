@@ -7,6 +7,7 @@ import threading
 
 from nz_coder.mcp import MCPRuntime
 from nz_coder.protocol.message_schema import is_synthetic_user_message
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.runtime.agent.agent_manager import (
     background_agent_manager,
     scoped_agent_message_sender,
@@ -118,9 +119,10 @@ class ProductionRuntimeHost:
             agent._emit_session_event("session.run.cancelled", {})
             raise
         except Exception as exc:
+            public_error = to_public_error(exc)
             agent._emit_session_event("session.run.failed", {
-                "error_type": type(exc).__name__,
-                "error": str(exc)[:1000],
+                "error_type": public_error.metadata.get("error_type", public_error.code),
+                "error": public_error.to_dict(),
             })
             raise
 

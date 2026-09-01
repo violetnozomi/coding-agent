@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import base64
 import binascii
+import copy
+import json
 import re
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -223,6 +225,10 @@ def openai_chat_messages(messages: list[dict]) -> list[dict]:
             for key, value in message.items()
             if key not in {"_nz_attachments", "_nz_user_attachments"}
         }
+        if clean.get("role") == "assistant" and isinstance(
+            clean.get("tool_calls"), list
+        ):
+            clean["tool_calls"] = _openai_tool_calls(clean["tool_calls"])
         if message.get("role") == "user":
             user_files = normalize_attachments(message.get("_nz_user_attachments"))
             if user_files:
@@ -249,3 +255,20 @@ def openai_chat_messages(messages: list[dict]) -> list[dict]:
             pending.extend(normalize_attachments(message.get("_nz_attachments")))
     flush()
     return result
+
+
+def _openai_tool_calls(tool_calls: list[dict]) -> list[dict]:
+    """Serialize structured approved inputs only at the OpenAI wire edge."""
+    projected: list[dict] = []
+    for value in tool_calls:
+        call = copy.deepcopy(value)
+        function = call.get("function")
+        if isinstance(function, dict) and isinstance(function.get("arguments"), dict):
+            function["arguments"] = json.dumps(
+                function["arguments"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        projected.append(call)
+    return projected

@@ -14,7 +14,8 @@ class GuardrailBlockedError(RuntimeError):
     def __init__(self, name: str, hook_point: str, reason: str):
         self.guardrail_name = name
         self.hook_point = hook_point
-        super().__init__(f'Guardrail "{name}" blocked at {hook_point}: {reason}')
+        self.private_reason = reason
+        super().__init__(f'Guardrail "{name}" blocked at {hook_point}.')
 
 
 class GuardrailEscalateError(RuntimeError):
@@ -23,7 +24,8 @@ class GuardrailEscalateError(RuntimeError):
     def __init__(self, name: str, hook_point: str, reason: str):
         self.guardrail_name = name
         self.hook_point = hook_point
-        super().__init__(f'Guardrail "{name}" escalated at {hook_point}: {reason}')
+        self.private_reason = reason
+        super().__init__(f'Guardrail "{name}" escalated at {hook_point}.')
 
 
 @dataclass(frozen=True)

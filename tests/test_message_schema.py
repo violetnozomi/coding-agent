@@ -278,7 +278,7 @@ def test_legacy_assistant_error_migrates_from_step_finish_reason():
     }
 
 
-def test_provider_exception_normalization_preserves_identity_and_auth_boundary():
+def test_provider_exception_normalization_preserves_safe_identity_and_auth_boundary():
     class ProviderFailure(Exception):
         status_code = 429
         code = "rate_limit"
@@ -295,20 +295,18 @@ def test_provider_exception_normalization_preserves_identity_and_auth_boundary()
     assert retry == {
         "name": "APIError",
         "data": {
-            "message": "too many requests",
+            "message": "The provider request failed.",
             "isRetryable": True,
             "statusCode": 429,
-            "responseHeaders": {
-                "retry-after": "3",
-                "x-api-key": "[REDACTED]",
-            },
             "metadata": {"name": "ProviderFailure", "code": "rate_limit"},
-            "responseBody": '{"error": "slow down"}',
         },
     }
     assert assistant_error_from_exception(auth, provider_id="demo") == {
         "name": "ProviderAuthError",
-        "data": {"providerID": "demo", "message": "expired"},
+        "data": {
+            "providerID": "demo",
+            "message": "The provider request failed.",
+        },
     }
 
 
