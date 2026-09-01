@@ -24,7 +24,12 @@ from nz_coder.interface.backend import RemoteTerminalBackend
 from nz_coder.interface.cli import StreamingRenderer
 from nz_coder.interface.interactions import TerminalInteractionBridge
 from nz_coder.interface.run_renderer import TerminalRunRenderer
-from nz_coder.protocol.public_error import to_public_error
+from nz_coder.interface.remote_mailbox import (
+    RemoteEventMailbox,
+    RemoteTransportBridge,
+    is_critical_remote_payload,
+)
+from nz_coder.protocol.public_error import public_error_message, to_public_error
 from nz_coder.interface.terminal_input import TerminalInput
 from nz_coder.interface.commands.registry import Command, CommandRegistry
 from nz_coder.interface.timeline import format_transcript
@@ -333,60 +338,74 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
     )
     interaction_input = bridge.terminal_input
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue = asyncio.Queue(
-        maxsize=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512)
+    transport = RemoteTransportBridge(
+        loop,
+        capacity=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512),
+        critical_reserve=16,
     )
-    done = asyncio.Event()
     stream = None
 
     def pump() -> None:
         try:
             for payload in stream:
-                loop.call_soon_threadsafe(_offer_remote_payload, queue, payload)
+                transport.offer(payload)
                 if payload.get("type") == "session.run.settled":
                     break
         except Exception as exc:
-            loop.call_soon_threadsafe(
-                _offer_remote_payload,
-                queue,
-                {"_error": to_public_error(exc).message},
-            )
+            transport.offer({"_error": to_public_error(exc).to_dict()})
         finally:
-            loop.call_soon_threadsafe(done.set)
+            transport.offer({"_transport_done": True})
 
     terminal_status = "completed"
     reconnecting = False
-    interaction_tasks: set[asyncio.Task] = set()
+    interaction_tasks = _InteractionTaskRegistry(
+        on_error=lambda exc: transport.offer({
+            "_error": to_public_error(exc).to_dict(),
+        }),
+    )
+    reader_done = False
     try:
         _feed_snapshot_events(run_view, baseline)
         if not bool((baseline.get("session") or {}).get("running")):
-            await _resolve_pending(backend, baseline.get("pending") or {}, bridge)
+            _register_pending_interactions(
+                backend,
+                baseline.get("pending") or {},
+                bridge,
+                interaction_tasks,
+            )
+            await interaction_tasks.wait()
             return
         stream = backend.events(last_event_id=cursor)
         thread = threading.Thread(target=pump, name="nz-remote-events", daemon=True)
         thread.start()
-        pending_task = asyncio.create_task(
-            _resolve_pending(backend, baseline.get("pending") or {}, bridge)
+        _register_pending_interactions(
+            backend,
+            baseline.get("pending") or {},
+            bridge,
+            interaction_tasks,
         )
-        interaction_tasks.add(pending_task)
-        pending_task.add_done_callback(interaction_tasks.discard)
-        while not done.is_set() or not queue.empty():
+        while not reader_done or transport.buffered_count:
             try:
-                payload = await asyncio.wait_for(queue.get(), timeout=0.25)
+                payload = await transport.get(timeout=0.25)
             except asyncio.TimeoutError:
+                interaction_tasks.raise_if_failed()
+                continue
+            if payload.get("_transport_done"):
+                reader_done = True
                 continue
             if payload.get("_error"):
-                raise RuntimeError(payload["_error"])
+                raise RuntimeError(public_error_message(payload["_error"]))
             event_type = payload.get("type")
             if event_type == "server.snapshot":
-                _feed_snapshot_events(run_view, payload.get("properties") or {})
-                task = asyncio.create_task(_resolve_pending(
+                latest = payload.get("properties") or {}
+                _feed_snapshot_events(run_view, latest)
+                _register_pending_interactions(
                     backend,
-                    (payload.get("properties") or {}).get("pending") or {},
+                    latest.get("pending") or {},
                     bridge,
-                ))
-                interaction_tasks.add(task)
-                task.add_done_callback(interaction_tasks.discard)
+                    interaction_tasks,
+                )
+                transport.clear_gap()
                 if reconnecting:
                     console.print("[success]Reconnected[/success]")
                     reconnecting = False
@@ -397,36 +416,40 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 if (payload.get("properties") or {}).get("local_queue_overflow"):
                     latest = await asyncio.to_thread(backend.attach_snapshot)
                     _feed_snapshot_events(run_view, latest)
+                    _register_pending_interactions(
+                        backend,
+                        latest.get("pending") or {},
+                        bridge,
+                        interaction_tasks,
+                    )
+                    transport.clear_gap()
                 continue
-            if event_type == "permission.asked":
-                task = asyncio.create_task(
-                    _resolve_remote_interaction(backend, bridge, payload)
+            if event_type in {"permission.asked", "question.asked"}:
+                _register_interaction_payload(
+                    backend,
+                    bridge,
+                    payload,
+                    interaction_tasks,
                 )
-                interaction_tasks.add(task)
-                task.add_done_callback(interaction_tasks.discard)
-                continue
-            if event_type == "question.asked":
-                task = asyncio.create_task(
-                    _resolve_remote_interaction(backend, bridge, payload)
-                )
-                interaction_tasks.add(task)
-                task.add_done_callback(interaction_tasks.discard)
+                # Give the prompt task one scheduling turn even when the SSE
+                # reader has already filled the mailbox through terminal.
+                await asyncio.sleep(0)
                 continue
             event = payload
             run_view.feed(event)
+            meta = event.get("meta") if isinstance(event.get("meta"), dict) else {}
+            transport.mark_applied(int(meta.get("sequence") or 0))
             if event_type in {"session.run.completed", "session.run.failed", "session.run.cancelled", "session.run.settled"}:
                 terminal_status = str(
                     (event.get("properties") or {}).get("status") or terminal_status
                 )
                 if event_type == "session.run.settled":
-                    done.set()
+                    reader_done = True
+                interaction_tasks.cancel()
         await asyncio.to_thread(stream.close)
     finally:
-        if interaction_tasks:
-            for task in interaction_tasks:
-                if not task.done():
-                    task.cancel()
-            await asyncio.gather(*tuple(interaction_tasks), return_exceptions=True)
+        interaction_tasks.cancel()
+        await interaction_tasks.wait(return_exceptions=True)
         if stream is not None:
             try:
                 stream.close()
@@ -449,26 +472,20 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 await interaction_input.close_async()
 
 
-def _offer_remote_payload(event_queue: asyncio.Queue, payload: dict) -> None:
-    """Bound receiver memory while preserving interaction and terminal events."""
+def _offer_remote_payload(
+    event_queue: asyncio.Queue | RemoteEventMailbox,
+    payload: dict,
+) -> None:
+    """Compatibility offer with semantic eviction for older queue consumers."""
+    if isinstance(event_queue, RemoteEventMailbox):
+        event_queue.offer(payload)
+        return
     try:
         event_queue.put_nowait(payload)
         return
     except asyncio.QueueFull:
         pass
-    event_type = str(payload.get("type") or "")
-    critical = bool(
-        payload.get("_error")
-        or event_type in {
-            "permission.asked",
-            "question.asked",
-            "session.run.completed",
-            "session.run.failed",
-            "session.run.cancelled",
-            "session.run.settled",
-            "server.snapshot",
-        }
-    )
+    critical = is_critical_remote_payload(payload)
     queued = getattr(event_queue, "_queue", ())
     if not critical and any(
         isinstance(item, dict)
@@ -477,11 +494,16 @@ def _offer_remote_payload(event_queue: asyncio.Queue, payload: dict) -> None:
         for item in queued
     ):
         return
-    try:
-        event_queue.get_nowait()
-        event_queue.task_done()
-    except asyncio.QueueEmpty:
+    queued = getattr(event_queue, "_queue", ())
+    removable = next((
+        item for item in queued
+        if isinstance(item, dict)
+        and not is_critical_remote_payload(item)
+    ), None)
+    if removable is None:
         return
+    queued.remove(removable)
+    event_queue._unfinished_tasks = max(0, event_queue._unfinished_tasks - 1)
     replacement = payload if critical else {
         "type": "server.event_gap",
         "properties": {
@@ -493,6 +515,106 @@ def _offer_remote_payload(event_queue: asyncio.Queue, payload: dict) -> None:
         event_queue.put_nowait(replacement)
     except asyncio.QueueFull:
         return
+
+
+class _InteractionTaskRegistry:
+    """Deduplicate pending permission/question prompts by request identity."""
+
+    def __init__(self, on_error=None) -> None:  # noqa: ANN001
+        self._tasks: dict[tuple[str, str], asyncio.Task] = {}
+        self._resolved: set[tuple[str, str]] = set()
+        self._failures: list[BaseException] = []
+        self._on_error = on_error
+
+    def register(self, kind: str, request_id: str, factory) -> asyncio.Task | None:  # noqa: ANN001
+        key = (str(kind), str(request_id))
+        if not key[1] or key in self._resolved:
+            return None
+        existing = self._tasks.get(key)
+        if existing is not None and not existing.done():
+            return existing
+        task = asyncio.create_task(factory())
+        self._tasks[key] = task
+
+        def settled(completed: asyncio.Task) -> None:
+            self._tasks.pop(key, None)
+            if completed.cancelled():
+                return
+            error = completed.exception()
+            if error is None:
+                self._resolved.add(key)
+                return
+            self._failures.append(error)
+            if callable(self._on_error):
+                self._on_error(error)
+
+        task.add_done_callback(settled)
+        return task
+
+    def cancel(self) -> None:
+        for task in tuple(self._tasks.values()):
+            if not task.done():
+                task.cancel()
+
+    async def wait(self, *, return_exceptions: bool = False) -> None:
+        tasks = tuple(self._tasks.values())
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        if not return_exceptions:
+            self.raise_if_failed()
+
+    def raise_if_failed(self) -> None:
+        if self._failures:
+            raise self._failures.pop(0)
+
+
+def _register_interaction_payload(
+    backend: RemoteTerminalBackend,
+    bridge: TerminalInteractionBridge,
+    payload: dict,
+    registry: _InteractionTaskRegistry,
+) -> asyncio.Task | None:
+    event_type = str(payload.get("type") or "")
+    properties = (
+        payload.get("properties")
+        if isinstance(payload.get("properties"), dict)
+        else {}
+    )
+    request_id = str(properties.get("id") or "")
+    kind = "permission" if event_type == "permission.asked" else "question"
+    return registry.register(
+        kind,
+        request_id,
+        lambda: _resolve_remote_interaction(backend, bridge, payload),
+    )
+
+
+def _register_pending_interactions(
+    backend: RemoteTerminalBackend,
+    pending: dict[str, Any],
+    bridge: TerminalInteractionBridge,
+    registry: _InteractionTaskRegistry,
+) -> None:
+    """Register snapshot and live interactions through the same dedupe path."""
+    selected = pending if isinstance(pending, dict) else {}
+    for item in selected.get("permissions", []):
+        if not isinstance(item, dict):
+            continue
+        _register_interaction_payload(
+            backend,
+            bridge,
+            {"type": "permission.asked", "properties": dict(item)},
+            registry,
+        )
+    for item in selected.get("questions", []):
+        if not isinstance(item, dict):
+            continue
+        _register_interaction_payload(
+            backend,
+            bridge,
+            {"type": "question.asked", "properties": dict(item)},
+            registry,
+        )
 
 
 async def _resolve_remote_interaction(
