@@ -19,6 +19,8 @@ class MessagePartReducer:
         self._messages: dict[str, list[dict]] = {}
         self._message_order: list[str] = []
         self._generation: dict[str, int] = {}
+        self._interaction_run_id = ""
+        self._tombstones: set[tuple[str, str]] = set()
         self._last_sequence = 0
         self._seen_event_ids: set[str] = set()
         self._seen_event_order: deque[str] = deque()
@@ -46,13 +48,21 @@ class MessagePartReducer:
         self._messages.clear()
         self._message_order.clear()
         self._generation.clear()
+        self._interaction_run_id = ""
+        self._tombstones.clear()
         self._last_sequence = 0
         self._seen_event_ids.clear()
         self._seen_event_order.clear()
         self._seen_deltas.clear()
         self._seen_delta_order.clear()
 
-    def replace_snapshot(self, records: list[dict] | None) -> None:
+    def replace_snapshot(
+        self,
+        records: list[dict] | None,
+        *,
+        interaction_run_id: str = "",
+        last_sequence: int = 0,
+    ) -> None:
         """Atomically replace state from an authoritative message snapshot."""
         messages: dict[str, list[dict]] = {}
         order: list[str] = []
@@ -62,6 +72,9 @@ class MessagePartReducer:
                 continue
             info = record.get("info")
             if not isinstance(info, dict) or info.get("role") != "assistant":
+                continue
+            record_interaction = str(info.get("interaction_run_id") or "")
+            if interaction_run_id and record_interaction != interaction_run_id:
                 continue
             message_id = str(info.get("id") or "")
             if not message_id or message_id in messages:
@@ -95,12 +108,33 @@ class MessagePartReducer:
         self._messages = messages
         self._message_order = order
         self._generation = generations
+        self._interaction_run_id = str(interaction_run_id or "")
+        self._last_sequence = max(0, self._integer(last_sequence))
+        self._tombstones.clear()
         self._seen_deltas.clear()
         self._seen_delta_order.clear()
 
     def apply_event(self, event: Any) -> bool:
         """Apply one Session event and report whether logical state changed."""
-        event_type, properties, event_id, sequence = self._event_fields(event)
+        event_type, properties, event_id, sequence, meta_interaction = (
+            self._event_fields(event)
+        )
+        event_part = properties.get("part")
+        event_part = event_part if isinstance(event_part, dict) else {}
+        event_interaction = str(
+            properties.get("interaction_run_id")
+            or properties.get("run_id")
+            or event_part.get("interaction_run_id")
+            or event_part.get("run_id")
+            or meta_interaction
+            or ""
+        )
+        if (
+            self._interaction_run_id
+            and event_interaction
+            and event_interaction != self._interaction_run_id
+        ):
+            return False
         if event_id and not self._remember_event(event_id):
             return False
         if sequence and sequence <= self._last_sequence:
@@ -138,6 +172,8 @@ class MessagePartReducer:
         part_id = str(value.get("id") or "")
         if not message_id or not part_id:
             return False
+        if (message_id, part_id) in self._tombstones:
+            return False
         incoming = copy.deepcopy(value)
         incoming["message_id"] = message_id
         incoming.setdefault("status", default_status)
@@ -153,6 +189,10 @@ class MessagePartReducer:
         for index, existing in enumerate(parts):
             if existing.get("id") != part_id:
                 continue
+            if not self._same_attempt(existing, incoming):
+                return False
+            if existing.get("status") in {"completed", "removed"}:
+                return False
             existing_version = self._integer(existing.get("version"))
             incoming_version = self._integer(incoming.get("version"))
             if incoming_version < existing_version:
@@ -193,6 +233,9 @@ class MessagePartReducer:
             return self._complete({
                 "message_id": selected_message_id,
                 "part_id": completed.get("id"),
+                "interaction_run_id": completed.get("interaction_run_id"),
+                "attempt_id": completed.get("attempt_id"),
+                "generation_id": completed.get("generation_id"),
                 "generation": completed.get("generation"),
                 "version": completed.get("version"),
             })
@@ -208,6 +251,8 @@ class MessagePartReducer:
         for existing in self._messages.get(message_id, ()):
             if existing.get("id") != part_id:
                 continue
+            if not self._same_attempt(existing, properties):
+                return False
             incoming_version = self._integer(properties.get("version"))
             existing_version = self._integer(existing.get("version"))
             if incoming_version and incoming_version < existing_version:
@@ -243,6 +288,8 @@ class MessagePartReducer:
             return False
         parts = self._message_parts(message_id)
         part = next((item for item in parts if item.get("id") == part_id), None)
+        if (message_id, part_id) in self._tombstones:
+            return False
         if part is None:
             part = {
                 "id": part_id,
@@ -261,6 +308,13 @@ class MessagePartReducer:
         if self._integer(part.get("generation")) != generation:
             return False
         if attempt_id and str(part.get("attempt_id") or "") not in {"", attempt_id}:
+            return False
+        if generation_id and str(part.get("generation_id") or "") not in {
+            "",
+            generation_id,
+        }:
+            return False
+        if part.get("status") in {"completed", "removed"}:
             return False
         incoming_version = self._integer(properties.get("version"))
         if incoming_version and incoming_version <= self._integer(part.get("version")):
@@ -285,13 +339,40 @@ class MessagePartReducer:
         parts = self._messages.get(message_id)
         if not parts:
             return False
+        existing = next(
+            (part for part in parts if part.get("id") == part_id),
+            None,
+        )
+        if existing is None or not self._same_attempt(existing, properties):
+            return False
+        generation = self._integer(properties.get("generation"))
+        existing_generation = self._integer(existing.get("generation"))
+        if generation < existing_generation:
+            return False
+        incoming_version = self._integer(properties.get("version"))
+        if incoming_version and incoming_version < self._integer(existing.get("version")):
+            return False
         retained = [part for part in parts if part.get("id") != part_id]
         if len(retained) == len(parts):
             return False
         self._messages[message_id] = retained
-        generation = self._integer(properties.get("generation"))
+        self._tombstones.add((message_id, part_id))
         if generation > self._generation.get(message_id, 0):
             self._generation[message_id] = generation
+        return True
+
+    @staticmethod
+    def _same_attempt(current: dict, incoming: dict) -> bool:
+        """Require all supplied opaque identities to agree."""
+        for key in (
+            "interaction_run_id",
+            "attempt_id",
+            "generation_id",
+        ):
+            existing = str(current.get(key) or "")
+            candidate = str(incoming.get(key) or "")
+            if existing and candidate and existing != candidate:
+                return False
         return True
 
     def _advance_generation(self, message_id: str, generation: int) -> None:
@@ -328,7 +409,7 @@ class MessagePartReducer:
         return True
 
     @staticmethod
-    def _event_fields(event: Any) -> tuple[str, dict, str, int]:
+    def _event_fields(event: Any) -> tuple[str, dict, str, int, str]:
         if isinstance(event, dict):
             meta = event.get("meta") if isinstance(event.get("meta"), dict) else {}
             properties = (
@@ -343,6 +424,7 @@ class MessagePartReducer:
                 MessagePartReducer._integer(
                     meta.get("sequence", event.get("sequence"))
                 ),
+                str(meta.get("interaction_run_id") or meta.get("run_id") or ""),
             )
         return (
             str(getattr(event, "type", "") or ""),
@@ -351,6 +433,7 @@ class MessagePartReducer:
             else {},
             str(getattr(event, "event_id", "") or ""),
             MessagePartReducer._integer(getattr(event, "sequence", 0)),
+            str(getattr(event, "run_id", "") or ""),
         )
 
     @staticmethod
@@ -367,9 +450,16 @@ class MessagePartReducer:
     @staticmethod
     def _updated_status(part: dict, *, snapshot: bool = False) -> str:
         timing = part.get("time") if isinstance(part.get("time"), dict) else {}
-        if "end" in timing or snapshot:
+        explicit = part.get("status")
+        if explicit in {"pending", "streaming", "completed", "error", "removed"}:
+            return str(explicit)
+        if part.get("removed") is True:
+            return "removed"
+        if "end" in timing:
             return "completed"
-        return "streaming"
+        if "start" in timing:
+            return "streaming"
+        return "pending" if snapshot else "streaming"
 
     @staticmethod
     def _integer(value: Any) -> int:

@@ -27,6 +27,15 @@ _JOURNAL_CLOSED = object()
 _JOURNAL_READ_BYTES = 16 * 1024 * 1024
 
 
+def _critical_journal_event(event_type: str) -> bool:
+    return event_type in {
+        "session.run.completed",
+        "session.run.failed",
+        "session.run.cancelled",
+        "session.disposed",
+    }
+
+
 def _safe_event_properties(properties: dict[str, Any]) -> dict[str, Any]:
     """Detach metadata and guarantee strict-JSON live/replay transport values."""
     payload = json_safe_value(properties)
@@ -87,6 +96,7 @@ class SessionEvent:
                 "timestamp": self.timestamp,
                 "session_id": self.session_id,
                 "run_id": self.run_id,
+                "interaction_run_id": self.run_id,
                 "agent_id": self.agent_id,
             },
         }
@@ -110,7 +120,11 @@ class SessionEvent:
         timestamp = meta.get("timestamp")
         schema_version = meta.get("schema_version")
         event_id = meta.get("event_id")
-        identity = [meta.get(name) for name in ("session_id", "run_id", "agent_id")]
+        identity = [
+            meta.get("session_id"),
+            meta.get("interaction_run_id") or meta.get("run_id"),
+            meta.get("agent_id"),
+        ]
         if (
             not isinstance(sequence, int)
             or isinstance(sequence, bool)
@@ -150,11 +164,20 @@ class _EventJournal:
         self.last_sequence = 0
         self._handle = None
         self._entry_count = 0
-        self._queue: queue.Queue = queue.Queue()
+        # Keep a small terminal/sentinel reserve without ever evicting an
+        # event whose append() already returned True. Ordinary high-frequency
+        # events are rejected at the soft limit and may be reconstructed from
+        # the authoritative snapshot.
+        self._ordinary_queue_limit = max(1024, self.max_entries * 4)
+        self._queue: queue.Queue = queue.Queue(
+            maxsize=self._ordinary_queue_limit + 64
+        )
         self._worker: threading.Thread | None = None
         self._worker_lock = threading.Lock()
         self._closing = False
         self._failed = False
+        self._failure: BaseException | None = None
+        self._writer_recent: deque[SessionEvent] = deque(maxlen=self.capacity)
 
     def load(self) -> list[SessionEvent]:
         # Only expose the final contiguous, valid suffix for cursor replay. If
@@ -195,13 +218,18 @@ class _EventJournal:
                     self._entry_count = self.max_entries
         except OSError:
             return []
+        self._writer_recent = deque(recent, maxlen=self.capacity)
         return list(recent)
 
-    def append(self, event: SessionEvent, recent: list[SessionEvent]) -> None:
+    def append(
+        self,
+        event: SessionEvent,
+        recent: list[SessionEvent] | None = None,
+    ) -> bool:
         """Queue one immutable record without blocking the EventBus lock."""
         with self._worker_lock:
             if self._closing or self._failed:
-                return
+                return False
             if self._worker is None:
                 self._worker = threading.Thread(
                     target=self._run_writer,
@@ -209,7 +237,45 @@ class _EventJournal:
                     daemon=True,
                 )
                 self._worker.start()
-        self._queue.put_nowait((event, recent))
+            # The enqueue belongs to the same state transition as the closing
+            # check. This guarantees the close sentinel follows every accepted
+            # record.
+            if (
+                not _critical_journal_event(event.type)
+                and self._queue.qsize() >= self._ordinary_queue_limit
+            ):
+                return False
+            try:
+                self._queue.put_nowait(event)
+                return True
+            except queue.Full:
+                if not _critical_journal_event(event.type):
+                    return False
+                # Reaching the physical limit requires either a burst of
+                # terminal events or an out-of-band queue producer: ordinary
+                # append() calls stop at the lower soft limit. Preserve the
+                # terminal transition by replacing one reconstructible event.
+                if not self._discard_one_ordinary_queued_event():
+                    return False
+                try:
+                    self._queue.put_nowait(event)
+                    return True
+                except queue.Full:
+                    return False
+
+    def _discard_one_ordinary_queued_event(self) -> bool:
+        """Make emergency room for a terminal event at physical capacity."""
+        with self._queue.mutex:
+            for index, queued in enumerate(self._queue.queue):
+                if (
+                    isinstance(queued, SessionEvent)
+                    and not _critical_journal_event(queued.type)
+                ):
+                    del self._queue.queue[index]
+                    self._queue.unfinished_tasks -= 1
+                    self._queue.not_full.notify()
+                    return True
+        return False
 
     def _run_writer(self) -> None:
         """Serialize journal records in event order on the sole writer thread."""
@@ -220,12 +286,11 @@ class _EventJournal:
                     return
                 if self._failed:
                     continue
-                event, recent = item
-                self._append_sync(event, recent)
+                self._append_sync(item)
             finally:
                 self._queue.task_done()
 
-    def _append_sync(self, event: SessionEvent, recent: list[SessionEvent]) -> None:
+    def _append_sync(self, event: SessionEvent) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if self._handle is None:
@@ -239,12 +304,14 @@ class _EventJournal:
                 ) + "\n"
             )
             self._entry_count += 1
+            self._writer_recent.append(event)
             if self._entry_count >= self.max_entries:
-                self._compact(recent)
+                self._compact(list(self._writer_recent))
         except Exception:
             # Journaling is a replay optimization. Extension metadata with an
             # unsupported or cyclic value must not abort live Agent delivery.
             self._failed = True
+            self._failure = RuntimeError("event journal writer failed")
             self._close_handle()
 
     def close(self) -> None:
@@ -255,10 +322,27 @@ class _EventJournal:
             self._closing = True
             worker = self._worker
             if worker is not None:
-                self._queue.put_nowait(_JOURNAL_CLOSED)
+                try:
+                    self._queue.put(_JOURNAL_CLOSED, timeout=1.0)
+                except queue.Full:
+                    self._failed = True
+                    self._failure = RuntimeError(
+                        "event journal close queue remained full"
+                    )
         if worker is not None and worker is not threading.current_thread():
-            worker.join()
+            worker.join(timeout=5.0)
+            is_alive = getattr(worker, "is_alive", None)
+            if callable(is_alive) and is_alive():
+                self._failed = True
+                self._failure = RuntimeError(
+                    "event journal writer did not close within timeout"
+                )
         self._close_handle()
+
+    @property
+    def failure(self) -> BaseException | None:
+        """Expose asynchronous persistence failure to the owning service."""
+        return self._failure
 
     def _close_handle(self) -> None:
         handle = self._handle
@@ -625,7 +709,7 @@ class SessionEventBus:
         )
         self._recent.append(event)
         if self._journal is not None:
-            self._journal.append(event, list(self._recent))
+            self._journal.append(event)
         # Queue fan-out stays in the sequence critical section so two
         # publisher threads cannot deliver event N+1 before event N.
         # _offer() is strictly non-blocking and each queue is bounded.
@@ -641,6 +725,12 @@ class SessionEventBus:
             return []
         with self._lock:
             return list(self._recent)[-bounded:]
+
+    @property
+    def journal_failure(self) -> BaseException | None:
+        """Return an asynchronous persistence failure, if journaling failed."""
+        journal = self._journal
+        return journal.failure if journal is not None else None
 
     def _unsubscribe(self, subscription: SessionSubscription) -> None:
         with self._lock:

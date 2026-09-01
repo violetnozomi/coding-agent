@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import copy
+import uuid
 
 from nz_coder.protocol.message_schema import (
+    INTERACTION_RUN_ID_KEY,
     MESSAGE_ID_KEY,
     cleanup_incomplete_tool_history,
 )
@@ -43,11 +45,26 @@ class SessionRuntime:
             _reconcile_transcript(session, list(request.messages))
         session.begin_run()
         metadata = copy.deepcopy(request.metadata)
+        interaction_run_id = (
+            request.interaction_run_id
+            or _interaction_id(metadata.get("interaction_run_id"))
+            or f"interaction-{uuid.uuid4().hex}"
+        )
+        metadata["interaction_run_id"] = interaction_run_id
         metadata["session_open"] = open_state
+        for message in reversed(session.transcript):
+            if (
+                isinstance(message, dict)
+                and message.get("role") == "user"
+                and not message.get("_nz_synthetic")
+            ):
+                message[INTERACTION_RUN_ID_KEY] = interaction_run_id
+                break
         return RunContext(
             request=request,
             session=session,
             active_agent=request.agent.name,
+            interaction_run_id=interaction_run_id,
             metadata=metadata,
         )
 
@@ -58,6 +75,8 @@ class SessionRuntime:
     ) -> None:
         """Persist one settled non-terminal state from the live RunContext."""
         self._validate_context(context)
+        if context.finalized or context.terminal_status is not None:
+            return
         normalized = _session_status(status)
         if normalized.terminal:
             self._clean_tool_history(context)
@@ -103,6 +122,10 @@ class SessionRuntime:
 def _parent_session_id(metadata: dict) -> str | None:
     value = metadata.get("parent_session_id")
     return value if isinstance(value, str) and value else None
+
+
+def _interaction_id(value: object) -> str | None:
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def _session_metadata(request: RunRequest) -> dict:

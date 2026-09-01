@@ -5,6 +5,7 @@ import asyncio
 import json
 import queue
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
@@ -54,6 +55,7 @@ def test_session_event_envelope_sequence_identity_and_copy():
         "timestamp": first.timestamp,
         "session_id": "session-a",
         "run_id": "run-a",
+        "interaction_run_id": "run-a",
         "agent_id": "agent-a",
     }
     assert subscription.get(timeout=0.1) == first
@@ -1317,11 +1319,130 @@ def test_stream_retry_settles_incomplete_tool_part(tmp_path, monkeypatch):
 
     assert result["status"] == "completed"
     assistant = next(message for message in messages if message.get("role") == "assistant")
-    tool = next(part for part in assistant["_nz_parts"] if part["type"] == "tool")
     retry = next(part for part in assistant["_nz_parts"] if part["type"] == "retry")
-    assert tool["state"]["status"] == "error"
-    assert "temporary connection reset" in tool["state"]["error"]
+    assert all(part["type"] != "tool" for part in assistant["_nz_parts"])
+    assert "call-incomplete" not in repr(messages)
     assert retry["attempt"] == 1
     assert assistant["content"] == "recovered"
 
     agent.close()
+
+
+def test_journal_append_close_race_does_not_lose_accepted_event(tmp_path):
+    """An accepted event must enter the queue before the close sentinel."""
+    from nz_coder.protocol.session_events import (
+        SessionEvent,
+        _EventJournal,
+        _JOURNAL_CLOSED,
+    )
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    class OrderedQueue:
+        def __init__(self) -> None:
+            self.items = []
+
+        def put_nowait(self, item) -> None:
+            if item is not _JOURNAL_CLOSED:
+                entered.set()
+                assert release.wait(2)
+            self.items.append(item)
+
+        def put(self, item, timeout=None) -> None:
+            self.put_nowait(item)
+
+    class JoinedWorker:
+        def join(self, timeout=None) -> None:
+            return None
+
+    journal = _EventJournal(tmp_path / "events.jsonl", 8, "session-race")
+    ordered = OrderedQueue()
+    journal._queue = ordered
+    journal._worker = JoinedWorker()
+    event = SessionEvent(
+        type="session.run.completed",
+        properties={"status": "completed"},
+        sequence=1,
+        timestamp=1.0,
+        session_id="session-race",
+        run_id="interaction-race",
+        agent_id="agent-race",
+        event_id="event-race",
+    )
+
+    append_thread = threading.Thread(target=journal.append, args=(event,))
+    append_thread.start()
+    assert entered.wait(1)
+    close_thread = threading.Thread(target=journal.close)
+    close_thread.start()
+    time.sleep(0.02)
+    release.set()
+    append_thread.join(1)
+    close_thread.join(1)
+
+    assert ordered.items == [event, _JOURNAL_CLOSED]
+
+
+def test_journal_close_is_idempotent(tmp_path):
+    from nz_coder.protocol.session_events import _EventJournal
+
+    journal = _EventJournal(tmp_path / "idempotent.jsonl", 4, "session")
+    journal.close()
+    journal.close()
+
+    assert journal._closing is True
+
+
+def test_journal_queue_is_bounded(tmp_path):
+    from nz_coder.protocol.session_events import _EventJournal
+
+    journal = _EventJournal(tmp_path / "bounded.jsonl", 4, "session")
+
+    assert journal._queue.maxsize > 0
+    assert journal._queue.maxsize <= 4096
+
+
+def test_journal_terminal_event_is_not_dropped(tmp_path):
+    from nz_coder.protocol.session_events import SessionEvent, _EventJournal
+
+    journal = _EventJournal(tmp_path / "terminal.jsonl", 1, "session")
+    journal._worker = SimpleNamespace(join=lambda timeout=None: None)
+    for index in range(journal._queue.maxsize):
+        journal._queue.put_nowait(SessionEvent(
+            type="message.part.delta",
+            properties={"index": index},
+            sequence=index + 1,
+            timestamp=1.0,
+            session_id="session",
+            run_id="interaction",
+            agent_id="agent",
+            event_id=f"event-{index}",
+        ))
+    terminal = SessionEvent(
+        type="session.run.completed",
+        properties={"status": "completed"},
+        sequence=journal._queue.maxsize + 1,
+        timestamp=2.0,
+        session_id="session",
+        run_id="interaction",
+        agent_id="agent",
+        event_id="event-terminal",
+    )
+
+    assert journal.append(terminal) is True
+    assert terminal in list(journal._queue.queue)
+
+
+def test_session_event_bus_exposes_journal_failure(tmp_path):
+    from nz_coder.protocol.session_events import SessionEventBus
+
+    bus = SessionEventBus(
+        session_id="session",
+        replay_capacity=4,
+        journal_path=tmp_path / "events.jsonl",
+    )
+    expected = RuntimeError("writer unavailable")
+    bus._journal._failure = expected
+
+    assert bus.journal_failure is expected

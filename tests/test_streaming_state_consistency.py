@@ -555,6 +555,501 @@ def test_output_guardrail_audit_never_records_private_reason():
     assert records[0][1]["reason_provided"] is True
 
 
+def test_streamed_tool_arguments_remain_private_until_approved():
+    """Raw streamed tool JSON never reaches SessionProcessor before admission."""
+    import threading
+
+    from nz_coder.runtime.execution.stream_state import StreamAttemptBuffer
+
+    published = []
+    processor = SimpleNamespace(
+        stream_tool_delta=lambda *args, **kwargs: published.append((args, kwargs)),
+    )
+    identity = {
+        "run_id": "run-1",
+        "message_id": "msg-1",
+        "part_id": "part-1",
+        "attempt_id": "attempt-1",
+        "generation_id": "generation-1",
+        "generation": 0,
+    }
+    host = SimpleNamespace(
+        _message_part_matches=lambda _part, candidate: candidate == identity,
+        _message_part_identity=lambda _part: dict(identity),
+    )
+    part = {**identity, "lock": threading.RLock()}
+    attempt = StreamAttemptBuffer(host, part, processor=processor, publish=True)
+
+    assert attempt.update_tool(0, {
+        "id": "call-1",
+        "function": {"name": "shell", "arguments": '{"token":"raw-secret"}'},
+    }) is True
+    assert published == []
+
+
+def test_agent_as_tool_output_is_not_user_visible():
+    """Internal child output remains private in the public message projection."""
+    from nz_coder.protocol.message_schema import (
+        attach_message_identity,
+        message_records,
+    )
+
+    message = {
+        "role": "assistant",
+        "content": "child-private-answer",
+        "_nz_internal": True,
+        "_nz_visible": False,
+    }
+    attach_message_identity(message, session_id="session-child")
+
+    assert message_records([message], "session-child") == []
+
+
+def test_all_parts_in_one_turn_share_interaction_run_id():
+    from nz_coder.runtime.session.session_processor import SessionProcessor
+
+    assistant = {
+        "role": "assistant",
+        "content": "",
+        "_nz_interaction_run_id": "interaction-one",
+    }
+    attach_message_identity(assistant, session_id="session-interaction")
+    processor = SessionProcessor(assistant)
+    processor.start_step()
+    processor.stream_text("answer", part_id="part-answer")
+    processor.finish_step("stop")
+
+    assert assistant[PARTS_KEY]
+    assert {
+        part.get("interaction_run_id")
+        for part in assistant[PARTS_KEY]
+    } == {"interaction-one"}
+
+
+def test_remote_snapshot_only_rebases_current_run():
+    """The current-answer reducer accepts only the active interaction records."""
+    reducer = MessagePartReducer()
+    records = [
+        {
+            "info": {
+                "id": "msg-old",
+                "role": "assistant",
+                "interaction_run_id": "interaction-old",
+            },
+            "parts": [{
+                "id": "part-old",
+                "message_id": "msg-old",
+                "type": "text",
+                "text": "OLD ANSWER",
+                "interaction_run_id": "interaction-old",
+                "status": "completed",
+            }],
+        },
+        {
+            "info": {
+                "id": "msg-current",
+                "role": "assistant",
+                "interaction_run_id": "interaction-current",
+            },
+            "parts": [{
+                "id": "part-current",
+                "message_id": "msg-current",
+                "type": "text",
+                "text": "CURRENT",
+                "interaction_run_id": "interaction-current",
+                "status": "completed",
+            }],
+        },
+    ]
+
+    reducer.replace_snapshot(
+        records,
+        interaction_run_id="interaction-current",
+    )
+
+    assert reducer.visible_text == "CURRENT"
+
+
+def test_in_progress_snapshot_part_remains_streaming():
+    """Taking a snapshot is not itself a completion signal."""
+    reducer = MessagePartReducer()
+    reducer.replace_snapshot([{
+        "info": {"id": "msg-live", "role": "assistant"},
+        "parts": [{
+            "id": "part-live",
+            "message_id": "msg-live",
+            "type": "text",
+            "text": "partial",
+            "time": {"start": 1.0},
+        }],
+    }])
+
+    assert reducer.parts("msg-live")[0]["status"] == "streaming"
+
+
+def test_mismatched_generation_id_is_rejected():
+    """A numeric generation match cannot authorize another generation UUID."""
+    reducer = MessagePartReducer()
+    reducer.replace_snapshot([{
+        "info": {"id": "msg-live", "role": "assistant"},
+        "parts": [{
+            "id": "part-live",
+            "message_id": "msg-live",
+            "type": "text",
+            "text": "approved",
+            "attempt_id": "attempt-new",
+            "generation_id": "generation-new",
+            "generation": 2,
+            "version": 2,
+            "status": "streaming",
+        }],
+    }])
+
+    changed = reducer.apply_event(_event(
+        "message.part.delta",
+        {
+            "message_id": "msg-live",
+            "part_id": "part-live",
+            "field": "text",
+            "delta": "-stale",
+            "attempt_id": "attempt-new",
+            "generation_id": "generation-old",
+            "generation": 2,
+            "version": 3,
+            "delta_sequence": 1,
+        },
+        event_id="generation-mismatch",
+        sequence=1,
+    ))
+
+    assert changed is False
+    assert reducer.visible_text == "approved"
+
+
+def test_removed_part_cannot_be_revived_by_old_delta():
+    reducer = MessagePartReducer()
+    created = _event(
+        "message.part.updated",
+        {"message_id": "msg-live", "part": {
+            "id": "part-live", "message_id": "msg-live", "type": "text",
+            "text": "partial", "attempt_id": "attempt-1",
+            "generation_id": "generation-1", "generation": 1, "version": 1,
+        }},
+        event_id="created-live", sequence=1,
+    )
+    removed = _event(
+        "message.part.removed",
+        {"message_id": "msg-live", "part_id": "part-live",
+         "attempt_id": "attempt-1", "generation_id": "generation-1",
+         "generation": 1, "version": 1},
+        event_id="removed-live", sequence=2,
+    )
+    reducer.apply_event(created)
+    reducer.apply_event(removed)
+
+    changed = reducer.apply_event(_event(
+        "message.part.delta",
+        {"message_id": "msg-live", "part_id": "part-live", "delta": "stale",
+         "attempt_id": "attempt-1", "generation_id": "generation-1",
+         "generation": 1, "version": 2, "delta_sequence": 1},
+        event_id="late-live", sequence=3,
+    ))
+
+    assert changed is False
+    assert reducer.visible_text == ""
+
+
+def test_completed_part_rejects_old_delta():
+    reducer = MessagePartReducer()
+    reducer.replace_snapshot([{
+        "info": {"id": "msg-done", "role": "assistant"},
+        "parts": [{
+            "id": "part-done", "message_id": "msg-done", "type": "text",
+            "text": "done", "status": "completed", "attempt_id": "attempt-1",
+            "generation_id": "generation-1", "generation": 1, "version": 3,
+        }],
+    }])
+
+    changed = reducer.apply_event(_event(
+        "message.part.delta",
+        {"message_id": "msg-done", "part_id": "part-done", "delta": "late",
+         "attempt_id": "attempt-1", "generation_id": "generation-1",
+         "generation": 1, "version": 4, "delta_sequence": 1},
+        event_id="late-completed", sequence=1,
+    ))
+
+    assert changed is False
+    assert reducer.visible_text == "done"
+
+
+def test_mismatched_attempt_id_is_rejected():
+    reducer = MessagePartReducer()
+    reducer.replace_snapshot([{
+        "info": {"id": "msg-attempt", "role": "assistant"},
+        "parts": [{
+            "id": "part-attempt", "message_id": "msg-attempt",
+            "type": "text", "text": "approved", "status": "streaming",
+            "attempt_id": "attempt-new", "generation_id": "generation-1",
+            "generation": 1, "version": 1,
+        }],
+    }])
+
+    changed = reducer.apply_event(_event(
+        "message.part.delta",
+        {
+            "message_id": "msg-attempt", "part_id": "part-attempt",
+            "delta": " leaked", "attempt_id": "attempt-old",
+            "generation_id": "generation-1", "generation": 1,
+            "version": 2, "delta_sequence": 1,
+        },
+        event_id="attempt-mismatch", sequence=1,
+    ))
+
+    assert changed is False
+    assert reducer.visible_text == "approved"
+
+
+def test_snapshot_then_old_replay_event_is_idempotent():
+    reducer = MessagePartReducer()
+    reducer.replace_snapshot([{
+        "info": {"id": "msg-snapshot", "role": "assistant"},
+        "parts": [{
+            "id": "part-snapshot", "message_id": "msg-snapshot",
+            "type": "text", "text": "current", "status": "streaming",
+            "attempt_id": "attempt-1", "generation_id": "generation-1",
+            "generation": 1, "version": 4,
+        }],
+    }], last_sequence=10)
+
+    changed = reducer.apply_event(_event(
+        "message.part.delta",
+        {
+            "message_id": "msg-snapshot", "part_id": "part-snapshot",
+            "delta": "old", "attempt_id": "attempt-1",
+            "generation_id": "generation-1", "generation": 1,
+            "version": 3, "delta_sequence": 3,
+        },
+        event_id="old-replay", sequence=9,
+    ))
+
+    assert changed is False
+    assert reducer.visible_text == "current"
+
+
+def test_raw_tool_arguments_not_published_before_guardrail(tmp_path, monkeypatch):
+    """Tool policy observes no raw envelope and only its rewrite becomes public."""
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.guardrails import ToolGuardrail
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.execution.loop import AgentLoop
+
+    raw_arguments = '{"path":"raw-secret-path","depth":1}'
+    tool_call = SimpleNamespace(
+        index=0,
+        id="call-private-tool",
+        function=SimpleNamespace(name="list_directory", arguments=raw_arguments),
+        provider_extra=None,
+    )
+    responses = [
+        iter([SimpleNamespace(choices=[SimpleNamespace(
+            finish_reason="tool_calls",
+            delta=SimpleNamespace(
+                content=None,
+                tool_calls=[tool_call],
+                reasoning_content=None,
+            ),
+        )])]),
+        iter([SimpleNamespace(choices=[SimpleNamespace(
+            finish_reason="stop",
+            delta=SimpleNamespace(
+                content="done",
+                tool_calls=None,
+                reasoning_content=None,
+            ),
+        )])]),
+    ]
+
+    class Completions:
+        def create(self, **_kwargs):
+            return responses.pop(0)
+
+    seen_messages = []
+
+    async def rewrite(call, context):
+        seen_messages.append(copy.deepcopy(context["messages"]))
+        assert "raw-secret-path" not in repr(context["messages"])
+        rewritten = copy.deepcopy(call)
+        rewritten["function"]["arguments"] = '{"path":".","depth":1}'
+        return {"action": "rewrite", "payload": rewritten}
+
+    graph = AgentGraph([
+        AgentSpec(
+            "worker",
+            "WORKER",
+            guardrails=(ToolGuardrail("rewrite-private", before_tool=rewrite),),
+        ),
+    ], start="worker")
+    bus = SessionEventBus(session_id="private-tool-boundary")
+    subscription = bus.subscribe()
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    agent = AgentLoop(
+        "unused",
+        permission_mode="auto",
+        client=SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+        trace_enabled=False,
+        session_id="private-tool-boundary",
+        event_bus=bus,
+        agent_graph=graph,
+    )
+    messages = [{"role": "user", "content": "inspect"}]
+    try:
+        result = asyncio.run(agent.run(messages, stream=True))
+        events = _drain(subscription)
+    finally:
+        agent.close()
+
+    assert result["status"] == "completed"
+    assert seen_messages
+    public = repr(messages) + repr([event.properties for event in events])
+    assert "raw-secret-path" not in public
+    assert "\\\"path\\\":\\\".\\\"" in public or "'path': '.'" in public
+
+
+def test_tool_guardrail_block_does_not_expose_raw_input(tmp_path, monkeypatch):
+    """A blocked call publishes structural policy state, not input or reason."""
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.guardrails import ToolGuardrail
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.execution.loop import AgentLoop
+
+    raw_arguments = '{"path":"token-raw-secret","depth":1}'
+    raw_reason = "reason-raw-secret"
+    tool_call = SimpleNamespace(
+        index=0,
+        id="call-blocked-tool",
+        function=SimpleNamespace(name="list_directory", arguments=raw_arguments),
+        provider_extra=None,
+    )
+    responses = [
+        iter([SimpleNamespace(choices=[SimpleNamespace(
+            finish_reason="tool_calls",
+            delta=SimpleNamespace(content=None, tool_calls=[tool_call], reasoning_content=None),
+        )])]),
+        iter([_chunk("recovered")]),
+    ]
+
+    class Completions:
+        def create(self, **_kwargs):
+            return responses.pop(0)
+
+    graph = AgentGraph([
+        AgentSpec(
+            "worker",
+            "WORKER",
+            guardrails=(ToolGuardrail(
+                "deny-private",
+                before_tool=lambda _call, _context: {
+                    "action": "block",
+                    "reason": raw_reason,
+                },
+            ),),
+        ),
+    ], start="worker")
+    bus = SessionEventBus(session_id="blocked-tool-boundary")
+    subscription = bus.subscribe()
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    agent = AgentLoop(
+        "unused",
+        permission_mode="auto",
+        client=SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+        trace_enabled=False,
+        session_id="blocked-tool-boundary",
+        event_bus=bus,
+        agent_graph=graph,
+    )
+    messages = [{"role": "user", "content": "inspect"}]
+    try:
+        asyncio.run(agent.run(messages, stream=True))
+        events = _drain(subscription)
+    finally:
+        agent.close()
+
+    public = repr(messages) + repr([event.properties for event in events])
+    assert "token-raw-secret" not in public
+    assert raw_reason not in public
+    assert "deny-private" in public
+
+
+def test_guardrail_reason_not_present_in_public_error():
+    from nz_coder.protocol.public_error import to_public_error
+    from nz_coder.runtime.agent.guardrails import GuardrailBlockedError
+
+    error = GuardrailBlockedError(
+        "redactor",
+        "output",
+        "private-reason-containing-token-secret",
+    )
+
+    public = to_public_error(error)
+
+    assert "token-secret" not in str(error)
+    assert "token-secret" not in repr(public.to_dict())
+    assert public.code == "guardrail_blocked"
+
+
+def test_guardrail_reason_not_present_in_event_journal(tmp_path, monkeypatch):
+    from nz_coder.foundation import config
+    from nz_coder.runtime.agent.guardrails import OutputGuardrail
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.execution.loop import AgentLoop
+
+    class Completions:
+        def create(self, **_kwargs):
+            return iter([_chunk("private-output")])
+
+    graph = AgentGraph([
+        AgentSpec(
+            "worker",
+            "WORKER",
+            guardrails=(OutputGuardrail(
+                "redactor",
+                lambda _message, _context: {
+                    "action": "block",
+                    "reason": "private-reason-token-secret",
+                },
+            ),),
+        ),
+    ], start="worker")
+    journal = tmp_path / "guardrail-events.jsonl"
+    bus = SessionEventBus(
+        session_id="guardrail-error-journal",
+        journal_path=journal,
+    )
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    agent = AgentLoop(
+        "unused",
+        permission_mode="auto",
+        client=SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+        trace_enabled=False,
+        session_id="guardrail-error-journal",
+        event_bus=bus,
+        agent_graph=graph,
+    )
+    try:
+        with pytest.raises(Exception):
+            asyncio.run(agent.run(
+                [{"role": "user", "content": "answer"}],
+                stream=True,
+            ))
+    finally:
+        agent.close()
+
+    persisted = journal.read_text(encoding="utf-8")
+    assert "private-output" not in persisted
+    assert "private-reason-token-secret" not in persisted
+    assert "guardrail_blocked" in persisted
+
+
 def test_stream_retry_removes_old_part_everywhere(tmp_path, monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.interface.timeline import latest_assistant_text
@@ -1023,6 +1518,44 @@ def test_gap_snapshot_rebase():
     assert projection.text == "accepted"
 
 
+def test_local_gap_rebase_only_restores_current_run():
+    """The authoritative gap-rebase regression is shared by both transports."""
+    test_gap_snapshot_rebase()
+
+
+def test_previous_assistant_answers_not_rendered_in_current_run():
+    from nz_coder.protocol.run_view_reducer import RunViewReducer
+
+    reducer = RunViewReducer()
+    reducer.replace_snapshot({
+        "interaction_run_id": "interaction-current",
+        "status": "running",
+        "messages": [{
+            "info": {
+                "id": "msg-old", "role": "assistant",
+                "interaction_run_id": "interaction-old",
+            },
+            "parts": [{
+                "id": "part-old", "message_id": "msg-old", "type": "text",
+                "text": "OLD ANSWER", "status": "completed",
+                "interaction_run_id": "interaction-old",
+            }],
+        }, {
+            "info": {
+                "id": "msg-current", "role": "assistant",
+                "interaction_run_id": "interaction-current",
+            },
+            "parts": [{
+                "id": "part-current", "message_id": "msg-current",
+                "type": "text", "text": "CURRENT", "status": "completed",
+                "interaction_run_id": "interaction-current",
+            }],
+        }],
+    })
+
+    assert reducer.visible_text == "CURRENT"
+
+
 def test_local_gap_rebases_from_authoritative_messages():
     from io import StringIO
 
@@ -1267,6 +1800,131 @@ def test_late_provider_result_after_cancel_is_ignored(tmp_path, monkeypatch):
     )
 
 
+def _late_callback_scenario(*, retry=False, events=()):
+    from nz_coder.runtime.conversation.model_result import LLMResult
+    from nz_coder.runtime.execution.provider_stream import project_streaming_turn
+    from nz_coder.runtime.model_gateway import (
+        ModelCallOutcome,
+        ModelStreamEvent,
+    )
+    from nz_coder.runtime.session.session_processor import SessionProcessor
+
+    active = {"value": True}
+    effects = {"retry": 0, "tool": 0, "checkpoint": 0}
+    identity = {
+        "run_id": "interaction-cancel",
+        "message_id": "msg-cancel",
+        "part_id": "part-cancel",
+        "attempt_id": "attempt-cancel",
+        "generation_id": "generation-cancel",
+        "generation": 1,
+    }
+    assistant = {"role": "assistant", "content": ""}
+    attach_message_identity(
+        assistant,
+        "msg-cancel",
+        session_id="session-cancel",
+    )
+    processor = SessionProcessor(assistant)
+    processor.fail_unsettled = lambda *_args: effects.__setitem__(
+        "retry", effects["retry"] + 1
+    )
+
+    class Gateway:
+        observer = None
+
+        def complete_stream_sync(self, _call, *, on_event, **_kwargs):
+            active["value"] = False
+            if retry:
+                self.observer("model_call_retry", {
+                    "streaming": True,
+                    "error": "late retry",
+                })
+            for kind, data in events:
+                on_event(ModelStreamEvent(kind, data))
+            return ModelCallOutcome.completed(finish_reason="stop")
+
+    gateway = Gateway()
+    host = SimpleNamespace(
+        _active_session_processor=processor,
+        _active_processor_messages=[assistant],
+        _message_part_identity=lambda _part: dict(identity),
+        _message_part_matches=lambda _part, _candidate: active["value"],
+        _message_part_is_retired=lambda _part: not active["value"],
+        _active_tool_specs=lambda: [],
+        _prompt_budget=lambda: SimpleNamespace(output_reserve_tokens=100),
+        _gateway=lambda **_kwargs: gateway,
+        _gateway_outcome_result=lambda _outcome: LLMResult(
+            content="", finish_reason="stop"
+        ),
+        _checkpoint_messages=lambda *_args: effects.__setitem__(
+            "checkpoint", effects["checkpoint"] + 1
+        ),
+        _discard_message_part=lambda *_args: active.__setitem__("value", False),
+        recovery=SimpleNamespace(record_success=lambda: None),
+        model_capabilities=SimpleNamespace(supports_tools=False),
+        provider_id="fake",
+    )
+    project_streaming_turn(
+        host,
+        [],
+        message_part={**identity, "lock": threading.RLock()},
+        stream_tool_handler=lambda _result: effects.__setitem__(
+            "tool", effects["tool"] + 1
+        ),
+    )
+    return effects, assistant
+
+
+def test_late_retry_observer_after_cancel_is_ignored():
+    effects, assistant = _late_callback_scenario(retry=True)
+
+    assert effects == {"retry": 0, "tool": 0, "checkpoint": 0}
+    assert assistant.get(PARTS_KEY, []) == []
+
+
+def test_late_finish_reason_after_cancel_is_ignored():
+    effects, _assistant = _late_callback_scenario(
+        events=(("finish", {"reason": "tool-calls"}),),
+    )
+
+    assert effects["tool"] == 0
+    assert effects["checkpoint"] == 0
+
+
+def test_late_tool_delta_after_cancel_is_ignored():
+    effects, assistant = _late_callback_scenario(events=(
+        ("tool_delta", {
+            "index": 0,
+            "call_id": "call-late",
+            "name": "bash",
+            "arguments": '{"command":"secret"}',
+        }),
+        ("finish", {"reason": "tool-calls"}),
+    ))
+
+    assert effects["tool"] == 0
+    assert "secret" not in repr(assistant)
+
+
+def test_late_checkpoint_after_cancel_is_not_written():
+    from nz_coder.runtime.execution.stream_state import StreamCheckpointScheduler
+
+    writes = []
+    scheduler = StreamCheckpointScheduler(
+        SimpleNamespace(_checkpoint_messages=lambda *_args: writes.append("write")),
+        [],
+        enabled=True,
+        interval_seconds=0.05,
+        min_chars=1,
+        active_check=lambda: False,
+    )
+    scheduler.note(10)
+
+    assert scheduler.flush(force=True) is False
+    assert writes == []
+
+
 def test_remote_cleanup_when_reconcile_fails(monkeypatch):
     from nz_coder.interface import remote
 
@@ -1326,7 +1984,7 @@ def test_remote_cleanup_when_reconcile_fails(monkeypatch):
         def begin_remote(self, _agent):
             pass
 
-        def rebase_remote(self, _messages=None):
+        def rebase_remote(self, _messages=None, **_kwargs):
             pass
 
         def feed(self, _event):

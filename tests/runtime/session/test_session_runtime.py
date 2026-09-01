@@ -110,6 +110,46 @@ def test_open_appends_a_new_activation_to_completed_durable_history(tmp_path):
     ]
 
 
+def test_each_user_submission_gets_new_interaction_run_id(tmp_path):
+    store = MemorySessionStore()
+    runtime = SessionRuntime(store)
+    first = asyncio.run(runtime.open(_request(
+        tmp_path,
+        [{"role": "user", "content": "first"}],
+    )))
+    first.session.finish(SessionStatus.COMPLETED)
+    first.session.mark_persisted()
+    store.existing = first.session
+
+    second = asyncio.run(runtime.open(_request(
+        tmp_path,
+        [{"role": "user", "content": "second"}],
+    )))
+
+    assert first.interaction_run_id != second.interaction_run_id
+    assert first.interaction_run_id.startswith("interaction-")
+    assert second.transcript[-1]["_nz_interaction_run_id"] == (
+        second.interaction_run_id
+    )
+
+
+def test_cancelled_run_cannot_transition_back_to_completed(tmp_path):
+    store = MemorySessionStore()
+    runtime = SessionRuntime(store)
+    context = asyncio.run(runtime.open(_request(
+        tmp_path,
+        [{"role": "user", "content": "cancel me"}],
+    )))
+    asyncio.run(runtime.finalize(context, RunStatus.CANCELLED))
+    saved = len(store.saved)
+
+    asyncio.run(runtime.checkpoint(context, SessionStatus.COMPLETED))
+
+    assert context.terminal_status is RunStatus.CANCELLED
+    assert context.session.status is SessionStatus.CANCELLED
+    assert len(store.saved) == saved
+
+
 def test_checkpoint_and_finalize_persist_owned_session_once(tmp_path):
     """The runtime owns non-terminal and exactly-once terminal persistence."""
     store = MemorySessionStore()
