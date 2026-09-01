@@ -1381,8 +1381,14 @@ def test_reasoning_part_updates_are_coalesced(tmp_path, monkeypatch):
         if event.properties.get("part", {}).get("type") == "reasoning"
     ]
     assert result.extra["reasoning_content"] == "r" * 200
-    assert len(reasoning_updates) < 20
-    assert reasoning_updates[-1].properties["part"]["text"] == "r" * 200
+    assert reasoning_updates == []
+    private_reasoning = [
+        part for part in assistant["_nz_parts"]
+        if part.get("type") == "reasoning"
+    ]
+    assert private_reasoning[-1]["text"] == "r" * 200
+    assert private_reasoning[-1]["internal"] is True
+    assert private_reasoning[-1]["visible"] is False
 
 
 def test_event_journal_compaction_never_blocks_event_bus_lock(
