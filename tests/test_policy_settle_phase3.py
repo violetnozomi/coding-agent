@@ -435,6 +435,148 @@ def test_settlement_completed_only_after_all_phases():
     ))
 
 
+def _after_side_effect_settlement(*, assistant=None, processor=None, retire=None):
+    selected_assistant = assistant or {"role": "assistant", "content": ""}
+    if "_nz_message_id" not in selected_assistant:
+        attach_message_identity(
+            selected_assistant,
+            "msg-after-side-effect",
+            session_id="session-policy",
+        )
+    selected_processor = processor or SessionProcessor(selected_assistant)
+    if not any(
+        part.get("type") == "step-start"
+        for part in selected_assistant.get("_nz_parts", [])
+    ):
+        selected_processor.start_step()
+    message_part = {
+        "part_id": "part-after-side-effect",
+        "retired": False,
+    }
+    retire_part = retire or (
+        lambda part, _reason: part.__setitem__("retired", True)
+    )
+    settlement = commit_boundary.FailedAttemptSettlement()
+    kwargs = {
+        "context": SimpleNamespace(
+            snapshots=SimpleNamespace(retire=lambda *_args: None),
+            messages=SimpleNamespace(
+                retire_message_part=retire_part,
+                publish_event=lambda *_args: None,
+            ),
+        ),
+        "services": SimpleNamespace(
+            session_runtime=SimpleNamespace(
+                checkpoint=lambda *_args: _record_async([], "error")
+            )
+        ),
+        "run_context": object(),
+        "assistant_message": selected_assistant,
+        "processor": selected_processor,
+        "message_part": message_part,
+        "public_error": PublicError(
+            "guardrail_review_required",
+            "Output requires policy review.",
+            metadata={"hook_point": "output"},
+        ),
+        "failure_kind": "output_guardrail",
+        "settlement": settlement,
+    }
+    return kwargs, settlement, selected_assistant, message_part
+
+
+def test_settlement_does_not_duplicate_after_publish_then_raise():
+    published = []
+    kwargs, settlement, assistant, _part = _after_side_effect_settlement()
+    failed = False
+
+    def publish(*args):
+        nonlocal failed
+        published.append(args)
+        if not failed:
+            failed = True
+            raise RuntimeError("publish failed after accepting event")
+
+    kwargs["context"].messages.publish_event = publish
+
+    async def exercise():
+        with pytest.raises(RuntimeError, match="after accepting"):
+            await commit_boundary.settle_failed_attempt(**kwargs)
+        assert settlement.error_attached is True
+        assert await commit_boundary.settle_failed_attempt(**kwargs) is True
+
+    asyncio.run(exercise())
+    assert len(published) == 1
+    assert assistant["_nz_assistant_error"]["name"] == "OutputGuardrailError"
+
+
+def test_finish_step_does_not_duplicate_after_mutate_then_raise():
+    assistant = {"role": "assistant", "content": ""}
+    attach_message_identity(
+        assistant,
+        "msg-finish-after-effect",
+        session_id="session-policy",
+    )
+    real_processor = SessionProcessor(assistant)
+    real_processor.start_step()
+    failed = False
+
+    class Processor:
+        def settle_policy_failure(self, error):
+            return real_processor.settle_policy_failure(error)
+
+        def finish_step(self, reason):
+            nonlocal failed
+            result = real_processor.finish_step(reason)
+            if not failed:
+                failed = True
+                raise RuntimeError("finish failed after mutation")
+            return result
+
+    kwargs, settlement, _assistant, _part = _after_side_effect_settlement(
+        assistant=assistant,
+        processor=Processor(),
+    )
+
+    async def exercise():
+        with pytest.raises(RuntimeError, match="after mutation"):
+            await commit_boundary.settle_failed_attempt(**kwargs)
+        assert settlement.step_finished is True
+        assert await commit_boundary.settle_failed_attempt(**kwargs) is True
+
+    asyncio.run(exercise())
+    finishes = [
+        part for part in assistant["_nz_parts"]
+        if part.get("type") == "step-finish"
+    ]
+    assert len(finishes) == 1
+
+
+def test_part_retirement_is_idempotent_after_partial_failure():
+    calls = 0
+
+    def retire(part, _reason):
+        nonlocal calls
+        calls += 1
+        part["retired"] = True
+        if calls == 1:
+            raise RuntimeError("retire failed after mutation")
+
+    kwargs, settlement, _assistant, part = _after_side_effect_settlement(
+        retire=retire,
+    )
+
+    async def exercise():
+        with pytest.raises(RuntimeError, match="after mutation"):
+            await commit_boundary.settle_failed_attempt(**kwargs)
+        assert settlement.part_retired is True
+        assert await commit_boundary.settle_failed_attempt(**kwargs) is True
+
+    asyncio.run(exercise())
+    assert part["retired"] is True
+    assert calls == 1
+
+
 def test_concurrent_settlement_calls_do_not_duplicate_parts():
     calls = []
 

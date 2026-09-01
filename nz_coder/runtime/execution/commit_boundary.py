@@ -8,9 +8,13 @@ from enum import Enum
 
 from nz_coder.runtime.conversation.model_result import LLMResult
 from nz_coder.protocol.message_schema import (
+    ASSISTANT_ERROR_KEY,
+    ASSISTANT_FINISH_KEY,
     AUTHORITATIVE_KEY,
     INTERNAL_KEY,
+    PARTS_KEY,
     VISIBLE_KEY,
+    normalize_assistant_error,
     provider_private_state,
     sanitize_provider_extra,
     set_assistant_error,
@@ -60,6 +64,44 @@ class FailedAttemptSettlement:
     def settled(self) -> bool:
         """Compatibility view for callers that previously read ``settled``."""
         return self.completed
+
+
+def _part_retirement_committed(message_part: object) -> bool:
+    """Recognize the durable marker written by MessageRuntime retirement."""
+    return isinstance(message_part, dict) and message_part.get("retired") is True
+
+
+def _assistant_error_committed(
+    assistant_message: dict,
+    *,
+    name: str,
+    public: PublicError,
+) -> bool:
+    """Recognize the exact typed public error after a callback failure."""
+    current = normalize_assistant_error(
+        assistant_message.get(ASSISTANT_ERROR_KEY)
+    )
+    if not isinstance(current, dict) or current.get("name") != name:
+        return False
+    data = current.get("data") if isinstance(current.get("data"), dict) else {}
+    wire = data.get("public_error")
+    return (
+        isinstance(wire, dict)
+        and wire.get("code") == public.code
+        and wire.get("message") == public.message
+    )
+
+
+def _step_finish_committed(assistant_message: dict, reason: str) -> bool:
+    """Recognize a fully persisted terminal step after publication raises."""
+    if assistant_message.get(ASSISTANT_FINISH_KEY) != reason:
+        return False
+    return any(
+        isinstance(part, dict)
+        and part.get("type") == "step-finish"
+        and part.get("reason") == reason
+        for part in assistant_message.get(PARTS_KEY, [])
+    )
 
 
 async def approve_model_result(
@@ -181,24 +223,44 @@ async def settle_failed_attempt(
                 retire_snapshot(snapshot_task, snapshot_cancel)
             settlement.snapshot_retired = True
         if not settlement.part_retired:
-            context.messages.retire_message_part(
-                message_part,
-                f"{str(failure_kind or 'attempt')}_failed",
-            )
+            try:
+                context.messages.retire_message_part(
+                    message_part,
+                    f"{str(failure_kind or 'attempt')}_failed",
+                )
+            except BaseException:
+                if _part_retirement_committed(message_part):
+                    settlement.part_retired = True
+                raise
             settlement.part_retired = True
         if not settlement.policy_parts_settled:
             processor.settle_policy_failure(public)
             settlement.policy_parts_settled = True
         if not settlement.error_attached:
-            set_assistant_error(
-                assistant_message,
-                public,
-                name=error_name,
-                publish=context.messages.publish_event,
-            )
+            try:
+                set_assistant_error(
+                    assistant_message,
+                    public,
+                    name=error_name,
+                    publish=context.messages.publish_event,
+                )
+            except BaseException:
+                if _assistant_error_committed(
+                    assistant_message,
+                    name=error_name,
+                    public=public,
+                ):
+                    settlement.error_attached = True
+                raise
             settlement.error_attached = True
         if not settlement.step_finished:
-            processor.finish_step(finish_reason)
+            try:
+                processor.finish_step(finish_reason)
+            except BaseException:
+                if _step_finish_committed(assistant_message, finish_reason):
+                    settlement.step_finished = True
+                    settlement.finish_reason = finish_reason
+                raise
             settlement.step_finished = True
             settlement.finish_reason = finish_reason
         if not settlement.checkpointed:
