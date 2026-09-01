@@ -1291,3 +1291,17 @@ trace、change set、run evidence、review summary，这些不是“以后再加
 **NZ-Coder 的核心，不是一个会调工具的 LLM，而是一套围绕 LLM 构建的、显式状态驱动的、安全可回滚、可验证、可观测的代码执行系统。**
 
 这也是它最值得学的地方。
+# Runtime publication boundaries
+
+Each user submission owns a fresh `interaction_run_id`. Provider text and tool
+arguments remain attempt-private until their output/tool guardrails approve
+them. `ApprovedModelResult` and `ApprovedToolBatch` are the only values allowed
+to enter Message/Part state. HTTP attach snapshots separate the complete
+`timeline` from the current `run`, and both local and remote terminal paths
+reduce current-run events through `RunViewReducer`.
+
+Public errors pass through `PublicError`; guardrail reasons, unapproved model
+text, raw tool envelopes, internal agent-as-tool answers, and retired attempt
+deltas are excluded from Session events and the event journal. The legacy SDK
+`on_token` callback is final-text-only and deprecated in favor of
+`on_final_text` or structured `on_event` consumption.

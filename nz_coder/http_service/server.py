@@ -17,6 +17,7 @@ from nz_coder.foundation.json_safety import (
     reject_nonstandard_json_constant,
 )
 from nz_coder.protocol.session_events import EventCursorExpiredError, iter_sse
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.state.instructions import (
     create_instruction_file,
     delete_instruction_file,
@@ -147,10 +148,11 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             self.close_connection = True
         except Exception as exc:
+            public = to_public_error(exc)
             self._error(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
-                "internal_error",
-                f"{type(exc).__name__}: {exc}"[:1000],
+                public.code,
+                public.message,
             )
 
     def _route_session(self, method: str, segments: list[str]) -> None:

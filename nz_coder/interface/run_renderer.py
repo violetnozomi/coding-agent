@@ -15,7 +15,8 @@ from rich.text import Text
 
 from nz_coder.interface.presentation_tokens import clip_terminal_text
 from nz_coder.protocol.message_schema import message_records
-from nz_coder.protocol.message_part_reducer import MessagePartReducer
+from nz_coder.protocol.run_view_reducer import RunViewReducer
+from nz_coder.protocol.public_error import public_error_message, to_public_error
 from nz_coder.protocol.session_events import (
     EventSubscriptionGapError,
     SessionEvent,
@@ -40,6 +41,12 @@ _EVENT_TYPES = {
     "process.exited",
     "process.killed",
     "process.failed",
+    "permission.asked",
+    "permission.replied",
+    "question.asked",
+    "question.replied",
+    "question.rejected",
+    "agent.handoff",
 }
 _ANSI_ESCAPE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -58,23 +65,30 @@ class TerminalRunRenderer:
         self._terminal_seen = False
         self._rendered_tool_ids: set[str] = set()
         self._rendered_error_ids: set[str] = set()
-        self._started_tools: dict[str, dict] = {}
-        self._running_parts: dict[str, dict] = {}
-        self._retry_part: dict | None = None
-        self._assistant_messages: dict[str, dict] = {}
         self._pending_errors: dict[str, dict] = {}
         self._pending_completed: dict[str, dict] = {}
         self._pending_terminal: tuple[str, str] | None = None
         self._agent = None
         self._seen_event_ids: set[str] = set()
         self._seen_event_order: deque[str] = deque()
-        self._part_reducer = MessagePartReducer()
+        self._run_reducer = RunViewReducer()
+        self._part_reducer = self._run_reducer.text
         self._projected_text = ""
 
     @property
     def logical_text(self) -> str:
         """Return the renderer's authoritative Message/Part text projection."""
         return self._part_reducer.visible_text
+
+    @property
+    def _running_parts(self) -> dict[str, dict]:
+        """Compatibility view derived from the authoritative RunViewReducer."""
+        return {
+            str(part.get("call_id") or key): part
+            for key, part in self._run_reducer.state.tool_parts.items()
+            if isinstance(part.get("state"), dict)
+            and part["state"].get("status") in {"pending", "running"}
+        }
 
     def begin(self, agent) -> None:
         """Subscribe before a run so no lifecycle event is missed."""
@@ -84,16 +98,12 @@ class TerminalRunRenderer:
         self._terminal_seen = False
         self._rendered_tool_ids.clear()
         self._rendered_error_ids.clear()
-        self._started_tools.clear()
-        self._running_parts.clear()
-        self._retry_part = None
-        self._assistant_messages.clear()
         self._pending_errors.clear()
         self._pending_completed.clear()
         self._pending_terminal = None
         self._seen_event_ids.clear()
         self._seen_event_order.clear()
-        self._part_reducer.clear()
+        self._run_reducer.clear()
         self._projected_text = ""
         self._agent = agent
         event_bus = getattr(agent, "event_bus", None)
@@ -113,20 +123,26 @@ class TerminalRunRenderer:
             "model_id": getattr(agent, "model_id", "model"),
         })())
 
-    def rebase_remote(self, messages: list[dict] | None = None) -> None:
+    def rebase_remote(
+        self,
+        messages: list[dict] | None = None,
+        *,
+        interaction_run_id: str = "",
+        run: dict | None = None,
+    ) -> None:
         """Reset transient reducer state at an authoritative remote snapshot.
 
         Event identities and already-rendered cards are retained so events shared
         by the old stream and snapshot replay cannot be applied twice.
         """
-        self._started_tools.clear()
-        self._running_parts.clear()
-        self._retry_part = None
-        self._assistant_messages.clear()
         self._pending_errors.clear()
         self._pending_completed.clear()
         self._pending_terminal = None
-        self._part_reducer.replace_snapshot(messages)
+        selected = copy.deepcopy(run) if isinstance(run, dict) else {}
+        selected.setdefault("interaction_run_id", interaction_run_id)
+        selected.setdefault("messages", messages or [])
+        selected.setdefault("status", "running")
+        self._run_reducer.replace_snapshot(selected)
         self._sync_text_projection()
         self._refresh_status()
 
@@ -153,15 +169,8 @@ class TerminalRunRenderer:
             self._seen_event_order.append(event.event_id)
             while len(self._seen_event_order) > 4096:
                 self._seen_event_ids.discard(self._seen_event_order.popleft())
-        if event.type in {
-            "message.part.created",
-            "message.part.updated",
-            "message.part.delta",
-            "message.part.completed",
-            "message.part.removed",
-        }:
-            if self._part_reducer.apply_event(event):
-                self._sync_text_projection()
+        if self._run_reducer.apply_event(event):
+            self._sync_text_projection()
         self._handle_event(event)
         if render_completed:
             self._flush_completed()
@@ -212,7 +221,7 @@ class TerminalRunRenderer:
     def fail(self, exc: Exception) -> None:
         self._with_stream_paused(self.drain)
         if not self._terminal_seen:
-            self._render_run_end("failed", str(exc))
+            self._render_run_end("failed", to_public_error(exc).message)
         self.close()
 
     def drain(self, *, render_completed: bool = True) -> None:
@@ -260,7 +269,6 @@ class TerminalRunRenderer:
             message_id = str(info.get("id") or properties.get("message_id") or "")
             if not message_id:
                 return
-            self._assistant_messages[message_id] = info
             error = info.get("error")
             if (
                 isinstance(error, dict)
@@ -272,19 +280,6 @@ class TerminalRunRenderer:
                 self._pending_errors.pop(message_id, None)
             return
         if event.type == "session.tool.started":
-            self._retry_part = None
-            call_id = str(properties.get("tool_call_id") or f"index-{properties.get('index')}")
-            self._started_tools[call_id] = properties
-            self._running_parts.setdefault(call_id, {
-                "type": "tool",
-                "tool": properties.get("name") or "tool",
-                "call_id": call_id,
-                "state": {
-                    "status": "running",
-                    "title": properties.get("summary") or properties.get("name") or "tool",
-                    "time": {"start": time.time()},
-                },
-            })
             self._refresh_status()
             return
         if event.type == "message.part.removed":
@@ -301,42 +296,43 @@ class TerminalRunRenderer:
                     self._refresh_status()
                 return
             if part.get("type") == "retry":
-                self._retry_part = part
                 self._refresh_status()
                 return
-            # Any later assistant progress retires the transient retry notice;
-            # the durable RetryPart remains in Session history for inspection.
-            self._retry_part = None
             if part.get("type") != "tool":
                 self._refresh_status()
                 return
-            call_id = str(part.get("call_id") or f"index-{part.get('index')}")
-            state = part.get("state") if isinstance(part.get("state"), dict) else {}
-            if state.get("status") in {"pending", "running"}:
-                self._running_parts[call_id] = part
-            else:
-                self._running_parts.pop(call_id, None)
             self._refresh_status()
             return
         if event.type == "session.tool.completed":
             call_id = str(properties.get("tool_call_id") or f"index-{properties.get('index')}")
             if call_id in self._rendered_tool_ids:
                 return
-            merged = {**self._started_tools.pop(call_id, {}), **properties}
-            self._running_parts.pop(call_id, None)
+            reduced = next((
+                part
+                for key, part in self._run_reducer.state.tool_parts.items()
+                if key == call_id or str(part.get("call_id") or "") == call_id
+            ), {})
+            merged = {
+                **(
+                    reduced.get("event", {})
+                    if isinstance(reduced.get("event"), dict)
+                    else {}
+                ),
+                **properties,
+            }
             self._pending_completed[call_id] = merged
             self._refresh_status()
             return
         if event.type == "session.run.completed":
-            self._retry_part = None
             self._pending_terminal = (str(properties.get("status") or "completed"), "")
             return
         if event.type == "session.run.failed":
-            self._retry_part = None
-            self._pending_terminal = ("failed", str(properties.get("error") or ""))
+            self._pending_terminal = (
+                "failed",
+                public_error_message(properties.get("error")),
+            )
             return
         if event.type == "session.run.cancelled":
-            self._retry_part = None
             self._pending_terminal = ("cancelled", "")
 
     def _sync_text_projection(self) -> None:
@@ -360,9 +356,9 @@ class TerminalRunRenderer:
         """Resubscribe before rebuilding from the live transcript snapshot."""
         agent = self._agent
         event_bus = getattr(agent, "event_bus", None)
+        context = getattr(agent, "active_run_context", None)
         messages = getattr(agent, "_active_processor_messages", None)
         if not isinstance(messages, list):
-            context = getattr(agent, "active_run_context", None)
             messages = getattr(context, "transcript", None)
         if event_bus is None or not isinstance(messages, list):
             return False
@@ -375,7 +371,20 @@ class TerminalRunRenderer:
                 copy.deepcopy(messages),
                 str(getattr(agent, "session_id", "") or event_bus.session_id),
             )
-            self._part_reducer.replace_snapshot(records)
+            interaction_run_id = str(
+                getattr(context, "interaction_run_id", "")
+                if context is not None
+                else getattr(event_bus, "run_id", "")
+            )
+            self._run_reducer.replace_snapshot({
+                "interaction_run_id": interaction_run_id,
+                "messages": records,
+                "status": "running",
+                "snapshot_sequence": max(
+                    (event.sequence for event in event_bus.recent()),
+                    default=0,
+                ),
+            })
             self._sync_text_projection()
             self._refresh_status()
         except (RuntimeError, TypeError, ValueError):
@@ -409,30 +418,38 @@ class TerminalRunRenderer:
             return
         elapsed = max(0.0, time.monotonic() - self._started_at)
         spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[int(elapsed * 10) % 10]
-        if self._retry_part is not None:
-            raw_attempt = self._retry_part.get("attempt")
+        state = self._run_reducer.state
+        retry_part = next(reversed(state.retries.values()), None)
+        if retry_part is not None:
+            raw_attempt = retry_part.get("attempt")
             attempt = max(1, raw_attempt) if isinstance(raw_attempt, int) else 1
-            next_at = self._retry_part.get("next")
+            next_at = retry_part.get("next")
             remaining = (
                 max(0.0, float(next_at) - time.time())
                 if isinstance(next_at, (int, float))
                 else 0.0
             )
             message = _sanitize(
-                str(self._retry_part.get("message") or "Provider request failed"),
+                str(retry_part.get("message") or "Provider request failed"),
                 160,
             )
             timing = f"in {remaining:.1f}s" if remaining > 0 else "now"
             setter((f"{spinner} Retry {attempt} {timing} · {message}",))
             return
-        if not self._running_parts:
+        running_parts = {
+            key: part
+            for key, part in state.tool_parts.items()
+            if isinstance(part.get("state"), dict)
+            and part["state"].get("status") in {"pending", "running"}
+        }
+        if not running_parts:
             model = str(getattr(self._agent, "model_id", "model"))
             setter((f"{spinner} Waiting for {model} · {elapsed:.1f}s",))
             return
         rows: list[str] = []
         from nz_coder.interface.presentation_tokens import activity_label
 
-        for part in list(self._running_parts.values())[:3]:
+        for part in list(running_parts.values())[:3]:
             state = part.get("state") if isinstance(part.get("state"), dict) else {}
             name = _sanitize(str(part.get("tool") or "tool"), 60)
             title = _sanitize(str(state.get("title") or name), 120)
@@ -459,8 +476,8 @@ class TerminalRunRenderer:
                     rows.append(f"  ↳ {child_count} tool call(s) · {child_status}")
                 else:
                     rows.append(f"  ↳ {child_status}")
-        if len(self._running_parts) > 3:
-            rows.append(f"  +{len(self._running_parts) - 3} more running tool(s)")
+        if len(running_parts) > 3:
+            rows.append(f"  +{len(running_parts) - 3} more running tool(s)")
         status_width = max(20, int(getattr(self.console, "width", 100) or 100) - 4)
         setter(tuple(clip_terminal_text(row, status_width) for row in rows))
 
@@ -619,7 +636,8 @@ class TerminalRunRenderer:
 
     def _assistant_footer(self) -> str:
         """Return metadata for the latest terminal Assistant message."""
-        for info in reversed(tuple(self._assistant_messages.values())):
+        messages = self._run_reducer.state.assistant_messages
+        for info in reversed(tuple(messages.values())):
             end_state = info.get("end_state")
             if not isinstance(end_state, dict):
                 continue

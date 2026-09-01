@@ -14,6 +14,7 @@ from typing import Any
 
 from nz_coder.foundation import config
 from nz_coder.protocol.message_schema import (
+    INTERACTION_RUN_ID_KEY,
     MESSAGE_ID_KEY,
     MESSAGE_SCHEMA_VERSION,
     attach_message_identity,
@@ -30,6 +31,7 @@ from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.session.lifecycle import delete_session
 from nz_coder.sdk import AgentClient
 from nz_coder.protocol.session_events import SessionEventBus
+from nz_coder.protocol.public_error import public_error_message, to_public_error
 from nz_coder.state.sessions import (
     create_session_id,
     list_sessions,
@@ -82,6 +84,22 @@ def _validated_wait_timeout(
             f"session {label} timeout must be a non-negative finite number"
         )
     return timeout
+
+
+def _interaction_records(
+    records: list[dict],
+    interaction_run_id: str,
+) -> list[dict]:
+    """Select one interaction without guessing from message order."""
+    if not interaction_run_id:
+        return []
+    return [
+        copy.deepcopy(record)
+        for record in records
+        if isinstance(record, dict)
+        and isinstance(record.get("info"), dict)
+        and record["info"].get("interaction_run_id") == interaction_run_id
+    ]
 
 
 def build_http_agent(session_id: str, permission_mode: str):
@@ -171,6 +189,7 @@ class ManagedSession:
         self._run_task: asyncio.Task | None = None
         self._run_phase = "idle"
         self._run_event_floor = 0
+        self._active_interaction_run_id = ""
         self._cancel_requested = False
         self._disposed = False
         self._run_gate = run_gate
@@ -234,6 +253,7 @@ class ManagedSession:
             session_id=self.session_id,
             tool_names=allowed_tools,
             stream=True,
+            interaction_run_id=self._active_interaction_run_id or None,
             provider=provider,
             model=model,
             reasoning_effort=variant,
@@ -242,6 +262,7 @@ class ManagedSession:
                 "persist_session": True,
                 # The HTTP manager owns the committed transcript and status.
                 "product_surface": "http",
+                "interaction_run_id": self._active_interaction_run_id,
             },
         )
 
@@ -276,6 +297,7 @@ class ManagedSession:
                 "pending_interaction_count": len(pending),
                 "last_error": self.last_error,
                 "last_result": copy.deepcopy(self.last_result),
+                "active_interaction_run_id": self._active_interaction_run_id,
             }
 
     def rename(self, title: str) -> str:
@@ -394,13 +416,37 @@ class ManagedSession:
             }
 
             def capture() -> dict:
+                timeline_messages = message_records(
+                    self.history,
+                    self.session_id,
+                )
+                run_messages = _interaction_records(
+                    timeline_messages,
+                    self._active_interaction_run_id,
+                )
                 return {
                     "schema_version": MESSAGE_SCHEMA_VERSION,
                     "snapshot_id": snapshot_id,
                     "settled": self._run_thread is None and self.status != "running",
                     "session": self.info(),
                     "summary": session_summary(self.history),
-                    "messages": message_records(self.history, self.session_id),
+                    "messages": timeline_messages,
+                    "active_interaction_run_id": self._active_interaction_run_id,
+                    "run": {
+                        "interaction_run_id": self._active_interaction_run_id,
+                        "status": self.info()["runtime_status"],
+                        "message_ids": [
+                            record["info"]["id"] for record in run_messages
+                        ],
+                        "messages": run_messages,
+                        "parts": [
+                            copy.deepcopy(part)
+                            for record in run_messages
+                            for part in record.get("parts", [])
+                        ],
+                        "pending": copy.deepcopy(pending),
+                    },
+                    "timeline": {"messages": timeline_messages},
                     "pending": copy.deepcopy(pending),
                 }
 
@@ -416,11 +462,17 @@ class ManagedSession:
             result["pending"] = _merge_replayed_interactions(
                 result["pending"], replay_events
             )
+            result["run"]["pending"] = copy.deepcopy(result["pending"])
+            result["run"]["snapshot_sequence"] = cursor.sequence
             if self._run_thread is not None or self.status == "running":
                 result["events"] = [
                     event.to_dict()
                     for event in replay_events
                     if event.sequence > self._run_event_floor
+                    and (
+                        not self._active_interaction_run_id
+                        or event.run_id == self._active_interaction_run_id
+                    )
                 ]
             else:
                 result["events"] = []
@@ -681,6 +733,12 @@ class ManagedSession:
             previous_history = copy.deepcopy(self.history)
             try:
                 self.interactions.begin_run()
+                self._active_interaction_run_id = (
+                    f"interaction-{uuid.uuid4().hex}"
+                )
+                self.event_bus.bind_identity(
+                    run_id=self._active_interaction_run_id,
+                )
                 recent = self.event_bus.recent(1)
                 self._run_event_floor = recent[-1].sequence if recent else 0
                 provider_id, model_id, variant = self._model_identity()
@@ -710,6 +768,9 @@ class ManagedSession:
                 # would orphan and subsequently discard those parts.
                 if not isinstance(user_message.get(MESSAGE_ID_KEY), str):
                     attach_message_identity(user_message, session_id=self.session_id)
+                user_message[INTERACTION_RUN_ID_KEY] = (
+                    self._active_interaction_run_id
+                )
                 self.history.append(user_message)
                 run_messages = copy.deepcopy(self.history)
                 with scoped_workdir(self.workspace):
@@ -741,7 +802,7 @@ class ManagedSession:
                 self._run_phase = "idle"
                 self._run_event_floor = 0
                 self.status = "failed"
-                self.last_error = f"{type(exc).__name__}: {exc}"[:2000]
+                self.last_error = to_public_error(exc).message
                 self.history = previous_history
                 try:
                     with scoped_workdir(self.workspace):
@@ -846,6 +907,12 @@ class ManagedSession:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         if self.client is None:
+            # The legacy Agent adapter must not infer an interaction identity
+            # from the session-long EventBus. Bind the request-scoped identity
+            # explicitly for this invocation only.
+            self.agent._requested_interaction_run_id = (
+                self._active_interaction_run_id
+            )
             task = loop.create_task(self.agent.run(run_messages, stream=True))
         else:
             task = loop.create_task(self.client.run(
@@ -876,18 +943,28 @@ class ManagedSession:
                     "status": status,
                     "answer": value.final_text,
                     "active_agent": value.active_agent,
-                    "error": value.error,
+                    "error": (
+                        public_error_message(value.error)
+                        if value.error
+                        else ""
+                    ),
                     "metadata": copy.deepcopy(value.metadata),
                 }
             else:
                 result = copy.deepcopy(value) if isinstance(value, dict) else {"result": value}
                 status = str(result.get("status") or "completed")
+                if status in {"error", "failed", "blocked", "aborted"}:
+                    for key in ("error", "last_error"):
+                        if result.get(key):
+                            result[key] = public_error_message(result[key])
         except asyncio.CancelledError:
             status = "cancelled"
         except Exception as exc:
             status = "failed"
-            error = f"{type(exc).__name__}: {exc}"[:2000]
+            error = to_public_error(exc).message
         finally:
+            if self.client is None:
+                self.agent._requested_interaction_run_id = None
             with self._lock:
                 self._run_phase = "committing"
                 if self._cancel_requested:

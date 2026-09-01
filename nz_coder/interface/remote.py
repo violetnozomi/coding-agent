@@ -24,6 +24,7 @@ from nz_coder.interface.backend import RemoteTerminalBackend
 from nz_coder.interface.cli import StreamingRenderer
 from nz_coder.interface.interactions import TerminalInteractionBridge
 from nz_coder.interface.run_renderer import TerminalRunRenderer
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.interface.terminal_input import TerminalInput
 from nz_coder.interface.commands.registry import Command, CommandRegistry
 from nz_coder.interface.timeline import format_transcript
@@ -341,36 +342,34 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
     def pump() -> None:
         try:
             for payload in stream:
-                delivery = asyncio.run_coroutine_threadsafe(queue.put(payload), loop)
-                try:
-                    delivery.result(timeout=30.0)
-                except Exception:
-                    delivery.cancel()
-                    raise
+                loop.call_soon_threadsafe(_offer_remote_payload, queue, payload)
                 if payload.get("type") == "session.run.settled":
                     break
         except Exception as exc:
-            try:
-                delivery = asyncio.run_coroutine_threadsafe(
-                    queue.put({"_error": str(exc)}),
-                    loop,
-                )
-                delivery.result(timeout=1.0)
-            except Exception:
-                pass
+            loop.call_soon_threadsafe(
+                _offer_remote_payload,
+                queue,
+                {"_error": to_public_error(exc).message},
+            )
         finally:
             loop.call_soon_threadsafe(done.set)
 
     terminal_status = "completed"
     reconnecting = False
+    interaction_tasks: set[asyncio.Task] = set()
     try:
         _feed_snapshot_events(run_view, baseline)
-        await _resolve_pending(backend, baseline.get("pending") or {}, bridge)
         if not bool((baseline.get("session") or {}).get("running")):
+            await _resolve_pending(backend, baseline.get("pending") or {}, bridge)
             return
         stream = backend.events(last_event_id=cursor)
         thread = threading.Thread(target=pump, name="nz-remote-events", daemon=True)
         thread.start()
+        pending_task = asyncio.create_task(
+            _resolve_pending(backend, baseline.get("pending") or {}, bridge)
+        )
+        interaction_tasks.add(pending_task)
+        pending_task.add_done_callback(interaction_tasks.discard)
         while not done.is_set() or not queue.empty():
             try:
                 payload = await asyncio.wait_for(queue.get(), timeout=0.25)
@@ -381,11 +380,13 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
             event_type = payload.get("type")
             if event_type == "server.snapshot":
                 _feed_snapshot_events(run_view, payload.get("properties") or {})
-                await _resolve_pending(
+                task = asyncio.create_task(_resolve_pending(
                     backend,
                     (payload.get("properties") or {}).get("pending") or {},
                     bridge,
-                )
+                ))
+                interaction_tasks.add(task)
+                task.add_done_callback(interaction_tasks.discard)
                 if reconnecting:
                     console.print("[success]Reconnected[/success]")
                     reconnecting = False
@@ -393,25 +394,23 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
             if event_type == "server.event_gap":
                 console.print("[info]Reconnecting…[/info]")
                 reconnecting = True
+                if (payload.get("properties") or {}).get("local_queue_overflow"):
+                    latest = await asyncio.to_thread(backend.attach_snapshot)
+                    _feed_snapshot_events(run_view, latest)
                 continue
             if event_type == "permission.asked":
-                request_id = str(payload.get("properties", {}).get("id") or "")
-                reply = await bridge._ask_permission(
-                    str(payload.get("properties", {}).get("permission") or "tool"),
-                    payload.get("properties", {}).get("tool_input", {}),
+                task = asyncio.create_task(
+                    _resolve_remote_interaction(backend, bridge, payload)
                 )
-                if request_id:
-                    await _reply_once(backend.reply_permission, request_id, reply)
+                interaction_tasks.add(task)
+                task.add_done_callback(interaction_tasks.discard)
                 continue
             if event_type == "question.asked":
-                props = payload.get("properties", {})
-                request_id = str(props.get("id") or "")
-                result = await bridge._ask_questions(props.get("questions", []))
-                if request_id:
-                    if result is None:
-                        await _reply_once(backend.reject_question, request_id)
-                    else:
-                        await _reply_once(backend.reply_question, request_id, result)
+                task = asyncio.create_task(
+                    _resolve_remote_interaction(backend, bridge, payload)
+                )
+                interaction_tasks.add(task)
+                task.add_done_callback(interaction_tasks.discard)
                 continue
             event = payload
             run_view.feed(event)
@@ -423,6 +422,11 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                     done.set()
         await asyncio.to_thread(stream.close)
     finally:
+        if interaction_tasks:
+            for task in interaction_tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tuple(interaction_tasks), return_exceptions=True)
         if stream is not None:
             try:
                 stream.close()
@@ -445,9 +449,101 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 await interaction_input.close_async()
 
 
+def _offer_remote_payload(event_queue: asyncio.Queue, payload: dict) -> None:
+    """Bound receiver memory while preserving interaction and terminal events."""
+    try:
+        event_queue.put_nowait(payload)
+        return
+    except asyncio.QueueFull:
+        pass
+    event_type = str(payload.get("type") or "")
+    critical = bool(
+        payload.get("_error")
+        or event_type in {
+            "permission.asked",
+            "question.asked",
+            "session.run.completed",
+            "session.run.failed",
+            "session.run.cancelled",
+            "session.run.settled",
+            "server.snapshot",
+        }
+    )
+    queued = getattr(event_queue, "_queue", ())
+    if not critical and any(
+        isinstance(item, dict)
+        and item.get("type") == "server.event_gap"
+        and (item.get("properties") or {}).get("local_queue_overflow")
+        for item in queued
+    ):
+        return
+    try:
+        event_queue.get_nowait()
+        event_queue.task_done()
+    except asyncio.QueueEmpty:
+        return
+    replacement = payload if critical else {
+        "type": "server.event_gap",
+        "properties": {
+            "local_queue_overflow": True,
+            "resume_required": True,
+        },
+    }
+    try:
+        event_queue.put_nowait(replacement)
+    except asyncio.QueueFull:
+        return
+
+
+async def _resolve_remote_interaction(
+    backend: RemoteTerminalBackend,
+    bridge: TerminalInteractionBridge,
+    payload: dict,
+) -> None:
+    """Collect user input without pausing the SSE reducer consumer."""
+    event_type = str(payload.get("type") or "")
+    props = (
+        payload.get("properties")
+        if isinstance(payload.get("properties"), dict)
+        else {}
+    )
+    request_id = str(props.get("id") or "")
+    if not request_id:
+        return
+    if event_type == "permission.asked":
+        reply = await bridge._ask_permission(
+            str(props.get("permission") or "tool"),
+            props.get("tool_input")
+            if isinstance(props.get("tool_input"), dict)
+            else {},
+        )
+        await _reply_once(backend.reply_permission, request_id, reply)
+        return
+    result = await bridge._ask_questions(props.get("questions", []))
+    if result is None:
+        await _reply_once(backend.reject_question, request_id)
+    else:
+        await _reply_once(backend.reply_question, request_id, result)
+
+
 def _feed_snapshot_events(run_view: TerminalRunRenderer, snapshot: dict[str, Any]) -> None:
+    run = snapshot.get("run") if isinstance(snapshot, dict) else None
+    run = run if isinstance(run, dict) else {}
+    interaction_run_id = str(
+        run.get("interaction_run_id")
+        or snapshot.get("active_interaction_run_id")
+        or ""
+    )
     run_view.rebase_remote(
-        snapshot.get("messages") if isinstance(snapshot, dict) else None
+        (
+            run.get("messages")
+            if isinstance(run.get("messages"), list)
+            else snapshot.get("messages")
+            if isinstance(snapshot, dict)
+            else None
+        ),
+        interaction_run_id=interaction_run_id,
+        run=run,
     )
     for payload in snapshot.get("events", []) if isinstance(snapshot, dict) else []:
         if not isinstance(payload, dict):

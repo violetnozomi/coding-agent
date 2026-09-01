@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from dataclasses import dataclass
 from typing import Callable, Protocol, runtime_checkable
 
@@ -50,6 +51,7 @@ class AgentClient:
         on_tool=None,
         on_text=None,
         on_token=None,
+        on_final_text=None,
         on_event=None,
         permission_asker=None,
         question_asker=None,
@@ -61,6 +63,16 @@ class AgentClient:
             raise TypeError("AgentClient.run requires RunRequest")
         if cancel_event is not None and cancel_event.is_set():
             return _cancelled_result(request)
+        if on_token is not None:
+            warnings.warn(
+                "on_token is deprecated; it emits committed final text, not raw "
+                "Provider tokens. Use on_final_text or structured on_event.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if on_token is not None and on_final_text is not None:
+            raise ValueError("Use either on_token or on_final_text, not both")
+        committed_text_callback = on_final_text or on_token
 
         native_runner = self.runner
         if native_runner is None and self.agent_factory is None:
@@ -70,7 +82,7 @@ class AgentClient:
                 stream=request.stream,
                 on_tool=on_tool,
                 on_text=on_text,
-                on_token=on_token,
+                on_token=committed_text_callback,
                 on_event=on_event,
                 cancellation=cancel_event,
                 permission_asker=permission_asker,
@@ -90,7 +102,7 @@ class AgentClient:
                     messages,
                     on_tool=on_tool,
                     on_text=on_text,
-                    on_token=on_token,
+                    on_token=committed_text_callback,
                     stream=request.stream,
                 )
             finally:
@@ -122,6 +134,7 @@ class AgentClient:
             workspace=parent.workspace,
             session_id=session_id,
             stream=stream,
+            parent_interaction_run_id=parent.interaction_run_id,
             parent_run_id=parent.session_id,
             parent_agent_id=parent.agent.name,
             provider=agent.provider or parent.provider,
@@ -143,6 +156,7 @@ async def run_agent(
     on_tool=None,
     on_text=None,
     on_token=None,
+    on_final_text=None,
     on_event=None,
 ) -> RunResult:
     """One-shot SDK entry using the exact production Agent execution chain."""
@@ -152,6 +166,7 @@ async def run_agent(
         on_tool=on_tool,
         on_text=on_text,
         on_token=on_token,
+        on_final_text=on_final_text,
         on_event=on_event,
     )
 
@@ -273,6 +288,11 @@ def _normalize_result(
 def _last_assistant_text(messages: list[dict]) -> str:
     for message in reversed(messages):
         if isinstance(message, dict) and message.get("role") == "assistant":
+            if (
+                message.get("_nz_internal") is True
+                or message.get("_nz_visible") is False
+            ):
+                continue
             content = message.get("content", "")
             if isinstance(content, str) and content:
                 return content

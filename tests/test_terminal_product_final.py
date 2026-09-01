@@ -6,6 +6,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 from nz_coder.evaluation.product_scenarios import (
     product_scenario_definitions,
     run_product_scenario_suite,
@@ -13,6 +15,7 @@ from nz_coder.evaluation.product_scenarios import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PRODUCT_JOURNEY = ROOT / "scripts" / "product_journey_smoke.py"
 
 
 def test_product_scenario_manifest_covers_t1_through_t20_once():
@@ -31,6 +34,10 @@ def test_product_scenario_manifest_covers_t1_through_t20_once():
     assert scenarios[2].command[-1] == "interactive-coding"
 
 
+@pytest.mark.skipif(
+    not PRODUCT_JOURNEY.is_file(),
+    reason="local product journey scripts are excluded from the public repository",
+)
 def test_first_provider_setup_is_a_real_cli_journey():
     completed = subprocess.run(
         [sys.executable, "scripts/product_journey_smoke.py", "first-provider"],
@@ -45,6 +52,10 @@ def test_first_provider_setup_is_a_real_cli_journey():
     assert '"provider_setup":"passed"' in completed.stdout
 
 
+@pytest.mark.skipif(
+    not PRODUCT_JOURNEY.is_file(),
+    reason="local product journey scripts are excluded from the public repository",
+)
 def test_interactive_coding_is_a_real_pty_agent_journey():
     completed = subprocess.run(
         [sys.executable, "scripts/product_journey_smoke.py", "interactive-coding"],

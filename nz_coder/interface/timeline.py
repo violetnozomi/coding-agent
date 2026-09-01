@@ -99,6 +99,11 @@ def conversation_turns(messages: list[dict]) -> list[ConversationTurn]:
             if not isinstance(message, dict):
                 continue
             if message.get("role") == "assistant":
+                if (
+                    message.get("_nz_internal") is True
+                    or message.get("_nz_visible") is False
+                ):
+                    continue
                 parent_id = message.get(ASSISTANT_PARENT_KEY)
                 graph_owned = (
                     isinstance(user_id, str)
@@ -243,6 +248,11 @@ def build_transcript_document(
         if not isinstance(message, dict):
             continue
         role = str(message.get("role") or "")
+        if role == "assistant" and (
+            message.get("_nz_internal") is True
+            or message.get("_nz_visible") is False
+        ):
+            continue
         if role == "user" and is_synthetic_user_message(message):
             continue
         message_id = str(message.get(MESSAGE_ID_KEY) or f"transcript-{role}-{index}")
@@ -404,6 +414,8 @@ def latest_assistant_text(messages: list[dict]) -> str:
         (
             item for item in reversed(messages)
             if isinstance(item, dict) and item.get("role") == "assistant"
+            and item.get("_nz_internal") is not True
+            and item.get("_nz_visible") is not False
         ),
         None,
     )

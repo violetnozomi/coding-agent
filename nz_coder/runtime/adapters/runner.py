@@ -85,6 +85,14 @@ def run_request_from_legacy_host(
         session_id=str(getattr(host, "session_id", "") or "session"),
         tool_names=tool_names,
         stream=stream,
+        # An EventBus may live for the whole Agent/session, so its current
+        # identity is not a safe source for a new user interaction. Product
+        # hosts that already allocated an interaction id pass it explicitly;
+        # otherwise SessionRuntime.open() creates a fresh one per request.
+        interaction_run_id=(
+            str(getattr(host, "_requested_interaction_run_id", "") or "")
+            or None
+        ),
         provider=provider_id,
         model=model_id,
         reasoning_effort=_optional_text(getattr(host, "model_variant", None)),
