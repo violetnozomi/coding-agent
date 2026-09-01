@@ -952,7 +952,12 @@ def message_records(messages: list[dict], session_id: str) -> list[dict]:
                 info["model"] = model
         records.append({
             "info": info,
-            "parts": copy.deepcopy(message[PARTS_KEY]),
+            "parts": [
+                project_public_tool_part(part)
+                if isinstance(part, dict) and part.get("type") == "tool"
+                else copy.deepcopy(part)
+                for part in message[PARTS_KEY]
+            ],
         })
     return records
 
@@ -1697,7 +1702,6 @@ def _handoff_part(value: dict, message_id: str) -> dict | None:
 def _tool_part(value: dict, message_id: str) -> dict | None:
     tool = value.get("tool")
     call_id = value.get("call_id")
-    value = project_public_tool_part(value)
     state = value.get("state")
     if not isinstance(tool, str) or not tool or not isinstance(call_id, str) or not call_id:
         return None
@@ -1735,13 +1739,9 @@ def _tool_part(value: dict, message_id: str) -> dict | None:
         if attachments:
             clean_state["attachments"] = attachments
     if status == "error":
-        public = public_error_from_wire(state.get("error"))
-        clean_state["error"] = (
-            public or PublicError("tool_execution_failed", "Tool execution failed.")
-        ).to_dict()
-        clean_state["output"] = str(state.get("output") or "Tool execution failed.")[
-            :4000
-        ]
+        clean_state["error"] = str(
+            state.get("error") or "Tool execution failed"
+        )[:4000]
         if isinstance(state.get("interrupted"), bool):
             clean_state["interrupted"] = state["interrupted"]
     result = {
