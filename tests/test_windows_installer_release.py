@@ -8,14 +8,17 @@ import sys
 
 import pytest
 
-from scripts.windows_installer_contract import InstallerContract, load_contract
+from nz_coder.evaluation.release_contracts import (
+    InstallerContract,
+    load_installer_contract,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_installer_contract_uses_project_version():
-    contract = load_contract(ROOT)
+    contract = load_installer_contract(ROOT)
 
     assert contract.version == "0.1.0"
     assert contract.architecture == "x64"
@@ -49,11 +52,12 @@ def test_frozen_tree_accepts_complete_distribution(tmp_path):
     assert InstallerContract("0.1.0").validate_frozen_tree(tmp_path) == ()
 
 
-def test_contract_cli_rejects_an_incomplete_frozen_tree(tmp_path):
+def test_contract_module_cli_rejects_an_incomplete_frozen_tree(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "scripts" / "windows_installer_contract.py"),
+            "-m",
+            "nz_coder.evaluation.release_contracts",
             "--root", str(ROOT),
             "--validate-frozen", str(tmp_path),
             "--json",
@@ -104,51 +108,6 @@ def test_inno_setup_is_per_user_upgrade_safe_and_owns_path():
     assert "[UninstallDelete]" not in text
 
 
-def test_windows_build_script_is_strict_and_emits_a_hashed_artifact():
-    text = (ROOT / "scripts" / "build_windows_installer.ps1").read_text(
-        encoding="utf-8",
-    )
-
-    for required in (
-        'Set-StrictMode -Version Latest',
-        '$ErrorActionPreference = "Stop"',
-        'PyInstaller',
-        'windows_installer_contract.py',
-        'ISCC.exe',
-        'Get-FileHash',
-        'SHA256',
-        'ConvertTo-Json',
-    ):
-        assert required in text
-
-
-def test_windows_installer_smoke_covers_product_upgrade_and_safe_uninstall():
-    text = (ROOT / "scripts" / "test_windows_installer.ps1").read_text(
-        encoding="utf-8",
-    )
-
-    for required in (
-        'Set-StrictMode -Version Latest',
-        '/VERYSILENT',
-        '/SUPPRESSMSGBOXES',
-        '/NORESTART',
-        '/CURRENTUSER',
-        'Install Path With Spaces',
-        'nz-coder.exe',
-        '@("platform", "--json")',
-        '@("doctor", "--json")',
-        '@("config", "show", "--json")',
-        'unins000.exe',
-        'workspace.env.sentinel',
-        'workspace.state.sentinel',
-        'ConvertTo-Json',
-        'Start-Process',
-        '-Wait',
-        '-PassThru',
-    ):
-        assert required in text
-
-
 def test_windows_installer_workflow_builds_tests_and_publishes_same_artifact():
     text = (ROOT / ".github" / "workflows" / "windows-installer.yml").read_text(
         encoding="utf-8",
@@ -158,30 +117,15 @@ def test_windows_installer_workflow_builds_tests_and_publishes_same_artifact():
         "windows-latest",
         'python-version: "3.12"',
         "pyinstaller==6.16.0",
-        "build_windows_installer.ps1",
-        "test_windows_installer.ps1",
+        "nz_coder.evaluation.release_contracts",
+        "PyInstaller",
+        "ISCC.exe",
+        "/VERYSILENT",
+        "unins000.exe",
         "actions/upload-artifact@v4",
         "windows-installer-evidence",
         "refs/tags/v",
         "softprops/action-gh-release@v2",
         "SHA256SUMS.txt",
-    ):
-        assert required in text
-
-
-def test_windows_install_guide_documents_setup_api_and_lsp_boundaries():
-    text = (ROOT / "docs" / "windows-install.md").read_text(encoding="utf-8")
-
-    for required in (
-        "NZ-Coder-0.1.0-windows-x64-setup.exe",
-        "Get-FileHash",
-        "/connect",
-        "deepseek-v4-flash",
-        "API_BASE_URL",
-        "API_KEY",
-        "nz-coder doctor",
-        "Language servers are optional",
-        "Uninstall",
-        ".nz-coder",
     ):
         assert required in text

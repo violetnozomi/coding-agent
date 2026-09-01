@@ -89,7 +89,7 @@ def test_windows_workflow_disables_go_cache_without_a_go_module():
         / "windows-product-rc.yml"
     ).read_text(encoding="utf-8")
 
-    go_setup = workflow.split("- uses: actions/setup-go@v5", 1)[1]
+    go_setup = workflow.split("- uses: actions/setup-go@v6", 1)[1]
     go_setup = go_setup.split("- name:", 1)[0]
     assert "cache: false" in go_setup
 
@@ -132,7 +132,9 @@ def test_windows_workflow_persists_structured_acceptance_artifacts():
         / "windows-product-rc.yml"
     ).read_text(encoding="utf-8")
 
-    assert "run_rc_acceptance.py --suite windows" in workflow
-    assert "benchmark_terminal_product_final.py" in workflow
+    assert "tests/test_windows_platform_runtime.py" in workflow
+    assert "tests/test_http_service.py" in workflow
+    assert "python -m build --wheel --sdist" in workflow
+    assert "installed-platform.json" in workflow
     assert "actions/upload-artifact" in workflow
     assert "windows-rc-evidence" in workflow

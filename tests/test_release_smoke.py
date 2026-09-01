@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.release_smoke import _installed_environment, _measure_cli_startup
+from nz_coder.evaluation.release_contracts import (
+    installed_environment,
+    measure_cli_startup,
+)
 
 
 def test_installed_environment_cannot_import_from_developer_pythonpath(monkeypatch):
@@ -11,7 +14,7 @@ def test_installed_environment_cannot_import_from_developer_pythonpath(monkeypat
     monkeypatch.setenv("PYTHONHOME", "/workspace/python-home")
     monkeypatch.setenv("API_KEY", "secret")
 
-    environment = _installed_environment()
+    environment = installed_environment()
 
     assert "PYTHONPATH" not in environment
     assert "PYTHONHOME" not in environment
@@ -20,11 +23,14 @@ def test_installed_environment_cannot_import_from_developer_pythonpath(monkeypat
 
 def test_release_smoke_builds_both_wheel_and_sdist():
     source = (
-        Path(__file__).resolve().parents[1] / "scripts" / "release_smoke.py"
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "core-runtime.yml"
     ).read_text(encoding="utf-8")
 
-    assert '"--sdist"' in source
-    assert "Expected one sdist" in source
+    assert "python -m build --wheel --sdist" in source
+    assert "python -m nz_coder --help" in source
 
 
 def test_measure_cli_startup_times_an_installed_version_command(tmp_path):
@@ -34,7 +40,7 @@ def test_measure_cli_startup_times_an_installed_version_command(tmp_path):
     def run(command, **kwargs):
         calls.append((command, kwargs))
 
-    elapsed = _measure_cli_startup(
+    elapsed = measure_cli_startup(
         tmp_path / "python",
         tmp_path,
         {"PATH": "/bin"},

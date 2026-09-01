@@ -29,18 +29,26 @@ def product_scenario_definitions() -> tuple[ProductScenario, ...]:
     """Return the stable final-product acceptance manifest."""
     pytest = (sys.executable, "-m", "pytest", "-q")
     return (
-        ProductScenario("T1", "Fresh install smoke", (sys.executable, "scripts/release_smoke.py"), "real-product"),
+        ProductScenario(
+            "T1",
+            "Release and installed-environment contracts",
+            pytest + ("-s", "tests/test_release_smoke.py"),
+        ),
         ProductScenario(
             "T2",
             "First provider setup",
-            (sys.executable, "scripts/product_journey_smoke.py", "first-provider"),
-            "real-product",
+            pytest + (
+                "-s",
+                "tests/test_terminal_product_alignment.py::test_connect_flow_masks_and_saves_credential_before_discovery",
+            ),
         ),
         ProductScenario(
             "T3",
             "Interactive coding task",
-            (sys.executable, "scripts/product_journey_smoke.py", "interactive-coding"),
-            "real-product",
+            pytest + (
+                "-s",
+                "tests/runtime/test_native_runner.py::test_native_runner_completes_model_tool_model_without_agent_loop",
+            ),
         ),
         ProductScenario("T4", "Permission interaction", pytest + ("tests/test_permissions.py::test_permission_manager_supports_http_once_reject_and_scoped_always",)),
         ProductScenario("T5", "Session resume", pytest + ("tests/test_http_service.py::test_http_restart_discovers_and_lazily_restores_session",)),

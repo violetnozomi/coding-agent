@@ -7,8 +7,8 @@ same-machine Remote attach surfaces over one native Agent runtime.
 
 It is intended for personal and internal use on trusted repositories. It is not
 an OS sandbox, an enterprise unattended agent, or a hosted multi-tenant service.
-Linux/POSIX is the release-proven path; other platform evidence and remaining
-product gaps are recorded in the final parity report below.
+Linux/POSIX is the release-proven path. Windows builds and product checks run
+through the tracked GitHub Actions workflows.
 
 ## Architecture
 
@@ -30,34 +30,16 @@ Transactions + Verification + Trace + Session Events
 
 Repository repair and Greenfield creation both run through the same loop, but they differ in strategy. Repair mode starts from repo search and narrow verification. Greenfield mode starts from requirements, blueprint, scaffold, batch file writes, acceptance planning, and project verification.
 
-The living Chinese learning log for changes made while aligning NZ-Coder with
-InfCode is maintained in
-[`docs/infcode-alignment-learning-log.md`](docs/infcode-alignment-learning-log.md).
-The currently supported release boundary is summarized in
-[`docs/release-baseline.md`](docs/release-baseline.md).
-The executable packaging and compatibility gates are in
-[`docs/release-checklist.md`](docs/release-checklist.md).
-The four-surface runtime convergence audit and remaining product gaps are in
-[`docs/product-runtime-convergence-phase7.md`](docs/product-runtime-convergence-phase7.md).
-The current reader documentation is organized as:
-
-- [`docs/quick-start.md`](docs/quick-start.md) — five-minute installation and first run
-- [`docs/cli-reference.md`](docs/cli-reference.md) — terminal and automation commands
-- [`docs/architecture.md`](docs/architecture.md) — architecture overview
-- [`docs/remote-daemon.md`](docs/remote-daemon.md) — daemon, attach, replay, and recovery
-- [`docs/process.md`](docs/process.md) — persistent process and PTY behavior
-- [`docs/mcp.md`](docs/mcp.md) — MCP transports, trust, OAuth, and discovery
-- [`docs/skills-and-commands.md`](docs/skills-and-commands.md) — extension concepts and lifecycle
-- [`docs/memory.md`](docs/memory.md) — governed memory review
-- [`docs/troubleshooting.md`](docs/troubleshooting.md) — product diagnostics and common failures
-- [`docs/terminal-product-parity-final-report-2026-08-13.md`](docs/terminal-product-parity-final-report-2026-08-13.md) — final three-way audit and release verdict
+The maintained architecture and learning document is
+[`docs/struct.md`](docs/struct.md). Release behavior is enforced by the tracked
+tests and workflows rather than by unversioned local documentation.
 
 
 ## Quickstart
 
-Windows 10/11 x64 users can install the self-contained setup executable without
-Python or Git. See [`docs/windows-install.md`](docs/windows-install.md) for
-download verification, `/connect` API configuration, upgrades, and uninstall.
+Windows 10/11 x64 users can install the self-contained setup executable produced
+by the `Windows Installer` workflow without Python or Git. Verify its SHA-256
+against the uploaded `SHA256SUMS.txt`, then use `/connect` for API configuration.
 
 Install from a checkout (editable mode is only needed for development):
 
@@ -105,10 +87,10 @@ eval "$(nz-coder completion zsh)"
 nz-coder completion fish | source
 ```
 
-For source development, use `python -m pip install -e .`. Run
-`python scripts/release_smoke.py` before a release; it builds a wheel, verifies
-the console entry point and bundled runtime assets, installs outside the checkout, and
-runs help/doctor from a separate workspace.
+For source development, use `python -m pip install -e .`. Before a release, run
+`python -m compileall -q nz_coder`, `python -m pytest -q`, `ruff check .`, and
+`python -m build --wheel --sdist`. The `Core Runtime`, `Windows Product RC`, and
+`Windows Installer` workflows enforce the same tracked release boundary.
 
 Inside the REPL:
 

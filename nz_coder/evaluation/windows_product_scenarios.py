@@ -33,7 +33,12 @@ def windows_scenarios() -> tuple[AcceptanceScenario, ...]:
     py = (sys.executable, "-m", "pytest", "-q")
     native = py + ("tests/test_windows_native_smoke.py",)
     return (
-        AcceptanceScenario("W1", "install", (sys.executable, "scripts/release_smoke.py"), "windows"),
+        AcceptanceScenario(
+            "W1",
+            "release contracts",
+            py + ("tests/test_release_smoke.py",),
+            "windows",
+        ),
         AcceptanceScenario("W2", "first startup", native + ("-k", "first_startup"), "windows"),
         AcceptanceScenario("W3", "PowerShell tool", native + ("-k", "powershell"), "windows"),
         AcceptanceScenario("W4", "path-with-space edit", native + ("-k", "space_path"), "windows"),
@@ -91,7 +96,7 @@ def release_scenarios(platform: str) -> tuple[AcceptanceScenario, ...]:
     family = "windows" if str(platform).lower().startswith("win") else "linux"
     py = (sys.executable, "-m", "pytest", "-q")
     owners = (
-        ("R1", "install", (sys.executable, "scripts/release_smoke.py")),
+        ("R1", "release contracts", py + ("tests/test_release_smoke.py",)),
         ("R2", "headless", py + ("tests/test_headless_cli.py",)),
         ("R3", "interactive", py + ("tests/test_fullscreen.py",)),
         ("R4", "shell", py + ("tests/test_windows_shell_runtime.py",)),

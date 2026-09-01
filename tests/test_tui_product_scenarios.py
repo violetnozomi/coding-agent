@@ -44,7 +44,13 @@ def test_provider_error_is_categorized_with_next_action_and_no_traceback():
     view._render_assistant_error({
         "name": "ProviderAuthError",
         "data": {
-            "message": "Traceback (most recent call last):\nsecret stack\n401 unauthorized",
+            "public_error": {
+                "schema": "nz.public_error.v1",
+                "code": "provider_auth_error",
+                "message": "The provider rejected the configured credential.",
+                "retryable": False,
+                "metadata": {"provider_id": "test-provider"},
+            },
             "statusCode": 401,
         },
     })

@@ -2,6 +2,21 @@
 from __future__ import annotations
 
 
+class _NoRequestClient:
+    """Provider-shaped test double that rejects accidental model calls."""
+
+    class _Completions:
+        def create(self, **_kwargs):
+            raise AssertionError("LLM should not be called in prompt contract tests")
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _NoRequestClient._Completions()
+
+    def __init__(self) -> None:
+        self.chat = self._Chat()
+
+
 def test_simple_repository_orientation_has_a_strict_exploration_budget(tmp_path):
     from nz_coder.runtime.conversation.prompt import build
     from nz_coder.runtime.process.workdir import scoped_workdir
@@ -74,7 +89,12 @@ def test_agent_builds_first_turn_implementation_bundle_from_planner_contract(
     )
     (tmp_path / "README.md").write_text("# Parser\n", encoding="utf-8")
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
-    agent = AgentLoop("test", permission_mode="auto", trace_enabled=False)
+    agent = AgentLoop(
+        "test",
+        permission_mode="auto",
+        client=_NoRequestClient(),
+        trace_enabled=False,
+    )
     contract = TaskContract.from_dict({
         "objective": "Add named parser values",
         "requirements": [
@@ -111,7 +131,12 @@ def test_task_contract_owns_progress_tool_unless_user_requests_todo(
     from nz_coder.runtime.agent.task_contract import TaskContract
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
-    agent = AgentLoop("test", permission_mode="auto", trace_enabled=False)
+    agent = AgentLoop(
+        "test",
+        permission_mode="auto",
+        client=_NoRequestClient(),
+        trace_enabled=False,
+    )
     contract = TaskContract.from_dict({
         "objective": "Change parser and tests",
         "requirements": [

@@ -2,11 +2,7 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 import time
-from pathlib import Path
-
-import pytest
 
 from nz_coder.evaluation.product_scenarios import (
     product_scenario_definitions,
@@ -14,8 +10,6 @@ from nz_coder.evaluation.product_scenarios import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
-PRODUCT_JOURNEY = ROOT / "scripts" / "product_journey_smoke.py"
 
 
 def test_product_scenario_manifest_covers_t1_through_t20_once():
@@ -27,47 +21,9 @@ def test_product_scenario_manifest_covers_t1_through_t20_once():
     assert len({item.name for item in scenarios}) == 20
     assert all(item.command for item in scenarios)
     assert all(item.evidence in {"real-product", "component-contract"} for item in scenarios)
-    assert [item.evidence for item in scenarios[:3]] == [
-        "real-product", "real-product", "real-product",
-    ]
-    assert scenarios[1].command[-1] == "first-provider"
-    assert scenarios[2].command[-1] == "interactive-coding"
-
-
-@pytest.mark.skipif(
-    not PRODUCT_JOURNEY.is_file(),
-    reason="local product journey scripts are excluded from the public repository",
-)
-def test_first_provider_setup_is_a_real_cli_journey():
-    completed = subprocess.run(
-        [sys.executable, "scripts/product_journey_smoke.py", "first-provider"],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=30,
-    )
-
-    assert completed.returncode == 0, completed.stderr or completed.stdout
-    assert '"provider_setup":"passed"' in completed.stdout
-
-
-@pytest.mark.skipif(
-    not PRODUCT_JOURNEY.is_file(),
-    reason="local product journey scripts are excluded from the public repository",
-)
-def test_interactive_coding_is_a_real_pty_agent_journey():
-    completed = subprocess.run(
-        [sys.executable, "scripts/product_journey_smoke.py", "interactive-coding"],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=30,
-    )
-
-    assert completed.returncode == 0, completed.stderr or completed.stdout
-    assert '"interactive_coding":"passed"' in completed.stdout
+    assert all(item.evidence == "component-contract" for item in scenarios[:3])
+    assert "test_connect_flow_masks" in scenarios[1].command[-1]
+    assert "test_native_runner_completes_model_tool_model" in scenarios[2].command[-1]
 
 
 def test_product_scenario_suite_records_each_result_and_metrics():
@@ -76,11 +32,11 @@ def test_product_scenario_suite_records_each_result_and_metrics():
     def execute(command, **_kwargs):
         calls.append(tuple(command))
         output = "1 passed"
-        if any(item.endswith("scripts/release_smoke.py") for item in command):
+        if any(item.endswith("tests/test_release_smoke.py") for item in command):
             output += '\nNZ_PRODUCT_METRICS {"startup_time_ms":125.0}'
-        if command[-1:] == ["first-provider"]:
+        if any("test_connect_flow_masks" in item for item in command):
             output += '\nNZ_PRODUCT_METRICS {"provider_setup":"passed"}'
-        if command[-1:] == ["interactive-coding"]:
+        if any("test_native_runner_completes_model_tool_model" in item for item in command):
             output += '\nNZ_PRODUCT_METRICS {"interactive_coding":"passed"}'
         if any("test_phase2_terminal_product_benchmark_drives_real_daemon_and_attach" in item for item in command):
             output += "\nNZ_PRODUCT_METRICS " + (

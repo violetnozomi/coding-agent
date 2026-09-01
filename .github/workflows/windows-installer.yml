@@ -17,31 +17,29 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
       - name: Install product and frozen-build tools
         run: python -m pip install ".[dev]" pyinstaller==6.16.0
-      - name: Run cross-platform installer contracts
+      - name: Run tracked installer contracts
         run: python -m pytest -q tests/test_windows_installer_release.py
-      - name: Parse PowerShell release scripts
+      - name: Build and validate frozen product
         shell: pwsh
         run: |
-          $failed = $false
-          foreach ($path in @("scripts/build_windows_installer.ps1", "scripts/test_windows_installer.ps1")) {
-            $tokens = $null
-            $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile(
-              (Resolve-Path $path), [ref]$tokens, [ref]$errors
-            ) | Out-Null
-            if ($errors.Count -gt 0) {
-              $errors | Format-List | Out-String | Write-Error
-              $failed = $true
-            }
-          }
-          if ($failed) { throw "PowerShell parser validation failed." }
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force artifacts, dist/installer | Out-Null
+          python -m PyInstaller --noconfirm --clean `
+            --workpath build/windows-installer `
+            --distpath dist `
+            packaging/windows/nz-coder.spec
+          python -m nz_coder.evaluation.release_contracts `
+            --root . `
+            --validate-frozen dist/NZ-Coder `
+            --json | Out-File artifacts/windows-frozen-contract.json -Encoding utf8
       - name: Locate Inno Setup compiler
         id: inno
         shell: pwsh
@@ -49,31 +47,77 @@ jobs:
           $path = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path -LiteralPath $path)) { throw "Inno Setup 6 is unavailable." }
           "path=$path" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-      - name: Build self-contained setup executable
-        shell: pwsh
-        run: >-
-          ./scripts/build_windows_installer.ps1
-          -Python python
-          -Iscc "${{ steps.inno.outputs.path }}"
-          -OutputDirectory "$PWD/dist/installer"
-          -EvidencePath "$PWD/artifacts/windows-installer-build.json"
-      - name: Test install upgrade product and uninstall lifecycle
+      - name: Compile setup executable
         shell: pwsh
         run: |
-          $artifact = Get-ChildItem dist/installer/NZ-Coder-*-windows-x64-setup.exe -File
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+          $identity = python -m nz_coder.evaluation.release_contracts --root . --json | ConvertFrom-Json
+          $iscc = "${{ steps.inno.outputs.path }}"
+          & $iscc `
+            "/DAppVersion=$($identity.version)" `
+            "/DSourceDir=$PWD\dist\NZ-Coder" `
+            "/DOutputDir=$PWD\dist\installer" `
+            "packaging\windows\nz-coder.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC.exe failed with exit code $LASTEXITCODE." }
+      - name: Test silent install upgrade product and safe uninstall
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+          $artifact = @(Get-ChildItem dist/installer/NZ-Coder-*-windows-x64-setup.exe -File)
           if ($artifact.Count -ne 1) { throw "Expected exactly one setup executable." }
-          ./scripts/test_windows_installer.ps1 `
-            -Artifact $artifact.FullName `
-            -EvidencePath "$PWD/artifacts/windows-installer-smoke.json" `
-            -TemporaryRoot "$env:RUNNER_TEMP/NZ Coder Setup Lifecycle"
+          $installRoot = Join-Path $env:RUNNER_TEMP "NZ Coder Install Path With Spaces"
+          $workspace = Join-Path $env:RUNNER_TEMP "NZ Coder Workspace"
+          New-Item -ItemType Directory -Force $workspace | Out-Null
+          Set-Content (Join-Path $workspace "workspace.env.sentinel") "preserve"
+          New-Item -ItemType Directory -Force (Join-Path $workspace ".nz-coder") | Out-Null
+          Set-Content (Join-Path $workspace ".nz-coder\workspace.state.sentinel") "preserve"
+          $arguments = @(
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER",
+            "/DIR=`"$installRoot`""
+          )
+          foreach ($attempt in 1..2) {
+            $install = Start-Process -FilePath $artifact[0].FullName -ArgumentList $arguments -Wait -PassThru
+            if ($install.ExitCode -ne 0) { throw "Silent install attempt $attempt failed." }
+          }
+          $exe = Join-Path $installRoot "nz-coder.exe"
+          & $exe --help | Out-File artifacts/installed-help.txt -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "Installed CLI help failed." }
+          & $exe platform --json | Out-File artifacts/installed-platform.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "Installed platform probe failed." }
+          & $exe config show --json | Out-File artifacts/installed-config.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "Installed config probe failed." }
+          $uninstaller = Join-Path $installRoot "unins000.exe"
+          $uninstall = Start-Process -FilePath $uninstaller `
+            -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER") `
+            -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed." }
+          if (Test-Path -LiteralPath $exe) { throw "Uninstall left the product executable behind." }
+          foreach ($sentinel in @(
+            (Join-Path $workspace "workspace.env.sentinel"),
+            (Join-Path $workspace ".nz-coder\workspace.state.sentinel")
+          )) {
+            if (-not (Test-Path -LiteralPath $sentinel)) {
+              throw "Uninstall removed workspace-owned state: $sentinel"
+            }
+          }
+          @{
+            artifact = $artifact[0].Name
+            install_attempts = 2
+            product_commands = @("--help", "platform --json", "config show --json")
+            uninstall_exit_code = $uninstall.ExitCode
+            workspace_preserved = $true
+          } | ConvertTo-Json | Out-File artifacts/windows-installer-smoke.json -Encoding utf8
       - name: Create checksum and validate release tag
         shell: pwsh
         run: |
-          $artifact = Get-ChildItem dist/installer/NZ-Coder-*-windows-x64-setup.exe -File
-          $hash = (Get-FileHash -LiteralPath $artifact.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash *$($artifact.Name)" | Set-Content artifacts/SHA256SUMS.txt -Encoding ascii
+          $artifact = @(Get-ChildItem dist/installer/NZ-Coder-*-windows-x64-setup.exe -File)
+          if ($artifact.Count -ne 1) { throw "Expected exactly one setup executable." }
+          $hash = (Get-FileHash -LiteralPath $artifact[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *$($artifact[0].Name)" | Set-Content artifacts/SHA256SUMS.txt -Encoding ascii
           if ($env:GITHUB_REF -like "refs/tags/v*") {
-            $identity = python scripts/windows_installer_contract.py --root . --json | ConvertFrom-Json
+            $identity = python -m nz_coder.evaluation.release_contracts --root . --json | ConvertFrom-Json
             if ($env:GITHUB_REF_NAME.Substring(1) -ne $identity.version) {
               throw "Tag version does not match pyproject.toml."
             }
@@ -85,8 +129,11 @@ jobs:
           if-no-files-found: error
           path: |
             dist/installer/NZ-Coder-*-windows-x64-setup.exe
-            artifacts/windows-installer-build.json
+            artifacts/windows-frozen-contract.json
             artifacts/windows-installer-smoke.json
+            artifacts/installed-help.txt
+            artifacts/installed-platform.json
+            artifacts/installed-config.json
             artifacts/SHA256SUMS.txt
       - name: Publish tested version-tag artifact
         if: startsWith(github.ref, 'refs/tags/v')
@@ -95,6 +142,6 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist/installer/NZ-Coder-*-windows-x64-setup.exe
-            artifacts/windows-installer-build.json
+            artifacts/windows-frozen-contract.json
             artifacts/windows-installer-smoke.json
             artifacts/SHA256SUMS.txt
