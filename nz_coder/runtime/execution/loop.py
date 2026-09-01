@@ -258,6 +258,9 @@ _AUTO_MODE_TRACE_FIELDS = frozenset({
 
 def _is_client_error(e: Exception) -> bool:
     """True 表示 400/422 类客户端错误，不应重试，而应注入诊断。"""
+    status = getattr(e, "status_code", None)
+    if isinstance(status, int) and not isinstance(status, bool):
+        return status in {400, 422}
     if _OPENAI_CLIENT_ERRORS and isinstance(e, _OPENAI_CLIENT_ERRORS):
         return True
     error_str = str(e)

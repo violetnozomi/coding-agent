@@ -29,3 +29,27 @@ jobs:
         run: ruff check .
       - name: Build wheel and source distribution
         run: python -m build --wheel --sdist
+
+  python-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.9"
+          cache: pip
+      - name: Install supported-floor runtime
+        run: python -m pip install -e '.[dev]' build
+      - name: Compile on the declared Python floor
+        run: python -m compileall -q nz_coder
+      - name: Run critical runtime compatibility contracts
+        run: >-
+          python -m pytest -q
+          tests/runtime/test_native_runner.py
+          tests/test_loop_fake.py
+          tests/test_public_error_boundary_phase3.py
+      - name: Smoke CLI on the declared Python floor
+        run: python -m nz_coder --help
+      - name: Build distributions on the declared Python floor
+        run: python -m build --wheel --sdist

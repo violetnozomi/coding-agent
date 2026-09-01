@@ -2049,29 +2049,24 @@ def test_bash_test_failure_no_rollback():
         _restore_workdir(old, tmp)
 
 
-def test_400_api_error_injects_diagnostic():
+def test_400_client_error_does_not_require_http_transport_library():
     """400 客户端错误应注入诊断消息到对话，而不是无限重试。"""
-    from openai import BadRequestError
     from nz_coder.loop import AgentLoop
+
+    class FakeClientError(Exception):
+        status_code = 400
+        code = "invalid_request_error"
+        body = {
+            "error": {
+                "message": "invalid json in tool",
+                "type": "invalid_request_error",
+            }
+        }
 
     old, tmp = _tmp_workdir()
     try:
-        # 构造一个 BadRequestError（400）
-        import httpx
-
-        http_response = httpx.Response(
-            400,
-            json={"error": {"message": "invalid json in tool", "type": "invalid_request_error"}},
-            request=httpx.Request("POST", "https://api.example.com/v1/chat/completions"),
-        )
-        bad_err = BadRequestError(
-            "invalid json in tool",
-            response=http_response,
-            body={"error": {"message": "invalid json in tool", "type": "invalid_request_error"}},
-        )
-
         fake = FakeClient([
-            bad_err,
+            FakeClientError("bad request"),
             FakeResponse(FakeMessage("corrected")),
         ])
         messages = [{"role": "user", "content": "test"}]
@@ -2127,29 +2122,19 @@ def test_402_balance_error_aborts_after_one_provider_request():
         _restore_workdir(old, tmp)
 
 
-def test_context_overflow_compacts_then_resumes_without_json_diagnostic():
+def test_context_overflow_recovery_does_not_require_http_transport_library():
     """Provider context rejection follows processor compact instead of 400 repair."""
-    from openai import BadRequestError
     from nz_coder.loop import AgentLoop
+
+    class FakeContextOverflow(Exception):
+        status_code = 400
+        code = "context_length_exceeded"
+        body = {"error": {"type": "context_length_exceeded"}}
 
     old, tmp = _tmp_workdir()
     try:
-        import httpx
-
-        http_response = httpx.Response(
-            400,
-            json={
-                "error": {
-                    "message": "maximum context length is 8192 tokens",
-                    "type": "context_length_exceeded",
-                }
-            },
-            request=httpx.Request("POST", "https://api.example.com/v1/chat/completions"),
-        )
-        overflow = BadRequestError(
+        overflow = FakeContextOverflow(
             "context_length_exceeded: maximum context length is 8192 tokens",
-            response=http_response,
-            body={"error": {"type": "context_length_exceeded"}},
         )
         fake = FakeClient([
             overflow,
@@ -2175,6 +2160,15 @@ def test_context_overflow_compacts_then_resumes_without_json_diagnostic():
         )
     finally:
         _restore_workdir(old, tmp)
+
+
+def test_openai_client_error_classification_is_transport_neutral():
+    from nz_coder.runtime.execution.loop import _is_client_error
+
+    class FakeClientError(Exception):
+        status_code = 400
+
+    assert _is_client_error(FakeClientError("bad request")) is True
 
 
 def test_context_overflow_stops_after_three_compaction_attempts(monkeypatch):
