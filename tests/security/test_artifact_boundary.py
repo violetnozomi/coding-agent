@@ -74,3 +74,67 @@ def test_artifact_single_read_is_bounded(tmp_path):
     assert chunk.text == "x" * 10
     assert chunk.next_offset == 10
     assert chunk.has_more is True
+
+
+def test_artifact_quotas_fail_without_echoing_output(tmp_path):
+    from nz_coder.tool_platform.artifacts import ArtifactQuotaError, ArtifactStore
+
+    secret = "sentinel-artifact-secret"
+    store = ArtifactStore(
+        tmp_path,
+        "session-a",
+        max_result_bytes=16,
+        max_session_bytes=20,
+    )
+    with pytest.raises(ArtifactQuotaError) as single:
+        store.put(secret * 10, kind="tool-result")
+    assert secret not in str(single.value)
+
+    store.put("x" * 12, kind="tool-result")
+    with pytest.raises(ArtifactQuotaError) as session:
+        store.put("y" * 12, kind="tool-result")
+    assert "yyyy" not in str(session.value)
+
+
+def test_workspace_lru_cleanup_never_deletes_current_session_entries(tmp_path):
+    from nz_coder.tool_platform.artifacts import ArtifactAccessError, ArtifactStore
+
+    old = ArtifactStore(
+        tmp_path,
+        "old-session",
+        max_workspace_files=1,
+        max_workspace_bytes=1024,
+        clock=lambda: 1.0,
+    )
+    old_id = old.put("old", kind="tool-result")
+    current = ArtifactStore(
+        tmp_path,
+        "current-session",
+        max_workspace_files=1,
+        max_workspace_bytes=1024,
+        clock=lambda: 100.0,
+    )
+    current_id = current.put("current", kind="tool-result")
+
+    assert current.read(current_id) == "current"
+    assert current.last_cleanup
+    with pytest.raises(ArtifactAccessError):
+        old.read(old_id)
+
+
+def test_concurrent_artifact_writes_remain_manifest_consistent(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from nz_coder.tool_platform.artifacts import ArtifactStore
+
+    store = ArtifactStore(tmp_path, "session-a", max_session_files=64)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        artifact_ids = list(pool.map(
+            lambda index: store.put(f"value-{index}", kind="tool-result"),
+            range(32),
+        ))
+
+    assert len(set(artifact_ids)) == 32
+    assert [store.read(item) for item in artifact_ids] == [
+        f"value-{index}" for index in range(32)
+    ]

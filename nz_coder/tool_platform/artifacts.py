@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import uuid
+from typing import Callable
 
 from nz_coder.foundation.private_paths import harden_private_path
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
@@ -57,6 +58,9 @@ class ArtifactStore:
         max_workspace_bytes: int = 256 * 1024 * 1024,
         max_workspace_files: int = 2048,
         max_read_bytes: int = 64 * 1024,
+        ttl_seconds: int = 7 * 24 * 60 * 60,
+        clock: Callable[[], float] = time.time,
+        on_cleanup: Callable[[dict[str, object]], None] | None = None,
     ) -> None:
         self.workspace = Path(workspace).resolve(strict=True)
         self.session_id = _validated_session_id(session_id)
@@ -66,6 +70,12 @@ class ArtifactStore:
         self.max_workspace_bytes = _positive(max_workspace_bytes, "max_workspace_bytes")
         self.max_workspace_files = _positive(max_workspace_files, "max_workspace_files")
         self.max_read_bytes = _positive(max_read_bytes, "max_read_bytes")
+        self.ttl_seconds = _positive(ttl_seconds, "ttl_seconds")
+        if not callable(clock):
+            raise ValueError("artifact clock must be callable")
+        self._clock = clock
+        self._on_cleanup = on_cleanup
+        self.last_cleanup: tuple[dict[str, object], ...] = ()
         self.directory = (
             self.workspace
             / ".nz-coder"
@@ -93,8 +103,13 @@ class ArtifactStore:
                 raise ArtifactQuotaError("Artifact Session file quota exceeded")
             if session_bytes + len(payload) > self.max_session_bytes:
                 raise ArtifactQuotaError("Artifact Session byte quota exceeded")
+            cleanup = self._cleanup_workspace(
+                required_bytes=len(payload),
+                required_files=1,
+            )
+            self.last_cleanup = tuple(cleanup)
             workspace_files, workspace_bytes = self._workspace_usage()
-            if workspace_files >= self.max_workspace_files:
+            if workspace_files + 1 > self.max_workspace_files:
                 raise ArtifactQuotaError("Artifact workspace file quota exceeded")
             if workspace_bytes + len(payload) > self.max_workspace_bytes:
                 raise ArtifactQuotaError("Artifact workspace byte quota exceeded")
@@ -106,7 +121,7 @@ class ArtifactStore:
                 "filename": filename,
                 "kind": kind,
                 "size": len(payload),
-                "created_at": time.time(),
+                "created_at": self._clock(),
             }
             try:
                 self._write_manifest(manifest)
@@ -236,6 +251,95 @@ class ArtifactStore:
         except OSError:
             pass
         return files, total
+
+    def _cleanup_workspace(
+        self,
+        *,
+        required_bytes: int,
+        required_files: int,
+    ) -> list[dict[str, object]]:
+        """Remove expired/LRU entries from other Sessions until quotas fit."""
+        root = self.workspace / ".nz-coder" / "sessions" / "_artifacts"
+        now = float(self._clock())
+        candidates: list[tuple[float, Path, str, dict[str, object]]] = []
+        for manifest_path in root.glob("*/runtime/tool-results/manifest.json"):
+            owner = manifest_path.parents[2].name
+            if owner == self.session_id:
+                continue
+            try:
+                payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            entries = payload.get("entries", {}) if isinstance(payload, dict) else {}
+            if not isinstance(entries, dict):
+                continue
+            for artifact_id, record in entries.items():
+                if not _ARTIFACT_ID.fullmatch(str(artifact_id)) or not isinstance(record, dict):
+                    continue
+                try:
+                    created = float(record.get("created_at", 0.0))
+                except (TypeError, ValueError):
+                    created = 0.0
+                candidates.append((created, manifest_path, str(artifact_id), record))
+        candidates.sort(key=lambda item: (item[0], item[2]))
+        events: list[dict[str, object]] = []
+        for created, manifest_path, artifact_id, record in candidates:
+            files, size = self._workspace_usage()
+            over_quota = (
+                files + required_files > self.max_workspace_files
+                or size + required_bytes > self.max_workspace_bytes
+            )
+            expired = now - created >= self.ttl_seconds
+            if not over_quota and not expired:
+                continue
+            event = self._remove_workspace_entry(
+                manifest_path,
+                artifact_id,
+                record,
+                reason="ttl" if expired else "lru-quota",
+            )
+            if event is not None:
+                events.append(event)
+                if self._on_cleanup is not None:
+                    try:
+                        self._on_cleanup(dict(event))
+                    except Exception as exc:
+                        event["observer_error"] = type(exc).__name__
+        return events
+
+    def _remove_workspace_entry(
+        self,
+        manifest_path: Path,
+        artifact_id: str,
+        record: dict[str, object],
+        *,
+        reason: str,
+    ) -> dict[str, object] | None:
+        filename = str(record.get("filename") or "")
+        if filename != f"{artifact_id}.txt":
+            return None
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            return None
+        entries = payload.get("entries", {}) if isinstance(payload, dict) else {}
+        if not isinstance(entries, dict) or artifact_id not in entries:
+            return None
+        target = WorkspacePathPolicy(self.workspace).validate_internal_access(
+            manifest_path.parent / filename
+        )
+        target.unlink(missing_ok=True)
+        entries.pop(artifact_id, None)
+        _atomic_write(
+            manifest_path,
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+        )
+        return {
+            "event": "artifact.cleaned",
+            "artifact_id": artifact_id,
+            "reason": reason,
+            "size": max(0, int(record.get("size", 0))),
+        }
 
 
 def _atomic_write(path: Path, payload: bytes) -> None:
