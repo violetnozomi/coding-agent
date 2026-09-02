@@ -1674,9 +1674,10 @@ def test_loop_preserves_reasoning_content_between_tool_turns():
         _run_agent(agent, messages, stream=False)
 
         assistant_messages = [m for m in messages if m.get("role") == "assistant"]
-        assert assistant_messages[0]["_nz_provider_reasoning_content"] == (
-            "private provider reasoning token"
-        )
+        private_state = assistant_messages[0]["_nz_provider_reasoning_content"]
+        assert private_state["schema"] == "nz.provider_private_state.v1"
+        assert private_state["provider_id"] == "openai-compatible"
+        assert private_state["payload"] == "private provider reasoning token"
         second_request_messages = fake.chat.completions.requests[1]["messages"]
         assert any(
             m.get("role") == "assistant"

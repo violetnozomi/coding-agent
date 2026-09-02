@@ -815,6 +815,8 @@ class AgentRunner:
                         processor=processor,
                         message_part=message_part,
                         messages=messages,
+                        source_provider_id=str(run_context.request.provider or ""),
+                        source_model_id=str(run_context.request.model or ""),
                     )
                     model_result_materialized = True
                     async def execute_batch():
@@ -996,6 +998,8 @@ class AgentRunner:
                         message_part=message_part,
                         messages=messages,
                         reconcile=model_result_materialized,
+                        source_provider_id=str(run_context.request.provider or ""),
+                        source_model_id=str(run_context.request.model or ""),
                     )
                     model_result_materialized = True
                     error = result.post_tool_stream_error
@@ -1229,6 +1233,8 @@ class AgentRunner:
                     message_part=message_part,
                     messages=messages,
                     reconcile=model_result_materialized,
+                    source_provider_id=str(run_context.request.provider or ""),
+                    source_model_id=str(run_context.request.model or ""),
                 )
                 if not model_result_materialized:
                     model_result_materialized = True

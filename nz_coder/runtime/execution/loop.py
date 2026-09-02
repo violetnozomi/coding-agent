@@ -157,6 +157,7 @@ from nz_coder.protocol.message_schema import (
     assistant_error_from_exception,
     attach_message_identity,
     attach_text_part,
+    provider_private_envelope,
     provider_private_state,
     bind_assistant_context,
     bind_user_context,
@@ -2113,6 +2114,12 @@ class ProductRunEnvironment:
             messages,
             capabilities=getattr(self, "model_capabilities", None),
             include_attachments=False,
+            target_provider_id=str(
+                getattr(getattr(self, "provider", None), "name", "")
+                or getattr(self, "provider_id", "")
+                or ""
+            ),
+            target_model_id=str(getattr(self, "model_id", "") or ""),
         )
         return estimate_tokens(projected)
 
@@ -2744,14 +2751,37 @@ class ProductRunEnvironment:
 
     def _make_assistant_message(self, result: LLMResult) -> dict:
         """把 LLMResult 转成可追加到历史里的 assistant 消息。"""
+        provider_id = str(getattr(self.provider, "name", "") or "unknown")
+        model_id = str(self.model_id or "unknown")
         content = ""
         if not result.tool_calls:
             content = result.content or ""
         assistant_msg = {"role": "assistant", "content": content}
         if result.extra:
-            assistant_msg.update(provider_private_state(result.extra))
+            assistant_msg.update(provider_private_state(
+                result.extra,
+                provider_id=provider_id,
+                model_id=model_id,
+            ))
         if result.tool_calls:
-            assistant_msg["tool_calls"] = result.tool_calls
+            assistant_msg["tool_calls"] = copy.deepcopy(result.tool_calls)
+            for tool_call in assistant_msg["tool_calls"]:
+                if not isinstance(tool_call, dict):
+                    continue
+                provider_extra = tool_call.get("provider_extra")
+                if not isinstance(provider_extra, dict) or not provider_extra:
+                    tool_call.pop("provider_extra", None)
+                    continue
+                envelope = provider_private_envelope(
+                    provider_extra,
+                    provider_id=provider_id,
+                    model_id=model_id,
+                    payload_schema="tool_call_provider_extra.v1",
+                )
+                if envelope is None:
+                    tool_call.pop("provider_extra", None)
+                else:
+                    tool_call["provider_extra"] = envelope
         if (
             result.total_tokens
             or result.input_tokens
@@ -2779,10 +2809,8 @@ class ProductRunEnvironment:
                 )
         if result.cost_known:
             assistant_msg[ASSISTANT_COST_KEY] = max(0.0, float(result.cost))
-        assistant_msg[ASSISTANT_PROVIDER_KEY] = str(
-            getattr(self.provider, "name", "") or "unknown"
-        )
-        assistant_msg[ASSISTANT_MODEL_KEY] = str(self.model_id or "unknown")
+        assistant_msg[ASSISTANT_PROVIDER_KEY] = provider_id
+        assistant_msg[ASSISTANT_MODEL_KEY] = model_id
         assistant_msg["_timestamp"] = time.time()
         return assistant_msg
 
@@ -4397,19 +4425,19 @@ class ProductRunEnvironment:
             )
 
     def _sanitize_messages(
-        self,
-        messages: list,
-        *,
-        include_attachments: bool = True,
+        self, messages: list, *, include_attachments: bool = True,
     ) -> list:
         """Compatibility facade for provider message projection."""
         details = continuation_projection_details(messages)
         projection_stats: dict = {}
+        provider_id, model_id = _provider_projection_identity(self)
         projected = project_provider_messages(
             messages,
             capabilities=getattr(self, "model_capabilities", None),
             include_attachments=include_attachments,
             projection_stats=projection_stats,
+            target_provider_id=provider_id,
+            target_model_id=model_id,
         )
         AgentLoop._trace_continuation_projection(self, details)
         _trace_evidence_projection(self, include_attachments, projection_stats)
@@ -4417,6 +4445,16 @@ class ProductRunEnvironment:
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
+
+
+def _provider_projection_identity(owner) -> tuple[str, str]:
+    """Resolve the target identity without moving projection into AgentLoop."""
+    provider_id = str(
+        getattr(getattr(owner, "provider", None), "name", "")
+        or getattr(owner, "provider_id", "")
+        or ""
+    )
+    return provider_id, str(getattr(owner, "model_id", "") or "")
 
 
 def _trace_evidence_projection(owner, enabled: bool, stats: dict) -> None:

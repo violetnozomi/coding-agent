@@ -10,6 +10,7 @@ from pathlib import Path
 import time
 from types import SimpleNamespace
 from typing import Any
+from enum import Enum
 from urllib.parse import urlsplit
 
 from rich.console import Console
@@ -325,12 +326,75 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
     return 0
 
 
-def _pump_remote_stream(stream: Any, transport: RemoteTransportBridge) -> None:
-    """Copy one SSE stream into the bridge and fail closed on backpressure."""
+class _RemotePumpExit(str, Enum):
+    """Explicit terminal reason for one cursor-bound SSE reader."""
+
+    SETTLED = "settled"
+    CLEAN_EOF = "clean_eof"
+    STOP_REQUESTED = "stop_requested"
+    TRANSPORT_ERROR = "transport_error"
+
+
+class _RemoteStreamPump:
+    """Own one SSE iterator, its thread, and its close lifecycle."""
+
+    def __init__(self, stream: Any, transport: RemoteTransportBridge) -> None:
+        self.stream = stream
+        self.transport = transport
+        self._stop = threading.Event()
+        self._done = threading.Event()
+        self.exit_reason: _RemotePumpExit | None = None
+        self.thread = threading.Thread(
+            target=self._run,
+            name="nz-remote-events",
+            daemon=True,
+        )
+
+    def start(self) -> "_RemoteStreamPump":
+        self.thread.start()
+        return self
+
+    def request_stop(self) -> None:
+        """Fence late publications; iterator close remains owner-thread-only."""
+        self._stop.set()
+        self.transport.deactivate()
+
+    def wait(self, timeout: float | None = None) -> bool:
+        if not self._done.wait(timeout):
+            return False
+        self.thread.join(timeout=0)
+        return not self.thread.is_alive()
+
+    def _run(self) -> None:
+        try:
+            self.exit_reason = _pump_remote_stream(
+                self.stream,
+                self.transport,
+                stop_requested=self._stop,
+            )
+        finally:
+            self._done.set()
+
+
+def _pump_remote_stream(
+    stream: Any,
+    transport: RemoteTransportBridge,
+    *,
+    stop_requested: threading.Event | None = None,
+) -> _RemotePumpExit:
+    """Copy one SSE stream; only this iterator owner may close it."""
+    stop = stop_requested or threading.Event()
+    reason = _RemotePumpExit.CLEAN_EOF
     try:
         for payload in stream:
+            if stop.is_set():
+                reason = _RemotePumpExit.STOP_REQUESTED
+                break
             accepted = transport.offer(payload)
             if not accepted:
+                if stop.is_set():
+                    reason = _RemotePumpExit.STOP_REQUESTED
+                    break
                 transport.fail_closed(
                     PublicError(
                         "remote_transport_overflow",
@@ -339,20 +403,43 @@ def _pump_remote_stream(stream: Any, transport: RemoteTransportBridge) -> None:
                     ),
                     reconnect_required=True,
                 )
+                reason = _RemotePumpExit.TRANSPORT_ERROR
                 break
             if payload.get("type") == "session.run.settled":
+                reason = _RemotePumpExit.SETTLED
+                break
+            if (
+                payload.get("type") == "server.event_gap"
+                or transport.rebase_required
+            ):
+                # Stop before requesting another potentially blocking HTTP
+                # read. The frontend will establish the next snapshot epoch.
+                reason = _RemotePumpExit.STOP_REQUESTED
                 break
     except Exception as exc:
-        transport.fail_closed(to_public_error(exc), reconnect_required=True)
+        reason = _RemotePumpExit.TRANSPORT_ERROR
+        if not stop.is_set():
+            transport.fail_closed(to_public_error(exc), reconnect_required=True)
+        else:
+            reason = _RemotePumpExit.STOP_REQUESTED
     finally:
-        transport.close_reader()
+        try:
+            close = getattr(stream, "close", None)
+            if callable(close):
+                close()
+        except Exception as exc:
+            if not stop.is_set():
+                reason = _RemotePumpExit.TRANSPORT_ERROR
+                transport.fail_closed(to_public_error(exc), reconnect_required=True)
+        transport.close_reader(reason.value)
+    return reason
 
 
 @dataclass(frozen=True)
 class _ReconnectedRemoteStream:
     """Authoritative replacement for one invalidated remote SSE stream."""
 
-    stream: Any | None
+    pump: _RemoteStreamPump | None
     transport: RemoteTransportBridge
     cursor: str | None
     settled: bool
@@ -370,6 +457,7 @@ def _remote_gap_requires_rebase(properties: object) -> bool:
             "remote_mailbox_overflow",
             "subscriber_queue_overflow",
             "cursor_expired",
+            "event_cursor_expired",
         }
     )
 
@@ -377,17 +465,31 @@ def _remote_gap_requires_rebase(properties: object) -> bool:
 async def _rebase_remote_stream(
     *,
     backend: RemoteTerminalBackend,
-    stream: Any,
+    pump: _RemoteStreamPump,
     transport: RemoteTransportBridge,
     run_view: TerminalRunRenderer,
     bridge: TerminalInteractionBridge,
     interaction_tasks: "_InteractionTaskRegistry",
     loop: asyncio.AbstractEventLoop,
 ) -> _ReconnectedRemoteStream:
-    """Close a gapped stream and resume from one authoritative snapshot."""
+    """Retire one reader and resume from one authoritative snapshot."""
     try:
-        await asyncio.to_thread(stream.close)
-        latest = await asyncio.to_thread(backend.attach_snapshot)
+        pump.request_stop()
+        stopped = await asyncio.to_thread(pump.wait, 5.0)
+        if not stopped:
+            raise PublicRuntimeError(PublicError(
+                "remote_stream_shutdown_timeout",
+                "The previous remote event stream did not stop safely.",
+                retryable=True,
+            ))
+        try:
+            latest = await asyncio.to_thread(backend.attach_snapshot)
+        except Exception as exc:
+            raise PublicRuntimeError(PublicError(
+                "remote_stream_ended",
+                "The remote event stream ended and its run state could not be recovered.",
+                retryable=True,
+            )) from exc
         if not isinstance(latest, dict):
             raise ValueError("remote snapshot must be an object")
         _feed_snapshot_events(run_view, latest)
@@ -402,32 +504,37 @@ async def _rebase_remote_stream(
             if isinstance(latest.get("session"), dict)
             else {}
         )
-        terminal_status = str(session.get("status") or "completed")
-        settled = bool(latest.get("settled")) or not bool(session.get("running"))
+        terminal_status = str(session.get("status") or "unknown")
+        settled = bool(latest.get("settled"))
+        running = bool(session.get("running")) or terminal_status == "running"
         cursor = str((latest.get("cursor") or {}).get("event_id") or "") or None
         transport.clear_gap()
         if settled:
             return _ReconnectedRemoteStream(
-                stream=None,
+                pump=None,
                 transport=transport,
                 cursor=cursor,
                 settled=True,
                 terminal_status=terminal_status,
             )
+        if not running:
+            raise PublicRuntimeError(PublicError(
+                "remote_stream_ended",
+                "The remote event stream ended without an authoritative run state.",
+                retryable=True,
+            ))
         replacement = RemoteTransportBridge(
             loop,
             capacity=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512),
             critical_reserve=16,
         )
         replacement_stream = backend.events(last_event_id=cursor)
-        threading.Thread(
-            target=_pump_remote_stream,
-            args=(replacement_stream, replacement),
-            name="nz-remote-events",
-            daemon=True,
+        replacement_pump = _RemoteStreamPump(
+            replacement_stream,
+            replacement,
         ).start()
         return _ReconnectedRemoteStream(
-            stream=replacement_stream,
+            pump=replacement_pump,
             transport=replacement,
             cursor=cursor,
             settled=False,
@@ -463,9 +570,9 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
         capacity=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512),
         critical_reserve=16,
     )
-    stream = None
+    pump = None
 
-    terminal_status = "completed"
+    terminal_status = str((baseline.get("session") or {}).get("status") or "unknown")
     reconnecting = False
     interaction_tasks = _InteractionTaskRegistry(
         on_error=lambda exc: transport.fail_closed(
@@ -487,13 +594,7 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
             await interaction_tasks.wait()
             return
         stream = backend.events(last_event_id=cursor)
-        thread = threading.Thread(
-            target=_pump_remote_stream,
-            args=(stream, transport),
-            name="nz-remote-events",
-            daemon=True,
-        )
-        thread.start()
+        pump = _RemoteStreamPump(stream, transport).start()
         _register_pending_interactions(
             backend,
             baseline.get("pending") or {},
@@ -507,7 +608,41 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 interaction_tasks.raise_if_failed()
                 continue
             if payload.get("_transport_done"):
-                reader_done = True
+                exit_reason = str(payload.get("_exit_reason") or "clean_eof")
+                if exit_reason == _RemotePumpExit.SETTLED.value:
+                    reader_done = True
+                    continue
+                if exit_reason == _RemotePumpExit.STOP_REQUESTED.value:
+                    reader_done = True
+                    continue
+                if transport_reconnects >= 3:
+                    raise PublicRuntimeError(PublicError(
+                        "remote_stream_ended",
+                        "The remote event stream ended before the run settled.",
+                        retryable=True,
+                    ))
+                transport_reconnects += 1
+                reconnecting = True
+                console.print("[info]Reconnecting…[/info]")
+                replacement = await _rebase_remote_stream(
+                    backend=backend,
+                    pump=pump,
+                    transport=transport,
+                    run_view=run_view,
+                    bridge=bridge,
+                    interaction_tasks=interaction_tasks,
+                    loop=loop,
+                )
+                pump = replacement.pump
+                transport = replacement.transport
+                cursor = replacement.cursor
+                terminal_status = replacement.terminal_status
+                if replacement.settled:
+                    reader_done = True
+                    break
+                reader_done = False
+                console.print("[success]Reconnected[/success]")
+                reconnecting = False
                 continue
             if payload.get("_error"):
                 public = public_error_from_wire(payload["_error"])
@@ -517,14 +652,14 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                     console.print("[info]Reconnecting…[/info]")
                     replacement = await _rebase_remote_stream(
                         backend=backend,
-                        stream=stream,
+                        pump=pump,
                         transport=transport,
                         run_view=run_view,
                         bridge=bridge,
                         interaction_tasks=interaction_tasks,
                         loop=loop,
                     )
-                    stream = replacement.stream
+                    pump = replacement.pump
                     transport = replacement.transport
                     cursor = replacement.cursor
                     terminal_status = replacement.terminal_status
@@ -564,14 +699,14 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                     transport_reconnects += 1
                     replacement = await _rebase_remote_stream(
                         backend=backend,
-                        stream=stream,
+                        pump=pump,
                         transport=transport,
                         run_view=run_view,
                         bridge=bridge,
                         interaction_tasks=interaction_tasks,
                         loop=loop,
                     )
-                    stream = replacement.stream
+                    pump = replacement.pump
                     transport = replacement.transport
                     cursor = replacement.cursor
                     terminal_status = replacement.terminal_status
@@ -604,16 +739,12 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 if event_type == "session.run.settled":
                     reader_done = True
                 interaction_tasks.cancel()
-        if stream is not None:
-            await asyncio.to_thread(stream.close)
     finally:
         interaction_tasks.cancel()
         await interaction_tasks.wait(return_exceptions=True)
-        if stream is not None:
-            try:
-                stream.close()
-            except Exception:
-                pass
+        if pump is not None:
+            pump.request_stop()
+            await asyncio.to_thread(pump.wait, 5.0)
         try:
             final_snapshot = await asyncio.to_thread(backend.attach_snapshot)
             _feed_snapshot_events(run_view, final_snapshot)

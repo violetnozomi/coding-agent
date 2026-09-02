@@ -74,8 +74,37 @@ class SessionRuntime:
         normalized = _session_status(status)
         if normalized.terminal:
             self._clean_tool_history(context)
+        marker = context.metadata.get("_nz_active_checkpoint_marker")
+        if isinstance(marker, str) and marker:
+            commits = context.session.metadata.setdefault(
+                "_nz_checkpoint_commits", []
+            )
+            if not isinstance(commits, list):
+                commits = []
+                context.session.metadata["_nz_checkpoint_commits"] = commits
+            if marker not in commits:
+                commits.append(marker)
+                del commits[:-32]
         context.session.record_status(normalized)
         await self.store.save(context.session)
+
+    async def checkpoint_committed(
+        self,
+        context: RunContext,
+        marker: str,
+    ) -> bool:
+        """Reconstruct whether a checkpoint survived an after-write failure."""
+        self._validate_context(context)
+        if not isinstance(marker, str) or not marker:
+            return False
+        durable = await self.store.load(
+            context.session.identity,
+            context.session.workspace,
+        )
+        if durable is None:
+            return False
+        commits = durable.metadata.get("_nz_checkpoint_commits")
+        return isinstance(commits, list) and marker in commits
 
     async def finalize(self, context: RunContext, status: RunStatus) -> None:
         """Persist one terminal run state exactly once."""

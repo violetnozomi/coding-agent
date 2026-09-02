@@ -910,7 +910,10 @@ def test_stream_tool_input_is_durable_before_tool_dispatch(tmp_path, monkeypatch
     first_assistant = next(
         message for message in messages if message.get("role") == "assistant"
     )
-    assert first_assistant["tool_calls"][0]["provider_extra"] == {
+    private_tool_state = first_assistant["tool_calls"][0]["provider_extra"]
+    assert private_tool_state["schema"] == "nz.provider_private_state.v1"
+    assert private_tool_state["provider_id"] == "openai-compatible"
+    assert private_tool_state["payload"] == {
         "thoughtSignature": "stream-signature",
     }
     first_assistant = next(message for message in messages if message.get("role") == "assistant")

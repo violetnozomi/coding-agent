@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import queue
 from typing import Any, Protocol
 
-from nz_coder.http_service.client import NZCoderClient, NZCoderHTTPError
+from nz_coder.http_service.client import NZCoderClient
 
 
 class TerminalBackend(Protocol):
@@ -198,36 +198,13 @@ class RemoteTerminalBackend:
         return info
 
     def events(self, *, last_event_id: str | None = None) -> Iterator[dict]:
-        cursor = last_event_id
-        resyncs = 0
-        while True:
-            stream = self.client.events(
-                self.session_id,
-                replay=0,
-                last_event_id=cursor,
-                reconnect_attempts=2,
-            )
-            try:
-                yield from stream
-                return
-            except NZCoderHTTPError as exc:
-                if exc.code != "event_cursor_expired" or resyncs >= 3:
-                    raise
-            finally:
-                stream.close()
-            resyncs += 1
-            yield {
-                "type": "server.event_gap",
-                "properties": {
-                    "reason": "event_cursor_expired",
-                    "resume_required": True,
-                },
-            }
-            snapshot = self.attach_snapshot()
-            yield {"type": "server.snapshot", "properties": snapshot}
-            if bool(snapshot.get("settled")):
-                return
-            cursor = str((snapshot.get("cursor") or {}).get("event_id") or "") or None
+        """Open exactly one cursor-bound stream; the frontend owns resync."""
+        yield from self.client.events(
+            self.session_id,
+            replay=0,
+            last_event_id=last_event_id,
+            reconnect_attempts=2,
+        )
 
     def reply_permission(self, request_id: str, reply: str, *, message: str = "") -> bool:
         return self.client.reply_permission(

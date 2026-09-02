@@ -31,19 +31,16 @@ class _GapClient:
         }
 
 
-def test_remote_backend_resyncs_expired_cursor_and_stops_when_settled():
+def test_cursor_expiry_has_single_resync_owner():
     client = _GapClient()
     backend = RemoteTerminalBackend(client, "session-1")
 
-    events = list(backend.events(last_event_id="expired"))
+    import pytest
 
-    assert [event["type"] for event in events] == [
-        "server.event_gap",
-        "server.snapshot",
-    ]
-    assert events[1]["properties"]["cursor"]["event_id"] == "fresh"
+    with pytest.raises(NZCoderHTTPError, match="event_cursor_expired"):
+        list(backend.events(last_event_id="expired"))
     assert client.event_calls == 1
-    assert client.snapshots == 1
+    assert client.snapshots == 0
 
 
 class _ControlClient:

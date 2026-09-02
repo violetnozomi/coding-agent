@@ -58,6 +58,8 @@ AUTHORITATIVE_KEY = "_nz_authoritative"
 PROVIDER_EXTRA_KEY = "_nz_provider_extra"
 PROVIDER_REASONING_KEY = "_nz_provider_reasoning_content"
 PROVIDER_TOOL_METADATA_KEY = "_nz_provider_metadata"
+POLICY_SETTLEMENT_KEY = "_nz_policy_settlement"
+PROVIDER_PRIVATE_STATE_SCHEMA = "nz.provider_private_state.v1"
 
 RESERVED_MESSAGE_KEYS = frozenset({
     "role",
@@ -103,15 +105,102 @@ def sanitize_provider_extra(extra: object) -> dict[str, object]:
     return selected
 
 
-def provider_private_state(extra: object) -> dict[str, object]:
-    """Map JSON-safe Provider continuation state onto private durable keys."""
+def provider_model_family(provider_id: object, model_id: object) -> str:
+    """Return a conservative compatibility family for private continuation."""
+    provider = str(provider_id or "").strip().casefold()
+    model = str(model_id or "").strip().casefold()
+    if not provider or not model:
+        return ""
+    return f"{provider}/{model}"
+
+
+def provider_private_envelope(
+    payload: object,
+    *,
+    provider_id: object,
+    model_id: object,
+    payload_schema: str,
+) -> dict[str, object] | None:
+    """Bind JSON-safe private state to its exact source compatibility family."""
+    provider = str(provider_id or "").strip()
+    family = provider_model_family(provider, model_id)
+    safe, accepted = _json_safe_provider_value(payload)
+    if not provider or not family or not accepted:
+        return None
+    return {
+        "schema": PROVIDER_PRIVATE_STATE_SCHEMA,
+        "provider_id": provider,
+        "model_family": family,
+        "payload_schema": str(payload_schema),
+        "payload": safe,
+    }
+
+
+def provider_private_state(
+    extra: object,
+    *,
+    provider_id: object = "",
+    model_id: object = "",
+) -> dict[str, object]:
+    """Map Provider continuation state onto source-bound durable keys."""
     selected = sanitize_provider_extra(extra)
     private: dict[str, object] = {}
     if "reasoning_content" in selected:
-        private[PROVIDER_REASONING_KEY] = selected["reasoning_content"]
+        envelope = provider_private_envelope(
+            selected["reasoning_content"],
+            provider_id=provider_id,
+            model_id=model_id,
+            payload_schema="reasoning_content.v1",
+        )
+        if envelope is not None:
+            private[PROVIDER_REASONING_KEY] = envelope
     if "provider_extra" in selected:
-        private[PROVIDER_EXTRA_KEY] = selected["provider_extra"]
+        envelope = provider_private_envelope(
+            selected["provider_extra"],
+            provider_id=provider_id,
+            model_id=model_id,
+            payload_schema="message_provider_extra.v1",
+        )
+        if envelope is not None:
+            private[PROVIDER_EXTRA_KEY] = envelope
     return private
+
+
+def project_provider_private_payload(
+    value: object,
+    *,
+    payload_schema: str,
+    source_provider_id: object = "",
+    source_model_id: object = "",
+    target_provider_id: object = "",
+    target_model_id: object = "",
+) -> object | None:
+    """Restore private payload only for a proven compatible target."""
+    target_provider = str(target_provider_id or "").strip()
+    target_family = provider_model_family(target_provider, target_model_id)
+    if not target_provider or not target_family:
+        return None
+    if isinstance(value, dict) and value.get("schema") == PROVIDER_PRIVATE_STATE_SCHEMA:
+        if (
+            value.get("payload_schema") != payload_schema
+            or str(value.get("provider_id") or "").casefold()
+            != target_provider.casefold()
+            or value.get("model_family") != target_family
+        ):
+            return None
+        safe, accepted = _json_safe_provider_value(value.get("payload"))
+        return copy.deepcopy(safe) if accepted else None
+    # Legacy migration is allowed only when the owning Assistant message has
+    # reliable source identity. Unknown provenance fails closed.
+    source_provider = str(source_provider_id or "").strip()
+    if (
+        not source_provider
+        or source_provider.casefold() != target_provider.casefold()
+        or provider_model_family(source_provider, source_model_id) != target_family
+    ):
+        return None
+    safe, accepted = _json_safe_provider_value(value)
+    return copy.deepcopy(safe) if accepted else None
 
 
 def project_public_protocol_value(value: object) -> object:

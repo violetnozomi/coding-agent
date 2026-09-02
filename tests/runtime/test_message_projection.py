@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from nz_coder.runtime.execution.loop import AgentLoop
 from nz_coder.runtime.conversation.message_projection import project_provider_messages
+from nz_coder.protocol.message_schema import provider_private_state
 
 
 def _assistant(call_id: str, *, provider_authored: bool = True) -> dict:
@@ -34,6 +35,158 @@ def _write_result(call_id: str, content: str = "FULL DIFF") -> dict:
         "_nz_mutated_resources": ["src/app.py"],
         "_nz_mutation_generation": 3,
     }
+
+
+def _private_assistant(provider: str = "provider-a", model: str = "model-1") -> dict:
+    message = {
+        "role": "assistant",
+        "content": "safe",
+        "_nz_provider_id": provider,
+        "_nz_model_id": model,
+        "tool_calls": [{
+            "id": "call-private",
+            "type": "function",
+            "function": {"name": "read_file", "arguments": "{}"},
+            "provider_extra": {
+                "schema": "nz.provider_private_state.v1",
+                "provider_id": provider,
+                "model_family": f"{provider}/{model}",
+                "payload_schema": "tool_call_provider_extra.v1",
+                "payload": {"signature": "private-tool-state"},
+            },
+        }],
+    }
+    message.update(provider_private_state(
+        {
+            "reasoning_content": "private-reasoning",
+            "provider_extra": {"response_id": "private-response"},
+        },
+        provider_id=provider,
+        model_id=model,
+    ))
+    return message
+
+
+def test_same_provider_private_state_round_trip_is_preserved():
+    message = _private_assistant()
+
+    projected = project_provider_messages(
+        [message, {"role": "tool", "tool_call_id": "call-private", "content": "ok"}],
+        capabilities=SimpleNamespace(
+            preserve_reasoning_content=True,
+            supports_image_input=False,
+        ),
+        target_provider_id="provider-a",
+        target_model_id="model-1",
+    )[0]
+
+    assert projected["reasoning_content"] == "private-reasoning"
+    assert projected["provider_extra"] == {"response_id": "private-response"}
+    assert projected["tool_calls"][0]["provider_extra"] == {
+        "signature": "private-tool-state",
+    }
+
+
+def test_provider_extra_not_forwarded_to_different_provider_family():
+    message = _private_assistant()
+    history = [
+        message,
+        {"role": "tool", "tool_call_id": "call-private", "content": "ok"},
+    ]
+    capabilities = SimpleNamespace(
+        preserve_reasoning_content=True,
+        supports_image_input=False,
+    )
+
+    for provider, model in (("provider-b", "model-1"), ("provider-a", "model-2")):
+        projected = project_provider_messages(
+            history,
+            capabilities=capabilities,
+            target_provider_id=provider,
+            target_model_id=model,
+        )[0]
+        assert projected.get("reasoning_content") == ""
+        assert "provider_extra" not in projected
+        assert "provider_extra" not in projected["tool_calls"][0]
+
+
+def test_legacy_unprovenanced_private_state_fails_closed():
+    projected = project_provider_messages(
+        [{
+            "role": "assistant",
+            "content": "safe",
+            "reasoning_content": "unknown-private",
+            "provider_extra": {"response_id": "unknown-private"},
+        }],
+        capabilities=SimpleNamespace(
+            preserve_reasoning_content=True,
+            supports_image_input=False,
+        ),
+        target_provider_id="provider-a",
+        target_model_id="model-1",
+    )[0]
+
+    assert projected["reasoning_content"] == ""
+    assert "provider_extra" not in projected
+
+
+def test_legacy_provider_state_migrates_with_reliable_message_identity():
+    projected = project_provider_messages(
+        [{
+            "role": "assistant",
+            "content": "safe",
+            "_nz_provider_id": "provider-a",
+            "_nz_model_id": "model-1",
+            "reasoning_content": "legacy-private",
+            "provider_extra": {"response_id": "legacy-private"},
+        }],
+        capabilities=SimpleNamespace(
+            preserve_reasoning_content=True,
+            supports_image_input=False,
+        ),
+        target_provider_id="provider-a",
+        target_model_id="model-1",
+    )[0]
+
+    assert projected["reasoning_content"] == "legacy-private"
+    assert projected["provider_extra"] == {"response_id": "legacy-private"}
+
+
+def test_private_reasoning_not_forwarded_after_provider_switch():
+    projected = project_provider_messages(
+        [_private_assistant("gemini", "gemini-3")],
+        capabilities=SimpleNamespace(
+            preserve_reasoning_content=True,
+            supports_image_input=False,
+        ),
+        target_provider_id="openai-compatible",
+        target_model_id="gpt-5",
+    )[0]
+
+    assert projected["reasoning_content"] == ""
+
+
+def test_gemini_thought_signature_not_sent_to_openai_compatible():
+    message = _private_assistant("gemini", "gemini-3")
+    projected = project_provider_messages(
+        [message, {"role": "tool", "tool_call_id": "call-private", "content": "ok"}],
+        target_provider_id="openai-compatible",
+        target_model_id="gpt-5",
+    )[0]
+
+    assert "provider_extra" not in projected["tool_calls"][0]
+
+
+def test_openai_reasoning_items_not_sent_to_gemini():
+    message = _private_assistant("openai", "gpt-5")
+    projected = project_provider_messages(
+        [message, {"role": "tool", "tool_call_id": "call-private", "content": "ok"}],
+        target_provider_id="gemini",
+        target_model_id="gemini-3",
+    )[0]
+
+    assert "provider_extra" not in projected
+    assert "provider_extra" not in projected["tool_calls"][0]
 
 
 def test_latest_write_result_stays_complete_until_provider_observes_it() -> None:

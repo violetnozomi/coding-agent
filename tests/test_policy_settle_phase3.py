@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -575,6 +576,182 @@ def test_part_retirement_is_idempotent_after_partial_failure():
     asyncio.run(exercise())
     assert part["retired"] is True
     assert calls == 1
+
+
+def test_policy_settle_after_publish_then_raise_does_not_duplicate():
+    kwargs, settlement, assistant, _part = _after_side_effect_settlement()
+    real_processor = kwargs["processor"]
+    calls = 0
+
+    class Processor:
+        def settle_policy_failure(self, error):
+            nonlocal calls
+            calls += 1
+            result = real_processor.settle_policy_failure(error)
+            raise RuntimeError("policy publish failed after mutation")
+
+        def finish_step(self, reason):
+            return real_processor.finish_step(reason)
+
+    kwargs["processor"] = Processor()
+
+    async def exercise():
+        with pytest.raises(RuntimeError, match="after mutation"):
+            await commit_boundary.settle_failed_attempt(**kwargs)
+        assert settlement.policy_parts_settled is True
+        assert await commit_boundary.settle_failed_attempt(**kwargs) is True
+
+    asyncio.run(exercise())
+    assert calls == 1
+    assert assistant["_nz_policy_settlement"]["error_code"] == (
+        "guardrail_review_required"
+    )
+
+
+def test_checkpoint_commit_then_raise_is_idempotent():
+    kwargs, settlement, _assistant, _part = _after_side_effect_settlement()
+    run_context = SimpleNamespace(metadata={})
+    calls = 0
+
+    class Runtime:
+        async def checkpoint(self, context, _status):
+            nonlocal calls
+            calls += 1
+            marker = context.metadata["_nz_active_checkpoint_marker"]
+            context.metadata.setdefault("_nz_checkpoint_commits", []).append(marker)
+            raise RuntimeError("checkpoint failed after durable commit")
+
+        async def checkpoint_committed(self, context, marker):
+            return marker in context.metadata.get("_nz_checkpoint_commits", [])
+
+    kwargs["run_context"] = run_context
+    kwargs["services"].session_runtime = Runtime()
+
+    async def exercise():
+        with pytest.raises(RuntimeError, match="after durable commit"):
+            await commit_boundary.settle_failed_attempt(**kwargs)
+        assert settlement.checkpointed is True
+        assert await commit_boundary.settle_failed_attempt(**kwargs) is True
+
+    asyncio.run(exercise())
+    assert calls == 1
+
+
+def test_snapshot_retire_after_signal_then_raise_is_idempotent():
+    kwargs, settlement, _assistant, _part = _after_side_effect_settlement()
+    cancel = threading.Event()
+    calls = 0
+
+    def retire(_task, signal):
+        nonlocal calls
+        calls += 1
+        signal.set()
+        raise RuntimeError("snapshot retire failed after signal")
+
+    kwargs["context"].snapshots.retire = retire
+    kwargs["snapshot_cancel"] = cancel
+
+    async def exercise():
+        with pytest.raises(RuntimeError, match="after signal"):
+            await commit_boundary.settle_failed_attempt(**kwargs)
+        assert settlement.snapshot_retired is True
+        assert await commit_boundary.settle_failed_attempt(**kwargs) is True
+
+    asyncio.run(exercise())
+    assert calls == 1
+
+
+def test_all_settlement_phases_have_recoverable_postconditions():
+    assistant = {"role": "assistant", "content": "unapproved"}
+    attach_message_identity(
+        assistant,
+        "msg-all-postconditions",
+        session_id="session-policy",
+    )
+    real_processor = SessionProcessor(assistant)
+    real_processor.start_step()
+    counters = {
+        "snapshot": 0,
+        "part": 0,
+        "policy": 0,
+        "error": 0,
+        "finish": 0,
+        "checkpoint": 0,
+    }
+    cancel = threading.Event()
+    message_part = {"retired": False}
+    run_context = SimpleNamespace(metadata={})
+
+    class Processor:
+        def settle_policy_failure(self, error):
+            counters["policy"] += 1
+            result = real_processor.settle_policy_failure(error)
+            raise RuntimeError("policy after effect")
+
+        def finish_step(self, reason):
+            counters["finish"] += 1
+            result = real_processor.finish_step(reason)
+            raise RuntimeError("finish after effect")
+
+    class Runtime:
+        async def checkpoint(self, context, _status):
+            counters["checkpoint"] += 1
+            marker = context.metadata["_nz_active_checkpoint_marker"]
+            context.metadata.setdefault("_nz_checkpoint_commits", []).append(marker)
+            raise RuntimeError("checkpoint after effect")
+
+        async def checkpoint_committed(self, context, marker):
+            return marker in context.metadata.get("_nz_checkpoint_commits", [])
+
+    def retire_snapshot(_task, signal):
+        counters["snapshot"] += 1
+        signal.set()
+        raise RuntimeError("snapshot after effect")
+
+    def retire_part(part, _reason):
+        counters["part"] += 1
+        part["retired"] = True
+        raise RuntimeError("part after effect")
+
+    def publish(*_args):
+        counters["error"] += 1
+        raise RuntimeError("error after effect")
+
+    settlement = commit_boundary.FailedAttemptSettlement()
+    kwargs = {
+        "context": SimpleNamespace(
+            snapshots=SimpleNamespace(retire=retire_snapshot),
+            messages=SimpleNamespace(
+                retire_message_part=retire_part,
+                publish_event=publish,
+            ),
+        ),
+        "services": SimpleNamespace(session_runtime=Runtime()),
+        "run_context": run_context,
+        "assistant_message": assistant,
+        "processor": Processor(),
+        "message_part": message_part,
+        "public_error": PublicError(
+            "guardrail_review_required",
+            "Output requires policy review.",
+            metadata={"hook_point": "output"},
+        ),
+        "failure_kind": "output_guardrail",
+        "settlement": settlement,
+        "snapshot_cancel": cancel,
+    }
+
+    async def exercise():
+        for _index in range(6):
+            try:
+                await commit_boundary.settle_failed_attempt(**kwargs)
+            except RuntimeError:
+                continue
+        assert await commit_boundary.settle_failed_attempt(**kwargs) is True
+
+    asyncio.run(exercise())
+    assert settlement.completed is True
+    assert all(count == 1 for count in counters.values())
 
 
 def test_concurrent_settlement_calls_do_not_duplicate_parts():

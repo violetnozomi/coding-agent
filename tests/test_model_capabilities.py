@@ -589,6 +589,8 @@ def test_reasoning_history_policy_is_model_aware():
     message = {
         "role": "assistant",
         "content": "tooling",
+        "_nz_provider_id": "openai-compatible",
+        "_nz_model_id": "qwen-plus",
         "reasoning_content": "provider-state",
     }
 

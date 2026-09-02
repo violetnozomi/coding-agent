@@ -55,6 +55,12 @@ class RemoteEventMailbox:
         with self._condition:
             return self._count_locked() + int(self._gap_pending)
 
+    @property
+    def rebase_required(self) -> bool:
+        """Return whether ordinary event loss has invalidated this epoch."""
+        with self._condition:
+            return self._gap_pending
+
     def offer(
         self,
         payload: dict,
@@ -287,6 +293,7 @@ class RemoteTransportState:
     reconnect_required: bool = False
     fatal_error: PublicError | None = None
     failure_reason: str = ""
+    exit_reason: str = ""
 
 
 class RemoteTransportBridge:
@@ -315,6 +322,10 @@ class RemoteTransportBridge:
         return self.mailbox.buffered_count
 
     @property
+    def rebase_required(self) -> bool:
+        return self.mailbox.rebase_required
+
+    @property
     def state(self) -> RemoteTransportState:
         """Return a detached snapshot of the transport control plane."""
         with self._lock:
@@ -340,10 +351,17 @@ class RemoteTransportBridge:
                 self.loop.call_soon_threadsafe(self._ready.set)
             return accepted
 
-    def close_reader(self) -> None:
+    def close_reader(self, reason: str = "clean_eof") -> None:
         """Publish reader completion without requiring a mailbox slot."""
         with self._lock:
             self._state.reader_done = True
+            self._state.exit_reason = str(reason or "clean_eof")
+            self._schedule_wakeup_locked()
+
+    def deactivate(self) -> None:
+        """Fence a superseded reader without publishing a transport failure."""
+        with self._lock:
+            self._state.closed = True
             self._schedule_wakeup_locked()
 
     def fail_closed(
@@ -406,7 +424,10 @@ class RemoteTransportBridge:
             }
         if mailbox_empty and self._state.reader_done and not self._done_delivered:
             self._done_delivered = True
-            return {"_transport_done": True}
+            return {
+                "_transport_done": True,
+                "_exit_reason": self._state.exit_reason or "clean_eof",
+            }
         return None
 
     def _schedule_wakeup_locked(self) -> None:

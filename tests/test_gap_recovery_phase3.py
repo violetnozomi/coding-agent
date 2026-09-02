@@ -244,6 +244,194 @@ def test_mailbox_gap_restores_pending_interactions(monkeypatch):
     }
 
 
+def _rebase_after_eof(monkeypatch, snapshot):
+    from nz_coder.interface import remote
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+
+    class Backend:
+        def attach_snapshot(self):
+            if isinstance(snapshot, BaseException):
+                raise snapshot
+            return snapshot
+
+        def events(self, *, last_event_id=None):
+            self.cursor = last_event_id
+            return _RemoteStream([])
+
+    async def exercise():
+        loop = asyncio.get_running_loop()
+        transport = RemoteTransportBridge(loop)
+        pump = remote._RemoteStreamPump(_RemoteStream([]), transport).start()
+        assert await asyncio.to_thread(pump.wait, 1.0)
+        return await remote._rebase_remote_stream(
+            backend=Backend(),
+            pump=pump,
+            transport=transport,
+            run_view=object(),
+            bridge=object(),
+            interaction_tasks=object(),
+            loop=loop,
+        )
+
+    monkeypatch.setattr(remote, "_feed_snapshot_events", lambda *_args: None)
+    monkeypatch.setattr(remote, "_register_pending_interactions", lambda *_args: None)
+    return asyncio.run(exercise())
+
+
+def test_transport_done_settled_snapshot_finishes(monkeypatch):
+    result = _rebase_after_eof(monkeypatch, {
+        "settled": True,
+        "session": {"running": False, "status": "failed"},
+        "cursor": {"event_id": "terminal-cursor"},
+        "pending": {},
+    })
+
+    assert result.settled is True
+    assert result.terminal_status == "failed"
+    assert result.pump is None
+
+
+def test_transport_done_running_snapshot_reconnects(monkeypatch):
+    result = _rebase_after_eof(monkeypatch, {
+        "settled": False,
+        "session": {"running": True, "status": "running"},
+        "cursor": {"event_id": "resume-cursor"},
+        "pending": {},
+    })
+
+    assert result.settled is False
+    assert result.cursor == "resume-cursor"
+    assert result.pump is not None
+    assert result.pump.wait(1.0)
+
+
+def test_transport_done_snapshot_failure_is_retryable_error(monkeypatch):
+    from nz_coder.protocol.public_error import PublicRuntimeError
+
+    with pytest.raises(PublicRuntimeError) as captured:
+        _rebase_after_eof(monkeypatch, RuntimeError("private snapshot detail"))
+
+    assert captured.value.public_error.code == "remote_stream_ended"
+    assert captured.value.public_error.retryable is True
+    assert "private snapshot detail" not in str(captured.value)
+
+
+def test_clean_eof_without_terminal_does_not_complete_run(monkeypatch):
+    from nz_coder.protocol.public_error import PublicRuntimeError
+
+    with pytest.raises(PublicRuntimeError) as captured:
+        _rebase_after_eof(monkeypatch, {
+            "settled": False,
+            "session": {"running": False, "status": "unknown"},
+            "cursor": {"event_id": "ambiguous-cursor"},
+            "pending": {},
+        })
+
+    assert captured.value.public_error.code == "remote_stream_ended"
+
+
+def test_terminal_status_never_defaults_to_completed_after_unverified_eof(monkeypatch):
+    result = _rebase_after_eof(monkeypatch, {
+        "settled": True,
+        "session": {"running": False, "status": "cancelled"},
+        "cursor": {"event_id": "cancelled-cursor"},
+        "pending": {},
+    })
+
+    assert result.terminal_status == "cancelled"
+    assert result.terminal_status != "completed"
+
+
+def test_rebase_never_closes_active_generator_from_another_thread(monkeypatch):
+    from nz_coder.interface import remote
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+
+    entered = threading.Event()
+    release = threading.Event()
+    owner = []
+    closed = []
+
+    def stream():
+        try:
+            owner.append(threading.get_ident())
+            entered.set()
+            release.wait(timeout=1)
+            if False:
+                yield None
+        finally:
+            closed.append(threading.get_ident())
+
+    class Backend:
+        def attach_snapshot(self):
+            return {
+                "settled": True,
+                "session": {"running": False, "status": "completed"},
+                "cursor": {},
+                "pending": {},
+            }
+
+    async def exercise():
+        loop = asyncio.get_running_loop()
+        transport = RemoteTransportBridge(loop)
+        pump = remote._RemoteStreamPump(stream(), transport).start()
+        assert await asyncio.to_thread(entered.wait, 1.0)
+        loop.call_later(0.05, release.set)
+        return await remote._rebase_remote_stream(
+            backend=Backend(),
+            pump=pump,
+            transport=transport,
+            run_view=object(),
+            bridge=object(),
+            interaction_tasks=object(),
+            loop=loop,
+        )
+
+    monkeypatch.setattr(remote, "_feed_snapshot_events", lambda *_args: None)
+    monkeypatch.setattr(remote, "_register_pending_interactions", lambda *_args: None)
+    result = asyncio.run(exercise())
+    assert result.settled is True
+    assert closed == owner
+
+
+def test_gap_rebase_waits_for_old_pump_shutdown(monkeypatch):
+    from nz_coder.interface import remote
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+
+    order = []
+
+    class Stream:
+        def __iter__(self):
+            yield {"type": "server.event_gap", "properties": {"resume_required": True}}
+
+        def close(self):
+            order.append("old-closed")
+
+    class Backend:
+        def attach_snapshot(self):
+            order.append("snapshot")
+            return {
+                "settled": True,
+                "session": {"running": False, "status": "completed"},
+                "cursor": {},
+                "pending": {},
+            }
+
+    async def exercise():
+        loop = asyncio.get_running_loop()
+        transport = RemoteTransportBridge(loop)
+        pump = remote._RemoteStreamPump(Stream(), transport).start()
+        assert await asyncio.to_thread(pump.wait, 1.0)
+        await remote._rebase_remote_stream(
+            backend=Backend(), pump=pump, transport=transport,
+            run_view=object(), bridge=object(), interaction_tasks=object(), loop=loop,
+        )
+
+    monkeypatch.setattr(remote, "_feed_snapshot_events", lambda *_args: None)
+    monkeypatch.setattr(remote, "_register_pending_interactions", lambda *_args: None)
+    asyncio.run(exercise())
+    assert order == ["old-closed", "snapshot"]
+
+
 def test_mailbox_gap_does_not_only_print_reconnecting(monkeypatch):
     result = _remote_gap_exercise(monkeypatch)
 

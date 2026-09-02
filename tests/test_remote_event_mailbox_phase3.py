@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from types import SimpleNamespace
 
 
@@ -382,7 +383,10 @@ def test_transport_done_uses_out_of_band_control_state():
         return await bridge.get(timeout=0.1), bridge.snapshot()
 
     payload, queued = asyncio.run(exercise())
-    assert payload == {"_transport_done": True}
+    assert payload == {
+        "_transport_done": True,
+        "_exit_reason": "clean_eof",
+    }
     assert queued == []
 
 
@@ -436,6 +440,74 @@ def test_critical_offer_failure_stops_sse_reader():
 
     assert observed == ["permission.asked"]
     assert bridge.state.reader_done is True
+
+
+def test_remote_stream_pump_owns_iterator_close():
+    from nz_coder.interface.remote import _RemoteStreamPump
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+
+    owner_threads = []
+    close_threads = []
+
+    class Stream:
+        def __iter__(self):
+            owner_threads.append(threading.get_ident())
+            yield _event("session.run.settled")
+
+        def close(self):
+            close_threads.append(threading.get_ident())
+
+    async def exercise():
+        bridge = RemoteTransportBridge(asyncio.get_running_loop())
+        pump = _RemoteStreamPump(Stream(), bridge).start()
+        assert await asyncio.to_thread(pump.wait, 1.0)
+
+    asyncio.run(exercise())
+    assert close_threads == owner_threads
+
+
+def test_old_stream_cannot_publish_after_replacement():
+    from nz_coder.interface.remote import _RemoteStreamPump
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+
+    release = threading.Event()
+
+    class Stream:
+        def __iter__(self):
+            release.wait(timeout=1)
+            yield _event("message.part.delta", sequence=2, delta="stale")
+
+        def close(self):
+            return None
+
+    async def exercise():
+        bridge = RemoteTransportBridge(asyncio.get_running_loop())
+        pump = _RemoteStreamPump(Stream(), bridge).start()
+        pump.request_stop()
+        release.set()
+        assert await asyncio.to_thread(pump.wait, 1.0)
+        return bridge.snapshot()
+
+    assert asyncio.run(exercise()) == []
+
+
+def test_repeated_reconnects_do_not_leak_pump_threads():
+    from nz_coder.interface.remote import _RemoteStreamPump
+    from nz_coder.interface.remote_mailbox import RemoteTransportBridge
+
+    async def exercise():
+        for _index in range(8):
+            pump = _RemoteStreamPump(
+                iter(()),
+                RemoteTransportBridge(asyncio.get_running_loop()),
+            ).start()
+            assert await asyncio.to_thread(pump.wait, 1.0)
+
+    asyncio.run(exercise())
+    assert not [
+        thread for thread in threading.enumerate()
+        if thread.name == "nz-remote-events" and thread.is_alive()
+    ]
 
 
 def test_permission_burst_beyond_reserve_recovers_from_snapshot():

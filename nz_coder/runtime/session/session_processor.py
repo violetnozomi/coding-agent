@@ -23,6 +23,7 @@ from nz_coder.protocol.message_schema import (
     ASSISTANT_TIME_KEY,
     MESSAGE_ID_KEY,
     PARTS_KEY,
+    POLICY_SETTLEMENT_KEY,
     PROVIDER_EXTRA_KEY,
     PROVIDER_REASONING_KEY,
     PROVIDER_TOOL_METADATA_KEY,
@@ -287,6 +288,10 @@ class SessionProcessor:
             self.message.pop("provider_extra", None)
             self.message.pop(PROVIDER_REASONING_KEY, None)
             self.message.pop(PROVIDER_EXTRA_KEY, None)
+            self.message[POLICY_SETTLEMENT_KEY] = {
+                "schema": "nz.policy_settlement.v1",
+                "error_code": public.code,
+            }
             self._notify_message_updated()
         return settled
 

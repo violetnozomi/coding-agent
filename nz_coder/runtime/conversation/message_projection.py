@@ -1,6 +1,7 @@
 """Provider-neutral projection of durable Session messages onto wire messages."""
 from __future__ import annotations
 
+import copy
 import math
 import time
 
@@ -10,9 +11,12 @@ from nz_coder.state.context import estimate_tokens
 from nz_coder.protocol.message_schema import (
     MESSAGE_ID_KEY,
     PARTS_KEY,
+    ASSISTANT_MODEL_KEY,
+    ASSISTANT_PROVIDER_KEY,
     PROVIDER_EXTRA_KEY,
     PROVIDER_REASONING_KEY,
     cleanup_incomplete_tool_history,
+    project_provider_private_payload,
 )
 from nz_coder.runtime.conversation.continuation_context import project_continuation_messages
 from nz_coder.state.input_expansion import render_expanded_message
@@ -24,8 +28,20 @@ def project_provider_messages(
     capabilities=None,
     include_attachments: bool = True,
     projection_stats: dict | None = None,
+    target_provider_id: str = "",
+    target_model_id: str = "",
 ) -> list:
     """Normalize Session history without exposing durable NZ-only fields."""
+    target_provider_id = str(
+        target_provider_id
+        or getattr(capabilities, "provider", "")
+        or ""
+    )
+    target_model_id = str(
+        target_model_id
+        or getattr(capabilities, "model_id", "")
+        or ""
+    )
     messages = project_continuation_messages(messages)
     empty_tool_assistant_ordinals = _empty_tool_assistant_ordinals(messages)
     calls_before, results_before = _tool_envelope_counts(messages)
@@ -152,12 +168,43 @@ def project_provider_messages(
         strip_keys = {
             key for key in message if key.startswith("_nz_")
         } | {"_timestamp"} | strip_extra
-        clean = {key: value for key, value in message.items() if key not in strip_keys}
-        private_provider_extra = message.get(PROVIDER_EXTRA_KEY)
-        if not isinstance(private_provider_extra, dict):
-            private_provider_extra = message.get("provider_extra")
-        if isinstance(private_provider_extra, dict) and private_provider_extra:
-            clean["provider_extra"] = dict(private_provider_extra)
+        clean = {
+            key: copy.deepcopy(value)
+            for key, value in message.items()
+            if key not in strip_keys
+        }
+        source_provider_id = message.get(ASSISTANT_PROVIDER_KEY)
+        source_model_id = message.get(ASSISTANT_MODEL_KEY)
+        private_provider_extra = (
+            message.get(PROVIDER_EXTRA_KEY)
+            if PROVIDER_EXTRA_KEY in message
+            else message.get("provider_extra")
+        )
+        restored_extra = project_provider_private_payload(
+            private_provider_extra,
+            payload_schema="message_provider_extra.v1",
+            source_provider_id=source_provider_id,
+            source_model_id=source_model_id,
+            target_provider_id=target_provider_id,
+            target_model_id=target_model_id,
+        )
+        if isinstance(restored_extra, dict) and restored_extra:
+            clean["provider_extra"] = restored_extra
+        if role == "assistant" and isinstance(clean.get("tool_calls"), list):
+            for tool_call in clean["tool_calls"]:
+                if not isinstance(tool_call, dict):
+                    continue
+                private_tool_extra = tool_call.pop("provider_extra", None)
+                restored_tool_extra = project_provider_private_payload(
+                    private_tool_extra,
+                    payload_schema="tool_call_provider_extra.v1",
+                    source_provider_id=source_provider_id,
+                    source_model_id=source_model_id,
+                    target_provider_id=target_provider_id,
+                    target_model_id=target_model_id,
+                )
+                if isinstance(restored_tool_extra, dict) and restored_tool_extra:
+                    tool_call["provider_extra"] = restored_tool_extra
         if role == "tool":
             replacement = _superseded_tool_marker(
                 message,
@@ -231,14 +278,23 @@ def project_provider_messages(
                 # still removed below because they never had tool calls.
                 clean["content"] = "..."
                 stats["empty_assistant_placeholders"] += 1
-            private_reasoning = message.get(PROVIDER_REASONING_KEY)
-            legacy_reasoning = message.get("reasoning_content")
+            private_reasoning = (
+                message.get(PROVIDER_REASONING_KEY)
+                if PROVIDER_REASONING_KEY in message
+                else message.get("reasoning_content")
+            )
+            restored_reasoning = project_provider_private_payload(
+                private_reasoning,
+                payload_schema="reasoning_content.v1",
+                source_provider_id=source_provider_id,
+                source_model_id=source_model_id,
+                target_provider_id=target_provider_id,
+                target_model_id=target_model_id,
+            )
             if preserve_reasoning:
                 clean["reasoning_content"] = str(
-                    private_reasoning
-                    if isinstance(private_reasoning, str)
-                    else legacy_reasoning
-                    if isinstance(legacy_reasoning, str)
+                    restored_reasoning
+                    if isinstance(restored_reasoning, str)
                     else ""
                 )
             clean["_timestamp"] = message.get("_timestamp", now)

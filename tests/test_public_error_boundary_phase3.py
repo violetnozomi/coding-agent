@@ -275,6 +275,8 @@ def _provider_private_assistant() -> dict:
     assistant = {
         "role": "assistant",
         "content": "safe answer",
+        "_nz_provider_id": "openai-compatible",
+        "_nz_model_id": "private-model",
         "reasoning_content": _SECRET,
         "provider_extra": {
             "authorization": "Bearer SECRET-123",
@@ -410,6 +412,8 @@ def test_private_provider_metadata_survives_provider_round_trip():
             },
         ],
         capabilities=SimpleNamespace(
+            provider="openai-compatible",
+            model_id="private-model",
             preserve_reasoning_content=True,
             supports_image_input=False,
         ),

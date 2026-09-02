@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import inspect
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -10,9 +12,12 @@ from nz_coder.runtime.conversation.model_result import LLMResult
 from nz_coder.protocol.message_schema import (
     ASSISTANT_ERROR_KEY,
     ASSISTANT_FINISH_KEY,
+    ASSISTANT_MODEL_KEY,
+    ASSISTANT_PROVIDER_KEY,
     AUTHORITATIVE_KEY,
     INTERNAL_KEY,
     PARTS_KEY,
+    POLICY_SETTLEMENT_KEY,
     VISIBLE_KEY,
     normalize_assistant_error,
     provider_private_state,
@@ -58,6 +63,7 @@ class FailedAttemptSettlement:
     checkpointed: bool = False
     completed: bool = False
     finish_reason: str = ""
+    checkpoint_id: str = field(default_factory=lambda: f"settlement-{uuid.uuid4().hex}")
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     @property
@@ -104,6 +110,54 @@ def _step_finish_committed(assistant_message: dict, reason: str) -> bool:
     )
 
 
+def _snapshot_retirement_committed(
+    snapshots: object,
+    snapshot_task: object,
+    snapshot_cancel: object,
+) -> bool:
+    """Recognize cancellation signalled before a retirement callback raised."""
+    probe = getattr(snapshots, "retirement_committed", None)
+    if callable(probe):
+        try:
+            return bool(probe(snapshot_task, snapshot_cancel))
+        except Exception:
+            return False
+    is_set = getattr(snapshot_cancel, "is_set", None)
+    if callable(is_set) and is_set():
+        return True
+    for name in ("cancelled", "done"):
+        check = getattr(snapshot_task, name, None)
+        if callable(check) and check():
+            return True
+    return False
+
+
+def _policy_settlement_committed(assistant_message: dict, public: PublicError) -> bool:
+    marker = assistant_message.get(POLICY_SETTLEMENT_KEY)
+    return bool(
+        isinstance(marker, dict)
+        and marker.get("schema") == "nz.policy_settlement.v1"
+        and marker.get("error_code") == public.code
+    )
+
+
+async def _checkpoint_committed(runtime: object, run_context: object, marker: str) -> bool:
+    probe = getattr(runtime, "checkpoint_committed", None)
+    if callable(probe):
+        try:
+            result = probe(run_context, marker)
+            if inspect.isawaitable(result):
+                result = await result
+            return bool(result)
+        except Exception:
+            return False
+    metadata = getattr(run_context, "metadata", None)
+    return bool(
+        isinstance(metadata, dict)
+        and marker in (metadata.get("_nz_checkpoint_commits") or [])
+    )
+
+
 async def approve_model_result(
     *,
     context,
@@ -132,6 +186,8 @@ def commit_approved_model_result(
     message_part: dict,
     messages: list[dict],
     reconcile: bool = False,
+    source_provider_id: str = "",
+    source_model_id: str = "",
 ) -> None:
     """Cross the sole model-to-Message/Part publication boundary.
 
@@ -146,8 +202,26 @@ def commit_approved_model_result(
     result.extra = sanitize_provider_extra(result.extra)
     internal = approved.visibility is not OutputVisibility.USER_VISIBLE
     if internal and not result.tool_calls:
+        provider_id = str(
+            source_provider_id
+            or assistant_message.get(ASSISTANT_PROVIDER_KEY)
+            or ""
+        )
+        model_id = str(
+            source_model_id
+            or assistant_message.get(ASSISTANT_MODEL_KEY)
+            or ""
+        )
         assistant_message["content"] = result.content or ""
-        assistant_message.update(provider_private_state(result.extra))
+        assistant_message.update(provider_private_state(
+            result.extra,
+            provider_id=provider_id,
+            model_id=model_id,
+        ))
+        if provider_id:
+            assistant_message[ASSISTANT_PROVIDER_KEY] = provider_id
+        if model_id:
+            assistant_message[ASSISTANT_MODEL_KEY] = model_id
         assistant_message["role"] = "assistant"
         assistant_message[VISIBLE_KEY] = False
         assistant_message[INTERNAL_KEY] = True
@@ -219,8 +293,17 @@ async def settle_failed_attempt(
             return False
         retire_snapshot = getattr(context.snapshots, "retire", None)
         if not settlement.snapshot_retired:
-            if callable(retire_snapshot):
-                retire_snapshot(snapshot_task, snapshot_cancel)
+            try:
+                if callable(retire_snapshot):
+                    retire_snapshot(snapshot_task, snapshot_cancel)
+            except BaseException:
+                if _snapshot_retirement_committed(
+                    context.snapshots,
+                    snapshot_task,
+                    snapshot_cancel,
+                ):
+                    settlement.snapshot_retired = True
+                raise
             settlement.snapshot_retired = True
         if not settlement.part_retired:
             try:
@@ -234,7 +317,12 @@ async def settle_failed_attempt(
                 raise
             settlement.part_retired = True
         if not settlement.policy_parts_settled:
-            processor.settle_policy_failure(public)
+            try:
+                processor.settle_policy_failure(public)
+            except BaseException:
+                if _policy_settlement_committed(assistant_message, public):
+                    settlement.policy_parts_settled = True
+                raise
             settlement.policy_parts_settled = True
         if not settlement.error_attached:
             try:
@@ -264,7 +352,19 @@ async def settle_failed_attempt(
             settlement.step_finished = True
             settlement.finish_reason = finish_reason
         if not settlement.checkpointed:
-            await services.session_runtime.checkpoint(run_context, "error")
+            metadata = getattr(run_context, "metadata", None)
+            if isinstance(metadata, dict):
+                metadata["_nz_active_checkpoint_marker"] = settlement.checkpoint_id
+            try:
+                await services.session_runtime.checkpoint(run_context, "error")
+            except BaseException:
+                if await _checkpoint_committed(
+                    services.session_runtime,
+                    run_context,
+                    settlement.checkpoint_id,
+                ):
+                    settlement.checkpointed = True
+                raise
             settlement.checkpointed = True
         settlement.completed = True
         return True

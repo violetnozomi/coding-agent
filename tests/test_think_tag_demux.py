@@ -136,7 +136,10 @@ def test_full_agent_run_persists_demuxed_text_and_reasoning_parts(tmp_path):
     ]
     assert result["status"] == "completed"
     assert assistant["content"] == "Ready"
-    assert assistant["_nz_provider_reasoning_content"] == "inspect state"
+    private_reasoning = assistant["_nz_provider_reasoning_content"]
+    assert private_reasoning["schema"] == "nz.provider_private_state.v1"
+    assert private_reasoning["provider_id"] == "openai-compatible"
+    assert private_reasoning["payload"] == "inspect state"
     assert [part["text"] for part in text_parts] == ["Ready"]
     assert [part["text"] for part in reasoning_parts] == ["inspect state"]
     assert all(part["internal"] is True for part in reasoning_parts)
