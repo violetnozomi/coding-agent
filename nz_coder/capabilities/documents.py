@@ -20,6 +20,7 @@ import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.protocol.attachments import (
     MAX_DOCUMENT_BYTES,
@@ -503,6 +504,7 @@ def _extract_pdf(
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=errors,
+                env=build_sanitized_subprocess_env(),
             )
             deadline = time.monotonic() + DOCUMENT_CONVERT_TIMEOUT_SECONDS
             while process.poll() is None:
@@ -547,6 +549,7 @@ def _pdf_page_count(path: Path, cancel_event: threading.Event) -> int | None:
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=subprocess.DEVNULL,
+            env=build_sanitized_subprocess_env(),
         )
         deadline = time.monotonic() + 10
         while process.poll() is None:

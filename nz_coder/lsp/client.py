@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 from nz_coder.foundation import config
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
 
 
@@ -112,6 +113,7 @@ class LSPClient:
             self.process = subprocess.Popen(
                 executable_argv(self.command),
                 cwd=str(self.root),
+                env=build_sanitized_subprocess_env(),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

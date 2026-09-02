@@ -470,20 +470,29 @@ def _check_lsp(root: Path) -> DoctorCheck:
         return DoctorCheck("lsp", "pass", "enabled; no supported source files detected", category="optional")
     installed = []
     missing = []
+    trust_required = []
     for language, path in sorted(samples.items()):
         server = resolve_server(path, root)
-        (installed if server else missing).append(
-            f"{language}:{server.server_id}" if server else language
-        )
+        if server is None:
+            missing.append(language)
+        elif not server.trusted:
+            trust_required.append(f"{language}:{server.server_id}")
+        else:
+            installed.append(f"{language}:{server.server_id}")
     detail = "installed=" + (", ".join(installed) or "none")
+    if trust_required:
+        detail += "; trust-required=" + ", ".join(trust_required)
     if missing:
         detail += "; optional missing=" + ", ".join(missing)
     return DoctorCheck(
         "lsp",
-        "warn" if missing else "pass",
+        "warn" if missing or trust_required else "pass",
         detail,
         "Install only the language servers you need; NZ-Coder still has structural search."
-        if missing else "",
+        if missing else (
+            "Review and trust a workspace LSP with nz-coder lsp trust <source-file>."
+            if trust_required else ""
+        ),
         "optional",
     )
 

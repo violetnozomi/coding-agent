@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 import shlex
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_trust import WorkspaceTrustStore
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,9 @@ class ResolvedServer:
     command: tuple[str, ...]
     root: Path
     analysis_paths: tuple[Path, ...] = ()
+    source: str = "system"
+    trusted: bool = True
+    fingerprint: str = ""
 
 
 _SPECS = (
@@ -220,14 +226,85 @@ def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
             continue
         resolved = _resolve_executable(command, root)
         if resolved:
+            executable = Path(resolved[0]).resolve(strict=False)
+            workspace_local = _inside_workspace(executable, workspace)
+            fingerprint = _server_fingerprint(resolved, executable)
+            trusted = not workspace_local or WorkspaceTrustStore().is_trusted(
+                workspace,
+                f"lsp:{spec.language}",
+                fingerprint,
+                executable=str(executable),
+            )
             return ResolvedServer(
                 server_id=Path(resolved[0]).name,
                 language_id=spec.language_id,
                 command=resolved,
                 root=root,
                 analysis_paths=analysis_paths,
+                source="workspace" if workspace_local else "system",
+                trusted=trusted,
+                fingerprint=fingerprint,
             )
     return None
+
+
+def trust_server(path: Path, workspace: Path) -> ResolvedServer:
+    """Trust the currently resolved workspace executable for one source file."""
+    server = resolve_server(path, workspace)
+    if server is None:
+        raise ValueError("No installed LSP server was found for this file")
+    if server.source != "workspace":
+        return server
+    WorkspaceTrustStore().trust(
+        workspace,
+        f"lsp:{server.language_id}",
+        server.fingerprint,
+        executable=str(Path(server.command[0]).resolve(strict=False)),
+    )
+    refreshed = resolve_server(path, workspace)
+    if refreshed is None or not refreshed.trusted:
+        raise ValueError("LSP workspace trust could not be established")
+    return refreshed
+
+
+def untrust_server(path: Path, workspace: Path) -> bool:
+    """Remove trust for the currently resolved workspace LSP executable."""
+    server = resolve_server(path, workspace)
+    if server is None or server.source != "workspace":
+        return False
+    return WorkspaceTrustStore().remove(
+        workspace,
+        f"lsp:{server.language_id}",
+        executable=str(Path(server.command[0]).resolve(strict=False)),
+    )
+
+
+def _inside_workspace(path: Path, workspace: Path) -> bool:
+    try:
+        path.relative_to(Path(workspace).resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _server_fingerprint(command: tuple[str, ...], executable: Path) -> str:
+    executable_hash = ""
+    if executable.is_file():
+        digest = hashlib.sha256()
+        with executable.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        executable_hash = digest.hexdigest()
+    payload = json.dumps(
+        {
+            "command": list(command),
+            "executable": str(executable),
+            "executable_hash": executable_hash,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def available_server_summary(path: Path) -> str:

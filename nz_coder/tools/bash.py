@@ -10,6 +10,7 @@ from itertools import islice
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.foundation.workspace_paths import (
     WorkspacePathError,
     WorkspacePathPolicy,
@@ -289,9 +290,8 @@ def run_bash(
         return workdir_error
     assert resolved_workdir is not None
     pythonpath_root = _strict_pytest_source_root(command, resolved_workdir)
-    process_environment = None
+    process_environment = build_sanitized_subprocess_env()
     if pythonpath_root is not None:
-        process_environment = dict(os.environ)
         inherited = str(process_environment.get("PYTHONPATH") or "").strip()
         process_environment["PYTHONPATH"] = os.pathsep.join(filter(None, (
             str(pythonpath_root),

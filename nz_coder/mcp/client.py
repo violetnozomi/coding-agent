@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
 
 _NOTIFICATION_CLOSED = object()
@@ -91,8 +92,7 @@ class MCPClient:
 
     def start(self) -> dict[str, Any]:
         """Spawn, initialize, and send the MCP initialized notification."""
-        env = os.environ.copy()
-        env.update(self.environment)
+        env = build_sanitized_subprocess_env(overrides=self.environment)
         with self._state_lock:
             if self.process is not None:
                 return {

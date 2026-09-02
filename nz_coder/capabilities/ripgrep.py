@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+
 
 class RipgrepCancelled(Exception):
     """Raised after a ripgrep producer has settled cooperative cancellation."""
@@ -190,7 +192,7 @@ def _run_ripgrep_lines(
     duration = float(timeout)
     if not math.isfinite(duration) or duration <= 0:
         raise ValueError("ripgrep timeout must be a positive finite number")
-    environment = dict(os.environ)
+    environment = build_sanitized_subprocess_env()
     environment.pop("RIPGREP_CONFIG_PATH", None)
     _raise_if_cancelled(cancel_event)
     lines: queue.Queue[str] = queue.Queue(maxsize=128)

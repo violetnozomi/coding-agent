@@ -979,6 +979,10 @@ def main(argv: list[str] | None = None) -> int:
         from nz_coder.mcp.cli import mcp_main
 
         return mcp_main(args[1:])
+    if args and args[0] == "lsp":
+        from nz_coder.lsp.cli import lsp_main
+
+        return lsp_main(args[1:])
     if args and args[0] == "provider-smoke":
         from nz_coder.evaluation.provider_smoke import main as provider_smoke_main
 

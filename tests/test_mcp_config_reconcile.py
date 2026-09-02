@@ -88,6 +88,68 @@ def test_layered_configs_replace_by_name_and_require_project_command_trust(
     assert changed.trusted is False
 
 
+def test_project_remote_mcp_requires_trust_and_security_changes_invalidate_it(
+    tmp_path,
+    monkeypatch,
+):
+    from nz_coder.foundation import config
+    from nz_coder.mcp import MCPTrustStore, load_mcp_server_configs
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _, project, trust_path = _configure_paths(monkeypatch, config, tmp_path)
+    _write_json(project, {
+        "servers": {
+            "remote": {
+                "type": "remote",
+                "url": "https://mcp.example.test/service",
+                "header_env": {"Authorization": "MCP_REMOTE_TOKEN"},
+                "tool_effects": {"lookup": "read"},
+            }
+        }
+    })
+
+    server = load_mcp_server_configs(workspace=workspace)[0]
+    assert server.source == "project"
+    assert server.trusted is False
+    MCPTrustStore(trust_path).trust(workspace, server.name, server.fingerprint)
+    assert load_mcp_server_configs(workspace=workspace)[0].trusted is True
+
+    _write_json(project, {
+        "servers": {
+            "remote": {
+                "type": "remote",
+                "url": "https://other.example.test/service",
+                "header_env": {"Authorization": "MCP_REMOTE_TOKEN"},
+                "tool_effects": {"lookup": "read"},
+            }
+        }
+    })
+    assert load_mcp_server_configs(workspace=workspace)[0].trusted is False
+
+
+def test_project_mcp_executable_change_invalidates_trust(tmp_path, monkeypatch):
+    from nz_coder.foundation import config
+    from nz_coder.mcp import MCPTrustStore, load_mcp_server_configs
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    executable = workspace / "mcp-server"
+    executable.write_text("version-one\n", encoding="utf-8")
+    _, project, trust_path = _configure_paths(monkeypatch, config, tmp_path)
+    _write_json(project, {
+        "servers": {"local": {"command": ["./mcp-server"]}}
+    })
+    server = load_mcp_server_configs(workspace=workspace)[0]
+    MCPTrustStore(trust_path).trust(workspace, server.name, server.fingerprint)
+    assert load_mcp_server_configs(workspace=workspace)[0].trusted is True
+
+    executable.write_text("version-two\n", encoding="utf-8")
+    changed = load_mcp_server_configs(workspace=workspace)[0]
+    assert changed.fingerprint != server.fingerprint
+    assert changed.trusted is False
+
+
 def stat_mode(path: Path) -> int:
     return os.stat(path).st_mode & 0o777
 

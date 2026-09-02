@@ -6,6 +6,7 @@ import json
 import math
 import os
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -291,12 +292,18 @@ def load_mcp_server_configs(
         )
         fingerprint = ""
         trusted = True
-        if server_type == "local" and origin == "project":
-            fingerprint = _command_fingerprint(
+        if origin == "project":
+            fingerprint = _server_fingerprint(
                 name=name,
+                server_type=server_type,
                 command=command,
                 cwd=cwd,
                 environment=environment,
+                url=str(url or ""),
+                headers=headers,
+                header_env=header_env,
+                oauth=oauth,
+                effects=tool_effects,
             )
             trusted = MCPTrustStore(Path(config.MCP_TRUST_STORE)).is_trusted(
                 root,
@@ -407,24 +414,80 @@ def _decode_server_payload(raw: str, label: str) -> dict[str, Any]:
     return dict(payload)
 
 
-def _command_fingerprint(
+def _server_fingerprint(
     *,
     name: str,
+    server_type: str,
     command: list[str],
     cwd: Path,
     environment: list[tuple[str, str]],
+    url: str,
+    headers: list[tuple[str, str]],
+    header_env: list[tuple[str, str]],
+    oauth: MCPOAuthConfig | None,
+    effects: list[tuple[str, str]],
 ) -> str:
+    executable = ""
+    executable_hash = ""
+    if command:
+        candidate = Path(command[0])
+        if candidate.is_absolute():
+            resolved = candidate.resolve(strict=False)
+        elif command[0].startswith(".") or "/" in command[0] or "\\" in command[0]:
+            resolved = (cwd / candidate).resolve(strict=False)
+        else:
+            resolved = Path(shutil.which(command[0]) or command[0]).resolve(strict=False)
+        executable = str(resolved)
+        if resolved.is_file():
+            executable_hash = _file_fingerprint(resolved)
     payload = json.dumps(
         {
             "name": name,
+            "type": server_type,
             "command": command,
             "cwd": str(cwd),
             "environment": sorted(environment),
+            "url": _normalized_remote_url(url),
+            "header_value_hashes": sorted(
+                (header.lower(), hashlib.sha256(value.encode("utf-8")).hexdigest())
+                for header, value in headers
+            ),
+            "header_env": sorted(header_env),
+            "oauth": {
+                "client_id": oauth.client_id,
+                "client_secret_env": oauth.client_secret_env,
+                "scope": oauth.scope,
+                "redirect_uri": oauth.redirect_uri,
+                "authorization_server": _normalized_remote_url(
+                    oauth.authorization_server
+                ),
+            } if oauth else None,
+            "effects": sorted(effects),
+            "executable": executable,
+            "executable_hash": executable_hash,
         },
         sort_keys=True,
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _file_fingerprint(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _normalized_remote_url(value: str) -> str:
+    if not value:
+        return ""
+    parsed = urlsplit(value)
+    host = (parsed.hostname or "").lower()
+    default_port = 443 if parsed.scheme.lower() == "https" else 80
+    authority = host if parsed.port in {None, default_port} else f"{host}:{parsed.port}"
+    return f"{parsed.scheme.lower()}://{authority}{parsed.path or '/'}"
 
 
 def _positive_timeout(value: Any, *, server: str, field: str) -> float:

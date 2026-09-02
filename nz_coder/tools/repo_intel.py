@@ -15,6 +15,7 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.runtime.agent.task_policy import (
@@ -61,6 +62,7 @@ def _run_git(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
         encoding="utf-8",
         errors="replace",
         timeout=timeout,
+        env=build_sanitized_subprocess_env(),
     )
 
 
@@ -287,6 +289,7 @@ def _run_verifier(label: str, cmd: list[str], timeout: int) -> tuple[bool, str]:
             errors="replace",
             timeout=timeout,
             cwd=current_workdir(),
+            env=build_sanitized_subprocess_env(),
         )
     except FileNotFoundError:
         return False, f"FAIL {label}\ncommand not found: {cmd[0]}"
@@ -653,6 +656,7 @@ def smart_search(
                     capture_output=True, text=True,
                     encoding="utf-8", errors="replace",
                     timeout=15,
+                    env=build_sanitized_subprocess_env(),
                 )
                 # git grep returns 1 when no matches; 128/129 means command/pathspec error.
                 if result.returncode not in (0, 1):

@@ -14,6 +14,7 @@ import subprocess
 import time
 from typing import Callable, Protocol, runtime_checkable
 
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.runtime.process.platform_runtime import select_shell, terminate_process_tree
 
 
@@ -320,7 +321,7 @@ def create_process_backend(
     selected_os = os.name if os_name is None else os_name
     shell = select_shell(os_name=selected_os, which=which or shutil.which)
     argv = shell.argv(command)
-    env = dict(os.environ)
+    env = build_sanitized_subprocess_env()
     env.setdefault("PYTHONIOENCODING", "utf-8")
     selected_rows, selected_cols = _size(rows, cols)
 

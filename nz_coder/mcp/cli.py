@@ -24,9 +24,13 @@ def mcp_main(argv: list[str] | None = None) -> int:
     logout = subparsers.add_parser("logout", help="Remove stored OAuth credentials")
     logout.add_argument("server")
     subparsers.add_parser("list", help="Show merged MCP servers and trust state")
-    trust = subparsers.add_parser("trust", help="Trust one project-local command fingerprint")
+    trust = subparsers.add_parser(
+        "trust", help="Trust one project MCP capability fingerprint"
+    )
     trust.add_argument("server")
-    untrust = subparsers.add_parser("untrust", help="Remove trust for one project-local command")
+    untrust = subparsers.add_parser(
+        "untrust", help="Remove trust for one project MCP capability"
+    )
     untrust.add_argument("server")
     smoke = subparsers.add_parser("smoke", help="Run an opt-in live MCP interoperability check")
     smoke.add_argument("server")
@@ -99,8 +103,8 @@ def mcp_main(argv: list[str] | None = None) -> int:
         if args.command in {"trust", "untrust"}:
             workspace = Path.cwd().resolve()
             server = _named_config(args.server, workspace)
-            if server.transport != "stdio" or server.source != "project":
-                raise ValueError("Only project-local stdio servers require command trust")
+            if server.source != "project":
+                raise ValueError("Only project MCP servers require explicit trust")
             store = MCPTrustStore(Path(config.MCP_TRUST_STORE))
             if args.command == "trust":
                 store.trust(workspace, server.name, server.fingerprint)

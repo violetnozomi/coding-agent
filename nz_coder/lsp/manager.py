@@ -14,6 +14,7 @@ _LOCK = threading.RLock()
 _CLIENTS: dict[tuple[str, str, str], LSPClient] = {}
 _BROKEN: set[tuple[str, str, str]] = set()
 _ERRORS: dict[tuple[str, str, str], str] = {}
+_TRUST_REQUIRED: set[tuple[str, str, str]] = set()
 
 
 def _client_key(
@@ -39,6 +40,17 @@ def get_client_for_file(path: Path, workspace: Path) -> LSPClient | None:
     if resolved is None or key is None:
         return None
     with _LOCK:
+        if not resolved.trusted:
+            stale = _CLIENTS.pop(key, None)
+            if stale is not None:
+                stale.close()
+            _TRUST_REQUIRED.add(key)
+            _ERRORS[key] = (
+                f"Workspace LSP executable '{resolved.server_id}' requires trust; "
+                "run `nz-coder lsp trust <source-file>` after review"
+            )
+            return None
+        _TRUST_REQUIRED.discard(key)
         existing = _CLIENTS.get(key)
         if existing is not None and existing.process.poll() is None:
             return existing
@@ -90,6 +102,17 @@ def client_status_summary(workspace: Path) -> list[dict[str, str]]:
             ):
                 continue
             rows.append({"id": server_id, "root": server_root, "status": "failed"})
+        for owner, server_id, server_root in _TRUST_REQUIRED:
+            if owner != root or any(
+                row["id"] == server_id and row["root"] == server_root
+                for row in rows
+            ):
+                continue
+            rows.append({
+                "id": server_id,
+                "root": server_root,
+                "status": "trust-required",
+            })
     return sorted(rows, key=lambda item: (item["id"], item["root"]))
 
 
@@ -100,6 +123,7 @@ def close_all_clients() -> None:
         _CLIENTS.clear()
         _BROKEN.clear()
         _ERRORS.clear()
+        _TRUST_REQUIRED.clear()
     for client in clients:
         client.close()
 
@@ -112,6 +136,9 @@ def close_workspace_clients(workspace: Path) -> None:
         clients = [_CLIENTS.pop(key) for key in selected_keys]
         _BROKEN.difference_update(tuple(
             key for key in _BROKEN if key[0] == owner
+        ))
+        _TRUST_REQUIRED.difference_update(tuple(
+            key for key in _TRUST_REQUIRED if key[0] == owner
         ))
         for key in tuple(_ERRORS):
             if key[0] == owner:
