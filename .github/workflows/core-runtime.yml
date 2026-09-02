@@ -53,3 +53,29 @@ jobs:
         run: python -m nz_coder --help
       - name: Build distributions on the declared Python floor
         run: python -m build --wheel --sdist
+
+  installed-wheel-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build release distributions
+        run: |
+          python -m pip install build
+          python -m build --wheel --sdist
+      - name: Install and probe the wheel outside the source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/nz-coder-installed"
+          "$RUNNER_TEMP/nz-coder-installed/bin/python" -m pip install dist/nz_coder-*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/nz-coder-installed/bin/nz-coder" --help
+          "$RUNNER_TEMP/nz-coder-installed/bin/nz-coder" doctor --repo-intelligence-only --json
+          "$RUNNER_TEMP/nz-coder-installed/bin/nz-coder" config show --json
+          "$RUNNER_TEMP/nz-coder-installed/bin/python" -c \
+            'from importlib.metadata import version; from importlib.resources import files; assert version("nz-coder"); assert files("nz_coder").joinpath("bundled_skills").is_dir(); assert files("nz_coder").joinpath("bundled_commands").is_dir()'
