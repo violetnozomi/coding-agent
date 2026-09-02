@@ -24,6 +24,7 @@ class ProviderConnection:
     credential_name: str
     api_key: str
     base_url: str
+    credential_scope_id: str
 
     @property
     def configured(self) -> bool:
@@ -47,6 +48,7 @@ def provider_connection(provider: str) -> ProviderConnection:
             credential_names[family],
             override[0],
             override[1],
+            f"user-connect:{family}",
         )
     if normalized in _ANTHROPIC_NAMES:
         return ProviderConnection(
@@ -54,6 +56,7 @@ def provider_connection(provider: str) -> ProviderConnection:
             "ANTHROPIC_API_KEY (or API_KEY)",
             config.ANTHROPIC_API_KEY,
             config.ANTHROPIC_API_BASE_URL,
+            "environment:anthropic-api-key",
         )
     if normalized in _GEMINI_NAMES:
         return ProviderConnection(
@@ -61,6 +64,7 @@ def provider_connection(provider: str) -> ProviderConnection:
             "GEMINI_API_KEY (or API_KEY)",
             config.GEMINI_API_KEY,
             config.GEMINI_API_BASE_URL,
+            "environment:gemini-api-key",
         )
     if normalized in _OPENAI_RESPONSES_NAMES:
         return ProviderConnection(
@@ -68,12 +72,14 @@ def provider_connection(provider: str) -> ProviderConnection:
             "OPENAI_API_KEY (or API_KEY)",
             config.OPENAI_API_KEY,
             config.OPENAI_API_BASE_URL,
+            "environment:openai-api-key",
         )
     return ProviderConnection(
         normalized,
         "API_KEY",
         config.API_KEY,
         config.API_BASE_URL,
+        "environment:api-key",
     )
 
 

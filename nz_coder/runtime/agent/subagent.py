@@ -42,6 +42,7 @@ from nz_coder.providers import (
     create_provider,
     prompt_family_guidance,
 )
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.runtime.core.execution_context import (
     scoped_broad_test_guard,
     scoped_runtime_overrides,
@@ -2118,8 +2119,14 @@ NEXT:
     except (asyncio.CancelledError, KeyboardInterrupt):
         run_status = {"status": "cancelled"}
     except Exception as exc:
-        child_tracer.log("run_error", error=str(exc))
-        run_status = {"status": "error", "last_error": str(exc)}
+        public = to_public_error(exc)
+        child_tracer.log("run_error", public_error=public.to_dict())
+        run_status = {
+            "status": "error",
+            "last_error": public.message,
+            "public_error": public.to_dict(),
+        }
+        state["public_error"] = public.to_dict()
     finally:
         if agent is not None:
             agent.close()
@@ -2149,7 +2156,11 @@ NEXT:
         if failed_assistant is not None:
             error_payload = failed_assistant["_nz_assistant_error"]
             data = error_payload.get("data") if isinstance(error_payload, dict) else {}
-            message = str((data or {}).get("message") or "Provider request failed")
+            raw_message = str(
+                (data or {}).get("message") or "Provider request failed"
+            )
+            public = to_public_error(RuntimeError(raw_message))
+            message = public.message
             failed_assistant["_nz_assistant_error"] = {
                 "name": "APIError",
                 "data": {"message": message, "isRetryable": False},
@@ -2158,6 +2169,8 @@ NEXT:
             failed_assistant["_nz_end_state"] = {"reason": "errored"}
             raw_status = "error"
             run_status["last_error"] = message
+            run_status["public_error"] = public.to_dict()
+            state["public_error"] = public.to_dict()
     status_map = {
         "completed": "completed",
         "completed_unverified": "completed_unverified",

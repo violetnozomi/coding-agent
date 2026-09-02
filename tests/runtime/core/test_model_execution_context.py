@@ -1,6 +1,8 @@
 """Focused model capability ownership tests."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from nz_coder.runtime.adapters.model import model_context_from_legacy_host
 from nz_coder.runtime.core.model_context import ModelExecutionContext
 
@@ -15,6 +17,9 @@ class _Host:
         self.model_capabilities = object()
         self.tracer = _Tracer()
         self.recovery = object()
+        self.model_runtime = SimpleNamespace(
+            provider_instance_id="provider-instance-model-a",
+        )
         self._call_llm = None
 
     def _active_model_id(self) -> str:
@@ -50,6 +55,7 @@ def test_model_context_projects_dynamic_model_capabilities() -> None:
     assert isinstance(context, ModelExecutionContext)
     assert context.capabilities() is host.model_capabilities
     assert context.active_model_id() == "model-a"
+    assert context.provider_instance_id() == "provider-instance-model-a"
     assert context.active_tool_specs() == [{"type": "function"}]
     assert "host" not in vars(context)
 
@@ -63,6 +69,7 @@ def test_model_context_rejects_non_callable_capability() -> None:
     values = {
         "capabilities": lambda: None,
         "active_model_id": lambda: "model",
+        "provider_instance_id": lambda: "provider-instance-test",
         "active_tool_specs": lambda: [],
         "prompt_budget": lambda: object(),
         "call_streaming": lambda *_args, **_kwargs: None,

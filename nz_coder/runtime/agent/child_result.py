@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, replace
 import math
 
 from nz_coder.foundation.json_safety import json_safe_value
+from nz_coder.protocol.public_error import public_error_from_wire
 
 
 CHILD_RESULT_KEY = "child_result"
@@ -41,6 +42,7 @@ class ChildAgentResult:
     usage: dict = field(default_factory=dict)
     cost: float | None = None
     final_text_truncated: bool = False
+    public_error: dict | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("task_id", "name", "status"):
@@ -80,6 +82,8 @@ class ChildAgentResult:
             payload["route_facts"] = copy.deepcopy(self.route_facts)
         if self.cost is not None:
             payload["cost"] = self.cost
+        if self.public_error is not None:
+            payload["public_error"] = copy.deepcopy(self.public_error)
         return payload
 
     def to_metadata(self) -> dict:
@@ -127,6 +131,7 @@ class ChildAgentResult:
         if not isinstance(route_facts, dict):
             route_facts = None
         cost = _finite_nonnegative(payload.get("cost"))
+        public_error = public_error_from_wire(payload.get("public_error"))
         return cls(
             task_id=str(payload.get("task_id") or payload.get("session_id") or "unknown"),
             name=str(payload.get("name") or payload.get("agent_id") or "child"),
@@ -159,6 +164,7 @@ class ChildAgentResult:
             final_text_truncated=(
                 truncated or payload.get("final_text_truncated") is True
             ),
+            public_error=public_error.to_dict() if public_error is not None else None,
         )
 
     @classmethod
@@ -276,6 +282,9 @@ def child_result_from_state(
         raw["verification"] = verification_payload
     if cost is not None:
         raw["cost"] = cost
+    public_error = state.get("public_error")
+    if public_error_from_wire(public_error) is not None:
+        raw["public_error"] = copy.deepcopy(public_error)
     digest = str(state.get("digest") or "").strip()
     if digest:
         raw["digest"] = digest
