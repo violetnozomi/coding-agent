@@ -95,6 +95,54 @@ def test_workspace_trust_is_exact_and_invalidated_by_fingerprint(tmp_path):
     assert changed.value("PERMISSION_MODE").ignored is True
 
 
+def test_config_cli_establishes_and_revokes_exact_workspace_trust(
+    tmp_path, monkeypatch, capsys,
+):
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+    from nz_coder.interface.config_cli import config_main
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    (workspace / ".env").write_text(
+        "API_BASE_URL=https://trusted.example/v1\n",
+        encoding="utf-8",
+    )
+    trust_store = tmp_path / "user" / "workspace-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_store))
+
+    assert config_main(["trust", "--workspace", str(workspace)]) == 0
+    assert load_config_snapshot(workspace, environ={
+        "NZ_CODER_WORKSPACE_TRUST_STORE": str(trust_store),
+    }).workspace_trusted is True
+    assert "trusted.example" not in capsys.readouterr().out
+
+    assert config_main(["untrust", "--workspace", str(workspace)]) == 0
+    assert load_config_snapshot(workspace, environ={
+        "NZ_CODER_WORKSPACE_TRUST_STORE": str(trust_store),
+    }).workspace_trusted is False
+
+
+def test_config_cli_trust_output_never_prints_workspace_secret(
+    tmp_path, monkeypatch, capsys,
+):
+    from nz_coder.interface.config_cli import config_main
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    (workspace / ".env").write_text(
+        "API_KEY=sentinel-workspace-cli-secret\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(
+        "NZ_CODER_WORKSPACE_TRUST_STORE",
+        str(tmp_path / "user" / "trust.json"),
+    )
+
+    assert config_main(["trust", "--workspace", str(workspace)]) == 0
+
+    assert "sentinel-workspace-cli-secret" not in capsys.readouterr().out
+
+
 def test_symlink_workspace_does_not_reuse_real_path_trust(tmp_path):
     from nz_coder.foundation.workspace_trust import WorkspaceTrustStore
 

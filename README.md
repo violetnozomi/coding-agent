@@ -263,6 +263,25 @@ TTY capability. `nz-coder doctor --json` is suitable for CI; the independent
 treats optional warnings as failures. It never prints credential values or starts
 a Provider, language server, or MCP process.
 
+Workspace `.env` files are parsed as project data and are never merged into the
+process environment. Non-sensitive settings work immediately. Provider endpoints,
+credentials, permission modes, MCP activation, and workspace LSP commands are
+ignored until the exact canonical workspace and current security-setting
+fingerprint are explicitly trusted:
+
+```bash
+nz-coder config show --sources
+nz-coder config trust                  # review .env first
+nz-coder config untrust
+```
+
+Changing a security-sensitive value invalidates that trust automatically. New
+credentials should be entered with the interactive `/connect` command; they are
+stored in the private user configuration outside the repository. If `doctor`
+reports a legacy credential in workspace `.env`, run `/connect`, remove the
+workspace copy, and re-run `doctor`. Trusting a repository authorizes NZ-Coder's
+documented workspace behavior; it is not an operating-system sandbox.
+
 Inspect or select models without starting an Agent:
 
 ```bash

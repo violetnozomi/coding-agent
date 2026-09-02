@@ -11,7 +11,11 @@ from rich.console import Console
 from rich.table import Table
 
 from nz_coder.foundation import config
-from nz_coder.foundation.workspace_trust import load_config_snapshot
+from nz_coder.foundation.workspace_trust import (
+    WorkspaceTrustStore,
+    default_trust_store_path,
+    load_config_snapshot,
+)
 from nz_coder.mcp.config import load_mcp_server_configs
 from nz_coder.providers.models import active_model_selection
 from nz_coder.runtime.process.workdir import current_workdir
@@ -97,7 +101,39 @@ def config_main(argv: list[str] | None = None) -> int:
     show = commands.add_parser("show", help="Show effective product configuration")
     show.add_argument("--sources", action="store_true")
     show.add_argument("--json", action="store_true")
+    trust = commands.add_parser(
+        "trust",
+        help="Trust the current security-sensitive workspace configuration",
+    )
+    trust.add_argument("--workspace", type=Path, default=Path.cwd())
+    untrust = commands.add_parser(
+        "untrust",
+        help="Revoke trust for the current workspace configuration",
+    )
+    untrust.add_argument("--workspace", type=Path, default=Path.cwd())
     args = parser.parse_args(argv)
+    if args.command in {"trust", "untrust"}:
+        root = args.workspace.expanduser().resolve(strict=True)
+        if not root.is_dir():
+            raise ValueError("Workspace must be a directory")
+        store = WorkspaceTrustStore(default_trust_store_path())
+        if args.command == "trust":
+            snapshot = load_config_snapshot(root, trust_store=store)
+            store.trust(
+                root,
+                "workspace-config",
+                snapshot.workspace_fingerprint,
+            )
+            Console().print(
+                "Trusted the exact current workspace configuration fingerprint."
+            )
+        else:
+            removed = store.remove(root, "workspace-config")
+            Console().print(
+                "Revoked workspace configuration trust."
+                if removed else "Workspace configuration was not trusted."
+            )
+        return 0
     values = collect_effective_config()
     projected = values if args.sources else {
         key: record["value"] for key, record in values.items()
