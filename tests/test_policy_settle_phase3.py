@@ -587,7 +587,7 @@ def test_policy_settle_after_publish_then_raise_does_not_duplicate():
         def settle_policy_failure(self, error):
             nonlocal calls
             calls += 1
-            result = real_processor.settle_policy_failure(error)
+            real_processor.settle_policy_failure(error)
             raise RuntimeError("policy publish failed after mutation")
 
         def finish_step(self, reason):
@@ -685,12 +685,12 @@ def test_all_settlement_phases_have_recoverable_postconditions():
     class Processor:
         def settle_policy_failure(self, error):
             counters["policy"] += 1
-            result = real_processor.settle_policy_failure(error)
+            real_processor.settle_policy_failure(error)
             raise RuntimeError("policy after effect")
 
         def finish_step(self, reason):
             counters["finish"] += 1
-            result = real_processor.finish_step(reason)
+            real_processor.finish_step(reason)
             raise RuntimeError("finish after effect")
 
     class Runtime:
