@@ -5,11 +5,14 @@ import ipaddress
 import math
 import re
 import zlib
+from contextlib import contextmanager
+from contextvars import ContextVar
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
+from nz_coder.foundation.network_policy import NetworkTargetPolicy
 from nz_coder.protocol.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
 from nz_coder.tools import ToolOutput, register
 
@@ -23,6 +26,24 @@ _BLOCK_TAGS = frozenset({
     "header", "main", "nav", "p", "section", "table", "tbody", "td",
     "tfoot", "th", "thead", "tr",
 })
+_NETWORK_POLICY: ContextVar[NetworkTargetPolicy | None] = ContextVar(
+    "nz_coder_webfetch_network_policy",
+    default=None,
+)
+
+
+@contextmanager
+def scoped_webfetch_network_policy(policy: NetworkTargetPolicy):
+    """Inject a policy for host tests; this is not part of the model tool schema."""
+    token = _NETWORK_POLICY.set(policy)
+    try:
+        yield
+    finally:
+        _NETWORK_POLICY.reset(token)
+
+
+def _current_network_policy() -> NetworkTargetPolicy:
+    return _NETWORK_POLICY.get() or NetworkTargetPolicy()
 
 
 def _normalize_url(value: str) -> str:
@@ -51,9 +72,14 @@ def _normalize_url(value: str) -> str:
 class _SafeRedirectHandler(HTTPRedirectHandler):
     """Keep redirects inside the same HTTP(S)-only URL contract."""
 
+    def __init__(self, policy: NetworkTargetPolicy):
+        super().__init__()
+        self._policy = policy
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
         try:
             normalized = _normalize_url(urljoin(req.full_url, newurl))
+            self._policy.validate_url(normalized)
         except ValueError as exc:
             raise URLError(str(exc)) from exc
         return super().redirect_request(req, fp, code, msg, headers, normalized)
@@ -183,9 +209,25 @@ def _opener_for(url: str):
         loopback = ipaddress.ip_address(hostname).is_loopback
     except ValueError:
         loopback = hostname.lower() == "localhost"
+    policy = _current_network_policy()
     if loopback:
-        return build_opener(ProxyHandler({}), _SafeRedirectHandler())
-    return build_opener(_SafeRedirectHandler())
+        return build_opener(ProxyHandler({}), _SafeRedirectHandler(policy))
+    return build_opener(_SafeRedirectHandler(policy))
+
+
+def _validate_response_peer(response, policy: NetworkTargetPolicy) -> None:  # noqa: ANN001
+    """Best-effort peer validation for urllib response implementations."""
+    current = response
+    for attribute in ("fp", "raw", "_sock"):
+        current = getattr(current, attribute, None)
+        if current is None:
+            return
+    getpeername = getattr(current, "getpeername", None)
+    if not callable(getpeername):
+        return
+    peer = getpeername()
+    if isinstance(peer, tuple) and peer:
+        policy.validate_ip(str(peer[0]))
 
 
 def webfetch(
@@ -211,6 +253,8 @@ def webfetch(
             timeout_seconds = min(timeout_seconds, MAX_TIMEOUT_SECONDS)
 
         normalized_url = _normalize_url(url)
+        network_policy = _current_network_policy()
+        network_policy.validate_url(normalized_url)
         request = Request(
             normalized_url,
             headers={
@@ -227,6 +271,7 @@ def webfetch(
         )
         opener = _opener_for(normalized_url)
         with opener.open(request, timeout=timeout_seconds) as response:
+            _validate_response_peer(response, network_policy)
             content_length = response.headers.get("Content-Length")
             if content_length:
                 try:
@@ -245,6 +290,7 @@ def webfetch(
             content_type = str(response.headers.get("Content-Type") or "")
             mime = content_type.split(";", 1)[0].strip().lower()
             final_url = _normalize_url(str(response.geturl()))
+            network_policy.validate_url(final_url)
 
         title = f"{final_url} ({content_type})"
         if mime in SUPPORTED_IMAGE_MIMES:
