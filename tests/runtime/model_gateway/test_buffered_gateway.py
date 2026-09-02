@@ -364,3 +364,75 @@ def test_cancellation_during_worker_returns_cancelled() -> None:
     release.set()
     assert not thread.is_alive()
     assert results[0].status is ModelCallStatus.CANCELLED
+
+
+def test_timeout_does_not_spawn_retry_or_new_worker_until_old_call_settles() -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow():
+        started.set()
+        release.wait(2)
+        return _response()
+
+    provider = _Provider([slow, _response()])
+    runtime = _runtime(provider)
+    gateway = ProductionModelGateway(runtime, max_retries=3, wait=lambda _seconds: None)
+
+    first = gateway.complete_sync(_call(timeout=0.03))
+    second = gateway.complete_sync(_call(timeout=0.03))
+
+    assert started.is_set()
+    assert first.status is ModelCallStatus.ABORTED
+    assert second.status is ModelCallStatus.ABORTED
+    assert len(provider.calls) == 1
+    assert runtime.inflight_status()["worker_still_running"] == 1
+    release.set()
+    deadline = time.monotonic() + 1
+    while runtime.inflight_status()["worker_still_running"] and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert runtime.inflight_status()["worker_still_running"] == 0
+
+
+def test_gateway_close_uses_provider_cancel_hook_to_settle_worker() -> None:
+    release = threading.Event()
+    started = threading.Event()
+
+    class CancelProvider(_Provider):
+        def cancel_completion(self, _client):
+            release.set()
+
+    def slow():
+        started.set()
+        release.wait(2)
+        return _response()
+
+    provider = CancelProvider([slow])
+    runtime = _runtime(provider)
+    gateway = ProductionModelGateway(runtime, max_retries=0)
+    outcome = gateway.complete_sync(_call(timeout=0.03))
+    gateway.close()
+
+    assert started.is_set()
+    assert outcome.status is ModelCallStatus.ABORTED
+    assert runtime.inflight_status()["worker_still_running"] == 0
+
+
+def test_logical_timeout_has_one_terminal_accounting_event() -> None:
+    release = threading.Event()
+    provider = _Provider([lambda: (release.wait(1), _response())[1]])
+    events = []
+    runtime = _runtime(provider)
+    outcome = ProductionModelGateway(
+        runtime,
+        max_retries=3,
+        observer=lambda name, payload: events.append((name, payload)),
+        wait=lambda _seconds: None,
+    ).complete_sync(_call(timeout=0.03))
+    release.set()
+
+    finishes = [payload for name, payload in events if name == "model_call_finish"]
+    assert outcome.status is ModelCallStatus.ABORTED
+    assert len(provider.calls) == 1
+    assert len(finishes) == 1
+    assert finishes[0]["attempts"] == 1

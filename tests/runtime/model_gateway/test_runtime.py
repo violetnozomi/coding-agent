@@ -33,8 +33,9 @@ class _AsyncClient:
 class _Provider:
     name = "example"
 
-    def __init__(self, client=None) -> None:
+    def __init__(self, client=None, *, base_url="https://one.example/v1") -> None:
         self.client = client or _Client()
+        self.base_url = base_url
         self.create_calls = 0
 
     def create_client(self):
@@ -82,6 +83,52 @@ def test_resolver_separates_logical_and_wire_identity() -> None:
     assert runtime.pricing == ModelPricing(input=1.0, output=2.0)
     assert runtime.variant == "high"
     assert runtime.owns_client is False
+    assert runtime.provider_instance_id.startswith("provider-instance-")
+
+
+def test_provider_instance_identity_is_endpoint_bound_without_key_material() -> None:
+    first = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=_Provider(base_url="HTTPS://ONE.EXAMPLE:443/v1/"),
+            credential_scope_id="account-primary",
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+    equivalent = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=_Provider(base_url="https://one.example/v1"),
+            credential_scope_id="account-primary",
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+    other_endpoint = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=_Provider(base_url="https://two.example/v1"),
+            credential_scope_id="account-primary",
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+    other_scope = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=_Provider(base_url="https://one.example/v1"),
+            credential_scope_id="account-secondary",
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+
+    assert first.provider_instance_id == equivalent.provider_instance_id
+    assert first.provider_instance_id != other_endpoint.provider_instance_id
+    assert first.provider_instance_id != other_scope.provider_instance_id
+    assert "account-primary" not in first.provider_instance_id
+    assert "one.example" not in first.provider_instance_id
 
 
 def test_injected_client_is_never_closed_by_runtime() -> None:

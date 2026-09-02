@@ -225,6 +225,7 @@ class ProductionModelGateway:
             raise _CallCancelled("model call cancelled before dispatch")
         result_queue: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=1)
         settled = threading.Event()
+        call_id = 0
 
         def publish(kind: str, value: object) -> None:
             if settled.is_set():
@@ -244,22 +245,32 @@ class ProductionModelGateway:
                 publish("error", exc)
             else:
                 publish("result", response)
+            finally:
+                if call_id:
+                    self.runtime.finish_inflight(call_id)
 
         worker = threading.Thread(
             target=invoke,
             name="nz-model-call",
             daemon=True,
         )
+        try:
+            call_id = self.runtime.begin_inflight(worker, self._cancel_transport)
+        except RuntimeError as exc:
+            raise _ProviderUnsettled(str(exc)) from exc
         worker.start()
         deadline = time.monotonic() + call.timeout_seconds
         try:
             while True:
                 if cancel_event is not None and cancel_event.is_set():
+                    self._settle_interrupted_worker(worker, kind="transport_cancellation")
                     raise _CallCancelled("model call cancelled")
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    raise TimeoutError(
-                        f"Provider hard timeout after {call.timeout_seconds:g}s"
+                    self._settle_interrupted_worker(worker, kind="logical_timeout")
+                    raise _LogicalTimeout(
+                        f"Provider hard timeout after {call.timeout_seconds:g}s",
+                        worker_running=worker.is_alive(),
                     )
                 try:
                     kind, value = result_queue.get(
@@ -272,6 +283,44 @@ class ProductionModelGateway:
                 return value
         finally:
             settled.set()
+
+    def _cancel_transport(self) -> None:
+        """Use explicit adapter/client cancellation hooks without killing threads."""
+        candidates = (
+            (self.runtime.provider, (self.runtime.client,)),
+            (self.runtime.client, ()),
+        )
+        for owner, arguments in candidates:
+            for name in ("cancel_completion", "cancel_request", "cancel"):
+                callback = getattr(owner, name, None)
+                if not callable(callback):
+                    continue
+                callback(*arguments)
+                return
+
+    def _settle_interrupted_worker(self, worker: threading.Thread, *, kind: str) -> None:
+        cleanup_failure = ""
+        try:
+            self._cancel_transport()
+        except Exception as exc:
+            cleanup_failure = type(exc).__name__
+        worker.join(timeout=0.1)
+        running = worker.is_alive()
+        if running:
+            self.runtime.mark_inflight_unsettled()
+        self._observe(
+            "model_call_transport_state",
+            lifecycle=kind,
+            transport_cancelled=not running,
+            worker_still_running=running,
+            cleanup_failure=cleanup_failure,
+        )
+
+    def close(self) -> dict[str, object]:
+        """Best-effort cleanup for outstanding transport workers and the runtime."""
+        status = self.runtime.cancel_inflight()
+        self.runtime.close()
+        return status
 
     def _normalize(
         self,
@@ -358,6 +407,28 @@ class ProductionModelGateway:
             )
             try:
                 response = self._attempt(active_call, cancel_event)
+            except _ProviderUnsettled as exc:
+                outcome = ModelCallOutcome.aborted(
+                    str(exc),
+                    retryable=False,
+                    duration_ms=round((time.perf_counter() - started) * 1000, 3),
+                    attempts=attempt,
+                )
+                return finish(outcome)
+            except _LogicalTimeout as exc:
+                outcome = ModelCallOutcome.aborted(
+                    str(exc),
+                    retryable=False,
+                    provider_metadata={
+                        "request_lifecycle": {
+                            "logical_timeout": True,
+                            "worker_still_running": exc.worker_running,
+                        }
+                    },
+                    duration_ms=round((time.perf_counter() - started) * 1000, 3),
+                    attempts=attempt,
+                )
+                return finish(outcome)
             except _CallCancelled as exc:
                 outcome = ModelCallOutcome.cancelled(
                     error=str(exc),
@@ -826,6 +897,18 @@ class ProductionModelGateway:
 
 class _CallCancelled(RuntimeError):
     """Internal control-flow marker for cooperative cancellation."""
+
+
+class _ProviderUnsettled(RuntimeError):
+    """A previous non-cancellable request still owns the runtime transport."""
+
+
+class _LogicalTimeout(TimeoutError):
+    """Logical deadline expired and records whether transport settled."""
+
+    def __init__(self, message: str, *, worker_running: bool):
+        super().__init__(message)
+        self.worker_running = bool(worker_running)
 
 
 class OpenAIClientBridgeProvider:
