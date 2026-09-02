@@ -193,6 +193,7 @@ import nz_coder.tools.repo_intel  # noqa: F401
 import nz_coder.tools.repo_map    # noqa: F401
 import nz_coder.tools.webfetch    # noqa: F401
 import nz_coder.tools.web_search  # noqa: F401
+import nz_coder.tools.artifacts  # noqa: F401
 import nz_coder.runtime.agent.agent_manager  # noqa: F401
 import nz_coder.runtime.workflows.workflow_runtime  # noqa: F401
 import nz_coder.runtime.workflows.workflow_library  # noqa: F401
@@ -456,10 +457,12 @@ class ProductRunEnvironment:
         self._mcp_runtime_factory = MCPRuntime
         self._tool_metadata_lock = threading.RLock()
         self.hooks = hooks or build_default_hooks()
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
         self.permissions = PermissionManager(
             permission_mode,
             renderer=self.renderer,
             asker=permission_asker,
+            workspace_trusted=load_config_snapshot(self.workdir).workspace_trusted,
         )
         from nz_coder.tools.plan_mode import PlanModeController
         self.plan_mode = PlanModeController(

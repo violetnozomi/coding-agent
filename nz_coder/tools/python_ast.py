@@ -5,17 +5,13 @@ import ast
 import difflib
 from pathlib import Path
 
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
 
 
 def _safe_path(p: str) -> Path:
-    path = (current_workdir() / p).resolve()
-    try:
-        path.relative_to(current_workdir().resolve())
-    except ValueError:
-        raise ValueError(f"Path escapes workspace: {p}")
-    return path
+    return WorkspacePathPolicy(current_workdir()).validate_model_read(p)
 
 
 def python_symbol_check(path: str, symbols: list = None, calls: list = None) -> str:

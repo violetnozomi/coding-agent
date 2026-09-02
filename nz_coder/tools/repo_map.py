@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.intelligence.code_index import (
     AmbiguousSymbolError,
     FileEntry,
@@ -24,11 +25,7 @@ from nz_coder.tools.repo_ranking import MatchRank, rank_repo_symbol
 
 def _safe_path(path: str) -> tuple[Path, Path]:
     workspace = current_workdir().resolve()
-    target = (workspace / (path or ".")).resolve()
-    try:
-        _ = target.relative_to(workspace)
-    except ValueError as exc:
-        raise ValueError(f"Path escapes workspace: {path}") from exc
+    target = WorkspacePathPolicy(workspace).validate_model_read(path or ".")
     return workspace, target
 
 

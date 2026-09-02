@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.intelligence.service import workspace_repo_intelligence
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
@@ -11,6 +12,8 @@ from nz_coder.tools import register
 def semantic_search(query: str, path: str = "", limit: int = 10) -> str:
     """Search experimental embedding chunks; structural tools remain fallback."""
     try:
+        if path.strip():
+            WorkspacePathPolicy(current_workdir()).validate_model_read(path.strip())
         service = workspace_repo_intelligence(current_workdir(), max_files=5000)
         if service is None:
             return "Error: repository intelligence service unavailable"

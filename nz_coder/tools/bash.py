@@ -10,6 +10,11 @@ from itertools import islice
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_paths import (
+    WorkspacePathError,
+    WorkspacePathPolicy,
+    model_command_private_path,
+)
 from nz_coder.runtime.core.execution_context import (
     broad_tests_blocked,
     declared_test_scopes,
@@ -161,14 +166,12 @@ def _resolve_bash_workdir(workdir: str | None) -> tuple[Path | None, str]:
     """Resolve an optional command cwd without permitting workspace escape."""
     workspace = current_workdir().resolve()
     value = str(workdir or "").strip()
-    candidate = Path(value) if value else workspace
-    if not candidate.is_absolute():
-        candidate = workspace / candidate
-    candidate = candidate.resolve()
     try:
-        candidate.relative_to(workspace)
-    except ValueError:
-        return None, "Error: workdir escapes workspace"
+        candidate = WorkspacePathPolicy(workspace).validate_model_execute(value or ".")
+    except WorkspacePathError as exc:
+        if "escapes workspace" in str(exc):
+            return None, "Error: workdir escapes workspace"
+        return None, f"Error: {exc}"
     if not candidate.exists():
         return None, f"Error: workdir does not exist: {workdir}"
     if not candidate.is_dir():
@@ -231,6 +234,9 @@ def run_bash(
     escaped = external_workspace_path(command, current_workdir())
     if escaped is not None:
         return f"Error: Command path escapes workspace: {escaped}"
+    private_path = model_command_private_path(command, current_workdir())
+    if private_path is not None:
+        return f"Error: Model access blocked for shell path: {private_path}"
     if strict_local_tools():
         from nz_coder.swebench.policy import strict_bash_guidance, strict_bash_violation
 

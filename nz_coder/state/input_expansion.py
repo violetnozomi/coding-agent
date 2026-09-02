@@ -18,6 +18,7 @@ from nz_coder.protocol.attachments import (
     sniff_image_mime,
 )
 from nz_coder.capabilities.documents import detect_document_mime
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.protocol.message_schema import attach_file_parts, attach_message_identity
 from nz_coder.state.context import estimate_tokens
 
@@ -170,13 +171,8 @@ def tag_file_attachments(
 
 
 def _safe_source(workspace: Path, source: str) -> Path | None:
-    candidate = Path(source)
-    target = candidate if candidate.is_absolute() else workspace / candidate
-    if target.is_symlink():
-        return None
     try:
-        resolved = target.resolve(strict=True)
-        resolved.relative_to(workspace)
+        resolved = WorkspacePathPolicy(workspace).validate_model_read(source)
     except (OSError, ValueError):
         return None
     return resolved if resolved.is_file() else None

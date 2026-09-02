@@ -30,11 +30,15 @@ class PermissionManager:
         mode: str = None,
         renderer=None,
         asker: Callable[[str, dict], bool | str] | None = None,
+        workspace_trusted: bool = True,
     ):
         self._mode = normalize_mode(mode or config.PERMISSION_MODE)
         self._renderer = renderer
         self._asker = asker
-        self._checker = PermissionChecker(self._mode)
+        self._checker = PermissionChecker(
+            self._mode,
+            workspace_trusted=workspace_trusted,
+        )
         self._deny_rules: list[PermissionRule] = []
         self._allow_rules: list[PermissionRule] = []
         self._ask_rules: list[PermissionRule] = []

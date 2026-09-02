@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.protocol.attachments import (
     MAX_IMAGE_BYTES,
     make_image_attachment,
@@ -80,13 +81,20 @@ def bind_tool_state(txn=None, change_tracker=None):
 
 
 def _safe_path(p: str) -> Path:
-    root = current_workdir()
-    path = (root / p).resolve()
-    try:
-        path.relative_to(root)
-    except ValueError:
-        raise ValueError(f"Path escapes workspace: {p}")
-    return path
+    """Validate host-owned internal access for compatibility callers."""
+    return WorkspacePathPolicy(current_workdir()).validate_internal_access(p)
+
+
+def _model_read_path(p: str) -> Path:
+    return WorkspacePathPolicy(current_workdir()).validate_model_read(p)
+
+
+def _model_write_path(p: str) -> Path:
+    return WorkspacePathPolicy(current_workdir()).validate_model_write(p)
+
+
+def _model_list_path(p: str) -> Path:
+    return WorkspacePathPolicy(current_workdir()).validate_model_list(p)
 
 
 
@@ -142,7 +150,7 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
         blocked = _blocked_write_reason(path)
         if blocked:
             raise ValueError(f"{path}: {blocked}")
-        fp = _safe_path(path)
+        fp = _model_write_path(path)
         key = str(fp)
         if key in seen_paths:
             raise ValueError(f"duplicate path in batch: {path}")
@@ -323,7 +331,7 @@ def read_file(
     pages: str = None,
 ) -> str:
     try:
-        fp = _safe_path(path)
+        fp = _model_read_path(path)
         if not fp.exists():
             return f"Error: {missing_path_message(fp, path)}"
         read_offset = _read_offset(offset)
@@ -486,7 +494,7 @@ def _read_limit(value: int | None) -> int:
 
 def write_file(path: str, content: str) -> str:
     try:
-        fp = _safe_path(path)
+        fp = _model_write_path(path)
         existed = fp.exists()
         before = fp.read_text(encoding="utf-8", errors="replace") if existed else ""
         warning = _dirty_warning(path)
@@ -506,7 +514,7 @@ def write_file(path: str, content: str) -> str:
 
 def edit_file(path: str, old_text: str, new_text: str) -> str:
     try:
-        fp = _safe_path(path)
+        fp = _model_write_path(path)
         content = fp.read_text(encoding="utf-8")
         warning = _dirty_warning(path)
         _track_before(path, fp, content, True)
@@ -547,7 +555,7 @@ def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> s
         if start < 1 or end < start:
             return "Error: line range must satisfy 1 <= start_line <= end_line"
 
-        fp = _safe_path(path)
+        fp = _model_write_path(path)
         content = fp.read_text(encoding="utf-8")
         lines = content.splitlines(keepends=True)
         if end > len(lines):
@@ -595,7 +603,7 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
             if not path:
                 return f"Error: change {i} requires path"
 
-            fp = _safe_path(path)
+            fp = _model_write_path(path)
             key = str(fp)
             if key not in prepared:
                 if fp.exists():
@@ -687,7 +695,7 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
 
 def list_directory(path: str = ".", depth: int = 1) -> str:
     try:
-        dp = _safe_path(path)
+        dp = _model_list_path(path)
         if not dp.is_dir():
             return f"Error: {path} is not a directory"
         lines = []
@@ -707,7 +715,10 @@ def _walk(base: Path, current: Path, lines: list, level: int, max_depth: int):
     except PermissionError:
         return
     indent = "  " * level
+    policy = WorkspacePathPolicy(current_workdir())
     for entry in entries:
+        if not policy.is_model_visible(entry):
+            continue
         if entry.name.startswith(".") and level == 0:
             continue  # skip hidden at top level
         rel = entry.relative_to(base)

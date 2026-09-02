@@ -153,7 +153,7 @@ def test_glob_defaults_exclude_managed_state_and_repository_noise(tmp_path, monk
     assert ".git" not in result
     assert ".pytest_cache" not in result
     assert "node_modules" not in result
-def test_glob_explicit_private_scope_can_inspect_product_state(tmp_path, monkeypatch):
+def test_glob_explicit_private_scope_cannot_inspect_product_state(tmp_path, monkeypatch):
     private = tmp_path / ".nz-coder"
     private.mkdir()
     (private / "trace.jsonl").write_text("{}\n", encoding="utf-8")
@@ -162,7 +162,7 @@ def test_glob_explicit_private_scope_can_inspect_product_state(tmp_path, monkeyp
     with scoped_workdir(tmp_path):
         result = glob_search("*.jsonl", ".nz-coder")
 
-    assert ".nz-coder/trace.jsonl" in result
+    assert result.startswith("Error: Model access blocked")
 
 
 def test_glob_keeps_unmanaged_product_prefixed_directories(tmp_path, monkeypatch):
@@ -262,7 +262,7 @@ def test_glob_absolute_pattern_stays_inside_workspace(tmp_path):
         file_base = glob_search("*", "src/main.py")
 
     assert str(target) in inside
-    assert outside.startswith("Error: Pattern escapes workspace")
+    assert outside.startswith("Error: Path escapes workspace")
     assert file_base.startswith("Error: glob path must be a directory")
 
 

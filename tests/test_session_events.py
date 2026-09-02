@@ -1181,6 +1181,7 @@ def test_bash_running_metadata_reaches_durable_session_events(tmp_path):
             session_id="bash-progress-session",
             event_bus=bus,
         )
+        agent.permissions.add_allow("bash")
         agent._execute_tools(
             assistant["tool_calls"],
             messages,

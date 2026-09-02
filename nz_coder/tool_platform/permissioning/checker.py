@@ -26,8 +26,9 @@ def _is_local_edit(name: str) -> bool:
 class PermissionChecker:
     """Compute allow/deny/ask decisions for tool invocations."""
 
-    def __init__(self, mode: str = "default") -> None:
+    def __init__(self, mode: str = "default", *, workspace_trusted: bool = True) -> None:
         self.mode = normalize_mode(mode)
+        self.workspace_trusted = bool(workspace_trusted)
 
     def check(
         self,
@@ -192,6 +193,11 @@ class PermissionChecker:
                     "behavior": "deny",
                     "reason": f"Plan mode: shell blocked ({classification['reason']})",
                 }
+            if not self.workspace_trusted:
+                return {
+                    "behavior": "ask",
+                    "reason": "Untrusted workspace: shell execution needs approval",
+                }
             return {"behavior": "allow", "reason": "Plan mode: read-only shell allowed"}
 
         allow_rule = first_matching_rule(allow_rules, "bash", tool_input)
@@ -205,6 +211,12 @@ class PermissionChecker:
             return {
                 "behavior": "ask",
                 "reason": f"Ask rule: {ask_rule.content or ask_rule.tool}",
+            }
+
+        if not self.workspace_trusted:
+            return {
+                "behavior": "ask",
+                "reason": "Untrusted workspace: shell execution needs approval",
             }
 
         if self.mode == "auto":
@@ -272,6 +284,11 @@ class PermissionChecker:
             return {
                 "behavior": "ask",
                 "reason": f"Ask rule: {ask_rule.content or ask_rule.tool}",
+            }
+        if operation == "start" and not self.workspace_trusted:
+            return {
+                "behavior": "ask",
+                "reason": "Untrusted workspace: process execution needs approval",
             }
         if operation == "start":
             return self._check_bash(

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_paths import model_command_private_path
 from nz_coder.tool_platform.command_policy import classify_bash
 from nz_coder.runtime.core.execution_context import strict_local_tools
 from nz_coder.runtime.process.process_service import (
@@ -69,6 +70,9 @@ def run_process(
             selected_command = str(command or "").strip()
             if not selected_command:
                 return "Error: command is required for process start"
+            private_path = model_command_private_path(selected_command, workspace)
+            if private_path is not None:
+                return f"Error: Model access blocked for process path: {private_path}"
             if strict_local_tools():
                 from nz_coder.swebench.policy import (
                     strict_bash_guidance,

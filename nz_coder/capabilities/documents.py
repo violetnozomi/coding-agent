@@ -20,6 +20,7 @@ import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.protocol.attachments import (
     MAX_DOCUMENT_BYTES,
     SUPPORTED_DOCUMENT_MIMES,
@@ -209,7 +210,7 @@ def _read_document_sync(
     cancel_event: threading.Event,
 ) -> DocumentReadResult:
     _check_cancelled(cancel_event)
-    source = (workspace / attachment["path"]).resolve()
+    source = WorkspacePathPolicy(workspace).validate_model_read(attachment["path"])
     try:
         source.relative_to(workspace)
     except ValueError:

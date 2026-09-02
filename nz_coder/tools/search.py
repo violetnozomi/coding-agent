@@ -7,6 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.capabilities.ripgrep import (
     RipgrepCancelled,
     RipgrepSearchMatch,
@@ -55,12 +56,7 @@ def _m_in_workspace(m: Path, base: Path) -> bool:
 
 
 def _safe_path(p: str = ".") -> Path:
-    path = (current_workdir() / (p or ".")).resolve()
-    try:
-        path.relative_to(current_workdir().resolve())
-    except ValueError:
-        raise ValueError(f"Path escapes workspace: {p}")
-    return path
+    return WorkspacePathPolicy(current_workdir()).validate_model_read(p or ".")
 
 
 def _default_ignores_enabled(base: Path, pattern: str = "") -> bool:
@@ -226,10 +222,13 @@ def _search_matches(
     by_path: dict[Path, float | None] = {}
     matches: list[_SearchMatch] = []
     workspace = current_workdir().resolve()
+    policy = WorkspacePathPolicy(workspace)
     for row in rows:
         _raise_if_cancelled()
         full = (cwd / row.path).resolve()
         if not _m_in_workspace(full, workspace):
+            continue
+        if not policy.is_model_visible(full):
             continue
         if full not in by_path:
             try:
@@ -506,11 +505,7 @@ def glob_search(pattern: str, path: str = ".") -> str:
         if absolute is None:
             base = _safe_path(path)
         else:
-            base = absolute[0].resolve()
-            try:
-                base.relative_to(current_workdir().resolve())
-            except ValueError:
-                return f"Error: Pattern escapes workspace: {pattern}"
+            base = WorkspacePathPolicy(current_workdir()).validate_model_list(absolute[0])
             raw = absolute[1]
         if base.is_file():
             return f"Error: glob path must be a directory: {base}"
@@ -528,10 +523,13 @@ def glob_search(pattern: str, path: str = ".") -> str:
             )
         )
         entries: list[tuple[str, float]] = []
+        policy = WorkspacePathPolicy(current_workdir())
         for relative in files:
             _raise_if_cancelled()
             full = (base / relative).resolve()
             if not _m_in_workspace(full, current_workdir().resolve()):
+                continue
+            if not policy.is_model_visible(full):
                 continue
             try:
                 mtime = full.stat().st_mtime

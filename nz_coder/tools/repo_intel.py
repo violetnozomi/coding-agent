@@ -15,6 +15,7 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.runtime.agent.task_policy import (
     is_source_file,
@@ -48,13 +49,7 @@ STOPWORDS = frozenset({
 
 
 def _safe_path(p: str = ".") -> Path:
-    wd = Path(current_workdir())
-    path = (wd / (p or ".")).resolve()
-    try:
-        path.relative_to(wd.resolve())
-    except ValueError:
-        raise ValueError(f"Path escapes workspace: {p}")
-    return path
+    return WorkspacePathPolicy(current_workdir()).validate_model_read(p or ".")
 
 
 def _run_git(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:

@@ -3,12 +3,16 @@
 import asyncio
 
 import json
+import os
 import shutil
 import tempfile
 import time
 from pathlib import Path
 
 import pytest
+
+
+_trust_env_stack: dict[str, str | None] = {}
 
 
 class FakeFunction:
@@ -153,9 +157,22 @@ def _run_agent(agent, *args, **kwargs):
 
 def _tmp_workdir():
     from nz_coder.foundation import config
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
 
     old = config.WORKDIR
     tmp = Path(tempfile.mkdtemp())
+    trust_path = tmp.parent / f".{tmp.name}-nz-trust.json"
+    _trust_env_stack[str(tmp)] = os.environ.get("NZ_CODER_WORKSPACE_TRUST_STORE")
+    os.environ["NZ_CODER_WORKSPACE_TRUST_STORE"] = str(trust_path)
+    snapshot = load_config_snapshot(tmp)
+    WorkspaceTrustStore(trust_path).trust(
+        tmp,
+        "workspace-config",
+        snapshot.workspace_fingerprint,
+    )
     config.WORKDIR = tmp
     return old, tmp
 
@@ -165,6 +182,13 @@ def _restore_workdir(old, tmp):
 
     config.WORKDIR = old
     shutil.rmtree(str(tmp), ignore_errors=True)
+    trust_path = tmp.parent / f".{tmp.name}-nz-trust.json"
+    trust_path.unlink(missing_ok=True)
+    previous = _trust_env_stack.pop(str(tmp), None)
+    if previous is None:
+        os.environ.pop("NZ_CODER_WORKSPACE_TRUST_STORE", None)
+    else:
+        os.environ["NZ_CODER_WORKSPACE_TRUST_STORE"] = previous
 
 
 def test_loop_executes_tool_then_final_response():

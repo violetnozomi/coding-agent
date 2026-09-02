@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.lsp import (
     LSPError,
     available_server_summary,
@@ -31,14 +32,7 @@ _OPERATIONS = {
 
 
 def _safe_path(file_path: str) -> Path:
-    workspace = current_workdir().resolve()
-    target = Path(file_path)
-    target = target.resolve() if target.is_absolute() else (workspace / target).resolve()
-    try:
-        target.relative_to(workspace)
-    except ValueError as exc:
-        raise ValueError(f"Path escapes workspace: {file_path}") from exc
-    return target
+    return WorkspacePathPolicy(current_workdir()).validate_model_read(file_path)
 
 
 def _position(line: int, character: int) -> dict:
