@@ -2,22 +2,47 @@
 
 import os
 from pathlib import Path
+import re
 
-from dotenv import load_dotenv
+from nz_coder.foundation.workspace_trust import (
+    ConfigSource,
+    ConfigValue,
+    is_secret_config_key,
+    load_config_snapshot,
+)
 
-# Shell environment wins. A workspace-local .env is the installed-product
-# contract; the source-tree fallback keeps editable development compatible.
 _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 _PROJECT_ROOT = _PACKAGE_ROOT.parent
 WORKSPACE_ENV_PATH = Path.cwd() / ".env"
 SOURCE_ENV_PATH = _PROJECT_ROOT / ".env"
-load_dotenv(WORKSPACE_ENV_PATH, override=False)
-if SOURCE_ENV_PATH != WORKSPACE_ENV_PATH:
-    load_dotenv(SOURCE_ENV_PATH, override=False)
+CONFIG_SNAPSHOT = load_config_snapshot(Path.cwd())
+CONFIG_ISSUES = CONFIG_SNAPSHOT.issues
+
+_INTEGER_DEFAULT = re.compile(r"[+-]?\d+")
+_FLOAT_DEFAULT = re.compile(
+    r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+)
 
 
 def get(key: str, default: str = None) -> str:
-    return os.environ.get(key, default)
+    """Read one startup-snapshot value with import-safe numeric fallback."""
+    fallback = "" if default is None else str(default)
+    # Preserve the historical ability for an embedding host or test harness to
+    # inject a shell value after import.  Workspace files never enter
+    # ``os.environ``, so this compatibility overlay cannot promote workspace
+    # data across the trust boundary.
+    if key in os.environ:
+        CONFIG_SNAPSHOT.values[key] = ConfigValue(
+            key,
+            str(os.environ[key]),
+            ConfigSource.ENVIRONMENT,
+            secret=is_secret_config_key(key),
+        )
+    if _INTEGER_DEFAULT.fullmatch(fallback):
+        return str(CONFIG_SNAPSHOT.get_int(key, int(fallback)))
+    if _FLOAT_DEFAULT.fullmatch(fallback) and any(char in fallback for char in ".eE"):
+        return str(CONFIG_SNAPSHOT.get_float(key, float(fallback)))
+    return CONFIG_SNAPSHOT.get(key, fallback)
 
 
 API_KEY = get("API_KEY", "")

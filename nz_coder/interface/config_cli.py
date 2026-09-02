@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_trust import load_config_snapshot
 from nz_coder.mcp.config import load_mcp_server_configs
 from nz_coder.providers.models import active_model_selection
 from nz_coder.runtime.process.workdir import current_workdir
@@ -19,6 +20,7 @@ from nz_coder.runtime.process.workdir import current_workdir
 def collect_effective_config(workspace: Path | None = None) -> dict[str, dict]:
     """Collect documented product controls without exposing credential values."""
     root = (workspace or current_workdir()).resolve()
+    snapshot = load_config_snapshot(root)
     selection = active_model_selection(root)
     model_source = "environment" if "MODEL_ID" in os.environ else selection.source
     effort_source = "environment" if "MODEL_VARIANT" in os.environ else selection.source
@@ -74,6 +76,17 @@ def collect_effective_config(workspace: Path | None = None) -> dict[str, dict]:
             "source": "platform",
         },
         "daemon_endpoint": {"value": daemon_endpoint, "source": "daemon state"},
+        "config_provenance": {
+            "value": snapshot.public(),
+            "source": "typed-snapshot",
+        },
+        "config_issues": {
+            "value": [
+                {"key": item.key, "message": item.message, "source": item.source.value}
+                for item in snapshot.issues
+            ],
+            "source": "typed-snapshot",
+        },
     }
 
 

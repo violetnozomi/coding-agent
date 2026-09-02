@@ -14,7 +14,9 @@ from nz_coder.providers.connect import provider_connect_spec, save_provider_conn
 
 
 def test_save_connection_preserves_unrelated_env_and_applies_process_state(tmp_path, monkeypatch):
-    target = tmp_path / ".env"
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    target = tmp_path / "user.env"
     target.write_text("KEEP=value\nAPI_KEY=old\nAPI_KEY=duplicate\n", encoding="utf-8")
     monkeypatch.setattr(config, "API_KEY", "before")
     monkeypatch.setattr(config, "API_BASE_URL", "https://before.example/v1")
@@ -26,7 +28,8 @@ def test_save_connection_preserves_unrelated_env_and_applies_process_state(tmp_p
             "openai-compatible",
             "secret-test-key",
             "https://api.example.test/v1/",
-            workspace=tmp_path,
+            workspace=workspace,
+            user_config_path=target,
         )
     finally:
         connection = provider_connection("openai-compatible")
@@ -47,6 +50,7 @@ def test_save_connection_rejects_insecure_remote_endpoint(tmp_path):
     with pytest.raises(ValueError, match="HTTPS"):
         save_provider_connection(
             "anthropic", "secret", "http://api.example.test", workspace=tmp_path,
+            user_config_path=tmp_path.parent / f"{tmp_path.name}-user.env",
         )
     assert not (tmp_path / ".env").exists()
 
@@ -57,18 +61,20 @@ def test_save_connection_allows_loopback_http_and_blocks_symlink(tmp_path, monke
     try:
         save_provider_connection(
             "gemini", "secret", "http://127.0.0.1:9000/v1", workspace=tmp_path,
+            user_config_path=tmp_path.parent / f"{tmp_path.name}-user.env",
         )
     finally:
         clear_provider_connection_overrides()
     outside = tmp_path.parent / f"{tmp_path.name}-outside-env"
     outside.write_text("SAFE=1\n", encoding="utf-8")
-    (tmp_path / ".env").unlink()
-    (tmp_path / ".env").symlink_to(outside)
+    user_config = tmp_path.parent / f"{tmp_path.name}-symlink-env"
+    user_config.symlink_to(outside)
     try:
         with pytest.raises(ValueError, match="symbolic link"):
             save_provider_connection(
                 "openai-responses", "secret", "https://api.openai.com/v1",
                 workspace=tmp_path,
+                user_config_path=user_config,
             )
         assert outside.read_text(encoding="utf-8") == "SAFE=1\n"
     finally:
@@ -91,16 +97,18 @@ def test_provider_connection_hardens_final_credential_file(tmp_path, monkeypatch
         lambda path: hardened.append(os.fspath(path)),
     )
     try:
+        target = tmp_path.parent / f"{tmp_path.name}-user.env"
         save_provider_connection(
             "openai-compatible",
             "secret-test-key",
             "https://api.example.test/v1",
             workspace=tmp_path,
+            user_config_path=target,
         )
     finally:
         clear_provider_connection_overrides()
 
-    assert os.fspath(tmp_path / ".env") in hardened
+    assert os.fspath(target) in hardened
 
 
 def test_windows_credential_write_fails_before_replace_when_acl_cannot_apply(

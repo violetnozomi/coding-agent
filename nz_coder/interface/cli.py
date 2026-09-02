@@ -485,7 +485,7 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
     if not connection.configured:
         credential_warning = (
             f"[error]Credential missing for provider '{selection.provider}'. "
-            f"Use /connect or set {connection.credential_name} in workspace .env; "
+            f"Use /connect or set {connection.credential_name} in the shell/user config; "
             "Agent requests will fail until a provider is connected.[/error]"
         )
 

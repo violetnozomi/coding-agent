@@ -102,6 +102,8 @@ def test_connect_flow_masks_and_saves_credential_before_discovery(
     monkeypatch.setattr(config, "ANTHROPIC_API_BASE_URL", "https://before.example")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "before")
     monkeypatch.setenv("ANTHROPIC_API_BASE_URL", "https://before.example")
+    user_config = tmp_path.parent / f"{tmp_path.name}-user.env"
+    monkeypatch.setenv("NZ_CODER_USER_CONFIG", str(user_config))
     monkeypatch.setattr(
         core,
         "discover_models",
@@ -118,7 +120,7 @@ def test_connect_flow_masks_and_saves_credential_before_discovery(
     with scoped_workdir(tmp_path):
         asyncio.run(core.handle_connect(context))
 
-    content = (tmp_path / ".env").read_text(encoding="utf-8")
+    content = user_config.read_text(encoding="utf-8")
     assert "ANTHROPIC_API_KEY=secret-value" in content
     assert terminal.prompts[0][1] is True
     assert all("secret-value" not in str(message) for message in console.messages)
