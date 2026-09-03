@@ -294,8 +294,9 @@ class ConfigSnapshot:
             if maximum is not None and value > maximum:
                 raise ValueError(f"must be <= {maximum}")
             return value
-        except (TypeError, ValueError) as exc:
-            self._record_issue(key, f"invalid integer; using default ({exc})")
+        except (TypeError, ValueError):
+            self._record_issue(key, "invalid integer; using default")
+            self._replace_invalid_value(key, str(default))
             return default
 
     def get_float(
@@ -316,8 +317,9 @@ class ConfigSnapshot:
             if maximum is not None and value > maximum:
                 raise ValueError(f"must be <= {maximum}")
             return value
-        except (TypeError, ValueError) as exc:
-            self._record_issue(key, f"invalid number; using default ({exc})")
+        except (TypeError, ValueError):
+            self._record_issue(key, "invalid finite number; using default")
+            self._replace_invalid_value(key, str(default))
             return default
 
     def get_bool(self, key: str, default: bool) -> bool:
@@ -340,6 +342,11 @@ class ConfigSnapshot:
             return
         self.issues.append(ConfigIssue(key, message[:300], self.value(key).source))
 
+    def _replace_invalid_value(self, key: str, fallback: str) -> None:
+        """Discard malformed raw text after recording only its provenance."""
+        record = self.value(key)
+        self.values[key] = replace(record, value=fallback, used_default=True)
+
 
 _ACTIVE_CONFIG_SNAPSHOT: ContextVar[ConfigSnapshot | None] = ContextVar(
     "nz_coder_active_config_snapshot",
@@ -359,18 +366,25 @@ def scoped_config_snapshot(snapshot: ConfigSnapshot):
 
 def current_config_snapshot(workspace: Path | None = None) -> ConfigSnapshot:
     """Return the matching run snapshot or capture the requested workspace."""
-    snapshot = _ACTIVE_CONFIG_SNAPSHOT.get()
+    snapshot = active_config_snapshot(workspace)
     if snapshot is not None:
-        if workspace is None:
-            return snapshot
-        requested = Path(workspace).expanduser().absolute()
-        if os.path.normcase(os.path.normpath(str(requested))) == os.path.normcase(
-            os.path.normpath(str(snapshot.workspace))
-        ):
-            return snapshot
+        return snapshot
     if workspace is None:
         raise RuntimeError("No run-scoped ConfigSnapshot is active")
     return load_config_snapshot(Path(workspace))
+
+
+def active_config_snapshot(workspace: Path | None = None) -> ConfigSnapshot | None:
+    """Return only an already-bound matching snapshot, without disk access."""
+    snapshot = _ACTIVE_CONFIG_SNAPSHOT.get()
+    if snapshot is None or workspace is None:
+        return snapshot
+    requested = Path(workspace).expanduser().absolute()
+    if os.path.normcase(os.path.normpath(str(requested))) == os.path.normcase(
+        os.path.normpath(str(snapshot.workspace))
+    ):
+        return snapshot
+    return None
 
 
 def default_user_config_path(environ: Mapping[str, str] | None = None) -> Path:
@@ -691,6 +705,16 @@ def load_config_snapshot(
     snapshot.get_int("BASH_TIMEOUT_SECONDS", 120, minimum=1)
     snapshot.get_int("NZ_PROCESS_BUFFER_BYTES", 2 * 1024 * 1024, minimum=1)
     snapshot.get_float("NZ_PROVIDER_HARD_TIMEOUT_SECONDS", 600.0, minimum=1.0)
+    snapshot.get_float("NZ_MCP_STARTUP_TIMEOUT_SECONDS", 30.0, minimum=0.001)
+    snapshot.get_float("NZ_MCP_TOOL_TIMEOUT_SECONDS", 30.0, minimum=0.001)
+    snapshot.get_float(
+        "NZ_LSP_INITIALIZE_TIMEOUT_SECONDS", 20.0,
+        minimum=0.001, maximum=600.0,
+    )
+    snapshot.get_float(
+        "NZ_LSP_REQUEST_TIMEOUT_SECONDS", 10.0,
+        minimum=0.001, maximum=600.0,
+    )
     return snapshot
 
 
@@ -773,6 +797,7 @@ __all__ = [
     "default_user_config_path",
     "is_secret_config_key",
     "is_sensitive_config_key",
+    "active_config_snapshot",
     "current_config_snapshot",
     "load_config_snapshot",
     "scoped_config_snapshot",

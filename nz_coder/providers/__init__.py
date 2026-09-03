@@ -62,10 +62,16 @@ def create_provider(
     api_key: str | None = None,
     base_url: str | None = None,
     client_factory: Callable[..., Any] | None = None,
+    config_snapshot=None,
 ) -> ModelProvider:
     """Build a configured model provider from explicit values or config."""
-    selected = (name or config.MODEL_PROVIDER).strip().lower()
-    connection = provider_connection(selected)
+    fallback_provider = (
+        config_snapshot.get("MODEL_PROVIDER", "openai-compatible")
+        if config_snapshot is not None
+        else config.MODEL_PROVIDER
+    )
+    selected = (name or fallback_provider).strip().lower()
+    connection = provider_connection(selected, config_snapshot=config_snapshot)
     if selected in _OPENAI_RESPONSES_NAMES:
         return OpenAIResponsesProvider(
             api_key=connection.api_key if api_key is None else api_key,
@@ -92,7 +98,11 @@ def create_provider(
         return AnthropicProvider(
             api_key=connection.api_key if api_key is None else api_key,
             base_url=connection.base_url if base_url is None else base_url,
-            api_version=config.ANTHROPIC_API_VERSION,
+            api_version=(
+                config_snapshot.get("ANTHROPIC_API_VERSION", "2023-06-01")
+                if config_snapshot is not None
+                else config.ANTHROPIC_API_VERSION
+            ),
         )
     if selected in _GEMINI_NAMES:
         return GeminiProvider(

@@ -68,7 +68,11 @@ class _NoRedirect(HTTPRedirectHandler):
         raise RuntimeError("Model discovery redirects are disabled")
 
 
-def active_model_selection(workspace: Path | None = None) -> ModelSelection:
+def active_model_selection(
+    workspace: Path | None = None,
+    *,
+    config_snapshot=None,
+) -> ModelSelection:
     """Return the workspace selection, falling back to environment config."""
     root = (workspace or current_workdir()).resolve()
     selection_path = root / _SELECTION_RELATIVE_PATH
@@ -92,10 +96,20 @@ def active_model_selection(workspace: Path | None = None) -> ModelSelection:
         if variant is not None and (not isinstance(variant, str) or not variant.strip()):
             raise ValueError("Model selection variant must be a non-empty string")
         return ModelSelection(provider, model_id, variant, "workspace")
+    if config_snapshot is not None:
+        if config_snapshot.workspace.resolve() != root:
+            raise ValueError("ConfigSnapshot belongs to a different workspace")
+        provider = config_snapshot.get("MODEL_PROVIDER", "openai-compatible")
+        model_id = config_snapshot.get("MODEL_ID", "deepseek-v4-flash")
+        variant = config_snapshot.get("MODEL_VARIANT", "")
+    else:
+        provider = config.MODEL_PROVIDER
+        model_id = config.MODEL_ID
+        variant = config.MODEL_VARIANT
     return ModelSelection(
-        str(config.MODEL_PROVIDER).strip().lower(),
-        str(config.MODEL_ID).strip(),
-        str(config.MODEL_VARIANT).strip() or None,
+        str(provider).strip().lower(),
+        str(model_id).strip(),
+        str(variant).strip() or None,
     )
 
 

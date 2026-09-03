@@ -39,7 +39,7 @@ class ProviderConnection:
         return bool(self.api_key.strip())
 
 
-def provider_connection(provider: str) -> ProviderConnection:
+def provider_connection(provider: str, *, config_snapshot=None) -> ProviderConnection:
     """Return the same credential/base selection used by Provider adapters."""
     normalized = str(provider or "").strip().lower()
     family = _provider_family(normalized)
@@ -58,36 +58,48 @@ def provider_connection(provider: str) -> ProviderConnection:
             override[1],
             f"user-connect:{family}:{override[2]}",
         )
+    def selected(key: str, default: str = "") -> str:
+        if config_snapshot is not None:
+            return config_snapshot.get(key, default)
+        return str(getattr(config, key, default))
+
+    shared_key = selected("API_KEY", "")
     if normalized in _ANTHROPIC_NAMES:
+        api_key = selected("ANTHROPIC_API_KEY", shared_key) or shared_key
         return ProviderConnection(
             normalized,
             "ANTHROPIC_API_KEY (or API_KEY)",
-            config.ANTHROPIC_API_KEY,
-            config.ANTHROPIC_API_BASE_URL,
-            _environment_credential_scope("anthropic", config.ANTHROPIC_API_KEY),
+            api_key,
+            selected("ANTHROPIC_API_BASE_URL", "https://api.anthropic.com"),
+            _environment_credential_scope("anthropic", api_key),
         )
     if normalized in _GEMINI_NAMES:
+        api_key = selected("GEMINI_API_KEY", shared_key) or shared_key
         return ProviderConnection(
             normalized,
             "GEMINI_API_KEY (or API_KEY)",
-            config.GEMINI_API_KEY,
-            config.GEMINI_API_BASE_URL,
-            _environment_credential_scope("gemini", config.GEMINI_API_KEY),
+            api_key,
+            selected(
+                "GEMINI_API_BASE_URL",
+                "https://generativelanguage.googleapis.com/v1beta",
+            ),
+            _environment_credential_scope("gemini", api_key),
         )
     if normalized in _OPENAI_RESPONSES_NAMES:
+        api_key = selected("OPENAI_API_KEY", shared_key) or shared_key
         return ProviderConnection(
             normalized,
             "OPENAI_API_KEY (or API_KEY)",
-            config.OPENAI_API_KEY,
-            config.OPENAI_API_BASE_URL,
-            _environment_credential_scope("openai-responses", config.OPENAI_API_KEY),
+            api_key,
+            selected("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
+            _environment_credential_scope("openai-responses", api_key),
         )
     return ProviderConnection(
         normalized,
         "API_KEY",
-        config.API_KEY,
-        config.API_BASE_URL,
-        _environment_credential_scope("openai-compatible", config.API_KEY),
+        shared_key,
+        selected("API_BASE_URL", "https://api.deepseek.com"),
+        _environment_credential_scope("openai-compatible", shared_key),
     )
 
 

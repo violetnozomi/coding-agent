@@ -97,6 +97,9 @@ _WARM_PENDING: set[tuple[Path, Path]] = set()
 
 def warm_lsp(path: Path, workspace: Path) -> None:
     """Best-effort asynchronous equivalent of InfCode's forked LSP touch."""
+    from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+    config_snapshot = current_config_snapshot(workspace)
     key = (path.resolve(), workspace.resolve())
     with _WARM_LOCK:
         if key in _WARM_PENDING:
@@ -111,7 +114,14 @@ def warm_lsp(path: Path, workspace: Path) -> None:
         try:
             from nz_coder.lsp import get_client_for_file
 
-            client = get_client_for_file(key[0], key[1])
+            try:
+                client = get_client_for_file(
+                    key[0], key[1], config_snapshot=config_snapshot,
+                )
+            except TypeError as exc:
+                if "config_snapshot" not in str(exc):
+                    raise
+                client = get_client_for_file(key[0], key[1])
             if client is not None:
                 client.open_document(key[0])
         except Exception:

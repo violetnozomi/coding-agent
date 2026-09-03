@@ -12,7 +12,7 @@ from .client import LSPClient
 from .servers import ResolvedServer, resolve_server
 
 _LOCK = threading.RLock()
-_ClientKey = tuple[str, str, str, str, tuple[str, ...], str]
+_ClientKey = tuple
 _CLIENTS: dict[_ClientKey, LSPClient] = {}
 _BROKEN: set[_ClientKey] = set()
 _ERRORS: dict[_ClientKey, str] = {}
@@ -24,6 +24,18 @@ def _client_key(
     workspace: Path,
     config_snapshot: ConfigSnapshot | None = None,
 ) -> tuple[ResolvedServer | None, _ClientKey | None]:
+    legacy_globals = config_snapshot is None
+    if config_snapshot is None:
+        from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
+            current_config_snapshot,
+        )
+
+        config_snapshot = (
+            active_config_snapshot(workspace)
+            or current_config_snapshot(workspace)
+        )
+        legacy_globals = active_config_snapshot(workspace) is None
     resolved = resolve_server(path, workspace, config_snapshot=config_snapshot)
     if resolved is None:
         return None, None
@@ -34,6 +46,22 @@ def _client_key(
         resolved.fingerprint,
         resolved.command,
         resolved.config_source,
+        str(
+            config.LSP_INITIALIZE_TIMEOUT_SECONDS
+            if legacy_globals
+            else config_snapshot.get_float(
+                "NZ_LSP_INITIALIZE_TIMEOUT_SECONDS", 20.0,
+                minimum=0.001, maximum=600.0,
+            )
+        ),
+        str(
+            config.LSP_REQUEST_TIMEOUT_SECONDS
+            if legacy_globals
+            else config_snapshot.get_float(
+                "NZ_LSP_REQUEST_TIMEOUT_SECONDS", 10.0,
+                minimum=0.001, maximum=600.0,
+            )
+        ),
     )
     return resolved, key
 
@@ -45,7 +73,24 @@ def get_client_for_file(
     config_snapshot: ConfigSnapshot | None = None,
 ) -> LSPClient | None:
     """Return a cached client, starting it on first use."""
-    if not config.LSP_ENABLED:
+    legacy_globals = config_snapshot is None
+    if config_snapshot is None:
+        from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
+            current_config_snapshot,
+        )
+
+        config_snapshot = (
+            active_config_snapshot(workspace)
+            or current_config_snapshot(workspace)
+        )
+        legacy_globals = active_config_snapshot(workspace) is None
+    if legacy_globals:
+        enabled = config.LSP_ENABLED
+    else:
+        enabled = config_snapshot.get_bool("NZ_LSP_ENABLED", True)
+    if not enabled:
+        close_workspace_clients(workspace)
         return None
     resolved, key = _client_key(path, workspace, config_snapshot)
     if resolved is None or key is None:
@@ -83,6 +128,8 @@ def get_client_for_file(
                 root=resolved.root,
                 language_id=resolved.language_id,
                 analysis_paths=resolved.analysis_paths,
+                initialize_timeout=float(key[-2]),
+                request_timeout=float(key[-1]),
             )
         except Exception as exc:
             _BROKEN.add(key)

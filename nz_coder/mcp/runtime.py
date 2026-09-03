@@ -114,13 +114,19 @@ class MCPRuntime:
         config_snapshot=None,
     ) -> "MCPRuntime":
         """Build the explicitly enabled runtime without starting subprocesses."""
-        if not config.MCP_ENABLED:
-            return cls([], workspace=workspace or current_workdir())
         root = (workspace or current_workdir()).resolve()
+        legacy_globals = config_snapshot is None
         if config_snapshot is None:
             from nz_coder.foundation.workspace_trust import current_config_snapshot
 
             config_snapshot = current_config_snapshot(root)
+        enabled = (
+            config.MCP_ENABLED
+            if legacy_globals
+            else config_snapshot.get_bool("NZ_MCP_ENABLED", False)
+        )
+        if not enabled:
+            return cls([], workspace=root)
 
         selected_snapshot = [config_snapshot]
 
@@ -128,26 +134,33 @@ class MCPRuntime:
             return load_mcp_server_configs(
                 workspace=root,
                 project_control_snapshot=selected_snapshot[0].project_control,
+                config_snapshot=(None if legacy_globals else selected_snapshot[0]),
             )
 
         def revision():
             return mcp_config_revision(
                 root,
                 project_control_snapshot=selected_snapshot[0].project_control,
+                config_snapshot=(None if legacy_globals else selected_snapshot[0]),
             )
 
         def refresh_loader():
             from nz_coder.foundation.workspace_trust import load_config_snapshot
 
             selected_snapshot[0] = load_config_snapshot(root)
-            return loader()
+            return load_mcp_server_configs(
+                workspace=root,
+                project_control_snapshot=selected_snapshot[0].project_control,
+            )
 
         return cls(
             loader(),
             workspace=root,
-            config_loader=loader,
-            config_revision=revision,
-            config_refresh_loader=refresh_loader,
+            # A top-level Run owns one immutable config epoch. Changes are
+            # observed only when the next Run creates its own runtime.
+            config_loader=loader if legacy_globals else None,
+            config_revision=revision if legacy_globals else None,
+            config_refresh_loader=refresh_loader if legacy_globals else None,
         )
 
     def start(self) -> "MCPRuntime":

@@ -149,11 +149,27 @@ def lsp(
         if not target.is_file():
             return f"Error: File not found: {file_path}"
         workspace = current_workdir().resolve()
-        if not config.LSP_ENABLED:
+        from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
+            current_config_snapshot,
+        )
+
+        config_snapshot = active_config_snapshot(workspace)
+        enabled = (
+            config_snapshot.get_bool("NZ_LSP_ENABLED", True)
+            if config_snapshot is not None
+            else config.LSP_ENABLED
+        )
+        if not enabled:
             return "Error: LSP support is disabled by NZ_LSP_ENABLED."
-        client = get_client_for_file(target, workspace)
+        config_snapshot = config_snapshot or current_config_snapshot(workspace)
+        client = get_client_for_file(
+            target, workspace, config_snapshot=config_snapshot,
+        )
         if client is None:
-            startup_error = client_startup_error(target, workspace)
+            startup_error = client_startup_error(
+                target, workspace, config_snapshot=config_snapshot,
+            )
             if startup_error:
                 return f"Error: LSP server failed to initialize: {startup_error}"
             return "Error: " + available_server_summary(target)

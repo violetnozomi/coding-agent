@@ -18,6 +18,7 @@ from nz_coder.runtime.process.workdir import current_workdir
 
 if TYPE_CHECKING:
     from nz_coder.foundation.project_control import ProjectControlSnapshot
+    from nz_coder.foundation.workspace_trust import ConfigSnapshot
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 _ENV_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -116,15 +117,27 @@ def load_mcp_server_configs(
     *,
     workspace: Path | None = None,
     project_control_snapshot: ProjectControlSnapshot | None = None,
+    config_snapshot: ConfigSnapshot | None = None,
 ) -> list[MCPServerConfig]:
     """Load merged user/project/environment config without executing commands."""
     root = (workspace or current_workdir()).resolve()
+    legacy_globals = config_snapshot is None
+    if config_snapshot is None:
+        from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+        config_snapshot = current_config_snapshot(root)
+    if config_snapshot.workspace.resolve() != root:
+        raise ValueError("ConfigSnapshot belongs to a different workspace")
+    if project_control_snapshot is None:
+        project_control_snapshot = config_snapshot.project_control
     origins: dict[str, str]
     project_control_trusted = True
     if raw is None:
         payload, origins, project_control_trusted = _load_merged_payload(
             root,
             project_control_snapshot,
+            config_snapshot,
+            legacy_globals=legacy_globals,
         )
         source: str | dict[str, Any] = payload
     else:
@@ -289,12 +302,30 @@ def load_mcp_server_configs(
         if not isinstance(enabled, bool):
             raise ValueError(f"MCP server '{name}' enabled must be boolean")
         startup_timeout = _positive_timeout(
-            item.get("startup_timeout_seconds", config.MCP_STARTUP_TIMEOUT_SECONDS),
+            item.get(
+                "startup_timeout_seconds",
+                (
+                    config.MCP_STARTUP_TIMEOUT_SECONDS
+                    if legacy_globals
+                    else config_snapshot.get_float(
+                    "NZ_MCP_STARTUP_TIMEOUT_SECONDS", 30.0, minimum=0.001,
+                    )
+                ),
+            ),
             server=name,
             field="startup_timeout_seconds",
         )
         tool_timeout = _positive_timeout(
-            item.get("tool_timeout_seconds", config.MCP_TOOL_TIMEOUT_SECONDS),
+            item.get(
+                "tool_timeout_seconds",
+                (
+                    config.MCP_TOOL_TIMEOUT_SECONDS
+                    if legacy_globals
+                    else config_snapshot.get_float(
+                    "NZ_MCP_TOOL_TIMEOUT_SECONDS", 30.0, minimum=0.001,
+                    )
+                ),
+            ),
             server=name,
             field="tool_timeout_seconds",
         )
@@ -315,7 +346,14 @@ def load_mcp_server_configs(
             )
             trusted = bool(
                 project_control_trusted
-                and MCPTrustStore(Path(config.MCP_TRUST_STORE)).is_trusted(
+                and MCPTrustStore(Path(
+                    config.MCP_TRUST_STORE
+                    if legacy_globals
+                    else config_snapshot.get(
+                        "NZ_MCP_TRUST_STORE",
+                        str(Path.home() / ".config" / "nz-coder" / "mcp-trust.json"),
+                    )
+                ).expanduser()).is_trusted(
                     root,
                     name,
                     fingerprint,
@@ -345,11 +383,29 @@ def load_mcp_server_configs(
     return servers
 
 
-def mcp_config_paths(workspace: Path) -> tuple[Path, Path, Path]:
+def mcp_config_paths(
+    workspace: Path,
+    *,
+    config_snapshot: ConfigSnapshot | None = None,
+) -> tuple[Path, Path, Path]:
     """Return resolved user, project, and trust paths with project confinement."""
     root = workspace.resolve()
-    user_path = Path(config.MCP_USER_CONFIG).expanduser().resolve()
-    project_value = Path(config.MCP_PROJECT_CONFIG)
+    legacy_globals = config_snapshot is None
+    if config_snapshot is None:
+        from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+        config_snapshot = current_config_snapshot(root)
+    user_path = Path(
+        config.MCP_USER_CONFIG if legacy_globals else config_snapshot.get(
+            "NZ_MCP_USER_CONFIG",
+            str(Path.home() / ".config" / "nz-coder" / "mcp.json"),
+        )
+    ).expanduser().resolve()
+    project_value = Path(
+        config.MCP_PROJECT_CONFIG if legacy_globals else config_snapshot.get(
+            "NZ_MCP_PROJECT_CONFIG", ".nz-coder/mcp.json",
+        )
+    )
     if project_value.is_absolute():
         raise ValueError("NZ_MCP_PROJECT_CONFIG must be workspace-relative")
     project_path = (root / project_value).resolve()
@@ -357,7 +413,12 @@ def mcp_config_paths(workspace: Path) -> tuple[Path, Path, Path]:
         project_path.relative_to(root)
     except ValueError as exc:
         raise ValueError("NZ_MCP_PROJECT_CONFIG escapes workspace") from exc
-    trust_path = Path(config.MCP_TRUST_STORE).expanduser().resolve()
+    trust_path = Path(
+        config.MCP_TRUST_STORE if legacy_globals else config_snapshot.get(
+            "NZ_MCP_TRUST_STORE",
+            str(Path.home() / ".config" / "nz-coder" / "mcp-trust.json"),
+        )
+    ).expanduser().resolve()
     return user_path, project_path, trust_path
 
 
@@ -365,14 +426,18 @@ def mcp_config_revision(
     workspace: Path,
     *,
     project_control_snapshot: ProjectControlSnapshot | None = None,
+    config_snapshot: ConfigSnapshot | None = None,
 ) -> str:
     """Return a cheap revision for config/trust polling without reading secrets."""
     from nz_coder.foundation.workspace_trust import current_config_snapshot
 
-    snapshot = project_control_snapshot
-    if snapshot is None:
-        snapshot = current_config_snapshot(workspace).project_control
-    user_path, _project_path, trust_path = mcp_config_paths(workspace)
+    legacy_globals = config_snapshot is None
+    run_snapshot = config_snapshot or current_config_snapshot(workspace)
+    snapshot = project_control_snapshot or run_snapshot.project_control
+    user_path, _project_path, trust_path = mcp_config_paths(
+        workspace,
+        config_snapshot=None if legacy_globals else run_snapshot,
+    )
     paths = (user_path, trust_path)
     records: list[tuple[str, int, int]] = []
     for path in paths:
@@ -384,7 +449,11 @@ def mcp_config_revision(
     payload = json.dumps(
         {
             "paths": records,
-            "environment": config.MCP_SERVERS_JSON,
+            "environment": (
+                config.MCP_SERVERS_JSON
+                if legacy_globals
+                else run_snapshot.get("NZ_MCP_SERVERS_JSON", "")
+            ),
             "project_control": snapshot.fingerprint,
         },
         sort_keys=True,
@@ -396,13 +465,17 @@ def mcp_config_revision(
 def _load_merged_payload(
     workspace: Path,
     project_control_snapshot: ProjectControlSnapshot | None,
+    config_snapshot: ConfigSnapshot,
+    *,
+    legacy_globals: bool = False,
 ) -> tuple[dict[str, Any], dict[str, str], bool]:
-    from nz_coder.foundation.workspace_trust import load_config_snapshot
-
-    snapshot = project_control_snapshot
-    if snapshot is None:
-        snapshot = load_config_snapshot(workspace).project_control
-    user_path = Path(config.MCP_USER_CONFIG).expanduser().resolve()
+    snapshot = project_control_snapshot or config_snapshot.project_control
+    user_path = Path(
+        config.MCP_USER_CONFIG if legacy_globals else config_snapshot.get(
+            "NZ_MCP_USER_CONFIG",
+            str(Path.home() / ".config" / "nz-coder" / "mcp.json"),
+        )
+    ).expanduser().resolve()
     merged: dict[str, Any] = {}
     origins: dict[str, str] = {}
     if user_path.exists():
@@ -416,11 +489,22 @@ def _load_merged_payload(
         for name, item in payload.items():
             merged[name] = item
             origins[name] = "project"
-    if config.MCP_SERVERS_JSON.strip():
-        payload = _decode_server_payload(config.MCP_SERVERS_JSON, "NZ_MCP_SERVERS_JSON")
+    inline = (
+        config.MCP_SERVERS_JSON
+        if legacy_globals
+        else config_snapshot.get("NZ_MCP_SERVERS_JSON", "")
+    )
+    if inline.strip():
+        payload = _decode_server_payload(inline, "NZ_MCP_SERVERS_JSON")
+        source = (
+            "environment"
+            if legacy_globals
+            else config_snapshot.value("NZ_MCP_SERVERS_JSON").source.value
+        )
+        origin = "environment" if source == "environment" else source
         for name, item in payload.items():
             merged[name] = item
-            origins[name] = "environment"
+            origins[name] = origin
     return merged, origins, snapshot.trusted
 
 

@@ -34,6 +34,7 @@ class ModelSelectionRequest:
     owns_client: bool | None = None
     base_url: str | None = None
     credential_scope_id: str | None = None
+    config_snapshot: Any = None
 
 
 @dataclass
@@ -168,16 +169,47 @@ def resolve_model_runtime(
     ),
 ) -> ResolvedModelRuntime:
     """Resolve selection, wire identity, capabilities, pricing, and ownership."""
-    selected = active_model_selection(request.workspace)
-    provider_id = str(request.provider_name or selected.provider).strip().lower()
-    model_id = str(request.model_id or selected.model_id).strip()
-    variant = request.variant if request.variant is not None else selected.variant
+    explicit_selection = (
+        request.provider_name is not None and request.model_id is not None
+    )
+    selected = (
+        None
+        if explicit_selection
+        else active_model_selection(
+            request.workspace,
+            config_snapshot=request.config_snapshot,
+        )
+    )
+    provider_id = str(
+        request.provider_name
+        or (selected.provider if selected is not None else "")
+    ).strip().lower()
+    model_id = str(
+        request.model_id
+        or (selected.model_id if selected is not None else "")
+    ).strip()
+    variant = (
+        request.variant
+        if explicit_selection or request.variant is not None
+        else selected.variant if selected is not None else None
+    )
     if not provider_id:
         raise ValueError("Model provider must not be empty")
     if not model_id:
         raise ValueError("Model id must not be empty")
 
-    provider = request.provider or provider_factory(provider_id)
+    from nz_coder.providers.configuration import provider_connection
+
+    connection = provider_connection(
+        provider_id,
+        config_snapshot=request.config_snapshot,
+    )
+    configured_provider = request.provider is None
+    provider = request.provider or (
+        create_provider(provider_id, config_snapshot=request.config_snapshot)
+        if provider_factory is create_provider
+        else provider_factory(provider_id)
+    )
     provider_id = str(getattr(provider, "name", provider_id) or provider_id).strip().lower()
     registry_model = registry_resolver(provider_id, model_id, request.workspace)
     request_model_id = (
@@ -199,8 +231,14 @@ def resolve_model_runtime(
         provider_id=provider_id,
         provider=provider,
         client=client,
-        explicit_base_url=request.base_url,
-        credential_scope_id=request.credential_scope_id,
+        explicit_base_url=(
+            request.base_url
+            if request.base_url is not None
+            else connection.base_url if configured_provider else None
+        ),
+        credential_scope_id=(
+            request.credential_scope_id or connection.credential_scope_id
+        ),
     )
     return ResolvedModelRuntime(
         provider_id=provider_id,
