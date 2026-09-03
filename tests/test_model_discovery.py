@@ -224,7 +224,7 @@ def test_untrusted_project_model_selection_is_ignored(tmp_path, monkeypatch):
     assert selection.source == "configuration"
 
 
-def test_trusted_workspace_control_model_selection_is_applied(tmp_path, monkeypatch):
+def test_workspace_control_trust_does_not_authorize_model_selection(tmp_path, monkeypatch):
     from nz_coder.foundation.workspace_trust import (
         WorkspaceTrustStore,
         load_config_snapshot,
@@ -232,6 +232,8 @@ def test_trusted_workspace_control_model_selection_is_applied(tmp_path, monkeypa
 
     trust_path = tmp_path.parent / f"{tmp_path.name}-workspace-trust.json"
     monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    monkeypatch.setattr(config, "MODEL_PROVIDER", "openai-compatible")
+    monkeypatch.setattr(config, "MODEL_ID", "fallback-model")
     target = tmp_path / ".nz-coder/models/selection.json"
     target.parent.mkdir(parents=True)
     target.write_text(
@@ -252,9 +254,59 @@ def test_trusted_workspace_control_model_selection_is_applied(tmp_path, monkeypa
 
     selection = active_model_selection(tmp_path)
 
-    assert selection.provider == "gemini"
-    assert selection.model_id == "gemini-code"
-    assert selection.source == "workspace"
+    assert selection.provider == "openai-compatible"
+    assert selection.model_id == "fallback-model"
+    assert selection.source == "configuration"
+
+
+def test_model_selection_does_not_revoke_workspace_control_trust(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
+    trust_path = tmp_path.parent / f"{tmp_path.name}-selection-control-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"permissions":{"deny":["bash"]}}', encoding="utf-8")
+    before = load_config_snapshot(tmp_path)
+    WorkspaceTrustStore(trust_path).trust(
+        tmp_path, "workspace-control", before.control_fingerprint
+    )
+
+    save_model_selection("gemini", "gemini-code", workspace=tmp_path)
+
+    after = load_config_snapshot(tmp_path)
+    assert after.control_fingerprint == before.control_fingerprint
+    assert after.control_plane_trusted is True
+
+
+def test_external_model_selection_change_invalidates_dedicated_trust(
+    tmp_path, monkeypatch,
+):
+    trust_path = tmp_path.parent / f"{tmp_path.name}-selection-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    monkeypatch.setattr(config, "MODEL_ID", "fallback-model")
+    save_model_selection("gemini", "gemini-code", workspace=tmp_path)
+    target = tmp_path / ".nz-coder" / "models" / "selection.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["model_id"] = "externally-changed"
+    target.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert active_model_selection(tmp_path).model_id == "fallback-model"
+
+
+def test_model_selection_cannot_refresh_workspace_control_trust(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+    trust_path = tmp_path.parent / f"{tmp_path.name}-no-control-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"permissions":{"allow":["bash"]}}', encoding="utf-8")
+    assert load_config_snapshot(tmp_path).control_plane_trusted is False
+
+    save_model_selection("gemini", "gemini-code", workspace=tmp_path)
+
+    assert load_config_snapshot(tmp_path).control_plane_trusted is False
 
 
 def test_selection_validates_exact_catalog_variant(tmp_path, monkeypatch):

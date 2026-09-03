@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import html
 import json
-import os
 import re
-import tempfile
 from dataclasses import dataclass, field
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -187,9 +185,7 @@ class SkillLoader:
         self._activated: set[str] = set()
         self._disabled: dict[str, Skill] = {}
         self._settings_path = self._project_dir.parent / "settings.json"
-        self._disabled_names = (
-            self._read_disabled_names() if self._workspace_trusted else set()
-        )
+        self._disabled_names = self._read_disabled_names()
 
         self._load()
 
@@ -359,19 +355,18 @@ class SkillLoader:
         return sorted(items, key=lambda item: item["name"])
 
     def set_enabled(self, name: str, enabled: bool) -> str:
-        """Persist one skill's enabled state in the project owner config."""
+        """Persist one Skill preference in user-owned workspace state."""
         selected = str(name).strip()
         known = set(self._skills) | set(self._conditional) | set(self._disabled)
         if selected not in known:
             raise ValueError(f"Unknown skill '{selected}'")
-        disabled = set(self._disabled_names)
-        if enabled:
-            disabled.discard(selected)
-        else:
-            disabled.add(selected)
-        payload = self._read_settings()
-        payload["disabled_skills"] = sorted(disabled)
-        self._write_settings(payload)
+        from nz_coder.tool_platform.permissioning.grants import UserGrantStore
+
+        UserGrantStore().set_skill_enabled(
+            self._project_dir.parent.parent,
+            selected,
+            enabled,
+        )
         self.reload()
         item = next(entry for entry in self.list_skills() if entry["name"] == selected)
         return str(item["status"])
@@ -382,9 +377,7 @@ class SkillLoader:
         self._conditional.clear()
         self._activated.clear()
         self._disabled.clear()
-        self._disabled_names = (
-            self._read_disabled_names() if self._workspace_trusted else set()
-        )
+        self._disabled_names = self._read_disabled_names()
         self._load()
 
     def _read_settings(self) -> dict:
@@ -399,32 +392,22 @@ class SkillLoader:
         return value
 
     def _read_disabled_names(self) -> set[str]:
-        values = self._read_settings().get("disabled_skills", [])
+        values = (
+            self._read_settings().get("disabled_skills", [])
+            if self._workspace_trusted else []
+        )
         if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
             raise ValueError("disabled_skills must be a list of names")
-        return {item.strip() for item in values if item.strip()}
-
-    def _write_settings(self, payload: dict) -> None:
-        self._settings_path.parent.mkdir(parents=True, exist_ok=True)
-        handle, temporary = tempfile.mkstemp(
-            prefix=f".{self._settings_path.name}.",
-            dir=str(self._settings_path.parent),
-            text=True,
-        )
+        project_disabled = {item.strip() for item in values if item.strip()}
         try:
-            with os.fdopen(handle, "w", encoding="utf-8") as stream:
-                json.dump(payload, stream, ensure_ascii=False, indent=2, sort_keys=True)
-                stream.write("\n")
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.chmod(temporary, 0o600)
-            os.replace(temporary, self._settings_path)
-        finally:
-            try:
-                os.unlink(temporary)
-            except FileNotFoundError:
-                pass
+            from nz_coder.tool_platform.permissioning.grants import UserGrantStore
 
+            user_disabled = UserGrantStore().load_disabled_skills(
+                self._project_dir.parent.parent
+            )
+        except (OSError, PermissionError, ValueError):
+            user_disabled = set()
+        return project_disabled | user_disabled
 
 def _matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
     """Check if rel_path matches any gitignore-style pattern.

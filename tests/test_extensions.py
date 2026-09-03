@@ -213,7 +213,9 @@ def test_extensions_cli_reload_projects_a_fresh_metadata_snapshot(tmp_path, caps
     assert '"extension_id": "hook:core"' in capsys.readouterr().out
 
 
-def test_skill_enable_disable_is_owned_persisted_and_runtime_effective(tmp_path):
+def test_skill_enable_disable_is_user_owned_and_runtime_effective(tmp_path, monkeypatch):
+    user_config = tmp_path.parent / f"{tmp_path.name}-user" / "config.env"
+    monkeypatch.setenv("NZ_CODER_USER_CONFIG", str(user_config))
     project = tmp_path / ".nz-coder" / "skills"
     _write_skill(project, "review", "description: project")
     loader = SkillLoader(
@@ -228,8 +230,9 @@ def test_skill_enable_disable_is_owned_persisted_and_runtime_effective(tmp_path)
     assert disabled["status"] == "disabled"
     assert registry.get("skill:review").enabled is False
     assert "review" not in loader.descriptions()
-    settings = json.loads((tmp_path / ".nz-coder" / "settings.json").read_text())
-    assert settings["disabled_skills"] == ["review"]
+    assert not (tmp_path / ".nz-coder" / "settings.json").exists()
+    state = json.loads(user_config.with_name("workspace-grants.json").read_text())
+    assert next(iter(state["workspaces"].values()))["disabled_skills"] == ["review"]
 
     enabled = registry.set_enabled("skill:review", True)
     assert enabled["status"] == "available"

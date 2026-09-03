@@ -19,7 +19,6 @@ from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.foundation.workspace_trust import (
     WorkspaceTrustStore,
     default_trust_store_path,
-    load_config_snapshot,
 )
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
@@ -77,13 +76,10 @@ def active_model_selection(workspace: Path | None = None) -> ModelSelection:
     if data is not None:
         fingerprint = _state_fingerprint(data)
         try:
-            trusted = (
-                WorkspaceTrustStore(default_trust_store_path()).is_trusted(
-                    root,
-                    "workspace-model-selection",
-                    fingerprint,
-                )
-                or load_config_snapshot(root).control_plane_trusted
+            trusted = WorkspaceTrustStore(default_trust_store_path()).is_trusted(
+                root,
+                "workspace-model-selection",
+                fingerprint,
             )
         except (OSError, ValueError):
             trusted = False
