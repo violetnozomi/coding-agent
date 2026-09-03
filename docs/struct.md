@@ -1315,7 +1315,7 @@ deltas are excluded from Session events and the event journal. The legacy SDK
 - Project Command 和 Project Workflow 只有在当前精确 `workspace-control` fingerprint 被信任后才会发现。未信任项目的命令不会进入列表、补全、HTTP 扩展或 Headless 执行，也不能覆盖 bundled/user command、改变 prompt、model 或 allowed tools；未信任项目的 Workflow 不可发现、不可显式加载，也不能覆盖 Personal Workflow。控制内容变化后旧信任立即失效，project-scope Workflow 的主动保存、替换或删除要求重新显式信任。
 - Workspace Control Trust 管理仓库提供的 Project Authority；用户点击“始终允许”产生的精确 scoped grant 和 Skill 启停偏好保存在平台用户配置目录旁的 `workspace-grants.json`。Grant Store 位于 Workspace 外，使用 canonical Workspace identity、跨进程锁、原子写入、配额和 owner-private 权限。Project deny 优先于 User Grant，未信任 Project allow 仍被忽略。
 - 工作区模型选择不参与 Project Control fingerprint，只使用 `workspace-model-selection` 专用信任。正式选择会登记 selection 内容指纹；外部修改或 reset 会使旧选择失效。选择模型不会刷新、撤销或扩大 Project Control Trust，仓库不能仅靠预置 `selection.json` 切换 Provider 或昂贵模型。
-- 未信任项目 Skill 仍可作为仓库上下文读取，但不能覆盖 user/bundled Skill，也不能声明 `model` 或 `allowed_tools` 来改变治理状态。
+- 未信任项目 Skill 不会被加载、展示或注入 Prompt，也不能覆盖 user/bundled Skill；普通源码仍可按正常文件读取规则作为仓库上下文使用。
 - Transaction rollback 记录父目录链的设备/文件身份。POSIX 从已验证 Workspace root fd 开始逐级以 `O_DIRECTORY | O_NOFOLLOW` 打开，并把最终父目录 fd 持有到临时文件写入、rename/unlink 和 fsync 完成；验证后的路径交换只能作用于已经打开的原目录。Windows 在恢复关键区间持有不共享 delete 的目录 handle、拒绝 reparse point，并通过 `NtSetInformationFile(FileRenameInformation)` 相对最终父目录 handle 原子恢复备份；新文件删除先验证目标 handle 的最终父目录，再通过 handle disposition 删除。即使 runner 允许已打开目录被 rename/junction 替换，恢复仍锚定原目录或 fail closed。无法安全证明的新目录删除会保持 `rollback_partial`、保留 backup/metadata，路径修复后可以 retry。
 - Provider credential scope 使用不公开的随机 generation；凭据轮换会得到新的 Provider instance，旧 thought signature/private continuation 不会跨账号转发。Provider worker 在 `thread.start()` 失败时也会释放 inflight 槽。
 - MCP/LSP 使用 `strict-service` 子进程环境，不继承 `PYTHONPATH`、`NODE_PATH`、`PSMODULEPATH`、`PYTHONHOME`、虚拟环境路径等代码加载变量；普通 build/test 命令仍使用兼容的 workspace-command profile。
@@ -1323,3 +1323,15 @@ deltas are excluded from Session events and the event journal. The legacy SDK
 - 目录型 `read_file` 会过滤 `.env`、`.git`、`.nz-coder` 等私有名称；GitHub Actions checkout 禁止持久化仓库凭据。
 
 仍需明确保留的边界：Shell、路径策略和环境清洗不是 OS sandbox；Webfetch 的代理语义和 DNS TOCTOU 没有被宣称彻底消除；临时 shell API Key 的 Provider continuation 仍只保证 process-scoped generation；Artifact 历史引用扫描仍是有界扫描，不能宣称严格永久保留；Windows junction 行为仍应持续以 Windows CI/实机结果为准（本轮 GitHub-hosted Windows 回归已执行通过）；Actions 尚未固定完整 SHA，应由可验证的依赖更新流程完成，不能离线编造。
+
+### 22.1 不可变 Project Control 与句柄锚定边界
+
+[`nz_coder/foundation/project_control.py`](../nz_coder/foundation/project_control.py) 定义 `ProjectControlSnapshot`。一次捕获只包含 `.nz-coder/settings.json`、`.nz-coder/mcp.json`、`.nz-coder/skills/*/SKILL.md`、`.nz-coder/commands/*.md` 和 `.nz-coder/workflows/*.workflow.json`；模型选择、Workflow 历史/回收站及 Session、run、artifact、trace、cache、runtime、plan 等派生目录均不属于 Project Authority。每个文件保存相对路径、类型、内容哈希、文件身份、大小和不可变 bytes；整个映射只读，并受单文件 1 MiB、总计 4 MiB、1024 文件和单目录 4096 entry 的 fail-closed 预算约束。
+
+Control fingerprint 直接由 Workspace 配置指纹、快照内相对路径和同一份 bytes 计算。Trust Store 只会把这份不可变快照标记为 trusted，不会产生可与未来磁盘路径组合的长期布尔授权。一次产品运行固定同一 `ConfigSnapshot`/`ProjectControlSnapshot`，Permission、Skill（包括 body）、Command、configured Hook、Workflow 和 MCP 都解析该快照的 bytes；TUI、Headless、HTTP 及 Runtime Host 传播同一对象。控制文件在捕获后改变不会改变当前运行；下一次捕获得到新 fingerprint，未明确建立的新信任不会获得 Project Authority。实现入口和消费关系可分别从 [`workspace_trust.py`](../nz_coder/foundation/workspace_trust.py)、[`skills.py`](../nz_coder/state/skills.py)、[`custom_commands.py`](../nz_coder/interface/custom_commands.py) 与 [`mcp/config.py`](../nz_coder/mcp/config.py) 追踪。
+
+POSIX 捕获从已验证 Workspace root descriptor 出发，对每级目录使用 `openat`、`O_DIRECTORY` 和 `O_NOFOLLOW`，从最终文件 descriptor 流式读取；父目录 symlink 和捕获期路径交换不能把 I/O 改向 Workspace 外。Windows 使用 `CreateFileW` 打开并保留父目录 handle，拒绝 reparse point，不共享 delete，并校验 handle 的最终父路径与 File ID/Volume identity；无法证明安全时整个 Project Authority fail closed。两端都不会在验证后回到普通 `Path.read_bytes()`。
+
+[`TransactionManager`](../nz_coder/state/transaction.py) 的 `track()` 与 rollback 现在都句柄锚定。Track 从 root handle 逐级打开父目录和最终 regular-file handle，备份直接复制该 handle 的内容，并记录 device/inode（Windows 为等价 File ID/Volume）、mode、atime/mtime 和 size；不再执行“Path 检查后 `shutil.copy2`”。POSIX rollback 在原子 replace 前通过临时文件 descriptor 恢复正文、permission mode 与 mtime，再 fsync 文件和父目录。元数据恢复失败会保留 backup 并进入 `rollback_partial`，修复环境后可重试。
+
+[`lsp/servers.py`](../nz_coder/lsp/servers.py) 不再读取进程启动目录的全局配置。Resolver 使用显式传入的目标 Workspace `ConfigSnapshot`，未传入时也按 `workspace` 参数捕获，并记录 `system-path`、`user-config`、`environment-config`、`trusted-workspace-config` 或 `workspace-local-default` 来源。位于目标 Workspace 内的 executable 无论配置来自哪里都继续要求内容 fingerprint trust。LSP client cache 同时绑定 Workspace、server/root、resolved command、配置来源和 executable fingerprint；任一项变化都会关闭旧 client 并重新执行信任判断。

@@ -64,8 +64,11 @@ jobs:
             tests/test_terminal_backend.py `
             tests/test_tui_product_frames.py `
             tests/test_fullscreen.py `
+            tests/security/test_project_control_snapshot.py `
             tests/security/test_transaction_recovery.py `
+            tests/security/test_transaction_track.py `
             tests/test_lsp.py `
+            tests/test_lsp_workspace_config.py `
             tests/test_mcp.py 2>&1 | Tee-Object artifacts/windows-product-tests.txt
           if ($LASTEXITCODE -ne 0) { throw "Windows product acceptance failed." }
       - name: Wheel sdist and fresh-install smoke
