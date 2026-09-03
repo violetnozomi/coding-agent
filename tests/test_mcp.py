@@ -962,7 +962,7 @@ def test_child_scope_clears_and_restores_parent_dynamic_tool_overlay():
         assert dispatch("mcp_parent_private", {}) == "parent"
 
 
-def test_agent_loop_reuses_mcp_runtime_until_agent_close(tmp_path, monkeypatch):
+def test_mcp_runtime_rotates_with_run_snapshot(tmp_path, monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.runtime.execution import loop as loop_module
 
@@ -993,14 +993,12 @@ def test_agent_loop_reuses_mcp_runtime_until_agent_close(tmp_path, monkeypatch):
         def close(self):
             events.append("close")
 
-    runtime = FakeRuntime()
-
     class RuntimeFactory:
         @staticmethod
         def configured(*, workspace=None, config_snapshot=None):
             assert workspace == tmp_path
             assert config_snapshot.workspace == tmp_path
-            return runtime
+            return FakeRuntime()
 
     class Message:
         content = "done"
@@ -1043,7 +1041,7 @@ def test_agent_loop_reuses_mcp_runtime_until_agent_close(tmp_path, monkeypatch):
     assert result["status"] == "completed"
     assert second["status"] == "completed"
     assert "mcp_fake_ping" in tool_names
-    assert events == ["start", "start"]
+    assert events == ["start", "close", "start", "close"]
     agent.close()
-    assert events == ["start", "start", "close"]
+    assert events == ["start", "close", "start", "close"]
     assert dispatch("mcp_fake_ping", {}) == "Error: Unknown tool 'mcp_fake_ping'"

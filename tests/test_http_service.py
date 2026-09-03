@@ -264,7 +264,12 @@ def test_http_remote_workflow_prepare_and_start_require_exact_approval(
             assert manager is runtime_owner
 
         def start(self, **kwargs):
+            from nz_coder.foundation.workspace_trust import current_config_snapshot
+
             captured.update(kwargs)
+            captured["control_fingerprint"] = current_config_snapshot(
+                session.workspace
+            ).control_fingerprint
             return Handle()
 
     resolution_calls = 0
@@ -295,6 +300,7 @@ def test_http_remote_workflow_prepare_and_start_require_exact_approval(
         assert resolution_calls == 2
         assert captured["approval_decision"] == "approve"
         assert captured["approval_digest"] == prepared["approval_digest"]
+        assert captured["control_fingerprint"] == session.config_snapshot.control_fingerprint
 
         with pytest.raises(NZCoderHTTPError) as stale:
             client.start_workflow(
@@ -374,7 +380,7 @@ def test_http_run_rejects_attachment_escape_and_symlink(local_service, tmp_path)
     assert client.messages(session_id) == []
 
 
-def test_untrusted_project_command_cannot_expand_over_http(local_service):
+def test_project_command_catalog_rotates_on_next_submission(local_service):
     from nz_coder.foundation.workspace_trust import (
         WorkspaceTrustStore,
         load_config_snapshot,
@@ -401,8 +407,6 @@ def test_untrusted_project_command_cannot_expand_over_http(local_service):
     WorkspaceTrustStore().trust(
         workspace, "workspace-control", snapshot.control_fingerprint
     )
-    assert all(item["name"] != "repo-review" for item in client.list_commands(session_id))
-    session_id = client.create_session("auto")["id"]
     listed = [
         item for item in client.list_commands(session_id)
         if item["name"] == "repo-review"
@@ -2583,7 +2587,9 @@ def test_http_agent_prompt_uses_the_selected_workspace_state(tmp_path, monkeypat
         build_http_agent("http-workspace-prompt", "default")
 
     assert captured["memory_block"] == ""
-    assert "project-skill" in captured["skill_descriptions"]
+    # Session construction does not freeze project skill descriptions. They
+    # are appended from the fresh per-run snapshot by AgentLoop.
+    assert captured["skill_descriptions"] == ""
     assert captured["memory_manager"].memory_dir == workspace / ".nz-coder" / "memory"
     assert captured["skill_loader"]._project_dir == workspace / ".nz-coder" / "skills"
     assert captured["system_prompt"] == "workspace prompt"
