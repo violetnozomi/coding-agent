@@ -3,8 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from dataclasses import replace
 
 import pytest
+
+from nz_coder.foundation.project_control import capture_project_control_snapshot
 
 
 def _write(directory: Path, name: str, body: str) -> None:
@@ -12,10 +15,14 @@ def _write(directory: Path, name: str, body: str) -> None:
     (directory / f"{name}.md").write_text(body, encoding="utf-8")
 
 
+def _trusted_snapshot(workspace: Path):  # noqa: ANN202
+    return replace(capture_project_control_snapshot(workspace), trusted=True)
+
+
 def test_command_discovery_precedence_and_provenance(tmp_path):
     from nz_coder.interface.custom_commands import CommandCatalog
 
-    project = tmp_path / "project"
+    project = tmp_path / ".nz-coder" / "commands"
     user = tmp_path / "user"
     bundled = tmp_path / "bundled"
     _write(bundled, "review", "---\ndescription: bundled\n---\nbundled $ARGUMENTS")
@@ -25,6 +32,7 @@ def test_command_discovery_precedence_and_provenance(tmp_path):
     catalog = CommandCatalog.discover(
         project_dir=project, user_dir=user, bundled_dir=bundled,
         project_trusted=True,
+        project_control_snapshot=_trusted_snapshot(tmp_path),
     )
 
     command = catalog.get("review")
@@ -37,7 +45,7 @@ def test_command_discovery_precedence_and_provenance(tmp_path):
 def test_command_expansion_is_inert_and_supports_raw_and_positional_args(tmp_path):
     from nz_coder.interface.custom_commands import CommandCatalog
 
-    project = tmp_path / "commands"
+    project = tmp_path / ".nz-coder" / "commands"
     _write(project, "fix-tests", """---
 description: Fix selected tests
 allowed_tools:
@@ -48,7 +56,11 @@ model: provider/model
 ---
 Area=$1 Rest=$ARGUMENTS Second=$2 Literal=$(touch /tmp/unsafe)
 """)
-    catalog = CommandCatalog.discover(project_dir=project, project_trusted=True)
+    catalog = CommandCatalog.discover(
+        project_dir=project,
+        project_trusted=True,
+        project_control_snapshot=_trusted_snapshot(tmp_path),
+    )
 
     expanded = catalog.expand("fix-tests", "auth tests/unit")
 
@@ -63,11 +75,15 @@ Area=$1 Rest=$ARGUMENTS Second=$2 Literal=$(touch /tmp/unsafe)
 def test_command_parser_rejects_unsafe_names_and_invalid_frontmatter(tmp_path):
     from nz_coder.interface.custom_commands import CommandCatalog, CommandParseError
 
-    project = tmp_path / "commands"
+    project = tmp_path / ".nz-coder" / "commands"
     _write(project, "bad name", "body")
     _write(project, "broken", "---\nallowed_tools: bash\n---\nbody")
 
-    catalog = CommandCatalog.discover(project_dir=project, project_trusted=True)
+    catalog = CommandCatalog.discover(
+        project_dir=project,
+        project_trusted=True,
+        project_control_snapshot=_trusted_snapshot(tmp_path),
+    )
 
     assert catalog.list() == ()
     assert len(catalog.errors) == 2
@@ -78,10 +94,14 @@ def test_custom_commands_register_for_completion_without_overriding_builtins(tmp
     from nz_coder.interface.commands import build_default_registry
     from nz_coder.interface.custom_commands import CommandCatalog, register_command_completion
 
-    project = tmp_path / "commands"
+    project = tmp_path / ".nz-coder" / "commands"
     _write(project, "review", "---\ndescription: Review changes\n---\nReview $ARGUMENTS")
     _write(project, "help", "---\ndescription: shadow help\n---\nshadow")
-    catalog = CommandCatalog.discover(project_dir=project, project_trusted=True)
+    catalog = CommandCatalog.discover(
+        project_dir=project,
+        project_trusted=True,
+        project_control_snapshot=_trusted_snapshot(tmp_path),
+    )
     registry = build_default_registry()
 
     register_command_completion(registry, catalog)

@@ -75,6 +75,7 @@ class MCPRuntime:
         workspace: Path | None = None,
         config_loader=None,
         config_revision=None,
+        config_refresh_loader=None,
     ):
         self.configs = list(configs)
         self._client_factory = client_factory
@@ -98,6 +99,7 @@ class MCPRuntime:
         self._workspace = (workspace or current_workdir()).resolve()
         self._config_loader = config_loader
         self._config_revision_loader = config_revision
+        self._config_refresh_loader = config_refresh_loader
         self._loaded_config_revision = (
             config_revision() if callable(config_revision) else ""
         )
@@ -105,23 +107,47 @@ class MCPRuntime:
         self._reconcile_lock = threading.RLock()
 
     @classmethod
-    def configured(cls, *, workspace: Path | None = None) -> "MCPRuntime":
+    def configured(
+        cls,
+        *,
+        workspace: Path | None = None,
+        config_snapshot=None,
+    ) -> "MCPRuntime":
         """Build the explicitly enabled runtime without starting subprocesses."""
         if not config.MCP_ENABLED:
             return cls([], workspace=workspace or current_workdir())
         root = (workspace or current_workdir()).resolve()
+        if config_snapshot is None:
+            from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+            config_snapshot = current_config_snapshot(root)
+
+        selected_snapshot = [config_snapshot]
 
         def loader():
-            return load_mcp_server_configs(workspace=root)
+            return load_mcp_server_configs(
+                workspace=root,
+                project_control_snapshot=selected_snapshot[0].project_control,
+            )
 
         def revision():
-            return mcp_config_revision(root)
+            return mcp_config_revision(
+                root,
+                project_control_snapshot=selected_snapshot[0].project_control,
+            )
+
+        def refresh_loader():
+            from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+            selected_snapshot[0] = load_config_snapshot(root)
+            return loader()
 
         return cls(
             loader(),
             workspace=root,
             config_loader=loader,
             config_revision=revision,
+            config_refresh_loader=refresh_loader,
         )
 
     def start(self) -> "MCPRuntime":
@@ -436,10 +462,18 @@ class MCPRuntime:
         if not callable(self._config_loader):
             return False
         with self._reconcile_lock:
-            if revision is None and callable(self._config_revision_loader):
-                revision = self._config_revision_loader()
             try:
-                configs = self._config_loader()
+                if revision is None and callable(self._config_refresh_loader):
+                    configs = self._config_refresh_loader()
+                    revision = (
+                        self._config_revision_loader()
+                        if callable(self._config_revision_loader)
+                        else None
+                    )
+                else:
+                    if revision is None and callable(self._config_revision_loader):
+                        revision = self._config_revision_loader()
+                    configs = self._config_loader()
             except Exception as exc:
                 with self._state_lock:
                     self._loaded_config_revision = revision or self._loaded_config_revision

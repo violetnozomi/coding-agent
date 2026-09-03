@@ -338,7 +338,8 @@ class ProductRunEnvironment:
                  model_runtime: ResolvedModelRuntime | None = None,
                  runtime_services: RuntimeServices | None = None,
                  event_bus_owned: bool = True,
-                 auto_mode_classifier_enabled: bool = False):
+                 auto_mode_classifier_enabled: bool = False,
+                 config_snapshot=None):
         from nz_coder.providers.models import active_model_selection
 
         if not isinstance(auto_mode_classifier_enabled, bool):
@@ -459,13 +460,17 @@ class ProductRunEnvironment:
         self._mcp_runtime_factory = MCPRuntime
         self._tool_metadata_lock = threading.RLock()
         self.hooks = hooks or build_default_hooks()
-        from nz_coder.foundation.workspace_trust import load_config_snapshot
-        workspace_snapshot = load_config_snapshot(self.workdir)
+        from nz_coder.foundation.workspace_trust import current_config_snapshot
+        workspace_snapshot = config_snapshot or current_config_snapshot(self.workdir)
+        if workspace_snapshot.workspace.resolve() != self.workdir.resolve():
+            raise ValueError("ConfigSnapshot belongs to a different workspace")
+        self.config_snapshot = workspace_snapshot
         self.permissions = PermissionManager(
             permission_mode,
             renderer=self.renderer,
             asker=permission_asker,
             workspace_trusted=workspace_snapshot.control_plane_trusted,
+            project_control_snapshot=workspace_snapshot.project_control,
         )
         from nz_coder.tools.plan_mode import PlanModeController
         self.plan_mode = PlanModeController(
@@ -541,6 +546,7 @@ class ProductRunEnvironment:
             else SkillLoader(
                 project_dir=project_skills,
                 workspace_trusted=workspace_snapshot.control_plane_trusted,
+                project_control_snapshot=workspace_snapshot.project_control,
             )
         )
         try:

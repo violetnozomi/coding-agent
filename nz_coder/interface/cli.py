@@ -33,7 +33,6 @@ from nz_coder.protocol.message_schema import bind_user_context
 from nz_coder.state.memory import memory_mgr
 from nz_coder.runtime.conversation.prompt import build
 from nz_coder.state.sessions import activate_session, create_session_id, save_session
-from nz_coder.state.skills import skill_loader
 
 theme = Theme({
     "tool": "bold yellow",
@@ -399,7 +398,7 @@ class StreamingRenderer:
 
 
 def _build_agent(system_prompt: str, renderer: StreamingRenderer, session_id: str,
-                 permission_mode: str = None):
+                 permission_mode: str = None, config_snapshot=None):
     from nz_coder.providers.configuration import provider_connection
     from nz_coder.providers.models import active_model_selection
     from nz_coder.runtime.execution.composition import build_product_environment
@@ -412,6 +411,7 @@ def _build_agent(system_prompt: str, renderer: StreamingRenderer, session_id: st
         session_id=session_id,
         client=None if connection.configured else _UnavailableModelClient(connection.provider),
         auto_mode_classifier_enabled=config.AUTO_MODE_CLASSIFIER_ENABLED,
+        config_snapshot=config_snapshot,
     )
 
 
@@ -489,14 +489,28 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             "Agent requests will fail until a provider is connected.[/error]"
         )
 
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+    from nz_coder.state.skills import SkillLoader
+
+    workspace_snapshot = load_config_snapshot(current_workdir())
+    run_skill_loader = SkillLoader(
+        project_dir=current_workdir() / ".nz-coder" / "skills",
+        workspace_trusted=workspace_snapshot.control_plane_trusted,
+        project_control_snapshot=workspace_snapshot.project_control,
+    )
     memory_mgr.load_all()
     system_prompt = build(
         memory_block="",
-        skill_descriptions=skill_loader.descriptions(),
+        skill_descriptions=run_skill_loader.descriptions(),
     )
     renderer = StreamingRenderer()
     initial_session_id = activate_session(create_session_id())
-    initial_environment = _build_agent(system_prompt, renderer, initial_session_id)
+    initial_environment = _build_agent(
+        system_prompt,
+        renderer,
+        initial_session_id,
+        config_snapshot=workspace_snapshot,
+    )
     from nz_coder.interface.session_controller import TerminalSessionController
     session_state = {
         "id": initial_session_id,
@@ -512,7 +526,10 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
         register_command_completion,
     )
 
-    command_catalog = default_command_catalog(current_workdir())
+    command_catalog = default_command_catalog(
+        current_workdir(),
+        config_snapshot=workspace_snapshot,
+    )
     command_registry = build_default_registry()
     register_command_completion(command_registry, command_catalog)
     input_ui = TerminalInput(

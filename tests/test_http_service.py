@@ -401,6 +401,8 @@ def test_untrusted_project_command_cannot_expand_over_http(local_service):
     WorkspaceTrustStore().trust(
         workspace, "workspace-control", snapshot.control_fingerprint
     )
+    assert all(item["name"] != "repo-review" for item in client.list_commands(session_id))
+    session_id = client.create_session("auto")["id"]
     listed = [
         item for item in client.list_commands(session_id)
         if item["name"] == "repo-review"
@@ -424,6 +426,8 @@ def test_untrusted_project_command_cannot_expand_over_http(local_service):
 
 
 def test_http_projects_remote_extension_skill_and_mcp_status(local_service):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
     client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
     created = client.create_session("auto")
     session_id = created["id"]
@@ -434,6 +438,11 @@ def test_http_projects_remote_extension_skill_and_mcp_status(local_service):
         "---\nname: review\ndescription: Review changes\n---\nReview.",
         encoding="utf-8",
     )
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore().trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
+    session_id = client.create_session("auto")["id"]
 
     extensions = client.list_extensions(session_id)
     skills = client.list_skills(session_id)
@@ -2537,6 +2546,14 @@ def test_http_agent_prompt_uses_the_selected_workspace_state(tmp_path, monkeypat
     (skills_dir / "SKILL.md").write_text(
         "---\nname: project-skill\ndescription: Selected workspace skill\n---\nBody\n",
         encoding="utf-8",
+    )
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
+    trust_path = tmp_path / "trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore(trust_path).trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
     )
     captured = {}
 

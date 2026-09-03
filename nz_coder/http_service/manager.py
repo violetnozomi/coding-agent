@@ -129,6 +129,7 @@ def build_http_agent(session_id: str, permission_mode: str):
         else SkillLoader(
             project_dir=project_skills,
             workspace_trusted=workspace_snapshot.control_plane_trusted,
+            project_control_snapshot=workspace_snapshot.project_control,
         )
     )
     memory_manager.load_all()
@@ -137,7 +138,7 @@ def build_http_agent(session_id: str, permission_mode: str):
         skill_descriptions=skill_manager.descriptions(),
     )
     with bind_memory_manager(memory_manager), bind_skill_loader(skill_manager):
-        return build_coding_agent(
+        agent = build_coding_agent(
             system_prompt,
             permission_mode=permission_mode,
             session_id=session_id,
@@ -146,7 +147,11 @@ def build_http_agent(session_id: str, permission_mode: str):
                 session_id=session_id,
                 journal_path=session_runtime_dir(session_id) / "events.jsonl",
             ),
+            config_snapshot=workspace_snapshot,
         )
+    if not hasattr(agent, "config_snapshot"):
+        agent.config_snapshot = workspace_snapshot
+    return agent
 
 
 class ManagedSession:
@@ -181,6 +186,11 @@ class ManagedSession:
         self.client = client
         self.workspace_id = workspace_id
         self.workspace = workspace
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        self.config_snapshot = getattr(agent, "config_snapshot", None)
+        if self.config_snapshot is None:
+            self.config_snapshot = load_config_snapshot(workspace)
         self.history = copy.deepcopy(history or [])
         ensure_message_identities(self.history, session_id)
         self.created_at = created_at if created_at is not None else now
@@ -505,20 +515,21 @@ class ManagedSession:
                 "allowed_tools": list(item.allowed_tools),
                 "model": item.model,
             }
-            for item in default_command_catalog(self.workspace).list()
+            for item in default_command_catalog(
+                self.workspace,
+                config_snapshot=self.config_snapshot,
+            ).list()
         ]
 
     def extensions(self) -> list[dict]:
         """Project extension owners from this Session's daemon workspace."""
         from nz_coder.extensions.registry import ExtensionRegistry
-        from nz_coder.foundation.workspace_trust import load_config_snapshot
         from nz_coder.state.skills import SkillLoader
 
         loader = SkillLoader(
             project_dir=self.workspace / ".nz-coder" / "skills",
-            workspace_trusted=load_config_snapshot(
-                self.workspace
-            ).control_plane_trusted,
+            workspace_trusted=self.config_snapshot.control_plane_trusted,
+            project_control_snapshot=self.config_snapshot.project_control,
         )
         return [
             item.to_dict()
@@ -702,7 +713,10 @@ class ManagedSession:
         if not isinstance(arguments, str):
             raise ValueError("command arguments must be a string")
         try:
-            expanded = default_command_catalog(self.workspace).expand(name, arguments)
+            expanded = default_command_catalog(
+                self.workspace,
+                config_snapshot=self.config_snapshot,
+            ).expand(name, arguments)
         except KeyError as exc:
             raise ValueError(f"custom command was not found: {name}") from exc
         return {

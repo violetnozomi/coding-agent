@@ -49,6 +49,7 @@ class ProductionRuntimeHost:
         from nz_coder.state.memory import bind_memory_manager
         from nz_coder.mcp import scoped_mcp_runtime
         from nz_coder.state.skills import bind_skill_loader
+        from nz_coder.foundation.workspace_trust import scoped_config_snapshot
         from nz_coder.runtime.agent.subagent import scoped_parent_context
         from nz_coder.tools.files import bind_tool_state
 
@@ -61,7 +62,10 @@ class ProductionRuntimeHost:
                 agent._mcp_runtime = (
                     runtime_factory([], workspace=agent.workdir)
                     if getattr(agent, "tool_allowlist", None) is not None
-                    else runtime_factory.configured(workspace=agent.workdir)
+                    else runtime_factory.configured(
+                        workspace=agent.workdir,
+                        config_snapshot=agent.config_snapshot,
+                    )
                 )
                 set_change_handler = getattr(agent._mcp_runtime, "set_change_handler", None)
                 if callable(set_change_handler):
@@ -77,6 +81,7 @@ class ProductionRuntimeHost:
             await to_thread_settled(mcp_runtime.start)
             with ExitStack() as stack:
                 stack.enter_context(scoped_workdir(agent.workdir))
+                stack.enter_context(scoped_config_snapshot(agent.config_snapshot))
                 stack.enter_context(scoped_broad_test_guard())
                 stack.enter_context(scoped_declared_test_scopes())
                 stack.enter_context(scoped_session(agent.session_id))

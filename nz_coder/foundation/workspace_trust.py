@@ -7,6 +7,7 @@ record matches the exact workspace identity and current value fingerprint.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from enum import Enum
 import hashlib
@@ -338,6 +339,38 @@ class ConfigSnapshot:
         if any(item.key == key and item.message == message for item in self.issues):
             return
         self.issues.append(ConfigIssue(key, message[:300], self.value(key).source))
+
+
+_ACTIVE_CONFIG_SNAPSHOT: ContextVar[ConfigSnapshot | None] = ContextVar(
+    "nz_coder_active_config_snapshot",
+    default=None,
+)
+
+
+@contextmanager
+def scoped_config_snapshot(snapshot: ConfigSnapshot):
+    """Bind one immutable-at-run-boundary configuration selection."""
+    token = _ACTIVE_CONFIG_SNAPSHOT.set(snapshot)
+    try:
+        yield snapshot
+    finally:
+        _ACTIVE_CONFIG_SNAPSHOT.reset(token)
+
+
+def current_config_snapshot(workspace: Path | None = None) -> ConfigSnapshot:
+    """Return the matching run snapshot or capture the requested workspace."""
+    snapshot = _ACTIVE_CONFIG_SNAPSHOT.get()
+    if snapshot is not None:
+        if workspace is None:
+            return snapshot
+        requested = Path(workspace).expanduser().absolute()
+        if os.path.normcase(os.path.normpath(str(requested))) == os.path.normcase(
+            os.path.normpath(str(snapshot.workspace))
+        ):
+            return snapshot
+    if workspace is None:
+        raise RuntimeError("No run-scoped ConfigSnapshot is active")
+    return load_config_snapshot(Path(workspace))
 
 
 def default_user_config_path(environ: Mapping[str, str] | None = None) -> Path:
@@ -740,7 +773,9 @@ __all__ = [
     "default_user_config_path",
     "is_secret_config_key",
     "is_sensitive_config_key",
+    "current_config_snapshot",
     "load_config_snapshot",
+    "scoped_config_snapshot",
     "workspace_config_fingerprint",
     "workspace_control_fingerprint",
     "workspace_identity",

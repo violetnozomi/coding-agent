@@ -9,12 +9,15 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from nz_coder.foundation import config
 from nz_coder.mcp.trust import MCPTrustStore
 from nz_coder.runtime.process.workdir import current_workdir
+
+if TYPE_CHECKING:
+    from nz_coder.foundation.project_control import ProjectControlSnapshot
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 _ENV_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -112,12 +115,17 @@ def load_mcp_server_configs(
     raw: str | dict[str, Any] | None = None,
     *,
     workspace: Path | None = None,
+    project_control_snapshot: ProjectControlSnapshot | None = None,
 ) -> list[MCPServerConfig]:
     """Load merged user/project/environment config without executing commands."""
     root = (workspace or current_workdir()).resolve()
     origins: dict[str, str]
+    project_control_trusted = True
     if raw is None:
-        payload, origins = _load_merged_payload(root)
+        payload, origins, project_control_trusted = _load_merged_payload(
+            root,
+            project_control_snapshot,
+        )
         source: str | dict[str, Any] = payload
     else:
         source = raw
@@ -305,10 +313,13 @@ def load_mcp_server_configs(
                 oauth=oauth,
                 effects=tool_effects,
             )
-            trusted = MCPTrustStore(Path(config.MCP_TRUST_STORE)).is_trusted(
-                root,
-                name,
-                fingerprint,
+            trusted = bool(
+                project_control_trusted
+                and MCPTrustStore(Path(config.MCP_TRUST_STORE)).is_trusted(
+                    root,
+                    name,
+                    fingerprint,
+                )
             )
         servers.append(
             MCPServerConfig(
@@ -350,9 +361,19 @@ def mcp_config_paths(workspace: Path) -> tuple[Path, Path, Path]:
     return user_path, project_path, trust_path
 
 
-def mcp_config_revision(workspace: Path) -> str:
+def mcp_config_revision(
+    workspace: Path,
+    *,
+    project_control_snapshot: ProjectControlSnapshot | None = None,
+) -> str:
     """Return a cheap revision for config/trust polling without reading secrets."""
-    paths = mcp_config_paths(workspace)
+    from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+    snapshot = project_control_snapshot
+    if snapshot is None:
+        snapshot = current_config_snapshot(workspace).project_control
+    user_path, _project_path, trust_path = mcp_config_paths(workspace)
+    paths = (user_path, trust_path)
     records: list[tuple[str, int, int]] = []
     for path in paths:
         try:
@@ -361,30 +382,46 @@ def mcp_config_revision(workspace: Path) -> str:
         except OSError:
             records.append((str(path), -1, -1))
     payload = json.dumps(
-        {"paths": records, "environment": config.MCP_SERVERS_JSON},
+        {
+            "paths": records,
+            "environment": config.MCP_SERVERS_JSON,
+            "project_control": snapshot.fingerprint,
+        },
         sort_keys=True,
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _load_merged_payload(workspace: Path) -> tuple[dict[str, Any], dict[str, str]]:
-    user_path, project_path, _ = mcp_config_paths(workspace)
+def _load_merged_payload(
+    workspace: Path,
+    project_control_snapshot: ProjectControlSnapshot | None,
+) -> tuple[dict[str, Any], dict[str, str], bool]:
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+    snapshot = project_control_snapshot
+    if snapshot is None:
+        snapshot = load_config_snapshot(workspace).project_control
+    user_path = Path(config.MCP_USER_CONFIG).expanduser().resolve()
     merged: dict[str, Any] = {}
     origins: dict[str, str] = {}
-    for origin, path in (("user", user_path), ("project", project_path)):
-        if not path.exists():
-            continue
-        payload = _read_payload_file(path, origin)
+    if user_path.exists():
+        payload = _read_payload_file(user_path, "user")
         for name, item in payload.items():
             merged[name] = item
-            origins[name] = origin
+            origins[name] = "user"
+    project = snapshot.get(".nz-coder/mcp.json")
+    if project is not None:
+        payload = _decode_server_payload(project.content, "MCP project config")
+        for name, item in payload.items():
+            merged[name] = item
+            origins[name] = "project"
     if config.MCP_SERVERS_JSON.strip():
         payload = _decode_server_payload(config.MCP_SERVERS_JSON, "NZ_MCP_SERVERS_JSON")
         for name, item in payload.items():
             merged[name] = item
             origins[name] = "environment"
-    return merged, origins
+    return merged, origins, snapshot.trusted
 
 
 def _read_payload_file(path: Path, origin: str) -> dict[str, Any]:
@@ -397,11 +434,11 @@ def _read_payload_file(path: Path, origin: str) -> dict[str, Any]:
     return _decode_server_payload(raw, f"MCP {origin} config {path}")
 
 
-def _decode_server_payload(raw: str, label: str) -> dict[str, Any]:
+def _decode_server_payload(raw: str | bytes, label: str) -> dict[str, Any]:
     try:
         payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid {label}: {exc}") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Invalid {label}") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"{label} must decode to an object")
     if "servers" in payload:

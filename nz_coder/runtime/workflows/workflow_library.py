@@ -9,6 +9,7 @@ import shutil
 import time
 import uuid
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from nz_coder import __version__
 from nz_coder.foundation import config
@@ -19,6 +20,9 @@ from nz_coder.runtime.workflows.workflow_capsule import (
 )
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import TOOL_HANDLERS, ToolOutput, register
+
+if TYPE_CHECKING:
+    from nz_coder.foundation.project_control import ProjectControlSnapshot
 
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
@@ -65,29 +69,37 @@ def _project_library_dir(root: Path) -> Path:
 def discover_workflow_capsules(
     workspace: Path | None = None,
     personal_dir: Path | None = None,
+    *,
+    project_control_snapshot: ProjectControlSnapshot | None = None,
 ) -> list[dict]:
     """Discover without parsing; project names override personal names."""
     directories = workflow_library_dirs(workspace, personal_dir)
     root = (workspace or current_workdir()).resolve()
-    project_trusted = _project_control_trusted(root)
+    control_snapshot = project_control_snapshot or _project_control_snapshot(root)
+    project_trusted = control_snapshot.trusted
     found: dict[str, dict] = {}
     for source in ("personal", "project"):
         if source == "project" and not project_trusted:
             continue
         directory = directories[source]
+        if source == "project":
+            entries = control_snapshot.files_for_kind("workflow")
+            for item in entries:
+                name = Path(item.relative_path).name[:-len(".workflow.json")]
+                if not name:
+                    continue
+                found[name] = {
+                    "name": name,
+                    "path": str(root / item.relative_path),
+                    "source": source,
+                    "execution": "capability-generated",
+                }
+            continue
         try:
-            if source == "project":
-                from nz_coder.foundation.project_control import (
-                    discover_project_control_files,
-                )
-                entries = list(discover_project_control_files(
-                    root, kinds=("workflow",)
-                ))
-            else:
-                entries = sorted(
-                    islice(directory.iterdir(), _MAX_LIBRARY_ENTRIES),
-                    key=lambda item: item.name,
-                )
+            entries = sorted(
+                islice(directory.iterdir(), _MAX_LIBRARY_ENTRIES),
+                key=lambda item: item.name,
+            )
         except OSError:
             continue
         for path in entries:
@@ -125,20 +137,34 @@ def _read_capsule(path: Path) -> dict:
     return validate_workflow_capsule(value)
 
 
+def _read_capsule_bytes(payload: bytes) -> dict:
+    if len(payload) > _MAX_CAPSULE_BYTES:
+        raise ValueError("workflow capsule exceeds 1 MiB")
+    try:
+        value = json.loads(
+            payload.decode("utf-8"),
+            parse_constant=reject_nonstandard_json_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("invalid project workflow capsule") from exc
+    return validate_workflow_capsule(value)
+
+
 def load_workflow_capsule(
     name: str,
     *,
     workspace: Path | None = None,
     personal_dir: Path | None = None,
     source: str = "",
+    project_control_snapshot: ProjectControlSnapshot | None = None,
 ) -> tuple[dict, dict]:
     safe = safe_workflow_name(name)
     if source and source not in {"project", "personal"}:
         raise ValueError("workflow source must be project or personal")
     root = (workspace or current_workdir()).resolve()
     try:
-        control_snapshot = _project_control_snapshot(root)
-        project_trusted = control_snapshot.control_plane_trusted
+        control_snapshot = project_control_snapshot or _project_control_snapshot(root)
+        project_trusted = control_snapshot.trusted
     except (OSError, ValueError):
         control_snapshot = None
         project_trusted = False
@@ -151,6 +177,19 @@ def load_workflow_capsule(
     )
     for candidate_source in sources:
         path = directories[candidate_source] / f"{safe}.workflow.json"
+        if candidate_source == "project":
+            item = control_snapshot.get(
+                f".nz-coder/workflows/{safe}.workflow.json"
+            ) if control_snapshot is not None else None
+            if item is None:
+                continue
+            ref = {
+                "name": safe,
+                "path": str(path),
+                "source": candidate_source,
+                "execution": "capability-generated",
+            }
+            return _read_capsule_bytes(item.content), ref
         if path.is_symlink() or not path.is_file():
             continue
         ref = {
@@ -160,28 +199,20 @@ def load_workflow_capsule(
             "execution": "capability-generated",
         }
         capsule = _read_capsule(path)
-        if candidate_source == "project":
-            refreshed = _project_control_snapshot(root)
-            if (
-                not refreshed.control_plane_trusted
-                or control_snapshot is None
-                or refreshed.control_fingerprint != control_snapshot.control_fingerprint
-            ):
-                raise ValueError("project workflow trust changed while loading")
         return capsule, ref
     raise ValueError(f"saved workflow not found: {safe}")
 
 
 def _project_control_snapshot(workspace: Path):  # noqa: ANN202
-    """Resolve exact current project authority without trusting cached callers."""
-    from nz_coder.foundation.workspace_trust import load_config_snapshot
+    """Resolve a new immutable Project Control snapshot outside a pinned run."""
+    from nz_coder.foundation.workspace_trust import current_config_snapshot
 
-    return load_config_snapshot(workspace)
+    return current_config_snapshot(workspace).project_control
 
 
 def _project_control_trusted(workspace: Path) -> bool:
     try:
-        return _project_control_snapshot(workspace).control_plane_trusted
+        return _project_control_snapshot(workspace).trusted
     except (OSError, ValueError):
         return False
 

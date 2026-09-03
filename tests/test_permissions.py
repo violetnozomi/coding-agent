@@ -544,6 +544,9 @@ def test_permission_manager_session_allow_rule_applies_to_bash():
 
 
 def test_permission_manager_loads_project_rules(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from nz_coder.foundation.project_control import capture_project_control_snapshot
     settings_dir = tmp_path / ".nz-coder"
     settings_dir.mkdir()
     (settings_dir / "settings.json").write_text(
@@ -560,7 +563,8 @@ def test_permission_manager_loads_project_rules(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
 
-    pm = PermissionManager("default")
+    snapshot = replace(capture_project_control_snapshot(tmp_path), trusted=True)
+    pm = PermissionManager("default", project_control_snapshot=snapshot)
 
     assert pm._allow_rules == [PermissionRule("bash", "allow", "prefix:git ")]
     assert pm._deny_rules == [PermissionRule("write_file", "deny")]

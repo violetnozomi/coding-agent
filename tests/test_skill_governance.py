@@ -1,6 +1,9 @@
 """Governed Skill metadata, enforcement, and run isolation."""
 from __future__ import annotations
 
+from dataclasses import replace
+
+from nz_coder.foundation.project_control import capture_project_control_snapshot
 from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.core.tool_context import ToolPolicyContext
 from nz_coder.runtime.tool_runtime.policy import ProductionToolPolicy
@@ -42,12 +45,19 @@ def _write_skill(root, name: str, *, allowed="read_file", model="gpt-review"):
     return directory
 
 
-def test_skill_preserves_model_provenance_and_resource_base(tmp_path) -> None:
-    directory = _write_skill(tmp_path / "project", "review")
-    loader = SkillLoader(
-        project_dir=tmp_path / "project", user_dir=tmp_path / "user",
+def _trusted_loader(tmp_path) -> SkillLoader:
+    snapshot = replace(capture_project_control_snapshot(tmp_path), trusted=True)
+    return SkillLoader(
+        project_dir=tmp_path / ".nz-coder" / "skills",
+        user_dir=tmp_path / "user",
         bundled_dir=tmp_path / "bundled",
+        project_control_snapshot=snapshot,
     )
+
+
+def test_skill_preserves_model_provenance_and_resource_base(tmp_path) -> None:
+    directory = _write_skill(tmp_path / ".nz-coder" / "skills", "review")
+    loader = _trusted_loader(tmp_path)
 
     info = loader.get_skill_info("review")
     result = loader.load("review")
@@ -60,11 +70,12 @@ def test_skill_preserves_model_provenance_and_resource_base(tmp_path) -> None:
 
 
 def test_loaded_skill_allowed_tools_are_enforced_by_tool_policy(tmp_path) -> None:
-    _write_skill(tmp_path / "project", "review", allowed="read_file, grep_search")
-    loader = SkillLoader(
-        project_dir=tmp_path / "project", user_dir=tmp_path / "user",
-        bundled_dir=tmp_path / "bundled",
+    _write_skill(
+        tmp_path / ".nz-coder" / "skills",
+        "review",
+        allowed="read_file, grep_search",
     )
+    loader = _trusted_loader(tmp_path)
     calls = [
         {"function": {"name": "read_file", "arguments": {}}},
         {"function": {"name": "write_file", "arguments": {"path": "x.py"}}},
@@ -82,11 +93,8 @@ def test_loaded_skill_allowed_tools_are_enforced_by_tool_policy(tmp_path) -> Non
 
 
 def test_skill_enforcement_is_isolated_between_bound_sessions(tmp_path) -> None:
-    _write_skill(tmp_path / "project", "read-only", allowed="read_file")
-    loader = SkillLoader(
-        project_dir=tmp_path / "project", user_dir=tmp_path / "user",
-        bundled_dir=tmp_path / "bundled",
-    )
+    _write_skill(tmp_path / ".nz-coder" / "skills", "read-only", allowed="read_file")
+    loader = _trusted_loader(tmp_path)
     write_call = [{"function": {"name": "write_file", "arguments": {}}}]
 
     with bind_skill_loader(loader):

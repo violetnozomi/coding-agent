@@ -118,6 +118,27 @@ def load_rules_from_settings(settings_path: Path | None = None) -> tuple[list[Pe
         return [], [], []
 
 
+def load_rules_from_bytes(
+    payload: bytes | None,
+) -> tuple[list[PermissionRule], list[PermissionRule], list[PermissionRule]]:
+    """Parse permission rules from immutable Project Control bytes."""
+    if payload is None:
+        return [], [], []
+    try:
+        data = json.loads(payload.decode("utf-8"))
+        if not isinstance(data, dict):
+            return [], [], []
+        permissions = data.get("permissions", {})
+        if not isinstance(permissions, dict):
+            return [], [], []
+        allow_rules = parse_rules(permissions.get("allow", []), "allow")
+        deny_rules = parse_rules(permissions.get("deny", []), "deny")
+        ask_rules = parse_rules(permissions.get("ask", []), "ask")
+        return allow_rules, deny_rules, ask_rules
+    except (AttributeError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        return [], [], []
+
+
 def first_matching_rule(rules: list[PermissionRule], tool_name: str, tool_input: dict) -> PermissionRule | None:
     """Return the first rule matching the tool invocation."""
     for rule in rules:
