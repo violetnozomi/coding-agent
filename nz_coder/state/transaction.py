@@ -375,15 +375,33 @@ class TransactionManager:
                 file_name,
                 len(file_name),
             )
-            rename = kernel32.SetFileInformationByHandle
+            class _IoStatusBlock(ctypes.Structure):
+                _fields_ = (
+                    ("status", ctypes.c_void_p),
+                    ("information", ctypes.c_size_t),
+                )
+
+            ntdll = ctypes.WinDLL("ntdll")
+            rename = ntdll.NtSetInformationFile
             rename.argtypes = (
-                wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+                wintypes.HANDLE,
+                ctypes.POINTER(_IoStatusBlock),
+                wintypes.LPVOID,
+                wintypes.ULONG,
+                ctypes.c_int,
             )
-            rename.restype = wintypes.BOOL
-            if not rename(
-                wintypes.HANDLE(value), 3, buffer, buffer_size
-            ):
-                raise OSError(ctypes.get_last_error(), "cannot restore transaction backup")
+            rename.restype = ctypes.c_long
+            io_status = _IoStatusBlock()
+            status = rename(
+                wintypes.HANDLE(value), ctypes.byref(io_status), buffer,
+                buffer_size, 10,
+            )
+            if status != 0:
+                convert_error = ntdll.RtlNtStatusToDosError
+                convert_error.argtypes = (ctypes.c_long,)
+                convert_error.restype = wintypes.ULONG
+                error = int(convert_error(status))
+                raise OSError(error, "cannot restore transaction backup")
         finally:
             close_handle(wintypes.HANDLE(value))
 
