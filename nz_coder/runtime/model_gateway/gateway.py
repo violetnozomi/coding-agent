@@ -258,7 +258,11 @@ class ProductionModelGateway:
             call_id = self.runtime.begin_inflight(worker, self._cancel_transport)
         except RuntimeError as exc:
             raise _ProviderUnsettled(str(exc)) from exc
-        worker.start()
+        try:
+            worker.start()
+        except BaseException:
+            self.runtime.finish_inflight(call_id)
+            raise
         deadline = time.monotonic() + call.timeout_seconds
         try:
             while True:

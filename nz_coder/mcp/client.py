@@ -92,7 +92,10 @@ class MCPClient:
 
     def start(self) -> dict[str, Any]:
         """Spawn, initialize, and send the MCP initialized notification."""
-        env = build_sanitized_subprocess_env(overrides=self.environment)
+        env = build_sanitized_subprocess_env(
+            overrides=self.environment,
+            profile="strict-service",
+        )
         with self._state_lock:
             if self.process is not None:
                 return {

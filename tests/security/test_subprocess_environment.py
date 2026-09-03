@@ -58,6 +58,26 @@ def test_explicit_low_risk_override_is_allowed_but_secret_name_is_rejected():
         raise AssertionError("credential-like child override must fail closed")
 
 
+def test_strict_service_environment_removes_code_loading_paths():
+    from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+
+    result = build_sanitized_subprocess_env(
+        source={
+            "PATH": "/usr/bin",
+            "HOME": "/home/test",
+            "PYTHONPATH": "/repo/python",
+            "PYTHONHOME": "/repo/runtime",
+            "NODE_PATH": "/repo/node",
+            "PSMODULEPATH": "/repo/powershell",
+            "VIRTUAL_ENV": "/repo/.venv",
+            "CONDA_PREFIX": "/repo/conda",
+        },
+        profile="strict-service",
+    )
+
+    assert result == {"HOME": "/home/test", "PATH": "/usr/bin"}
+
+
 def test_mcp_client_subprocess_does_not_receive_provider_secret(tmp_path, monkeypatch):
     from nz_coder.mcp.client import MCPClient, MCPError
 
@@ -72,6 +92,7 @@ def test_mcp_client_subprocess_does_not_receive_provider_secret(tmp_path, monkey
         raise OSError("expected test stop")
 
     monkeypatch.setenv("OPENAI_API_KEY", "sentinel-provider-secret")
+    monkeypatch.setenv("PYTHONPATH", "sentinel-workspace-python-path")
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     client = MCPClient(name="safe", command=(sys.executable, "server.py"), cwd=tmp_path)
 
@@ -81,6 +102,7 @@ def test_mcp_client_subprocess_does_not_receive_provider_secret(tmp_path, monkey
         pass
 
     assert "OPENAI_API_KEY" not in captured_keys
+    assert "PYTHONPATH" not in captured_keys
     assert secret_seen is False
 
 
@@ -98,6 +120,7 @@ def test_lsp_client_subprocess_does_not_receive_provider_secret(tmp_path, monkey
         raise OSError("expected test stop")
 
     monkeypatch.setenv("API_KEY", "sentinel-provider-secret")
+    monkeypatch.setenv("NODE_PATH", "sentinel-workspace-node-path")
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
     try:
@@ -111,4 +134,5 @@ def test_lsp_client_subprocess_does_not_receive_provider_secret(tmp_path, monkey
         pass
 
     assert "API_KEY" not in captured_keys
+    assert "NODE_PATH" not in captured_keys
     assert secret_seen is False

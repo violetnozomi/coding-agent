@@ -46,6 +46,41 @@ def test_save_connection_preserves_unrelated_env_and_applies_process_state(tmp_p
     assert os.stat(target).st_mode & 0o777 == 0o600
 
 
+def test_environment_key_rotation_changes_credential_generation(monkeypatch):
+    from nz_coder.foundation import config
+
+    clear_provider_connection_overrides()
+    monkeypatch.setattr(config, "API_KEY", "account-a-key")
+    first = provider_connection("openai-compatible")
+    same = provider_connection("openai-compatible")
+    monkeypatch.setattr(config, "API_KEY", "account-b-key")
+    rotated = provider_connection("openai-compatible")
+
+    assert first.credential_scope_id == same.credential_scope_id
+    assert first.credential_scope_id != rotated.credential_scope_id
+    assert "account-a-key" not in first.credential_scope_id
+    assert "account-b-key" not in rotated.credential_scope_id
+
+
+def test_live_connection_same_generation_preserves_round_trip():
+    clear_provider_connection_overrides()
+    try:
+        from nz_coder.providers.configuration import set_provider_connection_override
+
+        set_provider_connection_override(
+            "openai-compatible", "same-key", "https://api.example.test/v1"
+        )
+        first = provider_connection("openai-compatible")
+        set_provider_connection_override(
+            "openai-compatible", "same-key", "https://api.example.test/v1"
+        )
+        second = provider_connection("openai-compatible")
+    finally:
+        clear_provider_connection_overrides()
+
+    assert first.credential_scope_id == second.credential_scope_id
+
+
 def test_save_connection_rejects_insecure_remote_endpoint(tmp_path):
     with pytest.raises(ValueError, match="HTTPS"):
         save_provider_connection(

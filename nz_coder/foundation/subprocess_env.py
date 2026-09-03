@@ -61,6 +61,14 @@ _SAFE_EXACT = frozenset({
     "WINDIR",
 })
 _SAFE_PREFIXES = ("LC_",)
+_STRICT_SERVICE_BLOCKED = frozenset({
+    "CONDA_PREFIX",
+    "NODE_PATH",
+    "PSMODULEPATH",
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "VIRTUAL_ENV",
+})
 _SECRET_MARKERS = (
     "API_KEY",
     "APIKEY",
@@ -105,6 +113,7 @@ def build_sanitized_subprocess_env(
     *,
     source: Mapping[str, str] | None = None,
     overrides: Mapping[str, str] | None = None,
+    profile: str = "workspace-command",
 ) -> dict[str, str]:
     """Build the minimum useful child environment without ambient authority.
 
@@ -112,12 +121,16 @@ def build_sanitized_subprocess_env(
     ``MCP_MODE``. Credential-like names fail closed; callers must use a
     dedicated user-owned credential channel instead of ambient inheritance.
     """
+    if profile not in {"workspace-command", "strict-service"}:
+        raise ValueError("Unknown subprocess environment profile")
     inherited = os.environ if source is None else source
     result: dict[str, str] = {}
     for raw_name, raw_value in inherited.items():
         name = str(raw_name)
         upper = name.upper()
         if is_credential_environment_name(upper):
+            continue
+        if profile == "strict-service" and upper in _STRICT_SERVICE_BLOCKED:
             continue
         if upper in _SAFE_EXACT or upper.startswith(_SAFE_PREFIXES):
             result[name] = str(raw_value)
@@ -128,6 +141,10 @@ def build_sanitized_subprocess_env(
         if is_credential_environment_name(name):
             raise UnsafeSubprocessEnvironment(
                 f"Credential-like child environment variable is blocked: {name}"
+            )
+        if profile == "strict-service" and name.upper() in _STRICT_SERVICE_BLOCKED:
+            raise UnsafeSubprocessEnvironment(
+                f"Code-loading child environment variable is blocked: {name}"
             )
         value = str(raw_value)
         if "\x00" in value:

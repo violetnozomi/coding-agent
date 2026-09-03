@@ -113,7 +113,7 @@ class LSPClient:
             self.process = subprocess.Popen(
                 executable_argv(self.command),
                 cwd=str(self.root),
-                env=build_sanitized_subprocess_env(),
+                env=build_sanitized_subprocess_env(profile="strict-service"),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

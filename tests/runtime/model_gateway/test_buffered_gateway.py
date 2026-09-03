@@ -394,6 +394,28 @@ def test_timeout_does_not_spawn_retry_or_new_worker_until_old_call_settles() -> 
     assert runtime.inflight_status()["worker_still_running"] == 0
 
 
+def test_thread_start_failure_releases_inflight_slot(monkeypatch) -> None:
+    provider = _Provider([_response()])
+    runtime = _runtime(provider)
+    gateway = ProductionModelGateway(runtime, max_retries=0)
+    with monkeypatch.context() as scoped:
+        scoped.setattr(
+            threading.Thread,
+            "start",
+            lambda _self: (_ for _ in ()).throw(OSError("thread unavailable")),
+        )
+        outcome = gateway.complete_sync(_call())
+
+    retried = gateway.complete_sync(_call())
+
+    assert outcome.status is ModelCallStatus.ABORTED
+    assert retried.status is ModelCallStatus.COMPLETED
+    assert runtime.inflight_status() == {
+        "worker_still_running": 0,
+        "tainted": False,
+    }
+
+
 def test_gateway_close_uses_provider_cancel_hook_to_settle_worker() -> None:
     release = threading.Event()
     started = threading.Event()
