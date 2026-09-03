@@ -7,7 +7,7 @@ record matches the exact workspace identity and current value fingerprint.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 import hashlib
 import json
@@ -17,6 +17,7 @@ from pathlib import Path
 import stat
 import tempfile
 import threading
+from types import MappingProxyType
 from typing import Mapping
 
 from dotenv import dotenv_values
@@ -24,17 +25,15 @@ from dotenv import dotenv_values
 from nz_coder.foundation.private_paths import harden_private_path
 from nz_coder.foundation.file_lock import exclusive_file_lock
 from nz_coder.foundation.project_control import (
+    ProjectControlSnapshot,
     UnsafeProjectControl,
-    discover_project_control_files,
-    has_project_control_files,
+    capture_project_control_snapshot,
 )
 from nz_coder.foundation.languages import LSP_LANGUAGES, lsp_command_config_key
 
 
 _SCHEMA_VERSION = 1
 _MAX_CONFIG_BYTES = 1024 * 1024
-_MAX_CONTROL_BYTES = 4 * 1024 * 1024
-_MAX_CONTROL_FILES = 1024
 _STORE_LOCK = threading.RLock()
 
 
@@ -252,6 +251,7 @@ class ConfigSnapshot:
     workspace_trusted: bool
     control_fingerprint: str
     control_plane_trusted: bool
+    project_control: ProjectControlSnapshot
     values: dict[str, ConfigValue]
     issues: list[ConfigIssue] = field(default_factory=list)
 
@@ -395,89 +395,18 @@ def workspace_control_fingerprint(
     workspace_values: Mapping[str, str] | None = None,
 ) -> str:
     """Bind execution authority to every repository-owned control input."""
-    root = Path(workspace).expanduser().resolve(strict=True)
-    digest = hashlib.sha256()
+    root = Path(workspace).expanduser().absolute()
     values = workspace_values
     if values is None:
         values, _issues = _read_env_file(root / ".env", ConfigSource.WORKSPACE)
-    digest.update(b"workspace-config\0")
-    digest.update(workspace_config_fingerprint(values).encode("ascii"))
     try:
-        candidates = list(discover_project_control_files(root))
+        snapshot = capture_project_control_snapshot(
+            root,
+            workspace_config_fingerprint=workspace_config_fingerprint(values),
+        )
     except UnsafeProjectControl as exc:
         raise ConfigValidationError(str(exc)) from exc
-    total = 0
-    count = 0
-    for path in sorted(set(candidates), key=lambda item: item.as_posix()):
-        try:
-            info = path.lstat()
-        except FileNotFoundError:
-            continue
-        except OSError as exc:
-            raise ConfigValidationError("Workspace control file cannot be inspected") from exc
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-            raise ConfigValidationError("Workspace control file must be a regular file")
-        try:
-            payload = _read_control_file(path, info)
-        except (OSError, ValueError) as exc:
-            raise ConfigValidationError("Workspace control file cannot be read") from exc
-        count += 1
-        total += len(payload)
-        if count > _MAX_CONTROL_FILES or total > _MAX_CONTROL_BYTES:
-            raise ConfigValidationError("Workspace control plane exceeds safety limits")
-        try:
-            relative = path.relative_to(root).as_posix().encode("utf-8")
-        except (OSError, UnicodeError, ValueError) as exc:
-            raise ConfigValidationError("Workspace control file cannot be read") from exc
-        digest.update(b"\0path\0")
-        digest.update(relative)
-        digest.update(b"\0content\0")
-        digest.update(payload)
-    return digest.hexdigest()
-
-
-def _read_control_file(path: Path, expected: os.stat_result) -> bytes:
-    descriptor = os.open(
-        path,
-        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
-    )
-    try:
-        opened = os.fstat(descriptor)
-        current = path.lstat()
-        identities = {
-            (int(expected.st_dev), int(expected.st_ino)),
-            (int(opened.st_dev), int(opened.st_ino)),
-            (int(current.st_dev), int(current.st_ino)),
-        }
-        if (
-            len(identities) != 1
-            or not stat.S_ISREG(opened.st_mode)
-            or _is_link_or_reparse_stat(current)
-            or opened.st_size > _MAX_CONTROL_BYTES
-        ):
-            raise ValueError("Workspace control file changed while hashing")
-        with os.fdopen(descriptor, "rb") as stream:
-            descriptor = -1
-            payload = stream.read(_MAX_CONTROL_BYTES + 1)
-        if len(payload) != opened.st_size:
-            raise ValueError("Workspace control file changed while hashing")
-        return payload
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-
-
-def _is_link_or_reparse_stat(info: os.stat_result) -> bool:
-    attributes = int(getattr(info, "st_file_attributes", 0))
-    reparse = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
-    return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse)
-
-
-def _has_workspace_control_files(workspace: Path) -> bool:
-    try:
-        return has_project_control_files(workspace)
-    except UnsafeProjectControl:
-        return True
+    return snapshot.fingerprint
 
 
 class WorkspaceTrustStore:
@@ -617,9 +546,23 @@ def load_config_snapshot(
     workspace_values, workspace_issues = _read_env_file(root / ".env", ConfigSource.WORKSPACE)
     fingerprint = workspace_config_fingerprint(workspace_values)
     try:
-        control_fingerprint = workspace_control_fingerprint(root, workspace_values)
-    except ConfigValidationError:
+        project_control = capture_project_control_snapshot(
+            root,
+            workspace_config_fingerprint=fingerprint,
+        )
+        control_fingerprint = project_control.fingerprint
+    except (OSError, UnsafeProjectControl):
         control_fingerprint = ""
+        try:
+            identity = _workspace_identity(root)
+        except ConfigValidationError:
+            identity = {}
+        project_control = ProjectControlSnapshot(
+            workspace_identity=MappingProxyType(identity),
+            fingerprint="",
+            files=MappingProxyType({}),
+            total_bytes=0,
+        )
         control_issues = [ConfigIssue(
             "workspace-control",
             "unsafe workspace control plane; execution authority ignored",
@@ -640,7 +583,7 @@ def load_config_snapshot(
                 "workspace-control",
                 control_fingerprint,
             )
-            or (trusted and not _has_workspace_control_files(root))
+            or (trusted and not project_control.files)
         )
     except ConfigValidationError:
         control_trusted = False
@@ -649,6 +592,8 @@ def load_config_snapshot(
             "invalid trust store or control plane; execution authority ignored",
             ConfigSource.USER,
         ))
+    if control_trusted:
+        project_control = replace(project_control, trusted=True)
     issues = [*user_issues, *workspace_issues, *control_issues, *trust_issue]
     for key in sorted(set(workspace_values) - set(CONFIG_SCHEMA)):
         issues.append(ConfigIssue(
@@ -702,6 +647,7 @@ def load_config_snapshot(
         workspace_trusted=trusted,
         control_fingerprint=control_fingerprint,
         control_plane_trusted=control_trusted,
+        project_control=project_control,
         values=values,
         issues=issues,
     )
