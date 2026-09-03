@@ -6,6 +6,7 @@ record matches the exact workspace identity and current value fingerprint.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
@@ -21,55 +22,161 @@ from typing import Mapping
 from dotenv import dotenv_values
 
 from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.foundation.file_lock import exclusive_file_lock
 
 
 _SCHEMA_VERSION = 1
 _MAX_CONFIG_BYTES = 1024 * 1024
+_MAX_CONTROL_BYTES = 4 * 1024 * 1024
+_MAX_CONTROL_FILES = 1024
 _STORE_LOCK = threading.RLock()
 
-DEFAULT_CONFIG_VALUES: dict[str, str] = {
-    "API_KEY": "",
-    "OPENAI_API_KEY": "",
-    "ANTHROPIC_API_KEY": "",
-    "GEMINI_API_KEY": "",
-    "MODEL_PROVIDER": "openai-compatible",
-    "MODEL_ID": "deepseek-v4-flash",
-    "MODEL_VARIANT": "",
-    "API_BASE_URL": "https://api.deepseek.com",
-    "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
-    "ANTHROPIC_API_BASE_URL": "https://api.anthropic.com",
-    "GEMINI_API_BASE_URL": "https://generativelanguage.googleapis.com/v1beta",
-    "PERMISSION_MODE": "default",
-    "NZ_MCP_ENABLED": "0",
-    "NZ_MCP_SERVERS_JSON": "",
-    "NZ_LSP_PYTHON_COMMAND": "",
-    "LOG_LEVEL": "INFO",
-}
 
-_SENSITIVE_EXACT = frozenset({
-    "API_KEY",
-    "OPENAI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "GEMINI_API_KEY",
-    "GOOGLE_API_KEY",
-    "DEEPSEEK_API_KEY",
-    "NZ_IMAGE_DESCRIBE_API_KEY",
-    "API_BASE_URL",
-    "OPENAI_API_BASE_URL",
-    "ANTHROPIC_API_BASE_URL",
-    "GEMINI_API_BASE_URL",
-    "NZ_IMAGE_DESCRIBE_BASE_URL",
-    "MODEL_PROVIDER",
-    "PERMISSION_MODE",
-    "NZ_MCP_ENABLED",
-    "NZ_MCP_SERVERS_JSON",
-    "NZ_MCP_USER_CONFIG",
-    "NZ_MCP_PROJECT_CONFIG",
-    "NZ_MCP_TRUST_STORE",
-    "NZ_MCP_AUTH_STORE",
-    "ALLOW_BASH_PACKAGE_INSTALLS",
-    "NZ_CONTINUE_LOOP_ON_DENY",
+@dataclass(frozen=True)
+class ConfigSpec:
+    """Schema entry for one product-owned configuration key.
+
+    Workspace values are privileged by default.  A newly added setting must
+    therefore be explicitly downgraded to a non-governing workspace hint.
+    """
+
+    default: str | None = None
+    secret: bool = False
+    workspace_trust_required: bool = True
+    value_type: str = "string"
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+_KNOWN_CONFIG_KEYS = (
+    "ALLOW_BASH_PACKAGE_INSTALLS", "ANTHROPIC_API_BASE_URL",
+    "ANTHROPIC_API_KEY", "ANTHROPIC_API_VERSION", "API_BASE_URL", "API_KEY",
+    "BASH_TIMEOUT_SECONDS", "GEMINI_API_BASE_URL", "GEMINI_API_KEY", "LOG_LEVEL",
+    "MAX_AGENT_TURNS", "MAX_CONTEXT_TOKENS", "MAX_OUTPUT_TOKENS",
+    "MAX_PARALLEL_TASKS", "MAX_TOOL_CALLS_PER_RESPONSE",
+    "MAX_VERIFICATION_GATE_PROMPTS", "MEMORY_ASYNC_WRITE", "MEMORY_AUTO_DREAM",
+    "MEMORY_AUTO_DREAM_MIN_HOURS", "MEMORY_AUTO_DREAM_MIN_NEW_SESSIONS",
+    "MEMORY_AUTO_EXTRACT", "MEMORY_CLEANUP_DAYS", "MEMORY_LLM_EXTRACT",
+    "MEMORY_LLM_RERANK", "MODEL_CAPABILITIES_JSON", "MODEL_CATALOG_JSON",
+    "MODEL_CATALOG_PATH", "MODEL_ID", "MODEL_PROVIDER", "MODEL_VARIANT",
+    "NZ_AUTO_MODE_CLASSIFIER_BLOCK_STREAK", "NZ_AUTO_MODE_CLASSIFIER_ENABLED",
+    "NZ_AUTO_MODE_CLASSIFIER_INFRA_FAILURES",
+    "NZ_AUTO_MODE_CLASSIFIER_INFRA_WINDOW_SECONDS",
+    "NZ_AUTO_MODE_CLASSIFIER_MAX_OUTPUT_TOKENS",
+    "NZ_AUTO_MODE_CLASSIFIER_TIMEOUT_SECONDS", "NZ_BASH_OUTPUT_HARD_LIMIT_BYTES",
+    "NZ_CONTEXT_REPLAY_COMPACTION_TOKENS", "NZ_CONTINUE_LOOP_ON_DENY",
+    "NZ_DOOM_LOOP_THRESHOLD", "NZ_IMAGE_DESCRIBE_API_KEY",
+    "NZ_IMAGE_DESCRIBE_BASE_URL", "NZ_IMAGE_DESCRIBE_MAX_TOKENS",
+    "NZ_IMAGE_DESCRIBE_MODEL", "NZ_IMAGE_DESCRIBE_PROVIDER",
+    "NZ_LSP_DIAGNOSTIC_WAIT_SECONDS", "NZ_LSP_ENABLED",
+    "NZ_LSP_INITIALIZE_TIMEOUT_SECONDS", "NZ_LSP_MAX_OUTPUT_CHARS",
+    "NZ_LSP_PYTHON_COMMAND", "NZ_LSP_REQUEST_TIMEOUT_SECONDS",
+    "NZ_LSP_WRITE_DIAGNOSTIC_MAX_FILES", "NZ_LSP_WRITE_DIAGNOSTICS_ENABLED",
+    "NZ_MCP_ENABLED", "NZ_MCP_PROJECT_CONFIG", "NZ_MCP_SERVERS_JSON",
+    "NZ_MCP_STARTUP_TIMEOUT_SECONDS", "NZ_MCP_TOOL_TIMEOUT_SECONDS",
+    "NZ_MCP_TRUST_STORE", "NZ_MCP_USER_CONFIG", "NZ_MODEL_REGISTRY_PATH",
+    "NZ_MODEL_REGISTRY_TTL_SECONDS", "NZ_MODEL_REGISTRY_URL",
+    "NZ_NOMINAL_AGENT_TURNS", "NZ_PLANNING_ENABLED", "NZ_PLANNING_MAX_TOKENS",
+    "NZ_PROCESS_BUFFER_BYTES", "NZ_PROCESS_KILL_GRACE_SECONDS",
+    "NZ_PROCESS_MAX_PER_WORKSPACE", "NZ_PROCESS_OUTPUT_ENCODING",
+    "NZ_PROCESS_READ_MAX_BYTES", "NZ_PROCESS_WRITE_MAX_BYTES",
+    "NZ_PROJECT_VERIFY_TIMEOUT_SECONDS", "NZ_PROVIDER_CANCEL_GRACE_SECONDS",
+    "NZ_PROVIDER_HARD_TIMEOUT_SECONDS", "NZ_PROVIDER_MAX_RETRIES",
+    "NZ_PROVIDER_NON_STREAMING_FALLBACK", "NZ_PROVIDER_STREAM_IDLE_TIMEOUT_SECONDS",
+    "NZ_READ_DEDUP_ENABLED", "NZ_REFLECTION_ENABLED", "NZ_REFLECTION_MAX_ATTEMPTS",
+    "NZ_REMOTE_EVENT_QUEUE_SIZE", "NZ_REPLAN_IDLE_TURNS", "NZ_REPLAN_MAX_ATTEMPTS",
+    "NZ_REPO_MAP_MAX_FILE_BYTES", "NZ_REPO_MAP_MAX_FILES", "NZ_REPO_MAP_MAX_SYMBOLS",
+    "NZ_REPO_RETRIEVAL_STRATEGY", "NZ_SEMANTIC_MODEL",
+    "NZ_STREAM_CHECKPOINT_INTERVAL_SECONDS", "NZ_STREAM_CHECKPOINT_MIN_CHARS",
+    "NZ_STREAM_DELTA_INTERVAL_SECONDS", "NZ_STREAM_DELTA_MIN_CHARS",
+    "NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED", "NZ_SUBAGENT_PROCESS_STOP_GRACE_SECONDS",
+    "NZ_SWE_NOMINAL_AGENT_TURNS", "NZ_WRITE_BATCH_MAX_FILE_BYTES",
+    "NZ_WRITE_BATCH_MAX_TOTAL_BYTES", "OPENAI_API_BASE_URL", "OPENAI_API_KEY",
+    "PERMISSION_MODE", "RUNTIME_STATE_PERSIST", "SUBAGENT_BACKGROUND_MAX_CONCURRENT",
+    "SUBAGENT_BACKGROUND_MAX_TASKS", "SUBAGENT_DEEP_MODEL", "SUBAGENT_EXPLORE_MODEL",
+    "SUBAGENT_MAX_TURNS", "SUBAGENT_TIMEOUT_SECONDS", "SUBAGENT_WORKTREE_ENABLED",
+    "SYSTEM_CONTEXT_BUDGET_TOKENS", "TRACE_ENABLED",
+)
+
+CONFIG_SCHEMA: dict[str, ConfigSpec] = {
+    key: ConfigSpec() for key in _KNOWN_CONFIG_KEYS
+}
+CONFIG_SCHEMA.update({
+    "API_KEY": ConfigSpec("", secret=True),
+    "OPENAI_API_KEY": ConfigSpec("", secret=True),
+    "ANTHROPIC_API_KEY": ConfigSpec("", secret=True),
+    "GEMINI_API_KEY": ConfigSpec("", secret=True),
+    "NZ_IMAGE_DESCRIBE_API_KEY": ConfigSpec("", secret=True),
+    "MODEL_PROVIDER": ConfigSpec("openai-compatible"),
+    "MODEL_ID": ConfigSpec("deepseek-v4-flash"),
+    "MODEL_VARIANT": ConfigSpec(""),
+    "API_BASE_URL": ConfigSpec("https://api.deepseek.com"),
+    "OPENAI_API_BASE_URL": ConfigSpec("https://api.openai.com/v1"),
+    "ANTHROPIC_API_BASE_URL": ConfigSpec("https://api.anthropic.com"),
+    "GEMINI_API_BASE_URL": ConfigSpec(
+        "https://generativelanguage.googleapis.com/v1beta"
+    ),
+    "PERMISSION_MODE": ConfigSpec("default"),
+    "NZ_MCP_ENABLED": ConfigSpec("0", value_type="bool"),
+    "NZ_MCP_SERVERS_JSON": ConfigSpec(""),
+    "NZ_LSP_PYTHON_COMMAND": ConfigSpec(""),
+    "NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED": ConfigSpec("1", value_type="bool"),
+    "LOG_LEVEL": ConfigSpec("INFO", workspace_trust_required=False),
 })
+
+_BOOL_CONFIG_KEYS = (
+    "ALLOW_BASH_PACKAGE_INSTALLS", "MEMORY_ASYNC_WRITE", "MEMORY_AUTO_DREAM",
+    "MEMORY_AUTO_EXTRACT", "MEMORY_LLM_EXTRACT", "MEMORY_LLM_RERANK",
+    "NZ_AUTO_MODE_CLASSIFIER_ENABLED", "NZ_CONTINUE_LOOP_ON_DENY", "NZ_LSP_ENABLED",
+    "NZ_LSP_WRITE_DIAGNOSTICS_ENABLED", "NZ_PLANNING_ENABLED",
+    "NZ_PROVIDER_NON_STREAMING_FALLBACK", "NZ_READ_DEDUP_ENABLED",
+    "NZ_REFLECTION_ENABLED", "RUNTIME_STATE_PERSIST", "SUBAGENT_WORKTREE_ENABLED",
+    "TRACE_ENABLED",
+)
+for _key in _BOOL_CONFIG_KEYS:
+    CONFIG_SCHEMA[_key] = ConfigSpec(value_type="bool")
+
+_INTEGER_CONFIG_KEYS = (
+    "BASH_TIMEOUT_SECONDS", "MAX_AGENT_TURNS", "MAX_CONTEXT_TOKENS",
+    "MAX_OUTPUT_TOKENS", "MAX_PARALLEL_TASKS", "MAX_TOOL_CALLS_PER_RESPONSE",
+    "MAX_VERIFICATION_GATE_PROMPTS", "MEMORY_AUTO_DREAM_MIN_HOURS",
+    "MEMORY_AUTO_DREAM_MIN_NEW_SESSIONS", "MEMORY_CLEANUP_DAYS",
+    "NZ_AUTO_MODE_CLASSIFIER_BLOCK_STREAK", "NZ_AUTO_MODE_CLASSIFIER_INFRA_FAILURES",
+    "NZ_AUTO_MODE_CLASSIFIER_MAX_OUTPUT_TOKENS", "NZ_BASH_OUTPUT_HARD_LIMIT_BYTES",
+    "NZ_CONTEXT_REPLAY_COMPACTION_TOKENS", "NZ_DOOM_LOOP_THRESHOLD",
+    "NZ_IMAGE_DESCRIBE_MAX_TOKENS", "NZ_LSP_MAX_OUTPUT_CHARS",
+    "NZ_LSP_WRITE_DIAGNOSTIC_MAX_FILES", "NZ_MODEL_REGISTRY_TTL_SECONDS",
+    "NZ_NOMINAL_AGENT_TURNS", "NZ_PLANNING_MAX_TOKENS", "NZ_PROCESS_BUFFER_BYTES",
+    "NZ_PROCESS_MAX_PER_WORKSPACE", "NZ_PROCESS_READ_MAX_BYTES",
+    "NZ_PROCESS_WRITE_MAX_BYTES", "NZ_PROJECT_VERIFY_TIMEOUT_SECONDS",
+    "NZ_PROVIDER_MAX_RETRIES", "NZ_REFLECTION_MAX_ATTEMPTS", "NZ_REMOTE_EVENT_QUEUE_SIZE",
+    "NZ_REPLAN_IDLE_TURNS", "NZ_REPLAN_MAX_ATTEMPTS", "NZ_REPO_MAP_MAX_FILE_BYTES",
+    "NZ_REPO_MAP_MAX_FILES", "NZ_REPO_MAP_MAX_SYMBOLS", "NZ_STREAM_CHECKPOINT_MIN_CHARS",
+    "NZ_SWE_NOMINAL_AGENT_TURNS", "NZ_WRITE_BATCH_MAX_FILE_BYTES",
+    "NZ_WRITE_BATCH_MAX_TOTAL_BYTES", "SUBAGENT_BACKGROUND_MAX_CONCURRENT",
+    "SUBAGENT_BACKGROUND_MAX_TASKS", "SUBAGENT_MAX_TURNS", "SUBAGENT_TIMEOUT_SECONDS",
+    "SYSTEM_CONTEXT_BUDGET_TOKENS",
+)
+for _key in _INTEGER_CONFIG_KEYS:
+    CONFIG_SCHEMA[_key] = ConfigSpec(value_type="int", minimum=0)
+
+_FLOAT_CONFIG_KEYS = (
+    "NZ_AUTO_MODE_CLASSIFIER_INFRA_WINDOW_SECONDS",
+    "NZ_AUTO_MODE_CLASSIFIER_TIMEOUT_SECONDS", "NZ_LSP_DIAGNOSTIC_WAIT_SECONDS",
+    "NZ_LSP_INITIALIZE_TIMEOUT_SECONDS", "NZ_LSP_REQUEST_TIMEOUT_SECONDS",
+    "NZ_MCP_STARTUP_TIMEOUT_SECONDS", "NZ_MCP_TOOL_TIMEOUT_SECONDS",
+    "NZ_PROCESS_KILL_GRACE_SECONDS", "NZ_PROVIDER_CANCEL_GRACE_SECONDS",
+    "NZ_PROVIDER_HARD_TIMEOUT_SECONDS", "NZ_PROVIDER_STREAM_IDLE_TIMEOUT_SECONDS",
+    "NZ_STREAM_CHECKPOINT_INTERVAL_SECONDS", "NZ_STREAM_DELTA_INTERVAL_SECONDS",
+    "NZ_SUBAGENT_PROCESS_STOP_GRACE_SECONDS",
+)
+for _key in _FLOAT_CONFIG_KEYS:
+    CONFIG_SCHEMA[_key] = ConfigSpec(value_type="float", minimum=0)
+
+DEFAULT_CONFIG_VALUES: dict[str, str] = {
+    key: spec.default for key, spec in CONFIG_SCHEMA.items()
+    if spec.default is not None
+}
 _SECRET_MARKERS = ("API_KEY", "SECRET", "TOKEN", "PASSWORD", "CREDENTIAL", "COOKIE")
 _EXECUTION_MARKERS = (
     "AUTO_EXEC",
@@ -135,6 +242,8 @@ class ConfigSnapshot:
     workspace: Path
     workspace_fingerprint: str
     workspace_trusted: bool
+    control_fingerprint: str
+    control_plane_trusted: bool
     values: dict[str, ConfigValue]
     issues: list[ConfigIssue] = field(default_factory=list)
 
@@ -143,15 +252,18 @@ class ConfigSnapshot:
         if record is not None:
             return record.value
         fallback = "" if default is None else str(default)
+        spec = CONFIG_SCHEMA.get(str(key))
+        if spec is None:
+            return fallback
         record = ConfigValue(
             key,
-            fallback,
+            spec.default if spec.default is not None else fallback,
             ConfigSource.DEFAULT,
             used_default=True,
-            secret=is_secret_config_key(key),
+            secret=spec.secret,
         )
         self.values[key] = record
-        return fallback
+        return record.value
 
     def value(self, key: str) -> ConfigValue:
         self.get(key, DEFAULT_CONFIG_VALUES.get(key, ""))
@@ -242,16 +354,18 @@ def default_trust_store_path(environ: Mapping[str, str] | None = None) -> Path:
 
 def is_secret_config_key(key: str) -> bool:
     upper = str(key).upper()
-    return any(marker in upper for marker in _SECRET_MARKERS)
+    spec = CONFIG_SCHEMA.get(upper)
+    return spec.secret if spec is not None else any(
+        marker in upper for marker in _SECRET_MARKERS
+    )
 
 
 def is_sensitive_config_key(key: str) -> bool:
     upper = str(key).upper()
-    if upper in _SENSITIVE_EXACT or is_secret_config_key(upper):
-        return True
-    if upper.startswith("NZ_LSP_") and upper.endswith("_COMMAND"):
-        return True
-    return any(marker in upper for marker in _EXECUTION_MARKERS)
+    spec = CONFIG_SCHEMA.get(upper)
+    if spec is not None:
+        return spec.workspace_trust_required
+    return True
 
 
 def workspace_config_fingerprint(values: Mapping[str, str]) -> str:
@@ -259,10 +373,95 @@ def workspace_config_fingerprint(values: Mapping[str, str]) -> str:
     sensitive = {
         str(key): str(value)
         for key, value in values.items()
-        if is_sensitive_config_key(str(key))
+        if (
+            str(key) in CONFIG_SCHEMA
+            and CONFIG_SCHEMA[str(key)].workspace_trust_required
+        )
     }
     payload = json.dumps(sensitive, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def workspace_control_fingerprint(
+    workspace: Path,
+    workspace_values: Mapping[str, str] | None = None,
+) -> str:
+    """Bind execution authority to every repository-owned control input."""
+    root = Path(workspace).expanduser().resolve(strict=True)
+    digest = hashlib.sha256()
+    values = workspace_values
+    if values is None:
+        values, _issues = _read_env_file(root / ".env", ConfigSource.WORKSPACE)
+    digest.update(b"workspace-config\0")
+    digest.update(workspace_config_fingerprint(values).encode("ascii"))
+    fixed = (
+        root / ".nz-coder" / "settings.json",
+        root / ".nz-coder" / "models" / "selection.json",
+        root / ".nz-coder" / "mcp.json",
+    )
+    candidates = list(fixed)
+    skills = root / ".nz-coder" / "skills"
+    if skills.exists():
+        if skills.is_symlink() or not skills.is_dir():
+            raise ConfigValidationError("Workspace Skill control path is unsafe")
+        for path in skills.rglob("*"):
+            try:
+                info = path.lstat()
+            except OSError as exc:
+                raise ConfigValidationError(
+                    "Workspace Skill control path cannot be inspected"
+                ) from exc
+            if stat.S_ISLNK(info.st_mode):
+                raise ConfigValidationError("Workspace Skill control path is unsafe")
+            if stat.S_ISDIR(info.st_mode):
+                continue
+            if not stat.S_ISREG(info.st_mode):
+                raise ConfigValidationError("Workspace Skill control file is unsafe")
+            candidates.append(path)
+    total = 0
+    count = 0
+    for path in sorted(set(candidates), key=lambda item: item.as_posix()):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ConfigValidationError("Workspace control file cannot be inspected") from exc
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise ConfigValidationError("Workspace control file must be a regular file")
+        count += 1
+        total += int(info.st_size)
+        if count > _MAX_CONTROL_FILES or total > _MAX_CONTROL_BYTES:
+            raise ConfigValidationError("Workspace control plane exceeds safety limits")
+        try:
+            relative = path.relative_to(root).as_posix().encode("utf-8")
+            payload = path.read_bytes()
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise ConfigValidationError("Workspace control file cannot be read") from exc
+        if len(payload) != info.st_size:
+            raise ConfigValidationError("Workspace control file changed while hashing")
+        digest.update(b"\0path\0")
+        digest.update(relative)
+        digest.update(b"\0content\0")
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def _has_workspace_control_files(workspace: Path) -> bool:
+    root = Path(workspace)
+    fixed = (
+        root / ".nz-coder" / "settings.json",
+        root / ".nz-coder" / "models" / "selection.json",
+        root / ".nz-coder" / "mcp.json",
+    )
+    if any(path.exists() or path.is_symlink() for path in fixed):
+        return True
+    skills = root / ".nz-coder" / "skills"
+    if not skills.exists():
+        return skills.is_symlink()
+    if skills.is_symlink() or not skills.is_dir():
+        return True
+    return any(True for _path in skills.rglob("*"))
 
 
 class WorkspaceTrustStore:
@@ -305,7 +504,7 @@ class WorkspaceTrustStore:
         _ensure_store_outside_workspace(self.path, workspace)
         identity = _workspace_identity(workspace)
         key = _trust_key(identity, config_type, executable)
-        with _STORE_LOCK:
+        with self._exclusive_lock():
             entries = self._read_unlocked()
             entries[key] = {
                 "workspace": identity,
@@ -318,7 +517,7 @@ class WorkspaceTrustStore:
     def remove(self, workspace: Path, config_type: str, *, executable: str = "") -> bool:
         identity = _workspace_identity(workspace)
         key = _trust_key(identity, config_type, executable)
-        with _STORE_LOCK:
+        with self._exclusive_lock():
             entries = self._read_unlocked()
             removed = entries.pop(key, None) is not None
             if removed:
@@ -326,8 +525,16 @@ class WorkspaceTrustStore:
             return removed
 
     def _read(self) -> dict[str, dict[str, object]]:
-        with _STORE_LOCK:
+        with self._exclusive_lock():
             return self._read_unlocked()
+
+    @contextmanager
+    def _exclusive_lock(self):
+        with _STORE_LOCK:
+            self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            harden_private_path(self.path.parent)
+            with exclusive_file_lock(self.path.with_suffix(self.path.suffix + ".lock")):
+                yield
 
     def _read_unlocked(self) -> dict[str, dict[str, object]]:
         try:
@@ -394,17 +601,58 @@ def load_config_snapshot(
     workspace_values, workspace_issues = _read_env_file(root / ".env", ConfigSource.WORKSPACE)
     fingerprint = workspace_config_fingerprint(workspace_values)
     try:
+        control_fingerprint = workspace_control_fingerprint(root, workspace_values)
+    except ConfigValidationError:
+        control_fingerprint = ""
+        control_issues = [ConfigIssue(
+            "workspace-control",
+            "unsafe workspace control plane; execution authority ignored",
+            ConfigSource.WORKSPACE,
+        )]
+    else:
+        control_issues = []
+    try:
         trusted = store.is_trusted(root, "workspace-config", fingerprint)
         trust_issue: list[ConfigIssue] = []
     except ConfigValidationError:
         trusted = False
         trust_issue = [ConfigIssue("workspace-trust", "invalid trust store; workspace values ignored", ConfigSource.USER)]
-    keys = set(DEFAULT_CONFIG_VALUES) | set(user_values) | set(workspace_values) | set(environment)
+    try:
+        control_trusted = bool(control_fingerprint) and (
+            store.is_trusted(
+                root,
+                "workspace-control",
+                control_fingerprint,
+            )
+            or (trusted and not _has_workspace_control_files(root))
+        )
+    except ConfigValidationError:
+        control_trusted = False
+        trust_issue.append(ConfigIssue(
+            "workspace-control",
+            "invalid trust store or control plane; execution authority ignored",
+            ConfigSource.USER,
+        ))
+    issues = [*user_issues, *workspace_issues, *control_issues, *trust_issue]
+    for key in sorted(set(workspace_values) - set(CONFIG_SCHEMA)):
+        issues.append(ConfigIssue(
+            key,
+            "unknown workspace setting ignored",
+            ConfigSource.WORKSPACE,
+        ))
+    keys = {
+        key for key, spec in CONFIG_SCHEMA.items()
+        if spec.default is not None
+        or key in environment
+        or key in user_values
+        or key in workspace_values
+    }
     values: dict[str, ConfigValue] = {}
     for key in keys:
-        default = DEFAULT_CONFIG_VALUES.get(key, "")
-        sensitive = is_sensitive_config_key(key)
-        secret = is_secret_config_key(key)
+        spec = CONFIG_SCHEMA[key]
+        default = "" if spec.default is None else spec.default
+        sensitive = spec.workspace_trust_required
+        secret = spec.secret
         if key in environment:
             values[key] = ConfigValue(key, str(environment[key]), ConfigSource.ENVIRONMENT, requires_trust=False, secret=secret)
             continue
@@ -436,8 +684,10 @@ def load_config_snapshot(
         workspace=root,
         workspace_fingerprint=fingerprint,
         workspace_trusted=trusted,
+        control_fingerprint=control_fingerprint,
+        control_plane_trusted=control_trusted,
         values=values,
-        issues=[*user_issues, *workspace_issues, *trust_issue],
+        issues=issues,
     )
     # These historically crashed every CLI surface during module import.  Keep
     # validation here as well as in config.py so ``doctor --workspace`` can
@@ -505,9 +755,11 @@ def _ensure_store_outside_workspace(path: Path, workspace: Path) -> None:
 __all__ = [
     "ConfigIssue",
     "ConfigSnapshot",
+    "ConfigSpec",
     "ConfigSource",
     "ConfigValidationError",
     "ConfigValue",
+    "CONFIG_SCHEMA",
     "WorkspaceTrustStore",
     "default_trust_store_path",
     "default_user_config_path",
@@ -515,4 +767,5 @@ __all__ = [
     "is_sensitive_config_key",
     "load_config_snapshot",
     "workspace_config_fingerprint",
+    "workspace_control_fingerprint",
 ]

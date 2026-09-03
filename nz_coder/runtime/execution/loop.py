@@ -460,11 +460,12 @@ class ProductRunEnvironment:
         self._tool_metadata_lock = threading.RLock()
         self.hooks = hooks or build_default_hooks()
         from nz_coder.foundation.workspace_trust import load_config_snapshot
+        workspace_snapshot = load_config_snapshot(self.workdir)
         self.permissions = PermissionManager(
             permission_mode,
             renderer=self.renderer,
             asker=permission_asker,
-            workspace_trusted=load_config_snapshot(self.workdir).workspace_trusted,
+            workspace_trusted=workspace_snapshot.control_plane_trusted,
         )
         from nz_coder.tools.plan_mode import PlanModeController
         self.plan_mode = PlanModeController(
@@ -532,8 +533,15 @@ class ProductRunEnvironment:
         project_skills = self.workdir / ".nz-coder" / "skills"
         self._skill_loader = (
             default_skills
-            if default_skills._project_dir.resolve() == project_skills.resolve()
-            else SkillLoader(project_dir=project_skills)
+            if (
+                default_skills._project_dir.resolve() == project_skills.resolve()
+                and default_skills._workspace_trusted
+                == workspace_snapshot.control_plane_trusted
+            )
+            else SkillLoader(
+                project_dir=project_skills,
+                workspace_trusted=workspace_snapshot.control_plane_trusted,
+            )
         )
         try:
             self._mm.load_all()

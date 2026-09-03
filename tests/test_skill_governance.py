@@ -107,3 +107,48 @@ def test_invalid_skill_metadata_is_excluded(tmp_path) -> None:
     )
 
     assert loader.get_skill_info("invalid") is None
+
+
+def test_untrusted_project_skill_cannot_override_bundled_governance(tmp_path) -> None:
+    _write_skill(
+        tmp_path / "project",
+        "review",
+        allowed="bash, write_file",
+        model="repo-expensive-model",
+    )
+    _write_skill(
+        tmp_path / "bundled",
+        "review",
+        allowed="read_file",
+        model="bundled-safe-model",
+    )
+
+    loader = SkillLoader(
+        project_dir=tmp_path / "project",
+        user_dir=tmp_path / "user",
+        bundled_dir=tmp_path / "bundled",
+        workspace_trusted=False,
+    )
+    info = loader.get_skill_info("review")
+
+    assert info is not None
+    assert info.source == "bundled"
+    assert info.allowed_tools == ["read_file"]
+    assert info.model == "bundled-safe-model"
+
+
+def test_untrusted_project_skill_settings_remain_ignored_after_reload(tmp_path) -> None:
+    _write_skill(tmp_path / "bundled", "review", allowed="read_file", model="safe")
+    settings = tmp_path / "project" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"disabled_skills":["review"]}', encoding="utf-8")
+    loader = SkillLoader(
+        project_dir=tmp_path / "project" / "skills",
+        user_dir=tmp_path / "user",
+        bundled_dir=tmp_path / "bundled",
+        workspace_trusted=False,
+    )
+
+    loader.reload()
+
+    assert loader.get_skill_info("review") is not None

@@ -112,15 +112,24 @@ def build_http_agent(session_id: str, permission_mode: str):
     from nz_coder.runtime.execution.composition import build_coding_agent
     from nz_coder.runtime.process.workdir import current_derived_path, current_workdir
     from nz_coder.state.skills import SkillLoader, bind_skill_loader, current_skill_loader
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
 
     memory_dir = current_derived_path("MEMORY_DIR")
     memory_manager = workspace_memory_manager(memory_dir)
+    workspace_snapshot = load_config_snapshot(current_workdir())
     project_skills = current_workdir() / ".nz-coder" / "skills"
     default_skills = current_skill_loader()
     skill_manager = (
         default_skills
-        if default_skills._project_dir.resolve() == project_skills.resolve()
-        else SkillLoader(project_dir=project_skills)
+        if (
+            default_skills._project_dir.resolve() == project_skills.resolve()
+            and default_skills._workspace_trusted
+            == workspace_snapshot.control_plane_trusted
+        )
+        else SkillLoader(
+            project_dir=project_skills,
+            workspace_trusted=workspace_snapshot.control_plane_trusted,
+        )
     )
     memory_manager.load_all()
     system_prompt = build(
@@ -502,9 +511,15 @@ class ManagedSession:
     def extensions(self) -> list[dict]:
         """Project extension owners from this Session's daemon workspace."""
         from nz_coder.extensions.registry import ExtensionRegistry
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
         from nz_coder.state.skills import SkillLoader
 
-        loader = SkillLoader(project_dir=self.workspace / ".nz-coder" / "skills")
+        loader = SkillLoader(
+            project_dir=self.workspace / ".nz-coder" / "skills",
+            workspace_trusted=load_config_snapshot(
+                self.workspace
+            ).control_plane_trusted,
+        )
         return [
             item.to_dict()
             for item in ExtensionRegistry(

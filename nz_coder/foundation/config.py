@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 from nz_coder.foundation.workspace_trust import (
+    CONFIG_SCHEMA,
     ConfigSource,
     ConfigValue,
     is_secret_config_key,
@@ -31,7 +32,7 @@ def get(key: str, default: str = None) -> str:
     # inject a shell value after import.  Workspace files never enter
     # ``os.environ``, so this compatibility overlay cannot promote workspace
     # data across the trust boundary.
-    if key in os.environ:
+    if key in CONFIG_SCHEMA and key in os.environ:
         CONFIG_SNAPSHOT.values[key] = ConfigValue(
             key,
             str(os.environ[key]),

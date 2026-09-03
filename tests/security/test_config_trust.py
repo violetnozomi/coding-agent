@@ -10,6 +10,18 @@ import sys
 import pytest
 
 
+def _trust_workspace_in_process(arguments):
+    workspace, trust_path, fingerprint = arguments
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore
+
+    WorkspaceTrustStore(trust_path).trust(
+        workspace,
+        "workspace-control",
+        fingerprint,
+    )
+    return fingerprint
+
+
 def _load(tmp_path: Path, workspace: Path, environ: dict[str, str] | None = None):
     from nz_coder.foundation.workspace_trust import (
         WorkspaceTrustStore,
@@ -95,6 +107,38 @@ def test_workspace_trust_is_exact_and_invalidated_by_fingerprint(tmp_path):
     assert changed.value("PERMISSION_MODE").ignored is True
 
 
+def test_trusted_control_file_fingerprint_change_revokes_execution_trust(tmp_path):
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    workspace = tmp_path / "repo"
+    settings = workspace / ".nz-coder" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"permissions":{"deny":["bash"]}}', encoding="utf-8")
+    store = WorkspaceTrustStore(tmp_path / "trust.json")
+    initial = _load(tmp_path, workspace)
+    store.trust(workspace, "workspace-control", initial.control_fingerprint)
+
+    trusted = load_config_snapshot(
+        workspace,
+        environ={},
+        user_config_path=tmp_path / "user.env",
+        trust_store=store,
+    )
+    assert trusted.control_plane_trusted is True
+
+    settings.write_text('{"permissions":{"allow":["bash"]}}', encoding="utf-8")
+    changed = load_config_snapshot(
+        workspace,
+        environ={},
+        user_config_path=tmp_path / "user.env",
+        trust_store=store,
+    )
+    assert changed.control_plane_trusted is False
+
+
 def test_config_cli_establishes_and_revokes_exact_workspace_trust(
     tmp_path, monkeypatch, capsys,
 ):
@@ -164,6 +208,39 @@ def test_symlink_workspace_does_not_reuse_real_path_trust(tmp_path):
     assert through_alias.value("PERMISSION_MODE").ignored is True
 
 
+def test_workspace_trust_store_preserves_cross_process_updates(tmp_path):
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing
+
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore
+
+    trust_path = tmp_path / "workspace-trust.json"
+    workspaces = []
+    for index in range(12):
+        workspace = tmp_path / f"repo-{index}"
+        workspace.mkdir()
+        workspaces.append(workspace)
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=4, mp_context=context) as pool:
+        list(pool.map(
+            _trust_workspace_in_process,
+            [
+                (workspace, trust_path, f"fingerprint-{index}")
+                for index, workspace in enumerate(workspaces)
+            ],
+        ))
+
+    store = WorkspaceTrustStore(trust_path)
+    assert all(
+        store.is_trusted(
+            workspace,
+            "workspace-control",
+            f"fingerprint-{index}",
+        )
+        for index, workspace in enumerate(workspaces)
+    )
+
+
 def test_multiple_invalid_numeric_values_are_collected_without_crash(tmp_path):
     workspace = tmp_path / "repo"
     workspace.mkdir()
@@ -204,7 +281,8 @@ def test_loader_never_mutates_process_environment(tmp_path, monkeypatch):
 
     assert dict(os.environ) == before
     assert snapshot.get("API_KEY") == ""
-    assert snapshot.get("MODEL_ID") == "workspace-model"
+    assert snapshot.get("MODEL_ID") == "deepseek-v4-flash"
+    assert snapshot.value("MODEL_ID").ignored is True
 
 
 def test_public_projection_never_contains_credentials(tmp_path):
@@ -221,6 +299,65 @@ def test_public_projection_never_contains_credentials(tmp_path):
     assert "sentinel-public-secret" not in json.dumps(payload)
     assert payload["API_KEY"]["value"] == "<configured>"
     assert payload["MODEL_ID"]["value"] == "safe-model"
+
+
+def test_config_show_never_emits_unknown_environment_value(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+
+    snapshot = _load(
+        tmp_path,
+        workspace,
+        {
+            "DATABASE_URL": "postgres://admin:sentinel-password@db/private",
+            "AWS_ACCESS_KEY_ID": "sentinel-access-id",
+            "UNRELATED_HOST_VALUE": "sentinel-host-value",
+        },
+    )
+
+    public = snapshot.public_json()
+    assert "DATABASE_URL" not in snapshot.values
+    assert "AWS_ACCESS_KEY_ID" not in snapshot.values
+    assert "UNRELATED_HOST_VALUE" not in snapshot.values
+    assert "sentinel" not in public
+
+
+def test_unknown_workspace_security_option_is_ignored(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    (workspace / ".env").write_text(
+        "FUTURE_DISABLE_SECURITY=1\n",
+        encoding="utf-8",
+    )
+
+    snapshot = _load(tmp_path, workspace)
+
+    assert "FUTURE_DISABLE_SECURITY" not in snapshot.values
+    assert any(
+        issue.key == "FUTURE_DISABLE_SECURITY"
+        and "unknown workspace setting" in issue.message
+        for issue in snapshot.issues
+    )
+
+
+def test_config_spec_defaults_new_settings_to_workspace_trust_required():
+    from nz_coder.foundation.workspace_trust import ConfigSpec
+
+    assert ConfigSpec().workspace_trust_required is True
+
+
+def test_untrusted_workspace_cannot_disable_subagent_isolation(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    (workspace / ".env").write_text(
+        "NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED=0\n",
+        encoding="utf-8",
+    )
+
+    snapshot = _load(tmp_path, workspace)
+
+    assert snapshot.get("NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED", "1") == "1"
+    assert snapshot.value("NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED").ignored is True
 
 
 def test_provider_connect_persists_only_to_user_private_config(tmp_path):

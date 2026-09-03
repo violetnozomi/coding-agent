@@ -124,11 +124,17 @@ def config_main(argv: list[str] | None = None) -> int:
                 "workspace-config",
                 snapshot.workspace_fingerprint,
             )
+            store.trust(
+                root,
+                "workspace-control",
+                snapshot.control_fingerprint,
+            )
             Console().print(
                 "Trusted the exact current workspace configuration fingerprint."
             )
         else:
             removed = store.remove(root, "workspace-config")
+            removed = store.remove(root, "workspace-control") or removed
             Console().print(
                 "Revoked workspace configuration trust."
                 if removed else "Workspace configuration was not trusted."

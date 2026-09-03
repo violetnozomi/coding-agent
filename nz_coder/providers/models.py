@@ -16,6 +16,11 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 from nz_coder.foundation import config
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+from nz_coder.foundation.workspace_trust import (
+    WorkspaceTrustStore,
+    default_trust_store_path,
+    load_config_snapshot,
+)
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
     configured_model_capabilities,
@@ -67,7 +72,23 @@ class _NoRedirect(HTTPRedirectHandler):
 def active_model_selection(workspace: Path | None = None) -> ModelSelection:
     """Return the workspace selection, falling back to environment config."""
     root = (workspace or current_workdir()).resolve()
-    data = _read_state(root / _SELECTION_RELATIVE_PATH, required=False)
+    selection_path = root / _SELECTION_RELATIVE_PATH
+    data = _read_state(selection_path, required=False)
+    if data is not None:
+        fingerprint = _state_fingerprint(data)
+        try:
+            trusted = (
+                WorkspaceTrustStore(default_trust_store_path()).is_trusted(
+                    root,
+                    "workspace-model-selection",
+                    fingerprint,
+                )
+                or load_config_snapshot(root).control_plane_trusted
+            )
+        except (OSError, ValueError):
+            trusted = False
+        if not trusted:
+            data = None
     if data is not None:
         provider = _nonempty_string(data.get("provider"), "selection provider")
         model_id = _nonempty_string(data.get("model_id"), "selection model_id")
@@ -115,6 +136,11 @@ def save_model_selection(
         "variant": normalized_variant,
     }
     _write_state(root / _SELECTION_RELATIVE_PATH, payload)
+    WorkspaceTrustStore(default_trust_store_path()).trust(
+        root,
+        "workspace-model-selection",
+        _state_fingerprint(payload),
+    )
     return ModelSelection(normalized_provider, normalized_model, normalized_variant, "workspace")
 
 
@@ -122,11 +148,18 @@ def clear_model_selection(workspace: Path | None = None) -> bool:
     """Remove the workspace selection and restore environment-backed defaults."""
     root = (workspace or current_workdir()).resolve()
     target = _safe_state_path(root, root / _SELECTION_RELATIVE_PATH)
+    removed = False
     try:
         target.unlink()
     except FileNotFoundError:
-        return False
-    return True
+        pass
+    else:
+        removed = True
+    trust_removed = WorkspaceTrustStore(default_trust_store_path()).remove(
+        root,
+        "workspace-model-selection",
+    )
+    return removed or trust_removed
 
 
 def discover_models(
@@ -485,6 +518,20 @@ def _nonempty_string(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"Model {name} must be a non-empty string")
     return value.strip()
+
+
+def _state_fingerprint(payload: dict) -> str:
+    """Return a content identity without exposing provider configuration."""
+    import hashlib
+
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _validated_timeout(value: Any) -> float:

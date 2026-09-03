@@ -182,7 +182,7 @@ def test_repo_intelligence_doctor_is_independent_of_provider(monkeypatch, tmp_pa
     }
 
 
-def test_workspace_dotenv_does_not_supply_credentials_and_shell_wins(tmp_path):
+def test_untrusted_workspace_dotenv_cannot_select_model_and_shell_wins(tmp_path):
     root = Path(__file__).resolve().parents[1]
     (tmp_path / ".env").write_text(
         "API_KEY=workspace-key\nMODEL_ID=workspace-model\n",
@@ -214,8 +214,8 @@ def test_workspace_dotenv_does_not_supply_credentials_and_shell_wins(tmp_path):
         check=True,
     )
 
-    assert json.loads(loaded.stdout) == ["", "workspace-model"]
-    assert json.loads(overridden.stdout) == ["shell-key", "workspace-model"]
+    assert json.loads(loaded.stdout) == ["", "deepseek-v4-flash"]
+    assert json.loads(overridden.stdout) == ["shell-key", "deepseek-v4-flash"]
 
 
 def test_init_creates_private_config_and_refuses_overwrite(tmp_path, capsys, monkeypatch):

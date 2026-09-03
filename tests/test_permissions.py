@@ -48,6 +48,50 @@ def test_permission_manager_reports_matching_explicit_rule_source():
     assert pm.explicit_rule_behavior("todo", {}) is None
 
 
+def test_untrusted_project_allow_cannot_authorize_bash(tmp_path, monkeypatch):
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps({"permissions": {"allow": ["bash"]}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+
+    manager = PermissionManager("auto", workspace_trusted=False)
+
+    assert manager.check("bash", {"command": "python build.py"})["behavior"] == "ask"
+
+
+def test_untrusted_project_allow_cannot_authorize_process(tmp_path, monkeypatch):
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps({"permissions": {"allow": ["process"]}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+
+    manager = PermissionManager("auto", workspace_trusted=False)
+
+    assert manager.check(
+        "process", {"operation": "start", "command": "python server.py"}
+    )["behavior"] == "ask"
+
+
+def test_untrusted_project_deny_rule_still_applies(tmp_path, monkeypatch):
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps({"permissions": {"deny": ["bash"]}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+
+    manager = PermissionManager("auto", workspace_trusted=False)
+
+    assert manager.check("bash", {"command": "ls"})["behavior"] == "deny"
+
+
 def test_argv_prefix_rule_rejects_shell_composition():
     """A reusable command prefix cannot authorize a composed second command."""
     rule = scoped_allow_rule("bash", {"command": "git status"})

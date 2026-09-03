@@ -39,6 +39,7 @@ class PermissionManager:
             self._mode,
             workspace_trusted=workspace_trusted,
         )
+        self._workspace_trusted = bool(workspace_trusted)
         self._deny_rules: list[PermissionRule] = []
         self._allow_rules: list[PermissionRule] = []
         self._ask_rules: list[PermissionRule] = []
@@ -57,7 +58,10 @@ class PermissionManager:
     def _load_settings_rules(self) -> None:
         """Load permission rules from .nz-coder/settings.json if it exists."""
         allow_rules, deny_rules, ask_rules = load_rules_from_settings()
-        self._allow_rules = allow_rules
+        # A repository-owned allow rule is authority.  Until the exact
+        # workspace control plane is trusted, only restrictive project rules
+        # may influence execution.
+        self._allow_rules = allow_rules if self._workspace_trusted else []
         self._deny_rules = deny_rules
         self._ask_rules = ask_rules
 

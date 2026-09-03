@@ -169,6 +169,10 @@ def test_model_selection_rejects_nonstandard_json_numbers(tmp_path):
 
 
 def test_workspace_selection_round_trip_and_reset(tmp_path, monkeypatch):
+    monkeypatch.setenv(
+        "NZ_CODER_WORKSPACE_TRUST_STORE",
+        str(tmp_path.parent / f"{tmp_path.name}-workspace-trust.json"),
+    )
     monkeypatch.setattr(config, "MODEL_PROVIDER", "openai-compatible")
     monkeypatch.setattr(config, "MODEL_ID", "fallback-model")
     selection = save_model_selection("gemini", "gemini-code", workspace=tmp_path)
@@ -180,6 +184,77 @@ def test_workspace_selection_round_trip_and_reset(tmp_path, monkeypatch):
     assert clear_model_selection(tmp_path) is True
     assert active_model_selection(tmp_path).model_id == "fallback-model"
     assert clear_model_selection(tmp_path) is False
+
+
+def test_reset_revokes_previous_model_selection_generation(tmp_path, monkeypatch):
+    trust_path = tmp_path.parent / f"{tmp_path.name}-workspace-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    monkeypatch.setattr(config, "MODEL_PROVIDER", "openai-compatible")
+    monkeypatch.setattr(config, "MODEL_ID", "fallback-model")
+    save_model_selection("gemini", "gemini-code", workspace=tmp_path)
+    payload = (tmp_path / ".nz-coder/models/selection.json").read_text(
+        encoding="utf-8"
+    )
+
+    assert clear_model_selection(tmp_path) is True
+    target = tmp_path / ".nz-coder/models/selection.json"
+    target.write_text(payload, encoding="utf-8")
+
+    assert active_model_selection(tmp_path).model_id == "fallback-model"
+
+
+def test_untrusted_project_model_selection_is_ignored(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "MODEL_PROVIDER", "openai-compatible")
+    monkeypatch.setattr(config, "MODEL_ID", "safe-model")
+    target = tmp_path / ".nz-coder/models/selection.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        json.dumps({
+            "version": 1,
+            "provider": "openai-compatible",
+            "model_id": "repo-selected-expensive-model",
+            "variant": "xhigh",
+        }),
+        encoding="utf-8",
+    )
+
+    selection = active_model_selection(tmp_path)
+
+    assert selection.model_id == "safe-model"
+    assert selection.source == "configuration"
+
+
+def test_trusted_workspace_control_model_selection_is_applied(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    trust_path = tmp_path.parent / f"{tmp_path.name}-workspace-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    target = tmp_path / ".nz-coder/models/selection.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        json.dumps({
+            "version": 1,
+            "provider": "gemini",
+            "model_id": "gemini-code",
+            "variant": None,
+        }),
+        encoding="utf-8",
+    )
+    snapshot = load_config_snapshot(tmp_path)
+    WorkspaceTrustStore(trust_path).trust(
+        tmp_path,
+        "workspace-control",
+        snapshot.control_fingerprint,
+    )
+
+    selection = active_model_selection(tmp_path)
+
+    assert selection.provider == "gemini"
+    assert selection.model_id == "gemini-code"
+    assert selection.source == "workspace"
 
 
 def test_selection_validates_exact_catalog_variant(tmp_path, monkeypatch):

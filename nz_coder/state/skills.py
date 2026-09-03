@@ -149,9 +149,11 @@ def _scan_skills_dir(skills_dir: Path, source: str) -> list[Skill]:
         return []
     skills = []
     for entry in sorted(skills_dir.iterdir()):
+        if entry.is_symlink():
+            continue
         if entry.is_dir():
             skill_file = entry / "SKILL.md"
-            if skill_file.exists():
+            if skill_file.exists() and not skill_file.is_symlink():
                 skill = _parse_skill_file(skill_file, source)
                 if skill:
                     skills.append(skill)
@@ -170,10 +172,12 @@ class SkillLoader:
         bundled_dir: Path = None,
         user_dir: Path = None,
         project_dir: Path = None,
+        workspace_trusted: bool = True,
     ):
         self._bundled_dir = bundled_dir or config.SKILLS_DIR
         self._user_dir = user_dir or (Path.home() / ".nz-coder" / "skills")
         self._project_dir = project_dir or (current_workdir() / ".nz-coder" / "skills")
+        self._workspace_trusted = bool(workspace_trusted)
 
         # name → Skill (unconditional, immediately available)
         self._skills: dict[str, Skill] = {}
@@ -183,7 +187,9 @@ class SkillLoader:
         self._activated: set[str] = set()
         self._disabled: dict[str, Skill] = {}
         self._settings_path = self._project_dir.parent / "settings.json"
-        self._disabled_names = self._read_disabled_names()
+        self._disabled_names = (
+            self._read_disabled_names() if self._workspace_trusted else set()
+        )
 
         self._load()
 
@@ -191,12 +197,22 @@ class SkillLoader:
         """Load skills from all tiers, project > user > bundled priority."""
         # Collect from all tiers (higher priority first)
         all_skills: list[Skill] = []
-        for skills_dir, source in [
+        sources = [
             (self._project_dir, "project"),
             (self._user_dir, "user"),
             (self._bundled_dir, "bundled"),
-        ]:
+        ]
+        if not self._workspace_trusted:
+            sources = [
+                (self._user_dir, "user"),
+                (self._bundled_dir, "bundled"),
+                (self._project_dir, "project"),
+            ]
+        for skills_dir, source in sources:
             for skill in _scan_skills_dir(skills_dir, source):
+                if source == "project" and not self._workspace_trusted:
+                    skill.allowed_tools = []
+                    skill.model = ""
                 all_skills.append(skill)
 
         # Deduplicate: first occurrence wins (project > user > bundled)
@@ -366,7 +382,9 @@ class SkillLoader:
         self._conditional.clear()
         self._activated.clear()
         self._disabled.clear()
-        self._disabled_names = self._read_disabled_names()
+        self._disabled_names = (
+            self._read_disabled_names() if self._workspace_trusted else set()
+        )
         self._load()
 
     def _read_settings(self) -> dict:
@@ -431,7 +449,9 @@ def _matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
 
 # ── Global instance ───────────────────────────────────────────────────────────
 
-skill_loader = SkillLoader()
+skill_loader = SkillLoader(
+    workspace_trusted=getattr(config.CONFIG_SNAPSHOT, "control_plane_trusted", False)
+)
 _SKILL_LOADER: ContextVar[SkillLoader | None] = ContextVar(
     "nz_coder_skill_loader",
     default=None,
