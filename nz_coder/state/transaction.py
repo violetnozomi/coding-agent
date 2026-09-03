@@ -39,6 +39,11 @@ class _RecoveryParent:
     fd: int | None = None
     windows_handles: tuple[int, ...] = ()
 
+    @property
+    def windows_parent_handle(self) -> int | None:
+        """Return the final opened directory handle on Windows."""
+        return self.windows_handles[-1] if self.windows_handles else None
+
     def close(self) -> None:
         if self.fd is not None:
             os.close(self.fd)
@@ -314,26 +319,63 @@ class TransactionManager:
         if os.name != "nt":
             self._restore_backup_posix(record, backup, parent)
             return
-        target = record.target
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{target.name}.",
-            suffix=".rollback",
-            dir=target.parent,
+        self._restore_backup_windows(record, backup, parent)
+
+    @staticmethod
+    def _restore_backup_windows(
+        record: _Backup,
+        backup: Path,
+        parent: _RecoveryParent,
+    ) -> None:
+        """Atomically move the backup relative to the verified parent handle."""
+        import ctypes
+        from ctypes import wintypes
+
+        parent_handle = parent.windows_parent_handle
+        if parent_handle is None:
+            raise RuntimeError("Transaction recovery parent handle is unavailable")
+
+        create_file = ctypes.windll.kernel32.CreateFileW
+        create_file.argtypes = (
+            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+            wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
         )
-        temporary = Path(temporary_name)
+        create_file.restype = wintypes.HANDLE
+        desired_access = 0x80000000 | 0x00010000
+        flags = 0x00000080 | 0x00200000
+        handle = create_file(str(backup), desired_access, 0x00000001, None, 3, flags, None)
+        value = int(getattr(handle, "value", handle)) if handle is not None else -1
+        if value == ctypes.c_void_p(-1).value:
+            raise OSError(ctypes.get_last_error(), "cannot open transaction backup")
+
+        class _FileRenameInfo(ctypes.Structure):
+            _fields_ = (
+                ("replace_if_exists", wintypes.BOOLEAN),
+                ("root_directory", wintypes.HANDLE),
+                ("file_name_length", wintypes.DWORD),
+                ("file_name", wintypes.WCHAR * (len(record.target.name) + 1)),
+            )
+
+        close_handle = ctypes.windll.kernel32.CloseHandle
+        close_handle.argtypes = (wintypes.HANDLE,)
+        close_handle.restype = wintypes.BOOL
         try:
-            with os.fdopen(descriptor, "wb") as output, backup.open("rb") as source:
-                descriptor = -1
-                shutil.copyfileobj(source, output)
-                output.flush()
-                os.fsync(output.fileno())
-            shutil.copystat(backup, temporary, follow_symlinks=False)
-            os.replace(temporary, target)
-            self._fsync_directory(target.parent)
+            info = _FileRenameInfo()
+            info.replace_if_exists = True
+            info.root_directory = wintypes.HANDLE(parent_handle)
+            info.file_name_length = len(record.target.name.encode("utf-16-le"))
+            info.file_name = record.target.name
+            rename = ctypes.windll.kernel32.SetFileInformationByHandle
+            rename.argtypes = (
+                wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+            )
+            rename.restype = wintypes.BOOL
+            if not rename(
+                wintypes.HANDLE(value), 3, ctypes.byref(info), ctypes.sizeof(info)
+            ):
+                raise OSError(ctypes.get_last_error(), "cannot restore transaction backup")
         finally:
-            if descriptor >= 0:
-                os.close(descriptor)
-            temporary.unlink(missing_ok=True)
+            close_handle(wintypes.HANDLE(value))
 
     def _restore_backup_posix(
         self,
@@ -392,17 +434,87 @@ class TransactionManager:
             os.unlink(target.name, dir_fd=parent.fd)
             os.fsync(parent.fd)
             return
+        self._delete_new_target_windows(record, parent)
+
+    @classmethod
+    def _delete_new_target_windows(
+        cls,
+        record: _Backup,
+        parent: _RecoveryParent,
+    ) -> None:
+        """Delete a regular file by handle after binding it to the opened parent."""
+        import ctypes
+        from ctypes import wintypes
+        import ntpath
+
+        parent_handle = parent.windows_parent_handle
+        if parent_handle is None:
+            raise RuntimeError("Transaction recovery parent handle is unavailable")
+        create_file = ctypes.windll.kernel32.CreateFileW
+        create_file.argtypes = (
+            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+            wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+        )
+        create_file.restype = wintypes.HANDLE
+        desired_access = 0x00010000 | 0x00000080
+        flags = 0x00000080 | 0x00200000
+        handle = create_file(
+            str(record.target), desired_access, 0x00000001 | 0x00000002,
+            None, 3, flags, None,
+        )
+        value = int(getattr(handle, "value", handle)) if handle is not None else -1
+        invalid = ctypes.c_void_p(-1).value
+        if value == invalid:
+            error = ctypes.get_last_error()
+            if error in {2, 3}:
+                return
+            raise OSError(error, "cannot open transaction target")
+        close_handle = ctypes.windll.kernel32.CloseHandle
+        close_handle.argtypes = (wintypes.HANDLE,)
+        close_handle.restype = wintypes.BOOL
         try:
-            target.lstat()
-        except FileNotFoundError:
-            return
-        if target.is_symlink() or target.is_file():
-            target.unlink()
-        elif target.is_dir():
-            raise ValueError("Transaction cannot safely remove a new directory")
-        else:
-            target.unlink()
-        self._fsync_directory(target.parent)
+            target_path = cls._windows_final_path(value)
+            parent_path = cls._windows_final_path(parent_handle)
+            if ntpath.normcase(ntpath.dirname(target_path)) != ntpath.normcase(parent_path):
+                raise ValueError("Transaction recovery parent identity changed")
+
+            class _FileDispositionInfo(ctypes.Structure):
+                _fields_ = (("delete_file", wintypes.BOOLEAN),)
+
+            disposition = _FileDispositionInfo(True)
+            delete = ctypes.windll.kernel32.SetFileInformationByHandle
+            delete.argtypes = (
+                wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+            )
+            delete.restype = wintypes.BOOL
+            if not delete(
+                wintypes.HANDLE(value), 4, ctypes.byref(disposition),
+                ctypes.sizeof(disposition),
+            ):
+                raise OSError(ctypes.get_last_error(), "cannot remove transaction target")
+        finally:
+            close_handle(wintypes.HANDLE(value))
+
+    @staticmethod
+    def _windows_final_path(handle: int) -> str:
+        """Return the normalized DOS path represented by one Windows handle."""
+        import ctypes
+        from ctypes import wintypes
+
+        final_path = ctypes.windll.kernel32.GetFinalPathNameByHandleW
+        final_path.argtypes = (
+            wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD,
+        )
+        final_path.restype = wintypes.DWORD
+        required = final_path(wintypes.HANDLE(handle), None, 0, 0)
+        if not required:
+            raise OSError(ctypes.get_last_error(), "cannot resolve recovery handle")
+        buffer = ctypes.create_unicode_buffer(required + 1)
+        written = final_path(wintypes.HANDLE(handle), buffer, len(buffer), 0)
+        if not written or written >= len(buffer):
+            raise OSError(ctypes.get_last_error(), "cannot resolve recovery handle")
+        value = buffer.value
+        return value[4:] if value.startswith("\\\\?\\") else value
 
     @staticmethod
     def _fsync_directory(path: Path) -> None:

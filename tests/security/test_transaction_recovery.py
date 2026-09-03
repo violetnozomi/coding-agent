@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
-import shutil
 
 import pytest
 
@@ -215,7 +214,7 @@ def test_parent_junction_swap_after_track_is_rejected(tmp_path):
 
     assert transaction.state == "rollback_partial"
     assert outside_target.read_text(encoding="utf-8") == "outside"
-    shutil.rmtree(parent, ignore_errors=True)
+    os.rmdir(parent)
     original_parent.rename(parent)
 
 
@@ -379,6 +378,10 @@ def test_windows_parent_swap_during_recovery_is_blocked_or_fails_closed(
     target = parent / "module.py"
     target.write_text("before", encoding="utf-8")
     moved = tmp_path / "package-moved"
+    outside = tmp_path.parent / f"{tmp_path.name}-during-recovery-outside"
+    outside.mkdir()
+    outside_target = outside / "module.py"
+    outside_target.write_text("sentinel", encoding="utf-8")
     transaction = TransactionManager()
 
     with scoped_workdir(tmp_path):
@@ -391,11 +394,22 @@ def test_windows_parent_swap_during_recovery_is_blocked_or_fails_closed(
             try:
                 parent.rename(moved)
             except OSError:
-                pass
+                return original(record, backup, parent_guard)
+            os.system(f'mklink /J "{parent}" "{outside}" >NUL')
+            if not parent.exists():
+                moved.rename(parent)
+                pytest.skip("junction creation is unavailable")
             return original(record, backup, parent_guard)
 
         monkeypatch.setattr(transaction, "_restore_backup", attempt_swap)
         transaction.rollback()
 
-    assert not moved.exists()
-    assert target.read_text(encoding="utf-8") == "before"
+    assert outside_target.read_text(encoding="utf-8") == "sentinel"
+    assert not (outside / ".module.py.rollback").exists()
+    if moved.exists():
+        assert (moved / "module.py").read_text(encoding="utf-8") == "before"
+        os.rmdir(parent)
+        moved.rename(parent)
+    else:
+        assert target.read_text(encoding="utf-8") == "before"
+    assert transaction.state == "rolled_back"
