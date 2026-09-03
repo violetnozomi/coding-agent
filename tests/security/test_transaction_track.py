@@ -194,64 +194,61 @@ def test_metadata_restore_failure_keeps_backup_for_retry(tmp_path, monkeypatch):
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows native handle semantics")
 def test_windows_track_reparse_swap_fails_closed(tmp_path, monkeypatch):
-    """The Windows runner exercises the old check/copy race seam."""
+    """An opened target cannot be renamed during the backup capture."""
+    import nz_coder.foundation.project_control as project_control
     from nz_coder.runtime.process.workdir import scoped_workdir
 
     target = tmp_path / "module.py"
     target.write_text("OPENED-TARGET", encoding="utf-8")
-    outside = tmp_path.parent / f"{tmp_path.name}-outside-target"
-    outside.write_text("OUTSIDE-SECRET", encoding="utf-8")
     moved = tmp_path / "module-opened.py"
-    original_is_file = Path.is_file
-    swapped = False
+    original_open = project_control._windows_open
+    attempted = False
 
-    def swap_after_check(path: Path) -> bool:
-        nonlocal swapped
-        result = original_is_file(path)
-        if path == target and result and not swapped:
-            swapped = True
-            target.rename(moved)
-            target.symlink_to(outside)
-        return result
+    def attempt_swap_after_open(path: Path, **kwargs):
+        nonlocal attempted
+        handle = original_open(path, **kwargs)
+        if path == target and handle is not None and not attempted:
+            attempted = True
+            with pytest.raises(OSError):
+                target.rename(moved)
+        return handle
 
-    monkeypatch.setattr(Path, "is_file", swap_after_check)
+    monkeypatch.setattr(project_control, "_windows_open", attempt_swap_after_open)
     with scoped_workdir(tmp_path):
         manager = _manager(tmp_path)
         manager.track("module.py")
     record = next(iter(manager._backups.values()))
+    assert attempted
     assert record.backup is not None
     assert record.backup.read_text(encoding="utf-8") == "OPENED-TARGET"
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows native handle semantics")
 def test_windows_track_parent_swap_is_blocked_or_fails_closed(tmp_path, monkeypatch):
+    import nz_coder.foundation.project_control as project_control
     from nz_coder.runtime.process.workdir import scoped_workdir
-    from nz_coder.state.transaction import TransactionManager
 
     parent = tmp_path / "package"
     parent.mkdir()
     (parent / "module.py").write_text("OPENED-TARGET", encoding="utf-8")
-    outside = tmp_path.parent / f"{tmp_path.name}-outside-parent"
-    outside.mkdir()
-    (outside / "module.py").write_text("OUTSIDE-SECRET", encoding="utf-8")
-    original_capture = TransactionManager._capture_parent_chain
     moved = tmp_path / "package-opened"
+    original_open = project_control._windows_open
+    attempted = False
 
-    def swap_after_parent_check(root: Path, checked_parent: Path):
-        result = original_capture(root, checked_parent)
-        parent.rename(moved)
-        parent.symlink_to(outside, target_is_directory=True)
-        return result
+    def attempt_swap_after_open(path: Path, **kwargs):
+        nonlocal attempted
+        handle = original_open(path, **kwargs)
+        if path == parent and handle is not None and not attempted:
+            attempted = True
+            with pytest.raises(OSError):
+                parent.rename(moved)
+        return handle
 
-    monkeypatch.setattr(
-        TransactionManager,
-        "_capture_parent_chain",
-        staticmethod(swap_after_parent_check),
-    )
+    monkeypatch.setattr(project_control, "_windows_open", attempt_swap_after_open)
     with scoped_workdir(tmp_path):
         manager = _manager(tmp_path)
         manager.track("package/module.py")
     record = next(iter(manager._backups.values()))
+    assert attempted
     assert record.backup is not None
     assert record.backup.read_text(encoding="utf-8") == "OPENED-TARGET"
-    assert (outside / "module.py").read_text(encoding="utf-8") == "OUTSIDE-SECRET"
