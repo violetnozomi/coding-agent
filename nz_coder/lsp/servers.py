@@ -9,9 +9,13 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from nz_coder.foundation import config
 from nz_coder.foundation.languages import LSP_LANGUAGES, lsp_command_config_key
-from nz_coder.foundation.workspace_trust import WorkspaceTrustStore
+from nz_coder.foundation.workspace_trust import (
+    ConfigSnapshot,
+    ConfigSource,
+    WorkspaceTrustStore,
+    current_config_snapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,7 @@ class ResolvedServer:
     root: Path
     analysis_paths: tuple[Path, ...] = ()
     source: str = "system"
+    config_source: str = "system-path"
     trusted: bool = True
     fingerprint: str = ""
 
@@ -210,7 +215,12 @@ def _split_override(value: str, *, os_name: str | None = None) -> tuple[str, ...
     return tuple(parts)
 
 
-def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
+def resolve_server(
+    path: Path,
+    workspace: Path,
+    *,
+    config_snapshot: ConfigSnapshot | None = None,
+) -> ResolvedServer | None:
     """Resolve the first installed server matching ``path``."""
     spec = _spec_for_path(path)
     if spec is None:
@@ -228,7 +238,9 @@ def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
     ):
         root = root.parent.resolve()
     analysis_paths: tuple[Path, ...] = ()
-    override = config.get(lsp_command_config_key(spec.language), "").strip()
+    snapshot = config_snapshot or current_config_snapshot(workspace)
+    setting = snapshot.value(lsp_command_config_key(spec.language))
+    override = setting.value.strip()
     commands = (_split_override(override),) if override else spec.commands
     for command in commands:
         if not command:
@@ -238,6 +250,18 @@ def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
             executable = Path(resolved[0]).resolve(strict=False)
             workspace_local = _inside_workspace(executable, workspace)
             fingerprint = _server_fingerprint(resolved, executable)
+            if override:
+                config_source = {
+                    ConfigSource.USER: "user-config",
+                    ConfigSource.ENVIRONMENT: "environment-config",
+                    ConfigSource.TRUSTED_WORKSPACE: "trusted-workspace-config",
+                    ConfigSource.WORKSPACE: "workspace-config",
+                    ConfigSource.DEFAULT: "default-config",
+                }[setting.source]
+            elif "{root}" in command[0]:
+                config_source = "workspace-local-default"
+            else:
+                config_source = "system-path"
             trusted = not workspace_local or WorkspaceTrustStore().is_trusted(
                 workspace,
                 f"lsp:{spec.language}",
@@ -251,6 +275,7 @@ def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
                 root=root,
                 analysis_paths=analysis_paths,
                 source="workspace" if workspace_local else "system",
+                config_source=config_source,
                 trusted=trusted,
                 fingerprint=fingerprint,
             )

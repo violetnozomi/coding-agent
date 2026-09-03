@@ -6,40 +6,60 @@ import threading
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_trust import ConfigSnapshot
 
 from .client import LSPClient
 from .servers import ResolvedServer, resolve_server
 
 _LOCK = threading.RLock()
-_CLIENTS: dict[tuple[str, str, str], LSPClient] = {}
-_BROKEN: set[tuple[str, str, str]] = set()
-_ERRORS: dict[tuple[str, str, str], str] = {}
-_TRUST_REQUIRED: set[tuple[str, str, str]] = set()
+_ClientKey = tuple[str, str, str, str, tuple[str, ...], str]
+_CLIENTS: dict[_ClientKey, LSPClient] = {}
+_BROKEN: set[_ClientKey] = set()
+_ERRORS: dict[_ClientKey, str] = {}
+_TRUST_REQUIRED: set[_ClientKey] = set()
 
 
 def _client_key(
     path: Path,
     workspace: Path,
-) -> tuple[ResolvedServer | None, tuple[str, str, str] | None]:
-    resolved = resolve_server(path, workspace)
+    config_snapshot: ConfigSnapshot | None = None,
+) -> tuple[ResolvedServer | None, _ClientKey | None]:
+    resolved = resolve_server(path, workspace, config_snapshot=config_snapshot)
     if resolved is None:
         return None, None
     key = (
         str(workspace.resolve()),
         resolved.server_id,
         str(resolved.root.resolve()),
+        resolved.fingerprint,
+        resolved.command,
+        resolved.config_source,
     )
     return resolved, key
 
 
-def get_client_for_file(path: Path, workspace: Path) -> LSPClient | None:
+def get_client_for_file(
+    path: Path,
+    workspace: Path,
+    *,
+    config_snapshot: ConfigSnapshot | None = None,
+) -> LSPClient | None:
     """Return a cached client, starting it on first use."""
     if not config.LSP_ENABLED:
         return None
-    resolved, key = _client_key(path, workspace)
+    resolved, key = _client_key(path, workspace, config_snapshot)
     if resolved is None or key is None:
         return None
     with _LOCK:
+        identity = key[:3]
+        stale_keys = [candidate for candidate in _CLIENTS if candidate[:3] == identity and candidate != key]
+        stale_clients = [_CLIENTS.pop(candidate) for candidate in stale_keys]
+        for candidate in stale_keys:
+            _BROKEN.discard(candidate)
+            _ERRORS.pop(candidate, None)
+            _TRUST_REQUIRED.discard(candidate)
+        for stale in stale_clients:
+            stale.close()
         if not resolved.trusted:
             stale = _CLIENTS.pop(key, None)
             if stale is not None:
@@ -73,9 +93,14 @@ def get_client_for_file(path: Path, workspace: Path) -> LSPClient | None:
         return client
 
 
-def client_startup_error(path: Path, workspace: Path) -> str:
+def client_startup_error(
+    path: Path,
+    workspace: Path,
+    *,
+    config_snapshot: ConfigSnapshot | None = None,
+) -> str:
     """Return the cached initialization failure for a source file."""
-    _, key = _client_key(path, workspace)
+    _, key = _client_key(path, workspace, config_snapshot)
     if key is None:
         return ""
     with _LOCK:
@@ -87,7 +112,8 @@ def client_status_summary(workspace: Path) -> list[dict[str, str]]:
     root = str(workspace.resolve())
     rows = []
     with _LOCK:
-        for (owner, server_id, server_root), client in _CLIENTS.items():
+        for key, client in _CLIENTS.items():
+            owner, server_id, server_root = key[:3]
             if owner != root:
                 continue
             rows.append({
@@ -95,14 +121,16 @@ def client_status_summary(workspace: Path) -> list[dict[str, str]]:
                 "root": server_root,
                 "status": "connected" if client.process.poll() is None else "failed",
             })
-        for owner, server_id, server_root in _BROKEN:
+        for key in _BROKEN:
+            owner, server_id, server_root = key[:3]
             if owner != root or any(
                 row["id"] == server_id and row["root"] == server_root
                 for row in rows
             ):
                 continue
             rows.append({"id": server_id, "root": server_root, "status": "failed"})
-        for owner, server_id, server_root in _TRUST_REQUIRED:
+        for key in _TRUST_REQUIRED:
+            owner, server_id, server_root = key[:3]
             if owner != root or any(
                 row["id"] == server_id and row["root"] == server_root
                 for row in rows
