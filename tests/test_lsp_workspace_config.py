@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import io
 import sys
+import threading
 from types import SimpleNamespace
 
 
@@ -173,3 +175,90 @@ def test_lsp_cache_rotates_when_resolved_fingerprint_changes(tmp_path, monkeypat
     assert first.closed is True
     assert len(clients) == 2
     manager.close_all_clients()
+
+
+def test_headless_lsp_uses_headless_workspace_snapshot(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import current_config_snapshot
+    from nz_coder.interface.headless import run_main
+    from nz_coder.lsp.servers import resolve_server
+    from nz_coder.runtime.core.result import RunResult, RunStatus, TokenUsage
+
+    source = _source(tmp_path)
+    monkeypatch.setenv("NZ_LSP_PYTHON_COMMAND", sys.executable)
+    seen = []
+
+    class Client:
+        async def run(self, request, **_kwargs):
+            snapshot = current_config_snapshot(request.workspace)
+            seen.append(snapshot.workspace)
+            server = resolve_server(source, request.workspace)
+            assert server is not None
+            assert server.config_source == "environment-config"
+            return RunResult(
+                status=RunStatus.COMPLETED,
+                final_text="done",
+                messages=request.messages,
+                usage=TokenUsage(),
+                session_id=request.session_id,
+                active_agent="headless",
+            )
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    code = run_main(
+        ["--cwd", str(tmp_path), "inspect"],
+        stdin=io.StringIO(),
+        stdout=stdout,
+        stderr=stderr,
+        client_factory=Client,
+    )
+    assert code == 0, stderr.getvalue()
+    assert seen == [tmp_path.absolute()]
+
+
+def test_http_lsp_uses_session_workspace_snapshot(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import current_config_snapshot
+    from nz_coder.http_service.manager import ManagedSession
+    from nz_coder.lsp.servers import resolve_server
+    from nz_coder.protocol.session_events import SessionEventBus
+
+    source = _source(tmp_path)
+    monkeypatch.setenv("NZ_LSP_PYTHON_COMMAND", sys.executable)
+    seen = []
+    commands = []
+
+    class Agent:
+        def __init__(self):
+            self.event_bus = SessionEventBus(session_id="http-lsp")
+            self.permissions = SimpleNamespace(mode="default")
+
+        async def run(self, messages, stream=True):
+            snapshot = current_config_snapshot(tmp_path)
+            seen.append(snapshot.workspace)
+            server = resolve_server(source, tmp_path)
+            assert server is not None
+            commands.append(Path(server.command[0]).resolve())
+            assert Path(server.command[0]).resolve() == Path(sys.executable).resolve()
+            return {"status": "completed", "answer": "done"}
+
+        def close(self):
+            self.event_bus.close()
+
+    session = ManagedSession(
+        "http-lsp",
+        "default",
+        Agent(),
+        threading.Lock(),
+        1.0,
+        workspace_id="workspace",
+        workspace=tmp_path,
+        event_bus=SessionEventBus(session_id="http-lsp"),
+    )
+    changed = tmp_path / "changed-lsp"
+    changed.write_text("changed", encoding="utf-8")
+    monkeypatch.setenv("NZ_LSP_PYTHON_COMMAND", str(changed))
+    session._run_agent([{"role": "user", "content": "inspect"}])
+    assert session.status == "completed", session.last_error
+    session.dispose(force=True)
+    assert seen == [tmp_path.absolute()]
+    assert commands == [Path(sys.executable).resolve()]

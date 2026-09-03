@@ -940,22 +940,25 @@ class ManagedSession:
     ) -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        if self.client is None:
-            # The legacy Agent adapter must not infer an interaction identity
-            # from the session-long EventBus. Bind the request-scoped identity
-            # explicitly for this invocation only.
-            self.agent._requested_interaction_run_id = (
-                self._active_interaction_run_id
-            )
-            task = loop.create_task(self.agent.run(run_messages, stream=True))
-        else:
-            task = loop.create_task(self.client.run(
-                self._run_request(run_messages, allowed_tools, model_override),
-                permission_asker=self.interactions.ask_permission,
-                question_asker=self.interactions.ask_question,
-                workflow_approval_asker=lambda _summary: "reject",
-                event_bus=self.event_bus,
-            ))
+        from nz_coder.foundation.workspace_trust import scoped_config_snapshot
+
+        with scoped_workdir(self.workspace), scoped_config_snapshot(self.config_snapshot):
+            if self.client is None:
+                # The legacy Agent adapter must not infer an interaction identity
+                # from the session-long EventBus. Bind the request-scoped identity
+                # explicitly for this invocation only.
+                self.agent._requested_interaction_run_id = (
+                    self._active_interaction_run_id
+                )
+                task = loop.create_task(self.agent.run(run_messages, stream=True))
+            else:
+                task = loop.create_task(self.client.run(
+                    self._run_request(run_messages, allowed_tools, model_override),
+                    permission_asker=self.interactions.ask_permission,
+                    question_asker=self.interactions.ask_question,
+                    workflow_approval_asker=lambda _summary: "reject",
+                    event_bus=self.event_bus,
+                ))
         with self._lock:
             self._run_loop = loop
             self._run_task = task

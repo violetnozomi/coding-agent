@@ -997,8 +997,9 @@ def test_agent_loop_reuses_mcp_runtime_until_agent_close(tmp_path, monkeypatch):
 
     class RuntimeFactory:
         @staticmethod
-        def configured(*, workspace=None):
+        def configured(*, workspace=None, config_snapshot=None):
             assert workspace == tmp_path
+            assert config_snapshot.workspace == tmp_path
             return runtime
 
     class Message:
