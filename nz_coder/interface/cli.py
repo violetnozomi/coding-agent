@@ -31,6 +31,7 @@ from nz_coder.interface.terminal_input import TerminalInput
 from nz_coder.interface.submission import build_user_submission
 from nz_coder.protocol.message_schema import bind_user_context
 from nz_coder.state.memory import memory_mgr
+from nz_coder.state.skills import skill_loader  # noqa: F401  compatibility alias
 from nz_coder.runtime.conversation.prompt import build
 from nz_coder.state.sessions import activate_session, create_session_id, save_session
 

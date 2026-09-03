@@ -174,7 +174,7 @@ def test_run_cli_renders_failure_and_closes_current_agent(monkeypatch):
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
     monkeypatch.setattr(cli, "create_session_id", lambda: "session-test")
     monkeypatch.setattr(cli, "activate_session", lambda value: value)
-    monkeypatch.setattr(cli, "_build_agent", lambda *_args: agent)
+    monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: agent)
     monkeypatch.setattr(cli, "print_banner", lambda *_args: None)
     inputs = iter(("hello", "exit"))
     monkeypatch.setattr(cli, "read_user_query", lambda: next(inputs))
@@ -219,7 +219,7 @@ def test_run_cli_cancelled_turn_returns_to_same_repl(monkeypatch):
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
     monkeypatch.setattr(cli, "create_session_id", lambda: "session-test")
     monkeypatch.setattr(cli, "activate_session", lambda value: value)
-    monkeypatch.setattr(cli, "_build_agent", lambda *_args: agent)
+    monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: agent)
     monkeypatch.setattr(cli, "print_banner", lambda *_args: None)
     monkeypatch.setattr(cli, "save_session", lambda *_args, **_kwargs: None)
     inputs = iter(("first", "second", "exit"))
@@ -269,7 +269,7 @@ def test_typed_cancelled_turn_does_not_append_memory_reminder(monkeypatch):
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
     monkeypatch.setattr(cli, "create_session_id", lambda: "session-test")
     monkeypatch.setattr(cli, "activate_session", lambda value: value)
-    monkeypatch.setattr(cli, "_build_agent", lambda *_args: agent)
+    monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: agent)
     monkeypatch.setattr(cli, "print_banner", lambda *_args: None)
     monkeypatch.setattr(
         cli,
@@ -332,7 +332,7 @@ def test_first_ctrl_c_while_editing_prompts_before_exit(monkeypatch):
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
     monkeypatch.setattr(cli, "create_session_id", lambda: "session-test")
     monkeypatch.setattr(cli, "activate_session", lambda value: value)
-    monkeypatch.setattr(cli, "_build_agent", lambda *_args: agent)
+    monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: agent)
     monkeypatch.setattr(cli, "print_banner", lambda *_args: None)
     calls = 0
 
@@ -380,7 +380,7 @@ def test_second_ctrl_c_while_editing_exits_fallback_repl(monkeypatch):
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
     monkeypatch.setattr(cli, "create_session_id", lambda: "session-test")
     monkeypatch.setattr(cli, "activate_session", lambda value: value)
-    monkeypatch.setattr(cli, "_build_agent", lambda *_args: agent)
+    monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: agent)
     monkeypatch.setattr(cli, "print_banner", lambda *_args: None)
     monkeypatch.setattr(cli.time, "monotonic", lambda: 10.0)
     monkeypatch.setattr(
@@ -423,7 +423,7 @@ def test_cancelled_async_command_returns_to_same_repl(monkeypatch):
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
     monkeypatch.setattr(cli, "create_session_id", lambda: "session-test")
     monkeypatch.setattr(cli, "activate_session", lambda value: value)
-    monkeypatch.setattr(cli, "_build_agent", lambda *_args: agent)
+    monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: agent)
     monkeypatch.setattr(cli, "print_banner", lambda *_args: None)
 
     async def cancelled_command(*_args, **_kwargs):

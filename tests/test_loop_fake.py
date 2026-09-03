@@ -177,6 +177,20 @@ def _tmp_workdir():
     return old, tmp
 
 
+def _trust_project_control(tmp: Path) -> None:
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    snapshot = load_config_snapshot(tmp)
+    WorkspaceTrustStore().trust(
+        tmp,
+        "workspace-control",
+        snapshot.control_fingerprint,
+    )
+
+
 def _restore_workdir(old, tmp):
     from nz_coder.foundation import config
 
@@ -1547,6 +1561,7 @@ def test_loop_injects_prompt_hook_guidance_from_settings():
             ),
             encoding="utf-8",
         )
+        _trust_project_control(tmp)
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
         messages = [{"role": "user", "content": "fix the bug"}]
@@ -1589,6 +1604,7 @@ def test_loop_pre_tool_hook_rejects_write_file_from_settings():
             ),
             encoding="utf-8",
         )
+        _trust_project_control(tmp)
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall("write_file", {"path": "hello.txt", "content": "hello"}),
@@ -1637,6 +1653,7 @@ def test_loop_no_tool_hook_reopens_for_missing_requested_tests():
             ),
             encoding="utf-8",
         )
+        _trust_project_control(tmp)
         fake = FakeClient([
             FakeResponse(FakeMessage("done too early")),
             FakeResponse(FakeMessage("done after hook reminder")),
@@ -1770,6 +1787,7 @@ def test_loop_writes_trace_events():
             ),
             encoding="utf-8",
         )
+        _trust_project_control(tmp)
         fake = FakeClient([
             FakeResponse(FakeMessage("done")),
         ])

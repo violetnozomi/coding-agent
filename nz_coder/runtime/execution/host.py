@@ -49,13 +49,20 @@ class ProductionRuntimeHost:
         from nz_coder.state.memory import bind_memory_manager
         from nz_coder.mcp import scoped_mcp_runtime
         from nz_coder.state.skills import bind_skill_loader
-        from nz_coder.foundation.workspace_trust import scoped_config_snapshot
+        from nz_coder.foundation.workspace_trust import (
+            current_config_snapshot,
+            scoped_config_snapshot,
+        )
         from nz_coder.runtime.agent.subagent import scoped_parent_context
         from nz_coder.tools.files import bind_tool_state
 
         if not hasattr(agent, "_mcp_runtime_lock"):
             agent._mcp_runtime_lock = threading.Lock()
             agent._mcp_runtime = None
+        run_config_snapshot = getattr(agent, "config_snapshot", None)
+        if run_config_snapshot is None:
+            run_config_snapshot = current_config_snapshot(agent.workdir)
+            agent.config_snapshot = run_config_snapshot
         with agent._mcp_runtime_lock:
             if agent._mcp_runtime is None:
                 runtime_factory = getattr(agent, "_mcp_runtime_factory", MCPRuntime)
@@ -64,7 +71,7 @@ class ProductionRuntimeHost:
                     if getattr(agent, "tool_allowlist", None) is not None
                     else runtime_factory.configured(
                         workspace=agent.workdir,
-                        config_snapshot=agent.config_snapshot,
+                        config_snapshot=run_config_snapshot,
                     )
                 )
                 set_change_handler = getattr(agent._mcp_runtime, "set_change_handler", None)
@@ -81,7 +88,7 @@ class ProductionRuntimeHost:
             await to_thread_settled(mcp_runtime.start)
             with ExitStack() as stack:
                 stack.enter_context(scoped_workdir(agent.workdir))
-                stack.enter_context(scoped_config_snapshot(agent.config_snapshot))
+                stack.enter_context(scoped_config_snapshot(run_config_snapshot))
                 stack.enter_context(scoped_broad_test_guard())
                 stack.enter_context(scoped_declared_test_scopes())
                 stack.enter_context(scoped_session(agent.session_id))

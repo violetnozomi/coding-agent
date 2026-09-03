@@ -126,11 +126,13 @@ def test_process_product_metric_emits_zero_orphans(tmp_path):
 
 def test_command_discovery_metric_uses_the_production_catalog(tmp_path):
     import json
+    from dataclasses import replace
 
+    from nz_coder.foundation.project_control import capture_project_control_snapshot
     from nz_coder.interface.custom_commands import CommandCatalog
 
-    command_dir = tmp_path / "commands"
-    command_dir.mkdir()
+    command_dir = tmp_path / ".nz-coder" / "commands"
+    command_dir.mkdir(parents=True)
     for index in range(200):
         (command_dir / f"command-{index:03d}.md").write_text(
             f"---\ndescription: Command {index}\n---\nRun $ARGUMENTS\n",
@@ -138,7 +140,12 @@ def test_command_discovery_metric_uses_the_production_catalog(tmp_path):
         )
 
     started = time.perf_counter()
-    catalog = CommandCatalog.discover(project_dir=command_dir, project_trusted=True)
+    snapshot = replace(capture_project_control_snapshot(tmp_path), trusted=True)
+    catalog = CommandCatalog.discover(
+        project_dir=command_dir,
+        project_trusted=True,
+        project_control_snapshot=snapshot,
+    )
     latency_ms = round((time.perf_counter() - started) * 1000, 3)
 
     assert len(catalog.list()) == 200
