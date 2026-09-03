@@ -1311,13 +1311,15 @@ deltas are excluded from Session events and the event journal. The legacy SDK
 这一轮不是新增 Agent 功能，而是根据独立 PR 复核把“仓库内容”和“宿主权限”之间的边界补完整。
 
 - 配置加载改为显式 `CONFIG_SCHEMA`。只有产品已声明的键会进入 `ConfigSnapshot`；未知宿主环境不会出现在 `config show`，未知工作区键会被忽略并产生安全诊断。新配置项默认要求 workspace trust，secret、类型和范围由 schema 声明。
-- Workspace Control Plane 现在对 `.env` 中的治理配置、`.nz-coder/settings.json`、模型选择、项目 MCP 配置和项目 Skills 做统一指纹。控制文件变化会撤销执行信任；未信任项目的 allow 规则失效，但 deny/ask 仍然有效。
-- 工作区模型选择使用独立的用户侧信任代际。显式选择会登记内容指纹，文件变化或 reset 会使旧选择失效，仓库不能仅靠预置 `selection.json` 切换 Provider 或昂贵模型。
+- Project Control Plane 由一套共享发现器定义，准确范围是 `.env` 中已注册的治理配置、`.nz-coder/settings.json`、`.nz-coder/mcp.json`、实际可加载的 `.nz-coder/skills/*/SKILL.md`、`.nz-coder/commands/*.md` 和 `.nz-coder/workflows/*.workflow.json`。`.history`、`.trash`、Session、Artifact、trace、cache、plan 和 runtime 派生状态不参与指纹。活动控制文件必须是普通文件且不能是 symlink；文件数量和总字节仍受预算限制。
+- Project Command 和 Project Workflow 只有在当前精确 `workspace-control` fingerprint 被信任后才会发现。未信任项目的命令不会进入列表、补全、HTTP 扩展或 Headless 执行，也不能覆盖 bundled/user command、改变 prompt、model 或 allowed tools；未信任项目的 Workflow 不可发现、不可显式加载，也不能覆盖 Personal Workflow。控制内容变化后旧信任立即失效，project-scope Workflow 的主动保存、替换或删除要求重新显式信任。
+- Workspace Control Trust 管理仓库提供的 Project Authority；用户点击“始终允许”产生的精确 scoped grant 和 Skill 启停偏好保存在平台用户配置目录旁的 `workspace-grants.json`。Grant Store 位于 Workspace 外，使用 canonical Workspace identity、跨进程锁、原子写入、配额和 owner-private 权限。Project deny 优先于 User Grant，未信任 Project allow 仍被忽略。
+- 工作区模型选择不参与 Project Control fingerprint，只使用 `workspace-model-selection` 专用信任。正式选择会登记 selection 内容指纹；外部修改或 reset 会使旧选择失效。选择模型不会刷新、撤销或扩大 Project Control Trust，仓库不能仅靠预置 `selection.json` 切换 Provider 或昂贵模型。
 - 未信任项目 Skill 仍可作为仓库上下文读取，但不能覆盖 user/bundled Skill，也不能声明 `model` 或 `allowed_tools` 来改变治理状态。
-- Transaction rollback 记录父目录链的设备/文件身份。父目录在 track 后被 symlink、junction 或另一个目录替换时会 fail closed、保留 backup，并允许管理员修复路径后重试；POSIX 恢复通过验证后的目录描述符原子替换。
+- Transaction rollback 记录父目录链的设备/文件身份。POSIX 从已验证 Workspace root fd 开始逐级以 `O_DIRECTORY | O_NOFOLLOW` 打开，并把最终父目录 fd 持有到临时文件写入、rename/unlink 和 fsync 完成；验证后的路径交换只能作用于已经打开的原目录。Windows 在恢复关键区间持有不共享 delete 的目录 handle，并拒绝 reparse point。无法安全证明的新目录删除会 fail closed，状态保持 `rollback_partial`、保留 backup/metadata，路径修复后可以 retry。
 - Provider credential scope 使用不公开的随机 generation；凭据轮换会得到新的 Provider instance，旧 thought signature/private continuation 不会跨账号转发。Provider worker 在 `thread.start()` 失败时也会释放 inflight 槽。
 - MCP/LSP 使用 `strict-service` 子进程环境，不继承 `PYTHONPATH`、`NODE_PATH`、`PSMODULEPATH`、`PYTHONHOME`、虚拟环境路径等代码加载变量；普通 build/test 命令仍使用兼容的 workspace-command profile。
 - ArtifactStore 使用统一 Session 目录、真实文件 `stat` 计算配额、跨进程文件锁和 durable reference set。仍被历史 Session transcript 引用的 `[full:artifact-id]` 不会被 TTL/LRU 清理。
 - 目录型 `read_file` 会过滤 `.env`、`.git`、`.nz-coder` 等私有名称；GitHub Actions checkout 禁止持久化仓库凭据。
 
-仍需明确保留的边界：路径策略和环境清洗不是 OS sandbox；Webfetch 在 DNS TOCTOU 与显式代理模式下仍需要单独的网络隔离策略；Windows junction 的真实行为以 Windows CI/实机结果为准；Actions 完整 SHA 固定应由可验证的依赖更新流程完成，不能离线编造。
+仍需明确保留的边界：Shell、路径策略和环境清洗不是 OS sandbox；Webfetch 的代理语义和 DNS TOCTOU 没有被宣称彻底消除；临时 shell API Key 的 Provider continuation 仍只保证 process-scoped generation；Artifact 历史引用扫描仍是有界扫描，不能宣称严格永久保留；Windows junction 的真实行为必须以 Windows CI/实机结果为准；Actions 尚未固定完整 SHA，应由可验证的依赖更新流程完成，不能离线编造。
