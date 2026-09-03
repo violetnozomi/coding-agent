@@ -32,6 +32,29 @@ class _Backup:
     parent_chain: tuple[_PathIdentity, ...]
 
 
+@dataclass
+class _RecoveryParent:
+    """Stable parent authority held across validation and recovery I/O."""
+
+    fd: int | None = None
+    windows_handles: tuple[int, ...] = ()
+
+    def close(self) -> None:
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+        if self.windows_handles:
+            import ctypes
+            from ctypes import wintypes
+
+            close_handle = ctypes.windll.kernel32.CloseHandle
+            close_handle.argtypes = (wintypes.HANDLE,)
+            close_handle.restype = wintypes.BOOL
+            for handle in reversed(self.windows_handles):
+                close_handle(wintypes.HANDLE(handle))
+            self.windows_handles = ()
+
+
 class TransactionManager:
     """Track edits and retain failed rollback entries for a later retry."""
 
@@ -110,16 +133,20 @@ class TransactionManager:
         deleted: list[str] = []
         failed: dict[str, _Backup] = {}
         for key, record in tuple(self._backups.items()):
+            parent: _RecoveryParent | None = None
             try:
-                self._validate_recovery_target(record)
+                parent = self._validate_recovery_target(record)
                 if record.backup is None:
-                    self._delete_new_target(record.target)
+                    self._delete_new_target(record, parent)
                     deleted.append(record.relative)
                 else:
-                    self._restore_backup(record.target, record.backup)
+                    self._restore_backup(record, record.backup, parent)
                     restored.append(record.relative)
             except (OSError, ValueError, RuntimeError):
                 failed[key] = record
+            finally:
+                if parent is not None:
+                    parent.close()
         self._backups = failed
         lines = [f"  Restored: {path}" for path in restored]
         lines.extend(f"  Deleted (new target reverted): {path}" for path in deleted)
@@ -135,12 +162,14 @@ class TransactionManager:
             self._active = False
         return "Rolled back changes:\n" + "\n".join(lines) if lines else ""
 
-    def _validate_recovery_target(self, record: _Backup) -> None:
+    def _validate_recovery_target(self, record: _Backup) -> _RecoveryParent:
         root = current_workdir().resolve(strict=True)
         try:
             record.target.relative_to(root)
         except ValueError as exc:
             raise ValueError("Transaction recovery target escapes workspace") from exc
+        if os.name != "nt":
+            return self._open_recovery_parent_posix(root, record)
         for identity in record.parent_chain:
             try:
                 info = identity.path.lstat()
@@ -148,22 +177,98 @@ class TransactionManager:
                 raise ValueError("Transaction recovery parent identity changed") from exc
             if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
                 raise ValueError("Transaction recovery parent is unsafe")
-            if (int(info.st_dev), int(info.st_ino)) != (
-                identity.device,
-                identity.inode,
-            ):
-                raise ValueError("Transaction recovery parent identity changed")
+        return self._open_recovery_parent_windows(record)
+
+    def _open_recovery_parent_posix(
+        self,
+        root: Path,
+        record: _Backup,
+    ) -> _RecoveryParent:
+        """Traverse from the verified root and retain the final parent fd."""
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        descriptor = os.open(root, flags)
+        try:
+            self._verify_opened_directory(descriptor, record.parent_chain[0])
+            relative = record.target.parent.relative_to(root)
+            for index, part in enumerate(relative.parts, start=1):
+                child = os.open(part, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+                if index < len(record.parent_chain):
+                    self._verify_opened_directory(
+                        descriptor, record.parent_chain[index]
+                    )
+                else:
+                    info = os.fstat(descriptor)
+                    if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                        raise ValueError("Transaction recovery parent is unsafe")
+            return _RecoveryParent(fd=descriptor)
+        except Exception:
+            os.close(descriptor)
+            raise
+
+    def _open_recovery_parent_windows(self, record: _Backup) -> _RecoveryParent:
+        """Lock each existing parent against rename/delete for the I/O window."""
+        import ctypes
+        from ctypes import wintypes
+
+        create_file = ctypes.windll.kernel32.CreateFileW
+        create_file.argtypes = (
+            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+            wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+        )
+        create_file.restype = wintypes.HANDLE
+        handles: list[int] = []
+        share_read_write = 0x00000001 | 0x00000002
+        flags = 0x02000000 | 0x00200000
+        invalid = ctypes.c_void_p(-1).value
+        paths = [identity.path for identity in record.parent_chain]
         last = record.parent_chain[-1].path
-        relative_parent = record.target.parent.relative_to(last)
         cursor = last
-        for part in relative_parent.parts:
+        for part in record.target.parent.relative_to(last).parts:
             cursor = cursor / part
-            try:
-                info = cursor.lstat()
-            except OSError as exc:
-                raise ValueError("Transaction recovery parent is unavailable") from exc
-            if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
-                raise ValueError("Transaction recovery parent is unsafe")
+            paths.append(cursor)
+        try:
+            for index, path in enumerate(paths):
+                handle = create_file(
+                    str(path), 0x00000080, share_read_write, None, 3, flags, None
+                )
+                value = (
+                    int(getattr(handle, "value", handle))
+                    if handle is not None else invalid
+                )
+                if value == invalid:
+                    raise OSError(ctypes.get_last_error(), "cannot lock recovery parent")
+                handles.append(value)
+                info = path.lstat()
+                if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                    raise ValueError("Transaction recovery parent is unsafe")
+                if index < len(record.parent_chain):
+                    expected = record.parent_chain[index]
+                    if (int(info.st_dev), int(info.st_ino)) != (
+                        expected.device, expected.inode,
+                    ):
+                        raise ValueError("Transaction recovery parent identity changed")
+            return _RecoveryParent(windows_handles=tuple(handles))
+        except Exception:
+            close_handle = ctypes.windll.kernel32.CloseHandle
+            close_handle.argtypes = (wintypes.HANDLE,)
+            close_handle.restype = wintypes.BOOL
+            for handle in reversed(handles):
+                close_handle(wintypes.HANDLE(handle))
+            raise
+
+    @classmethod
+    def _verify_opened_directory(cls, descriptor: int, expected: _PathIdentity) -> None:
+        info = os.fstat(descriptor)
+        if cls._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+            raise ValueError("Transaction recovery parent is unsafe")
+        if (int(info.st_dev), int(info.st_ino)) != (expected.device, expected.inode):
+            raise ValueError("Transaction recovery parent identity changed")
 
     @classmethod
     def _capture_parent_chain(
@@ -199,15 +304,17 @@ class TransactionManager:
         reparse = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
         return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse)
 
-    def _restore_backup(self, target: Path, backup: Path) -> None:
+    def _restore_backup(
+        self,
+        record: _Backup,
+        backup: Path,
+        parent: _RecoveryParent,
+    ) -> None:
         """Restore through a same-directory fsynced temporary and atomic replace."""
-        record = self._backups.get(str(target))
-        if record is None:
-            raise RuntimeError("Transaction recovery metadata is unavailable")
-        self._validate_recovery_target(record)
         if os.name != "nt":
-            self._restore_backup_posix(record, backup)
+            self._restore_backup_posix(record, backup, parent)
             return
+        target = record.target
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=f".{target.name}.",
             suffix=".rollback",
@@ -228,20 +335,19 @@ class TransactionManager:
                 os.close(descriptor)
             temporary.unlink(missing_ok=True)
 
-    def _restore_backup_posix(self, record: _Backup, backup: Path) -> None:
+    def _restore_backup_posix(
+        self,
+        record: _Backup,
+        backup: Path,
+        parent: _RecoveryParent,
+    ) -> None:
         """Restore relative to a verified directory descriptor on POSIX."""
-        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-        parent_fd = os.open(record.target.parent, flags)
+        parent_fd = parent.fd
+        if parent_fd is None:
+            raise RuntimeError("Transaction recovery parent handle is unavailable")
         temporary_name = f".{record.target.name}.{uuid.uuid4().hex}.rollback"
         descriptor = -1
         try:
-            info = os.fstat(parent_fd)
-            if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
-                raise ValueError("Transaction recovery parent is unsafe")
-            if record.parent_chain[-1].path == record.target.parent:
-                expected = record.parent_chain[-1]
-                if (int(info.st_dev), int(info.st_ino)) != (expected.device, expected.inode):
-                    raise ValueError("Transaction recovery parent identity changed")
             descriptor = os.open(
                 temporary_name,
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL,
@@ -267,9 +373,25 @@ class TransactionManager:
                 os.unlink(temporary_name, dir_fd=parent_fd)
             except FileNotFoundError:
                 pass
-            os.close(parent_fd)
 
-    def _delete_new_target(self, target: Path) -> None:
+    def _delete_new_target(
+        self,
+        record: _Backup,
+        parent: _RecoveryParent,
+    ) -> None:
+        target = record.target
+        if os.name != "nt":
+            if parent.fd is None:
+                raise RuntimeError("Transaction recovery parent handle is unavailable")
+            try:
+                info = os.stat(target.name, dir_fd=parent.fd, follow_symlinks=False)
+            except FileNotFoundError:
+                return
+            if stat.S_ISDIR(info.st_mode):
+                raise ValueError("Transaction cannot safely remove a new directory")
+            os.unlink(target.name, dir_fd=parent.fd)
+            os.fsync(parent.fd)
+            return
         try:
             target.lstat()
         except FileNotFoundError:
@@ -277,7 +399,7 @@ class TransactionManager:
         if target.is_symlink() or target.is_file():
             target.unlink()
         elif target.is_dir():
-            shutil.rmtree(target)
+            raise ValueError("Transaction cannot safely remove a new directory")
         else:
             target.unlink()
         self._fsync_directory(target.parent)
