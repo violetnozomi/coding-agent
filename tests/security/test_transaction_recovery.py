@@ -367,6 +367,30 @@ def test_nonexistent_parent_created_after_track_cannot_escape(tmp_path):
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows junction semantics")
+def test_windows_handle_relative_restore_works(tmp_path):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.transaction import TransactionManager
+
+    target = tmp_path / "module.py"
+    target.write_text("before", encoding="utf-8")
+    transaction = TransactionManager()
+
+    with scoped_workdir(tmp_path):
+        transaction.begin()
+        transaction.track("module.py")
+        target.write_text("after", encoding="utf-8")
+        record = next(iter(transaction._backups.values()))
+        assert record.backup is not None
+        parent = transaction._validate_recovery_target(record)
+        try:
+            transaction._restore_backup_windows(record, record.backup, parent)
+        finally:
+            parent.close()
+
+    assert target.read_text(encoding="utf-8") == "before"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction semantics")
 def test_windows_parent_swap_during_recovery_is_blocked_or_fails_closed(
     tmp_path, monkeypatch,
 ):

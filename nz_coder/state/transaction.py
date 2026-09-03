@@ -52,7 +52,8 @@ class _RecoveryParent:
             import ctypes
             from ctypes import wintypes
 
-            close_handle = ctypes.windll.kernel32.CloseHandle
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            close_handle = kernel32.CloseHandle
             close_handle.argtypes = (wintypes.HANDLE,)
             close_handle.restype = wintypes.BOOL
             for handle in reversed(self.windows_handles):
@@ -221,7 +222,8 @@ class TransactionManager:
         import ctypes
         from ctypes import wintypes
 
-        create_file = ctypes.windll.kernel32.CreateFileW
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
         create_file.argtypes = (
             wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
             wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
@@ -260,7 +262,7 @@ class TransactionManager:
                         raise ValueError("Transaction recovery parent identity changed")
             return _RecoveryParent(windows_handles=tuple(handles))
         except Exception:
-            close_handle = ctypes.windll.kernel32.CloseHandle
+            close_handle = kernel32.CloseHandle
             close_handle.argtypes = (wintypes.HANDLE,)
             close_handle.restype = wintypes.BOOL
             for handle in reversed(handles):
@@ -335,7 +337,8 @@ class TransactionManager:
         if parent_handle is None:
             raise RuntimeError("Transaction recovery parent handle is unavailable")
 
-        create_file = ctypes.windll.kernel32.CreateFileW
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
         create_file.argtypes = (
             wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
             wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
@@ -348,30 +351,37 @@ class TransactionManager:
         if value == ctypes.c_void_p(-1).value:
             raise OSError(ctypes.get_last_error(), "cannot open transaction backup")
 
-        class _FileRenameInfo(ctypes.Structure):
+        class _FileRenameInfoHeader(ctypes.Structure):
             _fields_ = (
                 ("replace_if_exists", wintypes.BOOLEAN),
                 ("root_directory", wintypes.HANDLE),
                 ("file_name_length", wintypes.DWORD),
-                ("file_name", wintypes.WCHAR * (len(record.target.name) + 1)),
+                ("file_name", wintypes.WCHAR * 1),
             )
 
-        close_handle = ctypes.windll.kernel32.CloseHandle
+        close_handle = kernel32.CloseHandle
         close_handle.argtypes = (wintypes.HANDLE,)
         close_handle.restype = wintypes.BOOL
         try:
-            info = _FileRenameInfo()
+            file_name = record.target.name.encode("utf-16-le")
+            buffer_size = ctypes.sizeof(_FileRenameInfoHeader) + len(file_name)
+            buffer = ctypes.create_string_buffer(buffer_size)
+            info = _FileRenameInfoHeader.from_buffer(buffer)
             info.replace_if_exists = True
             info.root_directory = wintypes.HANDLE(parent_handle)
-            info.file_name_length = len(record.target.name.encode("utf-16-le"))
-            info.file_name = record.target.name
-            rename = ctypes.windll.kernel32.SetFileInformationByHandle
+            info.file_name_length = len(file_name)
+            ctypes.memmove(
+                ctypes.addressof(buffer) + _FileRenameInfoHeader.file_name.offset,
+                file_name,
+                len(file_name),
+            )
+            rename = kernel32.SetFileInformationByHandle
             rename.argtypes = (
                 wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
             )
             rename.restype = wintypes.BOOL
             if not rename(
-                wintypes.HANDLE(value), 3, ctypes.byref(info), ctypes.sizeof(info)
+                wintypes.HANDLE(value), 3, buffer, buffer_size
             ):
                 raise OSError(ctypes.get_last_error(), "cannot restore transaction backup")
         finally:
@@ -450,7 +460,8 @@ class TransactionManager:
         parent_handle = parent.windows_parent_handle
         if parent_handle is None:
             raise RuntimeError("Transaction recovery parent handle is unavailable")
-        create_file = ctypes.windll.kernel32.CreateFileW
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
         create_file.argtypes = (
             wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
             wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
@@ -469,7 +480,7 @@ class TransactionManager:
             if error in {2, 3}:
                 return
             raise OSError(error, "cannot open transaction target")
-        close_handle = ctypes.windll.kernel32.CloseHandle
+        close_handle = kernel32.CloseHandle
         close_handle.argtypes = (wintypes.HANDLE,)
         close_handle.restype = wintypes.BOOL
         try:
@@ -482,7 +493,7 @@ class TransactionManager:
                 _fields_ = (("delete_file", wintypes.BOOLEAN),)
 
             disposition = _FileDispositionInfo(True)
-            delete = ctypes.windll.kernel32.SetFileInformationByHandle
+            delete = kernel32.SetFileInformationByHandle
             delete.argtypes = (
                 wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
             )
@@ -501,7 +512,8 @@ class TransactionManager:
         import ctypes
         from ctypes import wintypes
 
-        final_path = ctypes.windll.kernel32.GetFinalPathNameByHandleW
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        final_path = kernel32.GetFinalPathNameByHandleW
         final_path.argtypes = (
             wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD,
         )
