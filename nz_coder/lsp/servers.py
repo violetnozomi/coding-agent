@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.languages import LSP_LANGUAGES, lsp_command_config_key
 from nz_coder.foundation.workspace_trust import WorkspaceTrustStore
 
 
@@ -147,6 +148,14 @@ _SPECS = (
     ),
 )
 
+if tuple(spec.language for spec in _SPECS) != LSP_LANGUAGES:
+    raise RuntimeError("LSP server specifications and config languages diverged")
+
+
+def language_server_specs() -> tuple[LanguageServerSpec, ...]:
+    """Expose immutable server metadata for schema parity verification."""
+    return _SPECS
+
 
 def _spec_for_path(path: Path) -> LanguageServerSpec | None:
     suffix = path.suffix.lower()
@@ -219,7 +228,7 @@ def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
     ):
         root = root.parent.resolve()
     analysis_paths: tuple[Path, ...] = ()
-    override = config.get(f"NZ_LSP_{spec.language.upper()}_COMMAND", "").strip()
+    override = config.get(lsp_command_config_key(spec.language), "").strip()
     commands = (_split_override(override),) if override else spec.commands
     for command in commands:
         if not command:
@@ -313,7 +322,7 @@ def available_server_summary(path: Path) -> str:
     if spec is None:
         return f"No LSP server is configured for extension '{path.suffix or path.name}'."
     candidates = ", ".join(Path(command[0]).name for command in spec.commands)
-    override = f"NZ_LSP_{spec.language.upper()}_COMMAND"
+    override = lsp_command_config_key(spec.language)
     return (
         f"No installed LSP server found for {spec.language}. "
         f"Install one of: {candidates}; or set {override}."

@@ -198,6 +198,83 @@ def test_windows_lsp_override_preserves_backslashes_and_quoted_paths():
     )
 
 
+def _lsp_config_snapshot(tmp_path, workspace, *, environment=None, user_text=""):
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    user_config = tmp_path / "user.env"
+    if user_text:
+        user_config.write_text(user_text, encoding="utf-8")
+    return load_config_snapshot(
+        workspace,
+        environ=environment or {},
+        user_config_path=user_config,
+        trust_store=WorkspaceTrustStore(tmp_path / "trust.json"),
+    )
+
+
+def test_all_lsp_specs_have_matching_config_schema_entries():
+    from nz_coder.foundation.workspace_trust import CONFIG_SCHEMA
+    from nz_coder.lsp.servers import language_server_specs
+
+    expected = {
+        f"NZ_LSP_{spec.language.upper()}_COMMAND" for spec in language_server_specs()
+    }
+    assert expected <= set(CONFIG_SCHEMA)
+    assert all(CONFIG_SCHEMA[key].value_type == "string" for key in expected)
+    assert all(CONFIG_SCHEMA[key].workspace_trust_required for key in expected)
+
+
+def test_typescript_lsp_command_loads_from_user_config(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    snapshot = _lsp_config_snapshot(
+        tmp_path, workspace,
+        user_text="NZ_LSP_TYPESCRIPT_COMMAND=typescript-language-server --stdio\n",
+    )
+    assert snapshot.get("NZ_LSP_TYPESCRIPT_COMMAND") == (
+        "typescript-language-server --stdio"
+    )
+
+
+def test_go_lsp_command_loads_from_explicit_environment(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    snapshot = _lsp_config_snapshot(
+        tmp_path, workspace, environment={"NZ_LSP_GO_COMMAND": "gopls -remote=auto"}
+    )
+    assert snapshot.get("NZ_LSP_GO_COMMAND") == "gopls -remote=auto"
+
+
+def test_workspace_typescript_lsp_command_requires_exact_trust(tmp_path):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    (workspace / ".env").write_text(
+        "NZ_LSP_TYPESCRIPT_COMMAND=repo-ts-server --stdio\n", encoding="utf-8"
+    )
+    untrusted = _lsp_config_snapshot(tmp_path, workspace)
+    assert untrusted.get("NZ_LSP_TYPESCRIPT_COMMAND", "") == ""
+
+    store = WorkspaceTrustStore(tmp_path / "trust.json")
+    store.trust(workspace, "workspace-config", untrusted.workspace_fingerprint)
+    trusted = _lsp_config_snapshot(tmp_path, workspace)
+    assert trusted.get("NZ_LSP_TYPESCRIPT_COMMAND") == "repo-ts-server --stdio"
+
+
+def test_windows_quoted_lsp_command_survives_schema_loading(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    command = r'"C:\Program Files\TypeScript\server.cmd" --stdio'
+    snapshot = _lsp_config_snapshot(
+        tmp_path, workspace, environment={"NZ_LSP_TYPESCRIPT_COMMAND": command}
+    )
+    assert snapshot.get("NZ_LSP_TYPESCRIPT_COMMAND") == command
+
+
 def test_windows_file_uri_roundtrip_removes_uri_drive_prefix():
     from nz_coder.lsp.client import uri_to_path
 
