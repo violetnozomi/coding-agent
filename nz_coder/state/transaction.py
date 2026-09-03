@@ -244,6 +244,7 @@ class TransactionManager:
         from ctypes import wintypes
 
         from nz_coder.foundation.project_control import (
+            UnsafeProjectControl,
             _windows_close,
             _windows_final_path,
             _windows_handle_info,
@@ -289,6 +290,9 @@ class TransactionManager:
                 return _Backup(target, relative, None, tuple(chain))
             handles.append(source)
             attributes, device, inode, size = _windows_handle_info(source, full=True)
+            original_mode, original_atime_ns, original_mtime_ns = (
+                self._windows_handle_metadata(source, attributes)
+            )
             backup = self._backup_path(target)
             destination = os.open(
                 backup,
@@ -346,10 +350,16 @@ class TransactionManager:
                 if destination >= 0:
                     os.close(destination)
             after = _windows_handle_info(source, full=True)
-            if after != (attributes, device, inode, size):
+            after_mode, _after_atime_ns, after_mtime_ns = (
+                self._windows_handle_metadata(source, after[0])
+            )
+            if (
+                after != (attributes, device, inode, size)
+                or after_mode != original_mode
+                or after_mtime_ns != original_mtime_ns
+            ):
                 backup.unlink(missing_ok=True)
                 raise ValueError("Transaction target changed during backup")
-            info = target.stat()
             if os.path.normcase(os.path.dirname(_windows_final_path(source))) != os.path.normcase(
                 _windows_final_path(parent_handle)
             ):
@@ -362,16 +372,59 @@ class TransactionManager:
                 tuple(chain),
                 target_device=device,
                 target_inode=inode,
-                original_mode=int(info.st_mode),
-                original_atime_ns=int(info.st_atime_ns),
-                original_mtime_ns=int(info.st_mtime_ns),
+                original_mode=original_mode,
+                original_atime_ns=original_atime_ns,
+                original_mtime_ns=original_mtime_ns,
                 original_size=size,
             )
+        except UnsafeProjectControl as exc:
+            raise ValueError(
+                "Transaction target is outside the safe workspace boundary"
+            ) from exc
         except Exception:
             raise
         finally:
             for handle in reversed(handles):
                 _windows_close(handle)
+
+    @staticmethod
+    def _windows_handle_metadata(
+        handle: int,
+        attributes: int,
+    ) -> tuple[int, int, int]:
+        """Return mode and Unix nanosecond times from an already-open handle."""
+        import ctypes
+        from ctypes import wintypes
+
+        class _ByHandleFileInformation(ctypes.Structure):
+            _fields_ = (
+                ("file_attributes", wintypes.DWORD),
+                ("creation_time", wintypes.FILETIME),
+                ("last_access_time", wintypes.FILETIME),
+                ("last_write_time", wintypes.FILETIME),
+                ("volume_serial_number", wintypes.DWORD),
+                ("file_size_high", wintypes.DWORD),
+                ("file_size_low", wintypes.DWORD),
+                ("number_of_links", wintypes.DWORD),
+                ("file_index_high", wintypes.DWORD),
+                ("file_index_low", wintypes.DWORD),
+            )
+
+        info = _ByHandleFileInformation()
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        query = kernel32.GetFileInformationByHandle
+        query.argtypes = (wintypes.HANDLE, ctypes.POINTER(_ByHandleFileInformation))
+        query.restype = wintypes.BOOL
+        if not query(wintypes.HANDLE(handle), ctypes.byref(info)):
+            raise OSError(ctypes.get_last_error(), "cannot inspect transaction target")
+
+        def _unix_ns(value: wintypes.FILETIME) -> int:
+            ticks = (int(value.dwHighDateTime) << 32) | int(value.dwLowDateTime)
+            return max(0, ticks - 116_444_736_000_000_000) * 100
+
+        write_bits = 0 if attributes & 0x00000001 else 0o222
+        mode = stat.S_IFREG | 0o444 | write_bits
+        return mode, _unix_ns(info.last_access_time), _unix_ns(info.last_write_time)
 
     def commit(self) -> None:
         """Commit and discard every recovery snapshot."""
@@ -427,13 +480,6 @@ class TransactionManager:
             raise ValueError("Transaction recovery target escapes workspace") from exc
         if os.name != "nt":
             return self._open_recovery_parent_posix(root, record)
-        for identity in record.parent_chain:
-            try:
-                info = identity.path.lstat()
-            except OSError as exc:
-                raise ValueError("Transaction recovery parent identity changed") from exc
-            if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
-                raise ValueError("Transaction recovery parent is unsafe")
         return self._open_recovery_parent_windows(record)
 
     def _open_recovery_parent_posix(
@@ -470,20 +516,14 @@ class TransactionManager:
 
     def _open_recovery_parent_windows(self, record: _Backup) -> _RecoveryParent:
         """Lock each existing parent against rename/delete for the I/O window."""
-        import ctypes
-        from ctypes import wintypes
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        create_file = kernel32.CreateFileW
-        create_file.argtypes = (
-            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
-            wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+        from nz_coder.foundation.project_control import (
+            UnsafeProjectControl,
+            _windows_close,
+            _windows_handle_info,
+            _windows_open,
         )
-        create_file.restype = wintypes.HANDLE
+
         handles: list[int] = []
-        share_read_write = 0x00000001 | 0x00000002
-        flags = 0x02000000 | 0x00200000
-        invalid = ctypes.c_void_p(-1).value
         paths = [identity.path for identity in record.parent_chain]
         last = record.parent_chain[-1].path
         cursor = last
@@ -492,32 +532,29 @@ class TransactionManager:
             paths.append(cursor)
         try:
             for index, path in enumerate(paths):
-                handle = create_file(
-                    str(path), 0x00000080, share_read_write, None, 3, flags, None
+                handle = _windows_open(
+                    path,
+                    directory=True,
+                    parent=handles[-1] if handles else None,
                 )
-                value = (
-                    int(getattr(handle, "value", handle))
-                    if handle is not None else invalid
-                )
-                if value == invalid:
-                    raise OSError(ctypes.get_last_error(), "cannot lock recovery parent")
-                handles.append(value)
-                info = path.lstat()
-                if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
-                    raise ValueError("Transaction recovery parent is unsafe")
+                assert handle is not None
+                handles.append(handle)
                 if index < len(record.parent_chain):
                     expected = record.parent_chain[index]
-                    if (int(info.st_dev), int(info.st_ino)) != (
-                        expected.device, expected.inode,
-                    ):
+                    _attributes, device, inode, _size = _windows_handle_info(
+                        handle,
+                        full=True,
+                    )
+                    if (device, inode) != (expected.device, expected.inode):
                         raise ValueError("Transaction recovery parent identity changed")
             return _RecoveryParent(windows_handles=tuple(handles))
-        except Exception:
-            close_handle = kernel32.CloseHandle
-            close_handle.argtypes = (wintypes.HANDLE,)
-            close_handle.restype = wintypes.BOOL
+        except UnsafeProjectControl as exc:
             for handle in reversed(handles):
-                close_handle(wintypes.HANDLE(handle))
+                _windows_close(handle)
+            raise ValueError("Transaction recovery parent is unsafe") from exc
+        except Exception:
+            for handle in reversed(handles):
+                _windows_close(handle)
             raise
 
     @classmethod

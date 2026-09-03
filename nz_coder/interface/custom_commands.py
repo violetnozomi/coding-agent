@@ -214,6 +214,9 @@ def _parse_command_bytes(path: Path, source: str, payload: bytes) -> PromptComma
 
 
 def _parse_command_text(path: Path, source: str, raw: str) -> PromptCommand:
+    # Snapshot bytes preserve the on-disk newline convention.  Normalize it so
+    # immutable project commands parse identically on Windows and POSIX.
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
     name = path.stem.lower()
     if not _NAME.fullmatch(name):
         raise CommandParseError(path, "filename must match [a-z0-9][a-z0-9_-]*.md")

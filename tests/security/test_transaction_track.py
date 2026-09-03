@@ -105,15 +105,33 @@ def test_transaction_backup_matches_opened_target_identity(tmp_path):
 
     target = tmp_path / "module.py"
     target.write_text("before", encoding="utf-8")
-    expected = target.stat()
+    if os.name == "nt":
+        from nz_coder.foundation.project_control import (
+            _windows_close,
+            _windows_handle_info,
+            _windows_open,
+        )
+
+        handle = _windows_open(target, directory=False)
+        assert handle is not None
+        try:
+            _attributes, expected_device, expected_inode, _size = (
+                _windows_handle_info(handle, full=True)
+            )
+        finally:
+            _windows_close(handle)
+    else:
+        expected = target.stat()
+        expected_device = int(expected.st_dev)
+        expected_inode = int(expected.st_ino)
     with scoped_workdir(tmp_path):
         manager = _manager(tmp_path)
         manager.track("module.py")
     record = next(iter(manager._backups.values()))
     assert (record.target_device, record.target_inode) == (
-        int(expected.st_dev), int(expected.st_ino)
+        expected_device, expected_inode,
     )
-    assert record.original_size == expected.st_size
+    assert record.original_size == len(b"before")
     assert record.backup is not None
     assert record.backup.read_bytes() == b"before"
 

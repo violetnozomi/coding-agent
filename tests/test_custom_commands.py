@@ -90,6 +90,25 @@ def test_command_parser_rejects_unsafe_names_and_invalid_frontmatter(tmp_path):
     assert all(isinstance(error, CommandParseError) for error in catalog.errors)
 
 
+def test_command_frontmatter_accepts_windows_newlines(tmp_path):
+    from nz_coder.interface.custom_commands import CommandCatalog
+
+    command = tmp_path / "review.md"
+    command.write_bytes(
+        b"---\r\ndescription: Review a path\r\n"
+        b"allowed_tools:\r\n  - read_file\r\n"
+        b"---\r\nReview $ARGUMENTS\r\n"
+    )
+
+    catalog = CommandCatalog.discover(user_dir=tmp_path)
+
+    parsed = catalog.get("review")
+    assert parsed is not None
+    assert parsed.description == "Review a path"
+    assert parsed.allowed_tools == ("read_file",)
+    assert parsed.template == "Review $ARGUMENTS"
+
+
 def test_custom_commands_register_for_completion_without_overriding_builtins(tmp_path):
     from nz_coder.interface.commands import build_default_registry
     from nz_coder.interface.custom_commands import CommandCatalog, register_command_completion
