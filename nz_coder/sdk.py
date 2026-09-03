@@ -57,6 +57,7 @@ class AgentClient:
         question_asker=None,
         workflow_approval_asker=None,
         event_bus=None,
+        config_snapshot=None,
     ) -> RunResult:
         """Execute one immutable request through the production Agent runtime."""
         if not isinstance(request, RunRequest):
@@ -89,6 +90,7 @@ class AgentClient:
                 question_asker=question_asker,
                 workflow_approval_asker=workflow_approval_asker,
                 event_bus=event_bus,
+                config_snapshot=config_snapshot,
             ))
 
         messages = copy.deepcopy(list(request.messages))

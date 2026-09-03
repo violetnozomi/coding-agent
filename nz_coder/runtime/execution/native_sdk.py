@@ -28,18 +28,27 @@ class _ProductEventSink:
             self._callback(event)
 
 
-def build_product_run_environment(request: RunRequest, options: RunOptions):
+def build_product_run_environment(
+    request: RunRequest,
+    options: RunOptions,
+    *,
+    config_snapshot=None,
+):
     """Build the complete production capability graph for one product run."""
     if not isinstance(request, RunRequest):
         raise TypeError("build_product_run_environment requires RunRequest")
     if not isinstance(options, RunOptions):
         raise TypeError("build_product_run_environment requires RunOptions")
 
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+    run_snapshot = config_snapshot or load_config_snapshot(request.workspace)
     runtime = resolve_model_runtime(ModelSelectionRequest(
         provider_name=request.provider or request.agent.provider,
         model_id=request.model or request.agent.model,
         variant=request.reasoning_effort or request.agent.reasoning_effort,
         workspace=request.workspace,
+        config_snapshot=run_snapshot,
     ))
     store = (
         LegacyJsonSessionStore()
@@ -77,6 +86,8 @@ def build_product_run_environment(request: RunRequest, options: RunOptions):
                 event_bus_owned=owns_event_bus,
                 tool_allowlist=_tool_allowlist(request),
                 model_runtime=runtime,
+                manage_model_runtime=True,
+                config_snapshot=run_snapshot,
                 runtime_services=services,
             )
             if request.interaction_run_id:
@@ -133,6 +144,9 @@ class NativeSDKRunner:
         if not isinstance(request, RunRequest):
             raise TypeError("NativeSDKRunner requires RunRequest")
         selected = options or RunOptions()
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        run_snapshot = selected.config_snapshot or load_config_snapshot(request.workspace)
         effective_request = request
         if request.interaction_run_id is None:
             effective_request = replace(
@@ -142,6 +156,7 @@ class NativeSDKRunner:
         environment = self._environment or build_product_run_environment(
             effective_request,
             selected,
+            config_snapshot=run_snapshot,
         )
         owns_environment = self._environment is None
         messages = copy.deepcopy(list(effective_request.messages))
@@ -156,7 +171,26 @@ class NativeSDKRunner:
         async def execute(_owner, _messages, *_callbacks):
             return await environment.runner.run_result(effective_request, selected)
 
+        run_control = None
         try:
+            run_control = environment.prepare_run_control(
+                run_snapshot,
+                provider_name=(
+                    effective_request.provider
+                    or effective_request.agent.provider
+                    or environment.model_runtime.provider_id
+                ),
+                model_id=(
+                    effective_request.model
+                    or effective_request.agent.model
+                    or environment.model_runtime.model_id
+                ),
+                variant=(
+                    effective_request.reasoning_effort
+                    or effective_request.agent.reasoning_effort
+                    or environment.model_runtime.variant
+                ),
+            )
             result = await environment.runtime_host.run(
                 environment,
                 messages,
@@ -169,11 +203,19 @@ class NativeSDKRunner:
                     else selected.stream
                 ),
                 execute=execute,
+                run_control=run_control,
             )
             return replace(result, metadata={
                 **result.metadata,
                 "changed_files": environment.change_tracker.current_changed_paths(),
             })
+        except BaseException:
+            if (
+                run_control is not None
+                and getattr(environment, "_active_run_control", None) is run_control
+            ):
+                environment.retire_run_control(run_control)
+            raise
         finally:
             if owns_environment:
                 await asyncio.to_thread(environment.close)

@@ -404,7 +404,18 @@ def _build_agent(system_prompt: str, renderer: StreamingRenderer, session_id: st
     from nz_coder.providers.models import active_model_selection
     from nz_coder.runtime.execution.composition import build_product_environment
 
-    connection = provider_connection(active_model_selection().provider)
+    selection = (
+        active_model_selection(
+            current_workdir(), config_snapshot=config_snapshot,
+        )
+        if config_snapshot is not None
+        else active_model_selection()
+    )
+    connection = (
+        provider_connection(selection.provider, config_snapshot=config_snapshot)
+        if config_snapshot is not None
+        else provider_connection(selection.provider)
+    )
     return build_product_environment(
         system_prompt,
         renderer=renderer,
@@ -474,14 +485,21 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
     from nz_coder.providers.configuration import provider_connection
     from nz_coder.providers.models import active_model_selection
 
-    selection = active_model_selection()
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+    workspace_snapshot = load_config_snapshot(current_workdir())
+    selection = active_model_selection(
+        current_workdir(), config_snapshot=workspace_snapshot,
+    )
     record_recent_model(f"{selection.provider}/{selection.model_id}")
     # Rich and prompt_toolkit consume the same persisted semantic theme.
     from nz_coder.interface.preferences import load_terminal_preferences
     push_theme = getattr(console, "push_theme", None)
     if callable(push_theme):
         push_theme(rich_theme(load_terminal_preferences().theme))
-    connection = provider_connection(selection.provider)
+    connection = provider_connection(
+        selection.provider, config_snapshot=workspace_snapshot,
+    )
     credential_warning = ""
     if not connection.configured:
         credential_warning = (
@@ -490,20 +508,10 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             "Agent requests will fail until a provider is connected.[/error]"
         )
 
-    from nz_coder.foundation.workspace_trust import load_config_snapshot
-    from nz_coder.state.skills import SkillLoader
-
-    workspace_snapshot = load_config_snapshot(current_workdir())
-    run_skill_loader = SkillLoader(
-        project_dir=current_workdir() / ".nz-coder" / "skills",
-        workspace_trusted=workspace_snapshot.control_plane_trusted,
-        project_control_snapshot=workspace_snapshot.project_control,
-    )
     memory_mgr.load_all()
-    system_prompt = build(
-        memory_block="",
-        skill_descriptions=run_skill_loader.descriptions(),
-    )
+    # Project skill descriptions are attached by the per-submission Run
+    # Control. Keeping them out of this Session base avoids stale authority.
+    system_prompt = build(memory_block="", skill_descriptions="")
     renderer = StreamingRenderer()
     initial_session_id = activate_session(create_session_id())
     initial_environment = _build_agent(
@@ -604,15 +612,31 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
                 break
             continue
 
+        # Command expansion and Agent execution must share one submission
+        # snapshot. Completion UI may remain one frame behind, but authority
+        # never comes from the startup catalog.
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        submission_snapshot = load_config_snapshot(current_workdir())
+
         if stripped.startswith("!"):
             from nz_coder.interface.direct_shell import execute_direct_shell
+            from nz_coder.tool_platform.permissioning import PermissionManager
 
             command = stripped[1:].strip()
+            agent = session_state["agent"]
+            shell_permissions = PermissionManager(
+                agent.permissions.mode,
+                renderer=getattr(agent, "renderer", None),
+                asker=getattr(agent, "_permission_asker", None),
+                workspace_trusted=submission_snapshot.control_plane_trusted,
+                project_control_snapshot=submission_snapshot.project_control,
+            )
             try:
                 result = await asyncio.to_thread(
                     execute_direct_shell,
                     command,
-                    permissions=session_state["agent"].permissions,
+                    permissions=shell_permissions,
                 )
             except (asyncio.CancelledError, KeyboardInterrupt):
                 _consume_current_task_cancellation()
@@ -629,6 +653,9 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             continue
 
         if stripped.startswith("/"):
+            command_catalog = default_command_catalog(
+                current_workdir(), config_snapshot=submission_snapshot,
+            )
             registered = command_registry.get(stripped.split(maxsplit=1)[0])
             expanded_command = (
                 command_catalog.expand_invocation(stripped)
@@ -681,6 +708,13 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
 
         agent = session_state["agent"]
         controller = session_state["controller"]
+        submission_selection = active_model_selection(
+            current_workdir(), config_snapshot=submission_snapshot,
+        )
+        submission_provider = submission_selection.provider
+        submission_model = command_model or submission_selection.model_id
+        if command_model and "/" in command_model:
+            submission_provider, submission_model = command_model.split("/", 1)
         submission, attachments = input_ui.prepare_submission(stripped)
         _render_submission_metadata(
             stripped, attachments, input_ui.preferences.paste_summary, active_console
@@ -691,9 +725,9 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             workspace=current_workdir(),
             session_id=agent.session_id,
             agent="plan" if agent.permissions.mode == "plan" else "build",
-            provider_id=str(getattr(agent, "provider_id", "unknown")),
-            model_id=str(getattr(agent, "model_id", "unknown")),
-            variant=getattr(agent, "model_variant", None),
+            provider_id=submission_provider,
+            model_id=submission_model,
+            variant=submission_selection.variant,
             natural_text=stripped,
         )
         history.append(user_message)
@@ -716,6 +750,7 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
                 stream=True,
                 allowed_tools=command_allowed_tools,
                 model=command_model,
+                config_snapshot=submission_snapshot,
             ))
             if input_ui.fullscreen is not None:
                 input_ui.fullscreen.set_cancel_run(controller.cancel)

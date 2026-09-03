@@ -219,7 +219,9 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
             command_tools = expanded_command.allowed_tools
             command_model = expanded_command.model
         session_id = _session_id(args)
-        selected = active_model_selection(workspace)
+        selected = active_model_selection(
+            workspace, config_snapshot=workspace_snapshot,
+        )
         provider = args.provider or selected.provider
         model = args.model or command_model or selected.model_id
         if "/" in model and args.provider is None and command_model == model:
@@ -267,7 +269,11 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
                 stdout.flush()
 
         with scoped_config_snapshot(workspace_snapshot):
-            result = await client_factory().run(request, on_event=on_event)
+            client = client_factory()
+            run_kwargs = {"on_event": on_event}
+            if isinstance(client, AgentClient):
+                run_kwargs["config_snapshot"] = workspace_snapshot
+            result = await client.run(request, **run_kwargs)
     record = _result_record(result)
     if args.output == "text":
         if result.final_text:
