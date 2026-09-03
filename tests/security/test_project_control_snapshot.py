@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -430,3 +432,248 @@ def test_mcp_project_config_uses_snapshot_bytes(tmp_path, monkeypatch):
 
     assert server.command == ("trusted-a",)
     assert server.source == "project"
+
+
+def test_control_plane_rejects_symlinked_commands_parent(tmp_path):
+    _assert_control_parent_symlink_rejected(tmp_path, "commands", "entry.md")
+
+
+def test_control_plane_rejects_symlinked_workflows_parent(tmp_path):
+    _assert_control_parent_symlink_rejected(
+        tmp_path, "workflows", "entry.workflow.json"
+    )
+
+
+def test_control_plane_rejects_symlinked_skills_parent(tmp_path):
+    from nz_coder.foundation.project_control import (
+        UnsafeProjectControl,
+        capture_project_control_snapshot,
+    )
+
+    workspace = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    (workspace / ".nz-coder").mkdir(parents=True)
+    (outside / "entry").mkdir(parents=True)
+    (outside / "entry" / "SKILL.md").write_text(
+        "OUTSIDE-SECRET", encoding="utf-8"
+    )
+    (workspace / ".nz-coder" / "skills").symlink_to(
+        outside, target_is_directory=True
+    )
+    with pytest.raises(UnsafeProjectControl, match="unsafe") as error:
+        capture_project_control_snapshot(workspace)
+    assert "OUTSIDE-SECRET" not in str(error.value)
+    assert str(outside) not in str(error.value)
+
+
+def test_control_plane_rejects_symlinked_mcp_parent(tmp_path):
+    """The .nz-coder directory is the direct parent of mcp.json."""
+    from nz_coder.foundation.project_control import (
+        UnsafeProjectControl,
+        capture_project_control_snapshot,
+    )
+
+    workspace = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    workspace.mkdir()
+    outside.mkdir()
+    (outside / "mcp.json").write_text("OUTSIDE-SECRET", encoding="utf-8")
+    (workspace / ".nz-coder").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(UnsafeProjectControl, match="unsafe") as error:
+        capture_project_control_snapshot(workspace)
+    assert "OUTSIDE-SECRET" not in str(error.value)
+    assert str(outside) not in str(error.value)
+
+
+def _assert_control_parent_symlink_rejected(
+    tmp_path: Path, directory: str, filename: str
+) -> None:
+    from nz_coder.foundation.project_control import (
+        UnsafeProjectControl,
+        capture_project_control_snapshot,
+    )
+
+    workspace = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    (workspace / ".nz-coder").mkdir(parents=True)
+    outside.mkdir()
+    (outside / filename).write_text("OUTSIDE-SECRET", encoding="utf-8")
+    (workspace / ".nz-coder" / directory).symlink_to(
+        outside, target_is_directory=True
+    )
+    with pytest.raises(UnsafeProjectControl, match="unsafe") as error:
+        capture_project_control_snapshot(workspace)
+    assert "OUTSIDE-SECRET" not in str(error.value)
+    assert str(outside) not in str(error.value)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor race seam")
+def test_control_file_parent_swap_during_capture_fails_closed(tmp_path, monkeypatch):
+    from nz_coder.foundation import project_control
+
+    workspace = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    workspace.mkdir()
+    outside.mkdir()
+    (outside / "settings.json").write_text("OUTSIDE-SECRET", encoding="utf-8")
+    control = workspace / ".nz-coder"
+    control.mkdir()
+    original_open = project_control.os.open
+    swapped = False
+
+    def swap_after_root_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        descriptor = original_open(path, flags, *args, **kwargs)
+        if Path(path) == workspace and not swapped:
+            swapped = True
+            control.rename(workspace / ".nz-coder-opened")
+            control.symlink_to(outside, target_is_directory=True)
+        return descriptor
+
+    monkeypatch.setattr(project_control.os, "open", swap_after_root_open)
+    with pytest.raises(project_control.UnsafeProjectControl, match="unsafe") as error:
+        project_control.capture_project_control_snapshot(workspace)
+    assert "OUTSIDE-SECRET" not in str(error.value)
+    assert str(outside) not in str(error.value)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor race seam")
+def test_control_file_replacement_after_open_does_not_change_snapshot(
+    tmp_path, monkeypatch,
+):
+    from nz_coder.foundation import project_control
+
+    workspace = tmp_path / "repo"
+    command = workspace / ".nz-coder" / "commands" / "review.md"
+    command.parent.mkdir(parents=True)
+    command.write_text("OPENED-CONTENT", encoding="utf-8")
+    original_read = project_control.os.read
+    replaced = False
+
+    def replace_path_after_open(descriptor: int, size: int) -> bytes:
+        nonlocal replaced
+        if not replaced:
+            replaced = True
+            command.rename(command.with_suffix(".opened"))
+            command.write_text("REPLACEMENT", encoding="utf-8")
+        return original_read(descriptor, size)
+
+    monkeypatch.setattr(project_control.os, "read", replace_path_after_open)
+    snapshot = project_control.capture_project_control_snapshot(workspace)
+    assert snapshot.get(".nz-coder/commands/review.md").content == b"OPENED-CONTENT"
+
+
+def test_control_discovery_stops_at_file_limit_without_full_materialization(
+    tmp_path, monkeypatch,
+):
+    from nz_coder.foundation import project_control
+
+    commands = tmp_path / ".nz-coder" / "commands"
+    commands.mkdir(parents=True)
+    for index in range(3):
+        (commands / f"{index}.md").write_text(str(index), encoding="utf-8")
+    monkeypatch.setattr(project_control, "MAX_CONTROL_FILES", 2)
+    with pytest.raises(project_control.UnsafeProjectControl, match="file limit"):
+        project_control.capture_project_control_snapshot(tmp_path)
+
+
+def test_control_discovery_stops_at_byte_limit(tmp_path, monkeypatch):
+    from nz_coder.foundation import project_control
+
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_bytes(b"12345")
+    monkeypatch.setattr(project_control, "MAX_CONTROL_TOTAL_BYTES", 4)
+    with pytest.raises(project_control.UnsafeProjectControl, match="byte limit"):
+        project_control.capture_project_control_snapshot(tmp_path)
+
+
+def test_current_run_keeps_pinned_control_snapshot(tmp_path):
+    from nz_coder.foundation.workspace_trust import (
+        current_config_snapshot,
+        load_config_snapshot,
+        scoped_config_snapshot,
+    )
+
+    command = tmp_path / ".nz-coder" / "commands" / "review.md"
+    command.parent.mkdir(parents=True)
+    command.write_text("A", encoding="utf-8")
+    current = load_config_snapshot(tmp_path, environ={}, user_config_path=tmp_path / "user")
+    command.write_text("B", encoding="utf-8")
+    with scoped_config_snapshot(current):
+        pinned = current_config_snapshot(tmp_path)
+    assert pinned.project_control.get(".nz-coder/commands/review.md").content == b"A"
+
+
+def test_next_run_rejects_changed_untrusted_control_plane(tmp_path):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
+    command = tmp_path / ".nz-coder" / "commands" / "review.md"
+    command.parent.mkdir(parents=True)
+    command.write_text("A", encoding="utf-8")
+    store = WorkspaceTrustStore(tmp_path.parent / f"{tmp_path.name}-trust.json")
+    first = load_config_snapshot(
+        tmp_path, environ={}, user_config_path=tmp_path.parent / "missing", trust_store=store
+    )
+    store.trust(tmp_path, "workspace-control", first.control_fingerprint)
+    trusted = load_config_snapshot(
+        tmp_path, environ={}, user_config_path=tmp_path.parent / "missing", trust_store=store
+    )
+    assert trusted.control_plane_trusted is True
+    command.write_text("B", encoding="utf-8")
+    next_run = load_config_snapshot(
+        tmp_path, environ={}, user_config_path=tmp_path.parent / "missing", trust_store=store
+    )
+    assert next_run.control_plane_trusted is False
+    assert next_run.project_control.trusted is False
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction semantics")
+def test_windows_control_plane_rejects_junction_ancestor(tmp_path):
+    from nz_coder.foundation.project_control import (
+        UnsafeProjectControl,
+        capture_project_control_snapshot,
+    )
+
+    workspace = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    workspace.mkdir()
+    outside.mkdir()
+    (outside / "settings.json").write_text("OUTSIDE-SECRET", encoding="utf-8")
+    junction = workspace / ".nz-coder"
+    process = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(junction), str(outside)],
+        capture_output=True,
+        text=True,
+    )
+    assert process.returncode == 0, process.stderr
+    with pytest.raises(UnsafeProjectControl, match="unsafe"):
+        capture_project_control_snapshot(workspace)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows handle semantics")
+def test_windows_control_parent_swap_during_capture_is_blocked_or_fails_closed(
+    tmp_path, monkeypatch,
+):
+    from nz_coder.foundation import project_control
+
+    workspace = tmp_path / "repo"
+    command = workspace / ".nz-coder" / "commands" / "review.md"
+    command.parent.mkdir(parents=True)
+    command.write_text("OPENED-CONTENT", encoding="utf-8")
+    original_open = project_control._windows_open
+    attempted = False
+
+    def attempt_swap(path: Path, **kwargs):
+        nonlocal attempted
+        handle = original_open(path, **kwargs)
+        if Path(path) == command.parent and handle is not None and not attempted:
+            attempted = True
+            with pytest.raises(OSError):
+                command.parent.rename(command.parent.with_name("commands-moved"))
+        return handle
+
+    monkeypatch.setattr(project_control, "_windows_open", attempt_swap)
+    snapshot = project_control.capture_project_control_snapshot(workspace)
+    assert attempted is True
+    assert snapshot.get(".nz-coder/commands/review.md").content == b"OPENED-CONTENT"
