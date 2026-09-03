@@ -138,7 +138,7 @@ def test_command_discovery_metric_uses_the_production_catalog(tmp_path):
         )
 
     started = time.perf_counter()
-    catalog = CommandCatalog.discover(project_dir=command_dir)
+    catalog = CommandCatalog.discover(project_dir=command_dir, project_trusted=True)
     latency_ms = round((time.perf_counter() - started) * 1000, 3)
 
     assert len(catalog.list()) == 200

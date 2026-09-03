@@ -275,13 +275,23 @@ def test_headless_file_and_attach_share_filepart_pipeline(tmp_path):
     assert any(part["type"] == "file" for part in message["_nz_parts"])
 
 
-def test_headless_expands_project_command_and_narrows_tools(tmp_path):
+def test_headless_expands_project_command_and_narrows_tools(tmp_path, monkeypatch):
     commands = tmp_path / ".nz-coder" / "commands"
     commands.mkdir(parents=True)
     (commands / "review.md").write_text(
         "---\ndescription: Review scope\nallowed_tools:\n  - read_file\n  - grep_search\n"
         "---\nReview only: $ARGUMENTS",
         encoding="utf-8",
+    )
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+    trust_path = tmp_path.parent / f"{tmp_path.name}-command-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    snapshot = load_config_snapshot(tmp_path)
+    WorkspaceTrustStore(trust_path).trust(
+        tmp_path, "workspace-control", snapshot.control_fingerprint
     )
 
     code, _stdout, stderr, client = _run(["/review", "src/runtime"], tmp_path)
@@ -292,6 +302,35 @@ def test_headless_expands_project_command_and_narrows_tools(tmp_path):
     assert request.messages[0]["content"].endswith("Review only: src/runtime")
     assert request.tool_names == ("read_file", "grep_search")
     assert request.agent.allowed_tools == ("read_file", "grep_search")
+
+
+def test_headless_uses_target_workspace_skill_trust(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    skill = tmp_path / ".nz-coder" / "skills" / "repo-review" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text(
+        "---\nname: repo-review\ndescription: Target workspace marker\n"
+        "---\nTARGET_WORKSPACE_SKILL_MARKER\n",
+        encoding="utf-8",
+    )
+    trust_path = tmp_path.parent / f"{tmp_path.name}-headless-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+
+    _code, _stdout, _stderr, untrusted_client = _run(["inspect"], tmp_path)
+    assert "TARGET_WORKSPACE_SKILL_MARKER" not in (
+        untrusted_client.requests[0].agent.instructions
+    )
+
+    snapshot = load_config_snapshot(tmp_path)
+    WorkspaceTrustStore(trust_path).trust(
+        tmp_path, "workspace-control", snapshot.control_fingerprint
+    )
+    _code, _stdout, _stderr, trusted_client = _run(["inspect"], tmp_path)
+    assert "repo-review" in trusted_client.requests[0].agent.instructions
 
 
 def test_headless_rejects_conflicting_sessions_and_empty_input(tmp_path):

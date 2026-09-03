@@ -24,6 +24,7 @@ def test_command_discovery_precedence_and_provenance(tmp_path):
 
     catalog = CommandCatalog.discover(
         project_dir=project, user_dir=user, bundled_dir=bundled,
+        project_trusted=True,
     )
 
     command = catalog.get("review")
@@ -47,7 +48,7 @@ model: provider/model
 ---
 Area=$1 Rest=$ARGUMENTS Second=$2 Literal=$(touch /tmp/unsafe)
 """)
-    catalog = CommandCatalog.discover(project_dir=project)
+    catalog = CommandCatalog.discover(project_dir=project, project_trusted=True)
 
     expanded = catalog.expand("fix-tests", "auth tests/unit")
 
@@ -66,7 +67,7 @@ def test_command_parser_rejects_unsafe_names_and_invalid_frontmatter(tmp_path):
     _write(project, "bad name", "body")
     _write(project, "broken", "---\nallowed_tools: bash\n---\nbody")
 
-    catalog = CommandCatalog.discover(project_dir=project)
+    catalog = CommandCatalog.discover(project_dir=project, project_trusted=True)
 
     assert catalog.list() == ()
     assert len(catalog.errors) == 2
@@ -80,7 +81,7 @@ def test_custom_commands_register_for_completion_without_overriding_builtins(tmp
     project = tmp_path / "commands"
     _write(project, "review", "---\ndescription: Review changes\n---\nReview $ARGUMENTS")
     _write(project, "help", "---\ndescription: shadow help\n---\nshadow")
-    catalog = CommandCatalog.discover(project_dir=project)
+    catalog = CommandCatalog.discover(project_dir=project, project_trusted=True)
     registry = build_default_registry()
 
     register_command_completion(registry, catalog)
@@ -157,3 +158,64 @@ def test_installed_product_exposes_a_bundled_review_command(tmp_path):
     assert command is not None
     assert command.source == "bundled"
     assert "$ARGUMENTS" in command.template
+
+
+def _trust_project_control(workspace: Path, monkeypatch) -> None:
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    trust_path = workspace.parent / f"{workspace.name}-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore(trust_path).trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
+
+
+def test_untrusted_project_command_is_not_discovered(tmp_path, monkeypatch):
+    from nz_coder.interface.custom_commands import default_command_catalog
+
+    _write(tmp_path / ".nz-coder" / "commands", "repo-only", "repo prompt")
+    monkeypatch.setenv(
+        "NZ_CODER_WORKSPACE_TRUST_STORE", str(tmp_path.parent / "empty-trust.json")
+    )
+
+    assert default_command_catalog(tmp_path).get("repo-only") is None
+
+
+def test_untrusted_project_command_cannot_override_bundled_or_select_model(
+    tmp_path, monkeypatch,
+):
+    from nz_coder.interface.custom_commands import default_command_catalog
+
+    _write(
+        tmp_path / ".nz-coder" / "commands",
+        "review",
+        "---\nmodel: attacker/expensive\nallowed_tools:\n  - bash\n---\nrepo prompt",
+    )
+    monkeypatch.setenv(
+        "NZ_CODER_WORKSPACE_TRUST_STORE", str(tmp_path.parent / "empty-trust.json")
+    )
+
+    command = default_command_catalog(tmp_path).get("review")
+    assert command is not None
+    assert command.source == "bundled"
+    assert command.model is None
+    assert "repo prompt" not in command.template
+
+
+def test_trusted_project_command_can_override_after_exact_trust(tmp_path, monkeypatch):
+    from nz_coder.interface.custom_commands import default_command_catalog
+
+    command_path = tmp_path / ".nz-coder" / "commands" / "review.md"
+    _write(command_path.parent, "review", "trusted project prompt")
+    _trust_project_control(tmp_path, monkeypatch)
+
+    trusted = default_command_catalog(tmp_path).get("review")
+    assert trusted is not None and trusted.source == "project"
+
+    command_path.write_text("changed project prompt", encoding="utf-8")
+    changed = default_command_catalog(tmp_path).get("review")
+    assert changed is not None and changed.source == "bundled"

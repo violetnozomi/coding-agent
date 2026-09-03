@@ -68,14 +68,26 @@ def discover_workflow_capsules(
 ) -> list[dict]:
     """Discover without parsing; project names override personal names."""
     directories = workflow_library_dirs(workspace, personal_dir)
+    root = (workspace or current_workdir()).resolve()
+    project_trusted = _project_control_trusted(root)
     found: dict[str, dict] = {}
     for source in ("personal", "project"):
+        if source == "project" and not project_trusted:
+            continue
         directory = directories[source]
         try:
-            entries = sorted(
-                islice(directory.iterdir(), _MAX_LIBRARY_ENTRIES),
-                key=lambda item: item.name,
-            )
+            if source == "project":
+                from nz_coder.foundation.project_control import (
+                    discover_project_control_files,
+                )
+                entries = list(discover_project_control_files(
+                    root, kinds=("workflow",)
+                ))
+            else:
+                entries = sorted(
+                    islice(directory.iterdir(), _MAX_LIBRARY_ENTRIES),
+                    key=lambda item: item.name,
+                )
         except OSError:
             continue
         for path in entries:
@@ -123,8 +135,20 @@ def load_workflow_capsule(
     safe = safe_workflow_name(name)
     if source and source not in {"project", "personal"}:
         raise ValueError("workflow source must be project or personal")
+    root = (workspace or current_workdir()).resolve()
+    try:
+        control_snapshot = _project_control_snapshot(root)
+        project_trusted = control_snapshot.control_plane_trusted
+    except (OSError, ValueError):
+        control_snapshot = None
+        project_trusted = False
+    if source == "project" and not project_trusted:
+        raise ValueError("project workflow is not trusted for this workspace")
     directories = workflow_library_dirs(workspace, personal_dir)
-    sources = (source,) if source else ("project", "personal")
+    sources = (
+        (source,) if source
+        else (("project", "personal") if project_trusted else ("personal",))
+    )
     for candidate_source in sources:
         path = directories[candidate_source] / f"{safe}.workflow.json"
         if path.is_symlink() or not path.is_file():
@@ -135,8 +159,31 @@ def load_workflow_capsule(
             "source": candidate_source,
             "execution": "capability-generated",
         }
-        return _read_capsule(path), ref
+        capsule = _read_capsule(path)
+        if candidate_source == "project":
+            refreshed = _project_control_snapshot(root)
+            if (
+                not refreshed.control_plane_trusted
+                or control_snapshot is None
+                or refreshed.control_fingerprint != control_snapshot.control_fingerprint
+            ):
+                raise ValueError("project workflow trust changed while loading")
+        return capsule, ref
     raise ValueError(f"saved workflow not found: {safe}")
+
+
+def _project_control_snapshot(workspace: Path):  # noqa: ANN202
+    """Resolve exact current project authority without trusting cached callers."""
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+    return load_config_snapshot(workspace)
+
+
+def _project_control_trusted(workspace: Path) -> bool:
+    try:
+        return _project_control_snapshot(workspace).control_plane_trusted
+    except (OSError, ValueError):
+        return False
 
 
 def save_workflow_capsule(

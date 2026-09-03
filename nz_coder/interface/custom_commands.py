@@ -66,6 +66,8 @@ class CommandCatalog:
         project_dir: Path | str | None = None,
         user_dir: Path | str | None = None,
         bundled_dir: Path | str | None = None,
+        project_files: Iterable[Path] | None = None,
+        project_trusted: bool = False,
     ) -> "CommandCatalog":
         """Load bundled < user < project, so later scopes replace by name."""
         commands: dict[str, PromptCommand] = {}
@@ -75,12 +77,19 @@ class CommandCatalog:
             ("user", user_dir),
             ("project", project_dir),
         ):
+            if source == "project" and not project_trusted:
+                continue
             if directory is None:
                 continue
             root = Path(directory).expanduser()
             if not root.is_dir():
                 continue
-            for path in sorted(root.glob("*.md")):
+            paths = (
+                sorted(project_files)
+                if source == "project" and project_files is not None
+                else sorted(root.glob("*.md"))
+            )
+            for path in paths:
                 try:
                     command = _parse_command(path, source)
                 except CommandParseError as exc:
@@ -124,12 +133,33 @@ class CommandCatalog:
 
 def default_command_catalog(workspace: Path | str) -> CommandCatalog:
     """Resolve the standard runtime-owned command scopes."""
+    from nz_coder.foundation.project_control import discover_project_control_files
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+
     root = Path(workspace).resolve()
-    return CommandCatalog.discover(
-        project_dir=root / ".nz-coder" / "commands",
+    snapshot = load_config_snapshot(root)
+    project_files = (
+        discover_project_control_files(root, kinds=("command",))
+        if snapshot.control_plane_trusted else ()
+    )
+    catalog = CommandCatalog.discover(
+        project_dir=(root / ".nz-coder" / "commands") if project_files else None,
+        project_files=project_files,
+        project_trusted=snapshot.control_plane_trusted,
         user_dir=Path.home() / ".nz-coder" / "commands",
         bundled_dir=Path(__file__).resolve().parent.parent / "bundled_commands",
     )
+    if project_files:
+        refreshed = load_config_snapshot(root)
+        if (
+            not refreshed.control_plane_trusted
+            or refreshed.control_fingerprint != snapshot.control_fingerprint
+        ):
+            return CommandCatalog.discover(
+                user_dir=Path.home() / ".nz-coder" / "commands",
+                bundled_dir=Path(__file__).resolve().parent.parent / "bundled_commands",
+            )
+    return catalog
 
 
 def register_command_completion(

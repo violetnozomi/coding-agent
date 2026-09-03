@@ -23,6 +23,12 @@ from dotenv import dotenv_values
 
 from nz_coder.foundation.private_paths import harden_private_path
 from nz_coder.foundation.file_lock import exclusive_file_lock
+from nz_coder.foundation.project_control import (
+    UnsafeProjectControl,
+    discover_project_control_files,
+    has_project_control_files,
+)
+from nz_coder.foundation.languages import LSP_LANGUAGES, lsp_command_config_key
 
 
 _SCHEMA_VERSION = 1
@@ -123,6 +129,8 @@ CONFIG_SCHEMA.update({
     "NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED": ConfigSpec("1", value_type="bool"),
     "LOG_LEVEL": ConfigSpec("INFO", workspace_trust_required=False),
 })
+for _language in LSP_LANGUAGES:
+    CONFIG_SCHEMA[lsp_command_config_key(_language)] = ConfigSpec("")
 
 _BOOL_CONFIG_KEYS = (
     "ALLOW_BASH_PACKAGE_INSTALLS", "MEMORY_ASYNC_WRITE", "MEMORY_AUTO_DREAM",
@@ -394,30 +402,10 @@ def workspace_control_fingerprint(
         values, _issues = _read_env_file(root / ".env", ConfigSource.WORKSPACE)
     digest.update(b"workspace-config\0")
     digest.update(workspace_config_fingerprint(values).encode("ascii"))
-    fixed = (
-        root / ".nz-coder" / "settings.json",
-        root / ".nz-coder" / "models" / "selection.json",
-        root / ".nz-coder" / "mcp.json",
-    )
-    candidates = list(fixed)
-    skills = root / ".nz-coder" / "skills"
-    if skills.exists():
-        if skills.is_symlink() or not skills.is_dir():
-            raise ConfigValidationError("Workspace Skill control path is unsafe")
-        for path in skills.rglob("*"):
-            try:
-                info = path.lstat()
-            except OSError as exc:
-                raise ConfigValidationError(
-                    "Workspace Skill control path cannot be inspected"
-                ) from exc
-            if stat.S_ISLNK(info.st_mode):
-                raise ConfigValidationError("Workspace Skill control path is unsafe")
-            if stat.S_ISDIR(info.st_mode):
-                continue
-            if not stat.S_ISREG(info.st_mode):
-                raise ConfigValidationError("Workspace Skill control file is unsafe")
-            candidates.append(path)
+    try:
+        candidates = list(discover_project_control_files(root))
+    except UnsafeProjectControl as exc:
+        raise ConfigValidationError(str(exc)) from exc
     total = 0
     count = 0
     for path in sorted(set(candidates), key=lambda item: item.as_posix()):
@@ -429,17 +417,18 @@ def workspace_control_fingerprint(
             raise ConfigValidationError("Workspace control file cannot be inspected") from exc
         if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
             raise ConfigValidationError("Workspace control file must be a regular file")
+        try:
+            payload = _read_control_file(path, info)
+        except (OSError, ValueError) as exc:
+            raise ConfigValidationError("Workspace control file cannot be read") from exc
         count += 1
-        total += int(info.st_size)
+        total += len(payload)
         if count > _MAX_CONTROL_FILES or total > _MAX_CONTROL_BYTES:
             raise ConfigValidationError("Workspace control plane exceeds safety limits")
         try:
             relative = path.relative_to(root).as_posix().encode("utf-8")
-            payload = path.read_bytes()
         except (OSError, UnicodeError, ValueError) as exc:
             raise ConfigValidationError("Workspace control file cannot be read") from exc
-        if len(payload) != info.st_size:
-            raise ConfigValidationError("Workspace control file changed while hashing")
         digest.update(b"\0path\0")
         digest.update(relative)
         digest.update(b"\0content\0")
@@ -447,21 +436,48 @@ def workspace_control_fingerprint(
     return digest.hexdigest()
 
 
-def _has_workspace_control_files(workspace: Path) -> bool:
-    root = Path(workspace)
-    fixed = (
-        root / ".nz-coder" / "settings.json",
-        root / ".nz-coder" / "models" / "selection.json",
-        root / ".nz-coder" / "mcp.json",
+def _read_control_file(path: Path, expected: os.stat_result) -> bytes:
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
     )
-    if any(path.exists() or path.is_symlink() for path in fixed):
+    try:
+        opened = os.fstat(descriptor)
+        current = path.lstat()
+        identities = {
+            (int(expected.st_dev), int(expected.st_ino)),
+            (int(opened.st_dev), int(opened.st_ino)),
+            (int(current.st_dev), int(current.st_ino)),
+        }
+        if (
+            len(identities) != 1
+            or not stat.S_ISREG(opened.st_mode)
+            or _is_link_or_reparse_stat(current)
+            or opened.st_size > _MAX_CONTROL_BYTES
+        ):
+            raise ValueError("Workspace control file changed while hashing")
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            payload = stream.read(_MAX_CONTROL_BYTES + 1)
+        if len(payload) != opened.st_size:
+            raise ValueError("Workspace control file changed while hashing")
+        return payload
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _is_link_or_reparse_stat(info: os.stat_result) -> bool:
+    attributes = int(getattr(info, "st_file_attributes", 0))
+    reparse = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+    return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse)
+
+
+def _has_workspace_control_files(workspace: Path) -> bool:
+    try:
+        return has_project_control_files(workspace)
+    except UnsafeProjectControl:
         return True
-    skills = root / ".nz-coder" / "skills"
-    if not skills.exists():
-        return skills.is_symlink()
-    if skills.is_symlink() or not skills.is_dir():
-        return True
-    return any(True for _path in skills.rglob("*"))
 
 
 class WorkspaceTrustStore:
@@ -733,6 +749,19 @@ def _workspace_identity(workspace: Path) -> dict[str, object]:
     }
 
 
+def workspace_identity(workspace: Path | str) -> dict[str, object]:
+    """Return the canonical identity shared by all user-owned workspace state."""
+    return _workspace_identity(Path(workspace))
+
+
+def workspace_identity_key(workspace: Path | str) -> str:
+    """Return an opaque stable key for the canonical workspace identity."""
+    payload = json.dumps(
+        workspace_identity(workspace), sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def _trust_key(identity: Mapping[str, object], config_type: str, executable: str) -> str:
     payload = json.dumps(
         {"workspace": dict(identity), "config_type": str(config_type), "executable": str(executable)},
@@ -768,4 +797,6 @@ __all__ = [
     "load_config_snapshot",
     "workspace_config_fingerprint",
     "workspace_control_fingerprint",
+    "workspace_identity",
+    "workspace_identity_key",
 ]

@@ -17,7 +17,6 @@ from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.core.result import RunResult, RunStatus
 from nz_coder.sdk import AgentClient
-from nz_coder.state.skills import skill_loader
 from nz_coder.state.sessions import create_session_id, load_session
 from nz_coder.state.workdir import scoped_workdir
 
@@ -197,8 +196,15 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
 
     with scoped_workdir(workspace):
         from nz_coder.interface.custom_commands import default_command_catalog
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+        from nz_coder.state.skills import SkillLoader
 
         expanded_command = default_command_catalog(workspace).expand_invocation(user_text)
+        workspace_snapshot = load_config_snapshot(workspace)
+        skill_loader = SkillLoader(
+            project_dir=workspace / ".nz-coder" / "skills",
+            workspace_trusted=workspace_snapshot.control_plane_trusted,
+        )
         command_tools: tuple[str, ...] = ()
         command_model: str | None = None
         if expanded_command is not None:

@@ -374,30 +374,48 @@ def test_http_run_rejects_attachment_escape_and_symlink(local_service, tmp_path)
     assert client.messages(session_id) == []
 
 
-def test_http_resolves_project_custom_commands_in_daemon_workspace(local_service):
+def test_untrusted_project_command_cannot_expand_over_http(local_service):
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
     client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
     created = client.create_session("auto")
     session_id = created["id"]
-    commands = Path(created["workspace"]) / ".nz-coder" / "commands"
+    workspace = Path(created["workspace"])
+    commands = workspace / ".nz-coder" / "commands"
     commands.mkdir(parents=True)
-    (commands / "review.md").write_text(
+    (commands / "repo-review.md").write_text(
         "---\ndescription: Review a path\nallowed_tools:\n  - read_file\n"
         "---\nReview $ARGUMENTS",
         encoding="utf-8",
     )
 
-    listed = client.list_commands(session_id)
-    expanded = client.expand_command(session_id, "review", "src/app.py")
+    assert all(item["name"] != "repo-review" for item in client.list_commands(session_id))
+    with pytest.raises(NZCoderHTTPError) as exc_info:
+        client.expand_command(session_id, "repo-review", "src/app.py")
+    assert exc_info.value.code == "invalid_request"
+
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore().trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
+    listed = [
+        item for item in client.list_commands(session_id)
+        if item["name"] == "repo-review"
+    ]
+    expanded = client.expand_command(session_id, "repo-review", "src/app.py")
 
     assert listed == [{
-        "name": "review",
+        "name": "repo-review",
         "description": "Review a path",
         "source": "project",
         "allowed_tools": ["read_file"],
         "model": None,
     }]
     assert expanded == {
-        "name": "review",
+        "name": "repo-review",
         "prompt": "Review src/app.py",
         "source": "project",
         "allowed_tools": ["read_file"],
