@@ -6,9 +6,20 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import stat
 import tempfile
+import uuid
 
 from nz_coder.state.workdir import current_workdir
+
+
+@dataclass(frozen=True)
+class _PathIdentity:
+    """Identity of one directory in the recovery path."""
+
+    path: Path
+    device: int
+    inode: int
 
 
 @dataclass(frozen=True)
@@ -18,6 +29,7 @@ class _Backup:
     target: Path
     relative: str
     backup: Path | None
+    parent_chain: tuple[_PathIdentity, ...]
 
 
 class TransactionManager:
@@ -70,15 +82,16 @@ class TransactionManager:
             return
         if self._backup_dir is None:
             raise RuntimeError("Transaction backup directory is unavailable")
+        parent_chain = self._capture_parent_chain(root, lexical.parent)
         if target.exists():
             if target.is_symlink() or not target.is_file():
                 raise ValueError("Transaction can only track regular workspace files")
             path_hash = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
             backup = self._backup_dir / f"{path_hash}_{target.name}"
             shutil.copy2(target, backup)
-            self._backups[key] = _Backup(target, relative, backup)
+            self._backups[key] = _Backup(target, relative, backup, parent_chain)
         else:
-            self._backups[key] = _Backup(target, relative, None)
+            self._backups[key] = _Backup(target, relative, None, parent_chain)
 
     def commit(self) -> None:
         """Commit and discard every recovery snapshot."""
@@ -98,7 +111,7 @@ class TransactionManager:
         failed: dict[str, _Backup] = {}
         for key, record in tuple(self._backups.items()):
             try:
-                self._validate_recovery_target(record.target)
+                self._validate_recovery_target(record)
                 if record.backup is None:
                     self._delete_new_target(record.target)
                     deleted.append(record.relative)
@@ -122,16 +135,79 @@ class TransactionManager:
             self._active = False
         return "Rolled back changes:\n" + "\n".join(lines) if lines else ""
 
-    def _validate_recovery_target(self, target: Path) -> None:
+    def _validate_recovery_target(self, record: _Backup) -> None:
         root = current_workdir().resolve(strict=True)
         try:
-            target.relative_to(root)
+            record.target.relative_to(root)
         except ValueError as exc:
             raise ValueError("Transaction recovery target escapes workspace") from exc
+        for identity in record.parent_chain:
+            try:
+                info = identity.path.lstat()
+            except OSError as exc:
+                raise ValueError("Transaction recovery parent identity changed") from exc
+            if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                raise ValueError("Transaction recovery parent is unsafe")
+            if (int(info.st_dev), int(info.st_ino)) != (
+                identity.device,
+                identity.inode,
+            ):
+                raise ValueError("Transaction recovery parent identity changed")
+        last = record.parent_chain[-1].path
+        relative_parent = record.target.parent.relative_to(last)
+        cursor = last
+        for part in relative_parent.parts:
+            cursor = cursor / part
+            try:
+                info = cursor.lstat()
+            except OSError as exc:
+                raise ValueError("Transaction recovery parent is unavailable") from exc
+            if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                raise ValueError("Transaction recovery parent is unsafe")
+
+    @classmethod
+    def _capture_parent_chain(
+        cls,
+        root: Path,
+        parent: Path,
+    ) -> tuple[_PathIdentity, ...]:
+        chain: list[_PathIdentity] = []
+        cursor = root
+        candidates = [root]
+        try:
+            relative = parent.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("Transaction target escapes workspace") from exc
+        for part in relative.parts:
+            cursor = cursor / part
+            candidates.append(cursor)
+        for candidate in candidates:
+            try:
+                info = candidate.lstat()
+            except FileNotFoundError:
+                break
+            if cls._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                raise ValueError("Transaction target parent is unsafe")
+            chain.append(_PathIdentity(candidate, int(info.st_dev), int(info.st_ino)))
+        if not chain:
+            raise ValueError("Transaction workspace identity is unavailable")
+        return tuple(chain)
+
+    @staticmethod
+    def _is_link_or_reparse(info: os.stat_result) -> bool:
+        attributes = int(getattr(info, "st_file_attributes", 0))
+        reparse = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+        return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse)
 
     def _restore_backup(self, target: Path, backup: Path) -> None:
         """Restore through a same-directory fsynced temporary and atomic replace."""
-        target.parent.mkdir(parents=True, exist_ok=True)
+        record = self._backups.get(str(target))
+        if record is None:
+            raise RuntimeError("Transaction recovery metadata is unavailable")
+        self._validate_recovery_target(record)
+        if os.name != "nt":
+            self._restore_backup_posix(record, backup)
+            return
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=f".{target.name}.",
             suffix=".rollback",
@@ -151,6 +227,47 @@ class TransactionManager:
             if descriptor >= 0:
                 os.close(descriptor)
             temporary.unlink(missing_ok=True)
+
+    def _restore_backup_posix(self, record: _Backup, backup: Path) -> None:
+        """Restore relative to a verified directory descriptor on POSIX."""
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        parent_fd = os.open(record.target.parent, flags)
+        temporary_name = f".{record.target.name}.{uuid.uuid4().hex}.rollback"
+        descriptor = -1
+        try:
+            info = os.fstat(parent_fd)
+            if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                raise ValueError("Transaction recovery parent is unsafe")
+            if record.parent_chain[-1].path == record.target.parent:
+                expected = record.parent_chain[-1]
+                if (int(info.st_dev), int(info.st_ino)) != (expected.device, expected.inode):
+                    raise ValueError("Transaction recovery parent identity changed")
+            descriptor = os.open(
+                temporary_name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=parent_fd,
+            )
+            with os.fdopen(descriptor, "wb") as output, backup.open("rb") as source:
+                descriptor = -1
+                shutil.copyfileobj(source, output)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(
+                temporary_name,
+                record.target.name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=parent_fd,
+            )
+            os.fsync(parent_fd)
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            try:
+                os.unlink(temporary_name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+            os.close(parent_fd)
 
     def _delete_new_target(self, target: Path) -> None:
         try:

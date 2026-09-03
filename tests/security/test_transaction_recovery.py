@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import shutil
 
 import pytest
 
@@ -114,3 +116,105 @@ def test_original_exception_remains_primary_when_rollback_is_partial(tmp_path, m
             transaction.rollback()
             with pytest.raises(RuntimeError, match="business failure"):
                 raise
+
+
+def test_parent_symlink_swap_after_track_is_rejected_and_retryable(tmp_path):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.transaction import TransactionManager
+
+    parent = tmp_path / "package"
+    parent.mkdir()
+    target = parent / "module.py"
+    target.write_text("before", encoding="utf-8")
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    outside_target = outside / "module.py"
+    outside_target.write_text("outside", encoding="utf-8")
+    original_parent = tmp_path / "package-original"
+    transaction = TransactionManager()
+
+    with scoped_workdir(tmp_path):
+        transaction.begin()
+        transaction.track("package/module.py")
+        target.write_text("after", encoding="utf-8")
+        parent.rename(original_parent)
+        try:
+            parent.symlink_to(outside, target_is_directory=True)
+        except OSError:
+            original_parent.rename(parent)
+            pytest.skip("directory symlinks are unavailable")
+
+        report = transaction.rollback()
+
+        assert transaction.state == "rollback_partial"
+        assert "retry is available" in report
+        assert outside_target.read_text(encoding="utf-8") == "outside"
+        assert next(iter(transaction._backups.values())).backup.exists()
+
+        parent.unlink()
+        original_parent.rename(parent)
+        retry = transaction.rollback()
+
+    assert target.read_text(encoding="utf-8") == "before"
+    assert transaction.state == "rolled_back"
+    assert "Restored: package/module.py" in retry
+
+
+def test_rollback_detects_parent_identity_change(tmp_path):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.transaction import TransactionManager
+
+    parent = tmp_path / "package"
+    parent.mkdir()
+    target = parent / "module.py"
+    target.write_text("before", encoding="utf-8")
+    moved = tmp_path / "package-original"
+    transaction = TransactionManager()
+
+    with scoped_workdir(tmp_path):
+        transaction.begin()
+        transaction.track("package/module.py")
+        target.write_text("after", encoding="utf-8")
+        parent.rename(moved)
+        parent.mkdir()
+        (parent / "module.py").write_text("replacement", encoding="utf-8")
+
+        transaction.rollback()
+
+    assert transaction.state == "rollback_partial"
+    assert (parent / "module.py").read_text(encoding="utf-8") == "replacement"
+    assert next(iter(transaction._backups.values())).backup.exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction semantics")
+def test_parent_junction_swap_after_track_is_rejected(tmp_path):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.transaction import TransactionManager
+
+    parent = tmp_path / "package"
+    parent.mkdir()
+    target = parent / "module.py"
+    target.write_text("before", encoding="utf-8")
+    outside = tmp_path.parent / f"{tmp_path.name}-junction-outside"
+    outside.mkdir()
+    outside_target = outside / "module.py"
+    outside_target.write_text("outside", encoding="utf-8")
+    original_parent = tmp_path / "package-original"
+    transaction = TransactionManager()
+
+    with scoped_workdir(tmp_path):
+        transaction.begin()
+        transaction.track("package/module.py")
+        target.write_text("after", encoding="utf-8")
+        parent.rename(original_parent)
+        os.system(f'mklink /J "{parent}" "{outside}" >NUL')
+        if not parent.exists():
+            original_parent.rename(parent)
+            pytest.skip("junction creation is unavailable")
+
+        transaction.rollback()
+
+    assert transaction.state == "rollback_partial"
+    assert outside_target.read_text(encoding="utf-8") == "outside"
+    shutil.rmtree(parent, ignore_errors=True)
+    original_parent.rename(parent)
