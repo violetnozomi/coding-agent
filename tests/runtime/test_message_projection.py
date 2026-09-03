@@ -4,8 +4,14 @@ from __future__ import annotations
 from copy import deepcopy
 from types import SimpleNamespace
 
+from nz_coder.foundation import config
+from nz_coder.providers.configuration import (
+    clear_provider_connection_overrides,
+    provider_connection,
+)
 from nz_coder.runtime.execution.loop import AgentLoop
 from nz_coder.runtime.conversation.message_projection import project_provider_messages
+from nz_coder.runtime.model_gateway.runtime import _provider_instance_id
 from nz_coder.protocol.message_schema import provider_private_state
 
 
@@ -179,6 +185,49 @@ def test_private_state_fails_closed_after_endpoint_instance_switch():
         target_provider_instance_id="provider-instance-endpoint-b",
     )[0]
 
+    assert projected["reasoning_content"] == ""
+    assert "provider_extra" not in projected
+    assert "provider_extra" not in projected["tool_calls"][0]
+
+
+def test_private_state_not_forwarded_after_account_switch(monkeypatch):
+    provider = SimpleNamespace(name="openai-compatible", base_url="https://api.test/v1")
+    client = SimpleNamespace(base_url="https://api.test/v1")
+    clear_provider_connection_overrides()
+    monkeypatch.setattr(config, "API_KEY", "account-a-key")
+    first_scope = provider_connection("openai-compatible").credential_scope_id
+    first_instance = _provider_instance_id(
+        provider_id="openai-compatible",
+        provider=provider,
+        client=client,
+        explicit_base_url=None,
+        credential_scope_id=first_scope,
+    )
+    monkeypatch.setattr(config, "API_KEY", "account-b-key")
+    second_scope = provider_connection("openai-compatible").credential_scope_id
+    second_instance = _provider_instance_id(
+        provider_id="openai-compatible",
+        provider=provider,
+        client=client,
+        explicit_base_url=None,
+        credential_scope_id=second_scope,
+    )
+
+    projected = project_provider_messages(
+        [
+            _private_assistant("openai-compatible", "model-1", first_instance),
+            {"role": "tool", "tool_call_id": "call-private", "content": "ok"},
+        ],
+        capabilities=SimpleNamespace(
+            preserve_reasoning_content=True,
+            supports_image_input=False,
+        ),
+        target_provider_id="openai-compatible",
+        target_model_id="model-1",
+        target_provider_instance_id=second_instance,
+    )[0]
+
+    assert first_instance != second_instance
     assert projected["reasoning_content"] == ""
     assert "provider_extra" not in projected
     assert "provider_extra" not in projected["tool_calls"][0]
