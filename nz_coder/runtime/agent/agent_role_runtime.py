@@ -54,6 +54,8 @@ class ProductionAgentRoleRuntime:
                     provider=default_runtime.provider if shares_default_client else None,
                     client=default_runtime.client if shares_default_client else None,
                     owns_client=False if shares_default_client else None,
+                    workspace=getattr(host, "workdir", None),
+                    config_snapshot=getattr(host, "config_snapshot", None),
                 ),
                 provider_factory=create_provider,
             )
@@ -96,6 +98,12 @@ class ProductionAgentRoleRuntime:
             prompt = f"{prompt}\n\n{build_structured_output_instruction(spec.output_schema)}"
         if guidance and "## Model-family guidance" not in prompt:
             prompt = f"{prompt}\n\n{guidance}"
+        skill_loader = getattr(host, "_skill_loader", None)
+        skill_descriptions = (
+            skill_loader.descriptions() if skill_loader is not None else ""
+        )
+        if skill_descriptions:
+            prompt = f"{prompt}\n\n## Available skills\n{skill_descriptions}"
         host.system_prompt = prompt
 
     def escalate(self, host, reason: str) -> bool:
