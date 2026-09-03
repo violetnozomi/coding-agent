@@ -1335,3 +1335,13 @@ POSIX 捕获从已验证 Workspace root descriptor 出发，对每级目录使�
 [`TransactionManager`](../nz_coder/state/transaction.py) 的 `track()` 与 rollback 现在都句柄锚定。Track 从 root handle 逐级打开父目录和最终 regular-file handle，备份直接复制该 handle 的内容，并记录 device/inode（Windows 为等价 File ID/Volume）、mode、atime/mtime 和 size；不再执行“Path 检查后 `shutil.copy2`”。POSIX rollback 在原子 replace 前通过临时文件 descriptor 恢复正文、permission mode 与 mtime，再 fsync 文件和父目录。元数据恢复失败会保留 backup 并进入 `rollback_partial`，修复环境后可重试。
 
 [`lsp/servers.py`](../nz_coder/lsp/servers.py) 不再读取进程启动目录的全局配置。Resolver 使用显式传入的目标 Workspace `ConfigSnapshot`，未传入时也按 `workspace` 参数捕获，并记录 `system-path`、`user-config`、`environment-config`、`trusted-workspace-config` 或 `workspace-local-default` 来源。位于目标 Workspace 内的 executable 无论配置来自哪里都继续要求内容 fingerprint trust。LSP client cache 同时绑定 Workspace、server/root、resolved command、配置来源和 executable fingerprint；任一项变化都会关闭旧 client 并重新执行信任判断。
+
+### 22.2 顶层 Run Control 生命周期与配置作用域（2026-09-04）
+
+长期 Session 现在只保留消息、Session ID 与交互状态，不再永久持有 Project Authority。Terminal 每次提交在自定义命令展开前捕获一次目标 Workspace 快照；HTTP `start_run()`、SDK `run_result()` 和 Headless 入口也分别在本次顶层 Run 开始时捕获。`RunControlBundle` 从这一份快照原子构造 Permission、Plan mode、Skill、configured Hook、MCP 与 Provider/Model 控制面，Host 在 Run 内通过 ContextVar 固定同一对象，并在完成、取消或异常后关闭本次 MCP、自动创建的 Sidecar 与 Provider runtime。下一次提交重新捕获 fingerprint，因此 `untrust`、branch checkout 或控制文件变化只影响下一 Run，不会改变正在执行的 Run。
+
+Terminal 的直接 Shell 与 Project Command 同样在提交边界重建权限/命令视图；Project Skill 描述不再固化进 Session 基础 prompt，而是由本次 Run 的 SkillLoader 注入。HTTP Workflow 的 prepare 与 start 各自重新捕获并以 approval digest 拒绝变更后的对象，start 选中的同一快照会通过 ContextVar 复制到后台线程，使 nested workflow resolve 保持固定。工作区模型选择继续使用独立的 `workspace-model-selection` trust，但一旦在提交边界解析为 Provider/Model/Variant，本次 Run 不会在线程内再次读取 selection 文件。
+
+正式执行路径中的 MCP enabled/servers/user/project/trust path 与 timeout、Provider key/endpoint/credential generation、Model fallback，以及 LSP enabled/initialize timeout/request timeout 都从目标 Workspace 的本次 `ConfigSnapshot` 解析。MCP 内联配置保留 `environment`、`user` 或 `trusted-workspace` 来源，不会把启动 Workspace 的 `.env` 降格成另一个 Workspace 的宿主环境；Provider endpoint 与 credential 来自同一 epoch；LSP cache key 包含 timeout 语义，变化时关闭旧 client。模块级常量仅保留给旧的直接调用兼容层，不再决定 Terminal、HTTP、SDK、Headless 对其他 Workspace 的安全语义。
+
+数值配置解析失败只记录固定诊断文本，并立即用安全默认值替换快照中的非法原文；因此类似凭据的错误数值不会进入 issue、`public_json()`、doctor 或 status 输出。仍保留上一节列出的边界：这些控制措施不是 OS sandbox，也不宣称解决 Webfetch DNS TOCTOU、Artifact 无限历史保留或 Actions SHA 固定。
