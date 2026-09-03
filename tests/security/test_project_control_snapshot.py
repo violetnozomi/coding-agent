@@ -434,6 +434,29 @@ def test_mcp_project_config_uses_snapshot_bytes(tmp_path, monkeypatch):
     assert server.source == "project"
 
 
+def test_project_hooks_are_parsed_from_snapshot_bytes(tmp_path):
+    from dataclasses import replace
+
+    from nz_coder.foundation.project_control import capture_project_control_snapshot
+    from nz_coder.runtime.verification.hooks import build_default_hooks
+
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        '{"hooks":[{"id":"trusted-a","event":"pre_tool_use",'
+        '"action":{"type":"prompt","message":"A"}}]}',
+        encoding="utf-8",
+    )
+    snapshot = replace(capture_project_control_snapshot(tmp_path), trusted=True)
+    settings.write_text(
+        '{"hooks":[{"id":"untrusted-b","event":"pre_tool_use",'
+        '"action":{"type":"prompt","message":"B"}}]}',
+        encoding="utf-8",
+    )
+    hooks = build_default_hooks(snapshot)
+    assert [item.id for item in hooks.configured_hooks] == ["trusted-a"]
+
+
 def test_control_plane_rejects_symlinked_commands_parent(tmp_path):
     _assert_control_parent_symlink_rejected(tmp_path, "commands", "entry.md")
 

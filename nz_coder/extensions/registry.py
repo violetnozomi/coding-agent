@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from nz_coder.foundation.project_control import ProjectControlSnapshot
+from nz_coder.foundation.workspace_trust import current_config_snapshot
 from nz_coder.mcp.config import load_mcp_server_configs
 from nz_coder.runtime.verification.hooks import load_configured_hooks_from_settings
 from nz_coder.runtime.process.workdir import current_workdir
@@ -79,15 +81,19 @@ class ExtensionRegistry:
         workspace: Path | None = None,
         skill_loader: SkillLoader | None = None,
         mcp_runtime: Any = None,
+        project_control_snapshot: ProjectControlSnapshot | None = None,
         hook_loader: Callable[..., list] | None = None,
         mcp_config_loader: Callable[..., list] | None = None,
     ):
         self.workspace = (workspace or current_workdir()).resolve()
         self.skill_loader = skill_loader
         self.mcp_runtime = mcp_runtime
-        self._hook_loader = hook_loader or (
-            lambda path: load_configured_hooks_from_settings(path, strict=True)
+        self.project_control_snapshot = (
+            project_control_snapshot
+            or getattr(skill_loader, "_project_control_snapshot", None)
+            or current_config_snapshot(self.workspace).project_control
         )
+        self._hook_loader = hook_loader
         self._mcp_config_loader = mcp_config_loader or load_mcp_server_configs
 
     def snapshot(self) -> list[ExtensionDescriptor]:
@@ -196,8 +202,15 @@ class ExtensionRegistry:
                 effects=tuple((name, "serial") for name in _CORE_HOOK_CAPABILITIES),
             )
         ]
-        settings_path = self.workspace / ".nz-coder" / "settings.json"
-        for hook in self._hook_loader(settings_path):
+        hooks = (
+            self._hook_loader(self.workspace / ".nz-coder" / "settings.json")
+            if self._hook_loader is not None
+            else load_configured_hooks_from_settings(
+                strict=True,
+                project_control_snapshot=self.project_control_snapshot,
+            )
+        )
+        for hook in hooks:
             capabilities = [f"event:{hook.event}", f"action:{hook.action.type}"]
             if hook.reject:
                 capabilities.append("decision:reject")
@@ -246,7 +259,17 @@ class ExtensionRegistry:
         records = (
             self.mcp_runtime.extension_snapshot()
             if self.mcp_runtime is not None
-            else [_mcp_config_record(item) for item in self._mcp_config_loader(workspace=self.workspace)]
+            else [
+                _mcp_config_record(item)
+                for item in (
+                    self._mcp_config_loader(workspace=self.workspace)
+                    if self._mcp_config_loader is not load_mcp_server_configs
+                    else self._mcp_config_loader(
+                        workspace=self.workspace,
+                        project_control_snapshot=self.project_control_snapshot,
+                    )
+                )
+            ]
         )
         result = []
         for item in records:

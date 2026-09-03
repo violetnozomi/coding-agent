@@ -415,7 +415,9 @@ class SkillLoader:
             selected,
             enabled,
         )
-        self.reload()
+        # Enabling is user-owned state; it must not implicitly re-read Project
+        # Control or exchange this run's immutable authority snapshot.
+        self.reload(self._project_control_snapshot)
         item = next(entry for entry in self.list_skills() if entry["name"] == selected)
         return str(item["status"])
 

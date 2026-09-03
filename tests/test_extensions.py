@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,6 +13,12 @@ from nz_coder.extensions.registry import ExtensionDescriptor, ExtensionRegistry
 from nz_coder.mcp.config import MCPServerConfig
 from nz_coder.mcp.runtime import MCPRuntime, MCPServerStatus
 from nz_coder.state.skills import SkillLoader
+
+
+def _trusted_control(workspace: Path):
+    from nz_coder.foundation.project_control import capture_project_control_snapshot
+
+    return replace(capture_project_control_snapshot(workspace), trusted=True)
 
 
 def _write_skill(root: Path, name: str, frontmatter: str) -> None:
@@ -55,7 +62,7 @@ def test_descriptor_validates_identity_scope_lifecycle_and_effect():
 
 def test_skill_projection_preserves_precedence_condition_and_declared_tools(tmp_path):
     bundled = tmp_path / "bundled"
-    project = tmp_path / "project"
+    project = tmp_path / ".nz-coder" / "skills"
     user = tmp_path / "user"
     _write_skill(bundled, "review", "description: bundled\nallowed_tools: read_file")
     _write_skill(
@@ -63,7 +70,12 @@ def test_skill_projection_preserves_precedence_condition_and_declared_tools(tmp_
         "review",
         "description: project\nallowed_tools: read_file, grep_search\npaths: src/**",
     )
-    loader = SkillLoader(bundled_dir=bundled, user_dir=user, project_dir=project)
+    loader = SkillLoader(
+        bundled_dir=bundled,
+        user_dir=user,
+        project_dir=project,
+        project_control_snapshot=_trusted_control(tmp_path),
+    )
 
     item = _registry(tmp_path, skill_loader=loader).get("skill:review")
     assert item is not None
@@ -177,6 +189,7 @@ def test_invalid_real_hook_settings_are_visible_as_failed_source(tmp_path):
             user_dir=tmp_path / "missing-user",
             project_dir=tmp_path / "missing-project",
         ),
+        project_control_snapshot=_trusted_control(tmp_path),
         mcp_config_loader=lambda **_kwargs: [],
     ).snapshot()
     error = next(item for item in items if item.extension_id == "error:hooks")
@@ -222,6 +235,7 @@ def test_skill_enable_disable_is_user_owned_and_runtime_effective(tmp_path, monk
         bundled_dir=tmp_path / "missing-bundled",
         user_dir=tmp_path / "missing-user",
         project_dir=project,
+        project_control_snapshot=_trusted_control(tmp_path),
     )
     registry = _registry(tmp_path, skill_loader=loader)
 
@@ -272,13 +286,25 @@ def test_extension_reload_delegates_to_real_owners_and_reports_restart_truth(tmp
     assert pack["status"] == "restart_required"
 
 
-def test_extensions_cli_enable_disable_and_owner_reload(tmp_path, capsys):
+def test_extensions_cli_enable_disable_and_owner_reload(tmp_path, capsys, monkeypatch):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
     project = tmp_path / ".nz-coder" / "skills"
     _write_skill(project, "review", "description: project")
+    trust_path = tmp_path.parent / f"{tmp_path.name}-trust.json"
+    user_config = tmp_path.parent / f"{tmp_path.name}-user" / "config.env"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    monkeypatch.setenv("NZ_CODER_USER_CONFIG", str(user_config))
+    initial = load_config_snapshot(tmp_path)
+    WorkspaceTrustStore(trust_path).trust(
+        tmp_path, "workspace-control", initial.control_fingerprint
+    )
+    trusted = load_config_snapshot(tmp_path).project_control
     registry = _registry(tmp_path, skill_loader=SkillLoader(
         bundled_dir=tmp_path / "missing-bundled",
         user_dir=tmp_path / "missing-user",
         project_dir=project,
+        project_control_snapshot=trusted,
     ))
 
     assert extensions_main(["disable", "skill:review", "--json"], registry=registry) == 0

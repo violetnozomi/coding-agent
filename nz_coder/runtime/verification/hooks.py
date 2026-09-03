@@ -13,7 +13,6 @@ from typing import Any, Callable
 
 from nz_coder.foundation import config
 from nz_coder.protocol.message_schema import is_synthetic_user_message, stamp_user_message
-from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.runtime.agent.task_policy import is_test_file, normalize_path as _policy_normalize_path
 from nz_coder.tools.todo import get_reminder
 
@@ -965,7 +964,7 @@ class AgentHooks:
         )
 
 
-def build_default_hooks() -> AgentHooks:
+def build_default_hooks(project_control_snapshot=None) -> AgentHooks:
     # InfCode's SessionPrompt loop finishes as soon as the assistant produces
     # a non-tool-call finish. Verification is model-directed prompt guidance,
     # and reflection is an explicit agent/tool choice; neither is an implicit
@@ -981,7 +980,9 @@ def build_default_hooks() -> AgentHooks:
             manual_compact_hook,
         ],
     )
-    for hook in load_configured_hooks_from_settings():
+    for hook in load_configured_hooks_from_settings(
+        project_control_snapshot=project_control_snapshot
+    ):
         hooks.register_configured_hook(hook)
     return hooks
 
@@ -1296,8 +1297,25 @@ def load_configured_hooks_from_settings(
     settings_path: Path | None = None,
     *,
     strict: bool = False,
+    project_control_snapshot=None,
 ) -> list[ConfiguredHook]:
-    path = settings_path or (current_workdir() / ".nz-coder" / "settings.json")
+    if project_control_snapshot is not None:
+        if not project_control_snapshot.trusted:
+            return []
+        item = project_control_snapshot.get(".nz-coder/settings.json")
+        if item is None:
+            return []
+        try:
+            data = json.loads(item.content.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            if strict:
+                raise HookConfigError("Failed to load hook settings") from exc
+            log.warning("Failed to load project hook settings")
+            return []
+        return _configured_hooks_from_payload(data, "snapshot", strict=strict)
+    if settings_path is None:
+        return []
+    path = settings_path
     if not path.exists():
         return []
     try:
@@ -1307,20 +1325,33 @@ def load_configured_hooks_from_settings(
             raise HookConfigError(f"Failed to load hook settings from {path}: {exc}") from exc
         log.warning("Failed to load hook settings from %s: %s", path, exc)
         return []
+    return _configured_hooks_from_payload(data, path.name, strict=strict)
+
+
+def _configured_hooks_from_payload(
+    data: object,
+    label: str,
+    *,
+    strict: bool,
+) -> list[ConfiguredHook]:
+    if not isinstance(data, dict):
+        if strict:
+            raise HookConfigError(f"Hook settings at {label}: must be an object")
+        return []
     raw_hooks = data.get("hooks", [])
     if not raw_hooks:
         return []
     if not isinstance(raw_hooks, list):
         if strict:
-            raise HookConfigError(f"Hook settings at {path}: 'hooks' must be a list")
-        log.warning("Ignoring hook settings at %s: 'hooks' must be a list", path)
+            raise HookConfigError(f"Hook settings at {label}: 'hooks' must be a list")
+        log.warning("Ignoring hook settings at %s: 'hooks' must be a list", label)
         return []
     try:
         return parse_configured_hooks(raw_hooks)
     except HookConfigError as exc:
         if strict:
             raise
-        log.warning("Ignoring invalid hook settings at %s: %s", path, exc)
+        log.warning("Ignoring invalid hook settings at %s: %s", label, exc)
         return []
 
 

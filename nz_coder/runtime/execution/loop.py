@@ -459,12 +459,12 @@ class ProductRunEnvironment:
         self._mcp_runtime_lock = threading.Lock()
         self._mcp_runtime_factory = MCPRuntime
         self._tool_metadata_lock = threading.RLock()
-        self.hooks = hooks or build_default_hooks()
         from nz_coder.foundation.workspace_trust import current_config_snapshot
         workspace_snapshot = config_snapshot or current_config_snapshot(self.workdir)
         if workspace_snapshot.workspace.resolve() != self.workdir.resolve():
             raise ValueError("ConfigSnapshot belongs to a different workspace")
         self.config_snapshot = workspace_snapshot
+        self.hooks = hooks or build_default_hooks(workspace_snapshot.project_control)
         self.permissions = PermissionManager(
             permission_mode,
             renderer=self.renderer,
