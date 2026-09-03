@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hmac
 import math
 import re
 import threading
@@ -751,13 +752,36 @@ class ManagedSession:
             ).expand(name, arguments)
         except KeyError as exc:
             raise ValueError(f"custom command was not found: {name}") from exc
-        return {
+        result = {
             "name": expanded.name,
             "prompt": expanded.prompt,
             "source": expanded.source,
             "allowed_tools": list(expanded.allowed_tools),
             "model": expanded.model,
         }
+        result["command_digest"] = self._command_execution_digest(
+            snapshot,
+            result["prompt"],
+            result["allowed_tools"],
+            result["model"],
+        )
+        return result
+
+    @staticmethod
+    def _command_execution_digest(
+        snapshot, prompt: str, allowed_tools, model: str | None,
+    ) -> str:
+        """Bind a remote command expansion to one control fingerprint."""
+        import hashlib
+        import json
+
+        payload = json.dumps({
+            "control_fingerprint": snapshot.control_fingerprint,
+            "prompt": str(prompt),
+            "allowed_tools": [str(name) for name in allowed_tools],
+            "model": str(model) if model is not None else None,
+        }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def start_run(
         self,
@@ -766,6 +790,7 @@ class ManagedSession:
         attachments=(),
         allowed_tools=(),
         model: str | None = None,
+        command_digest: str | None = None,
     ) -> dict:
         if not isinstance(message, str) or not message.strip():
             raise ValueError("message must be a non-empty string")
@@ -783,6 +808,25 @@ class ManagedSession:
         model_override = str(model or "").strip() or None
         if model_override is not None and len(model_override) > 240:
             raise ValueError("model override is too long")
+        provided_command_digest = str(command_digest or "").strip()
+        if command_digest is not None and len(provided_command_digest) != 64:
+            raise ValueError("command digest is invalid")
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        run_snapshot = load_config_snapshot(self.workspace)
+        if provided_command_digest:
+            expected_command_digest = self._command_execution_digest(
+                run_snapshot,
+                message,
+                selected_tools,
+                model_override,
+            )
+            if not hmac.compare_digest(
+                provided_command_digest, expected_command_digest,
+            ):
+                raise ValueError(
+                    "custom command expansion is stale; expand it again"
+                )
         with self._lock:
             if self._disposed:
                 raise SessionNotFoundError(self.session_id)
@@ -795,9 +839,6 @@ class ManagedSession:
             self._gate_acquired = True
             previous_history = copy.deepcopy(self.history)
             try:
-                from nz_coder.foundation.workspace_trust import load_config_snapshot
-
-                run_snapshot = load_config_snapshot(self.workspace)
                 self.config_snapshot = run_snapshot
                 self._active_interaction_run_id = (
                     f"interaction-{uuid.uuid4().hex}"
@@ -1285,12 +1326,14 @@ class SessionManager:
         attachments=(),
         allowed_tools=(),
         model: str | None = None,
+        command_digest: str | None = None,
     ) -> dict:
         return self.get(session_id).start_run(
             message,
             attachments=attachments,
             allowed_tools=allowed_tools,
             model=model,
+            command_digest=command_digest,
         )
 
     def info(self, session_id: str) -> dict:

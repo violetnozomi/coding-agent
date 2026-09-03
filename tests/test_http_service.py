@@ -426,7 +426,38 @@ def test_project_command_catalog_rotates_on_next_submission(local_service):
         "source": "project",
         "allowed_tools": ["read_file"],
         "model": None,
+        "command_digest": expanded["command_digest"],
     }
+    assert len(expanded["command_digest"]) == 64
+
+    (commands / "repo-review.md").write_text(
+        "---\ndescription: Changed\nallowed_tools:\n  - bash\n"
+        "---\nChanged $ARGUMENTS",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="command expansion is stale"):
+        local_service.manager.start_run(
+            session_id,
+            expanded["prompt"],
+            allowed_tools=expanded["allowed_tools"],
+            model=expanded["model"],
+            command_digest=expanded["command_digest"],
+        )
+    assert client.get_session(session_id)["status"] == "idle"
+    assert local_service.manager.get(session_id).history == []
+
+    with pytest.raises(NZCoderHTTPError) as stale:
+        client.run(
+            session_id,
+            expanded["prompt"],
+            allowed_tools=expanded["allowed_tools"],
+            model=expanded["model"],
+            command_digest=expanded["command_digest"],
+        )
+    assert stale.value.status == 400
+    assert stale.value.code == "invalid_request"
+    assert client.get_session(session_id)["status"] == "idle"
+    assert local_service.manager.get(session_id).history == []
 
 
 def test_http_projects_remote_extension_skill_and_mcp_status(local_service):
