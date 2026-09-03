@@ -154,6 +154,24 @@ def test_model_listing_filters_nested_private_children(tmp_path):
     assert "secret.json" not in output
 
 
+def test_read_directory_filters_private_child_names(tmp_path):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.files import read_file
+
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".nz-coder").mkdir()
+    (tmp_path / ".env").write_text("API_KEY=secret", encoding="utf-8")
+    (tmp_path / "public.py").write_text("pass\n", encoding="utf-8")
+
+    with scoped_workdir(tmp_path):
+        output = read_file(".")
+
+    assert "public.py" in output
+    assert ".git" not in output
+    assert ".nz-coder" not in output
+    assert ".env" not in output
+
+
 def test_untrusted_workspace_shell_requires_confirmation_even_in_auto_mode(
     tmp_path, monkeypatch
 ):

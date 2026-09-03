@@ -1,6 +1,7 @@
 """Opaque, quota-bounded, session-owned model-readable artifacts."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import json
 import os
@@ -13,7 +14,10 @@ import uuid
 from typing import Callable
 
 from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.foundation.file_lock import exclusive_file_lock
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.state.sessions import session_dir, session_tool_results_dir
 
 
 _ARTIFACT_ID = re.compile(r"^artifact_[a-f0-9]{32}$")
@@ -76,17 +80,18 @@ class ArtifactStore:
         self._clock = clock
         self._on_cleanup = on_cleanup
         self.last_cleanup: tuple[dict[str, object], ...] = ()
-        self.directory = (
-            self.workspace
-            / ".nz-coder"
-            / "sessions"
-            / "_artifacts"
-            / self.session_id
-            / "runtime"
-            / "tool-results"
-        )
-        WorkspacePathPolicy(self.workspace).validate_internal_access(self.directory)
+        with scoped_workdir(self.workspace):
+            self.sessions_root = session_dir().absolute()
+            self.directory = session_tool_results_dir(self.session_id).absolute()
+        self.artifact_root = self.sessions_root / "_artifacts"
+        try:
+            self.directory.relative_to(self.workspace)
+        except ValueError:
+            self.directory.relative_to(self.artifact_root)
+        else:
+            WorkspacePathPolicy(self.workspace).validate_internal_access(self.directory)
         self.manifest_path = self.directory / "manifest.json"
+        self.lock_path = self.artifact_root / ".artifact.lock"
 
     def put(self, text: str, *, kind: str) -> str:
         """Atomically persist one allowed model artifact and return an opaque ID."""
@@ -95,11 +100,14 @@ class ArtifactStore:
         payload = str(text).encode("utf-8")
         if len(payload) > self.max_result_bytes:
             raise ArtifactQuotaError("Artifact exceeds the per-result byte quota")
-        with _LOCK:
+        with self._exclusive_lock():
             manifest = self._load_manifest()
             entries = manifest["entries"]
-            session_bytes = sum(int(item.get("size", 0)) for item in entries.values())
-            if len(entries) >= self.max_session_files:
+            session_files, session_bytes = self._manifest_usage(
+                manifest,
+                self.directory,
+            )
+            if session_files >= self.max_session_files:
                 raise ArtifactQuotaError("Artifact Session file quota exceeded")
             if session_bytes + len(payload) > self.max_session_bytes:
                 raise ArtifactQuotaError("Artifact Session byte quota exceeded")
@@ -154,7 +162,7 @@ class ArtifactStore:
         if isinstance(requested, bool) or not isinstance(requested, int) or requested < 1:
             raise ArtifactAccessError("Artifact max_bytes must be a positive integer")
         limit = min(requested, self.max_read_bytes)
-        with _LOCK:
+        with self._exclusive_lock():
             manifest = self._load_manifest()
             record = manifest["entries"].get(safe_id)
             if not isinstance(record, dict):
@@ -189,7 +197,7 @@ class ArtifactStore:
 
     def delete_all(self) -> None:
         """Delete only this Session's known artifact files and manifest."""
-        with _LOCK:
+        with self._exclusive_lock():
             manifest = self._load_manifest()
             for artifact_id, record in manifest["entries"].items():
                 if not _ARTIFACT_ID.fullmatch(str(artifact_id)) or not isinstance(record, dict):
@@ -229,7 +237,7 @@ class ArtifactStore:
         )
 
     def _workspace_usage(self) -> tuple[int, int]:
-        root = self.workspace / ".nz-coder" / "sessions" / "_artifacts"
+        root = self.artifact_root
         files = 0
         total = 0
         try:
@@ -242,12 +250,12 @@ class ArtifactStore:
                 entries = payload.get("entries", {}) if isinstance(payload, dict) else {}
                 if not isinstance(entries, dict):
                     continue
-                files += len(entries)
-                total += sum(
-                    max(0, int(item.get("size", 0)))
-                    for item in entries.values()
-                    if isinstance(item, dict)
+                entry_files, entry_bytes = self._manifest_usage(
+                    {"entries": entries},
+                    manifest.parent,
                 )
+                files += entry_files
+                total += entry_bytes
         except OSError:
             pass
         return files, total
@@ -259,8 +267,9 @@ class ArtifactStore:
         required_files: int,
     ) -> list[dict[str, object]]:
         """Remove expired/LRU entries from other Sessions until quotas fit."""
-        root = self.workspace / ".nz-coder" / "sessions" / "_artifacts"
+        root = self.artifact_root
         now = float(self._clock())
+        durable_references = self._durable_artifact_references()
         candidates: list[tuple[float, Path, str, dict[str, object]]] = []
         for manifest_path in root.glob("*/runtime/tool-results/manifest.json"):
             owner = manifest_path.parents[2].name
@@ -291,6 +300,8 @@ class ArtifactStore:
             )
             expired = now - created >= self.ttl_seconds
             if not over_quota and not expired:
+                continue
+            if artifact_id in durable_references:
                 continue
             event = self._remove_workspace_entry(
                 manifest_path,
@@ -325,9 +336,11 @@ class ArtifactStore:
         entries = payload.get("entries", {}) if isinstance(payload, dict) else {}
         if not isinstance(entries, dict) or artifact_id not in entries:
             return None
-        target = WorkspacePathPolicy(self.workspace).validate_internal_access(
-            manifest_path.parent / filename
-        )
+        target = self._validated_artifact_path(manifest_path.parent / filename)
+        try:
+            actual_size = target.lstat().st_size
+        except FileNotFoundError:
+            actual_size = 0
         target.unlink(missing_ok=True)
         entries.pop(artifact_id, None)
         _atomic_write(
@@ -338,8 +351,75 @@ class ArtifactStore:
             "event": "artifact.cleaned",
             "artifact_id": artifact_id,
             "reason": reason,
-            "size": max(0, int(record.get("size", 0))),
+            "size": max(0, int(actual_size)),
         }
+
+    def _manifest_usage(
+        self,
+        manifest: dict[str, object],
+        directory: Path,
+    ) -> tuple[int, int]:
+        entries = manifest.get("entries", {})
+        if not isinstance(entries, dict):
+            return 0, 0
+        files = 0
+        total = 0
+        for artifact_id, record in entries.items():
+            if not _ARTIFACT_ID.fullmatch(str(artifact_id)) or not isinstance(record, dict):
+                continue
+            filename = str(record.get("filename") or "")
+            if filename != f"{artifact_id}.txt":
+                continue
+            target = self._validated_artifact_path(directory / filename)
+            try:
+                info = target.lstat()
+            except OSError:
+                continue
+            if target.is_symlink() or not target.is_file():
+                continue
+            files += 1
+            total += max(0, int(info.st_size))
+        return files, total
+
+    def _durable_artifact_references(self) -> set[str]:
+        """Collect opaque handles retained by saved Session transcripts."""
+        references: set[str] = set()
+        candidates = list(self.sessions_root.glob("*.json"))
+        candidates.extend(self.artifact_root.glob("*/runtime/transcripts/*"))
+        remaining = 16 * 1024 * 1024
+        for path in sorted(candidates, key=lambda item: item.as_posix()):
+            if remaining <= 0:
+                break
+            try:
+                path.lstat()
+                if path.is_symlink() or not path.is_file():
+                    continue
+                payload = path.read_bytes()[:remaining]
+            except OSError:
+                continue
+            remaining -= len(payload)
+            references.update(
+                match.decode("ascii")
+                for match in re.findall(rb"artifact_[a-f0-9]{32}", payload)
+            )
+        return references
+
+    def _validated_artifact_path(self, path: Path) -> Path:
+        target = path.absolute()
+        try:
+            target.relative_to(self.artifact_root)
+        except ValueError as exc:
+            raise ArtifactAccessError("Artifact path escapes its private root") from exc
+        return target
+
+    @contextmanager
+    def _exclusive_lock(self):
+        """Serialize manifest/quota updates across threads and processes."""
+        with _LOCK:
+            self.artifact_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+            harden_private_path(self.artifact_root)
+            with exclusive_file_lock(self.lock_path):
+                yield
 
 
 def _atomic_write(path: Path, payload: bytes) -> None:

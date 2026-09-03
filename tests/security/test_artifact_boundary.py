@@ -2,8 +2,20 @@
 from __future__ import annotations
 
 import os
+import json
 
 import pytest
+
+
+def _put_artifact_in_process(arguments):
+    workspace, index = arguments
+    from nz_coder.tool_platform.artifacts import ArtifactStore
+
+    return ArtifactStore(
+        workspace,
+        "session-process",
+        max_session_files=64,
+    ).put(f"process-{index}", kind="tool-result")
 
 
 def test_current_session_can_read_opaque_tool_result_only(tmp_path):
@@ -138,3 +150,87 @@ def test_concurrent_artifact_writes_remain_manifest_consistent(tmp_path):
     assert [store.read(item) for item in artifact_ids] == [
         f"value-{index}" for index in range(32)
     ]
+
+
+def test_cross_process_artifact_writes_remain_manifest_consistent(tmp_path):
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing
+
+    from nz_coder.tool_platform.artifacts import ArtifactStore
+
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=4, mp_context=context) as pool:
+        artifact_ids = list(pool.map(
+            _put_artifact_in_process,
+            [(tmp_path, index) for index in range(12)],
+        ))
+
+    store = ArtifactStore(tmp_path, "session-process", max_session_files=64)
+    assert len(set(artifact_ids)) == 12
+    assert sorted(store.read(item) for item in artifact_ids) == sorted(
+        f"process-{index}" for index in range(12)
+    )
+
+
+def test_workspace_cleanup_preserves_artifact_referenced_by_saved_session(tmp_path):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import save_session, scoped_session
+    from nz_coder.tool_platform.artifacts import ArtifactQuotaError, ArtifactStore
+
+    with scoped_workdir(tmp_path), scoped_session("old-session"):
+        old = ArtifactStore(
+            tmp_path,
+            "old-session",
+            max_workspace_files=1,
+            max_workspace_bytes=1024,
+            clock=lambda: 1.0,
+        )
+        artifact_id = old.put("durable", kind="tool-result")
+        save_session(
+            [{"role": "tool", "content": f"truncated\n[full:{artifact_id}]"}],
+            session_id="old-session",
+            activate=False,
+        )
+
+    current = ArtifactStore(
+        tmp_path,
+        "current-session",
+        max_workspace_files=1,
+        max_workspace_bytes=1024,
+        clock=lambda: 100.0,
+    )
+    with pytest.raises(ArtifactQuotaError, match="workspace file quota"):
+        current.put("current", kind="tool-result")
+
+    assert old.read(artifact_id) == "durable"
+
+
+def test_session_quota_uses_file_stat_not_manifest_size(tmp_path):
+    from nz_coder.tool_platform.artifacts import ArtifactQuotaError, ArtifactStore
+
+    store = ArtifactStore(
+        tmp_path,
+        "session-a",
+        max_result_bytes=100,
+        max_session_bytes=100,
+    )
+    store.put("x" * 60, kind="tool-result")
+    manifest = json.loads(store.manifest_path.read_text(encoding="utf-8"))
+    next(iter(manifest["entries"].values()))["size"] = 0
+    store.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ArtifactQuotaError, match="Session byte quota"):
+        store.put("y" * 50, kind="tool-result")
+
+
+def test_artifact_store_uses_configured_session_directory(tmp_path, monkeypatch):
+    from nz_coder.foundation import config
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tool_platform.artifacts import ArtifactStore
+
+    configured = tmp_path / "private-sessions"
+    monkeypatch.setattr(config, "SESSION_DIR", configured)
+    with scoped_workdir(tmp_path):
+        store = ArtifactStore(tmp_path, "session-a")
+
+    assert store.directory == configured / "_artifacts/session-a/runtime/tool-results"

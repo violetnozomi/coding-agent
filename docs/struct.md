@@ -1305,3 +1305,19 @@ text, raw tool envelopes, internal agent-as-tool answers, and retired attempt
 deltas are excluded from Session events and the event journal. The legacy SDK
 `on_token` callback is final-text-only and deprecated in favor of
 `on_final_text` or structured `on_event` consumption.
+
+## 22. Workspace Trust 安全复核收口（2026-09-03）
+
+这一轮不是新增 Agent 功能，而是根据独立 PR 复核把“仓库内容”和“宿主权限”之间的边界补完整。
+
+- 配置加载改为显式 `CONFIG_SCHEMA`。只有产品已声明的键会进入 `ConfigSnapshot`；未知宿主环境不会出现在 `config show`，未知工作区键会被忽略并产生安全诊断。新配置项默认要求 workspace trust，secret、类型和范围由 schema 声明。
+- Workspace Control Plane 现在对 `.env` 中的治理配置、`.nz-coder/settings.json`、模型选择、项目 MCP 配置和项目 Skills 做统一指纹。控制文件变化会撤销执行信任；未信任项目的 allow 规则失效，但 deny/ask 仍然有效。
+- 工作区模型选择使用独立的用户侧信任代际。显式选择会登记内容指纹，文件变化或 reset 会使旧选择失效，仓库不能仅靠预置 `selection.json` 切换 Provider 或昂贵模型。
+- 未信任项目 Skill 仍可作为仓库上下文读取，但不能覆盖 user/bundled Skill，也不能声明 `model` 或 `allowed_tools` 来改变治理状态。
+- Transaction rollback 记录父目录链的设备/文件身份。父目录在 track 后被 symlink、junction 或另一个目录替换时会 fail closed、保留 backup，并允许管理员修复路径后重试；POSIX 恢复通过验证后的目录描述符原子替换。
+- Provider credential scope 使用不公开的随机 generation；凭据轮换会得到新的 Provider instance，旧 thought signature/private continuation 不会跨账号转发。Provider worker 在 `thread.start()` 失败时也会释放 inflight 槽。
+- MCP/LSP 使用 `strict-service` 子进程环境，不继承 `PYTHONPATH`、`NODE_PATH`、`PSMODULEPATH`、`PYTHONHOME`、虚拟环境路径等代码加载变量；普通 build/test 命令仍使用兼容的 workspace-command profile。
+- ArtifactStore 使用统一 Session 目录、真实文件 `stat` 计算配额、跨进程文件锁和 durable reference set。仍被历史 Session transcript 引用的 `[full:artifact-id]` 不会被 TTL/LRU 清理。
+- 目录型 `read_file` 会过滤 `.env`、`.git`、`.nz-coder` 等私有名称；GitHub Actions checkout 禁止持久化仓库凭据。
+
+仍需明确保留的边界：路径策略和环境清洗不是 OS sandbox；Webfetch 在 DNS TOCTOU 与显式代理模式下仍需要单独的网络隔离策略；Windows junction 的真实行为以 Windows CI/实机结果为准；Actions 完整 SHA 固定应由可验证的依赖更新流程完成，不能离线编造。

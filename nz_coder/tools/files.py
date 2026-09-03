@@ -337,7 +337,12 @@ def read_file(
         read_offset = _read_offset(offset)
         read_limit = _read_limit(limit)
         if fp.is_dir():
-            entries = directory_entries(fp)
+            policy = WorkspacePathPolicy(current_workdir())
+            entries = [
+                entry
+                for entry in directory_entries(fp)
+                if policy.is_model_visible(fp / entry.rstrip("/"))
+            ]
             start = read_offset - 1
             selected = entries[start:start + read_limit]
             truncated = start + len(selected) < len(entries)
