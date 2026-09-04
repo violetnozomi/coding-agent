@@ -635,3 +635,72 @@ def test_lsp_outside_and_private_uris_are_redacted(tmp_path):
     assert _normalize_result({"targetUri": outside.as_uri()}, tmp_path)[
         "targetPath"
     ] == "outside-workspace"
+
+
+def test_lsp_outside_uri_does_not_expose_absolute_path(tmp_path):
+    from nz_coder.tools.lsp import _normalize_result
+
+    outside = tmp_path.parent / "host-secret.py"
+    result = _normalize_result({"uri": outside.as_uri()}, tmp_path)
+    assert result["path"] == "outside-workspace"
+    assert str(outside) not in repr(result)
+
+
+def test_lsp_private_uri_is_redacted(tmp_path):
+    from nz_coder.tools.lsp import _normalize_result
+
+    private = tmp_path / ".nz-coder" / "secret.py"
+    result = _normalize_result({"uri": private.as_uri()}, tmp_path)
+    assert result["path"] == "private-workspace"
+    assert str(private) not in repr(result)
+
+
+def test_lsp_source_change_is_observed_only_on_next_request(tmp_path):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.lsp.client import LSPClient
+
+    source = tmp_path / "source.py"
+    source.write_text("first = 1\n", encoding="utf-8")
+    access = WorkspaceFileAccess(tmp_path)
+    first_text, first_identity = access.read_text_with_identity("source.py")
+    source.write_text("second = 2\n", encoding="utf-8")
+    sent = []
+    client = object.__new__(LSPClient)
+    client.root = tmp_path.resolve()
+    client.language_id = "python"
+    client._documents = {}
+    client.notify = lambda method, params: sent.append((method, params))
+
+    client.open_document(source, first_text, first_identity)
+    second_text, second_identity = access.read_text_with_identity("source.py")
+    client.open_document(source, second_text, second_identity)
+
+    assert sent[0][1]["textDocument"]["text"] == "first = 1\n"
+    assert sent[-1][1]["contentChanges"][0]["text"] == "second = 2\n"
+
+
+def test_lsp_parent_swap_after_tool_validation_cannot_escape(tmp_path, monkeypatch):
+    from nz_coder.tools import lsp as lsp_tool
+
+    workspace = tmp_path / "workspace"
+    source_parent = workspace / "src"
+    parked = workspace / "src-original"
+    outside = tmp_path / "outside"
+    source_parent.mkdir(parents=True)
+    outside.mkdir()
+    (source_parent / "main.py").write_text("inside = 1\n", encoding="utf-8")
+    (outside / "main.py").write_text("SENTINEL-LSP-OUTSIDE\n", encoding="utf-8")
+    original = lsp_tool._safe_path
+
+    def validate_then_swap(path):
+        validated = original(path)
+        source_parent.rename(parked)
+        source_parent.symlink_to(outside, target_is_directory=True)
+        return validated
+
+    monkeypatch.setattr(lsp_tool, "_safe_path", validate_then_swap)
+    with scoped_workdir(workspace):
+        result = lsp_tool.lsp("hover", "src/main.py", 1, 1)
+
+    assert str(result).startswith("Error: ")
+    assert "SENTINEL-LSP-OUTSIDE" not in str(result)
