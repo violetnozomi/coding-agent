@@ -412,12 +412,14 @@ def test_mcp_project_config_uses_snapshot_bytes(tmp_path, monkeypatch):
     from nz_coder.foundation.project_control import capture_project_control_snapshot
     from nz_coder.mcp.config import load_mcp_server_configs
 
-    project = tmp_path / ".nz-coder" / "mcp.json"
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    project = workspace / ".nz-coder" / "mcp.json"
     project.parent.mkdir()
     project.write_text(
         '{"servers":{"demo":{"command":["trusted-a"]}}}', encoding="utf-8"
     )
-    snapshot = replace(capture_project_control_snapshot(tmp_path), trusted=True)
+    snapshot = replace(capture_project_control_snapshot(workspace), trusted=True)
     project.write_text(
         '{"servers":{"demo":{"command":["untrusted-b"]}}}', encoding="utf-8"
     )
@@ -426,7 +428,7 @@ def test_mcp_project_config_uses_snapshot_bytes(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "MCP_SERVERS_JSON", "")
 
     server = load_mcp_server_configs(
-        workspace=tmp_path,
+        workspace=workspace,
         project_control_snapshot=snapshot,
     )[0]
 
