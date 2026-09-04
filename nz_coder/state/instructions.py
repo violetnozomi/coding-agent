@@ -219,9 +219,9 @@ def _ensure_global_instruction_root(home: Path, *, create: bool) -> bool:
             for part in parts:
                 cursor /= part
                 try:
-                    child = _windows_open(
-                        cursor, directory=True, missing_ok=not create, parent=parent,
-                    )
+                        child = _windows_open(
+                            cursor, directory=True, missing_ok=True, parent=parent,
+                        )
                 except FileNotFoundError:
                     child = None
                 if child is None:

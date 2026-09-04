@@ -239,8 +239,11 @@ class WorkspaceFileAccess:
             cursor = self.root
             for part in relative.parts[:-1]:
                 cursor = cursor / part
-                child = _windows_open(cursor, directory=True, parent=parent)
-                assert child is not None
+                child = _windows_open(
+                    cursor, directory=True, missing_ok=True, parent=parent,
+                )
+                if child is None:
+                    return False
                 handles.append(child)
                 parent = child
             target = _windows_open(
@@ -558,8 +561,11 @@ class WorkspaceFileAccess:
             cursor = self.root
             for part in relative.parts[:-1]:
                 cursor /= part
-                child = _windows_open(cursor, directory=True, parent=parent)
-                assert child is not None
+                child = _windows_open(
+                    cursor, directory=True, missing_ok=True, parent=parent,
+                )
+                if child is None:
+                    raise FileNotFoundError(os.fspath(cursor))
                 handles.append(child)
                 parent = child
             opened = _windows_open(
@@ -722,14 +728,21 @@ class WorkspaceFileAccess:
             cursor = self.root
             for part in relative.parts[:-1]:
                 cursor /= part
-                child = _windows_open(cursor, directory=True, parent=parent)
-                assert child is not None
+                child = _windows_open(
+                    cursor, directory=True, missing_ok=True, parent=parent,
+                )
+                if child is None:
+                    raise FileNotFoundError(os.fspath(cursor))
                 handles.append(child)
                 parent = child
             target = _windows_open(
-                cursor / relative.name, directory=False, parent=parent,
+                cursor / relative.name,
+                directory=False,
+                missing_ok=True,
+                parent=parent,
             )
-            assert target is not None
+            if target is None:
+                raise FileNotFoundError(os.fspath(cursor / relative.name))
             handles.append(target)
             _attrs, _device, _inode, size = _windows_handle_info(target, full=True)
             info = os.stat(cursor / relative.name, follow_symlinks=False)
@@ -760,12 +773,21 @@ class WorkspaceFileAccess:
             cursor = self.root
             for part in relative.parts[:-1]:
                 cursor = cursor / part
-                child = _windows_open(cursor, directory=True, parent=parent)
-                assert child is not None
+                child = _windows_open(
+                    cursor, directory=True, missing_ok=True, parent=parent,
+                )
+                if child is None:
+                    raise FileNotFoundError(os.fspath(cursor))
                 handles.append(child)
                 parent = child
-            target = _windows_open(cursor / relative.name, directory=False, parent=parent)
-            assert target is not None
+            target = _windows_open(
+                cursor / relative.name,
+                directory=False,
+                missing_ok=True,
+                parent=parent,
+            )
+            if target is None:
+                raise FileNotFoundError(os.fspath(cursor / relative.name))
             handles.append(target)
             _attrs, device, inode, size = _windows_handle_info(target, full=True)
             if maximum is not None and size > maximum:
@@ -799,16 +821,14 @@ class WorkspaceFileAccess:
         # Windows directory handles are retained and verified by the project
         # control helper; replacement still has a documented final path/rename
         # TOCTOU window because Python exposes no handle-relative ReplaceFile.
-        from nz_coder.foundation.project_control import _windows_close, _windows_final_path, _windows_open
+        from nz_coder.foundation.project_control import _windows_close, _windows_final_path
 
-        parent_path = self.root / relative.parent
-        parent_path.mkdir(parents=True, exist_ok=True)
-        handle = _windows_open(parent_path, directory=True)
-        assert handle is not None
+        handles, handle, _lexical_parent = self._open_windows_parent(
+            relative, create=True,
+        )
+        parent_path = Path(_windows_final_path(handle))
         temporary: Path | None = None
         try:
-            if Path(_windows_final_path(handle)) != parent_path.resolve():
-                raise ValueError("Workspace parent identity changed")
             target_path = parent_path / relative.name
             try:
                 current_info = os.stat(target_path, follow_symlinks=False)
@@ -848,21 +868,21 @@ class WorkspaceFileAccess:
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
-            _windows_close(handle)
+            for owned in reversed(handles):
+                _windows_close(owned)
 
 
     def _delete_windows(
         self, relative: Path, transaction,
         *, expected: ExpectedFileIdentity | None,
     ) -> None:
-        from nz_coder.foundation.project_control import _windows_close, _windows_final_path, _windows_open
+        from nz_coder.foundation.project_control import _windows_close, _windows_final_path
 
-        parent_path = self.root / relative.parent
-        handle = _windows_open(parent_path, directory=True)
-        assert handle is not None
+        handles, handle, _lexical_parent = self._open_windows_parent(
+            relative, create=False,
+        )
+        parent_path = Path(_windows_final_path(handle))
         try:
-            if Path(_windows_final_path(handle)) != parent_path.resolve():
-                raise ValueError("Workspace parent identity changed")
             if transaction is not None and getattr(transaction, "active", False):
                 transaction.track_anchored(
                     relative.as_posix(), windows_parent_handle=handle,
@@ -876,7 +896,49 @@ class WorkspaceFileAccess:
             )
             target.unlink()
         finally:
-            _windows_close(handle)
+            for owned in reversed(handles):
+                _windows_close(owned)
+
+    def _open_windows_parent(
+        self, relative: Path, *, create: bool,
+    ) -> tuple[list[int], int, Path]:
+        """Hold every verified Windows ancestor until one mutation completes."""
+        from nz_coder.foundation.project_control import (
+            UnsafeProjectControl,
+            _windows_close,
+            _windows_open,
+        )
+
+        handles: list[int] = []
+        try:
+            parent = _windows_open(self.root, directory=True)
+            assert parent is not None
+            handles.append(parent)
+            cursor = self.root
+            for part in relative.parts[:-1]:
+                cursor /= part
+                child = _windows_open(
+                    cursor,
+                    directory=True,
+                    missing_ok=True,
+                    parent=parent,
+                )
+                if child is None:
+                    if not create:
+                        raise FileNotFoundError(os.fspath(cursor))
+                    try:
+                        cursor.mkdir(mode=0o755)
+                    except FileExistsError:
+                        pass
+                    child = _windows_open(cursor, directory=True, parent=parent)
+                assert child is not None
+                handles.append(child)
+                parent = child
+            return handles, parent, cursor
+        except (OSError, UnsafeProjectControl):
+            for owned in reversed(handles):
+                _windows_close(owned)
+            raise
 
 
 class FixedFileAccess(WorkspaceFileAccess):

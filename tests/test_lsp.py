@@ -597,7 +597,7 @@ def test_lsp_open_document_uses_anchored_source_bytes(tmp_path):
 
     client.open_document(source, text, identity)
 
-    assert sent[0][1]["textDocument"]["text"] == "anchored = 1\n"
+    assert sent[0][1]["textDocument"]["text"] == text
 
 
 def test_lsp_diagnostics_does_not_reread_source_path(tmp_path):
@@ -675,8 +675,8 @@ def test_lsp_source_change_is_observed_only_on_next_request(tmp_path):
     second_text, second_identity = access.read_text_with_identity("source.py")
     client.open_document(source, second_text, second_identity)
 
-    assert sent[0][1]["textDocument"]["text"] == "first = 1\n"
-    assert sent[-1][1]["contentChanges"][0]["text"] == "second = 2\n"
+    assert sent[0][1]["textDocument"]["text"] == first_text
+    assert sent[-1][1]["contentChanges"][0]["text"] == second_text
 
 
 def test_lsp_parent_swap_after_tool_validation_cannot_escape(tmp_path, monkeypatch):
