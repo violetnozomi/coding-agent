@@ -876,26 +876,95 @@ class WorkspaceFileAccess:
         self, relative: Path, transaction,
         *, expected: ExpectedFileIdentity | None,
     ) -> None:
-        from nz_coder.foundation.project_control import _windows_close, _windows_final_path
+        import ctypes
+        from ctypes import wintypes
+        import ntpath
+
+        from nz_coder.foundation.project_control import (
+            _windows_close,
+            _windows_final_path,
+            _windows_handle_info,
+        )
 
         handles, handle, _lexical_parent = self._open_windows_parent(
             relative, create=False,
         )
         parent_path = Path(_windows_final_path(handle))
+        target_handle: int | None = None
         try:
             if transaction is not None and getattr(transaction, "active", False):
                 transaction.track_anchored(
                     relative.as_posix(), windows_parent_handle=handle,
                 )
-            target = parent_path / relative.name
-            if target.is_symlink() or not target.is_file():
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            create_file = kernel32.CreateFileW
+            create_file.argtypes = (
+                wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+                wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+            )
+            create_file.restype = wintypes.HANDLE
+            opened = create_file(
+                str(parent_path / relative.name),
+                0x00010000 | 0x00000080,  # DELETE | FILE_READ_ATTRIBUTES
+                0x00000001 | 0x00000002,  # share read/write, but not delete
+                None,
+                3,  # OPEN_EXISTING
+                0x00000080 | 0x00200000,  # normal + open reparse point
+                None,
+            )
+            value = int(getattr(opened, "value", opened)) if opened is not None else -1
+            if value == ctypes.c_void_p(-1).value:
+                error = ctypes.get_last_error()
+                if error in {2, 3}:
+                    raise FileNotFoundError(os.fspath(parent_path / relative.name))
+                raise OSError(error, "Workspace target cannot be opened for deletion")
+            target_handle = value
+
+            attributes, device, inode, size = _windows_handle_info(
+                target_handle, full=True,
+            )
+            if attributes & 0x00000400 or attributes & 0x00000010:
                 raise ValueError("Workspace target is not a regular file")
+            target_path = _windows_final_path(target_handle)
+            if ntpath.normcase(ntpath.dirname(target_path)) != ntpath.normcase(
+                os.fspath(parent_path)
+            ):
+                raise ValueError("Workspace parent identity changed")
+            current_info = os.stat(target_path, follow_symlinks=False)
             self._validate_expected(
-                self._identity_from_stat(os.stat(target, follow_symlinks=False)),
+                WorkspaceFileIdentity(
+                    True,
+                    int(device),
+                    int(inode),
+                    int(size),
+                    int(current_info.st_mtime_ns),
+                    "",
+                ),
                 expected,
             )
-            target.unlink()
+
+            class _FileDispositionInfo(ctypes.Structure):
+                _fields_ = (("delete_file", wintypes.BOOLEAN),)
+
+            disposition = _FileDispositionInfo(True)
+            delete = kernel32.SetFileInformationByHandle
+            delete.argtypes = (
+                wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+            )
+            delete.restype = wintypes.BOOL
+            if not delete(
+                wintypes.HANDLE(target_handle),
+                4,  # FileDispositionInfo
+                ctypes.byref(disposition),
+                ctypes.sizeof(disposition),
+            ):
+                raise OSError(
+                    ctypes.get_last_error(), "Workspace target cannot be deleted",
+                )
         finally:
+            if target_handle is not None:
+                _windows_close(target_handle)
             for owned in reversed(handles):
                 _windows_close(owned)
 

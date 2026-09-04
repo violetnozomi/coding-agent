@@ -257,6 +257,33 @@ def test_windows_instruction_junction_is_rejected(tmp_path: Path):
     assert sentinel.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
 
 
+def test_windows_instruction_regular_file_lifecycle(tmp_path: Path):
+    """Normal instruction deletion must work through the native handle path."""
+    from nz_coder.state.instructions import (
+        create_instruction_file,
+        delete_instruction_file,
+        list_instruction_files,
+        set_instruction_file_enabled,
+    )
+
+    project = tmp_path / "workspace"
+    project.mkdir()
+    created = create_instruction_file(project, "project")
+    assert created.filename == "AGENTS.md"
+    target = project / "AGENTS.md"
+    target.write_text("native Windows instruction\n", encoding="utf-8")
+
+    disabled = set_instruction_file_enabled(
+        project, "project", "AGENTS.md", False,
+    )
+    assert disabled.enabled is False
+    assert list_instruction_files(project, "project").files[0].enabled is False
+
+    delete_instruction_file(project, "project", "AGENTS.md")
+    assert not target.exists()
+    assert not (project / ".nz-coder" / "instruction-file-state.json").exists()
+
+
 def test_windows_directory_limit_stops_scandir_early(tmp_path: Path, monkeypatch):
     import nz_coder.foundation.workspace_file_access as workspace_access
     from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
