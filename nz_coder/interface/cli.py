@@ -481,6 +481,18 @@ async def handle_command_async(
     return await (registry or default_command_registry).dispatch_async(cmd, context)
 
 
+def _resolve_submission_command(raw, registry, catalog):  # noqa: ANN001, ANN202
+    """Resolve dynamic prompt commands from the current submission catalog."""
+    text = str(raw).strip()
+    if not text.startswith("/"):
+        return None, False
+    registered = registry.get(text.split(maxsplit=1)[0])
+    if registered is not None and registered.category != "Custom":
+        return None, False
+    expanded = catalog.expand_invocation(text)
+    return expanded, expanded is None
+
+
 async def _run_cli_impl(owner_state: list[dict]) -> None:
     from nz_coder.providers.configuration import provider_connection
     from nz_coder.providers.models import active_model_selection
@@ -656,11 +668,10 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             command_catalog = default_command_catalog(
                 current_workdir(), config_snapshot=submission_snapshot,
             )
-            registered = command_registry.get(stripped.split(maxsplit=1)[0])
-            expanded_command = (
-                command_catalog.expand_invocation(stripped)
-                if registered is not None and registered.category == "Custom"
-                else None
+            expanded_command, dynamic_command_unknown = (
+                _resolve_submission_command(
+                    stripped, command_registry, command_catalog,
+                )
             )
             if expanded_command is not None:
                 stripped = expanded_command.prompt
@@ -672,8 +683,16 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
         else:
             command_allowed_tools = None
             command_model = None
+            dynamic_command_unknown = False
 
         if stripped.startswith("/"):
+            if dynamic_command_unknown:
+                active_console.print(
+                    f"[error]Unknown command: {stripped.split()[0]} — "
+                    "type /help for commands[/error]"
+                )
+                input_ui.refresh_view()
+                continue
             try:
                 handled = await handle_command_async(
                     stripped,

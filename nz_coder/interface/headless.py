@@ -200,18 +200,12 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
             load_config_snapshot,
             scoped_config_snapshot,
         )
-        from nz_coder.state.skills import SkillLoader
 
         workspace_snapshot = load_config_snapshot(workspace)
         expanded_command = default_command_catalog(
             workspace,
             config_snapshot=workspace_snapshot,
         ).expand_invocation(user_text)
-        skill_loader = SkillLoader(
-            project_dir=workspace / ".nz-coder" / "skills",
-            workspace_trusted=workspace_snapshot.control_plane_trusted,
-            project_control_snapshot=workspace_snapshot.project_control,
-        )
         command_tools: tuple[str, ...] = ()
         command_model: str | None = None
         if expanded_command is not None:
@@ -243,7 +237,7 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
             agent=AgentDefinition(
                 name="headless",
                 instructions=prompt.build(
-                    memory_block="", skill_descriptions=skill_loader.descriptions(),
+                    memory_block="", skill_descriptions="",
                 ),
                 allowed_tools=command_tools or None,
             ),

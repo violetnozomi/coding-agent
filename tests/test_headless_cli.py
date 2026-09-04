@@ -23,9 +23,15 @@ class FakeClient:
         self.error = error
         self.event_payload = event_payload or {}
         self.requests = []
+        self.run_kwargs = []
+        self.run_snapshots = []
 
     async def run(self, request, **kwargs):
+        from nz_coder.foundation.workspace_trust import active_config_snapshot
+
         self.requests.append(request)
+        self.run_kwargs.append(dict(kwargs))
+        self.run_snapshots.append(active_config_snapshot(request.workspace))
         on_event = kwargs.get("on_event")
         if on_event is not None:
             on_event(RuntimeEvent(
@@ -304,7 +310,7 @@ def test_headless_expands_project_command_and_narrows_tools(tmp_path, monkeypatc
     assert request.agent.allowed_tools == ("read_file", "grep_search")
 
 
-def test_headless_uses_target_workspace_skill_trust(tmp_path, monkeypatch):
+def test_headless_project_skill_uses_submission_snapshot(tmp_path, monkeypatch):
     from nz_coder.foundation.workspace_trust import (
         WorkspaceTrustStore,
         load_config_snapshot,
@@ -330,7 +336,139 @@ def test_headless_uses_target_workspace_skill_trust(tmp_path, monkeypatch):
         tmp_path, "workspace-control", snapshot.control_fingerprint
     )
     _code, _stdout, _stderr, trusted_client = _run(["inspect"], tmp_path)
-    assert "repo-review" in trusted_client.requests[0].agent.instructions
+    assert "repo-review" not in trusted_client.requests[0].agent.instructions
+    run_snapshot = trusted_client.run_snapshots[0]
+    assert run_snapshot.control_plane_trusted is True
+    assert run_snapshot.project_control.get(
+        ".nz-coder/skills/repo-review/SKILL.md"
+    ) is not None
+
+
+def test_headless_skill_descriptions_are_injected_once(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
+    skill = tmp_path / ".nz-coder" / "skills" / "once" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text(
+        "---\nname: once\ndescription: UNIQUE_SKILL_DESCRIPTION\n---\nbody\n",
+        encoding="utf-8",
+    )
+    trust_path = tmp_path.parent / f"{tmp_path.name}-skill-once-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    initial = load_config_snapshot(tmp_path)
+    WorkspaceTrustStore(trust_path).trust(
+        tmp_path, "workspace-control", initial.control_fingerprint,
+    )
+
+    code, _stdout, _stderr, client = _run(["inspect"], tmp_path)
+
+    assert code == 0
+    instructions = client.requests[0].agent.instructions
+    assert instructions.count("## Available skills") == 0
+    assert instructions.count("UNIQUE_SKILL_DESCRIPTION") == 0
+
+    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    snapshot = client.run_snapshots[0]
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop(
+            instructions,
+            client=type("Client", (), {})(),
+            config_snapshot=snapshot,
+            trace_enabled=False,
+            sidecar_verifier=False,
+        )
+        bundle = agent.prepare_run_control(snapshot)
+        try:
+            assert agent.system_prompt.count("## Available skills") == 1
+            assert agent.system_prompt.count("UNIQUE_SKILL_DESCRIPTION") == 1
+        finally:
+            agent.retire_run_control(bundle)
+            agent.close()
+
+
+def test_headless_skill_change_does_not_affect_inflight_run(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    skill = tmp_path / ".nz-coder" / "skills" / "epoch" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text(
+        "---\nname: epoch\ndescription: SKILL_EPOCH_ONE\n---\nbody\n",
+        encoding="utf-8",
+    )
+    trust_path = tmp_path.parent / f"{tmp_path.name}-skill-epoch-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    pending = load_config_snapshot(tmp_path)
+    WorkspaceTrustStore(trust_path).trust(
+        tmp_path, "workspace-control", pending.control_fingerprint,
+    )
+    submission_snapshot = load_config_snapshot(tmp_path)
+    skill.write_text(
+        "---\nname: epoch\ndescription: SKILL_EPOCH_TWO\n---\nbody\n",
+        encoding="utf-8",
+    )
+
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop(
+            "base", client=type("Client", (), {})(),
+            config_snapshot=submission_snapshot,
+            trace_enabled=False, sidecar_verifier=False,
+        )
+        bundle = agent.prepare_run_control(submission_snapshot)
+        try:
+            assert agent.system_prompt.count("SKILL_EPOCH_ONE") == 1
+            assert "SKILL_EPOCH_TWO" not in agent.system_prompt
+        finally:
+            agent.retire_run_control(bundle)
+            agent.close()
+
+
+def test_headless_next_run_rotates_skill_description(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    skill = tmp_path / ".nz-coder" / "skills" / "rotate" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    trust_path = tmp_path.parent / f"{tmp_path.name}-skill-rotate-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    store = WorkspaceTrustStore(trust_path)
+
+    skill.write_text(
+        "---\nname: rotate\ndescription: ROTATING_SKILL_ONE\n---\nbody\n",
+        encoding="utf-8",
+    )
+    pending = load_config_snapshot(tmp_path)
+    store.trust(tmp_path, "workspace-control", pending.control_fingerprint)
+    first = load_config_snapshot(tmp_path)
+
+    skill.write_text(
+        "---\nname: rotate\ndescription: ROTATING_SKILL_TWO\n---\nbody\n",
+        encoding="utf-8",
+    )
+    pending = load_config_snapshot(tmp_path)
+    store.trust(tmp_path, "workspace-control", pending.control_fingerprint)
+    second = load_config_snapshot(tmp_path)
+
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop(
+            "base", client=type("Client", (), {})(), config_snapshot=first,
+            trace_enabled=False, sidecar_verifier=False,
+        )
+        first_bundle = agent.prepare_run_control(first)
+        assert "ROTATING_SKILL_ONE" in agent.system_prompt
+        agent.retire_run_control(first_bundle)
+        second_bundle = agent.prepare_run_control(second)
+        try:
+            assert "ROTATING_SKILL_ONE" not in agent.system_prompt
+            assert agent.system_prompt.count("ROTATING_SKILL_TWO") == 1
+            assert agent.system_prompt.count("## Available skills") == 1
+        finally:
+            agent.retire_run_control(second_bundle)
+            agent.close()
 
 
 def test_headless_rejects_conflicting_sessions_and_empty_input(tmp_path):

@@ -331,7 +331,7 @@ def load_mcp_server_configs(
         )
         fingerprint = ""
         trusted = True
-        if origin == "project":
+        if origin in {"project", "trusted-workspace"}:
             fingerprint = _server_fingerprint(
                 name=name,
                 server_type=server_type,

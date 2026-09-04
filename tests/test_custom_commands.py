@@ -258,3 +258,132 @@ def test_trusted_project_command_can_override_after_exact_trust(tmp_path, monkey
     command_path.write_text("changed project prompt", encoding="utf-8")
     changed = default_command_catalog(tmp_path).get("review")
     assert changed is not None and changed.source == "bundled"
+
+
+def test_tui_newly_trusted_command_executes_without_restart(tmp_path):
+    from nz_coder.interface.cli import _resolve_submission_command
+    from nz_coder.interface.commands import build_default_registry
+    from nz_coder.interface.custom_commands import CommandCatalog
+
+    startup_registry = build_default_registry()
+    _write(tmp_path, "new", "Run $ARGUMENTS")
+    current_catalog = CommandCatalog.discover(user_dir=tmp_path)
+
+    expanded, unknown = _resolve_submission_command(
+        "/new target", startup_registry, current_catalog,
+    )
+
+    assert unknown is False
+    assert expanded is not None and expanded.prompt == "Run target"
+
+
+def test_tui_removed_command_is_unknown_without_restart(tmp_path):
+    from nz_coder.interface.cli import _resolve_submission_command
+    from nz_coder.interface.commands import build_default_registry
+    from nz_coder.interface.custom_commands import CommandCatalog, register_command_completion
+
+    _write(tmp_path, "old", "Old prompt")
+    startup = CommandCatalog.discover(user_dir=tmp_path)
+    registry = build_default_registry()
+    register_command_completion(registry, startup)
+
+    expanded, unknown = _resolve_submission_command(
+        "/old", registry, CommandCatalog(),
+    )
+
+    assert expanded is None
+    assert unknown is True
+
+
+def test_builtin_command_wins_over_dynamic_custom_command(tmp_path):
+    from nz_coder.interface.cli import _resolve_submission_command
+    from nz_coder.interface.commands import build_default_registry
+    from nz_coder.interface.custom_commands import CommandCatalog
+
+    _write(tmp_path, "help", "shadow built-in")
+    catalog = CommandCatalog.discover(user_dir=tmp_path)
+
+    expanded, unknown = _resolve_submission_command(
+        "/help", build_default_registry(), catalog,
+    )
+
+    assert expanded is None
+    assert unknown is False
+
+
+def test_command_model_and_allowed_tools_rotate_with_snapshot(tmp_path):
+    from nz_coder.interface.cli import _resolve_submission_command
+    from nz_coder.interface.commands import build_default_registry
+    from nz_coder.interface.custom_commands import CommandCatalog
+
+    command = tmp_path / "rotate.md"
+    command.write_text(
+        "---\nmodel: provider/one\nallowed_tools: [read_file]\n---\none",
+        encoding="utf-8",
+    )
+    first = CommandCatalog.discover(user_dir=tmp_path)
+    command.write_text(
+        "---\nmodel: provider/two\nallowed_tools: [grep_search]\n---\ntwo",
+        encoding="utf-8",
+    )
+    second = CommandCatalog.discover(user_dir=tmp_path)
+    registry = build_default_registry()
+
+    one, _ = _resolve_submission_command("/rotate", registry, first)
+    two, _ = _resolve_submission_command("/rotate", registry, second)
+
+    assert one is not None and (one.model, one.allowed_tools) == (
+        "provider/one", ("read_file",),
+    )
+    assert two is not None and (two.model, two.allowed_tools) == (
+        "provider/two", ("grep_search",),
+    )
+
+
+def test_tui_command_change_requires_new_trust(tmp_path, monkeypatch):
+    from nz_coder.interface.cli import _resolve_submission_command
+    from nz_coder.interface.commands import build_default_registry
+    from nz_coder.interface.custom_commands import default_command_catalog
+
+    command = tmp_path / ".nz-coder" / "commands" / "dynamic.md"
+    _write(command.parent, "dynamic", "old prompt")
+    _trust_project_control(tmp_path, monkeypatch)
+    trusted = default_command_catalog(tmp_path)
+    command.write_text("changed prompt", encoding="utf-8")
+    changed = default_command_catalog(tmp_path)
+
+    old, old_unknown = _resolve_submission_command(
+        "/dynamic", build_default_registry(), trusted,
+    )
+    new, new_unknown = _resolve_submission_command(
+        "/dynamic", build_default_registry(), changed,
+    )
+
+    assert old is not None and old.prompt == "old prompt" and old_unknown is False
+    assert new is None and new_unknown is True
+
+
+def test_command_expansion_and_run_share_submission_snapshot(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+    from nz_coder.interface.cli import _resolve_submission_command
+    from nz_coder.interface.commands import build_default_registry
+    from nz_coder.interface.custom_commands import default_command_catalog
+
+    command = tmp_path / ".nz-coder" / "commands" / "epoch.md"
+    _write(command.parent, "epoch", "epoch-one")
+    _trust_project_control(tmp_path, monkeypatch)
+    submission_snapshot = load_config_snapshot(tmp_path)
+    command.write_text("epoch-two", encoding="utf-8")
+    catalog = default_command_catalog(
+        tmp_path, config_snapshot=submission_snapshot,
+    )
+
+    expanded, unknown = _resolve_submission_command(
+        "/epoch", build_default_registry(), catalog,
+    )
+
+    assert unknown is False
+    assert expanded is not None and expanded.prompt == "epoch-one"
+    assert submission_snapshot.project_control.get(
+        ".nz-coder/commands/epoch.md"
+    ).content == b"epoch-one"
