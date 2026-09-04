@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import os
-import hashlib
-import json
 import shlex
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from nz_coder.foundation.languages import LSP_LANGUAGES, lsp_command_config_key
+from nz_coder.foundation.execution_identity import (
+    ExecutionIdentity,
+    resolve_execution_identity,
+)
 from nz_coder.foundation.workspace_trust import (
     ConfigSnapshot,
     ConfigSource,
@@ -42,6 +44,7 @@ class ResolvedServer:
     config_source: str = "system-path"
     trusted: bool = True
     fingerprint: str = ""
+    execution_identity: ExecutionIdentity | None = None
 
 
 _SPECS = (
@@ -248,8 +251,6 @@ def resolve_server(
         resolved = _resolve_executable(command, root)
         if resolved:
             executable = Path(resolved[0]).resolve(strict=False)
-            workspace_local = _inside_workspace(executable, workspace)
-            fingerprint = _server_fingerprint(resolved, executable)
             if override:
                 config_source = {
                     ConfigSource.USER: "user-config",
@@ -262,7 +263,16 @@ def resolve_server(
                 config_source = "workspace-local-default"
             else:
                 config_source = "system-path"
-            trusted = not workspace_local or WorkspaceTrustStore().is_trusted(
+            execution_identity = resolve_execution_identity(
+                resolved,
+                cwd=root,
+                workspace=workspace,
+                config_source=config_source,
+                environment_profile="strict-service",
+            )
+            fingerprint = execution_identity.fingerprint
+            workspace_controlled = execution_identity.workspace_controlled
+            trusted = not workspace_controlled or WorkspaceTrustStore().is_trusted(
                 workspace,
                 f"lsp:{spec.language}",
                 fingerprint,
@@ -274,10 +284,11 @@ def resolve_server(
                 command=resolved,
                 root=root,
                 analysis_paths=analysis_paths,
-                source="workspace" if workspace_local else "system",
+                source="workspace" if workspace_controlled else "system",
                 config_source=config_source,
                 trusted=trusted,
                 fingerprint=fingerprint,
+                execution_identity=execution_identity,
             )
     return None
 
@@ -319,26 +330,6 @@ def _inside_workspace(path: Path, workspace: Path) -> bool:
     except ValueError:
         return False
     return True
-
-
-def _server_fingerprint(command: tuple[str, ...], executable: Path) -> str:
-    executable_hash = ""
-    if executable.is_file():
-        digest = hashlib.sha256()
-        with executable.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-        executable_hash = digest.hexdigest()
-    payload = json.dumps(
-        {
-            "command": list(command),
-            "executable": str(executable),
-            "executable_hash": executable_hash,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def available_server_summary(path: Path) -> str:

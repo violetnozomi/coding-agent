@@ -14,6 +14,7 @@ class MCPTrustStore:
         self._store = WorkspaceTrustStore(self.path)
 
     def is_trusted(self, workspace: Path, server_name: str, fingerprint: str) -> bool:
+        self._require_user_owned(workspace)
         return self._store.is_trusted(
             workspace,
             f"mcp:{server_name}",
@@ -21,7 +22,18 @@ class MCPTrustStore:
         )
 
     def trust(self, workspace: Path, server_name: str, fingerprint: str) -> None:
+        self._require_user_owned(workspace)
         self._store.trust(workspace, f"mcp:{server_name}", fingerprint)
 
     def remove(self, workspace: Path, server_name: str) -> bool:
+        self._require_user_owned(workspace)
         return self._store.remove(workspace, f"mcp:{server_name}")
+
+    def _require_user_owned(self, workspace: Path) -> None:
+        root = Path(workspace).expanduser().resolve()
+        target = self.path.resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            return
+        raise ValueError("MCP trust store must be outside the workspace")

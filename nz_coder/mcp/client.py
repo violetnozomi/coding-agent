@@ -11,6 +11,11 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Callable
 
+from nz_coder.foundation.execution_identity import (
+    ExecutionIdentity,
+    UnsafeExecutionIdentity,
+    verify_execution_identity,
+)
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
@@ -62,6 +67,7 @@ class MCPClient:
         environment: dict[str, str] | None = None,
         startup_timeout_seconds: float = 30.0,
         tool_timeout_seconds: float = 30.0,
+        execution_identity: ExecutionIdentity | None = None,
     ):
         self.name = name
         self.command = tuple(command)
@@ -69,6 +75,7 @@ class MCPClient:
         self.environment = dict(environment or {})
         self.startup_timeout_seconds = _validated_timeout(startup_timeout_seconds)
         self.tool_timeout_seconds = _validated_timeout(tool_timeout_seconds)
+        self.execution_identity = execution_identity
         self.process: subprocess.Popen | None = None
         self.server_info: dict[str, Any] = {}
         self.server_capabilities: dict[str, Any] = {}
@@ -105,6 +112,8 @@ class MCPClient:
             if self._closed:
                 raise MCPError(f"MCP server '{self.name}' is closed")
             try:
+                if self.execution_identity is not None:
+                    verify_execution_identity(self.execution_identity)
                 self.process = subprocess.Popen(
                     executable_argv(self.command),
                     cwd=self.cwd,
@@ -123,6 +132,11 @@ class MCPClient:
                         else 0
                     ),
                 )
+            except UnsafeExecutionIdentity as exc:
+                self.process = None
+                raise MCPError(
+                    f"MCP server '{self.name}' execution identity changed"
+                ) from exc
             except Exception as exc:
                 self.process = None
                 raise MCPError(

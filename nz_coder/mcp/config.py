@@ -6,13 +6,17 @@ import json
 import math
 import os
 import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from nz_coder.foundation import config
+from nz_coder.foundation.execution_identity import (
+    ExecutionIdentity,
+    resolve_execution_identity,
+)
+from nz_coder.foundation.workspace_trust import default_user_config_path
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.mcp.trust import MCPTrustStore
 from nz_coder.runtime.process.workdir import current_workdir
@@ -91,6 +95,7 @@ class MCPServerConfig:
     source: str = "explicit"
     trusted: bool = True
     fingerprint: str = ""
+    execution_identity: ExecutionIdentity | None = None
 
     def environment_dict(self) -> dict[str, str]:
         return dict(self.environment)
@@ -330,9 +335,26 @@ def load_mcp_server_configs(
             server=name,
             field="tool_timeout_seconds",
         )
+        execution_identity = (
+            resolve_execution_identity(
+                command,
+                cwd=cwd,
+                workspace=root,
+                config_source=origin,
+                environment_profile="strict-service",
+            )
+            if command else None
+        )
         fingerprint = ""
         trusted = True
-        if origin in {"project", "trusted-workspace"}:
+        requires_execution_trust = bool(
+            origin in {"project", "trusted-workspace"}
+            or (
+                execution_identity is not None
+                and execution_identity.workspace_controlled
+            )
+        )
+        if requires_execution_trust:
             fingerprint = _server_fingerprint(
                 name=name,
                 server_type=server_type,
@@ -344,9 +366,14 @@ def load_mcp_server_configs(
                 header_env=header_env,
                 oauth=oauth,
                 effects=tool_effects,
+                execution_identity=execution_identity,
             )
             trusted = bool(
-                project_control_trusted
+                (
+                    project_control_trusted
+                    if origin in {"project", "trusted-workspace"}
+                    else True
+                )
                 and MCPTrustStore(Path(
                     config.MCP_TRUST_STORE
                     if legacy_globals
@@ -379,6 +406,7 @@ def load_mcp_server_configs(
                 source=origin,
                 trusted=trusted,
                 fingerprint=fingerprint,
+                execution_identity=execution_identity,
             )
         )
     return servers
@@ -396,12 +424,12 @@ def mcp_config_paths(
         from nz_coder.foundation.workspace_trust import current_config_snapshot
 
         config_snapshot = current_config_snapshot(root)
-    user_path = Path(
+    user_path = _user_owned_config_path(
         config.MCP_USER_CONFIG if legacy_globals else config_snapshot.get(
             "NZ_MCP_USER_CONFIG",
             str(Path.home() / ".config" / "nz-coder" / "mcp.json"),
-        )
-    ).expanduser().resolve()
+        ), root, label="MCP user config",
+    )
     project_value = Path(
         config.MCP_PROJECT_CONFIG if legacy_globals else config_snapshot.get(
             "NZ_MCP_PROJECT_CONFIG", ".nz-coder/mcp.json",
@@ -414,12 +442,12 @@ def mcp_config_paths(
         project_path.relative_to(root)
     except ValueError as exc:
         raise ValueError("NZ_MCP_PROJECT_CONFIG escapes workspace") from exc
-    trust_path = Path(
+    trust_path = _user_owned_config_path(
         config.MCP_TRUST_STORE if legacy_globals else config_snapshot.get(
             "NZ_MCP_TRUST_STORE",
             str(Path.home() / ".config" / "nz-coder" / "mcp-trust.json"),
-        )
-    ).expanduser().resolve()
+        ), root, label="MCP trust store",
+    )
     return user_path, project_path, trust_path
 
 
@@ -471,12 +499,14 @@ def _load_merged_payload(
     legacy_globals: bool = False,
 ) -> tuple[dict[str, Any], dict[str, str], bool]:
     snapshot = project_control_snapshot or config_snapshot.project_control
-    user_path = Path(
+    user_path = _user_owned_config_path(
         config.MCP_USER_CONFIG if legacy_globals else config_snapshot.get(
             "NZ_MCP_USER_CONFIG",
             str(Path.home() / ".config" / "nz-coder" / "mcp.json"),
-        )
-    ).expanduser().resolve()
+        ),
+        workspace,
+        label="MCP user config",
+    )
     merged: dict[str, Any] = {}
     origins: dict[str, str] = {}
     if user_path.exists():
@@ -548,20 +578,8 @@ def _server_fingerprint(
     header_env: list[tuple[str, str]],
     oauth: MCPOAuthConfig | None,
     effects: list[tuple[str, str]],
+    execution_identity: ExecutionIdentity | None = None,
 ) -> str:
-    executable = ""
-    executable_hash = ""
-    if command:
-        candidate = Path(command[0])
-        if candidate.is_absolute():
-            resolved = candidate.resolve(strict=False)
-        elif command[0].startswith(".") or "/" in command[0] or "\\" in command[0]:
-            resolved = (cwd / candidate).resolve(strict=False)
-        else:
-            resolved = Path(shutil.which(command[0]) or command[0]).resolve(strict=False)
-        executable = str(resolved)
-        if resolved.is_file():
-            executable_hash = _file_fingerprint(resolved)
     payload = json.dumps(
         {
             "name": name,
@@ -585,21 +603,14 @@ def _server_fingerprint(
                 ),
             } if oauth else None,
             "effects": sorted(effects),
-            "executable": executable,
-            "executable_hash": executable_hash,
+            "execution_identity": (
+                execution_identity.fingerprint if execution_identity else ""
+            ),
         },
         sort_keys=True,
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _file_fingerprint(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _normalized_remote_url(value: str) -> str:
@@ -609,7 +620,23 @@ def _normalized_remote_url(value: str) -> str:
     host = (parsed.hostname or "").lower()
     default_port = 443 if parsed.scheme.lower() == "https" else 80
     authority = host if parsed.port in {None, default_port} else f"{host}:{parsed.port}"
-    return f"{parsed.scheme.lower()}://{authority}{parsed.path or '/'}"
+    query = f"?{parsed.query}" if parsed.query else ""
+    return f"{parsed.scheme.lower()}://{authority}{parsed.path or '/'}{query}"
+
+
+def _user_owned_config_path(value: str, workspace: Path, *, label: str) -> Path:
+    """Resolve a user control path and reject workspace-owned destinations."""
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        # User-owned path settings deliberately never inherit process cwd.
+        candidate = default_user_config_path().parent / candidate
+    resolved = candidate.resolve()
+    root = Path(workspace).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        return resolved
+    raise ValueError(f"{label} must be outside the workspace")
 
 
 def _positive_timeout(value: Any, *, server: str, field: str) -> float:

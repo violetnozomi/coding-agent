@@ -290,6 +290,16 @@ def _write_fake_server(tmp_path):
     return path
 
 
+def _trust_test_lsp(tmp_path, monkeypatch, source_name="app.py"):
+    from nz_coder.lsp.servers import trust_server
+
+    monkeypatch.setenv(
+        "NZ_CODER_WORKSPACE_TRUST_STORE",
+        str(tmp_path.parent / f"{tmp_path.name}-workspace-trust.json"),
+    )
+    trust_server(tmp_path / source_name, tmp_path)
+
+
 def test_close_workspace_clients_preserves_other_workspaces(tmp_path):
     from nz_coder.lsp import manager
 
@@ -340,6 +350,7 @@ def test_lsp_tool_roundtrip_normalizes_paths_and_positions(tmp_path, monkeypatch
     )
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     (tmp_path / "app.py").write_text("answer = 42\n", encoding="utf-8")
+    _trust_test_lsp(tmp_path, monkeypatch)
 
     close_all_clients()
     try:
@@ -375,6 +386,7 @@ def test_lsp_tool_supports_symbols_hover_and_call_hierarchy(tmp_path, monkeypatc
         f"{sys.executable} -u {server}",
     )
     (tmp_path / "app.py").write_text("answer = 42\n", encoding="utf-8")
+    _trust_test_lsp(tmp_path, monkeypatch)
 
     close_all_clients()
     try:
@@ -438,6 +450,7 @@ def test_lsp_tool_reports_server_initialization_failure(tmp_path, monkeypatch):
         f"{sys.executable} -u {broken}",
     )
     (tmp_path / "app.py").write_text("answer = 42\n", encoding="utf-8")
+    _trust_test_lsp(tmp_path, monkeypatch)
 
     close_all_clients()
     try:
@@ -533,6 +546,7 @@ def test_write_diagnostics_use_real_protocol_and_normalize_locations(
         encoding="utf-8",
     )
     (tmp_path / "app.py").write_text("answer = missing\n", encoding="utf-8")
+    _trust_test_lsp(tmp_path, monkeypatch)
 
     close_all_clients()
     try:

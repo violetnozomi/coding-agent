@@ -139,6 +139,7 @@ def get_client_for_file(
                 initialize_timeout=float(key[-3]),
                 request_timeout=float(key[-1]),
                 diagnostic_wait=float(key[-2]),
+                execution_identity=resolved.execution_identity,
             )
         except Exception as exc:
             _BROKEN.add(key)

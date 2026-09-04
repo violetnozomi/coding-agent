@@ -618,6 +618,7 @@ class MCPRuntime:
                 environment=server.environment_dict(),
                 startup_timeout_seconds=server.startup_timeout_seconds,
                 tool_timeout_seconds=server.tool_timeout_seconds,
+                execution_identity=server.execution_identity,
             )
         with self._state_lock:
             if self._closing:

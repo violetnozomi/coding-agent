@@ -56,9 +56,9 @@ class ConfigSpec:
     public_projection: str = "value"
     opaque_configured: bool = False
     structured_redaction: bool = False
-    allowed_sources: tuple[str, ...] = (
+    allowed_sources: frozenset[str] = frozenset({
         "environment", "user", "workspace", "trusted-workspace",
-    )
+    })
 
 
 _KNOWN_CONFIG_KEYS = (
@@ -139,6 +139,10 @@ CONFIG_SCHEMA.update({
     "NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED": ConfigSpec("1", value_type="bool"),
     "LOG_LEVEL": ConfigSpec("INFO", workspace_trust_required=False),
 })
+for _user_only_key in ("NZ_MCP_USER_CONFIG", "NZ_MCP_TRUST_STORE"):
+    CONFIG_SCHEMA[_user_only_key] = ConfigSpec(
+        allowed_sources=frozenset({"environment", "user"}),
+    )
 for _structured_key in ("MODEL_CAPABILITIES_JSON", "MODEL_CATALOG_JSON"):
     CONFIG_SCHEMA[_structured_key] = ConfigSpec(
         "", public_projection="configured-status",
@@ -807,14 +811,25 @@ def load_config_snapshot(
         default = "" if spec.default is None else spec.default
         sensitive = spec.workspace_trust_required
         secret = spec.secret
-        if key in environment:
+        if key in environment and "environment" in spec.allowed_sources:
             values[key] = ConfigValue(key, str(environment[key]), ConfigSource.ENVIRONMENT, requires_trust=False, secret=secret)
             continue
-        if key in user_values:
+        if key in user_values and "user" in spec.allowed_sources:
             values[key] = ConfigValue(key, user_values[key], ConfigSource.USER, requires_trust=False, secret=secret)
             continue
         if key in workspace_values:
-            if sensitive and not trusted:
+            workspace_source = "trusted-workspace" if sensitive and trusted else "workspace"
+            if workspace_source not in spec.allowed_sources:
+                issues.append(ConfigIssue(
+                    key,
+                    "workspace source is not permitted for this setting; using default",
+                    ConfigSource.WORKSPACE,
+                ))
+                values[key] = ConfigValue(
+                    key, default, ConfigSource.DEFAULT, ignored=True,
+                    requires_trust=True, used_default=True, secret=secret,
+                )
+            elif sensitive and not trusted:
                 values[key] = ConfigValue(
                     key,
                     default,

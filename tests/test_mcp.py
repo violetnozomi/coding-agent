@@ -71,18 +71,19 @@ def test_mcp_config_validates_command_workspace_and_effects(tmp_path):
         workspace=tmp_path,
     )
 
-    assert configs == [
-        MCPServerConfig(
-            name="local",
-            command=("python3", "server.py"),
-            cwd=child,
-            environment=(("MCP_MODE", "test"),),
-            startup_timeout_seconds=2,
-            tool_timeout_seconds=4,
-            tool_effects=(("lookup", "read"), ("update", "write")),
-        )
-    ]
-    assert configs[0].effect_for("undeclared") == "serial"
+    assert len(configs) == 1
+    selected = configs[0]
+    assert selected.name == "local"
+    assert selected.command == ("python3", "server.py")
+    assert selected.cwd == child
+    assert selected.environment == (("MCP_MODE", "test"),)
+    assert selected.startup_timeout_seconds == 2
+    assert selected.tool_timeout_seconds == 4
+    assert selected.tool_effects == (("lookup", "read"), ("update", "write"))
+    assert selected.execution_identity is not None
+    assert selected.execution_identity.workspace_controlled is True
+    assert selected.trusted is False
+    assert selected.effect_for("undeclared") == "serial"
 
 
 @pytest.mark.parametrize(

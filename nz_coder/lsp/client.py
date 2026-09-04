@@ -14,6 +14,11 @@ from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
+from nz_coder.foundation.execution_identity import (
+    ExecutionIdentity,
+    UnsafeExecutionIdentity,
+    verify_execution_identity,
+)
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
@@ -85,12 +90,14 @@ class LSPClient:
         initialize_timeout: float | None = None,
         request_timeout: float | None = None,
         diagnostic_wait: float | None = None,
+        execution_identity: ExecutionIdentity | None = None,
     ):
         self.server_id = server_id
         self.command = tuple(command)
         self.root = root.resolve()
         self.language_id = language_id
         self.analysis_paths = tuple(Path(path).resolve() for path in analysis_paths)
+        self.execution_identity = execution_identity
         self.initialize_timeout = _validated_timeout(
             initialize_timeout
             if initialize_timeout is not None
@@ -118,6 +125,8 @@ class LSPClient:
         self._diagnostic_events: dict[str, threading.Event] = {}
         self._stderr = deque(maxlen=20)
         try:
+            if self.execution_identity is not None:
+                verify_execution_identity(self.execution_identity)
             self.process = subprocess.Popen(
                 executable_argv(self.command),
                 cwd=str(self.root),
@@ -133,6 +142,8 @@ class LSPClient:
                     else 0
                 ),
             )
+        except UnsafeExecutionIdentity as exc:
+            raise LSPError(f"Language server {server_id} execution identity changed") from exc
         except OSError as exc:
             raise LSPError(f"Failed to start {server_id}: {exc}") from exc
         if not self.process.stdin or not self.process.stdout or not self.process.stderr:
