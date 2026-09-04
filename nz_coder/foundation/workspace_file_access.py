@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import os
 from pathlib import Path
 import locale
@@ -13,6 +14,12 @@ from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.protocol.public_error import PublicInputError
 
 
+def _stat_tuple(info) -> tuple[int, int, int, int]:
+    return (
+        int(info.st_dev), int(info.st_ino), int(info.st_size), int(info.st_mtime_ns),
+    )
+
+
 @dataclass(frozen=True)
 class WorkspaceFileStat:
     """Public metadata captured from the same opened object used for I/O."""
@@ -20,6 +27,25 @@ class WorkspaceFileStat:
     size: int
     mode: int
     mtime_ns: int
+
+
+@dataclass(frozen=True)
+class WorkspaceFileIdentity:
+    """Identity captured from the same handle that supplied file content."""
+
+    expected_exists: bool
+    device: int = 0
+    inode: int = 0
+    size: int = 0
+    mtime_ns: int = 0
+    content_hash: str = ""
+
+    @classmethod
+    def missing(cls) -> "WorkspaceFileIdentity":
+        return cls(expected_exists=False)
+
+
+ExpectedFileIdentity = WorkspaceFileIdentity
 
 
 @dataclass(frozen=True)
@@ -47,11 +73,21 @@ class WorkspaceFileAccess:
 
     def read_bytes(self, path: str, *, maximum: int | None = None) -> bytes:
         """Read one regular file from the opened workspace directory chain."""
+        data, _identity = self.read_bytes_with_identity(path, maximum=maximum)
+        return data
+
+    def read_bytes_with_identity(
+        self, path: str, *, maximum: int | None = None,
+    ) -> tuple[bytes, WorkspaceFileIdentity]:
+        """Read bytes and capture mutation identity from the same file handle."""
         relative = self._relative(path, write=False)
         if os.name == "nt":
-            return self._read_windows(relative, maximum=maximum)
+            return self._read_windows_with_identity(relative, maximum=maximum)
         parent, name = self._open_parent_posix(relative, create=False)
         try:
+            metadata = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError("Workspace target is not a regular file")
             flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
             descriptor = os.open(name, flags, dir_fd=parent)
             try:
@@ -60,6 +96,7 @@ class WorkspaceFileAccess:
                     raise ValueError("Workspace target is not a regular file")
                 if maximum is not None and info.st_size > maximum:
                     raise PublicInputError("Workspace file exceeds the allowed size")
+                before = info
                 chunks: list[bytes] = []
                 total = 0
                 while True:
@@ -70,7 +107,14 @@ class WorkspaceFileAccess:
                     if maximum is not None and total > maximum:
                         raise PublicInputError("Workspace file exceeds the allowed size")
                     chunks.append(chunk)
-                return b"".join(chunks)
+                data = b"".join(chunks)
+                after = os.fstat(descriptor)
+                if _stat_tuple(after) != _stat_tuple(before):
+                    raise PublicInputError("Workspace file changed while it was read")
+                return data, WorkspaceFileIdentity(
+                    True, int(after.st_dev), int(after.st_ino), int(after.st_size),
+                    int(after.st_mtime_ns), hashlib.sha256(data).hexdigest(),
+                )
             finally:
                 os.close(descriptor)
         finally:
@@ -86,13 +130,22 @@ class WorkspaceFileAccess:
     ) -> str:
         return self.read_bytes(path, maximum=maximum).decode(encoding, errors=errors)
 
+    def read_text_with_identity(
+        self,
+        path: str,
+        *,
+        encoding: str = "utf-8",
+        errors: str = "strict",
+        maximum: int | None = None,
+    ) -> tuple[str, WorkspaceFileIdentity]:
+        data, identity = self.read_bytes_with_identity(path, maximum=maximum)
+        return data.decode(encoding, errors=errors), identity
+
     def stat(self, path: str) -> WorkspaceFileStat:
         """Stat the exact regular file reached through the anchored parent."""
         relative = self._relative(path, write=False)
         if os.name == "nt":
-            data = self._read_windows(relative, maximum=None)
-            info = (self.root / relative).stat()
-            return WorkspaceFileStat(len(data), int(info.st_mode), int(info.st_mtime_ns))
+            return self._stat_windows(relative)
         parent, name = self._open_parent_posix(relative, create=False)
         try:
             info = os.stat(name, dir_fd=parent, follow_symlinks=False)
@@ -215,15 +268,34 @@ class WorkspaceFileAccess:
         content: str,
         *,
         transaction=None,
+        expected: ExpectedFileIdentity | None = None,
+        overwrite: bool = True,
     ) -> None:
         """Atomically replace a file beneath a verified, held parent handle."""
         relative = self._relative(path, write=True)
         if os.name == "nt":
-            self._write_windows(relative, content.encode("utf-8"), transaction)
+            self._write_windows(
+                relative, content.encode("utf-8"), transaction,
+                expected=expected, overwrite=overwrite,
+            )
             return
         parent, name = self._open_parent_posix(relative, create=True)
         temporary = f".nzcoder-{uuid.uuid4().hex}.tmp"
         try:
+            try:
+                current_info = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            except FileNotFoundError:
+                current_info = None
+            if current_info is not None and not stat.S_ISREG(current_info.st_mode):
+                raise ValueError("Workspace target is not a regular file")
+            current = (
+                self._identity_from_stat(current_info)
+                if current_info is not None else WorkspaceFileIdentity.missing()
+            )
+            current_mode = current_info.st_mode if current_info is not None else 0o600
+            self._validate_expected(current, expected)
+            if current.expected_exists and not overwrite:
+                raise PublicInputError("target already exists and overwrite=false")
             if transaction is not None and getattr(transaction, "active", False):
                 transaction.track_anchored(
                     relative.as_posix(), parent_fd=parent,
@@ -242,9 +314,18 @@ class WorkspaceFileAccess:
                         raise OSError("workspace write made no progress")
                     view = view[written:]
                 os.fsync(descriptor)
+                if current.expected_exists:
+                    os.fchmod(descriptor, stat.S_IMODE(current_mode))
             finally:
                 os.close(descriptor)
-            os.replace(temporary, name, src_dir_fd=parent, dst_dir_fd=parent)
+            if overwrite:
+                os.replace(temporary, name, src_dir_fd=parent, dst_dir_fd=parent)
+            else:
+                os.link(
+                    temporary, name, src_dir_fd=parent, dst_dir_fd=parent,
+                    follow_symlinks=False,
+                )
+                os.unlink(temporary, dir_fd=parent)
             os.fsync(parent)
         finally:
             try:
@@ -253,17 +334,21 @@ class WorkspaceFileAccess:
                 pass
             os.close(parent)
 
-    def delete(self, path: str, *, transaction=None) -> None:
+    def delete(
+        self, path: str, *, transaction=None,
+        expected: ExpectedFileIdentity | None = None,
+    ) -> None:
         """Delete relative to a verified, held workspace parent handle."""
         relative = self._relative(path, write=True)
         if os.name == "nt":
-            self._delete_windows(relative, transaction)
+            self._delete_windows(relative, transaction, expected=expected)
             return
         parent, name = self._open_parent_posix(relative, create=False)
         try:
             info = os.stat(name, dir_fd=parent, follow_symlinks=False)
             if not stat.S_ISREG(info.st_mode):
                 raise ValueError("Workspace target is not a regular file")
+            self._validate_expected(self._identity_from_stat(info), expected)
             if transaction is not None and getattr(transaction, "active", False):
                 transaction.track_anchored(
                     relative.as_posix(), parent_fd=parent,
@@ -336,17 +421,30 @@ class WorkspaceFileAccess:
         if level >= max_depth:
             return
         candidates: list[tuple[str, bool]] = []
-        for name in os.listdir(descriptor):
-            if name in {".", ".."}:
-                continue
-            try:
-                info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-            except FileNotFoundError:
-                continue
-            if stat.S_ISDIR(info.st_mode):
-                candidates.append((name, True))
-            elif stat.S_ISREG(info.st_mode):
-                candidates.append((name, False))
+        remaining = maximum_entries - len(records)
+        with os.scandir(descriptor) as iterator:
+            entries = iterator
+            for entry in entries:
+                name = entry.name
+                if name in {".", ".."}:
+                    continue
+                if level == 0 and name.startswith(".") and not include_hidden_root:
+                    continue
+                relative = prefix / name
+                if not self.policy.is_model_visible(self.root / relative):
+                    continue
+                try:
+                    if entry.is_symlink():
+                        continue
+                    is_directory = entry.is_dir(follow_symlinks=False)
+                    is_file = entry.is_file(follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                if not (is_directory or is_file):
+                    continue
+                candidates.append((name, is_directory))
+                if len(candidates) > remaining:
+                    raise PublicInputError("Directory listing exceeds the allowed entry limit")
         if directories_first:
             candidates.sort(key=lambda item: (not item[1], item[0].lower()))
         else:
@@ -354,10 +452,6 @@ class WorkspaceFileAccess:
         flags = self._directory_flags()
         for name, is_directory in candidates:
             relative = prefix / name
-            if level == 0 and name.startswith(".") and not include_hidden_root:
-                continue
-            if not self.policy.is_model_visible(self.root / relative):
-                continue
             if len(records) >= maximum_entries:
                 raise PublicInputError("Directory listing exceeds the allowed entry limit")
             records.append(WorkspaceDirectoryEntry(relative.as_posix(), is_directory, level))
@@ -409,6 +503,33 @@ class WorkspaceFileAccess:
         except Exception:
             os.close(descriptor)
             raise
+
+    @staticmethod
+    def _identity_from_stat(info) -> WorkspaceFileIdentity:
+        return WorkspaceFileIdentity(
+            True, int(info.st_dev), int(info.st_ino), int(info.st_size),
+            int(info.st_mtime_ns), "",
+        )
+
+    @staticmethod
+    def _validate_expected(
+        current: WorkspaceFileIdentity,
+        expected: ExpectedFileIdentity | None,
+    ) -> None:
+        if expected is None:
+            return
+        comparable_current = (
+            current.expected_exists, current.device, current.inode,
+            current.size, current.mtime_ns,
+        )
+        comparable_expected = (
+            expected.expected_exists, expected.device, expected.inode,
+            expected.size, expected.mtime_ns,
+        )
+        if comparable_current != comparable_expected:
+            raise PublicInputError(
+                "File changed after it was read; re-read before editing."
+            )
 
     def _kind_windows(self, relative: Path) -> str:
         from nz_coder.foundation.project_control import (
@@ -524,8 +645,14 @@ class WorkspaceFileAccess:
 
         before = os.path.normcase(os.path.normpath(_windows_final_path(handle)))
         candidates: list[tuple[str, bool]] = []
+        remaining = maximum_entries - len(records)
         with os.scandir(directory_path) as iterator:
             for entry in iterator:
+                relative = prefix / entry.name
+                if level == 0 and entry.name.startswith(".") and not include_hidden_root:
+                    continue
+                if not self.policy.is_model_visible(self.root / relative):
+                    continue
                 try:
                     if entry.is_symlink():
                         continue
@@ -535,6 +662,8 @@ class WorkspaceFileAccess:
                         candidates.append((entry.name, False))
                 except FileNotFoundError:
                     continue
+                if len(candidates) > remaining:
+                    raise PublicInputError("Directory listing exceeds the allowed entry limit")
         if os.path.normcase(os.path.normpath(_windows_final_path(handle))) != before:
             raise UnsafeProjectControl("workspace directory identity changed")
         if directories_first:
@@ -543,10 +672,6 @@ class WorkspaceFileAccess:
             candidates.sort(key=lambda item: locale.strxfrm(item[0]))
         for name, is_directory in candidates:
             relative = prefix / name
-            if level == 0 and name.startswith(".") and not include_hidden_root:
-                continue
-            if not self.policy.is_model_visible(self.root / relative):
-                continue
             try:
                 child = _windows_open(
                     directory_path / name,
@@ -578,6 +703,48 @@ class WorkspaceFileAccess:
                 _windows_close(child)
 
     def _read_windows(self, relative: Path, *, maximum: int | None) -> bytes:
+        data, _identity = self._read_windows_with_identity(relative, maximum=maximum)
+        return data
+
+    def _stat_windows(self, relative: Path) -> WorkspaceFileStat:
+        from nz_coder.foundation.project_control import (
+            UnsafeProjectControl,
+            _windows_close,
+            _windows_handle_info,
+            _windows_open,
+        )
+
+        handles: list[int] = []
+        try:
+            parent = _windows_open(self.root, directory=True)
+            assert parent is not None
+            handles.append(parent)
+            cursor = self.root
+            for part in relative.parts[:-1]:
+                cursor /= part
+                child = _windows_open(cursor, directory=True, parent=parent)
+                assert child is not None
+                handles.append(child)
+                parent = child
+            target = _windows_open(
+                cursor / relative.name, directory=False, parent=parent,
+            )
+            assert target is not None
+            handles.append(target)
+            _attrs, _device, _inode, size = _windows_handle_info(target, full=True)
+            info = os.stat(cursor / relative.name, follow_symlinks=False)
+            return WorkspaceFileStat(
+                int(size), int(info.st_mode), int(info.st_mtime_ns),
+            )
+        except UnsafeProjectControl as exc:
+            raise ValueError("Workspace file boundary is unsafe") from exc
+        finally:
+            for handle in reversed(handles):
+                _windows_close(handle)
+
+    def _read_windows_with_identity(
+        self, relative: Path, *, maximum: int | None,
+    ) -> tuple[bytes, WorkspaceFileIdentity]:
         from nz_coder.foundation.project_control import (
             UnsafeProjectControl,
             _windows_close,
@@ -600,7 +767,7 @@ class WorkspaceFileAccess:
             target = _windows_open(cursor / relative.name, directory=False, parent=parent)
             assert target is not None
             handles.append(target)
-            _attrs, _device, _inode, size = _windows_handle_info(target, full=True)
+            _attrs, device, inode, size = _windows_handle_info(target, full=True)
             if maximum is not None and size > maximum:
                 raise PublicInputError("Workspace file exceeds the allowed size")
             import msvcrt
@@ -608,17 +775,27 @@ class WorkspaceFileAccess:
             source_fd = msvcrt.open_osfhandle(target, os.O_RDONLY)
             handles.pop()
             with os.fdopen(source_fd, "rb", closefd=True) as stream:
+                before = os.fstat(stream.fileno())
                 data = stream.read(maximum + 1 if maximum is not None else -1)
+                after = os.fstat(stream.fileno())
+                if _stat_tuple(after) != _stat_tuple(before):
+                    raise PublicInputError("Workspace file changed while it was read")
             if maximum is not None and len(data) > maximum:
                 raise PublicInputError("Workspace file exceeds the allowed size")
-            return data
+            return data, WorkspaceFileIdentity(
+                True, int(device), int(inode), int(size), int(after.st_mtime_ns),
+                hashlib.sha256(data).hexdigest(),
+            )
         except UnsafeProjectControl as exc:
             raise ValueError("Workspace file boundary is unsafe") from exc
         finally:
             for handle in reversed(handles):
                 _windows_close(handle)
 
-    def _write_windows(self, relative: Path, data: bytes, transaction) -> None:
+    def _write_windows(
+        self, relative: Path, data: bytes, transaction,
+        *, expected: ExpectedFileIdentity | None, overwrite: bool,
+    ) -> None:
         # Windows directory handles are retained and verified by the project
         # control helper; replacement still has a documented final path/rename
         # TOCTOU window because Python exposes no handle-relative ReplaceFile.
@@ -632,16 +809,39 @@ class WorkspaceFileAccess:
         try:
             if Path(_windows_final_path(handle)) != parent_path.resolve():
                 raise ValueError("Workspace parent identity changed")
+            target_path = parent_path / relative.name
+            try:
+                current_info = os.stat(target_path, follow_symlinks=False)
+            except FileNotFoundError:
+                current_info = None
+            if current_info is not None and not stat.S_ISREG(current_info.st_mode):
+                raise ValueError("Workspace target is not a regular file")
+            current = (
+                self._identity_from_stat(current_info)
+                if current_info is not None else WorkspaceFileIdentity.missing()
+            )
+            self._validate_expected(current, expected)
+            if current.expected_exists and not overwrite:
+                raise PublicInputError("target already exists and overwrite=false")
             if transaction is not None and getattr(transaction, "active", False):
                 transaction.track_anchored(
                     relative.as_posix(), windows_parent_handle=handle,
                 )
+            if not overwrite:
+                descriptor = os.open(target_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(data)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                return
             descriptor, raw = tempfile.mkstemp(prefix=".nzcoder-", suffix=".tmp", dir=parent_path)
             temporary = Path(raw)
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
+            if current_info is not None:
+                os.chmod(temporary, stat.S_IMODE(current_info.st_mode))
             if Path(_windows_final_path(handle)) != parent_path.resolve():
                 raise ValueError("Workspace parent identity changed")
             os.replace(temporary, parent_path / relative.name)
@@ -650,7 +850,11 @@ class WorkspaceFileAccess:
                 temporary.unlink(missing_ok=True)
             _windows_close(handle)
 
-    def _delete_windows(self, relative: Path, transaction) -> None:
+
+    def _delete_windows(
+        self, relative: Path, transaction,
+        *, expected: ExpectedFileIdentity | None,
+    ) -> None:
         from nz_coder.foundation.project_control import _windows_close, _windows_final_path, _windows_open
 
         parent_path = self.root / relative.parent
@@ -666,13 +870,47 @@ class WorkspaceFileAccess:
             target = parent_path / relative.name
             if target.is_symlink() or not target.is_file():
                 raise ValueError("Workspace target is not a regular file")
+            self._validate_expected(
+                self._identity_from_stat(os.stat(target, follow_symlinks=False)),
+                expected,
+            )
             target.unlink()
         finally:
             _windows_close(handle)
 
 
+class FixedFileAccess(WorkspaceFileAccess):
+    """Anchored access restricted to an explicit host-owned relative allowlist."""
+
+    def __init__(self, root: Path | str, allowed: tuple[str, ...]):
+        super().__init__(root)
+        self._allowed = frozenset(Path(item).as_posix() for item in allowed)
+
+    def display_path(self, path: str, *, write: bool = False) -> Path:
+        del write
+        relative = Path(path)
+        normalized = relative.as_posix()
+        if (
+            relative.is_absolute()
+            or normalized not in self._allowed
+            or any(part in {"", ".", ".."} for part in relative.parts)
+        ):
+            raise ValueError("Fixed file path is not allowed")
+        return self.root / relative
+
+    def _relative_directory(self, path: str, *, operation: str) -> Path:
+        del operation
+        relative = Path(path)
+        if relative.as_posix() not in self._allowed:
+            raise ValueError("Fixed file path is not allowed")
+        return relative
+
+
 __all__ = [
     "WorkspaceDirectoryEntry",
+    "ExpectedFileIdentity",
+    "FixedFileAccess",
     "WorkspaceFileAccess",
+    "WorkspaceFileIdentity",
     "WorkspaceFileStat",
 ]

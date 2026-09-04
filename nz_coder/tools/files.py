@@ -8,7 +8,10 @@ from contextvars import ContextVar
 from pathlib import Path
 
 from nz_coder.foundation import config
-from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+from nz_coder.foundation.workspace_file_access import (
+    WorkspaceFileAccess,
+    WorkspaceFileIdentity,
+)
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.protocol.attachments import (
@@ -101,6 +104,15 @@ def _file_access() -> WorkspaceFileAccess:
     return WorkspaceFileAccess(current_workdir())
 
 
+def _read_for_mutation(
+    access: WorkspaceFileAccess, path: str, *, errors: str = "strict",
+) -> tuple[str, WorkspaceFileIdentity]:
+    try:
+        return access.read_text_with_identity(path, errors=errors)
+    except FileNotFoundError:
+        return "", WorkspaceFileIdentity.missing()
+
+
 
 _BLOCKED_WRITE_FILENAMES = {".env", ".env.local", ".env.production", "id_rsa", "id_dsa", "known_hosts", "credentials"}
 _BLOCKED_WRITE_DIRS = {".ssh"}
@@ -161,7 +173,8 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
         if key in seen_paths:
             raise PublicInputError(f"duplicate path in batch: {path}")
         seen_paths.add(key)
-        existed = access.exists(path)
+        before, expected = _read_for_mutation(access, path, errors="replace")
+        existed = expected.expected_exists
         if existed and not overwrite:
             raise PublicInputError(
                 f"target already exists and overwrite=false: {path}"
@@ -177,13 +190,13 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
             raise PublicInputError(
                 f"batch too large ({total_bytes} bytes > {settings.write_batch_total_bytes})"
             )
-        before = access.read_text(path, errors="replace") if existed else ""
         prepared.append({
             "path": path,
             "fp": fp,
             "before": before,
             "content": content,
             "existed": existed,
+            "expected": expected,
             "purpose": str(item.get("purpose", "")).strip(),
         })
 
@@ -194,7 +207,10 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
     try:
         for item in prepared:
             _track_before(item["path"], item["fp"], item["before"], item["existed"])
-            access.write_text(item["path"], item["content"], transaction=txn)
+            access.write_text(
+                item["path"], item["content"], transaction=txn,
+                expected=item["expected"], overwrite=overwrite,
+            )
             _track_after(item["path"], item["content"], True)
             if item["existed"]:
                 updated.append(item["path"])
@@ -545,12 +561,12 @@ def write_file(path: str, content: str) -> str:
     try:
         access = _file_access()
         fp = _model_write_path(path)
-        existed = access.exists(path)
-        before = access.read_text(path, errors="replace") if existed else ""
+        before, expected = _read_for_mutation(access, path, errors="replace")
+        existed = expected.expected_exists
         warning = _dirty_warning(path)
         _track_before(path, fp, before, existed)
         txn = _get_txn()
-        access.write_text(path, content, transaction=txn)
+        access.write_text(path, content, transaction=txn, expected=expected)
         _track_after(path, content, True)
         diff = _format_diff(path, before, content)
         action = "Updated" if existed else "Created"
@@ -563,7 +579,7 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
     try:
         access = _file_access()
         fp = _model_write_path(path)
-        content = access.read_text(path)
+        content, expected = access.read_text_with_identity(path)
         warning = _dirty_warning(path)
         _track_before(path, fp, content, True)
         count = content.count(old_text)
@@ -575,7 +591,7 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
             return f"Error: old_text matches {count} locations in {path}. Be more specific."
         updated = content.replace(old_text, new_text, 1)
         txn = _get_txn()
-        access.write_text(path, updated, transaction=txn)
+        access.write_text(path, updated, transaction=txn, expected=expected)
         _track_after(path, updated, True)
         diff = _format_diff(path, content, updated)
         return f"{warning}Edited {path} (replaced 1 occurrence)\n\nDiff:\n{diff}"
@@ -603,7 +619,7 @@ def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> s
 
         access = _file_access()
         fp = _model_write_path(path)
-        content = access.read_text(path)
+        content, expected = access.read_text_with_identity(path)
         lines = content.splitlines(keepends=True)
         if end > len(lines):
             return f"Error: line range {start}-{end} exceeds {path} length {len(lines)}"
@@ -616,7 +632,7 @@ def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> s
         updated = "".join(lines[: start - 1] + replacement + lines[end:])
 
         txn = _get_txn()
-        access.write_text(path, updated, transaction=txn)
+        access.write_text(path, updated, transaction=txn, expected=expected)
         _track_after(path, updated, True)
         diff = _format_diff(path, content, updated)
         return f"{warning}Replaced lines {start}-{end} in {path}\n\nDiff:\n{diff}"
@@ -652,18 +668,16 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
             fp = _model_write_path(path)
             key = str(fp)
             if key not in prepared:
-                if access.exists(path):
-                    before = access.read_text(path)
-                    exists_before = True
-                else:
-                    before = ""
-                    exists_before = False
+                before, expected = _read_for_mutation(access, path)
+                exists_before = expected.expected_exists
                 prepared[key] = {
                     "path": path,
                     "fp": fp,
                     "before": before,
                     "after": before,
                     "exists_before": exists_before,
+                    "expected": expected,
+                    "overwrite": True,
                 }
 
             current = prepared[key]["after"]
@@ -676,6 +690,7 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
                 if not isinstance(new_text, str):
                     return f"Error: change {i} create requires content or new_text"
                 prepared[key]["after"] = new_text
+                prepared[key]["overwrite"] = bool(change.get("overwrite", False))
                 continue
 
             if op == "delete":
@@ -725,10 +740,16 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
                     continue
                 _track_before(item["path"], item["fp"], item["before"], item["exists_before"])
                 if after is None:
-                    access.delete(item["path"], transaction=txn)
+                    access.delete(
+                        item["path"], transaction=txn,
+                        expected=item["expected"],
+                    )
                     _track_after(item["path"], "", False)
                 else:
-                    access.write_text(item["path"], after, transaction=txn)
+                    access.write_text(
+                        item["path"], after, transaction=txn,
+                        expected=item["expected"], overwrite=item["overwrite"],
+                    )
                     _track_after(item["path"], after, True)
             if manage_locally:
                 txn.commit()

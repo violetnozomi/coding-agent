@@ -8,13 +8,16 @@ context, while recalled memories are fallible background notes.
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
-import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+
+from nz_coder.foundation.workspace_file_access import (
+    FixedFileAccess,
+    WorkspaceFileIdentity,
+)
 
 
 PER_SOURCE_MAX_BYTES = 20 * 1024
@@ -147,9 +150,7 @@ def _instruction_file_path(
     selected_filename = _validate_filename(filename)
     project, global_root = _roots(workspace, home)
     root = global_root if selected_scope == "global" else project
-    path = (root / selected_filename).resolve()
-    path.relative_to(root.resolve())
-    return path
+    return root / selected_filename
 
 
 def _instruction_state_path(
@@ -161,17 +162,38 @@ def _instruction_state_path(
     selected_scope = _validate_scope(scope)
     project, global_root = _roots(workspace, home)
     root = global_root if selected_scope == "global" else project / ".nz-coder"
-    path = (root / _STATE_FILENAME).resolve()
-    path.relative_to(root.resolve())
-    return path
+    return root / _STATE_FILENAME
 
 
-def _read_enabled_state(path: Path) -> tuple[dict[str, bool], str | None]:
+def _instruction_access(
+    workspace: str | Path,
+    scope: str,
+    *,
+    home: str | Path | None,
+    create_root: bool = False,
+) -> tuple[FixedFileAccess | None, str, str, Path]:
+    selected_scope = _validate_scope(scope)
+    project, global_root = _roots(workspace, home)
+    root = global_root if selected_scope == "global" else project
+    if create_root:
+        root.mkdir(parents=True, exist_ok=True)
+    if not root.is_dir():
+        return None, "", "", root
+    state = _STATE_FILENAME if selected_scope == "global" else f".nz-coder/{_STATE_FILENAME}"
+    allowed = (*INSTRUCTION_FILENAMES, state)
+    return FixedFileAccess(root, allowed), state, selected_scope, root
+
+
+def _read_enabled_state(
+    access: FixedFileAccess | None, relative: str,
+) -> tuple[dict[str, bool], str | None, WorkspaceFileIdentity]:
+    if access is None:
+        return {}, None, WorkspaceFileIdentity.missing()
     try:
-        size = path.stat().st_size
-        if size > _STATE_MAX_BYTES:
-            raise ValueError(f"state exceeds {_STATE_MAX_BYTES} bytes")
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw, identity = access.read_text_with_identity(
+            relative, maximum=_STATE_MAX_BYTES,
+        )
+        payload = json.loads(raw)
         if not isinstance(payload, dict) or payload.get("version") != 1:
             raise ValueError("state must be a version 1 object")
         raw_enabled = payload.get("enabled", {})
@@ -182,61 +204,46 @@ def _read_enabled_state(path: Path) -> tuple[dict[str, bool], str | None]:
             if filename not in INSTRUCTION_FILENAMES or not isinstance(value, bool):
                 raise ValueError("enabled state contains an invalid entry")
             enabled[filename] = value
-        return enabled, None
+        return enabled, None, identity
     except FileNotFoundError:
-        return {}, None
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
-        return {}, f"Failed to load instruction file enabled state: {error}"
+        return {}, None, WorkspaceFileIdentity.missing()
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return (
+            {}, "Failed to load instruction file enabled state safely",
+            WorkspaceFileIdentity.missing(),
+        )
 
 
-def _write_enabled_state(path: Path, enabled: dict[str, bool]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        path.parent.chmod(0o700)
-    except OSError:
-        pass
-    descriptor, temp_name = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
-    temp_path = Path(temp_name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(
-                {"version": 1, "enabled": enabled},
-                handle,
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        temp_path.chmod(0o600)
-        temp_path.replace(path)
-        path.chmod(0o600)
-    except Exception:
-        try:
-            os.close(descriptor)
-        except OSError:
-            pass
-        temp_path.unlink(missing_ok=True)
-        raise
+def _write_enabled_state(
+    access: FixedFileAccess,
+    relative: str,
+    enabled: dict[str, bool],
+    expected: WorkspaceFileIdentity,
+) -> None:
+    payload = json.dumps(
+        {"version": 1, "enabled": enabled},
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
+    access.write_text(relative, payload, expected=expected)
 
 
-def _delete_enabled_row(path: Path, filename: str) -> None:
+def _delete_enabled_row(
+    access: FixedFileAccess, state_relative: str, filename: str,
+) -> None:
     with _STATE_LOCK:
-        enabled, warning = _read_enabled_state(path)
+        enabled, warning, identity = _read_enabled_state(access, state_relative)
         if warning:
             # A corrupt two-key state file is recoverable. Replacing it avoids
             # making create/delete permanently unusable.
             enabled = {}
         enabled.pop(filename, None)
         if not enabled:
-            path.unlink(missing_ok=True)
+            if identity.expected_exists:
+                access.delete(state_relative, expected=identity)
             return
-        _write_enabled_state(path, enabled)
+        _write_enabled_state(access, state_relative, enabled, identity)
 
 
 def list_instruction_files(
@@ -247,12 +254,16 @@ def list_instruction_files(
 ) -> InstructionFileListResult:
     """List existing root AGENTS.md/CLAUDE.md files and enabled state."""
     selected_scope = _validate_scope(scope)
+    access, state_relative, _scope, root = _instruction_access(
+        workspace, selected_scope, home=home,
+    )
     state_path = _instruction_state_path(workspace, selected_scope, home=home)
     with _STATE_LOCK:
-        enabled, warning = _read_enabled_state(state_path)
+        enabled, warning, _identity = _read_enabled_state(access, state_relative)
     files: list[InstructionFileInfo] = []
     warnings: list[InstructionFileWarning] = []
-    state_warning_added = False
+    if warning:
+        warnings.append(InstructionFileWarning(str(state_path), warning))
     for filename in INSTRUCTION_FILENAMES:
         path = _instruction_file_path(
             workspace,
@@ -261,14 +272,16 @@ def list_instruction_files(
             home=home,
         )
         try:
-            if not path.is_file():
+            if access is None:
                 continue
-        except OSError as error:
-            warnings.append(InstructionFileWarning(str(path), str(error)))
+            access.stat(filename)
+        except FileNotFoundError:
             continue
-        if warning and not state_warning_added:
-            warnings.append(InstructionFileWarning(str(state_path), warning))
-            state_warning_added = True
+        except (OSError, ValueError):
+            warnings.append(InstructionFileWarning(
+                str(root / filename), "Instruction file is not a safe regular file",
+            ))
+            continue
         files.append(InstructionFileInfo(
             id=f"{selected_scope}:{filename}",
             scope=selected_scope,
@@ -292,13 +305,20 @@ def set_instruction_file_enabled(
     selected_filename = _validate_filename(filename)
     if not isinstance(enabled, bool):
         raise ValueError("enabled must be a boolean")
-    state_path = _instruction_state_path(workspace, selected_scope, home=home)
+    access, state_relative, _scope, _root = _instruction_access(
+        workspace, selected_scope, home=home, create_root=True,
+    )
+    assert access is not None
     with _STATE_LOCK:
-        state, warning = _read_enabled_state(state_path)
+        state, warning, identity = _read_enabled_state(access, state_relative)
         if warning:
             raise ValueError(warning)
+        try:
+            access.stat(selected_filename)
+        except FileNotFoundError:
+            pass
         state[selected_filename] = enabled
-        _write_enabled_state(state_path, state)
+        _write_enabled_state(access, state_relative, state, identity)
     path = _instruction_file_path(
         workspace,
         selected_scope,
@@ -329,16 +349,21 @@ def create_instruction_file(
         filename,
         home=home,
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("x", encoding="utf-8"):
-        pass
+    access, state_relative, _scope, _root = _instruction_access(
+        workspace, selected_scope, home=home, create_root=True,
+    )
+    assert access is not None
+    access.write_text(
+        filename, "", expected=WorkspaceFileIdentity.missing(), overwrite=False,
+    )
     try:
-        _delete_enabled_row(
-            _instruction_state_path(workspace, selected_scope, home=home),
-            filename,
-        )
+        _delete_enabled_row(access, state_relative, filename)
     except Exception:
-        path.unlink(missing_ok=True)
+        try:
+            _text, identity = access.read_text_with_identity(filename)
+            access.delete(filename, expected=identity)
+        except Exception:
+            pass
         raise
     return InstructionFileInfo(
         id=f"{selected_scope}:{filename}",
@@ -359,17 +384,18 @@ def delete_instruction_file(
     """Delete one supported root instruction file and its enabled row."""
     selected_scope = _validate_scope(scope)
     selected_filename = _validate_filename(filename)
-    path = _instruction_file_path(
-        workspace,
-        selected_scope,
-        selected_filename,
-        home=home,
+    access, state_relative, _scope, _root = _instruction_access(
+        workspace, selected_scope, home=home,
     )
-    path.unlink(missing_ok=True)
-    _delete_enabled_row(
-        _instruction_state_path(workspace, selected_scope, home=home),
-        selected_filename,
-    )
+    if access is None:
+        return
+    try:
+        _text, identity = access.read_text_with_identity(selected_filename)
+    except FileNotFoundError:
+        identity = WorkspaceFileIdentity.missing()
+    if identity.expected_exists:
+        access.delete(selected_filename, expected=identity)
+    _delete_enabled_row(access, state_relative, selected_filename)
 
 
 def _rule_files(root: Path) -> list[Path]:

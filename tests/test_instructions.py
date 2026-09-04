@@ -1,6 +1,8 @@
 """Tests for InfCode-aligned durable instruction loading."""
 from __future__ import annotations
 
+import pytest
+
 from nz_coder.state.instructions import (
     PER_SOURCE_MAX_BYTES,
     TOTAL_MAX_BYTES,
@@ -282,9 +284,63 @@ def test_instruction_control_plane_rejects_unknown_scope_and_filename(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
 
-    import pytest
-
     with pytest.raises(ValueError, match="scope"):
         list_instruction_files(project, "parent")
     with pytest.raises(ValueError, match="filename"):
         set_instruction_file_enabled(project, "project", "../AGENTS.md", False)
+
+
+def test_instruction_list_rejects_agents_symlink_to_env(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / ".env"
+    outside.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    (project / "AGENTS.md").symlink_to(outside)
+
+    listed = list_instruction_files(project)
+
+    assert listed.files == ()
+    assert listed.warnings
+    assert str(outside) not in repr(listed.warnings)
+    assert outside.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+
+
+def test_instruction_delete_symlink_does_not_delete_env(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / ".env"
+    outside.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    (project / "AGENTS.md").symlink_to(outside)
+
+    with pytest.raises(ValueError, match="regular file"):
+        delete_instruction_file(project, "project", "AGENTS.md")
+
+    assert outside.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+
+
+def test_instruction_create_refuses_existing_symlink(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    (project / "AGENTS.md").symlink_to(outside)
+
+    with pytest.raises(ValueError):
+        create_instruction_file(project)
+
+    assert outside.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+
+
+def test_instruction_state_symlink_cannot_overwrite_target(tmp_path):
+    project = tmp_path / "project"
+    state_dir = project / ".nz-coder"
+    state_dir.mkdir(parents=True)
+    (project / "AGENTS.md").write_text("rules\n", encoding="utf-8")
+    outside = tmp_path / "outside.json"
+    outside.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    (state_dir / "instruction-file-state.json").symlink_to(outside)
+
+    with pytest.raises(ValueError, match="safely"):
+        set_instruction_file_enabled(project, "project", "AGENTS.md", False)
+
+    assert outside.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
