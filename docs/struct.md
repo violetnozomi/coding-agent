@@ -1345,3 +1345,13 @@ Terminal 的直接 Shell 与 Project Command 同样在提交边界重建权限/�
 正式执行路径中的 MCP enabled/servers/user/project/trust path 与 timeout、Provider key/endpoint/credential generation、Model fallback，以及 LSP enabled/initialize timeout/request timeout 都从目标 Workspace 的本次 `ConfigSnapshot` 解析。MCP 内联配置保留 `environment`、`user` 或 `trusted-workspace` 来源，不会把启动 Workspace 的 `.env` 降格成另一个 Workspace 的宿主环境；Provider endpoint 与 credential 来自同一 epoch；LSP cache key 包含 timeout 语义，变化时关闭旧 client。模块级常量仅保留给旧的直接调用兼容层，不再决定 Terminal、HTTP、SDK、Headless 对其他 Workspace 的安全语义。
 
 数值配置解析失败只记录固定诊断文本，并立即用安全默认值替换快照中的非法原文；因此类似凭据的错误数值不会进入 issue、`public_json()`、doctor 或 status 输出。仍保留上一节列出的边界：这些控制措施不是 OS sandbox，也不宣称解决 Webfetch DNS TOCTOU、Artifact 无限历史保留或 Actions SHA 固定。
+
+### 22.3 Nested Run、资源退休与产品入口收口（2026-09-04）
+
+顶层 Run 的 `ConfigSnapshot` 现在通过 Host 的父上下文显式传给同步 child、task/subagent、background child 和 Workflow thread。SDK `run_child()` 会优先继承当前父 epoch；subagent 的 Provider、endpoint、credential scope、模型 tier/fallback、turn/time budget 与 worktree switch 都从该快照解析。独立 child worktree 只重绑定执行根目录，配置值和已批准的 Project Control bytes 不重新读盘；child 自己创建 Provider runtime，但不会继承父 Run 的动态 MCP tool overlay。进程隔离 child 通过私有 spawn IPC 传递同一对象，Snapshot 不进入 Session、metadata、trace 或 digest，且公开 `repr` 不包含配置值。下一次独立顶层提交仍重新捕获磁盘状态。
+
+`RunControlBundle` 使用 sidecar、MCP 和逐个 Provider runtime 的完成 ledger。关闭失败只保留资源标签与异常类型，已成功阶段不会重复关闭，未完成阶段可在 retire、下一次 prepare 或 environment close 时重试。新 Bundle 完成安装即为 commit point；commit 前失败恢复旧绑定并把 candidate 资源交给同一 cleanup ledger，commit 后旧资源关闭失败不会撤销或遗失新 Bundle。Host 先解除 active ownership 再退休资源，所以 cleanup failure 不覆盖 Provider 主异常，也不会把已经完成的业务结果改成失败或让下一 Run 永久 busy。
+
+Workspace 配置信任与 MCP capability 信任保持两层授权：`environment` 和 `user` 来源沿用宿主/用户信任；`project` 与 `.env` 产生的 `trusted-workspace` 都必须计算完整 Server fingerprint，并由 `MCPTrustStore` 精确信任后才能启动。command、cwd、executable 内容、URL、headers/header_env、OAuth 或 tool effects 改变都会使旧信任失效；CLI 的 list/trust/untrust 使用当前 Workspace Snapshot，并只公开安全截断 fingerprint。
+
+Terminal 的 Built-in Command 继续由稳定 Registry 拥有；Custom Command 的 dispatch authority 每次提交从同一 `submission_snapshot` 的 Catalog 解析，因此新增、删除、修改或撤销信任无需重启，且 Built-in 同名时始终优先。Headless 基础 `AgentDefinition` 不再预嵌入 Skill 描述，统一由 RunControl 的 `SkillLoader` 在最终 prompt 中注入一次，与 Terminal、HTTP 和 SDK 使用同一所有权边界。
