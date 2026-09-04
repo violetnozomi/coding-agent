@@ -21,6 +21,8 @@ from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
 
 _NOTIFICATION_CLOSED = object()
+_MAX_FRAME_BYTES = 16 * 1024 * 1024
+_MAX_STDERR_LINE_BYTES = 8 * 1024
 
 
 def _validated_timeout(value: Any) -> float:
@@ -405,20 +407,12 @@ class MCPClient:
             return
         error: MCPError | None = None
         try:
-            for line in process.stdout:
-                value = line.strip()
-                if not value:
-                    continue
-                try:
-                    message = json.loads(
-                        value,
-                        parse_constant=reject_nonstandard_json_constant,
-                    )
-                except (json.JSONDecodeError, ValueError) as exc:
-                    error = MCPError(
-                        f"MCP server '{self.name}' wrote invalid JSON to stdout: {exc}"
-                    )
+            while True:
+                message = _read_json_frame(process.stdout, server_name=self.name)
+                if message is None:
                     break
+                if not message:
+                    continue
                 if not isinstance(message, dict):
                     continue
                 message_id = message.get("id")
@@ -447,13 +441,18 @@ class MCPClient:
             with self._state_lock:
                 self._transport_error = error
             self._fail_pending(error)
+            if process.poll() is None:
+                self._terminate_process(process, force=True)
 
     def _read_stderr(self) -> None:
         process = self.process
         if process is None or process.stderr is None:
             return
         try:
-            for line in process.stderr:
+            while True:
+                line = process.stderr.readline(_MAX_STDERR_LINE_BYTES + 1)
+                if not line:
+                    break
                 value = line.rstrip()
                 if value:
                     self._stderr_tail.append(value[-2000:])
@@ -544,3 +543,19 @@ class MCPClient:
     @staticmethod
     def _terminate_process(process: subprocess.Popen, *, force: bool) -> None:
         terminate_process_tree(process, force=force)
+
+
+def _read_json_frame(stream, *, server_name: str) -> dict[str, Any] | list | None:
+    """Read one bounded newline-delimited JSON-RPC frame."""
+    line = stream.readline(_MAX_FRAME_BYTES + 1)
+    if not line:
+        return None
+    if len(line.encode("utf-8")) > _MAX_FRAME_BYTES or not line.endswith("\n"):
+        raise MCPError(f"MCP server '{server_name}' frame exceeds maximum size")
+    value = line.strip()
+    if not value:
+        return {}
+    try:
+        return json.loads(value, parse_constant=reject_nonstandard_json_constant)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise MCPError(f"MCP server '{server_name}' wrote invalid JSON to stdout") from exc

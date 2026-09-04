@@ -45,6 +45,7 @@ from nz_coder.tools import (
     scoped_dynamic_tool_snapshot,
     scoped_tool_metadata_reporter,
 )
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.tools.question import scoped_question_lifecycle_reporter
 
 
@@ -590,7 +591,7 @@ class ProductionToolRuntime:
                 mode=mode,
                 dispatched=[],
                 segments=segments,
-                error=str(exc) or type(exc).__name__,
+                error=to_public_error(exc).message,
             )
             raise
         dispatched = [
@@ -682,7 +683,7 @@ class ProductionToolRuntime:
                 mode=mode,
                 dispatched=[],
                 segments=segments,
-                error=str(exc) or type(exc).__name__,
+                error=to_public_error(exc).message,
             )
             raise
         transformed = []

@@ -18,6 +18,7 @@ from nz_coder.capabilities.vision import (
     describe_images,
     render_image_descriptions,
 )
+from nz_coder.protocol.public_error import to_public_error
 
 
 class ProductionInputPreflight:
@@ -167,7 +168,7 @@ class ProductionInputPreflight:
                     items[index] = {
                         **items[index],
                         "status": "error",
-                        "error": str(exc)[:4000] or type(exc).__name__,
+                        "error": to_public_error(exc).message,
                     }
                     continue
                 result_status = getattr(result, "status", "error")

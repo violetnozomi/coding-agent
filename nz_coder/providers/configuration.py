@@ -10,6 +10,12 @@ import threading
 import uuid
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_trust import (
+    ConfigSource,
+    ConfigValidationError,
+    WorkspaceTrustStore,
+    default_trust_store_path,
+)
 
 
 _ANTHROPIC_NAMES = {"anthropic", "claude"}
@@ -33,6 +39,8 @@ class ProviderConnection:
     api_key: str
     base_url: str
     credential_scope_id: str
+    credential_source: str
+    endpoint_source: str
 
     @property
     def configured(self) -> bool:
@@ -57,25 +65,38 @@ def provider_connection(provider: str, *, config_snapshot=None) -> ProviderConne
             override[0],
             override[1],
             f"user-connect:{family}:{override[2]}",
+            "user",
+            "user",
         )
     def selected(key: str, default: str = "") -> str:
         if config_snapshot is not None:
             return config_snapshot.get(key, default)
         return str(getattr(config, key, default))
 
+    def source(key: str) -> str:
+        if config_snapshot is None:
+            return "environment" if key in os.environ else "host-process"
+        return config_snapshot.value(key).source.value
+
     shared_key = selected("API_KEY", "")
+    shared_source = source("API_KEY")
     if normalized in _ANTHROPIC_NAMES:
-        api_key = selected("ANTHROPIC_API_KEY", shared_key) or shared_key
-        return ProviderConnection(
+        specific = selected("ANTHROPIC_API_KEY", shared_key)
+        api_key = specific or shared_key
+        connection = ProviderConnection(
             normalized,
             "ANTHROPIC_API_KEY (or API_KEY)",
             api_key,
             selected("ANTHROPIC_API_BASE_URL", "https://api.anthropic.com"),
             _environment_credential_scope("anthropic", api_key),
+            source("ANTHROPIC_API_KEY") if specific else shared_source,
+            source("ANTHROPIC_API_BASE_URL"),
         )
+        return _enforce_endpoint_delegation(connection, "anthropic", config_snapshot)
     if normalized in _GEMINI_NAMES:
-        api_key = selected("GEMINI_API_KEY", shared_key) or shared_key
-        return ProviderConnection(
+        specific = selected("GEMINI_API_KEY", shared_key)
+        api_key = specific or shared_key
+        connection = ProviderConnection(
             normalized,
             "GEMINI_API_KEY (or API_KEY)",
             api_key,
@@ -84,22 +105,104 @@ def provider_connection(provider: str, *, config_snapshot=None) -> ProviderConne
                 "https://generativelanguage.googleapis.com/v1beta",
             ),
             _environment_credential_scope("gemini", api_key),
+            source("GEMINI_API_KEY") if specific else shared_source,
+            source("GEMINI_API_BASE_URL"),
         )
+        return _enforce_endpoint_delegation(connection, "gemini", config_snapshot)
     if normalized in _OPENAI_RESPONSES_NAMES:
-        api_key = selected("OPENAI_API_KEY", shared_key) or shared_key
-        return ProviderConnection(
+        specific = selected("OPENAI_API_KEY", shared_key)
+        api_key = specific or shared_key
+        connection = ProviderConnection(
             normalized,
             "OPENAI_API_KEY (or API_KEY)",
             api_key,
             selected("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
             _environment_credential_scope("openai-responses", api_key),
+            source("OPENAI_API_KEY") if specific else shared_source,
+            source("OPENAI_API_BASE_URL"),
         )
-    return ProviderConnection(
+        return _enforce_endpoint_delegation(
+            connection, "openai-responses", config_snapshot,
+        )
+    connection = ProviderConnection(
         normalized,
         "API_KEY",
         shared_key,
         selected("API_BASE_URL", "https://api.deepseek.com"),
         _environment_credential_scope("openai-compatible", shared_key),
+        shared_source,
+        source("API_BASE_URL"),
+    )
+    return _enforce_endpoint_delegation(
+        connection, "openai-compatible", config_snapshot,
+    )
+
+
+_OFFICIAL_ENDPOINTS = {
+    "anthropic": "https://api.anthropic.com",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta",
+    "openai-responses": "https://api.openai.com/v1",
+    "openai-compatible": "https://api.deepseek.com",
+}
+
+
+def _endpoint_fingerprint(family: str, endpoint: str) -> str:
+    payload = f"{family}\0{str(endpoint).strip().rstrip('/')}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _enforce_endpoint_delegation(
+    connection: ProviderConnection,
+    family: str,
+    config_snapshot,
+) -> ProviderConnection:
+    if config_snapshot is None:
+        return connection
+    if (
+        connection.endpoint_source != ConfigSource.TRUSTED_WORKSPACE.value
+        or connection.credential_source not in {
+            ConfigSource.ENVIRONMENT.value, ConfigSource.USER.value,
+        }
+        or connection.base_url.rstrip("/") == _OFFICIAL_ENDPOINTS[family].rstrip("/")
+    ):
+        return connection
+    store = WorkspaceTrustStore(default_trust_store_path())
+    trusted = store.is_trusted(
+        config_snapshot.workspace,
+        f"provider-endpoint:{family}",
+        _endpoint_fingerprint(family, connection.base_url),
+    )
+    if not trusted:
+        raise ConfigValidationError(
+            "Workspace Provider endpoint requires explicit credential delegation"
+        )
+    return connection
+
+
+def trust_provider_endpoint(
+    provider: str,
+    *,
+    config_snapshot,
+    trust_store: WorkspaceTrustStore | None = None,
+) -> None:
+    """Delegate owner credentials to the exact current workspace endpoint."""
+    normalized = str(provider or "").strip().lower()
+    family = _provider_family(normalized)
+    endpoint_keys = {
+        "anthropic": "ANTHROPIC_API_BASE_URL",
+        "gemini": "GEMINI_API_BASE_URL",
+        "openai-responses": "OPENAI_API_BASE_URL",
+        "openai-compatible": "API_BASE_URL",
+    }
+    record = config_snapshot.value(endpoint_keys[family])
+    if record.source is not ConfigSource.TRUSTED_WORKSPACE:
+        raise ConfigValidationError(
+            "Provider endpoint delegation requires a trusted-workspace endpoint"
+        )
+    (trust_store or WorkspaceTrustStore(default_trust_store_path())).trust(
+        config_snapshot.workspace,
+        f"provider-endpoint:{family}",
+        _endpoint_fingerprint(family, record.value),
     )
 
 

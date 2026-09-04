@@ -7,6 +7,8 @@ from pathlib import Path
 
 from nz_coder.foundation.workspace_trust import ConfigSnapshot
 from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.protocol.public_error import to_public_error
+from nz_coder.foundation.capability_lease import capability_leases
 
 from .client import LSPClient
 from .servers import ResolvedServer, resolve_server
@@ -17,6 +19,23 @@ _CLIENTS: dict[_ClientKey, LSPClient] = {}
 _BROKEN: set[_ClientKey] = set()
 _ERRORS: dict[_ClientKey, str] = {}
 _TRUST_REQUIRED: set[_ClientKey] = set()
+_LEASES: dict[_ClientKey, str] = {}
+
+
+def _release_lease(key: _ClientKey) -> None:
+    lease_id = _LEASES.pop(key, "")
+    if lease_id:
+        capability_leases().release(lease_id)
+
+
+def _revoke_client(key: _ClientKey, expected: LSPClient) -> None:
+    with _LOCK:
+        client = _CLIENTS.get(key)
+        if client is expected:
+            _CLIENTS.pop(key, None)
+            _release_lease(key)
+    if client is expected:
+        client.close(force=True)
 
 
 def _client_key(
@@ -108,6 +127,7 @@ def get_client_for_file(
         stale_keys = [candidate for candidate in _CLIENTS if candidate[:3] == identity and candidate != key]
         stale_clients = [_CLIENTS.pop(candidate) for candidate in stale_keys]
         for candidate in stale_keys:
+            _release_lease(candidate)
             _BROKEN.discard(candidate)
             _ERRORS.pop(candidate, None)
             _TRUST_REQUIRED.discard(candidate)
@@ -116,6 +136,7 @@ def get_client_for_file(
         if not resolved.trusted:
             stale = _CLIENTS.pop(key, None)
             if stale is not None:
+                _release_lease(key)
                 stale.close()
             _TRUST_REQUIRED.add(key)
             _ERRORS[key] = (
@@ -143,9 +164,22 @@ def get_client_for_file(
             )
         except Exception as exc:
             _BROKEN.add(key)
-            _ERRORS[key] = str(exc)
+            _ERRORS[key] = to_public_error(exc).message
             return None
         _CLIENTS[key] = client
+        from nz_coder.state.sessions import active_session_id
+
+        lease = capability_leases().create(
+            kind="lsp-client",
+            resource_id=f"{resolved.server_id}:{resolved.fingerprint}",
+            workspace=workspace,
+            control_fingerprint=config_snapshot.control_fingerprint,
+            run_id=active_session_id() or "lsp-cache",
+            interaction_id=active_session_id() or "lsp-cache",
+            owner_session=active_session_id() or "lsp-cache",
+            revoke=lambda: _revoke_client(key, client),
+        )
+        _LEASES[key] = lease.lease_id
         _ERRORS.pop(key, None)
         return client
 
@@ -205,12 +239,16 @@ def close_all_clients() -> None:
     """Close every cached language server."""
     with _LOCK:
         clients = list(_CLIENTS.values())
+        lease_ids = list(_LEASES.values())
         _CLIENTS.clear()
+        _LEASES.clear()
         _BROKEN.clear()
         _ERRORS.clear()
         _TRUST_REQUIRED.clear()
     for client in clients:
         client.close()
+    for lease_id in lease_ids:
+        capability_leases().release(lease_id)
 
 
 def close_workspace_clients(workspace: Path) -> None:
@@ -219,6 +257,7 @@ def close_workspace_clients(workspace: Path) -> None:
     with _LOCK:
         selected_keys = [key for key in _CLIENTS if key[0] == owner]
         clients = [_CLIENTS.pop(key) for key in selected_keys]
+        lease_ids = [_LEASES.pop(key, "") for key in selected_keys]
         _BROKEN.difference_update(tuple(
             key for key in _BROKEN if key[0] == owner
         ))
@@ -230,6 +269,9 @@ def close_workspace_clients(workspace: Path) -> None:
                 _ERRORS.pop(key, None)
     for client in clients:
         client.close()
+    for lease_id in lease_ids:
+        if lease_id:
+            capability_leases().release(lease_id)
 
 
 atexit.register(close_all_clients)

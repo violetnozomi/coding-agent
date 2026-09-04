@@ -112,7 +112,7 @@ PROCESS_SITES = {
 # Direct filesystem calls are deliberately coarse here: the count is an alarm,
 # while P0-E's focused contract rejects specific calls in model tool modules.
 MODEL_IO_MODULE_COUNTS = {
-    'nz_coder/capabilities/documents.py': ('derived-cache-and-attachment-compat', 10),
+    'nz_coder/capabilities/documents.py': ('derived-cache-and-attachment-compat', 9),
     'nz_coder/capabilities/web_search.py': ('remote-transport', 3),
     'nz_coder/tools/bash.py': ('workspace-file-access', 0),
     'nz_coder/tools/files.py': ('workspace-file-access', 0),
@@ -128,15 +128,8 @@ MODEL_IO_MODULE_COUNTS = {
 
 
 PUBLIC_ERROR_MODULE_COUNTS = {
-    'nz_coder/capabilities/documents.py': ('public/model-visible', 2),
-    'nz_coder/capabilities/vision.py': ('public/model-visible', 1),
-    'nz_coder/lsp/client.py': ('trusted local validation', 1),
-    'nz_coder/lsp/manager.py': ('public/model-visible', 1),
     'nz_coder/runtime/agent/agent_manager.py': ('private diagnostic', 1),
     'nz_coder/runtime/agent/agent_resilience.py': ('trusted local validation', 1),
-    'nz_coder/runtime/agent/subagent.py': ('public/model-visible', 1),
-    'nz_coder/runtime/conversation/input_preflight.py': ('public/model-visible', 1),
-    'nz_coder/runtime/core/state.py': ('public/model-visible', 1),
     'nz_coder/runtime/execution/loop.py': ('private diagnostic', 20),
     'nz_coder/runtime/execution/provider_stream.py': ('private diagnostic', 1),
     'nz_coder/runtime/execution/run_lifecycle.py': ('private diagnostic', 2),
@@ -145,19 +138,14 @@ PUBLIC_ERROR_MODULE_COUNTS = {
     'nz_coder/runtime/model_gateway/errors.py': ('private diagnostic', 3),
     'nz_coder/runtime/model_gateway/gateway.py': ('private diagnostic', 16),
     'nz_coder/runtime/model_gateway/models.py': ('private diagnostic', 4),
-    'nz_coder/runtime/process/process_service.py': ('public/model-visible', 1),
-    'nz_coder/runtime/tool_runtime/pipeline.py': ('public/model-visible', 2),
     'nz_coder/runtime/verification/hooks.py': ('private diagnostic', 4),
     'nz_coder/runtime/verification/recovery.py': ('private diagnostic', 3),
     'nz_coder/runtime/verification/stall_sidecar.py': ('private diagnostic', 1),
     'nz_coder/runtime/workflows/workflow_generation.py': ('trusted local validation', 1),
-    'nz_coder/runtime/workflows/workflow_runtime.py': ('public/model-visible', 5),
     'nz_coder/runtime/worktree/manager.py': ('private diagnostic', 1),
     'nz_coder/tools/bash.py': ('trusted local validation', 1),
     'nz_coder/tools/question.py': ('private diagnostic', 1),
     'nz_coder/tools/read_support.py': ('trusted local validation', 1),
-    'nz_coder/tools/scratchpad.py': ('public/model-visible', 1),
-    'nz_coder/tools/todo.py': ('public/model-visible', 1),
     'nz_coder/tools/webfetch.py': ('private diagnostic', 1),
 }
 
@@ -305,6 +293,18 @@ def test_raw_exception_projection_sites_are_classified():
     expected = {path: count for path, (_kind, count) in PUBLIC_ERROR_MODULE_COUNTS.items()}
     assert actual == expected, f'raw exception projection inventory changed: expected {expected}, found {dict(actual)}; use PublicError or classify the reviewed site'
     assert {kind for kind, _count in PUBLIC_ERROR_MODULE_COUNTS.values()} <= {'private diagnostic', 'trusted local validation', 'public/model-visible'}
+
+
+def test_public_error_contract_rejects_raw_exception_output():
+    """No reviewed raw exception projection may target a public surface."""
+    public = {
+        path: count for path, (kind, count) in PUBLIC_ERROR_MODULE_COUNTS.items()
+        if kind == 'public/model-visible' and count
+    }
+    assert public == {}, (
+        f'raw exception output remains on public surfaces: {public}; '
+        'project through PublicError, TrustedPublicMessage, or PublicInputError'
+    )
 
 
 def test_cross_run_resources_declare_ownership_and_revocation():

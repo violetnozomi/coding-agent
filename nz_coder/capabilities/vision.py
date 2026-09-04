@@ -24,6 +24,7 @@ from nz_coder.runtime.model_gateway import (
     resolve_model_runtime,
 )
 from nz_coder.foundation.async_utils import to_thread_settled
+from nz_coder.protocol.public_error import to_public_error
 
 
 DescribeCallable = Callable[[dict, str], Awaitable[str]]
@@ -186,7 +187,7 @@ async def describe_images(
                 items[index] = {
                     **items[index],
                     "status": "error",
-                    "error": str(exc)[:4000] or type(exc).__name__,
+                    "error": to_public_error(exc).message,
                 }
             else:
                 items[index] = {

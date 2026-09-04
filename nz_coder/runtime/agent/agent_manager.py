@@ -5,6 +5,7 @@ import hashlib
 import multiprocessing
 import threading
 import time
+import weakref
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar, copy_context
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ from nz_coder.protocol.public_error import (
 )
 from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
 from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.foundation.capability_lease import capability_leases
 from nz_coder.tools import ToolOutput, dispatch, register
 
 
@@ -52,6 +54,7 @@ class _LiveJob:
     done_event: threading.Event
     thread: threading.Thread
     process: object | None = None
+    capability_lease_id: str = ""
 
 
 @dataclass
@@ -1101,6 +1104,9 @@ class BackgroundAgentManager:
                     with self._capacity_condition:
                         self._active_jobs -= 1
                         self._capacity_condition.notify_all()
+                if live_job is not None and live_job.capability_lease_id:
+                    capability_leases().release(live_job.capability_lease_id)
+                    live_job.capability_lease_id = ""
                 done_event.set()
 
         thread = threading.Thread(
@@ -1109,6 +1115,36 @@ class BackgroundAgentManager:
             daemon=True,
         )
         live_job = _LiveJob(cancel_event, done_event, thread)
+        manager_ref = weakref.ref(self)
+
+        def revoke_child() -> None:
+            manager = manager_ref()
+            if manager is not None:
+                result = manager.stop(
+                    [str(session_id)],
+                    reason="workspace trust revoked",
+                    timeout_ms=2000,
+                )
+                metadata = getattr(result, "metadata", {})
+                if metadata.get("unsettled_task_ids"):
+                    raise RuntimeError("background child did not settle after revocation")
+
+        lease = capability_leases().create(
+            kind="workflow-child" if state.get("workflow_run_id") else "background-child",
+            resource_id=str(session_id),
+            workspace=self.workspace,
+            control_fingerprint=(
+                run_snapshot.control_fingerprint
+                if run_snapshot is not None else "legacy"
+            ),
+            run_id=str(state.get("workflow_run_id") or session_id),
+            interaction_id=str(
+                state.get("origin_interaction_run_id") or session_id
+            ),
+            owner_session=self.parent_session_id,
+            revoke=revoke_child,
+        )
+        live_job.capability_lease_id = lease.lease_id
         with self._lock:
             self._jobs[session_id] = live_job
         thread.start()

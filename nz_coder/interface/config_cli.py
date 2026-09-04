@@ -111,8 +111,19 @@ def config_main(argv: list[str] | None = None) -> int:
         help="Revoke trust for the current workspace configuration",
     )
     untrust.add_argument("--workspace", type=Path, default=Path.cwd())
+    untrust.add_argument(
+        "--revoke-active",
+        action="store_true",
+        help="Also stop process-local capabilities already running for this workspace",
+    )
+    delegate = commands.add_parser(
+        "delegate-provider-endpoint",
+        help="Allow the exact trusted workspace endpoint to receive owner credentials",
+    )
+    delegate.add_argument("--workspace", type=Path, default=Path.cwd())
+    delegate.add_argument("--provider", required=True)
     args = parser.parse_args(argv)
-    if args.command in {"trust", "untrust"}:
+    if args.command in {"trust", "untrust", "delegate-provider-endpoint"}:
         root = args.workspace.expanduser().resolve(strict=True)
         if not root.is_dir():
             raise ValueError("Workspace must be a directory")
@@ -132,12 +143,44 @@ def config_main(argv: list[str] | None = None) -> int:
             Console().print(
                 "Trusted the exact current workspace configuration fingerprint."
             )
-        else:
+        elif args.command == "untrust":
             removed = store.remove(root, "workspace-config")
             removed = store.remove(root, "workspace-control") or removed
+            for family in (
+                "anthropic", "gemini", "openai-responses", "openai-compatible",
+            ):
+                removed = store.remove(root, f"provider-endpoint:{family}") or removed
+            from nz_coder.foundation.capability_lease import capability_leases
+
+            leases = capability_leases()
+            active = leases.list_workspace(root)
+            if args.revoke_active:
+                outcome = leases.revoke_workspace(root)
+                Console().print(
+                    f"Revoked workspace configuration trust; revoked "
+                    f"{outcome.revoked} active capability lease(s), "
+                    f"{outcome.failed} failed."
+                )
+            else:
+                prefix = (
+                    "Revoked workspace configuration trust."
+                    if removed else "Workspace configuration was not trusted."
+                )
+                Console().print(
+                    f"{prefix} This affects the next Run only; "
+                    f"{len(active)} active capability lease(s) remain. "
+                    "Use --revoke-active to stop process-local owned resources."
+                )
+        else:
+            from nz_coder.providers.configuration import trust_provider_endpoint
+
+            snapshot = load_config_snapshot(root, trust_store=store)
+            trust_provider_endpoint(
+                args.provider, config_snapshot=snapshot, trust_store=store,
+            )
             Console().print(
-                "Revoked workspace configuration trust."
-                if removed else "Workspace configuration was not trusted."
+                "Delegated owner credentials to the exact current workspace "
+                f"endpoint for provider '{args.provider}'."
             )
         return 0
     values = collect_effective_config()

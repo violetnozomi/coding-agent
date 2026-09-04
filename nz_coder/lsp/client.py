@@ -25,6 +25,11 @@ from nz_coder.runtime.process.platform_runtime import executable_argv, terminate
 
 
 _STDERR_DRAIN_TIMEOUT_SECONDS = 0.2
+_MAX_HEADER_BYTES = 64 * 1024
+_MAX_FRAME_BYTES = 16 * 1024 * 1024
+_MAX_DIAGNOSTICS = 2_000
+_MAX_DIAGNOSTIC_BYTES = 64 * 1024
+_MAX_STDERR_LINE_BYTES = 8 * 1024
 
 
 def _validated_timeout(value: Any) -> float:
@@ -54,7 +59,7 @@ class LSPResponseError(LSPError):
 
     def __init__(self, error: dict):
         self.error = error
-        super().__init__(str(error.get("message") or error))
+        super().__init__("Language server returned an error response")
 
 
 def path_to_uri(path: Path) -> str:
@@ -145,7 +150,7 @@ class LSPClient:
         except UnsafeExecutionIdentity as exc:
             raise LSPError(f"Language server {server_id} execution identity changed") from exc
         except OSError as exc:
-            raise LSPError(f"Failed to start {server_id}: {exc}") from exc
+            raise LSPError(f"Failed to start language server {server_id}") from exc
         if not self.process.stdin or not self.process.stdout or not self.process.stderr:
             self.close(force=True)
             raise LSPError(f"Language server {server_id} has no stdio pipes")
@@ -217,10 +222,7 @@ class LSPClient:
         except Exception as exc:
             self.close(force=True)
             self._stderr_reader.join(timeout=_STDERR_DRAIN_TIMEOUT_SECONDS)
-            detail = self.stderr_tail
-            if detail and detail not in str(exc):
-                raise LSPError(f"{exc}: {detail}") from exc
-            raise
+            raise LSPError("Language server failed to initialize") from exc
 
     @property
     def stderr_tail(self) -> str:
@@ -315,8 +317,9 @@ class LSPClient:
                 timeout=self.diagnostic_wait,
             )
             if isinstance(report, dict) and isinstance(report.get("items"), list):
-                self._diagnostics[uri] = report["items"]
-                return list(report["items"])
+                bounded = _bounded_diagnostics(report["items"])
+                self._diagnostics[uri] = bounded
+                return list(bounded)
         except (LSPResponseError, LSPTimeoutError):
             pass
         event.wait(timeout=self.diagnostic_wait)
@@ -384,10 +387,12 @@ class LSPClient:
                 if message is None:
                     break
                 self._handle_message(message)
-        except Exception as exc:
-            self._fail_pending(LSPError(
-                f"Language server {self.server_id} protocol failed: {exc}"
-            ))
+        except Exception:
+            error = LSPError(f"Language server {self.server_id} protocol failed")
+            self._fail_pending(error)
+            self._closed = True
+            if self.process.poll() is None:
+                terminate_process_tree(self.process, force=True)
         finally:
             if not self._closed:
                 detail = self.stderr_tail
@@ -400,19 +405,29 @@ class LSPClient:
         if not self.process.stdout:
             return None
         headers: dict[str, str] = {}
+        header_bytes = 0
         while True:
-            line = self.process.stdout.readline()
+            remaining = _MAX_HEADER_BYTES - header_bytes
+            line = self.process.stdout.readline(remaining + 1)
             if not line:
                 return None
+            header_bytes += len(line)
+            if header_bytes > _MAX_HEADER_BYTES or not line.endswith(b"\n"):
+                raise LSPError("LSP header exceeds maximum size")
             if line in (b"\r\n", b"\n"):
                 break
             decoded = line.decode("ascii", errors="replace").strip()
             if ":" in decoded:
                 key, value = decoded.split(":", 1)
                 headers[key.lower()] = value.strip()
-        length = int(headers.get("content-length", "0"))
+        try:
+            length = int(headers.get("content-length", "0"))
+        except ValueError as exc:
+            raise LSPError("Invalid Content-Length header") from exc
         if length <= 0:
             raise LSPError("Missing Content-Length header")
+        if length > _MAX_FRAME_BYTES:
+            raise LSPError("LSP frame exceeds maximum size")
         body = self.process.stdout.read(length)
         if len(body) != length:
             raise LSPError("Truncated JSON-RPC message")
@@ -436,7 +451,7 @@ class LSPClient:
             uri = str(params.get("uri") or "")
             diagnostics = params.get("diagnostics")
             if uri and isinstance(diagnostics, list):
-                self._diagnostics[uri] = diagnostics
+                self._diagnostics[uri] = _bounded_diagnostics(diagnostics)
                 self._diagnostic_events.setdefault(uri, threading.Event()).set()
             return
         if response_id is not None and method:
@@ -460,7 +475,10 @@ class LSPClient:
     def _read_stderr(self) -> None:
         if not self.process.stderr:
             return
-        for raw in iter(self.process.stderr.readline, b""):
+        while True:
+            raw = self.process.stderr.readline(_MAX_STDERR_LINE_BYTES + 1)
+            if not raw:
+                break
             text = raw.decode("utf-8", errors="replace").strip()
             if text:
                 self._stderr.append(text[:1000])
@@ -474,3 +492,18 @@ class LSPClient:
                 response_queue.put_nowait(exc)
             except queue.Full:
                 pass
+
+
+def _bounded_diagnostics(values: list[Any]) -> list[dict[str, Any]]:
+    """Retain only bounded JSON diagnostic objects from an untrusted server."""
+    result: list[dict[str, Any]] = []
+    for item in values[:_MAX_DIAGNOSTICS]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            encoded = json.dumps(item, ensure_ascii=False).encode("utf-8")
+        except (TypeError, ValueError):
+            continue
+        if len(encoded) <= _MAX_DIAGNOSTIC_BYTES:
+            result.append(item)
+    return result

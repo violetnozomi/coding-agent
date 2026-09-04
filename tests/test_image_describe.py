@@ -72,7 +72,7 @@ def test_describe_images_keeps_per_item_failure_and_completes_batch():
 
     assert state["status"] == "completed"
     assert [item["status"] for item in state["items"]] == ["error", "completed"]
-    assert state["items"][0]["error"] == "vision unavailable"
+    assert state["items"][0]["error"] == "An internal error occurred."
     assert snapshots[0]["status"] == "running"
     assert snapshots[-1]["status"] == "completed"
 

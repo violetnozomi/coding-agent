@@ -1855,7 +1855,7 @@ def run_subagent(
             error,
             name="MessageAbortedError" if cancelled else "APIError",
             data={
-                "message": str(error)[:4000],
+                "message": to_public_error(error).message,
                 **({"isRetryable": False} if not cancelled else {}),
             },
         )

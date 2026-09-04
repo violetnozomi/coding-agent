@@ -684,8 +684,8 @@ def test_agent_loop_close_cleans_background_before_other_resources():
     ]
 
 
-def test_agent_loop_close_preserves_resources_when_background_cannot_settle():
-    """A retryable child timeout must not tear down resources it still uses."""
+def test_agent_loop_close_records_child_failure_and_continues_cleanup():
+    """One failing cleanup stage cannot mask or prevent later cleanup stages."""
     from nz_coder.runtime.execution.loop import AgentLoop
 
     order = []
@@ -706,10 +706,9 @@ def test_agent_loop_close_preserves_resources_when_background_cannot_settle():
         "Tracer", (), {"close": lambda self: order.append("tracer")}
     )()
 
-    with pytest.raises(RuntimeError, match="child still running"):
-        loop.close()
+    loop.close()
 
-    assert order == []
+    assert order == ["repo", "events", "tracer"]
 
 
 def test_dispose_keeps_manager_reachable_when_children_do_not_settle(

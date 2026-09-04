@@ -28,6 +28,7 @@ from nz_coder.protocol.attachments import (
     SUPPORTED_DOCUMENT_MIMES,
     normalize_document_attachments,
 )
+from nz_coder.protocol.public_error import PublicInputError, to_public_error
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MIME = "application/pdf"
@@ -67,12 +68,12 @@ def parse_document_pages(value: str) -> DocumentPageRange:
     """Parse InfCode's ``pages=\"5\"`` / ``pages=\"1-10\"`` contract."""
     text = str(value).strip()
     if not text:
-        raise ValueError('Invalid pages value: expected "5" or "1-10"')
+        raise PublicInputError('Invalid pages value: expected "5" or "1-10"')
     pieces = text.split("-", 1)
     if len(pieces) == 1 and pieces[0].isdigit():
         page = int(pieces[0])
         if page < 1:
-            raise ValueError(f"Invalid page number: {value}")
+            raise PublicInputError(f"Invalid page number: {value}")
         return DocumentPageRange(page, page, str(page))
     if (
         len(pieces) == 2
@@ -81,13 +82,13 @@ def parse_document_pages(value: str) -> DocumentPageRange:
     ):
         start, end = (int(item) for item in pieces)
         if start < 1 or end < start:
-            raise ValueError(f"Invalid page range: {value}")
+            raise PublicInputError(f"Invalid page range: {value}")
         if end - start + 1 > DOCUMENT_MAX_PAGES:
-            raise ValueError(
+            raise PublicInputError(
                 f"Page range exceeds maximum of {DOCUMENT_MAX_PAGES} pages per read"
             )
         return DocumentPageRange(start, end, f"{start}-{end}")
-    raise ValueError(f'Invalid pages format: {value}. Use "5" or "1-10".')
+    raise PublicInputError(f'Invalid pages format: {value}. Use "5" or "1-10".')
 
 
 def read_document_file(
@@ -140,7 +141,7 @@ def read_document_file(
             limit=_validated_limit(limit),
         )
     except Exception as exc:
-        return _error(str(exc) or type(exc).__name__)
+        return _error(to_public_error(exc).message)
 
 
 def detect_document_mime(path: Path) -> str:
@@ -388,7 +389,7 @@ def _convert_and_slice(
         except _DocumentInterrupted:
             raise
         except Exception as exc:
-            return _error(str(exc) or type(exc).__name__)
+            return _error(to_public_error(exc).message)
         if not converted.strip():
             return _error(
                 "Could not extract any text from this document. It is likely "
@@ -451,7 +452,7 @@ def _validated_offset(value: int | None) -> int:
     if value is None or value == 0:
         return 1
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError("offset must be a non-negative integer")
+        raise PublicInputError("offset must be a non-negative integer")
     return value
 
 
@@ -459,7 +460,7 @@ def _validated_limit(value: int | None) -> int:
     if value is None:
         return DOCUMENT_DEFAULT_READ_LIMIT
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError("limit must be a non-negative integer")
+        raise PublicInputError("limit must be a non-negative integer")
     return value
 
 
@@ -485,23 +486,23 @@ def _extract_docx(path: Path, cancel_event: threading.Event) -> str:
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
             if len(infos) > 10_000 or sum(info.file_size for info in infos) > _MAX_DOCX_TOTAL_BYTES:
-                raise ValueError("DOCX expanded content exceeds the safe extraction limit")
+                raise PublicInputError("DOCX expanded content exceeds the safe extraction limit")
             names = {info.filename.replace("\\", "/") for info in infos}
             if "[Content_Types].xml" not in names or "word/document.xml" not in names:
-                raise ValueError("This DOCX is not a valid Office Open XML document")
+                raise PublicInputError("This DOCX is not a valid Office Open XML document")
             info = next(
                 item for item in infos
                 if item.filename.replace("\\", "/") == "word/document.xml"
             )
             if info.file_size > _MAX_DOCX_XML_BYTES:
-                raise ValueError("DOCX document.xml exceeds the safe extraction limit")
+                raise PublicInputError("DOCX document.xml exceeds the safe extraction limit")
             payload = archive.read(info)
     except zipfile.BadZipFile as exc:
-        raise ValueError(
+        raise PublicInputError(
             "This DOCX is not a valid Office Open XML document"
         ) from exc
     if b"<!DOCTYPE" in payload.upper():
-        raise ValueError("DOCX document.xml contains a forbidden document type")
+        raise PublicInputError("DOCX document.xml contains a forbidden document type")
     _check_cancelled(cancel_event)
     root = ET.fromstring(payload)
     paragraphs = []
@@ -531,7 +532,7 @@ def _extract_pdf(
 ) -> str:
     executable = shutil.which("pdftotext")
     if not executable:
-        raise RuntimeError(
+        raise PublicInputError(
             "PDF conversion requires the optional system 'pdftotext' executable"
         )
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -560,22 +561,18 @@ def _extract_pdf(
                     raise _DocumentInterrupted
                 if time.monotonic() >= deadline:
                     _stop_process(process)
-                    raise RuntimeError(
+                    raise PublicInputError(
                         f"Document convert timeout after "
                         f"{DOCUMENT_CONVERT_TIMEOUT_SECONDS}s"
                     )
             returncode = process.returncode
         if returncode != 0:
-            detail = error_file.read_text(
-                encoding="utf-8",
-                errors="replace",
-            )[:1000].strip()
-            raise RuntimeError(f"PDF conversion failed: {detail or returncode}")
+            raise PublicInputError("PDF conversion failed")
         _check_cancelled(cancel_event)
         with output.open("rb") as stream:
             payload = stream.read(_MAX_CONVERTED_BYTES + 1)
         if len(payload) > _MAX_CONVERTED_BYTES:
-            raise RuntimeError("Converted PDF text exceeds the 4 MB safety limit")
+            raise PublicInputError("Converted PDF text exceeds the 4 MB safety limit")
         return payload.decode("utf-8", errors="replace")
     finally:
         for temporary in (output, error_file):

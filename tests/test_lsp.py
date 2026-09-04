@@ -457,7 +457,7 @@ def test_lsp_tool_reports_server_initialization_failure(tmp_path, monkeypatch):
         with scoped_workdir(tmp_path):
             result = lsp("hover", "app.py")
         assert result.startswith("Error: LSP server failed to initialize:")
-        assert "broken server" in result
+        assert "broken server" not in result
     finally:
         close_all_clients()
 

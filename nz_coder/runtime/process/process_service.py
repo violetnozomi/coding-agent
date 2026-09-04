@@ -18,6 +18,8 @@ from nz_coder.runtime.process.process_backends import (
     ProcessBackendSession,
     create_process_backend,
 )
+from nz_coder.foundation.capability_lease import capability_leases
+from nz_coder.protocol.public_error import to_public_error
 
 
 class ProcessStatus(str, Enum):
@@ -107,6 +109,7 @@ class _ManagedProcess:
         self.last_output_event_at = 0.0
         self.last_output_at = 0.0
         self.event_bus_ref = weakref.ref(event_bus) if event_bus is not None else None
+        self.capability_lease_id = ""
 
     def bind_event_bus(self, event_bus) -> None:
         if event_bus is None:
@@ -243,10 +246,11 @@ class ProcessService:
                         "exit_code": None,
                     }
                 )
-                self._append_output(record, f"Process failed to start: {exc}\n".encode())
+                public = to_public_error(exc)
+                self._append_output(record, f"Process failed to start: {public.message}\n".encode())
                 record.publish("process.failed", {
                     "process_id": process_id,
-                    "error": str(exc),
+                    "error": public.to_dict(),
                 })
                 return record.handle
 
@@ -259,6 +263,32 @@ class ProcessService:
                     "tty": backend.tty,
                 }
             )
+            settings_snapshot = settings.snapshot
+            service_ref = weakref.ref(self)
+
+            def revoke_process() -> None:
+                service = service_ref()
+                if service is not None:
+                    service.kill(
+                        process_id,
+                        owner_session_id=str(owner_session_id or ""),
+                        reason=ProcessStatus.CANCELLED,
+                    )
+
+            lease = capability_leases().create(
+                kind="persistent-process",
+                resource_id=process_id,
+                workspace=self.workspace,
+                control_fingerprint=(
+                    settings_snapshot.control_fingerprint
+                    if settings_snapshot is not None else "legacy"
+                ),
+                run_id=str(owner_session_id or ""),
+                interaction_id=str(owner_agent_id or owner_session_id or ""),
+                owner_session=str(owner_session_id or ""),
+                revoke=revoke_process,
+            )
+            record.capability_lease_id = lease.lease_id
             if (
                 tty
                 and not backend.tty
@@ -644,6 +674,9 @@ class ProcessService:
                 "status": status.value,
                 "exit_code": exit_code,
             })
+        if record.capability_lease_id:
+            capability_leases().release(record.capability_lease_id)
+            record.capability_lease_id = ""
     @staticmethod
     def _close_record_streams(record: _ManagedProcess) -> None:
         with record.condition:
