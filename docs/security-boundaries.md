@@ -73,9 +73,10 @@ profile, cwd source, and cleanup owner.  The intended profiles are:
 
 ## Model-reachable file I/O
 
-The inventory tracks direct filesystem calls by module and count.  Model tool
-modules with direct calls are marked `legacy-model-reachable`; P0-E removes
-those calls behind `WorkspaceFileAccess`.  Other classes are `project-authority`,
+The inventory tracks direct filesystem calls by module and count, including
+directory enumeration. Model tool modules with direct calls are marked
+`legacy-model-reachable`; P0-E routes formal file and directory tool I/O
+through `WorkspaceFileAccess`. Other classes are `project-authority`,
 `private-user-state`, `host-maintenance`, and `remote-transport`.  A newly
 introduced direct call or a changed count fails CI until reviewed.
 
@@ -176,7 +177,7 @@ Changing the endpoint invalidates that delegation; `config untrust` removes it.
 
 ### WorkspaceFileAccess
 
-On POSIX, workspace reads open every directory component beneath a verified
+On POSIX, workspace reads and directory enumeration open every component beneath a verified
 root descriptor with `O_DIRECTORY | O_NOFOLLOW`; writes use an opened parent
 descriptor, exclusive temporary file, file and directory `fsync`, and
 handle-relative `replace`/`unlink`. The parent descriptor remains open across
@@ -195,9 +196,11 @@ On Windows, the service opens/holds directory and file handles, rejects reparse
 points and checks final path plus volume/file identity. Python does not expose a
 general handle-relative `ReplaceFile`; the final replacement therefore retains
 a documented Windows rename TOCTOU boundary and fails closed whenever the
-pre-replacement identity cannot be proved. Model-facing file, patch, structural
-search and document-source reads use this service; document converter/cache I/O
-is owner-private derived-cache work and remains separately inventoried.
+pre-replacement identity cannot be proved. Directory enumeration holds the
+verified directory handle, validates every traversed child and rechecks the
+handle final path. Model-facing file, patch, structural search and
+document-source reads use this service; document converter/cache I/O is
+owner-private derived-cache work and remains separately inventoried.
 
 ### Cleanup ownership and active revocation
 

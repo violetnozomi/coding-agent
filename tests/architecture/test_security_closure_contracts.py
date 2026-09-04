@@ -64,6 +64,19 @@ def test_public_returns_never_format_caught_exceptions_directly():
     assert not violations, "\n".join(violations)
 
 
+def test_filesystem_tools_do_not_enumerate_validated_paths_directly():
+    """Directory reads must stay on WorkspaceFileAccess-held handles."""
+    source = (ROOT / "nz_coder" / "tools" / "files.py").read_text(
+        encoding="utf-8",
+    )
+    forbidden = ("fp.exists()", "fp.is_dir()", "dp.is_dir()", "current.iterdir()")
+    found = [item for item in forbidden if item in source]
+    assert not found, (
+        f"validated Path directory I/O remains in tools/files.py: {found}; "
+        "route kind and enumeration through WorkspaceFileAccess"
+    )
+
+
 def test_capability_lease_identity_is_complete_and_immutable():
     from nz_coder.foundation.capability_lease import CapabilityLease
 

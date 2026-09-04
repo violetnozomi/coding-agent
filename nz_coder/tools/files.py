@@ -29,9 +29,7 @@ from nz_coder.tools.read_support import (
     DEFAULT_READ_LIMIT,
     MAX_READ_BYTES,
     SAMPLE_BYTES,
-    directory_entries,
     is_binary_file,
-    missing_path_message,
     read_text_lines_bytes,
     warm_lsp,
 )
@@ -335,6 +333,34 @@ def _truncate_output(text: str, limit: int) -> str:
     )
 
 
+def _missing_file_message(access: WorkspaceFileAccess, requested: str) -> str:
+    """Build bounded suggestions from a handle-anchored parent enumeration."""
+    raw = Path(requested)
+    parent = raw.parent.as_posix() or "."
+    basename = raw.name.lower()
+    suggestions: list[str] = []
+    try:
+        entries = access.walk_directory(
+            parent,
+            max_depth=1,
+            include_hidden_root=True,
+            directories_first=False,
+        )
+    except (OSError, ValueError):
+        entries = ()
+    for entry in entries:
+        name = Path(entry.path).name
+        lowered = name.lower()
+        if basename in lowered or lowered in basename:
+            suggestions.append(str(raw.parent / name))
+            if len(suggestions) == 3:
+                break
+    message = f"File not found: {requested}"
+    if suggestions:
+        message += "\n\nDid you mean one of these?\n" + "\n".join(suggestions)
+    return message
+
+
 def read_file(
     path: str,
     offset: int = None,
@@ -342,17 +368,22 @@ def read_file(
     pages: str = None,
 ) -> str:
     try:
-        fp = _model_read_path(path)
-        if not fp.exists():
-            return f"Error: {missing_path_message(fp, path)}"
+        access = _file_access()
+        kind = access.kind(path)
+        fp = access.display_path(path)
+        if kind == "missing":
+            return f"Error: {_missing_file_message(access, path)}"
         read_offset = _read_offset(offset)
         read_limit = _read_limit(limit)
-        if fp.is_dir():
-            policy = WorkspacePathPolicy(current_workdir())
+        if kind == "directory":
             entries = [
-                entry
-                for entry in directory_entries(fp)
-                if policy.is_model_visible(fp / entry.rstrip("/"))
+                item.path + ("/" if item.is_directory else "")
+                for item in access.walk_directory(
+                    path,
+                    max_depth=1,
+                    include_hidden_root=True,
+                    directories_first=False,
+                )
             ]
             start = read_offset - 1
             selected = entries[start:start + read_limit]
@@ -379,7 +410,6 @@ def read_file(
                     "loaded": [],
                 },
             )
-        access = _file_access()
         data = access.read_bytes(path, maximum=MAX_IMAGE_BYTES)
         sample = data[:SAMPLE_BYTES]
         image_mime = sniff_image_mime(sample)
@@ -715,38 +745,19 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
 
 def list_directory(path: str = ".", depth: int = 1) -> str:
     try:
-        dp = _model_list_path(path)
-        if not dp.is_dir():
+        access = _file_access()
+        if access.kind(path, operation="list") != "directory":
             return f"Error: {path} is not a directory"
-        lines = []
-        _walk(dp, dp, lines, 0, depth)
+        records = access.walk_directory(path, max_depth=depth)
+        lines = [
+            f"{'  ' * item.depth}{item.path}{'/' if item.is_directory else ''}"
+            for item in records
+        ]
         if not lines:
             return f"{path}/ (empty)"
         return "\n".join(lines)
     except Exception as e:
         return format_public_error(e)
-
-
-def _walk(base: Path, current: Path, lines: list, level: int, max_depth: int):
-    if level >= max_depth:
-        return
-    try:
-        entries = sorted(current.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
-    except PermissionError:
-        return
-    indent = "  " * level
-    policy = WorkspacePathPolicy(current_workdir())
-    for entry in entries:
-        if not policy.is_model_visible(entry):
-            continue
-        if entry.name.startswith(".") and level == 0:
-            continue  # skip hidden at top level
-        rel = entry.relative_to(base)
-        if entry.is_dir():
-            lines.append(f"{indent}{rel}/")
-            _walk(base, entry, lines, level + 1, max_depth)
-        else:
-            lines.append(f"{indent}{rel}")
 
 
 # Register tools

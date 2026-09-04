@@ -114,7 +114,7 @@ PROCESS_SITES = {
 MODEL_IO_MODULE_COUNTS = {
     'nz_coder/capabilities/documents.py': ('derived-cache-and-attachment-compat', 9),
     'nz_coder/capabilities/web_search.py': ('remote-transport', 3),
-    'nz_coder/tools/bash.py': ('workspace-file-access', 0),
+    'nz_coder/tools/bash.py': ('model-shell-workspace-probe', 1),
     'nz_coder/tools/files.py': ('workspace-file-access', 0),
     'nz_coder/tools/plan_mode.py': ('legacy-model-reachable', 3),
     'nz_coder/tools/python_ast.py': ('workspace-file-access', 0),
@@ -246,7 +246,10 @@ def test_all_direct_subprocess_launches_are_classified():
 
 
 def test_model_reachable_direct_io_is_inventoried():
-    method_names = {'read_text', 'read_bytes', 'write_text', 'write_bytes', 'open', 'unlink'}
+    method_names = {
+        'read_text', 'read_bytes', 'write_text', 'write_bytes', 'open', 'unlink',
+        'iterdir', 'scandir',
+    }
     actual: Counter[str] = Counter()
     for path, tree in _trees():
         relative = path.relative_to(ROOT).as_posix()

@@ -42,6 +42,66 @@ def test_read_parent_swap_after_validation_cannot_escape(tmp_path, monkeypatch):
     assert "OUTSIDE-SENTINEL" not in result
 
 
+def test_read_directory_parent_swap_cannot_enumerate_outside(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.files import read_file
+
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    (workspace / "src").mkdir(parents=True)
+    outside.mkdir()
+    (workspace / "src" / "inside.txt").write_text("inside", encoding="utf-8")
+    (outside / "OUTSIDE-FILENAME-SENTINEL").write_text("outside", encoding="utf-8")
+    original = WorkspacePathPolicy.validate_model_read
+    swapped = False
+
+    def validate_then_swap(policy, path):
+        nonlocal swapped
+        result = original(policy, path)
+        if not swapped:
+            swapped = True
+            _swap_parent_to_outside(workspace, outside)
+        return result
+
+    monkeypatch.setattr(WorkspacePathPolicy, "validate_model_read", validate_then_swap)
+    with scoped_workdir(workspace):
+        result = read_file("src")
+
+    assert str(result).startswith("Error:")
+    assert "OUTSIDE-FILENAME-SENTINEL" not in str(result)
+
+
+def test_list_directory_parent_swap_cannot_enumerate_outside(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.files import list_directory
+
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    (workspace / "src").mkdir(parents=True)
+    outside.mkdir()
+    (workspace / "src" / "inside.txt").write_text("inside", encoding="utf-8")
+    (outside / "OUTSIDE-FILENAME-SENTINEL").write_text("outside", encoding="utf-8")
+    original = WorkspacePathPolicy.validate_model_list
+    swapped = False
+
+    def validate_then_swap(policy, path):
+        nonlocal swapped
+        result = original(policy, path)
+        if not swapped:
+            swapped = True
+            _swap_parent_to_outside(workspace, outside)
+        return result
+
+    monkeypatch.setattr(WorkspacePathPolicy, "validate_model_list", validate_then_swap)
+    with scoped_workdir(workspace):
+        result = list_directory("src", depth=2)
+
+    assert str(result).startswith("Error:")
+    assert "OUTSIDE-FILENAME-SENTINEL" not in str(result)
+
+
 def test_write_parent_swap_after_validation_cannot_escape(tmp_path, monkeypatch):
     from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
     from nz_coder.runtime.process.workdir import scoped_workdir

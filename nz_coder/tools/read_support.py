@@ -77,34 +77,6 @@ def read_text_lines_bytes(
     )
 
 
-def directory_entries(path: Path) -> list[str]:
-    """Return locale-sorted direct children with directory suffixes."""
-    entries = []
-    for item in path.iterdir():
-        entries.append(item.name + "/" if item.is_dir() else item.name)
-    return sorted(entries, key=locale.strxfrm)
-
-
-def missing_path_message(path: Path, requested: str) -> str:
-    """Return a missing-file error with at most three nearby sibling names."""
-    base = path.name.lower()
-    suggestions = []
-    try:
-        children = list(path.parent.iterdir())
-    except OSError:
-        children = ()
-    for child in children:
-        name = child.name.lower()
-        if base in name or name in base:
-            suggestions.append(str(Path(requested).parent / child.name))
-            if len(suggestions) == 3:
-                break
-    message = f"File not found: {requested}"
-    if suggestions:
-        message += "\n\nDid you mean one of these?\n" + "\n".join(suggestions)
-    return message
-
-
 _WARM_LOCK = threading.Lock()
 _WARM_CAPACITY = threading.BoundedSemaphore(2)
 _WARM_PENDING: set[tuple[Path, Path]] = set()
