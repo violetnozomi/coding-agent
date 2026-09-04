@@ -344,3 +344,21 @@ def test_instruction_state_symlink_cannot_overwrite_target(tmp_path):
         set_instruction_file_enabled(project, "project", "AGENTS.md", False)
 
     assert outside.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+
+
+def test_instruction_global_root_symlink_is_rejected(tmp_path):
+    home = tmp_path / "home"
+    config = home / ".config"
+    outside = tmp_path / "outside"
+    config.mkdir(parents=True)
+    outside.mkdir()
+    sentinel = outside / "AGENTS.md"
+    sentinel.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    (config / "nz-coder").symlink_to(outside, target_is_directory=True)
+    project = tmp_path / "project"
+    project.mkdir()
+
+    with pytest.raises(ValueError, match="unsafe"):
+        create_instruction_file(project, "global", home=home)
+
+    assert sentinel.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"

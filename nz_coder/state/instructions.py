@@ -175,6 +175,9 @@ def _instruction_access(
     selected_scope = _validate_scope(scope)
     project, global_root = _roots(workspace, home)
     root = global_root if selected_scope == "global" else project
+    is_junction = getattr(root, "is_junction", lambda: False)
+    if root.is_symlink() or is_junction():
+        raise ValueError("Instruction control root is unsafe")
     if create_root:
         root.mkdir(parents=True, exist_ok=True)
     if not root.is_dir():
