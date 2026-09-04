@@ -73,7 +73,14 @@ class ProductionPromptBuilder:
             scratch,
             max_tokens=config.SYSTEM_CONTEXT_BUDGET_TOKENS,
         )
-        instructions = load_instruction_context(current_workdir())
+        run_snapshot = getattr(host, "config_snapshot", None)
+        instructions = (
+            load_instruction_context(
+                current_workdir(), config_snapshot=run_snapshot,
+            )
+            if run_snapshot is not None
+            else load_instruction_context(current_workdir())
+        )
         sanitized = host._sanitize_messages(messages)
         has_user = any(
             message.get("role") == "user"

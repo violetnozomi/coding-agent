@@ -8,6 +8,7 @@ from nz_coder.tool_platform.policies.command_policy import (
 )
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import (
+    collect_filesystem_mutation_paths,
     get_tool_side_effect,
     is_filesystem_mutation_tool,
     is_tool_plan_mode_allowed,
@@ -21,6 +22,19 @@ from .tool_groups import SAFE_STATE_TOOLS
 def _is_local_edit(name: str) -> bool:
     """Return whether acceptEdits may authorize this workspace mutation."""
     return is_filesystem_mutation_tool(name)
+
+
+def _mutates_project_instructions(tool_name: str, tool_input: dict) -> bool:
+    """Recognize model writes to the repository instruction control plane."""
+    if not is_filesystem_mutation_tool(tool_name):
+        return False
+    for raw in collect_filesystem_mutation_paths(tool_input):
+        normalized = str(raw).replace("\\", "/").lstrip("./").casefold()
+        if normalized in {"agents.md", "claude.md"}:
+            return True
+        if normalized.startswith("nz-coder/rules/"):
+            return True
+    return False
 
 
 class PermissionChecker:
@@ -45,6 +59,12 @@ class PermissionChecker:
             return {
                 "behavior": "deny",
                 "reason": f"Denied by rule: {tool_name}{detail}",
+            }
+
+        if _mutates_project_instructions(tool_name, tool_input):
+            return {
+                "behavior": "ask",
+                "reason": "Project instruction control-plane write needs approval",
             }
 
         if tool_name == "bash":

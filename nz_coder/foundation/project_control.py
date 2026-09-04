@@ -10,11 +10,22 @@ from types import MappingProxyType
 from typing import Iterable, Mapping
 
 
-CONTROL_FILE_KINDS = ("fixed", "skill", "command", "workflow")
-_SNAPSHOT_KINDS = ("settings", "mcp", "skill", "command", "workflow")
+CONTROL_FILE_KINDS = (
+    "fixed", "skill", "command", "workflow", "instruction", "rule",
+    "instruction-state",
+)
+_SNAPSHOT_KINDS = (
+    "settings", "mcp", "skill", "command", "workflow", "instruction",
+    "rule", "instruction-state",
+)
+_ROOT_INSTRUCTION_PATHS = (
+    ("instruction", "AGENTS.md"),
+    ("instruction", "CLAUDE.md"),
+)
 _FIXED_CONTROL_PATHS = (
     ("settings", ".nz-coder/settings.json"),
     ("mcp", ".nz-coder/mcp.json"),
+    ("instruction-state", ".nz-coder/instruction-file-state.json"),
 )
 MAX_CONTROL_FILE_BYTES = 1024 * 1024
 MAX_CONTROL_TOTAL_BYTES = 4 * 1024 * 1024
@@ -142,6 +153,46 @@ def capture_project_control_snapshot(
         fingerprint=digest.hexdigest(),
         files=MappingProxyType(ordered),
         total_bytes=total,
+    )
+
+
+def capture_user_instruction_snapshot(
+    config_root: Path | str,
+) -> ProjectControlSnapshot:
+    """Capture user-owned global instructions without following path aliases."""
+    root = Path(config_root).expanduser().absolute()
+    try:
+        info = root.lstat()
+    except FileNotFoundError:
+        identity = {
+            "lexical": os.path.normcase(os.path.normpath(str(root))),
+            "resolved": "",
+            "device": None,
+            "inode": None,
+        }
+        records: dict[str, TrustedControlFile] = {}
+    except OSError as exc:
+        raise UnsafeProjectControl("user instruction root cannot be inspected") from exc
+    else:
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise UnsafeProjectControl("user instruction root is unsafe")
+        if os.name == "nt":
+            identity, records = _capture_windows_user_instructions(root)
+        else:
+            identity, records = _capture_posix_user_instructions(root)
+    ordered = dict(sorted(records.items()))
+    digest = hashlib.sha256()
+    for relative, item in ordered.items():
+        digest.update(b"\0path\0")
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0content\0")
+        digest.update(item.content)
+    return ProjectControlSnapshot(
+        workspace_identity=MappingProxyType(dict(identity)),
+        fingerprint=digest.hexdigest(),
+        files=MappingProxyType(ordered),
+        total_bytes=sum(item.size for item in ordered.values()),
+        trusted=True,
     )
 
 
@@ -309,6 +360,16 @@ def _capture_posix(
             "inode": int(root_info.st_ino),
         }
         records: dict[str, TrustedControlFile] = {}
+        for kind, relative in _ROOT_INSTRUCTION_PATHS:
+            if kind not in selected:
+                continue
+            result = _read_posix_file(root_fd, relative, missing_ok=True)
+            if result is not None:
+                payload, info = result
+                _record(
+                    records, kind=kind, relative=relative, payload=payload,
+                    device=int(info.st_dev), inode=int(info.st_ino),
+                )
         control_fd = _open_posix_directory(
             ".nz-coder", dir_fd=root_fd, missing_ok=True
         )
@@ -332,6 +393,8 @@ def _capture_posix(
             )
         if "skill" in selected:
             _capture_posix_skills(control_fd, records)
+        if "rule" in selected:
+            _capture_posix_flat(control_fd, records, "rule", "rules", ".md")
         return identity, records
     finally:
         if control_fd is not None:
@@ -345,6 +408,8 @@ def _capture_posix_flat(
     kind: str,
     directory_name: str,
     suffix: str,
+    *,
+    prefix: str = ".nz-coder",
 ) -> None:
     directory_fd = _open_posix_directory(
         directory_name, dir_fd=control_fd, missing_ok=True
@@ -358,8 +423,9 @@ def _capture_posix_flat(
             result = _read_posix_file(directory_fd, name)
             assert result is not None
             payload, info = result
+            relative = "/".join(part for part in (prefix, directory_name, name) if part)
             _record(records, kind=kind,
-                    relative=f".nz-coder/{directory_name}/{name}", payload=payload,
+                    relative=relative, payload=payload,
                     device=int(info.st_dev), inode=int(info.st_ino))
     finally:
         os.close(directory_fd)
@@ -390,6 +456,46 @@ def _capture_posix_skills(
         os.close(skills_fd)
 
 
+def _capture_posix_user_instructions(
+    root: Path,
+) -> tuple[dict[str, object], dict[str, TrustedControlFile]]:
+    root_fd = _open_posix_directory(root)
+    assert root_fd is not None
+    try:
+        info = os.fstat(root_fd)
+        identity = {
+            "lexical": os.path.normcase(os.path.normpath(str(root))),
+            "resolved": os.path.normcase(os.path.normpath(str(root.resolve(strict=True)))),
+            "device": int(info.st_dev),
+            "inode": int(info.st_ino),
+        }
+        records: dict[str, TrustedControlFile] = {}
+        for kind, relative in _ROOT_INSTRUCTION_PATHS:
+            result = _read_posix_file(root_fd, relative, missing_ok=True)
+            if result is not None:
+                payload, file_info = result
+                _record(
+                    records, kind=kind, relative=relative, payload=payload,
+                    device=int(file_info.st_dev), inode=int(file_info.st_ino),
+                )
+        state = _read_posix_file(
+            root_fd, "instruction-file-state.json", missing_ok=True
+        )
+        if state is not None:
+            payload, file_info = state
+            _record(
+                records, kind="instruction-state",
+                relative="instruction-file-state.json", payload=payload,
+                device=int(file_info.st_dev), inode=int(file_info.st_ino),
+            )
+        _capture_posix_flat(
+            root_fd, records, "rule", "rules", ".md", prefix=""
+        )
+        return identity, records
+    finally:
+        os.close(root_fd)
+
+
 def _capture_windows(
     root: Path,
     selected: frozenset[str],
@@ -414,6 +520,18 @@ def _capture_windows(
             "inode": inode,
         }
         records: dict[str, TrustedControlFile] = {}
+        for kind, relative in _ROOT_INSTRUCTION_PATHS:
+            if kind not in selected:
+                continue
+            result = _windows_read_file(
+                root / relative, parent=root_handle, missing_ok=True
+            )
+            if result is not None:
+                payload, file_device, file_inode = result
+                _record(
+                    records, kind=kind, relative=relative, payload=payload,
+                    device=file_device, inode=file_inode,
+                )
         control_path = root / ".nz-coder"
         control_handle = _windows_open(
             control_path, directory=True, missing_ok=True, parent=root_handle
@@ -443,6 +561,10 @@ def _capture_windows(
             )
         if "skill" in selected:
             _capture_windows_skills(control_path, control_handle, records)
+        if "rule" in selected:
+            _capture_windows_flat(
+                control_path, control_handle, records, "rule", "rules", ".md"
+            )
         if ntpath.normcase(_windows_final_path(root_handle)) != ntpath.normcase(root_final):
             raise UnsafeProjectControl("workspace identity changed during capture")
         return identity, records
@@ -459,6 +581,8 @@ def _capture_windows_flat(
     kind: str,
     directory_name: str,
     suffix: str,
+    *,
+    prefix: str = ".nz-coder",
 ) -> None:
     directory_path = control_path / directory_name
     directory_handle = _windows_open(
@@ -473,8 +597,9 @@ def _capture_windows_flat(
             result = _windows_read_file(directory_path / name, parent=directory_handle)
             assert result is not None
             payload, device, inode = result
+            relative = "/".join(part for part in (prefix, directory_name, name) if part)
             _record(records, kind=kind,
-                    relative=f".nz-coder/{directory_name}/{name}", payload=payload,
+                    relative=relative, payload=payload,
                     device=device, inode=inode)
     finally:
         _windows_close(directory_handle)
@@ -512,6 +637,52 @@ def _capture_windows_skills(
                 _windows_close(skill_handle)
     finally:
         _windows_close(skills_handle)
+
+
+def _capture_windows_user_instructions(
+    root: Path,
+) -> tuple[dict[str, object], dict[str, TrustedControlFile]]:
+    root_handle = _windows_open(root, directory=True)
+    assert root_handle is not None
+    try:
+        attributes, device, inode, _size = _windows_handle_info(root_handle, full=True)
+        if attributes & 0x00000400:
+            raise UnsafeProjectControl("user instruction root is unsafe")
+        identity = {
+            "lexical": os.path.normcase(os.path.normpath(str(root))),
+            "resolved": os.path.normcase(os.path.normpath(_windows_final_path(root_handle))),
+            "device": device,
+            "inode": inode,
+        }
+        records: dict[str, TrustedControlFile] = {}
+        for kind, relative in _ROOT_INSTRUCTION_PATHS:
+            result = _windows_read_file(
+                root / relative, parent=root_handle, missing_ok=True
+            )
+            if result is not None:
+                payload, file_device, file_inode = result
+                _record(
+                    records, kind=kind, relative=relative, payload=payload,
+                    device=file_device, inode=file_inode,
+                )
+        state = _windows_read_file(
+            root / "instruction-file-state.json",
+            parent=root_handle,
+            missing_ok=True,
+        )
+        if state is not None:
+            payload, file_device, file_inode = state
+            _record(
+                records, kind="instruction-state",
+                relative="instruction-file-state.json", payload=payload,
+                device=file_device, inode=file_inode,
+            )
+        _capture_windows_flat(
+            root, root_handle, records, "rule", "rules", ".md", prefix=""
+        )
+        return identity, records
+    finally:
+        _windows_close(root_handle)
 
 
 def _bounded_windows_names(directory: Path):  # noqa: ANN202
@@ -699,6 +870,7 @@ __all__ = [
     "TrustedControlFile",
     "UnsafeProjectControl",
     "capture_project_control_snapshot",
+    "capture_user_instruction_snapshot",
     "discover_project_control_files",
     "has_project_control_files",
 ]

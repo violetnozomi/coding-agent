@@ -476,6 +476,117 @@ def _read_source(source: InstructionSource) -> bytes:
     return text.encode("utf-8")
 
 
+def _enabled_from_snapshot(
+    data: bytes | None,
+) -> tuple[dict[str, bool], str | None]:
+    if data is None:
+        return {}, None
+    if len(data) > _STATE_MAX_BYTES:
+        return {}, "Failed to load instruction file enabled state: state exceeds limit"
+    try:
+        payload = json.loads(data.decode("utf-8"))
+        if not isinstance(payload, dict) or payload.get("version") != 1:
+            raise ValueError("state must be a version 1 object")
+        raw_enabled = payload.get("enabled", {})
+        if not isinstance(raw_enabled, dict):
+            raise ValueError("enabled state must be an object")
+        enabled: dict[str, bool] = {}
+        for filename, value in raw_enabled.items():
+            if filename not in INSTRUCTION_FILENAMES or not isinstance(value, bool):
+                raise ValueError("enabled state contains an invalid entry")
+            enabled[filename] = value
+        return enabled, None
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return {}, "Failed to load instruction file enabled state: invalid state"
+
+
+def _snapshot_instruction_sources(
+    config_snapshot,
+) -> tuple[list[InstructionSource], dict[Path, bytes], tuple[str, ...], int]:
+    """Project immutable instructions plus a separately pinned user snapshot."""
+    sources: list[InstructionSource] = []
+    payloads: dict[Path, bytes] = {}
+    warnings: list[str] = []
+    disabled_count = 0
+
+    def collect(snapshot, *, root: Path, scope: str, project_layout: bool) -> None:
+        nonlocal disabled_count
+        if snapshot is None or (scope == "project" and not snapshot.trusted):
+            return
+        state_name = (
+            ".nz-coder/instruction-file-state.json"
+            if project_layout else "instruction-file-state.json"
+        )
+        state_file = snapshot.get(state_name)
+        enabled, warning = _enabled_from_snapshot(
+            state_file.content if state_file is not None else None
+        )
+        if warning:
+            warnings.append(warning)
+        rule_prefix = ".nz-coder/rules/" if project_layout else "rules/"
+        rules = sorted(
+            item for item in snapshot.files.values()
+            if item.kind == "rule" and item.relative_path.startswith(rule_prefix)
+        )
+        for index, item in enumerate(rules):
+            path = root / item.relative_path
+            text = _strip_rule_frontmatter(
+                item.content.decode("utf-8", errors="replace")
+            )
+            payloads[path] = text.encode("utf-8")
+            sources.append(InstructionSource(
+                path,
+                scope,
+                "rule",
+                (3.0 if scope == "project" else 0.0) + index / 1000,
+                40 if scope == "project" else 10,
+            ))
+        for filename in INSTRUCTION_FILENAMES:
+            item = snapshot.get(filename)
+            if item is None:
+                continue
+            if not enabled.get(filename, True):
+                disabled_count += 1
+                continue
+            path = root / filename
+            payloads[path] = item.content
+            if scope == "global":
+                order, priority = (
+                    (1.0, 20) if filename == "CLAUDE.md" else (2.0, 30)
+                )
+            else:
+                order, priority = (
+                    (4.0, 50) if filename == "CLAUDE.md" else (5.0, 60)
+                )
+            kind = "claude" if filename == "CLAUDE.md" else "agents"
+            sources.append(InstructionSource(path, scope, kind, order, priority))
+
+    user_snapshot = getattr(config_snapshot, "user_instructions", None)
+    user_root_text = (
+        str(user_snapshot.workspace_identity.get("lexical") or "")
+        if user_snapshot is not None else ""
+    )
+    if user_root_text:
+        collect(
+            user_snapshot,
+            root=Path(user_root_text),
+            scope="global",
+            project_layout=False,
+        )
+    collect(
+        config_snapshot.project_control,
+        root=Path(config_snapshot.workspace),
+        scope="project",
+        project_layout=True,
+    )
+    return (
+        sorted(sources, key=lambda item: (item.order, str(item.path))),
+        payloads,
+        tuple(warnings),
+        disabled_count,
+    )
+
+
 def _escape_reminder(text: str) -> str:
     return re.sub(
         r"</?\s*system-reminder\b",
@@ -557,13 +668,20 @@ def load_instruction_context(
     workspace: str | Path,
     *,
     home: str | Path | None = None,
+    config_snapshot=None,
 ) -> InstructionBundle:
     """Read, prioritize, budget, and render durable instruction files."""
     project = Path(workspace).resolve()
-    sources, warnings, disabled_count = _discover_instruction_sources_result(
-        workspace,
-        home=home,
-    )
+    snapshot_payloads: dict[Path, bytes] | None = None
+    if config_snapshot is None:
+        sources, warnings, disabled_count = _discover_instruction_sources_result(
+            workspace,
+            home=home,
+        )
+    else:
+        sources, snapshot_payloads, warnings, disabled_count = (
+            _snapshot_instruction_sources(config_snapshot)
+        )
     prepared: dict[Path, tuple[str, int, bool, bool, bool]] = {}
     remaining = TOTAL_MAX_BYTES
     per_file_truncated_count = 0
@@ -573,7 +691,11 @@ def load_instruction_context(
     # Higher-priority project sources win cumulative budget, while final
     # rendering still follows global-to-project order.
     for source in sorted(sources, key=lambda item: (-item.priority, item.order, str(item.path))):
-        data = _read_source(source)
+        data = (
+            snapshot_payloads.get(source.path, b"")
+            if snapshot_payloads is not None
+            else _read_source(source)
+        )
         file_content, file_used, decode_truncated = _decode_prefix(
             data,
             min(PER_SOURCE_MAX_BYTES, len(data)),

@@ -29,6 +29,7 @@ from nz_coder.foundation.project_control import (
     ProjectControlSnapshot,
     UnsafeProjectControl,
     capture_project_control_snapshot,
+    capture_user_instruction_snapshot,
 )
 from nz_coder.foundation.languages import LSP_LANGUAGES, lsp_command_config_key
 
@@ -255,6 +256,9 @@ class ConfigSnapshot:
     project_control: ProjectControlSnapshot = field(repr=False)
     values: dict[str, ConfigValue] = field(repr=False)
     issues: list[ConfigIssue] = field(default_factory=list, repr=False)
+    user_instructions: ProjectControlSnapshot | None = field(
+        default=None, repr=False,
+    )
 
     def get(self, key: str, default: str | None = None) -> str:
         record = self.values.get(key)
@@ -610,6 +614,27 @@ def load_config_snapshot(
     store = trust_store or WorkspaceTrustStore(default_trust_store_path(environment))
     _ensure_store_outside_workspace(store.path, root)
     user_values, user_issues = _read_env_file(user_path, ConfigSource.USER)
+    try:
+        user_instructions = capture_user_instruction_snapshot(user_path.parent)
+        user_instruction_issues: list[ConfigIssue] = []
+    except (OSError, UnsafeProjectControl):
+        user_instructions = ProjectControlSnapshot(
+            workspace_identity=MappingProxyType({
+                "lexical": os.path.normcase(os.path.normpath(str(user_path.parent))),
+                "resolved": "",
+                "device": None,
+                "inode": None,
+            }),
+            fingerprint="",
+            files=MappingProxyType({}),
+            total_bytes=0,
+            trusted=True,
+        )
+        user_instruction_issues = [ConfigIssue(
+            "user-instructions",
+            "unsafe user instruction plane; global instructions ignored",
+            ConfigSource.USER,
+        )]
     workspace_values, workspace_issues = _read_env_file(root / ".env", ConfigSource.WORKSPACE)
     fingerprint = workspace_config_fingerprint(workspace_values)
     try:
@@ -661,7 +686,13 @@ def load_config_snapshot(
         ))
     if control_trusted:
         project_control = replace(project_control, trusted=True)
-    issues = [*user_issues, *workspace_issues, *control_issues, *trust_issue]
+    issues = [
+        *user_issues,
+        *user_instruction_issues,
+        *workspace_issues,
+        *control_issues,
+        *trust_issue,
+    ]
     for key in sorted(set(workspace_values) - set(CONFIG_SCHEMA)):
         issues.append(ConfigIssue(
             key,
@@ -717,6 +748,7 @@ def load_config_snapshot(
         project_control=project_control,
         values=values,
         issues=issues,
+        user_instructions=user_instructions,
     )
     # These historically crashed every CLI surface during module import.  Keep
     # validation here as well as in config.py so ``doctor --workspace`` can
