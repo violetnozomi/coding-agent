@@ -384,13 +384,30 @@ def _completion_with_timeout(
 _ORIGINAL_COMPLETION_WITH_TIMEOUT = _completion_with_timeout
 
 
-@contextmanager
-def _closing_model_runtime(runtime):
-    """Close a child-owned model client across every terminal return path."""
+def _cleanup_subagent_resources(agent, model_runtime, tracer) -> None:
+    """Retire the single active owner without changing the business result."""
     try:
-        yield runtime
-    finally:
-        runtime.close()
+        if agent is not None:
+            agent.close()
+        else:
+            model_runtime.close()
+        return
+    except BaseException as cleanup_exc:
+        try:
+            tracer.log(
+                "subagent_cleanup_failed",
+                resource="environment" if agent is not None else "provider-runtime",
+                failure_type=type(cleanup_exc).__name__,
+            )
+        except BaseException:
+            pass
+    if agent is not None:
+        # Ownership had transferred to the Environment.  If its exhaustive
+        # close itself failed, retain one final attempt at the child runtime.
+        try:
+            model_runtime.close()
+        except BaseException:
+            pass
 
 
 def _ensure_subagent_tool_registry() -> None:
@@ -2116,7 +2133,6 @@ NEXT:
             scoped_workdir(worktree.path),
             scoped_config_snapshot(child_snapshot)
             if child_snapshot is not None else nullcontext(),
-            _closing_model_runtime(model_runtime),
             scoped_runtime_overrides(
                 max_agent_turns=(
                     max_turns
@@ -2211,9 +2227,10 @@ NEXT:
         }
         state["public_error"] = public.to_dict()
     finally:
-        if agent is not None:
-            agent.close()
-        _PARENT_CONTEXT.reset(parent_context_token)
+        try:
+            _cleanup_subagent_resources(agent, model_runtime, child_tracer)
+        finally:
+            _PARENT_CONTEXT.reset(parent_context_token)
 
     _record_usage_from_messages()
     if "structured" in run_status:

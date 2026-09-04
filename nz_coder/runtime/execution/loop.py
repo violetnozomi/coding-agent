@@ -344,6 +344,10 @@ class ProductRunEnvironment:
                  manage_model_runtime: bool | None = None):
         from nz_coder.providers.models import active_model_selection
 
+        self._environment_cleanup_lock = threading.RLock()
+        self._environment_cleanup_completed: set[str] = set()
+        self._environment_cleanup_failures: dict[str, str] = {}
+        self._environment_provider_ids_closed: set[int] = set()
         self._run_control_managed_provider = (
             bool(manage_model_runtime)
             if manage_model_runtime is not None
@@ -1776,81 +1780,133 @@ class ProductRunEnvironment:
         }
 
     def close(self) -> None:
-        """Dispose public event subscriptions and optional tracer resources."""
-        run_control_lock = getattr(self, "_run_control_lock", None)
-        if run_control_lock is not None:
-            with run_control_lock:
-                self._retry_run_control_cleanup()
-        stall_orchestrator = getattr(self, "stall_orchestrator", None)
-        if stall_orchestrator is not None:
-            cancel_and_settle = getattr(
-                stall_orchestrator,
-                "cancel_and_settle",
-                None,
+        """Attempt every owned cleanup stage; failed stages remain retryable."""
+        lock = getattr(self, "_environment_cleanup_lock", None)
+        if lock is None:
+            lock = threading.RLock()
+            self._environment_cleanup_lock = lock
+        with lock:
+            if not hasattr(self, "_environment_cleanup_completed"):
+                self._environment_cleanup_completed = set()
+            if not hasattr(self, "_environment_cleanup_failures"):
+                self._environment_cleanup_failures = {}
+            stages = (
+                ("run-control", self._close_environment_run_controls),
+                ("stall-sidecar", self._close_environment_stall_sidecar),
+                ("background-agents", self._close_environment_background_agents),
+                ("repo-intelligence", self._close_repo_intelligence),
+                ("mcp", self._close_environment_mcp),
+                ("sidecar", lambda: self._close_environment_object("_sidecar_verifier_handle")),
+                ("image-provider", lambda: self._close_environment_object("image_describer")),
+                ("provider-runtimes", self._close_environment_provider_runtimes),
+                ("event-bus", self._close_environment_event_bus),
+                ("tracer", lambda: self._close_environment_object("tracer")),
             )
-            if callable(cancel_and_settle):
-                cancel_and_settle(timeout=0.5)
-            else:
-                stall_orchestrator.reset()
-                stall_orchestrator.settle(timeout=0.0)
-        background_agents = getattr(self, "background_agents", None)
-        if background_agents is not None:
-            # A timed-out child remains owned by this Session and can still
-            # emit events or use workspace services. Preserve those resources
-            # so deletion/close can be retried after the child settles.
-            workdir = getattr(self, "workdir", None)
-            session_id = getattr(self, "session_id", None)
-            if workdir is not None and session_id:
-                from nz_coder.runtime.agent.agent_manager import (
-                    dispose_background_agent_manager,
-                )
+            for label, operation in stages:
+                if label in self._environment_cleanup_completed:
+                    continue
+                try:
+                    operation()
+                except BaseException as exc:
+                    self._environment_cleanup_failures[label] = type(exc).__name__
+                    tracer = getattr(self, "tracer", None)
+                    log = getattr(tracer, "log", None)
+                    if callable(log):
+                        try:
+                            log(
+                                "environment_cleanup_failed",
+                                resource=label,
+                                failure_type=type(exc).__name__,
+                            )
+                        except BaseException:
+                            pass
+                else:
+                    self._environment_cleanup_completed.add(label)
+                    self._environment_cleanup_failures.pop(label, None)
 
-                dispose_background_agent_manager(
-                    workdir,
-                    session_id,
-                    timeout=5.0,
-                    manager=background_agents,
-                )
-            else:
-                background_agents.close(timeout=5.0)
-        cleanup_error = None
-        try:
-            self._close_repo_intelligence()
-        except Exception as exc:
-            cleanup_error = exc
+    @property
+    def environment_cleanup_failures(self) -> dict[str, str]:
+        return dict(getattr(self, "_environment_cleanup_failures", {}))
+
+    @property
+    def environment_cleanup_complete(self) -> bool:
+        return len(getattr(self, "_environment_cleanup_completed", ())) == 10
+
+    def _close_environment_run_controls(self) -> None:
+        active = getattr(self, "_active_run_control", None)
+        if active is not None:
+            self.retire_run_control(active)
+        self._retry_run_control_cleanup()
+        if getattr(self, "_pending_run_control_cleanup", ()):
+            raise RuntimeError("run-control cleanup remains pending")
+
+    def _close_environment_stall_sidecar(self) -> None:
+        orchestrator = getattr(self, "stall_orchestrator", None)
+        if orchestrator is None:
+            return
+        cancel = getattr(orchestrator, "cancel_and_settle", None)
+        if callable(cancel):
+            cancel(timeout=0.5)
+            return
+        orchestrator.reset()
+        orchestrator.settle(timeout=0.0)
+
+    def _close_environment_background_agents(self) -> None:
+        background_agents = getattr(self, "background_agents", None)
+        if background_agents is None:
+            return
+        workdir = getattr(self, "workdir", None)
+        session_id = getattr(self, "session_id", None)
+        if workdir is not None and session_id:
+            from nz_coder.runtime.agent.agent_manager import dispose_background_agent_manager
+
+            dispose_background_agent_manager(
+                workdir, session_id, timeout=5.0, manager=background_agents,
+            )
+            return
+        background_agents.close(timeout=5.0)
+
+    def _close_environment_mcp(self) -> None:
         mcp_lock = getattr(self, "_mcp_runtime_lock", None)
         if mcp_lock is None:
-            mcp_runtime = None
+            runtime = getattr(self, "_mcp_runtime", None)
         else:
             with mcp_lock:
-                mcp_runtime = getattr(self, "_mcp_runtime", None)
-                self._mcp_runtime = None
-        if mcp_runtime is not None:
-            mcp_runtime.close()
-        sidecar_verifier = getattr(self, "_sidecar_verifier_handle", None)
-        close_sidecar = getattr(sidecar_verifier, "close", None)
-        if callable(close_sidecar):
-            close_sidecar()
-        image_describer = getattr(self, "image_describer", None)
-        close_image_describer = getattr(image_describer, "close", None)
-        if callable(close_image_describer):
-            try:
-                close_image_describer()
-            except Exception as exc:
-                cleanup_error = cleanup_error or exc
+                runtime = getattr(self, "_mcp_runtime", None)
+        if runtime is not None:
+            runtime.close()
+            self._mcp_runtime = None
+
+    def _close_environment_object(self, attribute: str) -> None:
+        resource = getattr(self, attribute, None)
+        close = getattr(resource, "close", None)
+        if callable(close):
+            close()
+
+    def _close_environment_provider_runtimes(self) -> None:
         runtimes = getattr(self, "_provider_runtimes", {})
-        for runtime in {id(value): value for value in runtimes.values()}.values():
+        completed = getattr(self, "_environment_provider_ids_closed", None)
+        if completed is None:
+            completed = set()
+            self._environment_provider_ids_closed = completed
+        failures: list[BaseException] = []
+        for runtime_id, runtime in {
+            id(value): value for value in runtimes.values()
+        }.items():
+            if runtime_id in completed:
+                continue
             try:
                 runtime.close()
-            except Exception as exc:
-                cleanup_error = cleanup_error or exc
+            except BaseException as exc:
+                failures.append(exc)
+            else:
+                completed.add(runtime_id)
+        if failures:
+            raise RuntimeError("provider runtime cleanup incomplete") from failures[0]
+
+    def _close_environment_event_bus(self) -> None:
         if getattr(self, "_owns_event_bus", True):
-            self.event_bus.close()
-        close_tracer = getattr(self.tracer, "close", None)
-        if callable(close_tracer):
-            close_tracer()
-        if cleanup_error is not None:
-            raise cleanup_error
+            self._close_environment_object("event_bus")
 
     def _initialize_repo_intelligence(
         self, workspace: Path, *, interval: float = 5.0,
