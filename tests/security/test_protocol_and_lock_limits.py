@@ -98,7 +98,7 @@ def test_windows_optional_file_probe_allows_final_target_to_be_missing(
 
     def fake_open(path, *, directory, missing_ok=False, parent=None):
         opened.append((str(path), directory, missing_ok))
-        return None if missing_ok else next(next_handle)
+        return None if missing_ok and not directory else next(next_handle)
 
     monkeypatch.setattr(control, "_windows_open", fake_open)
     monkeypatch.setattr(control, "_windows_close", lambda _handle: None)
