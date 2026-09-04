@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.protocol.attachments import (
@@ -19,7 +20,6 @@ from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.capabilities.documents import (
     DOCX_MIME,
     PDF_MIME,
-    detect_document_mime,
     read_document_file,
 )
 from nz_coder.state.sessions import active_session_id
@@ -31,7 +31,7 @@ from nz_coder.tools.read_support import (
     directory_entries,
     is_binary_file,
     missing_path_message,
-    read_text_lines,
+    read_text_lines_bytes,
     warm_lsp,
 )
 from nz_coder.state.workspace import git_file_status
@@ -98,6 +98,10 @@ def _model_list_path(p: str) -> Path:
     return WorkspacePathPolicy(current_workdir()).validate_model_list(p)
 
 
+def _file_access() -> WorkspaceFileAccess:
+    return WorkspaceFileAccess(current_workdir())
+
+
 
 _BLOCKED_WRITE_FILENAMES = {".env", ".env.local", ".env.production", "id_rsa", "id_dsa", "known_hosts", "credentials"}
 _BLOCKED_WRITE_DIRS = {".ssh"}
@@ -137,6 +141,7 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
         raise ValueError("max 50 files per batch")
 
     settings = current_run_settings()
+    access = _file_access()
     prepared: list[dict] = []
     seen_paths: set[str] = set()
     total_bytes = 0
@@ -157,7 +162,7 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
         if key in seen_paths:
             raise ValueError(f"duplicate path in batch: {path}")
         seen_paths.add(key)
-        existed = fp.exists()
+        existed = access.exists(path)
         if existed and not overwrite:
             raise ValueError(f"target already exists and overwrite=false: {path}")
         content_bytes = len(content.encode("utf-8"))
@@ -168,7 +173,7 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
             raise ValueError(
                 f"batch too large ({total_bytes} bytes > {settings.write_batch_total_bytes})"
             )
-        before = fp.read_text(encoding="utf-8", errors="replace") if existed else ""
+        before = access.read_text(path, errors="replace") if existed else ""
         prepared.append({
             "path": path,
             "fp": fp,
@@ -186,8 +191,7 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
         for item in prepared:
             _track_before(item["path"], item["fp"], item["before"], item["existed"])
             txn.track(item["path"])
-            item["fp"].parent.mkdir(parents=True, exist_ok=True)
-            item["fp"].write_text(item["content"], encoding="utf-8")
+            access.write_text(item["path"], item["content"], transaction=txn)
             _track_after(item["path"], item["content"], True)
             if item["existed"]:
                 updated.append(item["path"])
@@ -370,19 +374,17 @@ def read_file(
                     "loaded": [],
                 },
             )
-        if not fp.is_file():
-            return f"Error: Path is not a regular file: {path}"
-        with fp.open("rb") as handle:
-            sample = handle.read(SAMPLE_BYTES)
+        access = _file_access()
+        data = access.read_bytes(path, maximum=MAX_IMAGE_BYTES)
+        sample = data[:SAMPLE_BYTES]
         image_mime = sniff_image_mime(sample)
         if image_mime:
-            size = fp.stat().st_size
+            size = len(data)
             if size >= MAX_IMAGE_BYTES:
                 raise ValueError(
                     f"Image size must be less than "
                     f"{MAX_IMAGE_BYTES // 1024 // 1024} MB ({size} bytes)."
                 )
-            data = fp.read_bytes()
             attachment = make_image_attachment(data, image_mime, filename=fp.name)
             return ToolOutput(
                 "Image read successfully",
@@ -390,7 +392,11 @@ def read_file(
                 metadata={"preview": "Image read successfully", "truncated": False},
                 attachments=[attachment],
             )
-        document_mime = detect_document_mime(fp)
+        document_mime = (
+            PDF_MIME if sample.startswith(b"%PDF-") or fp.suffix.lower() == ".pdf"
+            else DOCX_MIME if fp.suffix.lower() == ".docx"
+            else ""
+        )
         if document_mime in {PDF_MIME, DOCX_MIME}:
             result = read_document_file(
                 path,
@@ -400,6 +406,7 @@ def read_file(
                 offset=read_offset,
                 limit=read_limit,
                 cancel_event=current_tool_cancel_event(),
+                source_bytes=data,
             )
             body = result.text
             if result.status == "error":
@@ -435,7 +442,7 @@ def read_file(
             )
         if is_binary_file(fp, sample):
             return f"Error: Cannot read binary file: {path}"
-        result = read_text_lines(fp, offset=read_offset, limit=read_limit)
+        result = read_text_lines_bytes(data, offset=read_offset, limit=read_limit)
         if result.count < read_offset and not (
             result.count == 0 and read_offset == 1
         ):
@@ -501,16 +508,16 @@ def _read_limit(value: int | None) -> int:
 
 def write_file(path: str, content: str) -> str:
     try:
+        access = _file_access()
         fp = _model_write_path(path)
-        existed = fp.exists()
-        before = fp.read_text(encoding="utf-8", errors="replace") if existed else ""
+        existed = access.exists(path)
+        before = access.read_text(path, errors="replace") if existed else ""
         warning = _dirty_warning(path)
         _track_before(path, fp, before, existed)
         txn = _get_txn()
         if txn and txn.active:
             txn.track(path)
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        fp.write_text(content, encoding="utf-8")
+        access.write_text(path, content, transaction=txn)
         _track_after(path, content, True)
         diff = _format_diff(path, before, content)
         action = "Updated" if existed else "Created"
@@ -521,8 +528,9 @@ def write_file(path: str, content: str) -> str:
 
 def edit_file(path: str, old_text: str, new_text: str) -> str:
     try:
+        access = _file_access()
         fp = _model_write_path(path)
-        content = fp.read_text(encoding="utf-8")
+        content = access.read_text(path)
         warning = _dirty_warning(path)
         _track_before(path, fp, content, True)
         count = content.count(old_text)
@@ -536,7 +544,7 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
         txn = _get_txn()
         if txn and txn.active:
             txn.track(path)
-        fp.write_text(updated, encoding="utf-8")
+        access.write_text(path, updated, transaction=txn)
         _track_after(path, updated, True)
         diff = _format_diff(path, content, updated)
         return f"{warning}Edited {path} (replaced 1 occurrence)\n\nDiff:\n{diff}"
@@ -562,8 +570,9 @@ def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> s
         if start < 1 or end < start:
             return "Error: line range must satisfy 1 <= start_line <= end_line"
 
+        access = _file_access()
         fp = _model_write_path(path)
-        content = fp.read_text(encoding="utf-8")
+        content = access.read_text(path)
         lines = content.splitlines(keepends=True)
         if end > len(lines):
             return f"Error: line range {start}-{end} exceeds {path} length {len(lines)}"
@@ -578,7 +587,7 @@ def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> s
         txn = _get_txn()
         if txn and txn.active:
             txn.track(path)
-        fp.write_text(updated, encoding="utf-8")
+        access.write_text(path, updated, transaction=txn)
         _track_after(path, updated, True)
         diff = _format_diff(path, content, updated)
         return f"{warning}Replaced lines {start}-{end} in {path}\n\nDiff:\n{diff}"
@@ -594,6 +603,7 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
         if len(changes) > 20:
             return "Error: Max 20 changes per patch"
 
+        access = _file_access()
         prepared: dict[str, dict] = {}
         for i, change in enumerate(changes):
             if not isinstance(change, dict):
@@ -613,8 +623,8 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
             fp = _model_write_path(path)
             key = str(fp)
             if key not in prepared:
-                if fp.exists():
-                    before = fp.read_text(encoding="utf-8")
+                if access.exists(path):
+                    before = access.read_text(path)
                     exists_before = True
                 else:
                     before = ""
@@ -674,25 +684,29 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
                 return f"Error: change {i} old_text matches {count} locations in {path}. Be more specific."
             prepared[key]["after"] = current.replace(old_text, new_text, 1)
 
-        txn = _get_txn()
+        txn, manage_locally = _begin_local_txn()
         reports = []
-        for item in prepared.values():
-            after = item["after"]
-            diff_after = "" if after is None else after
-            warning = _dirty_warning(item["path"])
-            reports.append(f"{warning}Diff for {item['path']}:\n{_format_diff(item['path'], item['before'], diff_after)}")
-            if dry_run:
-                continue
-            _track_before(item["path"], item["fp"], item["before"], item["exists_before"])
-            if txn and txn.active:
-                txn.track(item["path"])
-            if after is None:
-                item["fp"].unlink()
-                _track_after(item["path"], "", False)
-            else:
-                item["fp"].parent.mkdir(parents=True, exist_ok=True)
-                item["fp"].write_text(after, encoding="utf-8")
-                _track_after(item["path"], after, True)
+        try:
+            for item in prepared.values():
+                after = item["after"]
+                diff_after = "" if after is None else after
+                warning = _dirty_warning(item["path"])
+                reports.append(f"{warning}Diff for {item['path']}:\n{_format_diff(item['path'], item['before'], diff_after)}")
+                if dry_run:
+                    continue
+                _track_before(item["path"], item["fp"], item["before"], item["exists_before"])
+                if after is None:
+                    access.delete(item["path"], transaction=txn)
+                    _track_after(item["path"], "", False)
+                else:
+                    access.write_text(item["path"], after, transaction=txn)
+                    _track_after(item["path"], after, True)
+            if manage_locally:
+                txn.commit()
+        except Exception:
+            if manage_locally:
+                txn.rollback()
+            raise
 
         verb = "Patch preview" if dry_run else "Applied patch"
         return f"{verb} ({len(changes)} changes across {len(prepared)} files)\n\n" + "\n\n".join(reports)

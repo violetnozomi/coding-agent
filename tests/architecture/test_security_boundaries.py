@@ -112,15 +112,15 @@ PROCESS_SITES = {
 # Direct filesystem calls are deliberately coarse here: the count is an alarm,
 # while P0-E's focused contract rejects specific calls in model tool modules.
 MODEL_IO_MODULE_COUNTS = {
-    'nz_coder/capabilities/documents.py': ('legacy-model-reachable', 9),
+    'nz_coder/capabilities/documents.py': ('derived-cache-and-attachment-compat', 10),
     'nz_coder/capabilities/web_search.py': ('remote-transport', 3),
-    'nz_coder/tools/bash.py': ('legacy-model-reachable', 1),
-    'nz_coder/tools/files.py': ('legacy-model-reachable', 13),
+    'nz_coder/tools/bash.py': ('workspace-file-access', 0),
+    'nz_coder/tools/files.py': ('workspace-file-access', 0),
     'nz_coder/tools/plan_mode.py': ('legacy-model-reachable', 3),
-    'nz_coder/tools/python_ast.py': ('legacy-model-reachable', 2),
+    'nz_coder/tools/python_ast.py': ('workspace-file-access', 0),
     'nz_coder/tools/read_support.py': ('legacy-model-reachable', 3),
-    'nz_coder/tools/repo_intel.py': ('legacy-model-reachable', 5),
-    'nz_coder/tools/search.py': ('legacy-model-reachable', 2),
+    'nz_coder/tools/repo_intel.py': ('workspace-file-access', 0),
+    'nz_coder/tools/search.py': ('workspace-file-access', 0),
     'nz_coder/tools/scratchpad.py': ('private-user-state', 1),
     'nz_coder/tools/todo.py': ('private-user-state', 1),
     'nz_coder/tools/webfetch.py': ('remote-transport', 1),
@@ -266,10 +266,30 @@ def test_model_reachable_direct_io_is_inventoried():
         if not relative.startswith(('nz_coder/tools/', 'nz_coder/capabilities/')):
             continue
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and _dotted(node.func).split('.')[-1] in method_names:
+            if (
+                isinstance(node, ast.Call)
+                and _dotted(node.func).split('.')[-1] in method_names
+                and not _is_workspace_file_access_call(node)
+            ):
                 actual[relative] += 1
-    expected = {path: count for path, (_kind, count) in MODEL_IO_MODULE_COUNTS.items()}
+    expected = {
+        path: count
+        for path, (_kind, count) in MODEL_IO_MODULE_COUNTS.items()
+        if count
+    }
     assert actual == expected, f'direct model-reachable I/O changed: expected {expected}, found {dict(actual)}; route through WorkspaceFileAccess or update the reviewed inventory'
+
+
+def _is_workspace_file_access_call(node: ast.Call) -> bool:
+    if not isinstance(node.func, ast.Attribute):
+        return False
+    owner = node.func.value
+    if isinstance(owner, ast.Name) and owner.id in {'access', 'file_access'}:
+        return True
+    return (
+        isinstance(owner, ast.Call)
+        and _dotted(owner.func).endswith('WorkspaceFileAccess')
+    )
 
 
 def test_raw_exception_projection_sites_are_classified():

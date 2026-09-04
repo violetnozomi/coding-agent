@@ -26,18 +26,19 @@ def test_write_files_batch_creates_files_without_overwrite(tmp_path):
 
 def test_write_files_batch_rolls_back_on_write_failure(tmp_path, monkeypatch):
     from nz_coder.foundation import config
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
     from nz_coder.tools import files as files_mod
 
     old = config.WORKDIR
     config.WORKDIR = tmp_path
-    original = Path.write_text
+    original = WorkspaceFileAccess.write_text
 
-    def flaky(self, content, *args, **kwargs):
-        if self.name == "b.txt":
+    def flaky(self, path, content, *args, **kwargs):
+        if Path(path).name == "b.txt":
             raise OSError("boom")
-        return original(self, content, *args, **kwargs)
+        return original(self, path, content, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "write_text", flaky)
+    monkeypatch.setattr(WorkspaceFileAccess, "write_text", flaky)
     try:
         with pytest.raises(OSError):
             files_mod._write_files_batch_impl([

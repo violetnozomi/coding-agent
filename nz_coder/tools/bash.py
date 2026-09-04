@@ -12,6 +12,7 @@ from itertools import islice
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.foundation.workspace_paths import (
@@ -230,7 +231,9 @@ def _apply_sed_via_edit(command: str) -> str | None:
         return None  # file doesn't exist, let bash produce the real error
 
     try:
-        content = fp.read_text(encoding="utf-8", errors="replace")
+        content = WorkspaceFileAccess(current_workdir()).read_text(
+            file_path, errors="replace",
+        )
     except OSError:
         return None
 

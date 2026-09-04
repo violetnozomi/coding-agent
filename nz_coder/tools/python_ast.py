@@ -5,6 +5,7 @@ import ast
 import difflib
 from pathlib import Path
 
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
@@ -18,7 +19,7 @@ def python_symbol_check(path: str, symbols: list = None, calls: list = None) -> 
     """Check module/class/function symbols and simple call relationships with AST."""
     try:
         fp = _safe_path(path)
-        source = fp.read_text(encoding="utf-8")
+        source = WorkspaceFileAccess(current_workdir()).read_text(path)
         tree = ast.parse(source, filename=str(fp))
     except SyntaxError as e:
         return f"Error: Python syntax error in {path}: {e}"
@@ -51,7 +52,7 @@ def python_structural_edit(path: str, insertions: list = None, replacements: lis
     """Apply AST-located insertions/replacements for Python functions and methods."""
     try:
         fp = _safe_path(path)
-        source = fp.read_text(encoding="utf-8")
+        source = WorkspaceFileAccess(current_workdir()).read_text(path)
         tree = ast.parse(source, filename=str(fp))
         lines = source.splitlines(keepends=True)
         edits = []

@@ -16,6 +16,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.runtime.agent.task_policy import (
@@ -51,6 +52,12 @@ STOPWORDS = frozenset({
 
 def _safe_path(p: str = ".") -> Path:
     return WorkspacePathPolicy(current_workdir()).validate_model_read(p or ".")
+
+
+def _read_source(path: Path, *, errors: str = "replace") -> str:
+    access = WorkspaceFileAccess(current_workdir())
+    relative = path.resolve().relative_to(access.root).as_posix()
+    return access.read_text(relative, errors=errors)
 
 
 def _run_git(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
@@ -249,7 +256,9 @@ def _changed_files_for_verification(include_tests: bool) -> list[str]:
 
 def _package_json_scripts() -> dict:
     try:
-        data = json.loads((current_workdir() / "package.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            WorkspaceFileAccess(current_workdir()).read_text("package.json")
+        )
     except (OSError, json.JSONDecodeError):
         return {}
     scripts = data.get("scripts", {}) if isinstance(data, dict) else {}
@@ -451,7 +460,7 @@ def read_symbol(
     """
     try:
         fp = _safe_path(path)
-        source = fp.read_text(encoding="utf-8", errors="replace")
+        source = _read_source(fp)
         lines = source.splitlines()
         tree = ast.parse(source, filename=str(fp))
         symbols = _collect_symbols(tree, max_depth=max_depth)
@@ -574,7 +583,7 @@ def _parse_python_source(source: str, fp: Path) -> ast.AST | None:
 def _ast_summary(fp: Path, limit: int = 12, tree: ast.AST | None = None) -> list[str]:
     if tree is None:
         try:
-            source = fp.read_text(encoding="utf-8", errors="replace")
+            source = _read_source(fp)
         except OSError:
             return []
         tree = _parse_python_source(source, fp)
@@ -706,7 +715,7 @@ def smart_search(
             rel_low = rel.lower()
 
             try:
-                file_text = fp.read_text(encoding="utf-8", errors="replace")
+                file_text = _read_source(fp)
             except OSError:
                 continue
             readable_files += 1
@@ -958,7 +967,7 @@ def find_symbol_callers(
         for fp in files:
             rel = str(fp.relative_to(current_workdir()))
             try:
-                source = fp.read_text(encoding="utf-8", errors="replace")
+                source = _read_source(fp)
                 tree = ast.parse(source, filename=str(fp))
             except (SyntaxError, ValueError) as exc:
                 skipped_files.append(f"{rel}: parse error: {exc}")

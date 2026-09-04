@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.capabilities.ripgrep import (
     RipgrepCancelled,
     RipgrepSearchMatch,
@@ -152,6 +153,7 @@ def _python_rg_search(
         candidates = [cwd / item for item in files]
     else:
         candidates = _iter_fallback_files(cwd)
+    access = WorkspaceFileAccess(current_workdir())
     matches: list[_RGMatch] = []
     partial = False
     for candidate in candidates:
@@ -168,25 +170,26 @@ def _python_rg_search(
             continue
         absolute_offset = 0
         try:
-            with candidate.open("r", encoding="utf-8", errors="replace") as stream:
-                for line_number, text in enumerate(stream, 1):
-                    _raise_if_cancelled()
-                    found = list(regex.finditer(text))
-                    if found:
-                        submatches = tuple({
-                            "text": item.group(0),
-                            "start": len(text[:item.start()].encode("utf-8")),
-                            "end": len(text[:item.end()].encode("utf-8")),
-                        } for item in found)
-                        matches.append(_RGMatch(
-                            path=relative.as_posix(),
-                            text=text,
-                            line=line_number,
-                            absolute_offset=absolute_offset,
-                            submatches=submatches,
-                        ))
-                    absolute_offset += len(text.encode("utf-8"))
-        except OSError:
+            relative_to_workspace = candidate.resolve().relative_to(access.root).as_posix()
+            source = access.read_text(relative_to_workspace, errors="replace")
+            for line_number, text in enumerate(source.splitlines(keepends=True), 1):
+                _raise_if_cancelled()
+                found = list(regex.finditer(text))
+                if found:
+                    submatches = tuple({
+                        "text": item.group(0),
+                        "start": len(text[:item.start()].encode("utf-8")),
+                        "end": len(text[:item.end()].encode("utf-8")),
+                    } for item in found)
+                    matches.append(_RGMatch(
+                        path=relative.as_posix(),
+                        text=text,
+                        line=line_number,
+                        absolute_offset=absolute_offset,
+                        submatches=submatches,
+                    ))
+                absolute_offset += len(text.encode("utf-8"))
+        except (OSError, ValueError):
             partial = True
     return matches, partial
 
@@ -270,6 +273,7 @@ def _render_infcode_content(
     current: Path | None = None
     emitted_context: set[tuple[Path, int]] = set()
     source_cache: dict[Path, list[str]] = {}
+    access = WorkspaceFileAccess(current_workdir())
     for match in selected:
         if current != match.path:
             if current is not None:
@@ -281,9 +285,9 @@ def _render_infcode_content(
             continue
         if match.path not in source_cache:
             try:
-                source_cache[match.path] = match.path.read_text(
-                    encoding="utf-8",
-                    errors="replace",
+                relative = match.path.relative_to(access.root).as_posix()
+                source_cache[match.path] = access.read_text(
+                    relative, errors="replace",
                 ).splitlines(keepends=True)
             except OSError:
                 source_cache[match.path] = []

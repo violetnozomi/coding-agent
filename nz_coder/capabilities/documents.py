@@ -99,6 +99,7 @@ def read_document_file(
     offset: int | None = None,
     limit: int | None = None,
     cancel_event: threading.Event | None = None,
+    source_bytes: bytes | None = None,
 ) -> DocumentReadResult:
     """Synchronously read a workspace PDF/DOCX for the ``read_file`` tool."""
     root = Path(workspace).resolve()
@@ -107,18 +108,25 @@ def read_document_file(
         source.relative_to(root)
     except ValueError:
         return _error("Document path escapes workspace")
-    if source.is_symlink() or not source.is_file():
+    if source_bytes is None and (source.is_symlink() or not source.is_file()):
         return _error("Document path is not a regular workspace file")
-    stat = source.stat()
-    if stat.st_size >= MAX_DOCUMENT_BYTES:
+    size = len(source_bytes) if source_bytes is not None else source.stat().st_size
+    if size >= MAX_DOCUMENT_BYTES:
         return _error(
-            f"Document exceeds 10 MB limit ({stat.st_size} bytes). "
+            f"Document exceeds 10 MB limit ({size} bytes). "
             "All PDF and DOCX files must be less than 10 MB."
         )
-    mime = detect_document_mime(source)
+    mime = (
+        _detect_document_bytes(source_bytes, source.suffix)
+        if source_bytes is not None else detect_document_mime(source)
+    )
     if mime not in SUPPORTED_DOCUMENT_MIMES:
         return _error(f"Unsupported document type: {mime or 'unknown'}")
     try:
+        if source_bytes is not None:
+            source = _stage_captured_document(
+                source_bytes, source.suffix, root, str(session_id or "default"),
+            )
         requested_pages = parse_document_pages(pages) if pages and mime == PDF_MIME else None
         return _convert_and_slice(
             source,
@@ -145,6 +153,40 @@ def detect_document_mime(path: Path) -> str:
     if sample.startswith(b"%PDF-") or path.suffix.lower() == ".pdf":
         return PDF_MIME
     return DOCX_MIME if path.suffix.lower() == ".docx" else ""
+
+
+def _detect_document_bytes(data: bytes, suffix: str) -> str:
+    if data.startswith(b"%PDF-") or suffix.lower() == ".pdf":
+        return PDF_MIME
+    return DOCX_MIME if suffix.lower() == ".docx" else ""
+
+
+def _stage_captured_document(
+    data: bytes, suffix: str, workspace: Path, session_id: str,
+) -> Path:
+    """Materialize already-anchored bytes only in owner-private derived cache."""
+    directory = (
+        prepare_user_storage(workspace).workspace_cache
+        / "documents" / session_id / "sources"
+    )
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    digest = hashlib.sha256(data).hexdigest()
+    target = directory / f"{digest}{suffix.lower()}"
+    if target.is_file() and target.stat().st_size == len(data):
+        return target
+    descriptor, raw = tempfile.mkstemp(prefix=".source-", suffix=".tmp", dir=directory)
+    temporary = Path(raw)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.chmod(0o600)
+        os.replace(temporary, target)
+        target.chmod(0o600)
+        return target
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 async def read_document(

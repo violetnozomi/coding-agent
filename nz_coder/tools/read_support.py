@@ -62,6 +62,21 @@ def read_text_lines(path: Path, *, offset: int, limit: int) -> TextReadResult:
         return _read_stream(text.splitlines(), offset=offset, limit=limit, encoding=detected)
 
 
+def read_text_lines_bytes(
+    data: bytes, *, offset: int, limit: int,
+) -> TextReadResult:
+    """Apply the bounded line policy to bytes captured by WorkspaceFileAccess."""
+    encoding = _bom_encoding(data[:SAMPLE_BYTES]) or "utf-8"
+    try:
+        text = data.decode(encoding, errors="strict")
+        detected = encoding
+    except UnicodeDecodeError:
+        text, detected = _decode_legacy(data)
+    return _read_stream(
+        text.splitlines(), offset=offset, limit=limit, encoding=detected,
+    )
+
+
 def directory_entries(path: Path) -> list[str]:
     """Return locale-sorted direct children with directory suffixes."""
     entries = []
