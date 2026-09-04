@@ -30,6 +30,20 @@ class _AsyncClient:
         self.close_calls += 1
 
 
+class _FailOnceClient(_Client):
+    def close(self) -> None:
+        super().close()
+        if self.close_calls == 1:
+            raise RuntimeError("first close failed")
+
+
+class _AsyncFailOnceClient(_AsyncClient):
+    async def aclose(self) -> None:
+        await super().aclose()
+        if self.close_calls == 1:
+            raise RuntimeError("first close failed")
+
+
 class _Provider:
     name = "example"
 
@@ -183,6 +197,44 @@ def test_async_created_client_is_closed_once() -> None:
     asyncio.run(runtime.aclose())
 
     assert client.close_calls == 1
+
+
+def test_created_provider_runtime_close_failure_is_retryable() -> None:
+    client = _FailOnceClient()
+    runtime = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=_Provider(client),
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(RuntimeError, match="first close failed"):
+        runtime.close()
+    runtime.close()
+    runtime.close()
+
+    assert client.close_calls == 2
+
+
+def test_async_created_provider_runtime_close_failure_is_retryable() -> None:
+    client = _AsyncFailOnceClient()
+    runtime = resolve_model_runtime(
+        ModelSelectionRequest(
+            provider_name="example",
+            model_id="logical-model",
+            provider=_Provider(client),
+        ),
+        registry_resolver=lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(RuntimeError, match="first close failed"):
+        asyncio.run(runtime.aclose())
+    asyncio.run(runtime.aclose())
+    asyncio.run(runtime.aclose())
+
+    assert client.close_calls == 2
 
 
 @pytest.mark.parametrize(

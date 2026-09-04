@@ -28,6 +28,41 @@ class _ProductEventSink:
             self._callback(event)
 
 
+def _record_cleanup_failure(environment, exc: BaseException) -> None:
+    """Attach a secret-free cleanup diagnostic without replacing Run outcome."""
+    tracer = getattr(environment, "tracer", None)
+    log = getattr(tracer, "log", None)
+    if not callable(log):
+        return
+    try:
+        log(
+            "product_environment_cleanup_failed",
+            failure_type=type(exc).__name__,
+        )
+    except BaseException:
+        # Diagnostics are not part of resource ownership and may not replace
+        # either the business result or its primary exception.
+        return
+
+
+def _close_after_build_failure(primary: BaseException, *resources) -> None:
+    """Best-effort construction rollback while retaining the primary error."""
+    failures: list[str] = []
+    for resource in resources:
+        close = getattr(resource, "close", None)
+        if not callable(close):
+            continue
+        try:
+            close()
+        except BaseException as exc:
+            failures.append(type(exc).__name__)
+    if failures and hasattr(primary, "add_note"):
+        primary.add_note(
+            "Product environment rollback also reported: "
+            + ", ".join(failures)
+        )
+
+
 def build_product_run_environment(
     request: RunRequest,
     options: RunOptions,
@@ -102,10 +137,12 @@ def build_product_run_environment(
                 environment.background_agents.bind_event_publisher(
                     environment.event_publisher
                 )
-    except BaseException:
-        if owns_event_bus:
-            event_bus.close()
-        runtime.close()
+    except BaseException as primary:
+        _close_after_build_failure(
+            primary,
+            event_bus if owns_event_bus else None,
+            runtime,
+        )
         raise
     environment.runtime_profile = request.profile.mode.value
     environment.model_capability_options = copy.deepcopy(
@@ -125,9 +162,8 @@ def build_product_run_environment(
             environment.repo_intelligence.configure_semantic(
                 sentence_transformer_provider(semantic_model),
             )
-        except BaseException:
-            environment.close()
-            runtime.close()
+        except BaseException as primary:
+            _close_after_build_failure(primary, environment, runtime)
             raise
     return environment
 
@@ -218,7 +254,10 @@ class NativeSDKRunner:
             raise
         finally:
             if owns_environment:
-                await asyncio.to_thread(environment.close)
+                try:
+                    await asyncio.to_thread(environment.close)
+                except BaseException as exc:
+                    _record_cleanup_failure(environment, exc)
 
 
 def build_native_sdk_runner() -> NativeSDKRunner:

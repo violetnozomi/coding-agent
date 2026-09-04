@@ -350,6 +350,7 @@ class ProductRunEnvironment:
         )
         self._run_control_lock = threading.RLock()
         self._active_run_control = None
+        self._pending_run_control_cleanup: list[object] = []
         self._configured_hooks = hooks
         self._configured_sidecar_verifier = sidecar_verifier
         self._permission_asker = permission_asker
@@ -639,6 +640,7 @@ class ProductRunEnvironment:
     ):
         """Build and atomically install all controls for one top-level Run."""
         from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
             load_config_snapshot,
             scoped_config_snapshot,
         )
@@ -648,10 +650,15 @@ class ProductRunEnvironment:
         from nz_coder.state.skills import SkillLoader
         from nz_coder.tools.plan_mode import PlanModeController
 
-        snapshot = config_snapshot or load_config_snapshot(self.workdir)
+        snapshot = (
+            config_snapshot
+            or active_config_snapshot(self.workdir)
+            or load_config_snapshot(self.workdir)
+        )
         if snapshot.workspace.resolve() != self.workdir.resolve():
             raise ValueError("ConfigSnapshot belongs to a different workspace")
         with self._run_control_lock:
+            self._retry_run_control_cleanup()
             if self._active_run_control is not None:
                 raise RuntimeError("A top-level Run already owns this environment")
             previous_permissions = self.permissions
@@ -808,18 +815,23 @@ class ProductRunEnvironment:
                         owns_sidecar_verifier=owns_sidecar,
                     )
             except BaseException:
-                close_mcp = getattr(candidate_mcp, "close", None)
-                if callable(close_mcp):
-                    close_mcp()
-                if owns_runtimes and not reuse_initial:
-                    for owned in {id(item): item for item in candidate_runtimes.values()}.values():
-                        owned.close()
-                close_sidecar = (
-                    getattr(candidate_sidecar, "close", None)
-                    if owns_sidecar else None
+                rollback = RunControlBundle(
+                    config_snapshot=snapshot,
+                    permissions=None,
+                    plan_mode=None,
+                    skill_loader=None,
+                    hooks=None,
+                    mcp_runtime=candidate_mcp,
+                    model_runtime=None,
+                    provider_runtimes=(
+                        candidate_runtimes
+                        if owns_runtimes and not reuse_initial else {}
+                    ),
+                    owns_provider_runtimes=bool(owns_runtimes and not reuse_initial),
+                    sidecar_verifier=candidate_sidecar,
+                    owns_sidecar_verifier=owns_sidecar,
                 )
-                if callable(close_sidecar):
-                    close_sidecar()
+                self._attempt_run_control_cleanup(rollback, "construction-rollback")
                 raise
 
             # Role activation may validate a declared model and can therefore
@@ -887,39 +899,65 @@ class ProductRunEnvironment:
             except BaseException:
                 for name, value in previous_bindings.items():
                     setattr(self, name, value)
-                close_mcp = getattr(candidate_mcp, "close", None)
-                if callable(close_mcp):
-                    close_mcp()
                 previous_runtime_ids = {
                     id(item) for item in previous_runtimes.values()
                 }
-                if owns_runtimes:
-                    for owned in {
-                        id(item): item for item in candidate_runtimes.values()
-                    }.values():
-                        if id(owned) not in previous_runtime_ids:
-                            owned.close()
-                close_sidecar = (
-                    getattr(candidate_sidecar, "close", None)
-                    if owns_sidecar else None
+                rollback_runtimes = {
+                    key: owned
+                    for key, owned in candidate_runtimes.items()
+                    if owns_runtimes and id(owned) not in previous_runtime_ids
+                }
+                rollback = RunControlBundle(
+                    config_snapshot=snapshot,
+                    permissions=None,
+                    plan_mode=None,
+                    skill_loader=None,
+                    hooks=None,
+                    mcp_runtime=candidate_mcp,
+                    model_runtime=None,
+                    provider_runtimes=rollback_runtimes,
+                    owns_provider_runtimes=bool(rollback_runtimes),
+                    sidecar_verifier=candidate_sidecar,
+                    owns_sidecar_verifier=owns_sidecar,
                 )
-                if callable(close_sidecar):
-                    close_sidecar()
+                self._attempt_run_control_cleanup(rollback, "install-rollback")
                 raise
             if reuse_initial:
                 self._initial_model_runtime_available = False
 
-            if previous_mcp is not None and previous_mcp is not candidate_mcp:
-                previous_mcp.close()
-            if self._run_control_managed_provider and previous_runtimes is not candidate_runtimes:
-                candidate_ids = {id(item) for item in candidate_runtimes.values()}
-                for old in {id(item): item for item in previous_runtimes.values()}.values():
-                    if id(old) not in candidate_ids:
-                        old.close()
-            if previous_sidecar is not None and previous_sidecar is not candidate_sidecar:
-                close_sidecar = getattr(previous_sidecar, "close", None)
-                if callable(close_sidecar):
-                    close_sidecar()
+            candidate_ids = {id(item) for item in candidate_runtimes.values()}
+            retired_runtimes = {
+                key: old
+                for key, old in previous_runtimes.items()
+                if (
+                    self._run_control_managed_provider
+                    and previous_runtimes is not candidate_runtimes
+                    and id(old) not in candidate_ids
+                )
+            }
+            retired = RunControlBundle(
+                config_snapshot=previous_bindings.get("config_snapshot"),
+                permissions=None,
+                plan_mode=None,
+                skill_loader=None,
+                hooks=None,
+                mcp_runtime=(
+                    previous_mcp
+                    if previous_mcp is not candidate_mcp else None
+                ),
+                model_runtime=None,
+                provider_runtimes=retired_runtimes,
+                owns_provider_runtimes=bool(retired_runtimes),
+                sidecar_verifier=(
+                    previous_sidecar
+                    if previous_sidecar is not candidate_sidecar else None
+                ),
+                owns_sidecar_verifier=bool(
+                    previous_sidecar is not None
+                    and previous_sidecar is not candidate_sidecar
+                ),
+            )
+            self._attempt_run_control_cleanup(retired, "predecessor-retire")
             return bundle
 
     def retire_run_control(self, bundle) -> None:
@@ -929,7 +967,46 @@ class ProductRunEnvironment:
                 self._active_run_control = None
                 if self._mcp_runtime is bundle.mcp_runtime:
                     self._mcp_runtime = None
-        bundle.close()
+        self._attempt_run_control_cleanup(bundle, "run-retire")
+
+    def _attempt_run_control_cleanup(self, bundle, phase: str) -> bool:
+        """Attempt one ledger and retain incomplete ownership for retry."""
+        with self._run_control_lock:
+            try:
+                bundle.close()
+            except BaseException:
+                if not any(
+                    item is bundle for item in self._pending_run_control_cleanup
+                ):
+                    self._pending_run_control_cleanup.append(bundle)
+                tracer = getattr(self, "tracer", None)
+                if tracer is not None:
+                    try:
+                        tracer.log(
+                            "run_control_cleanup_failed",
+                            phase=str(phase),
+                            resources=list(
+                                getattr(bundle, "incomplete_resources", ())
+                            ),
+                            failure_types=dict(
+                                getattr(bundle, "cleanup_failures", {})
+                            ),
+                        )
+                    except BaseException:
+                        # The cleanup ledger remains authoritative even when
+                        # its optional diagnostic sink is unavailable.
+                        return False
+                return False
+            self._pending_run_control_cleanup = [
+                item for item in self._pending_run_control_cleanup
+                if item is not bundle
+            ]
+            return True
+
+    def _retry_run_control_cleanup(self) -> None:
+        """Best-effort retry without blocking a new committed Run epoch."""
+        for bundle in list(self._pending_run_control_cleanup):
+            self._attempt_run_control_cleanup(bundle, "deferred-retry")
 
     def set_followup_pending(self, callback: Callable[[], bool] | None) -> None:
         """Bind a host-owned check for a newer prompt queued during this run."""
@@ -1658,6 +1735,10 @@ class ProductRunEnvironment:
 
     def close(self) -> None:
         """Dispose public event subscriptions and optional tracer resources."""
+        run_control_lock = getattr(self, "_run_control_lock", None)
+        if run_control_lock is not None:
+            with run_control_lock:
+                self._retry_run_control_cleanup()
         stall_orchestrator = getattr(self, "stall_orchestrator", None)
         if stall_orchestrator is not None:
             cancel_and_settle = getattr(

@@ -236,6 +236,7 @@ _PARENT_CONTEXT_DEFAULT: dict[str, Any] = {
     "agent_id": None,
     "trace_id": None,
     "model_id": None,
+    "config_snapshot": None,
 }
 _PARENT_CONTEXT: ContextVar[dict[str, Any]] = ContextVar(
     "nz_coder_parent_context",
@@ -308,8 +309,12 @@ def bind_parent_context(
     agent_id: str | None = None,
     trace_id: str | None = None,
     model_id: str | None = None,
+    config_snapshot: Any = None,
 ) -> None:
-    if session_id is None and tracer is None and agent_id is None and trace_id is None and model_id is None:
+    if (
+        session_id is None and tracer is None and agent_id is None
+        and trace_id is None and model_id is None and config_snapshot is None
+    ):
         _PARENT_CONTEXT.set(dict(_PARENT_CONTEXT_DEFAULT))
         return
     context = dict(_PARENT_CONTEXT.get())
@@ -323,6 +328,8 @@ def bind_parent_context(
         context["trace_id"] = trace_id
     if model_id is not None:
         context["model_id"] = model_id
+    if config_snapshot is not None:
+        context["config_snapshot"] = config_snapshot
     _PARENT_CONTEXT.set(context)
 
 
@@ -419,23 +426,56 @@ def _normalize_agent_type(agent_type: str | None) -> str:
     return normalized
 
 
-def _subagent_model(agent_type: str) -> str:
-    parent_model = str(_PARENT_CONTEXT.get().get("model_id") or config.MODEL_ID)
+def _parent_config_snapshot(workspace: Path | None = None):  # noqa: ANN202
+    """Return the private parent epoch without consulting mutable disk state."""
+    snapshot = _PARENT_CONTEXT.get().get("config_snapshot")
+    if snapshot is None:
+        from nz_coder.foundation.workspace_trust import active_config_snapshot
+
+        snapshot = active_config_snapshot(workspace)
+    if snapshot is not None and workspace is not None:
+        if snapshot.workspace.resolve() != Path(workspace).resolve():
+            raise ValueError("Parent ConfigSnapshot belongs to a different workspace")
+    return snapshot
+
+
+def _subagent_model(agent_type: str, config_snapshot=None) -> str:
+    snapshot = config_snapshot or _parent_config_snapshot()
+    parent_model = str(
+        _PARENT_CONTEXT.get().get("model_id")
+        or (snapshot.get("MODEL_ID", config.MODEL_ID) if snapshot is not None else config.MODEL_ID)
+    )
     if agent_type == "explore":
-        return config.SUBAGENT_EXPLORE_MODEL or parent_model
+        return (
+            snapshot.get("SUBAGENT_EXPLORE_MODEL", "")
+            if snapshot is not None else config.SUBAGENT_EXPLORE_MODEL
+        ) or parent_model
     return parent_model
 
 
 def _resolve_subagent_route(
     agent_type: str,
     model_hint: str | None,
+    config_snapshot=None,
 ) -> tuple[str, dict]:
     """Resolve an InfCodeX-style semantic model tier without hidden fallback."""
     hint = str(model_hint or "").strip().lower()
     if hint and hint not in {"fast", "balanced", "deep"}:
         raise ValueError("model_hint must be one of: fast, balanced, deep")
-    parent_model = str(_PARENT_CONTEXT.get().get("model_id") or config.MODEL_ID)
-    selected = _subagent_model(agent_type)
+    snapshot = config_snapshot or _parent_config_snapshot()
+    parent_model = str(
+        _PARENT_CONTEXT.get().get("model_id")
+        or (snapshot.get("MODEL_ID", config.MODEL_ID) if snapshot is not None else config.MODEL_ID)
+    )
+    explore_model = (
+        snapshot.get("SUBAGENT_EXPLORE_MODEL", "")
+        if snapshot is not None else config.SUBAGENT_EXPLORE_MODEL
+    )
+    deep_model = (
+        snapshot.get("SUBAGENT_DEEP_MODEL", "")
+        if snapshot is not None else config.SUBAGENT_DEEP_MODEL
+    )
+    selected = _subagent_model(agent_type, snapshot)
     outcome = "inherited"
     model_source = "parent"
     fallback_reason = ""
@@ -444,8 +484,8 @@ def _resolve_subagent_route(
             selected = parent_model
             outcome = "fast-write-ineligible"
             fallback_reason = "fast tier is read-only; inherited parent model"
-        elif config.SUBAGENT_EXPLORE_MODEL:
-            selected = config.SUBAGENT_EXPLORE_MODEL
+        elif explore_model:
+            selected = explore_model
             outcome = "applied"
             model_source = "tier"
         else:
@@ -453,8 +493,8 @@ def _resolve_subagent_route(
             outcome = "unconfigured"
             fallback_reason = "fast tier is not configured"
     elif hint == "deep":
-        if config.SUBAGENT_DEEP_MODEL:
-            selected = config.SUBAGENT_DEEP_MODEL
+        if deep_model:
+            selected = deep_model
             outcome = "applied"
             model_source = "tier"
         else:
@@ -1359,11 +1399,20 @@ def _direct_worktree(parent_workspace: Path, state: dict) -> Worktree:
     )
 
 
-def _ensure_subagent_worktree(parent_workspace: Path, state: dict) -> Worktree:
+def _ensure_subagent_worktree(
+    parent_workspace: Path,
+    state: dict,
+    *,
+    config_snapshot=None,
+) -> Worktree:
     existing = _validated_persisted_worktree(parent_workspace, state)
     if existing is not None and Path(existing.path).exists():
         return existing
-    if not config.SUBAGENT_WORKTREE_ENABLED:
+    worktree_enabled = (
+        config_snapshot.get_bool("SUBAGENT_WORKTREE_ENABLED", True)
+        if config_snapshot is not None else config.SUBAGENT_WORKTREE_ENABLED
+    )
+    if not worktree_enabled:
         return _direct_worktree(parent_workspace, state)
     manager = WorktreeManager(repo_root=parent_workspace)
     worktree = manager.create(state["session_id"], "HEAD")
@@ -1484,6 +1533,7 @@ def run_subagent(
     cancel_event = cancel_event or current_tool_cancel_event()
 
     parent_workspace = _workspace_root()
+    parent_snapshot = _parent_config_snapshot(parent_workspace)
     parent_session_id = _parent_session_id()
     state = _load_subagent_state(parent_session_id, session_id, parent_workspace) if session_id else {}
     if session_id and not state:
@@ -1516,6 +1566,7 @@ def run_subagent(
         state["model_id"], state["route_facts"] = _resolve_subagent_route(
             normalized_type,
             declared_hint,
+            parent_snapshot,
         )
     except ValueError as exc:
         return f"Error: {exc}"
@@ -1551,7 +1602,10 @@ def run_subagent(
         state["verification_contract"] = verification_contract
     from nz_coder.providers.models import active_model_selection
 
-    state["provider_id"] = active_model_selection(parent_workspace).provider
+    state["provider_id"] = active_model_selection(
+        parent_workspace,
+        config_snapshot=parent_snapshot,
+    ).provider
     state["route_facts"]["initial_provider"] = state["provider_id"]
     state["route_facts"]["final_provider"] = state["provider_id"]
     state["_invocation_started_at"] = time.time()
@@ -1598,7 +1652,9 @@ def run_subagent(
             )
             return _format_scope_conflict_block(list(state.get("claimed_paths") or []), scope_conflicts)
 
-    worktree = _ensure_subagent_worktree(parent_workspace, state)
+    worktree = _ensure_subagent_worktree(
+        parent_workspace, state, config_snapshot=parent_snapshot,
+    )
     scratch_path = _prepare_subagent_workspace(parent_workspace, state, worktree)
     child_tracer = _build_subagent_tracer(parent_workspace, parent_session_id, state)
     state["status"] = "running"
@@ -1636,13 +1692,18 @@ def run_subagent(
     if not native_session_active:
         ensure_message_identities(messages, state["session_id"])
 
-    provider = create_provider(client_factory=OpenAI)
+    provider = create_provider(
+        name=state["provider_id"],
+        client_factory=OpenAI,
+        config_snapshot=parent_snapshot,
+    )
     model_runtime = resolve_model_runtime(
         ModelSelectionRequest(
             provider_name=str(state.get("provider_id") or getattr(provider, "name", "")),
             model_id=str(state["model_id"]),
             workspace=parent_workspace,
             provider=provider,
+            config_snapshot=parent_snapshot,
         )
     )
     client = model_runtime.client
@@ -1780,14 +1841,21 @@ def run_subagent(
             },
         )
 
-    max_turns = max(1, config.SUBAGENT_MAX_TURNS)
+    max_turns = max(1, (
+        parent_snapshot.get_int("SUBAGENT_MAX_TURNS", 200, minimum=1)
+        if parent_snapshot is not None else config.SUBAGENT_MAX_TURNS
+    ))
     verification_repair_budget = (
         1
         if verification_contract is not None
         and verification_contract.get("enforcement") == "hard"
         else 0
     )
-    deadline = time.monotonic() + max(1, config.SUBAGENT_TIMEOUT_SECONDS)
+    subagent_timeout = max(1, (
+        parent_snapshot.get_int("SUBAGENT_TIMEOUT_SECONDS", 180, minimum=1)
+        if parent_snapshot is not None else config.SUBAGENT_TIMEOUT_SECONDS
+    ))
+    deadline = time.monotonic() + subagent_timeout
     parent_context = _parent_context_block(parent_session_id)
     tool_scope = ", ".join(sorted(allowed_tools)) if allowed_tools else "default tools for this mode"
     system = f"""You are an isolated child coding agent working in: {worktree.path}
@@ -2032,9 +2100,20 @@ NEXT:
     run_status: dict = {"status": "error"}
     automatic_verification = ""
     parent_context_token = _PARENT_CONTEXT.set(dict(_PARENT_CONTEXT.get()))
+    from nz_coder.foundation.workspace_trust import (
+        inherited_config_snapshot,
+        scoped_config_snapshot,
+    )
+
+    child_snapshot = (
+        inherited_config_snapshot(parent_snapshot, worktree.path)
+        if parent_snapshot is not None else None
+    )
     try:
         with (
             scoped_workdir(worktree.path),
+            scoped_config_snapshot(child_snapshot)
+            if child_snapshot is not None else nullcontext(),
             _closing_model_runtime(model_runtime),
             scoped_runtime_overrides(
                 max_agent_turns=(
@@ -2042,7 +2121,7 @@ NEXT:
                     + (1 if declared_schema is not None else 0)
                     + (1 if verification_repair_budget else 0)
                 ),
-                agent_timeout_seconds=config.SUBAGENT_TIMEOUT_SECONDS,
+                agent_timeout_seconds=subagent_timeout,
                 strict_local_tools=False,
             ),
             scoped_broad_test_guard(),
@@ -2057,6 +2136,8 @@ NEXT:
                 change_tracker=change_tracker,
                 session_id=state["session_id"],
                 model_runtime=effective_runtime,
+                config_snapshot=child_snapshot,
+                tool_allowlist=tuple(sorted(all_tool_names)),
                 sidecar_verifier=False,
                 stall_sidecar=lambda _signal: {"is_stuck": False, "trace": "child"},
             )

@@ -49,6 +49,19 @@ class ProjectControlSnapshot:
     total_bytes: int
     trusted: bool = False
 
+    def __reduce__(self):  # noqa: ANN204
+        """Preserve immutable mappings across a private spawn IPC boundary."""
+        return (
+            _restore_project_control_snapshot,
+            (
+                dict(self.workspace_identity),
+                self.fingerprint,
+                dict(self.files),
+                self.total_bytes,
+                self.trusted,
+            ),
+        )
+
     def files_for_kind(self, kind: str) -> tuple[TrustedControlFile, ...]:
         return tuple(item for item in self.files.values() if item.kind == str(kind))
 
@@ -75,6 +88,23 @@ class ProjectControlSnapshot:
                 for item in self.files.values()
             ],
         }
+
+
+def _restore_project_control_snapshot(
+    workspace_identity: dict[str, object],
+    fingerprint: str,
+    files: dict[str, TrustedControlFile],
+    total_bytes: int,
+    trusted: bool,
+) -> ProjectControlSnapshot:
+    """Rebuild read-only mappings after private multiprocessing transport."""
+    return ProjectControlSnapshot(
+        workspace_identity=MappingProxyType(dict(workspace_identity)),
+        fingerprint=str(fingerprint),
+        files=MappingProxyType(dict(files)),
+        total_bytes=int(total_bytes),
+        trusted=bool(trusted),
+    )
 
 
 def capture_project_control_snapshot(

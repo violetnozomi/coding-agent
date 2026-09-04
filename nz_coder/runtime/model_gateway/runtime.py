@@ -70,13 +70,6 @@ class ResolvedModelRuntime:
     _next_inflight_id: int = field(default=1, init=False, repr=False)
     _tainted: bool = field(default=False, init=False, repr=False)
 
-    def _claim_close(self) -> bool:
-        with self._close_lock:
-            if self._closed:
-                return False
-            self._closed = True
-            return True
-
     def begin_inflight(
         self,
         worker: threading.Thread,
@@ -129,35 +122,37 @@ class ResolvedModelRuntime:
         return {**status, "cleanup_failures": cleanup_failures}
 
     def close(self) -> None:
-        """Close an internally created synchronous client at most once."""
-        if not self._claim_close():
-            return
-        self.cancel_inflight()
-        if not self.owns_client:
-            return
-        close = getattr(self.client, "close", None)
-        if not callable(close):
-            return
-        result = close()
-        if inspect.isawaitable(result):
-            result.close()
-            raise RuntimeError("Async model clients must be closed with aclose()")
+        """Close a client exactly once, leaving failures retryable."""
+        with self._close_lock:
+            if self._closed:
+                return
+            self.cancel_inflight()
+            if self.owns_client:
+                close = getattr(self.client, "close", None)
+                if callable(close):
+                    result = close()
+                    if inspect.isawaitable(result):
+                        result.close()
+                        raise RuntimeError(
+                            "Async model clients must be closed with aclose()"
+                        )
+            self._closed = True
 
     async def aclose(self) -> None:
-        """Close an internally created sync or async client at most once."""
-        if not self._claim_close():
-            return
-        self.cancel_inflight()
-        if not self.owns_client:
-            return
-        close = getattr(self.client, "aclose", None)
-        if not callable(close):
-            close = getattr(self.client, "close", None)
-        if not callable(close):
-            return
-        result = close()
-        if inspect.isawaitable(result):
-            await result
+        """Close a sync or async client exactly once, retrying failures."""
+        with self._close_lock:
+            if self._closed:
+                return
+            self.cancel_inflight()
+            if self.owns_client:
+                close = getattr(self.client, "aclose", None)
+                if not callable(close):
+                    close = getattr(self.client, "close", None)
+                if callable(close):
+                    result = close()
+                    if inspect.isawaitable(result):
+                        await result
+            self._closed = True
 
 
 def resolve_model_runtime(

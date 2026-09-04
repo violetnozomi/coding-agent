@@ -130,6 +130,7 @@ class ProductionRuntimeHost:
                     agent_id=agent.agent_id,
                     trace_id=agent.trace_id,
                     model_id=agent._active_model_id(),
+                    config_snapshot=run_config_snapshot,
                 ))
                 mcp_status = mcp_runtime.status_summary()
                 if mcp_status:

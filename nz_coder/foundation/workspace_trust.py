@@ -252,9 +252,9 @@ class ConfigSnapshot:
     workspace_trusted: bool
     control_fingerprint: str
     control_plane_trusted: bool
-    project_control: ProjectControlSnapshot
-    values: dict[str, ConfigValue]
-    issues: list[ConfigIssue] = field(default_factory=list)
+    project_control: ProjectControlSnapshot = field(repr=False)
+    values: dict[str, ConfigValue] = field(repr=False)
+    issues: list[ConfigIssue] = field(default_factory=list, repr=False)
 
     def get(self, key: str, default: str | None = None) -> str:
         record = self.values.get(key)
@@ -385,6 +385,26 @@ def active_config_snapshot(workspace: Path | None = None) -> ConfigSnapshot | No
     ):
         return snapshot
     return None
+
+
+def inherited_config_snapshot(
+    snapshot: ConfigSnapshot,
+    workspace: Path | str,
+) -> ConfigSnapshot:
+    """Rebind one parent epoch to its private child worktree without recapture.
+
+    Values and captured control bytes remain those approved for the parent Run;
+    only workspace-relative execution is moved to the owned child directory.
+    """
+    target = Path(workspace).expanduser().absolute()
+    if target == snapshot.workspace:
+        return snapshot
+    return replace(
+        snapshot,
+        workspace=target,
+        values=dict(snapshot.values),
+        issues=list(snapshot.issues),
+    )
 
 
 def default_user_config_path(environ: Mapping[str, str] | None = None) -> Path:

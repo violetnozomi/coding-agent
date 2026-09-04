@@ -5,7 +5,7 @@ import hashlib
 import multiprocessing
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar, copy_context
 from dataclasses import dataclass
 from pathlib import Path
@@ -70,9 +70,16 @@ def _run_subagent_process(connection, payload: dict) -> None:
     try:
         from nz_coder.runtime.agent.subagent import run_subagent, scoped_parent_context
         from nz_coder.runtime.process.workdir import scoped_workdir
+        from nz_coder.foundation.workspace_trust import scoped_config_snapshot
 
-        with scoped_workdir(payload["workspace"]), scoped_parent_context(
-            session_id=payload["parent_session_id"],
+        snapshot = payload.pop("config_snapshot", None)
+        with (
+            scoped_workdir(payload["workspace"]),
+            scoped_config_snapshot(snapshot) if snapshot is not None else nullcontext(),
+            scoped_parent_context(
+                session_id=payload["parent_session_id"],
+                config_snapshot=snapshot,
+            ),
         ):
             result = run_subagent(
                 payload["prompt"],
@@ -185,7 +192,8 @@ class BackgroundAgentManager:
                 self._agent_cap,
             ),
         )
-        self._slots = threading.BoundedSemaphore(self._concurrency_cap)
+        self._active_jobs = 0
+        self._capacity_condition = threading.Condition(self._lock)
         from nz_coder.runtime.agent.subagent import _subagent_root
 
         process_root = (
@@ -365,11 +373,34 @@ class BackgroundAgentManager:
 
     @property
     def agent_cap(self) -> int:
-        return self._agent_cap
+        return self._run_limits()[0]
 
     @property
     def concurrency_cap(self) -> int:
-        return self._concurrency_cap
+        return self._run_limits()[1]
+
+    def _run_limits(self, snapshot=None) -> tuple[int, int]:
+        """Resolve child budgets from the active parent epoch when present."""
+        if snapshot is None:
+            from nz_coder.foundation.workspace_trust import active_config_snapshot
+
+            snapshot = active_config_snapshot(self.workspace)
+        agent_cap = (
+            snapshot.get_int(
+                "SUBAGENT_BACKGROUND_MAX_TASKS", self._agent_cap,
+                minimum=1, maximum=20,
+            )
+            if snapshot is not None else self._agent_cap
+        )
+        configured_concurrency = (
+            snapshot.get_int(
+                "SUBAGENT_BACKGROUND_MAX_CONCURRENT", self._concurrency_cap,
+                minimum=1, maximum=20,
+            )
+            if snapshot is not None else self._concurrency_cap
+        )
+        concurrency_cap = min(configured_concurrency, agent_cap)
+        return agent_cap, concurrency_cap
 
     def spawned_count(self) -> int:
         return sum(1 for state in self._states() if state.get("background"))
@@ -745,17 +776,37 @@ class BackgroundAgentManager:
         )
 
         from nz_coder.protocol.session_events import current_session_event_publisher
+        from nz_coder.foundation.workspace_trust import active_config_snapshot
 
         origin_publisher = current_session_event_publisher() or self._event_publisher
+        run_snapshot = active_config_snapshot(self.workspace)
+        agent_cap, concurrency_cap = self._run_limits(run_snapshot)
+        worktree_enabled = (
+            run_snapshot.get_bool("SUBAGENT_WORKTREE_ENABLED", True)
+            if run_snapshot is not None else config.SUBAGENT_WORKTREE_ENABLED
+        )
+        process_isolation_enabled = (
+            run_snapshot.get_bool("NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED", True)
+            if run_snapshot is not None
+            else config.SUBAGENT_PROCESS_ISOLATION_ENABLED
+        )
+        process_stop_grace = (
+            run_snapshot.get_float(
+                "NZ_SUBAGENT_PROCESS_STOP_GRACE_SECONDS", 0.5,
+                minimum=0.0, maximum=30.0,
+            )
+            if run_snapshot is not None
+            else config.SUBAGENT_PROCESS_STOP_GRACE_SECONDS
+        )
         with self._lock:
             if self._closing or self._closed:
                 return "Error: background Agent manager is closed"
-        if not config.SUBAGENT_WORKTREE_ENABLED:
+        if not worktree_enabled:
             return "Error: background write agents require SUBAGENT_WORKTREE_ENABLED=1"
         if not isinstance(tasks, list) or not tasks:
             return "Error: tasks must be a non-empty list"
-        if len(tasks) > self._agent_cap:
-            return f"Error: fan-out exceeds maxAgents lifetime cap ({self._agent_cap})"
+        if len(tasks) > agent_cap:
+            return f"Error: fan-out exceeds maxAgents lifetime cap ({agent_cap})"
 
         # Admission, state publication, and job registration share one lock.
         # Concurrent callers therefore cannot both observe the same remaining
@@ -766,11 +817,11 @@ class BackgroundAgentManager:
             spawned = sum(
                 1 for state in self._states() if state.get("background")
             )
-            remaining = self._agent_cap - spawned
+            remaining = agent_cap - spawned
             if len(tasks) > remaining:
                 return (
                     "Error: maxAgents lifetime cap "
-                    f"({self._agent_cap}) would be exceeded; "
+                    f"({agent_cap}) would be exceeded; "
                     f"spawned={spawned}, requested={len(tasks)}, remaining={max(0, remaining)}"
                 )
 
@@ -788,7 +839,7 @@ class BackgroundAgentManager:
                 isolation = str(item.get("isolation") or "thread")
                 if isolation not in {"thread", "process"}:
                     return f"Error: task {index} isolation must be thread or process"
-                if isolation == "process" and not config.SUBAGENT_PROCESS_ISOLATION_ENABLED:
+                if isolation == "process" and not process_isolation_enabled:
                     return "Error: process isolation is disabled by configuration"
                 try:
                     scopes = _normalize_scope_paths(item.get("target_paths"), self.workspace)
@@ -851,8 +902,16 @@ class BackgroundAgentManager:
                     state,
                     message=f"queued {state['display_name']}",
                 )
+            self._workflow.agent_cap = agent_cap
+            self._workflow.concurrency_cap = concurrency_cap
             for state, item in prepared:
-                self._launch(state, item)
+                self._launch(
+                    state,
+                    item,
+                    run_snapshot=run_snapshot,
+                    concurrency_cap=concurrency_cap,
+                    process_stop_grace=process_stop_grace,
+                )
 
         lines = [f"Started {len(prepared)} background write subagent(s)."]
         lines.extend(
@@ -866,19 +925,31 @@ class BackgroundAgentManager:
             metadata={
                 "fanout_id": fanout_id,
                 "task_ids": [state["session_id"] for state, _ in prepared],
-                "max_agents": self._agent_cap,
-                "max_concurrency": self._concurrency_cap,
+                "max_agents": agent_cap,
+                "max_concurrency": concurrency_cap,
                 "workflow_snapshot": self._workflow.snapshot(),
             },
         )
 
-    def _launch(self, state: dict, item: dict) -> None:
+    def _launch(
+        self,
+        state: dict,
+        item: dict,
+        *,
+        run_snapshot=None,
+        concurrency_cap: int | None = None,
+        process_stop_grace: float | None = None,
+    ) -> None:
         from nz_coder.runtime.agent.subagent import run_subagent
 
         cancel_event = threading.Event()
         done_event = threading.Event()
         session_id = state["session_id"]
         context = copy_context()
+        if concurrency_cap is None:
+            _agent_cap, concurrency_cap = self._run_limits(run_snapshot)
+        if process_stop_grace is None:
+            process_stop_grace = config.SUBAGENT_PROCESS_STOP_GRACE_SECONDS
         live_job: _LiveJob | None = None
 
         def persist_terminal(latest: dict, result: str) -> None:
@@ -921,16 +992,19 @@ class BackgroundAgentManager:
             acquired = False
             process_public_error: PublicError | None = None
             try:
-                while not self._slots.acquire(timeout=0.1):
-                    if cancel_event.is_set():
-                        latest = self._load_raw(session_id) or state
-                        latest["status"] = "cancelled"
-                        persist_terminal(
-                            latest,
-                            "Cancelled before execution started.",
-                        )
-                        return
-                acquired = True
+                with self._capacity_condition:
+                    while self._active_jobs >= concurrency_cap:
+                        if cancel_event.is_set():
+                            latest = self._load_raw(session_id) or state
+                            latest["status"] = "cancelled"
+                            persist_terminal(
+                                latest,
+                                "Cancelled before execution started.",
+                            )
+                            return
+                        self._capacity_condition.wait(0.1)
+                    self._active_jobs += 1
+                    acquired = True
                 latest = self._load_raw(session_id) or state
                 latest["status"] = "running"
                 latest["run_started_at"] = time.time()
@@ -955,6 +1029,7 @@ class BackgroundAgentManager:
                         "model_hint": item.get("model_hint"),
                         "evidence_refs": item.get("evidence_refs"),
                         "verification": item.get("verification"),
+                        "config_snapshot": run_snapshot,
                     }
                     process = spawn.Process(
                         target=_run_subagent_process,
@@ -970,7 +1045,7 @@ class BackgroundAgentManager:
                         pass
                     if cancel_event.is_set() and process.is_alive():
                         process.terminate()
-                        process.join(max(0.0, config.SUBAGENT_PROCESS_STOP_GRACE_SECONDS))
+                        process.join(max(0.0, process_stop_grace))
                         if process.is_alive() and hasattr(process, "kill"):
                             process.kill()
                     process.join()
@@ -1020,9 +1095,11 @@ class BackgroundAgentManager:
             finally:
                 # Publish the terminal transition before making execution
                 # capacity available.  The event projection can therefore
-                # never report more running tasks than the semaphore admits.
+                # never report more running tasks than the parent epoch admits.
                 if acquired:
-                    self._slots.release()
+                    with self._capacity_condition:
+                        self._active_jobs -= 1
+                        self._capacity_condition.notify_all()
                 done_event.set()
 
         thread = threading.Thread(
