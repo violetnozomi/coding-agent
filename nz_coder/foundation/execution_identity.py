@@ -105,9 +105,7 @@ def resolve_execution_identity(
             argv, run_cwd, flag="-jar", kind="java-jar",
         )
     elif stem == "dotnet":
-        kind, entrypoint, semantics = _script_entrypoint(
-            argv, run_cwd, kind="dotnet-assembly", inline_flags=set(),
-        )
+        kind, entrypoint, semantics = _dotnet_entrypoint(argv, run_cwd)
 
     payloads = _explicit_payloads(argv, run_cwd, stem)
     if entrypoint is not None and entrypoint not in payloads:
@@ -120,7 +118,7 @@ def resolve_execution_identity(
     cwd_identity = _directory_identity(run_cwd)
     workspace_controlled = any(
         _inside(candidate, root)
-        for candidate in (executable, entrypoint)
+        for candidate in (executable, entrypoint, *payloads)
         if candidate is not None
     )
     payload = {
@@ -313,6 +311,36 @@ def _flagged_entrypoint(
     return kind, path, (flag, str(path), *args[index + 2:])
 
 
+def _dotnet_entrypoint(
+    argv: tuple[str, ...], cwd: Path,
+) -> tuple[str, Path, tuple[str, ...]]:
+    args = argv[1:]
+    index = 1 if args and args[0] == "exec" else 0
+    value_options = {
+        "--additional-deps", "--additionalprobingpath", "--depsfile",
+        "--fx-version", "--roll-forward", "--runtimeconfig",
+    }
+    flag_options = {"--disable-diagnostic-port", "--additionalprobingpath"}
+    while index < len(args):
+        value = args[index]
+        if value in value_options:
+            index = _consume_option(args, index, value)
+            continue
+        if any(value.startswith(f"{option}=") for option in value_options):
+            index += 1
+            continue
+        if value in flag_options:
+            index += 1
+            continue
+        if value.startswith("-"):
+            raise UnsafeExecutionIdentity(f"unsupported dotnet option: {value}")
+        path = _resolve_payload_path(value, cwd)
+        if path.suffix.lower() != ".dll":
+            raise UnsafeExecutionIdentity("dotnet command has no stable assembly payload")
+        return "dotnet-assembly", path, ("assembly", str(path), *args[index + 1:])
+    raise UnsafeExecutionIdentity("dotnet command has no stable assembly payload")
+
+
 def _consume_option(args: tuple[str, ...], index: int, option: str) -> int:
     if index + 1 >= len(args):
         raise UnsafeExecutionIdentity(f"{option} requires an argument")
@@ -399,8 +427,14 @@ def _resolve_payload_path(value: str, cwd: Path) -> Path:
     candidate = Path(value).expanduser()
     lexical = candidate if candidate.is_absolute() else cwd / candidate
     try:
-        if lexical.is_symlink():
-            raise UnsafeExecutionIdentity("execution payload symlink is not allowed")
+        cursor = lexical
+        boundary = cwd.resolve()
+        while cursor != cursor.parent:
+            if cursor.is_symlink():
+                raise UnsafeExecutionIdentity("execution payload symlink is not allowed")
+            if cursor == boundary:
+                break
+            cursor = cursor.parent
         resolved = lexical.resolve(strict=True)
     except FileNotFoundError as exc:
         raise UnsafeExecutionIdentity("execution payload cannot be located") from exc
