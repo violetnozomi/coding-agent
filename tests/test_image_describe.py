@@ -387,6 +387,25 @@ def test_image_provider_empty_specific_key_uses_target_run_credential(tmp_path):
     assert descriptor.connection.credential_source == "environment"
 
 
+def test_image_provider_does_not_use_startup_workspace_credential(
+    tmp_path, monkeypatch,
+):
+    from nz_coder.foundation import config
+
+    workspace = tmp_path / "target"
+    workspace.mkdir()
+    monkeypatch.setattr(config, "API_KEY", "STARTUP-WORKSPACE-SECRET")
+    descriptor = ProviderImageDescriber.configured(run_settings=_image_settings(
+        tmp_path, workspace, {
+            "API_KEY": "TARGET-RUN-SECRET",
+            "NZ_IMAGE_DESCRIBE_MODEL": "vision",
+        },
+    ))
+
+    assert descriptor.connection.api_key == "TARGET-RUN-SECRET"
+    assert "STARTUP-WORKSPACE-SECRET" not in repr(descriptor.connection)
+
+
 def test_image_provider_endpoint_does_not_bleed_between_workspaces(tmp_path):
     first_workspace = tmp_path / "a"
     second_workspace = tmp_path / "b"
@@ -416,7 +435,7 @@ def test_image_provider_endpoint_does_not_bleed_between_workspaces(tmp_path):
     assert first.runtime_identity != second.runtime_identity
 
 
-def test_image_runtime_rotates_after_specific_key_change(tmp_path):
+def test_image_runtime_rotates_after_key_change(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     first = ProviderImageDescriber.configured(run_settings=_image_settings(
@@ -436,6 +455,27 @@ def test_image_runtime_rotates_after_specific_key_change(tmp_path):
 
     assert first.runtime_identity != second.runtime_identity
     assert "IMAGE-A" not in repr(first.connection)
+
+
+def test_image_runtime_rotates_after_endpoint_change(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    first = ProviderImageDescriber.configured(run_settings=_image_settings(
+        tmp_path, workspace, {
+            "API_KEY": "shared",
+            "NZ_IMAGE_DESCRIBE_BASE_URL": "https://image-a.invalid/v1",
+            "NZ_IMAGE_DESCRIBE_MODEL": "vision",
+        },
+    ))
+    second = ProviderImageDescriber.configured(run_settings=_image_settings(
+        tmp_path, workspace, {
+            "API_KEY": "shared",
+            "NZ_IMAGE_DESCRIBE_BASE_URL": "https://image-b.invalid/v1",
+            "NZ_IMAGE_DESCRIBE_MODEL": "vision",
+        },
+    ))
+
+    assert first.runtime_identity != second.runtime_identity
 
 
 def test_image_workspace_endpoint_requires_credential_delegation(tmp_path):
@@ -467,12 +507,42 @@ def test_image_workspace_endpoint_requires_credential_delegation(tmp_path):
         )
 
 
-def test_image_provider_construction_failure_closes_created_provider(monkeypatch):
+def test_image_official_endpoint_does_not_require_extra_delegation(tmp_path):
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+    from nz_coder.runtime.core.run_settings import RunSettings
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".env").write_text(
+        "NZ_IMAGE_DESCRIBE_BASE_URL=https://api.deepseek.com\n",
+        encoding="utf-8",
+    )
+    trust = WorkspaceTrustStore(tmp_path / "trust.json")
+    pending = load_config_snapshot(
+        workspace, environ={"API_KEY": "OWNER-SECRET"}, trust_store=trust,
+    )
+    trust.trust(workspace, "workspace-config", pending.workspace_fingerprint)
+    snapshot = load_config_snapshot(
+        workspace, environ={"API_KEY": "OWNER-SECRET"}, trust_store=trust,
+    )
+
+    descriptor = ProviderImageDescriber.configured(
+        run_settings=RunSettings.from_snapshot(snapshot),
+    )
+
+    assert descriptor.connection.base_url == "https://api.deepseek.com"
+
+
+def test_image_provider_cleanup_failure_does_not_mask_primary_result(monkeypatch):
     closed = []
 
     class Provider:
         def close(self):
             closed.append(True)
+            raise RuntimeError("secondary cleanup failure")
 
     monkeypatch.setattr(
         "nz_coder.capabilities.vision.create_provider", lambda *_args, **_kwargs: Provider(),
