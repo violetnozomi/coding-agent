@@ -10,6 +10,8 @@ import shutil
 import sys
 from typing import Iterable
 
+from nz_coder.foundation.secret_values import secret_str
+
 
 class UnsafeExecutionIdentity(ValueError):
     """Raised when a command cannot be identified safely and deterministically."""
@@ -40,6 +42,15 @@ class ExecutionIdentity:
     workspace: Path
     workspace_controlled: bool
     fingerprint: str
+
+    def __post_init__(self) -> None:
+        """Keep argv executable while redacting generic diagnostic projections."""
+        object.__setattr__(self, "command", tuple(secret_str(value) for value in self.command))
+        object.__setattr__(
+            self,
+            "argv_semantics",
+            tuple(secret_str(value) for value in self.argv_semantics),
+        )
 
     def __repr__(self) -> str:
         return (

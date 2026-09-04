@@ -1,6 +1,8 @@
 """Configuration-source and executable-payload identity security contracts."""
 from __future__ import annotations
 
+from dataclasses import asdict
+
 import json
 import os
 from pathlib import Path
@@ -368,3 +370,139 @@ def test_execution_identity_repr_hides_command_arguments(tmp_path, monkeypatch):
     )
 
     assert secret not in repr(identity)
+    projected = asdict(identity)
+    assert secret not in repr(projected)
+    assert projected["command"][-1] == "<redacted>"
+
+
+def _resolve_test_identity(tmp_path, monkeypatch, command):
+    from nz_coder.foundation.execution_identity import resolve_execution_identity
+
+    monkeypatch.setattr(
+        "nz_coder.foundation.execution_identity.shutil.which",
+        lambda name: f"/usr/bin/{name}",
+    )
+    return resolve_execution_identity(
+        command, cwd=tmp_path, workspace=tmp_path,
+        config_source="project", environment_profile="strict-service",
+    )
+
+
+def test_python_warning_option_still_hashes_script(tmp_path, monkeypatch):
+    script = tmp_path / "server.py"
+    _write_server(script, "warning")
+    identity = _resolve_test_identity(
+        tmp_path, monkeypatch, ("python", "-W", "ignore", "server.py"),
+    )
+    assert identity.entrypoint_path == script.resolve()
+
+
+def test_python_x_option_still_hashes_script(tmp_path, monkeypatch):
+    script = tmp_path / "server.py"
+    _write_server(script, "x-option")
+    identity = _resolve_test_identity(
+        tmp_path, monkeypatch, ("python", "-X", "utf8", "server.py"),
+    )
+    assert identity.entrypoint_path == script.resolve()
+
+
+@pytest.mark.parametrize(
+    ("flag", "hook_name"),
+    [("--require", "preload.js"), ("--loader", "loader.js")],
+)
+def test_node_explicit_hook_hashes_hook_and_main(
+    tmp_path, monkeypatch, flag, hook_name,
+):
+    hook = tmp_path / hook_name
+    main = tmp_path / "main.js"
+    _write_server(hook, "hook-one")
+    _write_server(main, "main")
+    first = _resolve_test_identity(
+        tmp_path, monkeypatch, ("node", flag, hook_name, "main.js"),
+    )
+    _write_server(hook, "hook-two")
+    second = _resolve_test_identity(
+        tmp_path, monkeypatch, ("node", flag, hook_name, "main.js"),
+    )
+    assert second.fingerprint != first.fingerprint
+
+
+def test_node_require_hashes_preload_and_main(tmp_path, monkeypatch):
+    test_node_explicit_hook_hashes_hook_and_main(
+        tmp_path, monkeypatch, "--require", "preload.js",
+    )
+
+
+def test_node_loader_hashes_loader_and_main(tmp_path, monkeypatch):
+    test_node_explicit_hook_hashes_hook_and_main(
+        tmp_path, monkeypatch, "--loader", "loader.js",
+    )
+
+
+def test_shell_option_argument_is_not_treated_as_script(tmp_path, monkeypatch):
+    script = tmp_path / "server.sh"
+    _write_server(script, "shell")
+    identity = _resolve_test_identity(
+        tmp_path, monkeypatch, ("bash", "-O", "extglob", "server.sh"),
+    )
+    assert identity.entrypoint_path == script.resolve()
+
+
+def test_powershell_execution_policy_still_hashes_file(tmp_path, monkeypatch):
+    script = tmp_path / "server.ps1"
+    _write_server(script, "powershell")
+    identity = _resolve_test_identity(
+        tmp_path, monkeypatch,
+        ("pwsh", "-ExecutionPolicy", "Bypass", "-File", "server.ps1"),
+    )
+    assert identity.entrypoint_path == script.resolve()
+
+
+def test_payload_change_invalidates_fingerprint(tmp_path, monkeypatch):
+    script = tmp_path / "server.py"
+    _write_server(script, "one")
+    first = _resolve_test_identity(tmp_path, monkeypatch, ("python", "server.py"))
+    _write_server(script, "two")
+    second = _resolve_test_identity(tmp_path, monkeypatch, ("python", "server.py"))
+    assert second.fingerprint != first.fingerprint
+
+
+def test_preload_change_invalidates_fingerprint(tmp_path, monkeypatch):
+    test_node_explicit_hook_hashes_hook_and_main(
+        tmp_path, monkeypatch, "--require", "preload.js",
+    )
+
+
+def test_ambiguous_interpreter_command_fails_closed(tmp_path, monkeypatch):
+    from nz_coder.foundation.execution_identity import UnsafeExecutionIdentity
+
+    with pytest.raises(UnsafeExecutionIdentity):
+        _resolve_test_identity(tmp_path, monkeypatch, ("java", "com.example.Main"))
+
+
+def test_execution_identity_file_budget(tmp_path, monkeypatch):
+    from nz_coder.foundation.execution_identity import UnsafeExecutionIdentity
+
+    script = tmp_path / "server.py"
+    script.write_bytes(b"12345")
+    monkeypatch.setattr(
+        "nz_coder.foundation.execution_identity._MAX_SINGLE_PAYLOAD_BYTES", 4,
+    )
+    with pytest.raises(UnsafeExecutionIdentity, match="budget"):
+        _resolve_test_identity(tmp_path, monkeypatch, ("python", "server.py"))
+
+
+def test_execution_identity_package_file_count_budget(tmp_path, monkeypatch):
+    from nz_coder.foundation.execution_identity import UnsafeExecutionIdentity
+
+    package = tmp_path / "server_package"
+    package.mkdir()
+    _write_server(package / "__main__.py", "main")
+    _write_server(package / "extra.py", "extra")
+    monkeypatch.setattr(
+        "nz_coder.foundation.execution_identity._MAX_PAYLOAD_FILES", 1,
+    )
+    with pytest.raises(UnsafeExecutionIdentity, match="file budget"):
+        _resolve_test_identity(
+            tmp_path, monkeypatch, ("python", "-m", "server_package"),
+        )

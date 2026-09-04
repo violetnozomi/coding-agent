@@ -10,6 +10,7 @@ import threading
 import uuid
 
 from nz_coder.foundation import config
+from nz_coder.foundation.secret_values import secret_str
 from nz_coder.foundation.workspace_trust import (
     ConfigSource,
     ConfigValidationError,
@@ -41,6 +42,10 @@ class ProviderConnection:
     credential_scope_id: str
     credential_source: str
     endpoint_source: str
+
+    def __post_init__(self) -> None:
+        """Redact the credential in generic dataclass diagnostic projections."""
+        object.__setattr__(self, "api_key", secret_str(self.api_key))
 
     @property
     def configured(self) -> bool:

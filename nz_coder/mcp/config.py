@@ -16,6 +16,7 @@ from nz_coder.foundation.execution_identity import (
     ExecutionIdentity,
     resolve_execution_identity,
 )
+from nz_coder.foundation.secret_values import secret_str
 from nz_coder.foundation.workspace_trust import default_user_config_path
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.mcp.trust import MCPTrustStore
@@ -104,6 +105,15 @@ class MCPServerConfig:
     trusted: bool = True
     fingerprint: str = ""
     execution_identity: ExecutionIdentity | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        """Protect inline credential values in generic dataclass diagnostics."""
+        object.__setattr__(self, "environment", tuple(
+            (str(name), secret_str(value)) for name, value in self.environment
+        ))
+        object.__setattr__(self, "headers", tuple(
+            (str(name), secret_str(value)) for name, value in self.headers
+        ))
 
     def environment_dict(self) -> dict[str, str]:
         return dict(self.environment)

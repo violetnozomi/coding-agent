@@ -10,6 +10,7 @@ from nz_coder.foundation.run_context import (
     bind_run_settings_object,
     reset_run_settings_object,
 )
+from nz_coder.foundation.secret_values import secret_str
 from nz_coder.foundation.workspace_trust import ConfigSnapshot
 
 
@@ -138,6 +139,10 @@ class RunSettings:
     auto_mode_classifier_infra_failures: int
     auto_mode_classifier_infra_window: float
     snapshot: ConfigSnapshot | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        """Keep credential text usable while making dataclass projections safe."""
+        object.__setattr__(self, "image_api_key", secret_str(self.image_api_key))
 
     @classmethod
     def from_snapshot(cls, snapshot: ConfigSnapshot) -> "RunSettings":
