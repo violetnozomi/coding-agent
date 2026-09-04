@@ -81,6 +81,32 @@ def test_private_lock_rejects_parent_symlink(tmp_path):
     assert not (outside / "state.lock").exists()
 
 
+def test_windows_optional_file_probe_allows_final_target_to_be_missing(
+    tmp_path, monkeypatch,
+):
+    """Creating a new file is not confused with an unsafe Windows parent."""
+    from pathlib import Path
+
+    import nz_coder.foundation.project_control as control
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
+    workspace = tmp_path / "workspace"
+    (workspace / "My Project (a)[b]#").mkdir(parents=True)
+    access = WorkspaceFileAccess(workspace)
+    opened: list[tuple[str, bool, bool]] = []
+    next_handle = iter(range(10, 20))
+
+    def fake_open(path, *, directory, missing_ok=False, parent=None):
+        opened.append((str(path), directory, missing_ok))
+        return None if missing_ok else next(next_handle)
+
+    monkeypatch.setattr(control, "_windows_open", fake_open)
+    monkeypatch.setattr(control, "_windows_close", lambda _handle: None)
+
+    assert access._exists_windows(Path("My Project (a)[b]#") / "main.py") is False
+    assert opened[-1][1:] == (False, True)
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows reparse-point contract")
 def test_private_lock_rejects_windows_reparse_parent(tmp_path, monkeypatch):
     """Windows private locks consult the reparse-point guard."""

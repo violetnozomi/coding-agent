@@ -92,11 +92,54 @@ class WorkspaceFileAccess:
             os.close(parent)
 
     def exists(self, path: str) -> bool:
+        relative = self._relative(path, write=False)
+        if os.name == "nt":
+            return self._exists_windows(relative)
         try:
             self.stat(path)
         except FileNotFoundError:
             return False
         return True
+
+    def _exists_windows(self, relative: Path) -> bool:
+        """Probe an optional file while retaining the verified Windows parent chain."""
+        from nz_coder.foundation.project_control import (
+            UnsafeProjectControl,
+            _windows_close,
+            _windows_handle_info,
+            _windows_open,
+        )
+
+        handles: list[int] = []
+        try:
+            parent = _windows_open(self.root, directory=True)
+            assert parent is not None
+            handles.append(parent)
+            cursor = self.root
+            for part in relative.parts[:-1]:
+                cursor = cursor / part
+                child = _windows_open(cursor, directory=True, parent=parent)
+                assert child is not None
+                handles.append(child)
+                parent = child
+            target = _windows_open(
+                cursor / relative.name,
+                directory=False,
+                missing_ok=True,
+                parent=parent,
+            )
+            if target is None:
+                return False
+            handles.append(target)
+            attributes, _device, _inode, _size = _windows_handle_info(
+                target, full=True,
+            )
+            return not bool(attributes & 0x00000010)
+        except UnsafeProjectControl as exc:
+            raise ValueError("Workspace file boundary is unsafe") from exc
+        finally:
+            for handle in reversed(handles):
+                _windows_close(handle)
 
     def write_text(
         self,
