@@ -12,7 +12,7 @@ class _FakeClient:
         self.opened: list[Path] = []
         self.requests: list[tuple[str, dict[str, str]]] = []
 
-    def open_document(self, path: Path) -> int:
+    def open_document(self, path: Path, text: str, source_identity) -> int:
         self.opened.append(path)
         return 0
 

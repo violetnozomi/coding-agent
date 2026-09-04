@@ -86,13 +86,18 @@ def collect_write_diagnostics(paths: Iterable[str], workspace: Path) -> str:
 
     for relative, target in targets:
         try:
+            from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
             client = get_client_for_file(target, workspace)
             if client is None:
                 continue
             if not target.is_file():
                 client.close_document(target)
                 continue
-            diagnostics = client.diagnostics(target)
+            text, identity = WorkspaceFileAccess(workspace).read_text_with_identity(
+                relative, errors="replace",
+            )
+            diagnostics = client.diagnostics(target, text, identity)
         except Exception:
             continue
         for item in diagnostics:

@@ -19,6 +19,7 @@ from nz_coder.foundation.execution_identity import (
     UnsafeExecutionIdentity,
     verify_execution_identity,
 )
+from nz_coder.foundation.workspace_file_access import WorkspaceFileIdentity
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
@@ -125,7 +126,7 @@ class LSPClient:
         self._pending: dict[int, queue.Queue] = {}
         self._next_id = 1
         self._closed = False
-        self._documents: dict[Path, tuple[int, str]] = {}
+        self._documents: dict[Path, tuple[int, str, WorkspaceFileIdentity]] = {}
         self._diagnostics: dict[str, list[dict[str, Any]]] = {}
         self._diagnostic_events: dict[str, threading.Event] = {}
         self._stderr = deque(maxlen=20)
@@ -275,11 +276,22 @@ class LSPClient:
             "params": params or {},
         })
 
-    def open_document(self, path: Path) -> int:
-        """Open or refresh a document using full-content synchronization."""
-        target = path.resolve()
-        text = target.read_text(encoding="utf-8", errors="replace")
-        uri = path_to_uri(target)
+    def open_document(
+        self,
+        path: Path,
+        text: str,
+        source_identity: WorkspaceFileIdentity,
+    ) -> int:
+        """Open fixed, handle-anchored content supplied by the workspace boundary."""
+        target = path if path.is_absolute() else self.root / path
+        try:
+            relative = target.relative_to(self.root)
+        except ValueError as exc:
+            raise LSPError("LSP document is outside the workspace") from exc
+        if any(part in {"", ".", ".."} for part in relative.parts):
+            raise LSPError("LSP document path is invalid")
+        target = self.root / relative
+        uri = target.as_uri()
         existing = self._documents.get(target)
         if existing is None:
             version = 0
@@ -300,16 +312,21 @@ class LSPClient:
                 "textDocument": {"uri": uri, "version": version},
                 "contentChanges": [{"text": text}],
             })
-        self._documents[target] = (version, text)
+        self._documents[target] = (version, text, source_identity)
         return version
 
-    def diagnostics(self, path: Path) -> list[dict[str, Any]]:
-        """Return pull or published diagnostics for one document."""
-        target = path.resolve()
-        uri = path_to_uri(target)
+    def diagnostics(
+        self,
+        path: Path,
+        text: str,
+        source_identity: WorkspaceFileIdentity,
+    ) -> list[dict[str, Any]]:
+        """Return diagnostics for exactly the supplied anchored document bytes."""
+        target = path if path.is_absolute() else self.root / path
+        uri = target.as_uri()
         event = self._diagnostic_events.setdefault(uri, threading.Event())
         event.clear()
-        self.open_document(target)
+        self.open_document(target, text, source_identity)
         try:
             report = self.request(
                 "textDocument/diagnostic",

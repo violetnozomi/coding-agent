@@ -578,3 +578,60 @@ def test_write_diagnostics_silently_skip_missing_server(tmp_path, monkeypatch):
         assert collect_write_diagnostics(["app.py"], tmp_path) == ""
     finally:
         close_all_clients()
+
+
+def test_lsp_open_document_uses_anchored_source_bytes(tmp_path):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.lsp.client import LSPClient
+
+    source = tmp_path / "source.py"
+    source.write_text("anchored = 1\n", encoding="utf-8")
+    text, identity = WorkspaceFileAccess(tmp_path).read_text_with_identity("source.py")
+    source.write_text("swapped = 2\n", encoding="utf-8")
+    sent = []
+    client = object.__new__(LSPClient)
+    client.root = tmp_path.resolve()
+    client.language_id = "python"
+    client._documents = {}
+    client.notify = lambda method, params: sent.append((method, params))
+
+    client.open_document(source, text, identity)
+
+    assert sent[0][1]["textDocument"]["text"] == "anchored = 1\n"
+
+
+def test_lsp_diagnostics_does_not_reread_source_path(tmp_path):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.lsp.client import LSPClient, LSPResponseError
+
+    source = tmp_path / "source.py"
+    source.write_text("anchored = 1\n", encoding="utf-8")
+    text, identity = WorkspaceFileAccess(tmp_path).read_text_with_identity("source.py")
+    client = object.__new__(LSPClient)
+    client.root = tmp_path.resolve()
+    client.language_id = "python"
+    client._documents = {}
+    client._diagnostics = {}
+    client._diagnostic_events = {}
+    client.diagnostic_wait = 0
+    client.notify = lambda *_args, **_kwargs: None
+    client.request = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        LSPResponseError({"code": -1}),
+    )
+    source.unlink()
+
+    assert client.diagnostics(source, text, identity) == []
+
+
+def test_lsp_outside_and_private_uris_are_redacted(tmp_path):
+    from nz_coder.tools.lsp import _normalize_result
+
+    private = tmp_path / ".nz-coder" / "secret.py"
+    outside = tmp_path.parent / "host-secret.py"
+
+    assert _normalize_result({"uri": private.as_uri()}, tmp_path)["path"] == (
+        "private-workspace"
+    )
+    assert _normalize_result({"targetUri": outside.as_uri()}, tmp_path)[
+        "targetPath"
+    ] == "outside-workspace"

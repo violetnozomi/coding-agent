@@ -110,7 +110,13 @@ def warm_lsp(path: Path, workspace: Path) -> None:
                     raise
                 client = get_client_for_file(key[0], key[1])
             if client is not None:
-                client.open_document(key[0])
+                from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
+                relative = key[0].relative_to(key[1]).as_posix()
+                text, identity = WorkspaceFileAccess(key[1]).read_text_with_identity(
+                    relative, errors="replace",
+                )
+                client.open_document(key[0], text, identity)
         except Exception:
             pass
         finally:

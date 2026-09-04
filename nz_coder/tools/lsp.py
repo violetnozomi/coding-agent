@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.lsp import (
     LSPError,
     available_server_summary,
@@ -56,18 +57,28 @@ def _normalize_result(value: Any, workspace: Path) -> Any:
         path = uri_to_path(uri)
         if path is not None:
             try:
-                normalized["path"] = str(path.resolve().relative_to(workspace))
+                relative = path.resolve().relative_to(workspace)
+                normalized["path"] = (
+                    relative.as_posix()
+                    if WorkspacePathPolicy(workspace).is_model_visible(path)
+                    else "private-workspace"
+                )
             except ValueError:
-                normalized["path"] = str(path.resolve())
+                normalized["path"] = "outside-workspace"
             normalized.pop("uri", None)
     target_uri = normalized.get("targetUri")
     if isinstance(target_uri, str):
         path = uri_to_path(target_uri)
         if path is not None:
             try:
-                normalized["targetPath"] = str(path.resolve().relative_to(workspace))
+                relative = path.resolve().relative_to(workspace)
+                normalized["targetPath"] = (
+                    relative.as_posix()
+                    if WorkspacePathPolicy(workspace).is_model_visible(path)
+                    else "private-workspace"
+                )
             except ValueError:
-                normalized["targetPath"] = str(path.resolve())
+                normalized["targetPath"] = "outside-workspace"
             normalized.pop("targetUri", None)
     return normalized
 
@@ -79,6 +90,8 @@ def _request_for_operation(
     line: int,
     character: int,
     query: str,
+    source_text: str,
+    source_identity,
 ) -> Any:
     uri = path_to_uri(target)
     position = _position(line, character)
@@ -130,7 +143,7 @@ def _request_for_operation(
         )
         return client.request(method, {"item": items[0]})
     if operation == "diagnostics":
-        return client.diagnostics(target)
+        return client.diagnostics(target, source_text, source_identity)
     raise ValueError(f"Unsupported LSP operation: {operation}")
 
 
@@ -150,6 +163,10 @@ def lsp(
         if not target.is_file():
             return f"Error: File not found: {file_path}"
         workspace = current_workdir().resolve()
+        relative = target.relative_to(workspace).as_posix()
+        source_text, source_identity = WorkspaceFileAccess(
+            workspace,
+        ).read_text_with_identity(relative, errors="replace")
         from nz_coder.foundation.workspace_trust import (
             active_config_snapshot,
             current_config_snapshot,
@@ -176,7 +193,7 @@ def lsp(
                 return f"Error: LSP server failed to initialize: {startup_error}"
             return "Error: " + available_server_summary(target)
         if operation != "diagnostics":
-            client.open_document(target)
+            client.open_document(target, source_text, source_identity)
         result = _request_for_operation(
             client,
             operation,
@@ -184,6 +201,8 @@ def lsp(
             line,
             character,
             query,
+            source_text,
+            source_identity,
         )
         normalized = _normalize_result(result, workspace)
         if normalized in (None, [], {}):
