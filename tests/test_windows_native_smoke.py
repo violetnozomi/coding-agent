@@ -223,6 +223,78 @@ def test_windows_model_file_junction_swap_fails_closed(tmp_path: Path, monkeypat
     assert "secret.txt" not in str(listing)
 
 
+def test_windows_instruction_junction_is_rejected(tmp_path: Path):
+    from nz_coder.runtime.process.platform_runtime import decode_process_output
+    from nz_coder.state.instructions import delete_instruction_file, list_instruction_files
+
+    project = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    project.mkdir()
+    outside.mkdir()
+    sentinel = outside / "sentinel.txt"
+    sentinel.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    link = project / "AGENTS.md"
+    environment = os.environ.copy()
+    environment["NZ_RC_LINK"] = str(link)
+    environment["NZ_RC_TARGET"] = str(outside)
+    completed = subprocess.run(
+        [
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+            "$null=New-Item -ItemType Junction -Path $env:NZ_RC_LINK -Target $env:NZ_RC_TARGET",
+        ],
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    assert completed.returncode == 0, decode_process_output(completed.stdout)
+
+    listed = list_instruction_files(project)
+    assert listed.files == ()
+    assert listed.warnings
+    with pytest.raises(ValueError):
+        delete_instruction_file(project, "project", "AGENTS.md")
+    assert sentinel.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+
+
+def test_windows_directory_limit_stops_scandir_early(tmp_path: Path, monkeypatch):
+    import nz_coder.foundation.workspace_file_access as workspace_access
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.protocol.public_error import PublicInputError
+
+    for index in range(20):
+        (tmp_path / f"file-{index:02}.txt").write_text("x", encoding="utf-8")
+    real_scandir = workspace_access.os.scandir
+    consumed = 0
+
+    class CountingScandir:
+        def __init__(self, target):
+            self._iterator = real_scandir(target)
+
+        def __enter__(self):
+            self._iterator.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._iterator.__exit__(*args)
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            nonlocal consumed
+            item = next(self._iterator)
+            consumed += 1
+            return item
+
+    monkeypatch.setattr(workspace_access.os, "scandir", CountingScandir)
+    with pytest.raises(PublicInputError, match="entry limit"):
+        WorkspaceFileAccess(tmp_path).walk_directory(
+            ".", max_depth=1, maximum_entries=2,
+        )
+    assert consumed == 3
+
+
 def test_persistent_process_and_conpty_repl_and_ctrl_c(tmp_path):
     from nz_coder.runtime.process.process_service import ProcessService
     service = ProcessService(tmp_path, kill_grace_seconds=0.1)

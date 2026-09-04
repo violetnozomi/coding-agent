@@ -2130,6 +2130,36 @@ def test_http_instruction_file_control_plane_closes_runtime_loop(tmp_path):
         thread.join(timeout=2)
 
 
+def test_http_instruction_delete_keeps_symlink_target_unchanged(tmp_path):
+    project = tmp_path / "instructions-project"
+    outside = tmp_path / "outside.md"
+    project.mkdir()
+    outside.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    (project / "AGENTS.md").symlink_to(outside)
+    manager = SessionManager(
+        agent_factory=_fake_factory,
+        workspace_roots=[project],
+        restore_saved=False,
+    )
+    service = SessionHTTPService(
+        port=0,
+        token="test-token-1234567890",
+        manager=manager,
+    )
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = NZCoderClient(service.base_url, service.token, timeout=2)
+        workspace_id = manager.workspaces.id_for(project)
+        with pytest.raises(NZCoderHTTPError):
+            client.delete_instruction_file("project", "AGENTS.md", workspace_id)
+    finally:
+        service.shutdown()
+        thread.join(timeout=2)
+
+    assert outside.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+
+
 def test_http_different_workspaces_run_concurrently(tmp_path):
     first = tmp_path / "first"
     second = tmp_path / "second"

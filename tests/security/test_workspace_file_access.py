@@ -7,6 +7,54 @@ from pathlib import Path
 import pytest
 
 
+def _assert_directory_scan_stops_at_limit(tmp_path, monkeypatch):
+    import nz_coder.foundation.workspace_file_access as workspace_access
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.protocol.public_error import PublicInputError
+
+    for index in range(20):
+        (tmp_path / f"file-{index:02}.txt").write_text("x", encoding="utf-8")
+    real_scandir = workspace_access.os.scandir
+    consumed = 0
+
+    class CountingScandir:
+        def __init__(self, target):
+            self._iterator = real_scandir(target)
+
+        def __enter__(self):
+            self._iterator.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._iterator.__exit__(*args)
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            nonlocal consumed
+            item = next(self._iterator)
+            consumed += 1
+            return item
+
+    monkeypatch.setattr(workspace_access.os, "scandir", CountingScandir)
+    with pytest.raises(PublicInputError, match="entry limit"):
+        WorkspaceFileAccess(tmp_path).walk_directory(
+            ".", max_depth=1, maximum_entries=2,
+        )
+    assert consumed == 3
+
+
+def test_directory_limit_stops_enumeration_early(tmp_path, monkeypatch):
+    _assert_directory_scan_stops_at_limit(tmp_path, monkeypatch)
+
+
+def test_directory_listing_does_not_materialize_unbounded_entries(
+    tmp_path, monkeypatch,
+):
+    _assert_directory_scan_stops_at_limit(tmp_path, monkeypatch)
+
+
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="POSIX swap harness")
 
 

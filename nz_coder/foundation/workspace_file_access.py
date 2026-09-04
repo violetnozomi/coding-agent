@@ -313,9 +313,9 @@ class WorkspaceFileAccess:
                     if written <= 0:
                         raise OSError("workspace write made no progress")
                     view = view[written:]
-                os.fsync(descriptor)
                 if current.expected_exists:
                     os.fchmod(descriptor, stat.S_IMODE(current_mode))
+                os.fsync(descriptor)
             finally:
                 os.close(descriptor)
             if overwrite:
@@ -883,7 +883,12 @@ class FixedFileAccess(WorkspaceFileAccess):
     """Anchored access restricted to an explicit host-owned relative allowlist."""
 
     def __init__(self, root: Path | str, allowed: tuple[str, ...]):
-        super().__init__(root)
+        lexical = Path(root).expanduser().absolute()
+        super().__init__(lexical)
+        if os.path.normcase(os.path.normpath(str(self.root))) != os.path.normcase(
+            os.path.normpath(str(lexical))
+        ):
+            raise ValueError("Fixed file root contains a redirected path component")
         self._allowed = frozenset(Path(item).as_posix() for item in allowed)
 
     def display_path(self, path: str, *, write: bool = False) -> Path:

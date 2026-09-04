@@ -8,6 +8,7 @@ context, while recalled memories are fallible background notes.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import threading
@@ -178,13 +179,87 @@ def _instruction_access(
     is_junction = getattr(root, "is_junction", lambda: False)
     if root.is_symlink() or is_junction():
         raise ValueError("Instruction control root is unsafe")
-    if create_root:
+    if selected_scope == "global":
+        available = _ensure_global_instruction_root(
+            root.parents[1], create=create_root,
+        )
+        if not available:
+            return None, "", "", root
+    elif create_root:
         root.mkdir(parents=True, exist_ok=True)
     if not root.is_dir():
         return None, "", "", root
     state = _STATE_FILENAME if selected_scope == "global" else f".nz-coder/{_STATE_FILENAME}"
     allowed = (*INSTRUCTION_FILENAMES, state)
     return FixedFileAccess(root, allowed), state, selected_scope, root
+
+
+def _ensure_global_instruction_root(home: Path, *, create: bool) -> bool:
+    """Reach ``~/.config/nz-coder`` without following redirected components."""
+    parts = (".config", "nz-coder")
+    if not home.exists():
+        if not create:
+            return False
+        home.mkdir(parents=True, mode=0o700)
+    if home.is_symlink() or not home.is_dir():
+        raise ValueError("Instruction control root is unsafe")
+    if os.name == "nt":
+        from nz_coder.foundation.project_control import (
+            UnsafeProjectControl,
+            _windows_close,
+            _windows_open,
+        )
+
+        handles: list[int] = []
+        try:
+            parent = _windows_open(home, directory=True)
+            assert parent is not None
+            handles.append(parent)
+            cursor = home
+            for part in parts:
+                cursor /= part
+                try:
+                    child = _windows_open(
+                        cursor, directory=True, missing_ok=not create, parent=parent,
+                    )
+                except FileNotFoundError:
+                    child = None
+                if child is None:
+                    if not create:
+                        return False
+                    cursor.mkdir(mode=0o700)
+                    child = _windows_open(cursor, directory=True, parent=parent)
+                assert child is not None
+                handles.append(child)
+                parent = child
+            return True
+        except (OSError, UnsafeProjectControl) as exc:
+            raise ValueError("Instruction control root is unsafe") from exc
+        finally:
+            for handle in reversed(handles):
+                _windows_close(handle)
+
+    flags = (
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    )
+    descriptor = os.open(home, flags)
+    try:
+        for part in parts:
+            try:
+                child = os.open(part, flags, dir_fd=descriptor)
+            except FileNotFoundError:
+                if not create:
+                    return False
+                os.mkdir(part, 0o700, dir_fd=descriptor)
+                child = os.open(part, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        return True
+    except OSError as exc:
+        raise ValueError("Instruction control root is unsafe") from exc
+    finally:
+        os.close(descriptor)
 
 
 def _read_enabled_state(

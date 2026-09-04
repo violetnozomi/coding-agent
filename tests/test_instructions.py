@@ -362,3 +362,88 @@ def test_instruction_global_root_symlink_is_rejected(tmp_path):
         create_instruction_file(project, "global", home=home)
 
     assert sentinel.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+
+
+def test_instruction_global_parent_symlink_is_rejected_without_creation(tmp_path):
+    home = tmp_path / "home"
+    outside = tmp_path / "outside"
+    home.mkdir()
+    outside.mkdir()
+    (home / ".config").symlink_to(outside, target_is_directory=True)
+    project = tmp_path / "project"
+    project.mkdir()
+
+    with pytest.raises(ValueError, match="unsafe|redirected"):
+        create_instruction_file(project, "global", home=home)
+
+    assert not (outside / "nz-coder").exists()
+
+
+def test_instruction_parent_swap_during_delete_fails_closed(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_file_access import FixedFileAccess
+
+    project = tmp_path / "project"
+    outside = tmp_path / "outside"
+    parked = tmp_path / "project-original"
+    project.mkdir()
+    outside.mkdir()
+    (project / "AGENTS.md").write_text("inside\n", encoding="utf-8")
+    sentinel = outside / "AGENTS.md"
+    sentinel.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    original = FixedFileAccess.read_text_with_identity
+    swapped = False
+
+    def read_then_swap(self, path, **kwargs):
+        nonlocal swapped
+        result = original(self, path, **kwargs)
+        if path == "AGENTS.md" and not swapped:
+            swapped = True
+            project.rename(parked)
+            project.symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(FixedFileAccess, "read_text_with_identity", read_then_swap)
+
+    with pytest.raises((OSError, ValueError)):
+        delete_instruction_file(project, "project", "AGENTS.md")
+
+    assert sentinel.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+    assert (parked / "AGENTS.md").read_text(encoding="utf-8") == "inside\n"
+
+
+def test_instruction_parent_swap_during_state_replace_fails_closed(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_file_access import FixedFileAccess
+
+    project = tmp_path / "project"
+    state = project / ".nz-coder"
+    outside = tmp_path / "outside"
+    parked = project / ".nz-coder-original"
+    state.mkdir(parents=True)
+    outside.mkdir()
+    (project / "AGENTS.md").write_text("inside\n", encoding="utf-8")
+    (state / "instruction-file-state.json").write_text(
+        '{"version": 1, "enabled": {}}\n', encoding="utf-8",
+    )
+    sentinel = outside / "instruction-file-state.json"
+    sentinel.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    original = FixedFileAccess.stat
+    swapped = False
+
+    def stat_then_swap(self, path):
+        nonlocal swapped
+        result = original(self, path)
+        if path == "AGENTS.md" and not swapped:
+            swapped = True
+            state.rename(parked)
+            state.symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(FixedFileAccess, "stat", stat_then_swap)
+
+    with pytest.raises((OSError, ValueError)):
+        set_instruction_file_enabled(project, "project", "AGENTS.md", False)
+
+    assert sentinel.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+    assert (parked / "instruction-file-state.json").read_text(encoding="utf-8") == (
+        '{"version": 1, "enabled": {}}\n'
+    )
