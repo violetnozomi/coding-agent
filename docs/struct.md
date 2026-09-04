@@ -1367,3 +1367,19 @@ Terminal 的 Built-in Command 继续由稳定 Registry 拥有；Custom Command �
 公共异常只能通过 `PublicError`、`TrustedPublicMessage` 或 `PublicInputError`；架构测试中 public/model-visible 的原始 `str(exception)` 数量为零，并额外拒绝 `return f"...{exc}"` 这类此前可能漏过清单的直接格式化返回。LSP/MCP 对 header、frame、diagnostic、stderr、SSE line/event 和 HTTP response 设置硬上限，超限关闭对应本地服务。用户状态锁在 POSIX 使用安全 parent fd 与 `O_NOFOLLOW`，在 Windows 拒绝 symlink/reparse point/non-regular file。
 
 完整的分类清单、实现细节、cleanup ownership 和仍保留的真实边界记录在 [`security-boundaries.md`](security-boundaries.md)。这些改动依然不把 Shell 变成 OS sandbox，也不宣称解决 Webfetch DNS/connection TOCTOU、跨 daemon 主动撤销或 GitHub 仓库管理设置。
+
+### 22.5 PR #2 冻结范围最终收口（2026-09-05）
+
+Image preflight 现在从同一 Run 的 `ConfigSnapshot` 构造 source-aware `ProviderConnection`。专用 image key/endpoint 保留各自配置来源；缺省时继承 image provider family 的本 Run credential/endpoint。`environment`/`user` credential 与 `trusted-workspace` endpoint 的组合复用主 Provider 的精确 delegation，runtime identity 绑定 provider、model、credential generation、规范化 endpoint、max tokens 和 timeout。
+
+Instruction 管理只允许 `AGENTS.md`、`CLAUDE.md` 与 `.nz-coder/instruction-file-state.json` 三类词法固定路径，并通过 `FixedFileAccess` 在 root/parent handle 下执行 regular-file 检查、`O_NOFOLLOW` 读取及相对 replace/unlink。symlink、junction、reparse point 和非普通文件会被安全拒绝，返回信息不包含链接目标；Prompt 使用的不可变 Instruction Snapshot 未被改写。
+
+`ExecutionIdentity` 分别解析 Python、Node、POSIX shell、PowerShell、Java jar 和 dotnet assembly 的 option arity。显式主入口、Python module、Node preload/loader/import、jar/dll 都参与 fingerprint；inline 或无法稳定解释的形式 fail closed。单文件、文件数、总字节和遍历深度均有硬预算，payload symlink/reparse 不被跟随。该身份只绑定显式代码负载，不声称覆盖动态 import 的传递依赖闭包。
+
+LSP 的 Workspace 读取权限已收回到 Tool/Intelligence 边界：`WorkspaceFileAccess` 一次提供相对路径、固定文本与 `WorkspaceFileIdentity`，`LSPClient` 只同步这份内容，diagnostics 不重新读盘。Workspace 外 URI 投影为 `outside-workspace`，私有 URI 投影为 `private-workspace`。
+
+Workspace mutation 会保留既有 POSIX permission bits，新文件使用安全默认 mode；edit/replace-lines/apply-patch/batch 在同一 parent handle 下复核 device/inode/size/mtime，冲突要求重新读取，多文件失败回滚已写成员。`overwrite=false` 使用 exclusive/no-replace 创建。目录枚举只保留最多 `maximum_entries + 1` 个候选后立即停止，Windows stat 不再读取完整文件。
+
+Credential-bearing dataclass 对 key、environment、headers、command argv 和嵌套 runtime 对象使用 `repr=False` 或安全 `__repr__`。安全门禁扫描整个 `nz_coder/**/*.py`，识别 config alias、from-import、`getattr`、同数量位置交换、LSP direct I/O、间接 exception formatting 与 secret-like dataclass 字段。MCP 默认按 explicit snapshot、active snapshot、current workspace snapshot 选择配置，只有明确 `compatibility_mode=True` 的宿主兼容调用能读取 legacy globals。
+
+本轮继续保留的真实边界：Shell 不是 OS sandbox；Webfetch DNS rebinding、跨 daemon revoke IPC、Artifact 永久保留、GitHub Action 完整 SHA 固定不在冻结范围；Windows replace 与 executable launch 的最终一步仍依赖平台 handle/share 语义。
