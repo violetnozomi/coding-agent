@@ -147,6 +147,43 @@ def provider_connection(provider: str, *, config_snapshot=None) -> ProviderConne
     )
 
 
+def image_provider_connection(
+    provider: str,
+    *,
+    config_snapshot,
+) -> ProviderConnection:
+    """Build the image sidecar connection without discarding source provenance."""
+    base = provider_connection(provider, config_snapshot=config_snapshot)
+    key_record = config_snapshot.value("NZ_IMAGE_DESCRIBE_API_KEY")
+    endpoint_record = config_snapshot.value("NZ_IMAGE_DESCRIBE_BASE_URL")
+    api_key = key_record.value if key_record.value.strip() else base.api_key
+    base_url = (
+        endpoint_record.value if endpoint_record.value.strip() else base.base_url
+    )
+    credential_source = (
+        key_record.source.value if key_record.value.strip()
+        else base.credential_source
+    )
+    endpoint_source = (
+        endpoint_record.source.value if endpoint_record.value.strip()
+        else base.endpoint_source
+    )
+    family = _provider_family(str(provider or "").strip().lower())
+    connection = ProviderConnection(
+        provider=str(provider or "").strip().lower(),
+        credential_name=(
+            "NZ_IMAGE_DESCRIBE_API_KEY"
+            if key_record.value.strip() else base.credential_name
+        ),
+        api_key=api_key,
+        base_url=base_url,
+        credential_scope_id=_environment_credential_scope(f"image:{family}", api_key),
+        credential_source=credential_source,
+        endpoint_source=endpoint_source,
+    )
+    return _enforce_endpoint_delegation(connection, family, config_snapshot)
+
+
 _OFFICIAL_ENDPOINTS = {
     "anthropic": "https://api.anthropic.com",
     "gemini": "https://generativelanguage.googleapis.com/v1beta",
