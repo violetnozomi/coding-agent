@@ -1355,3 +1355,15 @@ Terminal 的直接 Shell 与 Project Command 同样在提交边界重建权限/�
 Workspace 配置信任与 MCP capability 信任保持两层授权：`environment` 和 `user` 来源沿用宿主/用户信任；`project` 与 `.env` 产生的 `trusted-workspace` 都必须计算完整 Server fingerprint，并由 `MCPTrustStore` 精确信任后才能启动。command、cwd、executable 内容、URL、headers/header_env、OAuth 或 tool effects 改变都会使旧信任失效；CLI 的 list/trust/untrust 使用当前 Workspace Snapshot，并只公开安全截断 fingerprint。
 
 Terminal 的 Built-in Command 继续由稳定 Registry 拥有；Custom Command 的 dispatch authority 每次提交从同一 `submission_snapshot` 的 Catalog 解析，因此新增、删除、修改或撤销信任无需重启，且 Built-in 同名时始终优先。Headless 基础 `AgentDefinition` 不再预嵌入 Skill 描述，统一由 RunControl 的 `SkillLoader` 在最终 prompt 中注入一次，与 Terminal、HTTP 和 SDK 使用同一所有权边界。
+
+### 22.4 Security Boundary Closure（2026-09-04）
+
+本轮把前述实现从“逐点加固”收口成可机器验证的不变量。运行配置统一进入不可变 `RunSettings`，正式执行路径没有剩余的 run-scoped 全局配置读取；MCP/LSP 的信任绑定解释器、脚本/模块、cwd、argv、配置来源和内容 fingerprint，并在 spawn 前复核；Provider 额外区分 credential 与 endpoint 来源，用户凭据发送给工作区自定义 endpoint 必须执行独立的 `config delegate-provider-endpoint`。
+
+模型可达的源码读写、删除和 patch 通过 `WorkspaceFileAccess` 锚定已打开的 Workspace/parent handle。POSIX 使用 `openat/O_NOFOLLOW/dirfd` 完成读写与 replace/unlink；Windows 持有并校验目录/文件 handle、拒绝 reparse point，但受 Python API 限制，最终 replace 和 executable launch 的最后一跳仍保留明确的 TOCTOU 边界，不能宣称彻底消除。
+
+持久进程、background/workflow child 与缓存 LSP client 现在登记 `CapabilityLease`。普通 `config untrust` 只影响下一 Run 并报告仍活动的租约；显式 `--revoke-active` 才同步停止当前进程拥有的资源，并分别报告成功与失败。跨 daemon 撤销仍需要未来的控制面协议，当前实现不会虚假声称已撤销另一个进程中的资源。
+
+公共异常只能通过 `PublicError`、`TrustedPublicMessage` 或 `PublicInputError`；架构测试中 public/model-visible 的原始 `str(exception)` 数量为零。LSP/MCP 对 header、frame、diagnostic、stderr、SSE line/event 和 HTTP response 设置硬上限，超限关闭对应本地服务。用户状态锁在 POSIX 使用安全 parent fd 与 `O_NOFOLLOW`，在 Windows 拒绝 symlink/reparse point/non-regular file。
+
+完整的分类清单、实现细节、cleanup ownership 和仍保留的真实边界记录在 [`security-boundaries.md`](security-boundaries.md)。这些改动依然不把 Shell 变成 OS sandbox，也不宣称解决 Webfetch DNS/connection TOCTOU、跨 daemon 主动撤销或 GitHub 仓库管理设置。
