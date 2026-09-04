@@ -159,6 +159,7 @@ class MCPRuntime:
                 workspace=root,
                 project_control_snapshot=selected_snapshot[0].project_control,
                 config_snapshot=selected_snapshot[0],
+                compatibility_mode=legacy_globals,
             )
 
         return cls(
