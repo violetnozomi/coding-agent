@@ -16,6 +16,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import current_workdir
@@ -212,7 +213,7 @@ def diff_status() -> str:
     except subprocess.TimeoutExpired:
         return "Error: git diff/status timed out"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -398,7 +399,7 @@ def verify_changed_files(include_tests: bool = False, timeout: int = 30) -> str:
     except subprocess.TimeoutExpired:
         return f"Error: changed-file verification timed out after {timeout}s"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -516,11 +517,11 @@ def read_symbol(
             f"{_line_numbered(selected, start)}"
         )
     except SyntaxError as exc:
-        return f"Error: Python syntax error in {path}: {exc}"
+        return format_public_error(exc, context=f"Python syntax error in {path}: ")
     except FileNotFoundError:
         return f"Error: file not found: {path}"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -820,11 +821,11 @@ def smart_search(
         )
         return "\n".join(out).rstrip()
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except OSError as exc:
-        return f"Error: filesystem error during smart_search: {exc}"
+        return format_public_error(exc, context="filesystem error during smart_search: ")
     except Exception as exc:
-        return f"Error: unexpected smart_search failure ({type(exc).__name__}): {exc}"
+        return format_public_error(exc, context="unexpected smart_search failure: ")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -996,11 +997,15 @@ def find_symbol_callers(
             out.append(f"  skipped {len(skipped_files)} unparsable/unreadable file(s)")
         return "\n".join(out)
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except OSError as exc:
-        return f"Error: filesystem error during find_symbol_callers: {exc}"
+        return format_public_error(
+            exc, context="filesystem error during find_symbol_callers: ",
+        )
     except Exception as exc:
-        return f"Error: unexpected find_symbol_callers failure ({type(exc).__name__}): {exc}"
+        return format_public_error(
+            exc, context="unexpected find_symbol_callers failure: ",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

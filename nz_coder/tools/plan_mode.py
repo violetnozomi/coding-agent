@@ -9,6 +9,7 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.sessions import session_plan_path
 from nz_coder.tools import ToolOutput, register
@@ -98,7 +99,9 @@ class PlanModeController:
         try:
             answers = self.question_asker([question])
         except Exception as exc:
-            return "error", f"Interactive plan approval failed: {exc}"
+            return "error", format_public_error(
+                exc, prefix="", context="Interactive plan approval failed: ",
+            )
         if answers is None:
             return "dismissed", ""
         if (
@@ -181,7 +184,7 @@ class PlanModeController:
         try:
             content = self._validated_path(self.plan_path).read_text(encoding="utf-8")
         except OSError as exc:
-            return f"Error: unable to read the plan file: {exc}"
+            return format_public_error(exc, context="unable to read the plan file: ")
         if not content.strip():
             return "Error: plan file is empty; call write_plan before plan_exit"
 
@@ -221,7 +224,9 @@ class PlanModeController:
         try:
             reviewed = self._validated_path(self.plan_path).read_text(encoding="utf-8")
         except OSError as exc:
-            return f"Error: unable to re-read the approved plan file: {exc}"
+            return format_public_error(
+                exc, context="unable to re-read the approved plan file: ",
+            )
         reviewed_digest = hashlib.sha256(
             reviewed.strip().encode("utf-8")
         ).hexdigest()[:16]
@@ -304,7 +309,7 @@ def plan_enter(reason: str) -> str:
             return controller
         return controller.enter(reason)
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def write_plan(content: str) -> str:
@@ -315,7 +320,7 @@ def write_plan(content: str) -> str:
             return controller
         return controller.write(content)
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def plan_exit(title: str, summary: str) -> str:
@@ -326,7 +331,7 @@ def plan_exit(title: str, summary: str) -> str:
             return controller
         return controller.exit(title, summary)
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

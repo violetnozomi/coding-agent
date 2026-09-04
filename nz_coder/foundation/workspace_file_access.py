@@ -9,6 +9,7 @@ import tempfile
 import uuid
 
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.protocol.public_error import PublicInputError
 
 
 @dataclass(frozen=True)
@@ -48,7 +49,7 @@ class WorkspaceFileAccess:
                 if not stat.S_ISREG(info.st_mode):
                     raise ValueError("Workspace target is not a regular file")
                 if maximum is not None and info.st_size > maximum:
-                    raise ValueError("Workspace file exceeds the allowed size")
+                    raise PublicInputError("Workspace file exceeds the allowed size")
                 chunks: list[bytes] = []
                 total = 0
                 while True:
@@ -57,7 +58,7 @@ class WorkspaceFileAccess:
                         break
                     total += len(chunk)
                     if maximum is not None and total > maximum:
-                        raise ValueError("Workspace file exceeds the allowed size")
+                        raise PublicInputError("Workspace file exceeds the allowed size")
                     chunks.append(chunk)
                 return b"".join(chunks)
             finally:
@@ -157,7 +158,9 @@ class WorkspaceFileAccess:
         temporary = f".nzcoder-{uuid.uuid4().hex}.tmp"
         try:
             if transaction is not None and getattr(transaction, "active", False):
-                transaction.track(relative.as_posix())
+                transaction.track_anchored(
+                    relative.as_posix(), parent_fd=parent,
+                )
             flags = (
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL
                 | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
@@ -195,7 +198,9 @@ class WorkspaceFileAccess:
             if not stat.S_ISREG(info.st_mode):
                 raise ValueError("Workspace target is not a regular file")
             if transaction is not None and getattr(transaction, "active", False):
-                transaction.track(relative.as_posix())
+                transaction.track_anchored(
+                    relative.as_posix(), parent_fd=parent,
+                )
             os.unlink(name, dir_fd=parent)
             os.fsync(parent)
         finally:
@@ -265,7 +270,7 @@ class WorkspaceFileAccess:
             handles.append(target)
             _attrs, _device, _inode, size = _windows_handle_info(target, full=True)
             if maximum is not None and size > maximum:
-                raise ValueError("Workspace file exceeds the allowed size")
+                raise PublicInputError("Workspace file exceeds the allowed size")
             import msvcrt
 
             source_fd = msvcrt.open_osfhandle(target, os.O_RDONLY)
@@ -273,7 +278,7 @@ class WorkspaceFileAccess:
             with os.fdopen(source_fd, "rb", closefd=True) as stream:
                 data = stream.read(maximum + 1 if maximum is not None else -1)
             if maximum is not None and len(data) > maximum:
-                raise ValueError("Workspace file exceeds the allowed size")
+                raise PublicInputError("Workspace file exceeds the allowed size")
             return data
         except UnsafeProjectControl as exc:
             raise ValueError("Workspace file boundary is unsafe") from exc
@@ -296,7 +301,9 @@ class WorkspaceFileAccess:
             if Path(_windows_final_path(handle)) != parent_path.resolve():
                 raise ValueError("Workspace parent identity changed")
             if transaction is not None and getattr(transaction, "active", False):
-                transaction.track(relative.as_posix())
+                transaction.track_anchored(
+                    relative.as_posix(), windows_parent_handle=handle,
+                )
             descriptor, raw = tempfile.mkstemp(prefix=".nzcoder-", suffix=".tmp", dir=parent_path)
             temporary = Path(raw)
             with os.fdopen(descriptor, "wb") as stream:
@@ -321,7 +328,9 @@ class WorkspaceFileAccess:
             if Path(_windows_final_path(handle)) != parent_path.resolve():
                 raise ValueError("Workspace parent identity changed")
             if transaction is not None and getattr(transaction, "active", False):
-                transaction.track(relative.as_posix())
+                transaction.track_anchored(
+                    relative.as_posix(), windows_parent_handle=handle,
+                )
             target = parent_path / relative.name
             if target.is_symlink() or not target.is_file():
                 raise ValueError("Workspace target is not a regular file")

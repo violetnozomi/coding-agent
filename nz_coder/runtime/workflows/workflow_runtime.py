@@ -29,7 +29,11 @@ from nz_coder.runtime.workflows.workflow_run_store import (
     build_workflow_cost_report,
 )
 from nz_coder.tools import ToolOutput, register
-from nz_coder.protocol.public_error import to_public_error
+from nz_coder.protocol.public_error import (
+    PublicInputError,
+    format_public_error,
+    to_public_error,
+)
 
 
 _SUCCESS = frozenset({"completed", "completed_unverified"})
@@ -39,7 +43,7 @@ _MAX_ITEMS = 256
 _MAX_PROMPT_CHARS = 60_000
 
 
-class WorkflowControlError(RuntimeError):
+class WorkflowControlError(PublicInputError):
     """Base class for structural failures that must stop the whole workflow."""
 
 
@@ -1399,9 +1403,9 @@ def workflow_run(
             metadata={"workflow_result": outcome},
         )
     except WorkflowControlError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: workflow failed: {exc}"
+        return format_public_error(exc, context="workflow failed: ")
 
 
 register(

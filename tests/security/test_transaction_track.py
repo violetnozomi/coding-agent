@@ -162,6 +162,28 @@ def test_transaction_track_and_mutation_share_anchor(tmp_path, monkeypatch):
     assert target.read_text(encoding="utf-8") == "after"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor identity contract")
+def test_repeated_transaction_mutation_rejects_replaced_parent(tmp_path):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    parent = tmp_path / "package"
+    parent.mkdir()
+    (parent / "module.py").write_text("before", encoding="utf-8")
+    access = WorkspaceFileAccess(tmp_path)
+    with scoped_workdir(tmp_path):
+        manager = _manager(tmp_path)
+        access.write_text("package/module.py", "first", transaction=manager)
+        parent.rename(tmp_path / "package-original")
+        parent.mkdir()
+        (parent / "module.py").write_text("replacement", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="parent identity changed"):
+            access.write_text("package/module.py", "escaped", transaction=manager)
+
+    assert (parent / "module.py").read_text(encoding="utf-8") == "replacement"
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX metadata semantics")
 def test_transaction_backup_captures_original_mode_and_mtime(tmp_path):
     from nz_coder.runtime.process.workdir import scoped_workdir

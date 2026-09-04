@@ -423,6 +423,47 @@ def test_prepare_failure_after_install_is_recoverable(tmp_path):
         scope.__exit__(None, None, None)
 
 
+def test_construction_failure_retires_image_and_provider_resources(
+    tmp_path, monkeypatch,
+):
+    import copy
+
+    from nz_coder.runtime.execution import loop
+
+    provider = _RetryingCloser()
+    provider.provider_id = "offline"
+    provider.model_id = "offline-model"
+    provider.owns_client = False
+    image = _RetryingCloser()
+
+    scope, agent = _cleanup_agent(tmp_path, _LifecycleMCP)
+    agent._run_control_managed_provider = True
+    agent._initial_model_runtime_available = False
+    agent._configured_sidecar_verifier = False
+    hooks = copy.copy(agent.hooks)
+    hooks.reset_run_state = lambda: (_ for _ in ()).throw(
+        RuntimeError("construction failed")
+    )
+    agent._configured_hooks = hooks
+    monkeypatch.setattr(loop, "resolve_model_runtime", lambda _request: provider)
+    monkeypatch.setattr(
+        loop.ProviderImageDescriber,
+        "configured",
+        classmethod(lambda cls, **_kwargs: image),
+    )
+    try:
+        with pytest.raises(RuntimeError, match="construction failed"):
+            agent.prepare_run_control(
+                provider_name="offline", model_id="offline-model",
+            )
+        assert provider.calls == 1
+        assert image.calls == 1
+        assert agent._active_run_control is None
+    finally:
+        agent.close()
+        scope.__exit__(None, None, None)
+
+
 class _Message:
     content = "done"
     tool_calls = []

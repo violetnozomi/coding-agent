@@ -184,15 +184,20 @@ def test_bash_package_policy_uses_target_run_settings(tmp_path, monkeypatch):
     allowed = RunSettings.from_snapshot(_snapshot(
         tmp_path / "allowed", ALLOW_BASH_PACKAGE_INSTALLS="1",
     ))
-    monkeypatch.setattr(
-        bash_module.subprocess,
-        "Popen",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("launch-reached")),
-    )
+    launches = []
+
+    def fail_launch(*_args, **_kwargs):
+        launches.append(True)
+        raise OSError("launch-secret-must-not-escape")
+
+    monkeypatch.setattr(bash_module.subprocess, "Popen", fail_launch)
     with scoped_workdir(tmp_path / "denied"), scoped_run_settings(denied):
         assert "Package install blocked" in bash_module.run_bash("pip install package")
     with scoped_workdir(tmp_path / "allowed"), scoped_run_settings(allowed):
-        assert "launch-reached" in bash_module.run_bash("pip install package")
+        result = bash_module.run_bash("pip install package")
+        assert launches == [True]
+        assert result == "Error: An internal error occurred."
+        assert "launch-secret" not in result
 
 
 def test_bash_timeout_uses_target_run_settings(tmp_path, monkeypatch):
@@ -206,15 +211,20 @@ def test_bash_timeout_uses_target_run_settings(tmp_path, monkeypatch):
     long = RunSettings.from_snapshot(_snapshot(
         tmp_path / "long", BASH_TIMEOUT_SECONDS="20",
     ))
-    monkeypatch.setattr(
-        bash_module.subprocess,
-        "Popen",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("launch-reached")),
-    )
+    launches = []
+
+    def fail_launch(*_args, **_kwargs):
+        launches.append(True)
+        raise OSError("launch-secret-must-not-escape")
+
+    monkeypatch.setattr(bash_module.subprocess, "Popen", fail_launch)
     with scoped_workdir(tmp_path / "short"), scoped_run_settings(short):
         assert "between 1 and 2s" in bash_module.run_bash("echo ok", timeout=10)
     with scoped_workdir(tmp_path / "long"), scoped_run_settings(long):
-        assert "launch-reached" in bash_module.run_bash("echo ok", timeout=10)
+        result = bash_module.run_bash("echo ok", timeout=10)
+        assert launches == [True]
+        assert result == "Error: An internal error occurred."
+        assert "launch-secret" not in result
 
 
 def test_tool_call_limit_uses_target_run_settings(tmp_path):

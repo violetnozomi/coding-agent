@@ -372,7 +372,9 @@ def _convert_and_slice(
     except FileNotFoundError:
         cached = ""
     except OSError as exc:
-        return _error(f"Document cache read failed: {exc}")
+        return _error(
+            "Document cache read failed: " + to_public_error(exc).message
+        )
     _check_cancelled(cancel_event)
     if not cached:
         try:

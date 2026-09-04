@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.tools import register
 
 
@@ -50,7 +51,7 @@ def _mcp_catalog(
             ))
         return _search(runtime, query=query, kind=kind, server=server, limit=limit)
     except Exception as error:
-        return f"Error: MCP {selected} failed: {error}"
+        return format_public_error(error, context=f"MCP {selected} failed: ")
 
 
 def _search(runtime, *, query: str, kind: str, server: str, limit: int) -> str:

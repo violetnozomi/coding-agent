@@ -13,6 +13,7 @@ from nz_coder.lsp import (
     get_client_for_file,
 )
 from nz_coder.lsp.client import path_to_uri, uri_to_path
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.tools import register
@@ -195,9 +196,9 @@ def lsp(
             )
         return output
     except (LSPError, OSError, ValueError) as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: Unexpected LSP failure: {exc}"
+        return format_public_error(exc, context="Unexpected LSP failure: ")
 
 
 register(

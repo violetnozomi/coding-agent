@@ -6,6 +6,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 
+from nz_coder.protocol.public_error import PublicInputError
 
 _PRIVATE_DIRECTORIES = frozenset({
     ".git",
@@ -35,7 +36,7 @@ _PUBLIC_ENV_TEMPLATES = frozenset({".env.example", ".env.sample", ".env.template
 _WINDOWS_ABSOLUTE = re.compile(r"^[A-Za-z]:[/\\]")
 
 
-class WorkspacePathError(ValueError):
+class WorkspacePathError(PublicInputError):
     """A requested filesystem capability is outside the allowed boundary."""
 
 

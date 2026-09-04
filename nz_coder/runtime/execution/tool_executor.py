@@ -29,6 +29,7 @@ from nz_coder.runtime.agent.agent_resilience import (
     is_tool_result_error_content,
 )
 from nz_coder.protocol.session_events import publish_session_event
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tool_platform.execution import (
     WRITE_TOOLS,
@@ -319,9 +320,9 @@ class ToolExecutor:
             )
             if isinstance(tool_input, dict):
                 json.dumps(tool_input, ensure_ascii=False, allow_nan=False)
-        except (json.JSONDecodeError, TypeError, ValueError, OverflowError) as e:
+        except (json.JSONDecodeError, TypeError, ValueError, OverflowError):
             output = (
-                f"Error: Invalid JSON arguments for {fn_name}: {e}. "
+                f"Error: Invalid JSON arguments for {fn_name}. "
                 "Your tool call arguments are not valid JSON. "
                 "Common causes: unescaped quotes inside strings, "
                 "literal backslashes not doubled, trailing commas. "
@@ -378,7 +379,9 @@ class ToolExecutor:
             return ToolExecutionResult(
                 name=fn_name,
                 tool_input=tool_input,
-                output=f"Error: {fn_name} raised {type(exc).__name__}: {exc}",
+                output=format_public_error(
+                    exc, context=f"{fn_name} failed: ",
+                ),
                 executed=True,
                 dispatch_failed=True,
                 command_failed=False,
@@ -394,7 +397,9 @@ class ToolExecutor:
             return ToolExecutionResult(
                 name=fn_name,
                 tool_input=tool_input,
-                output=f"Error: {fn_name} returned an invalid result: {type(exc).__name__}: {exc}",
+                output=format_public_error(
+                    exc, context=f"{fn_name} returned an invalid result: ",
+                ),
                 executed=True,
                 dispatch_failed=True,
                 command_failed=False,

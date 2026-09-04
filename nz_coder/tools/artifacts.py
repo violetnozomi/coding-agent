@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.sessions import active_session_id
 from nz_coder.tool_platform.artifacts import ArtifactError, ArtifactStore
@@ -25,7 +26,7 @@ def read_tool_result(
             max_bytes=max_bytes,
         )
     except (ArtifactError, ValueError) as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     trailer = json.dumps(
         {
             "artifact_id": artifact_id,

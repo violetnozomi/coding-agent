@@ -189,10 +189,10 @@ def evaluate_structured_output(
             candidate,
             parse_constant=reject_nonstandard_json_constant,
         )
-    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (json.JSONDecodeError, TypeError, ValueError):
         return StructuredOutputEvaluation(
             False,
-            errors=(f"output was not valid JSON: {exc}",),
+            errors=("output was not valid JSON",),
         )
     errors = validate_against_schema(value, schema)
     return StructuredOutputEvaluation(not errors, value=value, errors=errors)

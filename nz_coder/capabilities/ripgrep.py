@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Callable
 
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+from nz_coder.protocol.public_error import PublicInputError
 
 
 class RipgrepCancelled(Exception):
@@ -129,13 +130,13 @@ def decode_ripgrep_event(line: str) -> RipgrepSearchMatch | None:
     try:
         payload = json.loads(line)
     except json.JSONDecodeError as error:
-        raise ValueError("invalid ripgrep JSON output") from error
+        raise PublicInputError("invalid ripgrep JSON output") from error
     if not isinstance(payload, dict):
-        raise ValueError("invalid ripgrep JSON event")
+        raise PublicInputError("invalid ripgrep JSON event")
     event_type = payload.get("type")
     data = payload.get("data")
     if not isinstance(data, dict):
-        raise ValueError("invalid ripgrep JSON event data")
+        raise PublicInputError("invalid ripgrep JSON event data")
     if event_type == "begin":
         _path_text(data.get("path"), "begin path")
         return None
@@ -151,7 +152,7 @@ def decode_ripgrep_event(line: str) -> RipgrepSearchMatch | None:
         _validate_stats(data.get("stats"), "summary stats")
         return None
     if event_type != "match":
-        raise ValueError("invalid ripgrep JSON event type")
+        raise PublicInputError("invalid ripgrep JSON event type")
     path = _path_text(data.get("path"), "match path")
     text = _path_text(data.get("lines"), "match lines")
     raw_submatches = data.get("submatches")

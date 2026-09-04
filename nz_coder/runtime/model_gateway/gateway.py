@@ -30,6 +30,7 @@ from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.conversation.think_tags import ThinkTagDemux, demux_think_tags
 from nz_coder.runtime.model_gateway.stream import iter_stream_with_timeouts
 from nz_coder.providers.capabilities import configured_model_capabilities
+from nz_coder.protocol.public_error import to_public_error
 
 
 def _field(owner, name: str):
@@ -829,14 +830,15 @@ class ProductionModelGateway:
                     )
                     continue
                 classification = classify_provider_error(exc)
+                public_error = to_public_error(exc)
                 if classification == "context_overflow":
-                    return terminal("context_overflow", str(exc))
+                    return terminal("context_overflow", public_error.message)
                 if classification == "client_error":
-                    return terminal("client_error", str(exc))
+                    return terminal("client_error", public_error.message)
                 retryable = classification == "retryable"
                 if side_effect_committed:
                     provider_metadata["stream_error"] = {
-                        "message": str(exc),
+                        "message": public_error.message,
                         **_error_metadata(exc)["error"],
                     }
                     return terminal("completed")
@@ -879,7 +881,7 @@ class ProductionModelGateway:
                         attempt=combined.attempts,
                     )
                 if decision.action != "retry":
-                    return terminal("aborted", str(exc), retryable)
+                    return terminal("aborted", public_error.message, retryable)
                 archive_attempt(usage, provider_cost)
                 recovery.record_error(exc)
                 wait_seconds = recovery.backoff_seconds(exc)

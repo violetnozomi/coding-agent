@@ -146,6 +146,17 @@ def public_error_message(value: object) -> str:
     return "Request failed."
 
 
+def format_public_error(
+    error: object,
+    *,
+    prefix: str = "Error: ",
+    context: str = "",
+) -> str:
+    """Format one projected failure for legacy string-based public surfaces."""
+    public = to_public_error(error)
+    return f"{prefix}{context}{public.message}"
+
+
 def public_error_from_wire(value: object) -> PublicError | None:
     """Parse only the explicitly versioned public-error wire contract."""
     if not isinstance(value, dict) or value.get("schema") != PUBLIC_ERROR_SCHEMA:

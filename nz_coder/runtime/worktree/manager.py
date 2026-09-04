@@ -9,6 +9,7 @@ from pathlib import Path
 
 from nz_coder.foundation.user_paths import prepare_user_storage
 from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.runtime.worktree.models import Worktree
 from nz_coder.runtime.worktree.setup import perform_post_creation_setup
 
@@ -244,7 +245,9 @@ class WorktreeManager:
                 check=False,
             )
         except (OSError, subprocess.SubprocessError) as exc:
-            return subprocess.CompletedProcess(["git", *args], 1, "", str(exc))
+            return subprocess.CompletedProcess(
+                ["git", *args], 1, "", to_public_error(exc).message,
+            )
 
     @staticmethod
     def read_worktree_head_sha(wt_path: str | Path) -> str | None:

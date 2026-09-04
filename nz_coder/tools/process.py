@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from nz_coder.foundation import config
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.workspace_paths import model_command_private_path
 from nz_coder.tool_platform.command_policy import classify_bash
@@ -232,7 +233,7 @@ def run_process(
             metadata={"process_id": selected_id, "status": handle.status},
         )
     except (ValueError, ProcessNotFoundError, ProcessOwnershipError, ProcessStateError) as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

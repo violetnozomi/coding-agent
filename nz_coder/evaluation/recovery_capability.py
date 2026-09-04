@@ -64,7 +64,11 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
     runs.append({
         "case_id": "R2", "failure": "tool_exception", "expected_action": "return_repair_evidence",
         "observed_action": "return_repair_evidence" if (
-            tool_exception.dispatch_failed and "fault fixture" in tool_exception.output
+            tool_exception.dispatch_failed
+            and tool_exception.output == (
+                "Error: read_file failed: An internal error occurred."
+            )
+            and "fault fixture" not in tool_exception.output
         ) else "incorrect",
         "evidence": tool_exception.output,
     })

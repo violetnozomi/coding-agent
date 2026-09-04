@@ -9,6 +9,7 @@ from pathlib import Path
 
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.capabilities.ripgrep import (
     RipgrepCancelled,
     RipgrepSearchMatch,
@@ -400,7 +401,7 @@ def grep_search(
     except subprocess.TimeoutExpired:
         return "Error: Search timed out (30s)"
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 def _expand_braces(pattern: str, limit: int = 64) -> tuple[str, ...]:
     """Expand bounded comma braces used by ripgrep's globset syntax."""
@@ -566,7 +567,7 @@ def glob_search(pattern: str, path: str = ".") -> str:
     except subprocess.TimeoutExpired:
         return "Error: Search timed out (30s)"
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 register(
     name="grep_search",

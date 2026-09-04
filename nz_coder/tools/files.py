@@ -16,6 +16,7 @@ from nz_coder.protocol.attachments import (
     make_image_attachment,
     sniff_image_mime,
 )
+from nz_coder.protocol.public_error import PublicInputError, format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.capabilities.documents import (
     DOCX_MIME,
@@ -136,9 +137,9 @@ def _begin_local_txn():
 
 def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
     if not isinstance(files, list) or not files:
-        raise ValueError("files must be a non-empty list")
+        raise PublicInputError("files must be a non-empty list")
     if len(files) > 50:
-        raise ValueError("max 50 files per batch")
+        raise PublicInputError("max 50 files per batch")
 
     settings = current_run_settings()
     access = _file_access()
@@ -147,30 +148,35 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
     total_bytes = 0
     for i, item in enumerate(files):
         if not isinstance(item, dict):
-            raise ValueError(f"file {i} must be an object")
+            raise PublicInputError(f"file {i} must be an object")
         path = str(item.get("path", "")).strip()
         content = item.get("content")
         if not path:
-            raise ValueError(f"file {i} requires path")
+            raise PublicInputError(f"file {i} requires path")
         if not isinstance(content, str):
-            raise ValueError(f"file {i} requires string content")
+            raise PublicInputError(f"file {i} requires string content")
         blocked = _blocked_write_reason(path)
         if blocked:
-            raise ValueError(f"{path}: {blocked}")
+            raise PublicInputError(f"{path}: {blocked}")
         fp = _model_write_path(path)
         key = str(fp)
         if key in seen_paths:
-            raise ValueError(f"duplicate path in batch: {path}")
+            raise PublicInputError(f"duplicate path in batch: {path}")
         seen_paths.add(key)
         existed = access.exists(path)
         if existed and not overwrite:
-            raise ValueError(f"target already exists and overwrite=false: {path}")
+            raise PublicInputError(
+                f"target already exists and overwrite=false: {path}"
+            )
         content_bytes = len(content.encode("utf-8"))
         if content_bytes > settings.write_batch_file_bytes:
-            raise ValueError(f"file too large ({content_bytes} bytes > {settings.write_batch_file_bytes}): {path}")
+            raise PublicInputError(
+                f"file too large ({content_bytes} bytes > "
+                f"{settings.write_batch_file_bytes}): {path}"
+            )
         total_bytes += content_bytes
         if total_bytes > settings.write_batch_total_bytes:
-            raise ValueError(
+            raise PublicInputError(
                 f"batch too large ({total_bytes} bytes > {settings.write_batch_total_bytes})"
             )
         before = access.read_text(path, errors="replace") if existed else ""
@@ -190,7 +196,6 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
     try:
         for item in prepared:
             _track_before(item["path"], item["fp"], item["before"], item["existed"])
-            txn.track(item["path"])
             access.write_text(item["path"], item["content"], transaction=txn)
             _track_after(item["path"], item["content"], True)
             if item["existed"]:
@@ -219,7 +224,7 @@ def write_files_batch(files: list[dict], overwrite: bool = False) -> str:
     try:
         result = _write_files_batch_impl(files, overwrite=overwrite)
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
     touched = len(result["created"]) + len(result["updated"])
     lines = [
@@ -381,7 +386,7 @@ def read_file(
         if image_mime:
             size = len(data)
             if size >= MAX_IMAGE_BYTES:
-                raise ValueError(
+                raise PublicInputError(
                     f"Image size must be less than "
                     f"{MAX_IMAGE_BYTES // 1024 // 1024} MB ({size} bytes)."
                 )
@@ -487,14 +492,14 @@ def read_file(
             },
         )
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 
 def _read_offset(value: int | None) -> int:
     if value is None or value == 0:
         return 1
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError("offset must be a non-negative integer")
+        raise PublicInputError("offset must be a non-negative integer")
     return value
 
 
@@ -502,7 +507,7 @@ def _read_limit(value: int | None) -> int:
     if value is None:
         return DEFAULT_READ_LIMIT
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError("limit must be a non-negative integer")
+        raise PublicInputError("limit must be a non-negative integer")
     return value
 
 
@@ -515,15 +520,13 @@ def write_file(path: str, content: str) -> str:
         warning = _dirty_warning(path)
         _track_before(path, fp, before, existed)
         txn = _get_txn()
-        if txn and txn.active:
-            txn.track(path)
         access.write_text(path, content, transaction=txn)
         _track_after(path, content, True)
         diff = _format_diff(path, before, content)
         action = "Updated" if existed else "Created"
         return f"{warning}{action} {path} ({len(content)} bytes)\n\nDiff:\n{diff}"
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 
 def edit_file(path: str, old_text: str, new_text: str) -> str:
@@ -542,14 +545,12 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
             return f"Error: old_text matches {count} locations in {path}. Be more specific."
         updated = content.replace(old_text, new_text, 1)
         txn = _get_txn()
-        if txn and txn.active:
-            txn.track(path)
         access.write_text(path, updated, transaction=txn)
         _track_after(path, updated, True)
         diff = _format_diff(path, content, updated)
         return f"{warning}Edited {path} (replaced 1 occurrence)\n\nDiff:\n{diff}"
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 
 def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> str:
@@ -585,14 +586,12 @@ def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> s
         updated = "".join(lines[: start - 1] + replacement + lines[end:])
 
         txn = _get_txn()
-        if txn and txn.active:
-            txn.track(path)
         access.write_text(path, updated, transaction=txn)
         _track_after(path, updated, True)
         diff = _format_diff(path, content, updated)
         return f"{warning}Replaced lines {start}-{end} in {path}\n\nDiff:\n{diff}"
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 
 def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
@@ -711,7 +710,7 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
         verb = "Patch preview" if dry_run else "Applied patch"
         return f"{verb} ({len(changes)} changes across {len(prepared)} files)\n\n" + "\n\n".join(reports)
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 
 def list_directory(path: str = ".", depth: int = 1) -> str:
@@ -725,7 +724,7 @@ def list_directory(path: str = ".", depth: int = 1) -> str:
             return f"{path}/ (empty)"
         return "\n".join(lines)
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 
 def _walk(base: Path, current: Path, lines: list, level: int, max_depth: int):

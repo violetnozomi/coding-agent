@@ -19,6 +19,7 @@ from nz_coder.runtime.agent.child_result import (
 from nz_coder.runtime.agent.child_contracts import presentation_excerpt
 from nz_coder.protocol.public_error import (
     PublicError,
+    format_public_error,
     public_error_from_wire,
     to_public_error,
 )
@@ -848,7 +849,7 @@ class BackgroundAgentManager:
                 try:
                     scopes = _normalize_scope_paths(item.get("target_paths"), self.workspace)
                 except ValueError as exc:
-                    return f"Error: {exc}"
+                    return format_public_error(exc)
                 if not read_only and not scopes:
                     return f"Error: task {index} requires non-empty target_paths for write isolation"
                 for sibling, _ in prepared:
@@ -1476,7 +1477,9 @@ class BackgroundAgentManager:
         try:
             worktree = _validated_persisted_worktree(self.workspace, state)
         except ValueError as exc:
-            return [], [], f"Error: invalid child worktree ownership: {exc}"
+            return [], [], format_public_error(
+                exc, context="invalid child worktree ownership: ",
+            )
         if worktree is None or worktree.mode not in {"git", "copy"}:
             return [], [], "Error: direct-mode child changes cannot be safely applied"
         child_root = Path(worktree.path).resolve()
@@ -1655,7 +1658,7 @@ def agent_manager(
             )
         return "Error: unsupported agent_manager action"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def send_message(to: str, content: str, seen_by: list[str] | None = None) -> str:
@@ -1670,7 +1673,7 @@ def send_message(to: str, content: str, seen_by: list[str] | None = None) -> str
             seen_by=seen_by,
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def apply_agent_changes(session_id: str, reviewed_files: list[str], confirm: bool = False) -> str:
@@ -1718,7 +1721,7 @@ def apply_agent_changes(session_id: str, reviewed_files: list[str], confirm: boo
             metadata=outcome.to_metadata(),
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

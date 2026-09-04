@@ -43,7 +43,7 @@ from nz_coder.providers import (
     create_provider,
     prompt_family_guidance,
 )
-from nz_coder.protocol.public_error import to_public_error
+from nz_coder.protocol.public_error import format_public_error, to_public_error
 from nz_coder.runtime.core.execution_context import (
     scoped_broad_test_guard,
     scoped_runtime_overrides,
@@ -408,6 +408,19 @@ def _cleanup_subagent_resources(agent, model_runtime, tracer) -> None:
             model_runtime.close()
         except BaseException:
             pass
+
+
+def _cleanup_subagent_scope(
+    agent,
+    model_runtime,
+    tracer,
+    parent_context_token,
+) -> None:
+    """Always restore parent authority even if a cleanup implementation regresses."""
+    try:
+        _cleanup_subagent_resources(agent, model_runtime, tracer)
+    finally:
+        _PARENT_CONTEXT.reset(parent_context_token)
 
 
 def _ensure_subagent_tool_registry() -> None:
@@ -1564,7 +1577,7 @@ def run_subagent(
         else:
             normalized_type = _normalize_agent_type(state.get("agent_type") or agent_type or "explore")
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     state["workspace_root"] = str(parent_workspace)
 
     if allowed_tools is None:
@@ -1588,7 +1601,7 @@ def run_subagent(
             parent_snapshot,
         )
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if declared_hint:
         state["model_hint"] = declared_hint
     declared_refs = evidence_refs
@@ -1597,7 +1610,7 @@ def run_subagent(
     try:
         normalized_refs = normalize_evidence_refs(declared_refs)
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if state.get("evidence_refs") and normalized_refs != state.get("evidence_refs"):
         return "Error: evidence_refs cannot change when resuming a child session"
     state["evidence_refs"] = normalized_refs
@@ -1611,7 +1624,7 @@ def run_subagent(
             declared_verification
         )
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if (
         isinstance(state.get("verification_contract"), dict)
         and verification_contract != state["verification_contract"]
@@ -1635,7 +1648,7 @@ def run_subagent(
         try:
             assert_supported_output_schema(declared_schema)
         except ValueError as exc:
-            return f"Error: {exc}"
+            return format_public_error(exc)
         if (
             isinstance(state.get("output_schema"), dict)
             and state["output_schema"] != declared_schema
@@ -1653,7 +1666,7 @@ def run_subagent(
     try:
         state["claimed_paths"] = _resolve_claimed_paths(state, prompt, target_paths, parent_workspace)
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if normalized_type == "general-purpose":
         scope_conflicts = _active_scope_conflicts(
             parent_session_id,
@@ -1919,7 +1932,9 @@ Only use it when you need to leave detailed notes for the parent and your curren
         except ValueError as exc:
             _persist_state("error")
             return _finalize_subagent_result(
-                f"Evidence briefing failed: {exc}",
+                format_public_error(
+                    exc, prefix="", context="Evidence briefing failed: ",
+                ),
                 scratch_path,
                 "error",
                 state,
@@ -1995,9 +2010,9 @@ NEXT:
             raw = tool_call.get("function", {}).get("arguments", {})
             try:
                 args = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
-            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 return ToolExecutionResult(
-                    name, {}, f"Error: Invalid JSON arguments for {name}: {exc}",
+                    name, {}, f"Error: Invalid JSON arguments for {name}",
                     False, True, False, is_transactional_write_tool(name),
                 )
             raw_output = _run_allowed_tool(
@@ -2227,10 +2242,9 @@ NEXT:
         }
         state["public_error"] = public.to_dict()
     finally:
-        try:
-            _cleanup_subagent_resources(agent, model_runtime, child_tracer)
-        finally:
-            _PARENT_CONTEXT.reset(parent_context_token)
+        _cleanup_subagent_scope(
+            agent, model_runtime, child_tracer, parent_context_token,
+        )
 
     _record_usage_from_messages()
     if "structured" in run_status:

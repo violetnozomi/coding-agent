@@ -16,6 +16,7 @@ from typing import Any
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.mcp.client import MCPClient, MCPError, MCPRequestError
 from nz_coder.mcp.config import (
     MCPServerConfig,
@@ -954,7 +955,10 @@ def _tool_handler(
                 public_name=public_name,
             )
         except Exception as exc:
-            return f"Error: MCP server '{server_name}' tool '{original_name}' failed: {exc}"
+            return format_public_error(
+                exc,
+                context=f"MCP server '{server_name}' tool '{original_name}' failed: ",
+            )
 
     return handler
 

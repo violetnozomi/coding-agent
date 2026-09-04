@@ -10,11 +10,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _contains_raw_exception_projection(node: ast.AST, name: str) -> bool:
+    def exception_root(value: ast.AST) -> bool:
+        current = value
+        while isinstance(current, ast.Attribute):
+            if current.attr == "code":
+                return False
+            current = current.value
+        return isinstance(current, ast.Name) and current.id == name
+
     for child in ast.walk(node):
         if (
             isinstance(child, ast.FormattedValue)
-            and isinstance(child.value, ast.Name)
-            and child.value.id == name
+            and exception_root(child.value)
         ):
             return True
         if (
@@ -22,8 +29,7 @@ def _contains_raw_exception_projection(node: ast.AST, name: str) -> bool:
             and isinstance(child.func, ast.Name)
             and child.func.id in {"str", "repr"}
             and child.args
-            and isinstance(child.args[0], ast.Name)
-            and child.args[0].id == name
+            and exception_root(child.args[0])
         ):
             return True
     return False

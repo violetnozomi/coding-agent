@@ -14,6 +14,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 from nz_coder.foundation.network_policy import NetworkTargetPolicy
 from nz_coder.protocol.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
+from nz_coder.protocol.public_error import PublicInputError, format_public_error
 from nz_coder.tools import ToolOutput, register
 
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -50,19 +51,19 @@ def _normalize_url(value: str) -> str:
     """Return one absolute HTTP(S) URL with an ASCII hostname."""
     raw = str(value or "").strip()
     if not raw or any(ord(character) < 0x20 for character in raw):
-        raise ValueError("URL must be a non-empty HTTP(S) URL")
+        raise PublicInputError("URL must be a non-empty HTTP(S) URL")
     parsed = urlsplit(raw)
     if parsed.scheme.lower() not in {"http", "https"}:
-        raise ValueError("URL must start with http:// or https://")
+        raise PublicInputError("URL must start with http:// or https://")
     if not parsed.hostname:
-        raise ValueError("URL must include a hostname")
+        raise PublicInputError("URL must include a hostname")
     if parsed.username is not None or parsed.password is not None:
-        raise ValueError("URL cannot contain credentials")
+        raise PublicInputError("URL cannot contain credentials")
     try:
         port = parsed.port
         hostname = parsed.hostname.encode("idna").decode("ascii")
     except (UnicodeError, ValueError) as exc:
-        raise ValueError("URL contains an invalid hostname or port") from exc
+        raise PublicInputError("URL contains an invalid hostname or port") from exc
     if ":" in hostname and not hostname.startswith("["):
         hostname = f"[{hostname}]"
     netloc = hostname + (f":{port}" if port is not None else "")
@@ -178,13 +179,13 @@ def _bounded_decompress(data: bytes, encoding: str) -> bytes:
     elif selected == "deflate":
         decoder = zlib.decompressobj()
     else:
-        raise ValueError(f"Unsupported content encoding: {encoding}")
+        raise PublicInputError(f"Unsupported content encoding: {encoding}")
     output = decoder.decompress(data, MAX_RESPONSE_BYTES + 1)
     if decoder.unconsumed_tail or len(output) > MAX_RESPONSE_BYTES:
-        raise ValueError("Response too large (exceeds 5MB limit)")
+        raise PublicInputError("Response too large (exceeds 5MB limit)")
     output += decoder.flush(MAX_RESPONSE_BYTES + 1 - len(output))
     if len(output) > MAX_RESPONSE_BYTES:
-        raise ValueError("Response too large (exceeds 5MB limit)")
+        raise PublicInputError("Response too large (exceeds 5MB limit)")
     return output
 
 
@@ -239,17 +240,17 @@ def webfetch(
     try:
         selected_format = str(format or "markdown").strip().lower()
         if selected_format not in _FORMATS:
-            raise ValueError("format must be one of: text, markdown, html")
+            raise PublicInputError("format must be one of: text, markdown, html")
         if timeout is None:
             timeout_seconds = DEFAULT_TIMEOUT_SECONDS
         elif isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
-            raise ValueError("timeout must be a number of seconds")
+            raise PublicInputError("timeout must be a number of seconds")
         else:
             timeout_seconds = float(timeout)
             if not math.isfinite(timeout_seconds):
-                raise ValueError("timeout must be a positive finite number")
+                raise PublicInputError("timeout must be a positive finite number")
             if timeout_seconds <= 0:
-                raise ValueError("timeout must be greater than zero")
+                raise PublicInputError("timeout must be greater than zero")
             timeout_seconds = min(timeout_seconds, MAX_TIMEOUT_SECONDS)
 
         normalized_url = _normalize_url(url)
@@ -279,10 +280,10 @@ def webfetch(
                 except ValueError:
                     declared_size = 0
                 if declared_size > MAX_RESPONSE_BYTES:
-                    raise ValueError("Response too large (exceeds 5MB limit)")
+                    raise PublicInputError("Response too large (exceeds 5MB limit)")
             data = response.read(MAX_RESPONSE_BYTES + 1)
             if len(data) > MAX_RESPONSE_BYTES:
-                raise ValueError("Response too large (exceeds 5MB limit)")
+                raise PublicInputError("Response too large (exceeds 5MB limit)")
             data = _bounded_decompress(
                 data,
                 str(response.headers.get("Content-Encoding") or ""),
@@ -316,11 +317,11 @@ def webfetch(
     except HTTPError as exc:
         return f"Error: HTTP {exc.code} while fetching URL"
     except URLError as exc:
-        return f"Error: Request failed: {exc.reason}"
+        return format_public_error(exc, context="Request failed: ")
     except (OSError, TimeoutError, ValueError, zlib.error) as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: {type(exc).__name__}: {exc}"
+        return format_public_error(exc)
 
 
 register(

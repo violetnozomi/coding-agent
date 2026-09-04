@@ -116,6 +116,198 @@ class TransactionManager:
             record = self._track_posix(root, target, relative)
         self._backups[key] = record
 
+    @staticmethod
+    def _verify_anchored_parent(
+        record: _Backup,
+        *,
+        parent_fd: int | None,
+        windows_parent_handle: int | None,
+    ) -> None:
+        """Reject a later mutation that resolves to a different parent object."""
+        expected = record.parent_chain[-1]
+        if os.name == "nt":
+            if windows_parent_handle is None:
+                raise ValueError("Transaction parent handle is unavailable")
+            from nz_coder.foundation.project_control import _windows_handle_info
+
+            _attributes, device, inode, _size = _windows_handle_info(
+                windows_parent_handle, full=True,
+            )
+        else:
+            if parent_fd is None:
+                raise ValueError("Transaction parent descriptor is unavailable")
+            info = os.fstat(parent_fd)
+            device, inode = int(info.st_dev), int(info.st_ino)
+        if (device, inode) != (expected.device, expected.inode):
+            raise ValueError("Transaction parent identity changed")
+
+    def track_anchored(
+        self,
+        file_path: str | os.PathLike[str],
+        *,
+        parent_fd: int | None = None,
+        windows_parent_handle: int | None = None,
+    ) -> None:
+        """Snapshot through the same held parent used by the pending mutation."""
+        if not self._active:
+            return
+        root = current_workdir().resolve(strict=True)
+        raw = Path(file_path)
+        lexical = raw if raw.is_absolute() else root / raw
+        target = Path(os.path.normpath(str(lexical)))
+        try:
+            relative = target.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise ValueError("Transaction target escapes workspace") from exc
+        key = str(target)
+        existing = self._backups.get(key)
+        if existing is not None:
+            self._verify_anchored_parent(
+                existing,
+                parent_fd=parent_fd,
+                windows_parent_handle=windows_parent_handle,
+            )
+            return
+        if self._backup_dir is None:
+            raise RuntimeError("Transaction backup directory is unavailable")
+        if os.name == "nt":
+            if windows_parent_handle is None:
+                raise ValueError("Transaction parent handle is unavailable")
+            record = self._track_windows_anchored(
+                root, target, relative, windows_parent_handle,
+            )
+        else:
+            if parent_fd is None:
+                raise ValueError("Transaction parent descriptor is unavailable")
+            record = self._track_posix_anchored(
+                root, target, relative, parent_fd,
+            )
+        self._backups[key] = record
+
+    def _track_posix_anchored(
+        self,
+        root: Path,
+        target: Path,
+        relative: str,
+        parent_fd: int,
+    ) -> _Backup:
+        """Back up the target relative to the mutation's already-open parent."""
+        chain = self._capture_parent_chain_from_handle(
+            root, target.parent, parent_fd,
+        )
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        try:
+            source = os.open(target.name, flags, dir_fd=parent_fd)
+        except FileNotFoundError:
+            return _Backup(target, relative, None, chain)
+        except OSError as exc:
+            raise ValueError("Transaction target is an unsafe workspace file") from exc
+        backup = self._backup_path(target)
+        try:
+            before = os.fstat(source)
+            if not stat.S_ISREG(before.st_mode):
+                raise ValueError("Transaction can only track regular workspace files")
+            self._copy_open_file_to_backup(source, backup)
+            after = os.fstat(source)
+            if (
+                before.st_dev,
+                before.st_ino,
+                before.st_size,
+                before.st_mtime_ns,
+            ) != (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+            ):
+                backup.unlink(missing_ok=True)
+                raise ValueError("Transaction target changed during backup")
+            return _Backup(
+                target,
+                relative,
+                backup,
+                chain,
+                target_device=int(before.st_dev),
+                target_inode=int(before.st_ino),
+                original_mode=int(before.st_mode),
+                original_atime_ns=int(before.st_atime_ns),
+                original_mtime_ns=int(before.st_mtime_ns),
+                original_size=int(before.st_size),
+            )
+        except Exception:
+            backup.unlink(missing_ok=True)
+            raise
+        finally:
+            os.close(source)
+
+    def _track_windows_anchored(
+        self,
+        root: Path,
+        target: Path,
+        relative: str,
+        parent_handle: int,
+    ) -> _Backup:
+        """Keep the mutation parent locked while using Windows backup handles."""
+        from nz_coder.foundation.project_control import (
+            _windows_final_path,
+            _windows_handle_info,
+        )
+
+        expected_parent = target.parent.resolve(strict=True)
+        if Path(_windows_final_path(parent_handle)) != expected_parent:
+            raise ValueError("Transaction parent identity changed")
+        before = _windows_handle_info(parent_handle, full=True)
+        record = self._track_windows(root, target, relative)
+        after = _windows_handle_info(parent_handle, full=True)
+        if before != after or Path(_windows_final_path(parent_handle)) != expected_parent:
+            if record.backup is not None:
+                record.backup.unlink(missing_ok=True)
+            raise ValueError("Transaction parent identity changed")
+        return record
+
+    @classmethod
+    def _capture_parent_chain_from_handle(
+        cls,
+        root: Path,
+        parent: Path,
+        held_parent_fd: int,
+    ) -> tuple[_PathIdentity, ...]:
+        """Capture every parent with openat and match the final held descriptor."""
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        descriptor = os.open(root, flags)
+        chain: list[_PathIdentity] = []
+        cursor = root
+        try:
+            info = os.fstat(descriptor)
+            chain.append(_PathIdentity(cursor, int(info.st_dev), int(info.st_ino)))
+            for part in parent.relative_to(root).parts:
+                child = os.open(part, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+                cursor = cursor / part
+                info = os.fstat(descriptor)
+                if not stat.S_ISDIR(info.st_mode):
+                    raise ValueError("Transaction target parent is unsafe")
+                chain.append(
+                    _PathIdentity(cursor, int(info.st_dev), int(info.st_ino))
+                )
+            opened = os.fstat(descriptor)
+            held = os.fstat(held_parent_fd)
+            if (opened.st_dev, opened.st_ino) != (held.st_dev, held.st_ino):
+                raise ValueError("Transaction parent identity changed")
+            return tuple(chain)
+        finally:
+            os.close(descriptor)
+
     def _backup_path(self, target: Path) -> Path:
         if self._backup_dir is None:
             raise RuntimeError("Transaction backup directory is unavailable")

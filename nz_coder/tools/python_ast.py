@@ -7,6 +7,7 @@ from pathlib import Path
 
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
 
@@ -22,9 +23,9 @@ def python_symbol_check(path: str, symbols: list = None, calls: list = None) -> 
         source = WorkspaceFileAccess(current_workdir()).read_text(path)
         tree = ast.parse(source, filename=str(fp))
     except SyntaxError as e:
-        return f"Error: Python syntax error in {path}: {e}"
+        return format_public_error(e, context=f"Python syntax error in {path}: ")
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
     symbols = symbols or []
     calls = calls or []
@@ -98,9 +99,9 @@ def python_structural_edit(path: str, insertions: list = None, replacements: lis
             diff = "(no changes)"
         return f"Applied Python structural edit to {path}\n\nStructural diff:\n{diff}\n\n{result}"
     except SyntaxError as e:
-        return f"Error: Python syntax error in {path}: {e}"
+        return format_public_error(e, context=f"Python syntax error in {path}: ")
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 
 def _check_symbol(symbol: str, module_funcs: dict, classes: dict) -> str:

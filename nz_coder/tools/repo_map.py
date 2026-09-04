@@ -6,6 +6,7 @@ from pathlib import Path
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.intelligence.code_index import (
     AmbiguousSymbolError,
     FileEntry,
@@ -117,11 +118,11 @@ def code_references(
         alternatives = ", ".join(
             str(item["symbol_id"]) for item in exc.alternatives[:8]
         )
-        return f"Error: {exc}. Candidates: {alternatives}"
+        return format_public_error(exc, context=f"Candidates: {alternatives}. ")
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def _rank_symbol(
@@ -265,9 +266,9 @@ def repo_map(
             header.extend(f"  - {item}" for item in parse_errors[:5])
         return "\n".join(header + rows + semantic_rows)
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.intelligence.service import workspace_repo_intelligence
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
@@ -24,7 +25,7 @@ def semantic_search(query: str, path: str = "", limit: int = 10) -> str:
         encoded = json.dumps(result, ensure_ascii=False, indent=2, default=str)
         return encoded[:40_000] + ("\n[truncated]" if len(encoded) > 40_000 else "")
     except Exception as exc:
-        return f"Error: {type(exc).__name__}: {exc}"
+        return format_public_error(exc)
 
 
 register(

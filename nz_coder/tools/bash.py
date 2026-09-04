@@ -20,6 +20,7 @@ from nz_coder.foundation.workspace_paths import (
     WorkspacePathPolicy,
     model_command_private_path,
 )
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.core.execution_context import (
     broad_tests_blocked,
     declared_test_scopes,
@@ -267,7 +268,7 @@ def _resolve_bash_workdir(workdir: str | None) -> tuple[Path | None, str]:
     except WorkspacePathError as exc:
         if "escapes workspace" in str(exc):
             return None, "Error: workdir escapes workspace"
-        return None, f"Error: {exc}"
+        return None, format_public_error(exc)
     if not candidate.exists():
         return None, f"Error: workdir does not exist: {workdir}"
     if not candidate.is_dir():
@@ -399,7 +400,7 @@ def run_bash(
     try:
         shell = select_shell()
     except RuntimeError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if shell.kind.value == "sh" and "|" in command:
         from nz_coder.intelligence.verification_planner import classify_verification_command
 
@@ -441,7 +442,7 @@ def run_bash(
             env=process_environment,
         )
     except (FileNotFoundError, OSError) as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
     output_queue: queue.Queue = queue.Queue(maxsize=64)
     finished = object()

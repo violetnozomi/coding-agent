@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from nz_coder import __version__
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.workflows.workflow_capsule import (
     preflight_workflow_capsule,
     validate_workflow_capsule,
@@ -425,7 +426,7 @@ def workflow_library(action: str, name: str = "", source: str = "") -> str:
             )
         return "Error: action must be list, show, or preflight"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_save(
@@ -448,7 +449,7 @@ def workflow_save(
             metadata={"workflow_ref": ref},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_library_mutate(
@@ -480,7 +481,7 @@ def workflow_library_mutate(
             metadata={"workflow_ref": ref, "action": normalized},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

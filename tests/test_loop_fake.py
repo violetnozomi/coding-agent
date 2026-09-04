@@ -3537,7 +3537,8 @@ def test_streaming_context_overflow_returns_typed_compaction_outcome():
 
         assert result.needs_compaction is True
         assert result.diagnostic is None
-        assert "context_length_exceeded" in result.compaction_error
+        assert result.compaction_error == "An internal error occurred."
+        assert "8192" not in result.compaction_error
         assert fake.chat.completions.calls == 1
     finally:
         _restore_workdir(old, tmp)

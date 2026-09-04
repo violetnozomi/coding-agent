@@ -1,6 +1,8 @@
 """Subagent single-owner cleanup and result-preservation contracts."""
 from __future__ import annotations
 
+import pytest
+
 
 class _Closer:
     def __init__(self, *, fail=False):
@@ -63,3 +65,22 @@ def test_subagent_model_close_failure_preserves_provider_error():
         preserved = caught
 
     assert preserved is primary
+
+
+def test_subagent_agent_close_failure_always_resets_parent_context(monkeypatch):
+    from nz_coder.runtime.agent import subagent
+
+    outer = {"agent_id": "parent"}
+    outer_token = subagent._PARENT_CONTEXT.set(outer)
+    child_token = subagent._PARENT_CONTEXT.set({"agent_id": "child"})
+    monkeypatch.setattr(
+        subagent,
+        "_cleanup_subagent_resources",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("close failed")),
+    )
+    try:
+        with pytest.raises(RuntimeError, match="close failed"):
+            subagent._cleanup_subagent_scope(None, None, None, child_token)
+        assert subagent._PARENT_CONTEXT.get() == outer
+    finally:
+        subagent._PARENT_CONTEXT.reset(outer_token)
