@@ -6,7 +6,7 @@ import json
 import math
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 from urllib.parse import urlsplit
@@ -61,6 +61,14 @@ class MCPOAuthConfig:
     redirect_uri: str = "http://127.0.0.1:19876/mcp/oauth/callback"
     authorization_server: str = ""
 
+    def __repr__(self) -> str:
+        return (
+            "MCPOAuthConfig("
+            f"configured={bool(self.client_id)!r}, "
+            f"client_secret_env_configured={bool(self.client_secret_env)!r}, "
+            f"authorization_server={self.authorization_server!r})"
+        )
+
     def resolved_client_secret(self) -> str:
         if not self.client_secret_env:
             return ""
@@ -81,21 +89,21 @@ class MCPServerConfig:
     name: str
     command: tuple[str, ...] = ()
     cwd: Path = Path(".")
-    environment: tuple[tuple[str, str], ...] = ()
+    environment: tuple[tuple[str, str], ...] = field(default=(), repr=False)
     enabled: bool = True
     startup_timeout_seconds: float = 30.0
     tool_timeout_seconds: float = 30.0
     tool_effects: tuple[tuple[str, str], ...] = ()
     transport: str = "stdio"
     url: str = ""
-    headers: tuple[tuple[str, str], ...] = ()
+    headers: tuple[tuple[str, str], ...] = field(default=(), repr=False)
     header_env: tuple[tuple[str, str], ...] = ()
     allow_insecure_http: bool = False
     oauth: MCPOAuthConfig | None = None
     source: str = "explicit"
     trusted: bool = True
     fingerprint: str = ""
-    execution_identity: ExecutionIdentity | None = None
+    execution_identity: ExecutionIdentity | None = field(default=None, repr=False)
 
     def environment_dict(self) -> dict[str, str]:
         return dict(self.environment)

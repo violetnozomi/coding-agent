@@ -20,19 +20,19 @@ class RunControlCleanupError(RuntimeError):
 class RunControlBundle:
     """All security-sensitive controls selected from one ConfigSnapshot."""
 
-    config_snapshot: Any
-    permissions: Any
-    plan_mode: Any
-    skill_loader: Any
-    hooks: Any
-    mcp_runtime: Any
-    model_runtime: Any
-    provider_runtimes: dict[tuple[str, str], Any]
+    config_snapshot: Any = field(repr=False)
+    permissions: Any = field(repr=False)
+    plan_mode: Any = field(repr=False)
+    skill_loader: Any = field(repr=False)
+    hooks: Any = field(repr=False)
+    mcp_runtime: Any = field(repr=False)
+    model_runtime: Any = field(repr=False)
+    provider_runtimes: dict[tuple[str, str], Any] = field(repr=False)
     owns_provider_runtimes: bool
-    run_settings: Any = None
-    image_describer: Any = None
+    run_settings: Any = field(default=None, repr=False)
+    image_describer: Any = field(default=None, repr=False)
     owns_image_describer: bool = False
-    sidecar_verifier: Any = None
+    sidecar_verifier: Any = field(default=None, repr=False)
     owns_sidecar_verifier: bool = False
     _closed: bool = field(default=False, init=False, repr=False)
     _sidecar_closed: bool = field(default=False, init=False, repr=False)

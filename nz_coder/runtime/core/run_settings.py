@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterator
 
 from nz_coder.foundation.run_context import (
@@ -128,7 +128,7 @@ class RunSettings:
     trace_enabled: bool
     image_provider: str
     image_model: str
-    image_api_key: str
+    image_api_key: str = field(repr=False)
     image_base_url: str
     image_max_tokens: int
     auto_mode_classifier_enabled: bool
@@ -137,7 +137,7 @@ class RunSettings:
     auto_mode_classifier_block_streak: int
     auto_mode_classifier_infra_failures: int
     auto_mode_classifier_infra_window: float
-    snapshot: ConfigSnapshot | None = None
+    snapshot: ConfigSnapshot | None = field(default=None, repr=False)
 
     @classmethod
     def from_snapshot(cls, snapshot: ConfigSnapshot) -> "RunSettings":

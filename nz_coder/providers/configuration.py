@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import hmac
 import os
@@ -36,7 +36,7 @@ class ProviderConnection:
 
     provider: str
     credential_name: str
-    api_key: str
+    api_key: str = field(repr=False)
     base_url: str
     credential_scope_id: str
     credential_source: str
@@ -45,6 +45,15 @@ class ProviderConnection:
     @property
     def configured(self) -> bool:
         return bool(self.api_key.strip())
+
+    def __repr__(self) -> str:
+        return (
+            "ProviderConnection("
+            f"provider={self.provider!r}, configured={self.configured!r}, "
+            f"credential_source={self.credential_source!r}, "
+            f"endpoint={self.base_url!r}, endpoint_source={self.endpoint_source!r}, "
+            f"generation={self.credential_scope_id[-12:]!r})"
+        )
 
 
 def provider_connection(provider: str, *, config_snapshot=None) -> ProviderConnection:

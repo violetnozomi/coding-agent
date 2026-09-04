@@ -257,3 +257,114 @@ def test_execution_payload_swap_before_launch_fails_closed(tmp_path, monkeypatch
 
     with pytest.raises(UnsafeExecutionIdentity):
         verify_execution_identity(identity, workspace=workspace)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ("python", "-W", "ignore", "server.py"),
+        ("python", "-X", "utf8", "server.py"),
+        ("bash", "-O", "extglob", "server.sh"),
+        ("pwsh", "-ExecutionPolicy", "Bypass", "-File", "server.ps1"),
+    ],
+)
+def test_interpreter_option_arguments_are_not_code_payloads(
+    tmp_path, monkeypatch, command,
+):
+    """An option value must not displace the actual script identity."""
+    from nz_coder.foundation.execution_identity import resolve_execution_identity
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    script = workspace / command[-1]
+    _write_server(script, "one")
+    monkeypatch.setattr(
+        "nz_coder.foundation.execution_identity.shutil.which",
+        lambda name: f"/usr/bin/{name}",
+    )
+
+    identity = resolve_execution_identity(
+        command, cwd=workspace, workspace=workspace,
+        config_source="project", environment_profile="strict-service",
+    )
+
+    assert identity.entrypoint_path == script.resolve()
+
+
+@pytest.mark.parametrize(
+    ("hook_flag", "hook_name"),
+    [("--require", "preload.js"), ("--loader", "loader.js")],
+)
+def test_node_hook_and_main_are_both_content_bound(
+    tmp_path, monkeypatch, hook_flag, hook_name,
+):
+    """Changing an explicit Node preload/loader must rotate the identity."""
+    from nz_coder.foundation.execution_identity import resolve_execution_identity
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    hook = workspace / hook_name
+    main = workspace / "main.js"
+    _write_server(hook, "hook-one")
+    _write_server(main, "main")
+    monkeypatch.setattr(
+        "nz_coder.foundation.execution_identity.shutil.which",
+        lambda _name: "/usr/bin/node",
+    )
+    command = ("node", hook_flag, hook_name, "main.js")
+    first = resolve_execution_identity(
+        command, cwd=workspace, workspace=workspace,
+        config_source="project", environment_profile="strict-service",
+    )
+    _write_server(hook, "hook-two")
+    second = resolve_execution_identity(
+        command, cwd=workspace, workspace=workspace,
+        config_source="project", environment_profile="strict-service",
+    )
+
+    assert second.fingerprint != first.fingerprint
+
+
+def test_execution_identity_never_follows_payload_symlink(tmp_path, monkeypatch):
+    """A code payload symlink cannot redirect trust to an arbitrary target."""
+    from nz_coder.foundation.execution_identity import (
+        UnsafeExecutionIdentity,
+        resolve_execution_identity,
+    )
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    outside = tmp_path / "outside.py"
+    _write_server(outside, "secret")
+    (workspace / "server.py").symlink_to(outside)
+    monkeypatch.setattr(
+        "nz_coder.foundation.execution_identity.shutil.which",
+        lambda _name: "/usr/bin/python",
+    )
+
+    with pytest.raises(UnsafeExecutionIdentity, match="symlink"):
+        resolve_execution_identity(
+            ("python", "server.py"), cwd=workspace, workspace=workspace,
+            config_source="project", environment_profile="strict-service",
+        )
+
+
+def test_execution_identity_repr_hides_command_arguments(tmp_path, monkeypatch):
+    """Credential-like command arguments never enter dataclass repr output."""
+    from nz_coder.foundation.execution_identity import resolve_execution_identity
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _write_server(workspace / "server.py", "main")
+    monkeypatch.setattr(
+        "nz_coder.foundation.execution_identity.shutil.which",
+        lambda _name: "/usr/bin/python",
+    )
+    secret = "SENTINEL-COMMAND-SECRET"
+    identity = resolve_execution_identity(
+        ("python", "server.py", "--token", secret),
+        cwd=workspace, workspace=workspace,
+        config_source="project", environment_profile="strict-service",
+    )
+
+    assert secret not in repr(identity)
