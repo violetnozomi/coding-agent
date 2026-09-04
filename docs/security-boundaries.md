@@ -86,7 +86,10 @@ Raw `str()`/`repr()` conversions of caught exceptions are inventoried as
 `public/model-visible` raw projections. An Exception can cross a model,
 Session, Trace, HTTP, or Terminal boundary only through `PublicError`,
 `TrustedPublicMessage`, or the predefined local-validation type
-`PublicInputError`.
+`PublicInputError`. A second AST contract follows returned values and rejects
+both `str(exc)`/`repr(exc)` and f-string interpolation such as `f"{exc}"`;
+this closes the earlier inventory gap where formatted exceptions were not
+counted.
 
 ## Cross-run resources
 
@@ -180,6 +183,14 @@ handle-relative `replace`/`unlink`. The parent descriptor remains open across
 the operation, so a path swap cannot redirect the I/O outside the captured
 directory.
 
+Transaction backup and mutation now share that exact held parent descriptor:
+`WorkspaceFileAccess` calls `TransactionManager.track_anchored()` only after
+opening the mutation parent, and backup reads the original target relative to
+that descriptor. Reusing a transaction verifies the new parent device/inode
+against the first backup before another mutation. Windows passes the held
+directory handle and verifies its final path plus volume/file identity across
+backup; the documented final replacement limitation remains.
+
 On Windows, the service opens/holds directory and file handles, rejects reparse
 points and checks final path plus volume/file identity. Python does not expose a
 general handle-relative `ReplaceFile`; the final replacement therefore retains
@@ -241,8 +252,8 @@ still coordinate only cooperating processes and are not an OS sandbox.
 The executable contracts live in `tests/architecture/test_security_boundaries.py`
 and `tests/architecture/test_security_closure_contracts.py`. They fail when a
 new direct configuration read, subprocess launch, model-facing file operation,
-raw public exception projection or cross-run resource appears without an exact
-classification. Runtime attack tests cover instruction/config snapshotting,
+raw public exception projection (including direct f-string return) or cross-run
+resource appears without an exact classification. Runtime attack tests cover instruction/config snapshotting,
 workspace-state aliases, cross-workspace settings, MCP/LSP identity changes,
 parent swaps, cleanup failures, active revocation, credential delegation,
 oversized protocol frames and private-lock aliases.
