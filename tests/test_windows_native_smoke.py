@@ -147,7 +147,7 @@ def test_space_path_and_cjk_path_file_edit(tmp_path: Path, directory: str):
         assert "print('ok')" in read_file(relative)
 
 
-def test_junction_escape_blocks_existing_read_and_new_file_write(tmp_path: Path):
+def test_windows_model_file_junction_swap_fails_closed(tmp_path: Path):
     from nz_coder.runtime.process.platform_runtime import decode_process_output
     from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tools.files import read_file, write_file

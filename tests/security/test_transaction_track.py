@@ -136,6 +136,32 @@ def test_transaction_backup_matches_opened_target_identity(tmp_path):
     assert record.backup.read_bytes() == b"before"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor identity contract")
+def test_transaction_track_and_mutation_share_anchor(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    target = tmp_path / "module.py"
+    target.write_text("before", encoding="utf-8")
+    with scoped_workdir(tmp_path):
+        manager = _manager(tmp_path)
+        legacy_calls: list[str] = []
+        monkeypatch.setattr(
+            manager,
+            "track",
+            lambda path: legacy_calls.append(str(path)),
+        )
+        WorkspaceFileAccess(tmp_path).write_text(
+            "module.py", "after", transaction=manager,
+        )
+
+    assert legacy_calls == []
+    record = next(iter(manager._backups.values()))
+    assert record.backup is not None
+    assert record.backup.read_text(encoding="utf-8") == "before"
+    assert target.read_text(encoding="utf-8") == "after"
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX metadata semantics")
 def test_transaction_backup_captures_original_mode_and_mtime(tmp_path):
     from nz_coder.runtime.process.workdir import scoped_workdir

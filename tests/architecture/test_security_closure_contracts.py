@@ -1,11 +1,61 @@
 """Static contracts that keep the final security-boundary closure intact."""
 from __future__ import annotations
 
+import ast
 from dataclasses import fields
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _contains_raw_exception_projection(node: ast.AST, name: str) -> bool:
+    for child in ast.walk(node):
+        if (
+            isinstance(child, ast.FormattedValue)
+            and isinstance(child.value, ast.Name)
+            and child.value.id == name
+        ):
+            return True
+        if (
+            isinstance(child, ast.Call)
+            and isinstance(child.func, ast.Name)
+            and child.func.id in {"str", "repr"}
+            and child.args
+            and isinstance(child.args[0], ast.Name)
+            and child.args[0].id == name
+        ):
+            return True
+    return False
+
+
+def test_public_returns_never_format_caught_exceptions_directly():
+    """A returned model/tool value must use the explicit PublicError boundary."""
+    roots = tuple(
+        ROOT / "nz_coder" / name
+        for name in ("runtime", "tools", "capabilities", "providers", "mcp", "lsp")
+    )
+    violations: list[str] = []
+    for root in roots:
+        for path in sorted(root.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for handler in ast.walk(tree):
+                if not isinstance(handler, ast.ExceptHandler) or not handler.name:
+                    continue
+                for child in ast.walk(handler):
+                    if (
+                        isinstance(child, ast.Return)
+                        and child.value is not None
+                        and _contains_raw_exception_projection(
+                            child.value, handler.name,
+                        )
+                    ):
+                        violations.append(
+                            f"{path.relative_to(ROOT)}:{child.lineno}: "
+                            f"returned caught exception {handler.name!r}; "
+                            "project it through PublicError/PublicInputError"
+                        )
+    assert not violations, "\n".join(violations)
 
 
 def test_capability_lease_identity_is_complete_and_immutable():
@@ -59,4 +109,3 @@ def test_public_error_protocol_has_explicit_input_error_type():
     public = to_public_error(PublicInputError("A predefined validation error."))
     assert public.code == "invalid_input"
     assert public.message == "A predefined validation error."
-

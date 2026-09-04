@@ -96,6 +96,72 @@ def test_delete_parent_swap_after_validation_cannot_escape(tmp_path, monkeypatch
     assert sentinel.read_text(encoding="utf-8") == "OUTSIDE-SENTINEL"
 
 
+def test_document_parent_swap_after_validation_cannot_escape(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.files import read_file
+
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    (workspace / "docs").mkdir(parents=True)
+    outside.mkdir()
+    (workspace / "docs" / "input.pdf").write_bytes(b"%PDF-safe")
+    (outside / "input.pdf").write_bytes(b"%PDF-OUTSIDE-SENTINEL")
+    original = WorkspacePathPolicy.validate_model_read
+    swapped = False
+
+    def validate_then_swap(policy, path):
+        nonlocal swapped
+        result = original(policy, path)
+        if not swapped:
+            swapped = True
+            (workspace / "docs").rename(workspace / "docs-original")
+            (workspace / "docs").symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(WorkspacePathPolicy, "validate_model_read", validate_then_swap)
+    with scoped_workdir(workspace):
+        result = read_file("docs/input.pdf")
+
+    assert "OUTSIDE-SENTINEL" not in str(result)
+
+
+def test_apply_patch_parent_swap_cannot_escape(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.files import apply_patch
+
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    (workspace / "src").mkdir(parents=True)
+    outside.mkdir()
+    (workspace / "src" / "target.txt").write_text("inside", encoding="utf-8")
+    sentinel = outside / "target.txt"
+    sentinel.write_text("OUTSIDE-SENTINEL", encoding="utf-8")
+    original = WorkspacePathPolicy.validate_model_write
+    swapped = False
+
+    def validate_then_swap(policy, path):
+        nonlocal swapped
+        result = original(policy, path)
+        if not swapped:
+            swapped = True
+            (workspace / "src").rename(workspace / "src-original")
+            (workspace / "src").symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(WorkspacePathPolicy, "validate_model_write", validate_then_swap)
+    with scoped_workdir(workspace):
+        result = apply_patch([{
+            "path": "src/target.txt",
+            "old_text": "inside",
+            "new_text": "changed",
+        }])
+
+    assert str(result).startswith("Error:")
+    assert sentinel.read_text(encoding="utf-8") == "OUTSIDE-SENTINEL"
+
+
 def test_direct_apply_patch_failure_rolls_back_all_files(tmp_path, monkeypatch):
     from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
     from nz_coder.runtime.process.workdir import scoped_workdir

@@ -264,7 +264,7 @@ def _native_environment(*, result=None, primary_error=None):
     return Environment()
 
 
-def test_native_cleanup_failure_does_not_turn_success_into_failed_run(
+def test_environment_cleanup_does_not_change_completed_result(
     tmp_path, monkeypatch,
 ):
     from nz_coder.runtime.core.request import RunOptions
@@ -286,7 +286,7 @@ def test_native_cleanup_failure_does_not_turn_success_into_failed_run(
     )]
 
 
-def test_native_cleanup_failure_does_not_mask_primary_run_error(
+def test_environment_cleanup_does_not_mask_primary_error(
     tmp_path, monkeypatch,
 ):
     from nz_coder.runtime.core.request import RunOptions

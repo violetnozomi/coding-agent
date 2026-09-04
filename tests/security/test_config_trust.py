@@ -267,6 +267,22 @@ def test_multiple_invalid_numeric_values_are_collected_without_crash(tmp_path):
     }
 
 
+def test_invalid_boolean_secret_is_not_public(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    secret = "BOOLEAN-SECRET-MUST-NOT-LEAK"
+
+    snapshot = _load(
+        tmp_path,
+        workspace,
+        {"NZ_MCP_ENABLED": secret},
+    )
+
+    assert snapshot.get_bool("NZ_MCP_ENABLED", False) is False
+    assert secret not in snapshot.public_json()
+    assert any(issue.key == "NZ_MCP_ENABLED" for issue in snapshot.issues)
+
+
 def test_loader_never_mutates_process_environment(tmp_path, monkeypatch):
     workspace = tmp_path / "repo"
     workspace.mkdir()

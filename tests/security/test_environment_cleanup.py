@@ -63,7 +63,7 @@ def test_environment_close_attempts_all_resources():
     assert "cleanup-secret-must-not-escape" not in repr(environment.tracer.events)
 
 
-def test_environment_close_is_retryable_without_double_close():
+def test_environment_close_is_retryable():
     environment, failing_provider, successful_provider = _environment()
     mcp = environment._mcp_runtime
 
