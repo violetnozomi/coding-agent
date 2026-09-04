@@ -2532,7 +2532,8 @@ class ProductRunEnvironment:
             )
         instruction_tokens = estimate_tokens(
             load_instruction_context(
-                current_workdir(), config_snapshot=self.config_snapshot,
+                current_workdir(),
+                config_snapshot=getattr(self, "config_snapshot", None),
             ).reminder
         )
         plan_block = self._plan_mode_prompt_block()

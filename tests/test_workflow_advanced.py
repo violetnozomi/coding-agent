@@ -284,7 +284,9 @@ def test_scoped_review_builtin_runs_review_gate_artifact_and_synthesis(
 def test_worktree_sweep_removes_clean_read_only_and_retains_changed(tmp_path):
     from nz_coder.runtime.workflows.workflow_sweep import sweep_workflow_worktrees
 
-    worktrees = tmp_path / ".nz-coder" / "worktrees"
+    from nz_coder.runtime.worktree import WorktreeManager
+
+    worktrees = WorktreeManager(tmp_path).worktree_dir
     clean = worktrees / "clean"
     changed = worktrees / "changed"
     clean.mkdir(parents=True)

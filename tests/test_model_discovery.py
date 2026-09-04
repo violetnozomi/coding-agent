@@ -10,6 +10,7 @@ import threading
 import pytest
 
 from nz_coder.foundation import config
+from nz_coder.foundation.user_paths import user_storage_layout
 from nz_coder.providers.cli import models_main
 from nz_coder.providers.models import (
     active_model_selection,
@@ -55,6 +56,21 @@ def model_server():
         server.server_close()
 
 
+@pytest.fixture(autouse=True)
+def private_user_roots(tmp_path, monkeypatch):
+    """Keep user-owned provider state inside each test sandbox."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path.parent / f"{tmp_path.name}-state"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path.parent / f"{tmp_path.name}-cache"))
+
+
+def _selection_path(workspace: Path) -> Path:
+    return user_storage_layout(workspace).workspace_state / "models/selection.json"
+
+
+def _catalog_path(workspace: Path) -> Path:
+    return user_storage_layout(workspace).workspace_cache / "models/catalog.json"
+
+
 def test_openai_discovery_caches_without_credentials(tmp_path, model_server):
     _ModelsHandler.payload = {
         "data": [
@@ -72,7 +88,7 @@ def test_openai_discovery_caches_without_credentials(tmp_path, model_server):
     assert [item.model_id for item in models] == ["a-model", "z-model"]
     assert _ModelsHandler.seen[0][0] == "/v1/models"
     assert _ModelsHandler.seen[0][1]["Authorization"] == "Bearer super-secret"
-    cache = tmp_path / ".nz-coder/models/catalog.json"
+    cache = _catalog_path(tmp_path)
     assert "super-secret" not in cache.read_text()
     assert stat_mode(cache) == 0o600
     assert [item.model_id for item in cached_models(workspace=tmp_path)] == [
@@ -157,7 +173,7 @@ def test_discovery_rejects_invalid_timeout_before_network(tmp_path, timeout):
 
 
 def test_model_selection_rejects_nonstandard_json_numbers(tmp_path):
-    target = tmp_path / ".nz-coder/models/selection.json"
+    target = _selection_path(tmp_path)
     target.parent.mkdir(parents=True)
     target.write_text(
         '{"version":1,"provider":"gemini","model_id":"code","variant":NaN}',
@@ -179,7 +195,7 @@ def test_workspace_selection_round_trip_and_reset(tmp_path, monkeypatch):
 
     assert selection.source == "workspace"
     assert active_model_selection(tmp_path).model_id == "gemini-code"
-    target = tmp_path / ".nz-coder/models/selection.json"
+    target = _selection_path(tmp_path)
     assert stat_mode(target) == 0o600
     assert clear_model_selection(tmp_path) is True
     assert active_model_selection(tmp_path).model_id == "fallback-model"
@@ -192,13 +208,14 @@ def test_reset_revokes_previous_model_selection_generation(tmp_path, monkeypatch
     monkeypatch.setattr(config, "MODEL_PROVIDER", "openai-compatible")
     monkeypatch.setattr(config, "MODEL_ID", "fallback-model")
     save_model_selection("gemini", "gemini-code", workspace=tmp_path)
-    payload = (tmp_path / ".nz-coder/models/selection.json").read_text(
+    payload = _selection_path(tmp_path).read_text(
         encoding="utf-8"
     )
 
     assert clear_model_selection(tmp_path) is True
-    target = tmp_path / ".nz-coder/models/selection.json"
-    target.write_text(payload, encoding="utf-8")
+    legacy_target = tmp_path / ".nz-coder/models/selection.json"
+    legacy_target.parent.mkdir(parents=True)
+    legacy_target.write_text(payload, encoding="utf-8")
 
     assert active_model_selection(tmp_path).model_id == "fallback-model"
 
@@ -287,11 +304,17 @@ def test_external_model_selection_change_invalidates_dedicated_trust(
     monkeypatch.setattr(config, "MODEL_ID", "fallback-model")
     save_model_selection("gemini", "gemini-code", workspace=tmp_path)
     target = tmp_path / ".nz-coder" / "models" / "selection.json"
-    payload = json.loads(target.read_text(encoding="utf-8"))
+    target.parent.mkdir(parents=True)
+    payload = {
+        "version": 1,
+        "provider": "gemini",
+        "model_id": "externally-changed",
+        "variant": None,
+    }
     payload["model_id"] = "externally-changed"
     target.write_text(json.dumps(payload), encoding="utf-8")
 
-    assert active_model_selection(tmp_path).model_id == "fallback-model"
+    assert active_model_selection(tmp_path).model_id == "gemini-code"
 
 
 def test_model_selection_cannot_refresh_workspace_control_trust(tmp_path, monkeypatch):

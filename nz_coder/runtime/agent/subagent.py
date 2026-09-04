@@ -591,8 +591,7 @@ def _drain_peer_messages(parent_session_id: str, child_session_id: str) -> list[
 def _parent_context_block(parent_session_id: str | None = None) -> str:
     parts: list[str] = []
     state_path = session_runtime_state_path(parent_session_id) if parent_session_id else None
-    legacy_path = current_workdir() / ".nz-coder" / "runtime_state.json"
-    for candidate in (state_path, legacy_path):
+    for candidate in (state_path,):
         if not candidate or not candidate.exists():
             continue
         try:
@@ -828,23 +827,18 @@ def _workspace_root(path: str | Path | None = None) -> Path:
 
 
 def _subagent_root(parent_session_id: str, workspace_root: str | Path | None = None) -> Path:
+    from nz_coder.foundation.user_paths import prepare_user_storage
+
     root = _workspace_root(workspace_root)
-    root.mkdir(parents=True, exist_ok=True)
-    current = root
+    current = prepare_user_storage(root).workspace_state
     for part in (
-        ".nz-coder",
         "sessions",
         "_artifacts",
         _safe_session_id(parent_session_id) or "main-session",
         "subagents",
     ):
         candidate = current / part
-        if candidate.exists():
-            try:
-                candidate.resolve().relative_to(root)
-            except ValueError as exc:
-                raise ValueError("Subagent state path escapes workspace") from exc
-        candidate.mkdir(exist_ok=True)
+        candidate.mkdir(mode=0o700, exist_ok=True)
         current = candidate.resolve()
     return current
 
@@ -1118,11 +1112,11 @@ def _clone_child_worktree(workspace: Path, source: dict, target: dict) -> None:
             else:
                 raise ValueError(f"unsupported changed child path: {relative}")
     if old_worktree is not None:
-        old_scratch = (
-            Path(old_worktree.path).resolve()
-            / ".nz-coder" / "subagents"
-            / str(source.get("session_id") or "") / "scratch.md"
-        )
+        old_scratch = _subagent_artifact_dir(
+            str(source.get("parent_session_id") or "main-session"),
+            str(source.get("session_id") or ""),
+            workspace,
+        ) / "scratch.md"
         if old_scratch.is_file() and not old_scratch.is_symlink():
             scratch_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(old_scratch, scratch_path)
@@ -1429,8 +1423,11 @@ def _relative_to_parent(path: Path, parent_workspace: Path) -> str:
 
 
 def _prepare_subagent_workspace(parent_workspace: Path, state: dict, worktree: Worktree) -> Path:
-    worktree_path = Path(worktree.path).resolve()
-    scratch_path = worktree_path / ".nz-coder" / "subagents" / state["session_id"] / "scratch.md"
+    scratch_path = _subagent_artifact_dir(
+        str(state.get("parent_session_id") or "main-session"),
+        str(state["session_id"]),
+        parent_workspace,
+    ) / "scratch.md"
     scratch_path.parent.mkdir(parents=True, exist_ok=True)
     state["worktree"] = {
         "id": worktree.id,
@@ -1441,8 +1438,12 @@ def _prepare_subagent_workspace(parent_workspace: Path, state: dict, worktree: W
         "mode": worktree.mode,
         "created_at": worktree.created_at,
     }
-    state["worktree_rel"] = _relative_to_parent(worktree_path, parent_workspace)
-    state["scratch_rel"] = _relative_to_parent(scratch_path, parent_workspace)
+    state["worktree_rel"] = (
+        "."
+        if worktree.mode == "direct"
+        else f"user-cache://worktrees/{worktree.id}"
+    )
+    state["scratch_rel"] = f"user-state://subagents/{state['session_id']}/scratch.md"
     return scratch_path
 
 

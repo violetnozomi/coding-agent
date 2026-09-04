@@ -12,7 +12,6 @@ from typing import Any
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.sessions import session_plan_path
 from nz_coder.tools import ToolOutput, register
-from nz_coder.tools.files import _safe_path
 
 
 _MAX_PLAN_CHARS = 100_000
@@ -78,11 +77,20 @@ class PlanModeController:
 
     @staticmethod
     def _validated_path(path: Path) -> Path:
-        relative = path.relative_to(current_workdir())
-        return _safe_path(str(relative))
+        from nz_coder.foundation.user_paths import prepare_user_storage
+
+        allowed = prepare_user_storage(current_workdir()).workspace_state / "sessions" / "_plans"
+        target = path.absolute()
+        try:
+            target.relative_to(allowed.absolute())
+        except ValueError as exc:
+            raise ValueError("Plan path escapes private session state") from exc
+        if target.is_symlink():
+            raise ValueError("Plan path must not be an alias")
+        return target
 
     def _display_path(self) -> str:
-        return str(self.plan_path.relative_to(current_workdir()))
+        return f"user-state://plans/{self.plan_path.name}"
 
     def _ask(self, question: dict) -> tuple[str, str]:
         if self.question_asker is None:

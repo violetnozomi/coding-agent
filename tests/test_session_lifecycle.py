@@ -20,10 +20,9 @@ def test_session_persistence_hardens_state_directories_and_final_json(tmp_path, 
     )
     with scoped_workdir(tmp_path):
         path = sessions.save_session([], session_id="private", activate=False)
+        state = sessions.session_dir()
 
-    state = tmp_path / ".nz-coder"
     assert state in hardened
-    assert state / "sessions" in hardened
     assert path in hardened
 
 
@@ -104,10 +103,11 @@ def test_delete_session_removes_artifacts_and_child_worktree(tmp_path):
         session_artifact_dir,
         session_subagent_dir,
     )
+    from nz_coder.runtime.worktree import WorktreeManager
 
     with scoped_workdir(tmp_path):
         save_session([{"role": "user", "content": "old"}], session_id="old")
-        child = tmp_path / ".nz-coder" / "worktrees" / "subagent-child"
+        child = WorktreeManager(tmp_path).worktree_dir / "subagent-child"
         child.mkdir(parents=True)
         (child / "result.py").write_text("done\n", encoding="utf-8")
         state_dir = session_subagent_dir("old") / "subagent-child"
@@ -142,6 +142,7 @@ def test_delete_active_session_repairs_alias_to_latest_remaining(tmp_path):
         active_session_id,
         load_session,
         save_session,
+        session_dir,
     )
 
     with scoped_workdir(tmp_path):
@@ -149,7 +150,7 @@ def test_delete_active_session_repairs_alias_to_latest_remaining(tmp_path):
         save_session([], session_id="active-old", activate=True)
         # Make newer.json the newest remaining durable Session without changing
         # the active alias.
-        newer = tmp_path / ".nz-coder" / "sessions" / "newer.json"
+        newer = session_dir() / "newer.json"
         newer.touch()
         activate_session("active-old")
 
@@ -200,7 +201,7 @@ def test_session_mutations_reject_reserved_or_sanitized_identity(
     session_id,
 ):
     """User IDs must never alias another Session or convenience pointer."""
-    from nz_coder.state.sessions import activate_session, save_session
+    from nz_coder.state.sessions import activate_session, save_session, session_dir
 
     with scoped_workdir(tmp_path):
         save_session([], session_id="session", activate=False)
@@ -209,7 +210,7 @@ def test_session_mutations_reject_reserved_or_sanitized_identity(
         with pytest.raises(ValueError, match="exact non-reserved"):
             activate_session(session_id)
 
-        assert (tmp_path / ".nz-coder" / "sessions" / "session.json").exists()
+        assert (session_dir() / "session.json").exists()
 
 
 def test_session_read_rejects_lossy_identity_instead_of_aliasing(tmp_path):
@@ -224,11 +225,11 @@ def test_session_read_rejects_lossy_identity_instead_of_aliasing(tmp_path):
 
 
 def test_corrupt_active_alias_cannot_select_sanitized_session(tmp_path):
-    from nz_coder.state.sessions import active_session_id, save_session
+    from nz_coder.state.sessions import active_session_id, save_session, session_dir
 
     with scoped_workdir(tmp_path):
         save_session([], session_id="session", activate=False)
-        alias = tmp_path / ".nz-coder" / "sessions" / "active.json"
+        alias = session_dir() / "active.json"
         alias.write_text(
             json.dumps({"session_id": "../../session"}),
             encoding="utf-8",
@@ -239,10 +240,10 @@ def test_corrupt_active_alias_cannot_select_sanitized_session(tmp_path):
 
 def test_non_object_session_json_is_treated_as_corrupt_state(tmp_path):
     """Valid JSON with the wrong root type must not crash Session callers."""
-    from nz_coder.state.sessions import active_session_id, load_session, save_session
+    from nz_coder.state.sessions import active_session_id, load_session, save_session, session_dir
 
     with scoped_workdir(tmp_path):
-        base = tmp_path / ".nz-coder" / "sessions"
+        base = session_dir()
         base.mkdir(parents=True)
         (base / "active.json").write_text("[]\n", encoding="utf-8")
         (base / "latest.json").write_text("[]\n", encoding="utf-8")

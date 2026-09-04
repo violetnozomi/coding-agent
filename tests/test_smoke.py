@@ -519,9 +519,8 @@ def test_persist_large_output_uses_current_workdir():
     config.WORKDIR = tmpdir
     try:
         result = persist_large_output("call_test", "x" * (old_trigger + 1))
-        expected = tmpdir / ".nz-coder" / "tool-results" / "call_test.txt"
-        assert expected.exists()
-        assert "Full output saved to: .nz-coder/tool-results/call_test.txt" in result
+        assert "Full output artifact: artifact_" in result
+        assert str(tmpdir) not in result
         print("OK: large outputs use current WORKDIR")
     finally:
         config.WORKDIR = old_workdir
@@ -1132,9 +1131,10 @@ def test_persist_large_output_uses_active_session_runtime_dir():
     try:
         activate_session("session-output")
         result = persist_large_output("call_test", "x" * (old_trigger + 1))
-        expected = session_tool_results_dir("session-output") / "call_test.txt"
-        assert expected.exists()
-        assert str(expected.relative_to(tmpdir)) in result
+        persisted = list(session_tool_results_dir("session-output").glob("artifact_*.txt"))
+        assert len(persisted) == 1
+        assert "Full output artifact: artifact_" in result
+        assert str(persisted[0]) not in result
     finally:
         config.WORKDIR = old_workdir
         shutil.rmtree(str(tmpdir), ignore_errors=True)

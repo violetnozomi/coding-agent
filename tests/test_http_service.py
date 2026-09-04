@@ -28,6 +28,7 @@ from nz_coder.state.memory_control import MemoryControlPlane
 from nz_coder.runtime.process.workdir import current_workdir, scoped_workdir
 from nz_coder.runtime.process.process_service import workspace_process_service
 from nz_coder.state.sessions import load_session, save_session, session_runtime_dir
+from nz_coder.foundation.user_paths import user_storage_layout
 from nz_coder.protocol.session_events import SessionEventBus, encode_sse
 from nz_coder.state.skills import current_skill_loader
 
@@ -173,8 +174,11 @@ def test_http_session_run_messages_and_sse_replay(local_service):
     session_id = created["id"]
     assert created["status"] == "idle"
     assert created["permission_mode"] == "auto"
-    persisted = Path(created["workspace"]) / ".nz-coder" / "sessions" / f"{session_id}.json"
-    artifacts = Path(created["workspace"]) / ".nz-coder" / "sessions" / "_artifacts" / session_id
+    private_sessions = user_storage_layout(
+        Path(created["workspace"])
+    ).workspace_state / "sessions"
+    persisted = private_sessions / f"{session_id}.json"
+    artifacts = private_sessions / "_artifacts" / session_id
     assert persisted.exists()
     assert artifacts.exists()
 
@@ -972,8 +976,7 @@ def test_http_session_busy_abort_and_delete_boundary(local_service):
     created = client.create_session("default")
     session_id = created["id"]
     persisted = (
-        Path(created["workspace"])
-        / ".nz-coder"
+        user_storage_layout(Path(created["workspace"])).workspace_state
         / "sessions"
         / f"{session_id}.json"
     )
@@ -2188,7 +2191,11 @@ def test_http_restart_discovers_and_lazily_restores_session(tmp_path):
     assert first_manager.get(session_id).wait(timeout=3)
     first_snapshot = first_manager.get(session_id).snapshot()
     first_ids = [item["info"]["id"] for item in first_snapshot["messages"]]
-    session_path = workspace / ".nz-coder" / "sessions" / f"{session_id}.json"
+    session_path = (
+        user_storage_layout(workspace).workspace_state
+        / "sessions"
+        / f"{session_id}.json"
+    )
     persisted = json.loads(session_path.read_text(encoding="utf-8"))
     assert persisted["message_schema_version"] == 1
     assert all("_nz_message_id" in item for item in persisted["messages"])
@@ -2621,13 +2628,13 @@ def test_http_agent_prompt_uses_the_selected_workspace_state(tmp_path, monkeypat
     # Session construction does not freeze project skill descriptions. They
     # are appended from the fresh per-run snapshot by AgentLoop.
     assert captured["skill_descriptions"] == ""
-    assert captured["memory_manager"].memory_dir == workspace / ".nz-coder" / "memory"
+    private_state = user_storage_layout(workspace).workspace_state
+    assert captured["memory_manager"].memory_dir == private_state / "memory"
     assert captured["skill_loader"]._project_dir == workspace / ".nz-coder" / "skills"
     assert captured["system_prompt"] == "workspace prompt"
     assert not captured["kwargs"].get("auto_mode_classifier_enabled", False)
     assert captured["kwargs"]["event_bus"]._journal.path == (
-        workspace
-        / ".nz-coder"
+        private_state
         / "sessions"
         / "_artifacts"
         / "http-workspace-prompt"

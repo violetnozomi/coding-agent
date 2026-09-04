@@ -2391,15 +2391,19 @@ def test_instruction_reminder_precedes_dynamic_context_on_first_user():
 
 def test_instruction_reminder_falls_back_to_system_without_user_message():
     from nz_coder.loop import AgentLoop
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
 
     old, tmp = _tmp_workdir()
     try:
         (tmp / "AGENTS.md").write_text("SYSTEM-FALLBACK-RULE", encoding="utf-8")
+        _trust_project_control(tmp)
+        snapshot = load_config_snapshot(tmp)
         agent = AgentLoop(
             "test",
             permission_mode="auto",
             client=FakeClient([]),
             trace_enabled=False,
+            config_snapshot=snapshot,
         )
 
         request = agent._build_api_messages([
@@ -2999,15 +3003,17 @@ def test_planning_restore_hydrates_plan_without_new_planning_call():
 
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
+    from nz_coder.state.sessions import session_runtime_state_path
     from nz_coder.tools.scratchpad import scratchpad
 
     old, tmp = _tmp_workdir()
     old_planning = _set_planning_config(config, enabled=True)
     scratchpad.clear()
     try:
-        state_dir = tmp / ".nz-coder"
-        state_dir.mkdir(exist_ok=True)
-        (state_dir / "runtime_state.json").write_text(
+        session_id = "planning-restore"
+        state_path = session_runtime_state_path(session_id)
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(
             json.dumps({
                 "active": True,
                 "turn_count": 0,
@@ -3022,7 +3028,13 @@ def test_planning_restore_hydrates_plan_without_new_planning_call():
         )
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         messages = [{"role": "user", "content": "Add a REST endpoint"}]
-        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=fake,
+            trace_enabled=False,
+            session_id=session_id,
+        )
         _run_agent(agent, messages, stream=False)
 
         assert fake.chat.completions.calls == 1
@@ -3039,6 +3051,7 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.state.sessions import session_runtime_state_path
 
     old, tmp = _tmp_workdir()
     old_planning = _set_planning_config(config, enabled=False)
@@ -3054,9 +3067,10 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
         state.set_acceptance_criteria_from_text(original_task)
         state.turn_count = 200
         state.read_files = ["parser.py", "tests/test_parser.py"]
-        state_dir = tmp / ".nz-coder"
-        state_dir.mkdir(exist_ok=True)
-        state.save(state_dir / "runtime_state.json", active=False)
+        session_id = "resume-max-turns-go-on"
+        state_path = session_runtime_state_path(session_id)
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state.save(state_path, active=False)
 
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         messages = [
@@ -3076,7 +3090,7 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
             permission_mode="auto",
             client=fake,
             trace_enabled=False,
-            session_id="resume-max-turns-go-on",
+            session_id=session_id,
         )
 
         _run_agent(agent, messages, stream=False)
@@ -3101,6 +3115,7 @@ def test_substantive_continuation_overlays_current_round_constraints(monkeypatch
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.state.sessions import session_runtime_state_path
 
     old, tmp = _tmp_workdir()
     monkeypatch.setattr(config, "RUNTIME_STATE_PERSIST", True)
@@ -3115,9 +3130,10 @@ def test_substantive_continuation_overlays_current_round_constraints(monkeypatch
         state.initial_task_text = original_task
         state.set_acceptance_criteria_from_text(original_task)
         state.read_files = ["parser.py", "tests/test_parser.py"]
-        state_dir = tmp / ".nz-coder"
-        state_dir.mkdir(exist_ok=True)
-        state.save(state_dir / "runtime_state.json", active=False)
+        session_id = "resume-with-current-round-constraints"
+        state_path = session_runtime_state_path(session_id)
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state.save(state_path, active=False)
 
         current_instruction = (
             "Continue the parser fix in parser_v2.py. The fallback must reject "
@@ -3141,7 +3157,7 @@ def test_substantive_continuation_overlays_current_round_constraints(monkeypatch
             permission_mode="auto",
             client=FakeClient([]),
             trace_enabled=False,
-            session_id="resume-with-current-round-constraints",
+            session_id=session_id,
         )
 
         agent._init_run(messages, stream=False)

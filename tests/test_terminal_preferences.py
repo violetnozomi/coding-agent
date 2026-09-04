@@ -27,7 +27,9 @@ def test_preferences_round_trip_and_private_file(tmp_path):
 
     assert updated.theme == "nord"
     assert load_terminal_preferences(tmp_path) == updated
-    path = tmp_path / ".nz-coder" / "terminal" / "preferences.json"
+    from nz_coder.foundation.user_paths import user_storage_layout
+
+    path = user_storage_layout(tmp_path).workspace_state / "terminal" / "preferences.json"
     assert os.stat(path).st_mode & 0o777 == 0o600
 
 
@@ -43,7 +45,9 @@ def test_preferences_harden_directory_and_atomic_final_file(tmp_path, monkeypatc
 
     update_terminal_preferences(workspace=tmp_path, theme="nord")
 
-    target = tmp_path / ".nz-coder" / "terminal" / "preferences.json"
+    from nz_coder.foundation.user_paths import user_storage_layout
+
+    target = user_storage_layout(tmp_path).workspace_state / "terminal" / "preferences.json"
     assert os.fspath(target.parent) in hardened
     assert os.fspath(target) in hardened
 

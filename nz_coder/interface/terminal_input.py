@@ -41,6 +41,8 @@ from nz_coder.interface.preferences import (
     theme_names,
 )
 from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.foundation.user_paths import prepare_user_storage
+from nz_coder.foundation.user_paths import resolve_private_attachment
 from nz_coder.interface.selector import FuzzySelector
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.sessions import list_session_ids
@@ -99,6 +101,7 @@ class AttachedFile:
 
     path: str
     size: int
+    host_path: str = ""
 
 
 class TerminalCompleter(Completer):
@@ -481,6 +484,16 @@ class TerminalInput:
             if strict:
                 raise ValueError("Use /attach PATH")
             return None
+        if raw.startswith("user-state://attachments/"):
+            try:
+                private = resolve_private_attachment(self.workspace, raw)
+                if private.is_symlink() or not private.is_file():
+                    raise ValueError("private attachment is missing or unsafe")
+                return AttachedFile(raw, private.stat().st_size, str(private))
+            except (OSError, ValueError) as exc:
+                if strict:
+                    raise ValueError("Private attachment is missing or unsafe") from exc
+                return None
         candidate = Path(raw)
         path = candidate if candidate.is_absolute() else self.workspace / candidate
         if path.is_symlink():
@@ -527,8 +540,15 @@ class TerminalInput:
         image = read_image()
         if image is None:
             return False
-        relative = persist_image(self.workspace, image)
-        self.queue_attachment(relative)
+        reference = persist_image(self.workspace, image)
+        attachment = self._resolve_attachment(reference, strict=False)
+        if attachment is None:
+            return False
+        self._attachments.append(attachment)
+        if len(self._attachments) > _MAX_ATTACHMENTS:
+            self._attachments.pop(0)
+        if self.fullscreen is not None:
+            self.fullscreen.invalidate()
         return True
 
     def _dropped_file_attachments(self, text: str) -> tuple[AttachedFile, ...]:
@@ -827,9 +847,8 @@ def scan_workspace_files(workspace: Path, limit: int = _MAX_COMPLETION_FILES) ->
 
 def _prepare_history_path(workspace: Path) -> Path:
     root = workspace.resolve()
-    directory = root / ".nz-coder"
+    directory = prepare_user_storage(root).workspace_state / "terminal"
     path = directory / "prompt-history"
-    path.resolve().relative_to(root)
     directory.mkdir(parents=True, exist_ok=True)
     try:
         directory.chmod(0o700)

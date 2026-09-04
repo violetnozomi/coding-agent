@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import math
 import re
@@ -27,11 +26,7 @@ from nz_coder.protocol.message_schema import (
     is_synthetic_user_message,
 )
 from nz_coder.state.workdir import current_workdir
-from nz_coder.state.sessions import (
-    session_runtime_dir,
-    session_tool_results_dir,
-    session_transcript_dir,
-)
+from nz_coder.state.sessions import active_session_id, session_transcript_dir
 
 PREVIEW_CHARS = config.PERSIST_PREVIEW_CHARS
 TRIGGER_CHARS = config.PERSIST_OUTPUT_TRIGGER
@@ -219,19 +214,18 @@ def persist_oversized_user_inputs(messages: list, max_tokens: int) -> int:
         return 0
 
     persisted = 0
-    input_dir = session_runtime_dir() / "user-inputs"
-    for index, message in enumerate(messages):
+    for message in messages:
         if message.get("role") != "user":
             continue
         content = message.get("_nz_user_text", message.get("content"))
         if not isinstance(content, str) or estimate_tokens(content) <= max_tokens:
             continue
-        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-        path = input_dir / f"user_input_{index}_{digest}.txt"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        if not path.exists():
-            path.write_text(content, encoding="utf-8")
-        relative = path.relative_to(current_workdir())
+        from nz_coder.tool_platform.artifacts import ArtifactStore
+
+        artifact_id = ArtifactStore(
+            current_workdir(),
+            active_session_id() or "session",
+        ).put(content, kind="user-input")
         preview_chars = max(200, PREVIEW_CHARS)
         head = content[:preview_chars]
         tail = content[-preview_chars:] if len(content) > preview_chars else ""
@@ -239,8 +233,8 @@ def persist_oversized_user_inputs(messages: list, max_tokens: int) -> int:
         replacement = (
             "<oversized-user-input>\n"
             "The original user message exceeded this model's safe input budget. "
-            f"Its full content is saved at: {relative}\n"
-            "Read that file when the complete input is needed.\n\n"
+            f"Its full content is saved as opaque artifact: {artifact_id}\n"
+            "Use read_tool_result with that artifact id when the complete input is needed.\n\n"
             f"Beginning preview:\n{head}"
             f"{tail_block}\n"
             "</oversized-user-input>"
@@ -258,26 +252,18 @@ def persist_oversized_user_inputs(messages: list, max_tokens: int) -> int:
 def persist_large_output(tool_call_id: str, output: str) -> str:
     if len(output) <= TRIGGER_CHARS:
         return output
-    tool_results_dir = session_tool_results_dir()
-    tool_results_dir.mkdir(parents=True, exist_ok=True)
-    safe_id = re.sub(r"[^a-zA-Z0-9_.-]", "_", tool_call_id or "unknown")
-    path = tool_results_dir / f"{safe_id}.txt"
-    if path.exists():
-        try:
-            matches_existing = path.read_text(encoding="utf-8") == output
-        except OSError:
-            matches_existing = False
-        if not matches_existing:
-            digest = hashlib.sha256(output.encode("utf-8")).hexdigest()[:16]
-            path = tool_results_dir / f"{safe_id}_{digest}.txt"
-    if not path.exists():
-        path.write_text(output, encoding="utf-8")
-    rel = path.relative_to(current_workdir())
+    from nz_coder.tool_platform.artifacts import ArtifactStore
+
+    artifact_id = ArtifactStore(
+        current_workdir(),
+        active_session_id() or "session",
+    ).put(output, kind="tool-result")
     preview = output[:PREVIEW_CHARS]
     size_kb = len(output) / 1024
     return (
         f"<persisted-output>\n"
-        f"Output too large ({size_kb:.1f}KB). Full output saved to: {rel}\n\n"
+        f"Output too large ({size_kb:.1f}KB). Full output artifact: {artifact_id}\n"
+        "Use read_tool_result with that artifact id to inspect it.\n\n"
         f"Preview (first {PREVIEW_CHARS} chars):\n{preview}\n"
         f"</persisted-output>"
     )
@@ -862,7 +848,12 @@ def auto_compact(
                 if isinstance(message.get(MESSAGE_ID_KEY), str)
             ],
             "created_at": time.time(),
-            "archive": str(path.relative_to(current_workdir())),
+            # Transcript archives are private runtime state, not project files.
+            # Keep their host path out of model-visible/session metadata.
+            "archive": (
+                "user-state://transcripts/"
+                f"{active_session_id() or 'session'}/{path.name}"
+            ),
         },
     }
     if recovery is not None:

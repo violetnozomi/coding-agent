@@ -55,17 +55,13 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         current_round_instruction: str = "",
     ) -> bool:
         host._runtime_state_path = session_runtime_state_path(host.session_id)
-        legacy_path = current_workdir() / ".nz-coder" / "runtime_state.json"
         host.runtime_state.reset(max_turns=max_turns, timeout_seconds=timeout)
         host.runtime_state.set_acceptance_criteria_from_text(task_text)
         host.runtime_state.initial_task_text = task_text
         restored = False
         if config.RUNTIME_STATE_PERSIST:
-            restore_path = host._runtime_state_path
-            if not restore_path.exists() and legacy_path.exists():
-                restore_path = legacy_path
             restored = host.runtime_state.load(
-                restore_path,
+                host._runtime_state_path,
                 allow_inactive=resume_activation,
             )
             if restored:

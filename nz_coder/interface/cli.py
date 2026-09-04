@@ -1071,6 +1071,10 @@ def main(argv: list[str] | None = None) -> int:
         from nz_coder.state.memory_cli import memory_main
 
         return memory_main(args[1:])
+    if args and args[0] == "migrate-state":
+        from nz_coder.state.migration import migration_main
+
+        return migration_main(args[1:])
     if args and args[0] in ("extension", "extensions"):
         from nz_coder.extensions.cli import extensions_main
 
@@ -1111,6 +1115,7 @@ def main(argv: list[str] | None = None) -> int:
             "  nz-coder config show             Show effective configuration\n"
             "  nz-coder models list             List available models\n"
             "  nz-coder models select PROVIDER/MODEL  Select a model\n\n"
+            "  nz-coder migrate-state            Inspect/migrate legacy runtime state\n\n"
             "More: nz-coder mcp --help | swebench --help | extensions --help\n"
             "Inside the terminal use /help, /model, /mode, or Ctrl+K.",
             markup=False,

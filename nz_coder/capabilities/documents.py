@@ -21,6 +21,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+from nz_coder.foundation.user_paths import prepare_user_storage
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.protocol.attachments import (
     MAX_DOCUMENT_BYTES,
@@ -285,7 +286,11 @@ def _convert_and_slice(
     """Convert one source revision, cache it, then apply line pagination."""
     _check_cancelled(cancel_event)
     stat = source.stat()
-    cache_dir = workspace / ".nz-coder" / "sessions" / session_id / "documents" / ".cache"
+    cache_dir = (
+        prepare_user_storage(workspace).workspace_cache
+        / "documents"
+        / session_id
+    )
     total_pages = None
     read_pages = None
     effective_pages = requested_pages

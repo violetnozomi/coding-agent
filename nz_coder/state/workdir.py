@@ -14,7 +14,18 @@ _DERIVED_DIRS = (
     "TRACE_DIR",
     "CHANGE_DIR",
     "SESSION_DIR",
+    "ARTIFACT_DIR",
+    "ATTACHMENT_DIR",
+    "DOCUMENT_CACHE_DIR",
+    "INDEX_CACHE_DIR",
+    "MODEL_CACHE_DIR",
 )
+
+_COMPAT_DEFAULTS = {
+    name: Path(getattr(config, name))
+    for name in _DERIVED_DIRS
+    if hasattr(config, name)
+}
 
 _WORKDIR_OVERRIDE: ContextVar[Path | None] = ContextVar(
     "nz_coder_workdir_override",
@@ -23,14 +34,23 @@ _WORKDIR_OVERRIDE: ContextVar[Path | None] = ContextVar(
 
 
 def _workspace_derived_paths(root: Path) -> dict[str, Path]:
-    base = root.resolve() / ".nz-coder"
+    from nz_coder.foundation.user_paths import prepare_user_storage
+
+    layout = prepare_user_storage(root)
+    state = layout.workspace_state
+    cache = layout.workspace_cache
     return {
-        "TRANSCRIPT_DIR": base / "transcripts",
-        "TOOL_RESULTS_DIR": base / "tool-results",
-        "MEMORY_DIR": base / "memory",
-        "TRACE_DIR": base / "runs",
-        "CHANGE_DIR": base / "changes",
-        "SESSION_DIR": base / "sessions",
+        "TRANSCRIPT_DIR": state / "transcripts",
+        "TOOL_RESULTS_DIR": state / "tool-results",
+        "MEMORY_DIR": state / "memory",
+        "TRACE_DIR": state / "runs",
+        "CHANGE_DIR": state / "changes",
+        "SESSION_DIR": state / "sessions",
+        "ARTIFACT_DIR": state / "artifacts",
+        "ATTACHMENT_DIR": state / "attachments",
+        "DOCUMENT_CACHE_DIR": cache / "documents",
+        "INDEX_CACHE_DIR": cache / "indexes",
+        "MODEL_CACHE_DIR": cache / "models",
     }
 
 
@@ -46,15 +66,12 @@ def current_derived_path(name: str) -> Path:
     """Return a workspace-derived directory without mutating global config."""
     if name not in _DERIVED_DIRS:
         raise ValueError(f"Unknown workspace-derived path: {name}")
-    override = _WORKDIR_OVERRIDE.get()
-    if override is not None:
-        return _workspace_derived_paths(override)[name]
-    root = current_workdir()
-    expected = _workspace_derived_paths(root)[name]
-    configured = Path(getattr(config, name))
-    if configured.parent.name == ".nz-coder" and configured.parent.parent.resolve() != root:
-        return expected
-    return configured
+    configured_default = _COMPAT_DEFAULTS.get(name)
+    if configured_default is not None:
+        configured = Path(getattr(config, name))
+        if configured != configured_default:
+            return configured
+    return _workspace_derived_paths(current_workdir())[name]
 
 
 @contextmanager

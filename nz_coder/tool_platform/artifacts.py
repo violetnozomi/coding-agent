@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import tempfile
 import threading
 import time
@@ -15,14 +16,13 @@ from typing import Callable
 
 from nz_coder.foundation.private_paths import harden_private_path
 from nz_coder.foundation.file_lock import exclusive_file_lock
-from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state.sessions import session_dir, session_tool_results_dir
 
 
 _ARTIFACT_ID = re.compile(r"^artifact_[a-f0-9]{32}$")
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_.-]{1,160}$")
-_ALLOWED_MODEL_KINDS = frozenset({"tool-result"})
+_ALLOWED_MODEL_KINDS = frozenset({"tool-result", "user-input"})
 _LOCK = threading.RLock()
 
 
@@ -89,7 +89,7 @@ class ArtifactStore:
         except ValueError:
             self.directory.relative_to(self.artifact_root)
         else:
-            WorkspacePathPolicy(self.workspace).validate_internal_access(self.directory)
+            raise ArtifactAccessError("Artifact directory must be outside the workspace")
         self.manifest_path = self.directory / "manifest.json"
         self.lock_path = self.artifact_root / ".artifact.lock"
 
@@ -172,21 +172,27 @@ class ArtifactStore:
             filename = str(record.get("filename") or "")
             if filename != f"{safe_id}.txt":
                 raise ArtifactAccessError("Artifact manifest entry is invalid")
-            path = WorkspacePathPolicy(self.workspace).validate_internal_access(
-                self.directory / filename
-            )
+            path = self._validated_artifact_path(self.directory / filename)
             try:
-                info = path.lstat()
+                descriptor = os.open(
+                    path,
+                    os.O_RDONLY
+                    | getattr(os, "O_NOFOLLOW", 0)
+                    | getattr(os, "O_NONBLOCK", 0),
+                )
             except OSError as exc:
                 raise ArtifactAccessError("Artifact content is unavailable") from exc
-            if path.is_symlink() or not path.is_file():
-                raise ArtifactAccessError("Artifact content is not a regular file")
-            total = int(info.st_size)
-            if offset > total:
-                raise ArtifactAccessError("Artifact offset exceeds content length")
-            with path.open("rb") as handle:
-                handle.seek(offset)
-                payload = handle.read(limit)
+            try:
+                info = os.fstat(descriptor)
+                if not stat.S_ISREG(info.st_mode):
+                    raise ArtifactAccessError("Artifact content is not a regular file")
+                total = int(info.st_size)
+                if offset > total:
+                    raise ArtifactAccessError("Artifact offset exceeds content length")
+                os.lseek(descriptor, offset, os.SEEK_SET)
+                payload = os.read(descriptor, limit)
+            finally:
+                os.close(descriptor)
             next_offset = offset + len(payload)
             return ArtifactChunk(
                 payload.decode("utf-8", errors="replace"),

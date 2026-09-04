@@ -223,14 +223,16 @@ def test_session_quota_uses_file_stat_not_manifest_size(tmp_path):
         store.put("y" * 50, kind="tool-result")
 
 
-def test_artifact_store_uses_configured_session_directory(tmp_path, monkeypatch):
+def test_artifact_store_rejects_workspace_local_configured_session_directory(
+    tmp_path,
+    monkeypatch,
+):
     from nz_coder.foundation import config
     from nz_coder.runtime.process.workdir import scoped_workdir
-    from nz_coder.tool_platform.artifacts import ArtifactStore
+    from nz_coder.tool_platform.artifacts import ArtifactAccessError, ArtifactStore
 
     configured = tmp_path / "private-sessions"
     monkeypatch.setattr(config, "SESSION_DIR", configured)
     with scoped_workdir(tmp_path):
-        store = ArtifactStore(tmp_path, "session-a")
-
-    assert store.directory == configured / "_artifacts/session-a/runtime/tool-results"
+        with pytest.raises(ArtifactAccessError, match="outside the workspace"):
+            ArtifactStore(tmp_path, "session-a")

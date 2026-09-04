@@ -56,7 +56,12 @@ def tag_file_attachments(
         if not source:
             continue
         original_bytes = max(0, int(getattr(attachment, "size", 0) or 0))
-        path = _safe_source(root, source) if root is not None else None
+        private_source = str(getattr(attachment, "host_path", "") or "").strip()
+        path = (
+            _safe_private_source(root, source, private_source)
+            if root is not None and private_source
+            else (_safe_source(root, source) if root is not None else None)
+        )
         if path is not None:
             try:
                 original_bytes = path.stat().st_size
@@ -176,6 +181,23 @@ def _safe_source(workspace: Path, source: str) -> Path | None:
     except (OSError, ValueError):
         return None
     return resolved if resolved.is_file() else None
+
+
+def _safe_private_source(
+    workspace: Path,
+    source: str,
+    host_path: str,
+) -> Path | None:
+    from nz_coder.foundation.user_paths import resolve_private_attachment
+
+    try:
+        expected = resolve_private_attachment(workspace, source)
+        provided = Path(host_path).absolute()
+        if expected.absolute() != provided or provided.is_symlink() or not provided.is_file():
+            return None
+        return provided
+    except (OSError, ValueError):
+        return None
 
 
 def _read_bounded_text(path: Path, max_bytes: int) -> tuple[str, int, int]:
