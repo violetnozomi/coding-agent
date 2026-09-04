@@ -132,14 +132,18 @@ def load_mcp_server_configs(
     workspace: Path | None = None,
     project_control_snapshot: ProjectControlSnapshot | None = None,
     config_snapshot: ConfigSnapshot | None = None,
+    compatibility_mode: bool = False,
 ) -> list[MCPServerConfig]:
     """Load merged user/project/environment config without executing commands."""
     root = (workspace or current_workdir()).resolve()
-    legacy_globals = config_snapshot is None
+    legacy_globals = bool(compatibility_mode)
     if config_snapshot is None:
-        from nz_coder.foundation.workspace_trust import current_config_snapshot
+        from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
+            current_config_snapshot,
+        )
 
-        config_snapshot = current_config_snapshot(root)
+        config_snapshot = active_config_snapshot(root) or current_config_snapshot(root)
     if config_snapshot.workspace.resolve() != root:
         raise ValueError("ConfigSnapshot belongs to a different workspace")
     if project_control_snapshot is None:
@@ -424,10 +428,11 @@ def mcp_config_paths(
     workspace: Path,
     *,
     config_snapshot: ConfigSnapshot | None = None,
+    compatibility_mode: bool = False,
 ) -> tuple[Path, Path, Path]:
     """Return resolved user, project, and trust paths with project confinement."""
     root = workspace.resolve()
-    legacy_globals = config_snapshot is None
+    legacy_globals = bool(compatibility_mode)
     if config_snapshot is None:
         from nz_coder.foundation.workspace_trust import current_config_snapshot
 
@@ -464,16 +469,18 @@ def mcp_config_revision(
     *,
     project_control_snapshot: ProjectControlSnapshot | None = None,
     config_snapshot: ConfigSnapshot | None = None,
+    compatibility_mode: bool = False,
 ) -> str:
     """Return a cheap revision for config/trust polling without reading secrets."""
     from nz_coder.foundation.workspace_trust import current_config_snapshot
 
-    legacy_globals = config_snapshot is None
+    legacy_globals = bool(compatibility_mode)
     run_snapshot = config_snapshot or current_config_snapshot(workspace)
     snapshot = project_control_snapshot or run_snapshot.project_control
     user_path, _project_path, trust_path = mcp_config_paths(
         workspace,
-        config_snapshot=None if legacy_globals else run_snapshot,
+        config_snapshot=run_snapshot,
+        compatibility_mode=legacy_globals,
     )
     paths = (user_path, trust_path)
     records: list[tuple[str, int, int]] = []
@@ -780,7 +787,7 @@ def _validate_oauth(
         "http://127.0.0.1:19876/mcp/oauth/callback",
     )
     authorization_server = value.get("authorization_server", "")
-    for field, field_value in {
+    for field_name, field_value in {
         "client_id": client_id,
         "client_secret_env": client_secret_env,
         "scope": scope,
@@ -788,9 +795,13 @@ def _validate_oauth(
         "authorization_server": authorization_server,
     }.items():
         if not isinstance(field_value, str):
-            raise ValueError(f"MCP server '{server}' oauth {field} must be a string")
+            raise ValueError(
+                f"MCP server '{server}' oauth {field_name} must be a string"
+            )
         if any(ord(character) < 32 or ord(character) == 127 for character in field_value):
-            raise ValueError(f"MCP server '{server}' oauth {field} is invalid")
+            raise ValueError(
+                f"MCP server '{server}' oauth {field_name} is invalid"
+            )
     if client_secret_env and not _ENV_RE.fullmatch(client_secret_env):
         raise ValueError(
             f"MCP server '{server}' oauth client_secret_env is invalid"

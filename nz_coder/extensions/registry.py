@@ -86,12 +86,13 @@ class ExtensionRegistry:
         mcp_config_loader: Callable[..., list] | None = None,
     ):
         self.workspace = (workspace or current_workdir()).resolve()
+        self.config_snapshot = current_config_snapshot(self.workspace)
         self.skill_loader = skill_loader
         self.mcp_runtime = mcp_runtime
         self.project_control_snapshot = (
             project_control_snapshot
             or getattr(skill_loader, "_project_control_snapshot", None)
-            or current_config_snapshot(self.workspace).project_control
+            or self.config_snapshot.project_control
         )
         self._hook_loader = hook_loader
         self._mcp_config_loader = mcp_config_loader or load_mcp_server_configs
@@ -267,6 +268,7 @@ class ExtensionRegistry:
                     else self._mcp_config_loader(
                         workspace=self.workspace,
                         project_control_snapshot=self.project_control_snapshot,
+                        config_snapshot=self.config_snapshot,
                     )
                 )
             ]

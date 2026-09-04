@@ -55,6 +55,7 @@ def _server_config(tmp_path: Path, *, name: str = "echo") -> MCPServerConfig:
 def test_mcp_config_validates_command_workspace_and_effects(tmp_path):
     child = tmp_path / "service"
     child.mkdir()
+    (child / "server.py").write_text("print('ok')\n", encoding="utf-8")
     configs = load_mcp_server_configs(
         {
             "servers": {

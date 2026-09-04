@@ -113,14 +113,18 @@ class MCPRuntime:
         *,
         workspace: Path | None = None,
         config_snapshot=None,
+        compatibility_mode: bool = False,
     ) -> "MCPRuntime":
         """Build the explicitly enabled runtime without starting subprocesses."""
         root = (workspace or current_workdir()).resolve()
-        legacy_globals = config_snapshot is None
+        legacy_globals = bool(compatibility_mode)
         if config_snapshot is None:
-            from nz_coder.foundation.workspace_trust import current_config_snapshot
+            from nz_coder.foundation.workspace_trust import (
+                active_config_snapshot,
+                current_config_snapshot,
+            )
 
-            config_snapshot = current_config_snapshot(root)
+            config_snapshot = active_config_snapshot(root) or current_config_snapshot(root)
         enabled = (
             current_run_settings().mcp_enabled
             if legacy_globals
@@ -135,14 +139,16 @@ class MCPRuntime:
             return load_mcp_server_configs(
                 workspace=root,
                 project_control_snapshot=selected_snapshot[0].project_control,
-                config_snapshot=(None if legacy_globals else selected_snapshot[0]),
+                config_snapshot=selected_snapshot[0],
+                compatibility_mode=legacy_globals,
             )
 
         def revision():
             return mcp_config_revision(
                 root,
                 project_control_snapshot=selected_snapshot[0].project_control,
-                config_snapshot=(None if legacy_globals else selected_snapshot[0]),
+                config_snapshot=selected_snapshot[0],
+                compatibility_mode=legacy_globals,
             )
 
         def refresh_loader():
@@ -152,6 +158,7 @@ class MCPRuntime:
             return load_mcp_server_configs(
                 workspace=root,
                 project_control_snapshot=selected_snapshot[0].project_control,
+                config_snapshot=selected_snapshot[0],
             )
 
         return cls(
