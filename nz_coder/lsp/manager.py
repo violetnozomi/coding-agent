@@ -5,8 +5,8 @@ import atexit
 import threading
 from pathlib import Path
 
-from nz_coder.foundation import config
 from nz_coder.foundation.workspace_trust import ConfigSnapshot
+from nz_coder.runtime.core.run_settings import current_run_settings
 
 from .client import LSPClient
 from .servers import ResolvedServer, resolve_server
@@ -47,7 +47,7 @@ def _client_key(
         resolved.command,
         resolved.config_source,
         str(
-            config.LSP_INITIALIZE_TIMEOUT_SECONDS
+            current_run_settings().lsp_initialize_timeout
             if legacy_globals
             else config_snapshot.get_float(
                 "NZ_LSP_INITIALIZE_TIMEOUT_SECONDS", 20.0,
@@ -55,7 +55,15 @@ def _client_key(
             )
         ),
         str(
-            config.LSP_REQUEST_TIMEOUT_SECONDS
+            current_run_settings().lsp_diagnostic_wait
+            if legacy_globals
+            else config_snapshot.get_float(
+                "NZ_LSP_DIAGNOSTIC_WAIT_SECONDS", 2.0,
+                minimum=0.0, maximum=600.0,
+            )
+        ),
+        str(
+            current_run_settings().lsp_request_timeout
             if legacy_globals
             else config_snapshot.get_float(
                 "NZ_LSP_REQUEST_TIMEOUT_SECONDS", 10.0,
@@ -86,7 +94,7 @@ def get_client_for_file(
         )
         legacy_globals = active_config_snapshot(workspace) is None
     if legacy_globals:
-        enabled = config.LSP_ENABLED
+        enabled = current_run_settings().lsp_enabled
     else:
         enabled = config_snapshot.get_bool("NZ_LSP_ENABLED", True)
     if not enabled:
@@ -128,8 +136,9 @@ def get_client_for_file(
                 root=resolved.root,
                 language_id=resolved.language_id,
                 analysis_paths=resolved.analysis_paths,
-                initialize_timeout=float(key[-2]),
+                initialize_timeout=float(key[-3]),
                 request_timeout=float(key[-1]),
+                diagnostic_wait=float(key[-2]),
             )
         except Exception as exc:
             _BROKEN.add(key)

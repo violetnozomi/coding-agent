@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nz_coder import __version__
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.runtime.workflows.workflow_capsule import (
     preflight_workflow_capsule,
@@ -385,7 +385,7 @@ def capsule_environment(workspace: Path | None = None) -> dict:
         "nzcoder_version": __version__,
         "is_git_repo": (root / ".git").exists(),
         "worktree_capable": bool(
-            config.SUBAGENT_WORKTREE_ENABLED
+            current_run_settings().subagent_worktree_enabled
             and shutil.which("git")
             and (root / ".git").exists()
         ),

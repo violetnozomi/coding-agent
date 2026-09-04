@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.intelligence.code_index import (
     AmbiguousSymbolError,
@@ -91,12 +91,12 @@ def code_references(
         if not base.exists():
             return f"Error: path not found: {path}"
         service = workspace_repo_intelligence(
-            workspace, max_files=max(1, min(int(config.REPO_MAP_MAX_FILES), 500)),
+            workspace, max_files=max(1, min(current_run_settings().repo_map_max_files, 500)),
         )
         index = service.index if service is not None else PersistentCodeIndex(workspace)
         entries, reused, _omitted = _build_index(
             workspace, base,
-            max_files=max(1, min(int(config.REPO_MAP_MAX_FILES), 500)),
+            max_files=max(1, min(current_run_settings().repo_map_max_files, 500)),
             refresh=bool(refresh),
         )
         limit = max(1, min(int(max_results), 1000))
@@ -154,8 +154,9 @@ def repo_map(
         if base.is_file() and not is_supported_source(base):
             return f"Error: repo_map does not support source file: {path}"
 
-        file_limit = int(max_files or config.REPO_MAP_MAX_FILES)
-        symbol_limit = int(max_symbols or config.REPO_MAP_MAX_SYMBOLS)
+        settings = current_run_settings()
+        file_limit = int(max_files or settings.repo_map_max_files)
+        symbol_limit = int(max_symbols or settings.repo_map_max_symbols)
         file_limit = max(1, min(file_limit, 500))
         symbol_limit = max(1, min(symbol_limit, 5000))
         entries, reused, omitted = _build_index(

@@ -9,7 +9,7 @@ from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar, copy_context
 from dataclasses import dataclass
 from pathlib import Path
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.runtime.agent.child_result import (
     CHILD_RESULT_KEY,
     ChildAgentResult,
@@ -181,14 +181,15 @@ class BackgroundAgentManager:
         self._task_publishers: dict[str, object] = {}
         self._lineage = None
         self._managed_runs: dict[str, _ManagedWorkflowRun] = {}
+        settings = current_run_settings()
         self._agent_cap = max(
             1,
-            min(int(config.SUBAGENT_BACKGROUND_MAX_TASKS), 20),
+            min(settings.subagent_background_max_tasks, 20),
         )
         self._concurrency_cap = max(
             1,
             min(
-                int(config.SUBAGENT_BACKGROUND_MAX_CONCURRENT),
+                settings.subagent_background_max_concurrent,
                 self._agent_cap,
             ),
         )
@@ -783,12 +784,12 @@ class BackgroundAgentManager:
         agent_cap, concurrency_cap = self._run_limits(run_snapshot)
         worktree_enabled = (
             run_snapshot.get_bool("SUBAGENT_WORKTREE_ENABLED", True)
-            if run_snapshot is not None else config.SUBAGENT_WORKTREE_ENABLED
+            if run_snapshot is not None else current_run_settings().subagent_worktree_enabled
         )
         process_isolation_enabled = (
             run_snapshot.get_bool("NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED", True)
             if run_snapshot is not None
-            else config.SUBAGENT_PROCESS_ISOLATION_ENABLED
+            else current_run_settings().subagent_process_isolation_enabled
         )
         process_stop_grace = (
             run_snapshot.get_float(
@@ -796,7 +797,7 @@ class BackgroundAgentManager:
                 minimum=0.0, maximum=30.0,
             )
             if run_snapshot is not None
-            else config.SUBAGENT_PROCESS_STOP_GRACE_SECONDS
+            else current_run_settings().subagent_process_stop_grace
         )
         with self._lock:
             if self._closing or self._closed:
@@ -949,7 +950,7 @@ class BackgroundAgentManager:
         if concurrency_cap is None:
             _agent_cap, concurrency_cap = self._run_limits(run_snapshot)
         if process_stop_grace is None:
-            process_stop_grace = config.SUBAGENT_PROCESS_STOP_GRACE_SECONDS
+            process_stop_grace = current_run_settings().subagent_process_stop_grace
         live_job: _LiveJob | None = None
 
         def persist_terminal(latest: dict, result: str) -> None:

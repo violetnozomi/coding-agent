@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.message_schema import assistant_error_from_exception
 from nz_coder.runtime.model_gateway import ModelCall, ModelCallPurpose, ModelCallStatus
 from nz_coder.runtime.conversation.model_result import LLMResult
@@ -39,24 +39,16 @@ def project_streaming_turn(
         publish=bool(
             message_part is None or message_part.get("public_streaming", True)
         ),
-        delta_interval_seconds=getattr(
-            config,
-            "STREAM_DELTA_INTERVAL_SECONDS",
-            0.05,
-        ),
-        delta_min_chars=getattr(config, "STREAM_DELTA_MIN_CHARS", 256),
+        delta_interval_seconds=current_run_settings().stream_delta_interval,
+        delta_min_chars=current_run_settings().stream_delta_min_chars,
     )
     active_messages = getattr(host, "_active_processor_messages", None)
     checkpoints = StreamCheckpointScheduler(
         host,
         active_messages,
         enabled=attempt.publish,
-        interval_seconds=getattr(
-            config,
-            "STREAM_CHECKPOINT_INTERVAL_SECONDS",
-            0.5,
-        ),
-        min_chars=getattr(config, "STREAM_CHECKPOINT_MIN_CHARS", 4096),
+        interval_seconds=current_run_settings().stream_checkpoint_interval,
+        min_chars=current_run_settings().stream_checkpoint_min_chars,
         active_check=attempt.is_active,
     )
 
@@ -128,13 +120,13 @@ def project_streaming_turn(
         tools=_active_tools(host),
         max_output_tokens=host._prompt_budget().output_reserve_tokens,
         streaming=True,
-        timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS,
+        timeout_seconds=current_run_settings().provider_hard_timeout,
         capability_options=dict(
             getattr(host, "model_capability_options", {}) or {}
         ),
     )
     gateway = host._gateway(
-        max_retries=getattr(config, "PROVIDER_MAX_RETRIES", 3)
+        max_retries=current_run_settings().provider_max_retries
     )
     base_observer = gateway.observer
 
@@ -163,9 +155,7 @@ def project_streaming_turn(
             call,
             on_event=on_event,
             cancel_event=RetiredEvent() if message_part is not None else None,
-            idle_timeout_seconds=getattr(
-                config, "PROVIDER_STREAM_IDLE_TIMEOUT_SECONDS", 60.0
-            ),
+            idle_timeout_seconds=current_run_settings().provider_stream_idle_timeout,
         )
     except KeyboardInterrupt:
         if on_token:

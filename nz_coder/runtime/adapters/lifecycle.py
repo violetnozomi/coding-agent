@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import copy
 
-from nz_coder.foundation import config
 from nz_coder.protocol.message_schema import bind_user_context
 from nz_coder.runtime.observability.run_evidence import RunEvidence
 from nz_coder.runtime.core.lifecycle_context import (
@@ -13,6 +12,7 @@ from nz_coder.runtime.core.lifecycle_context import (
 from nz_coder.runtime.session.session_revert import SessionReverter
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.sessions import session_runtime_state_path
+from nz_coder.runtime.core.run_settings import current_run_settings
 
 
 def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
@@ -59,7 +59,7 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         host.runtime_state.set_acceptance_criteria_from_text(task_text)
         host.runtime_state.initial_task_text = task_text
         restored = False
-        if config.RUNTIME_STATE_PERSIST:
+        if current_run_settings().runtime_state_persist:
             restored = host.runtime_state.load(
                 host._runtime_state_path,
                 allow_inactive=resume_activation,

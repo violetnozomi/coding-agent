@@ -11,7 +11,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.message_schema import is_synthetic_user_message, stamp_user_message
 from nz_coder.runtime.agent.task_policy import is_test_file, normalize_path as _policy_normalize_path
 from nz_coder.tools.todo import get_reminder
@@ -1095,7 +1095,7 @@ def verification_gate_hook(ctx: NoToolResponseContext) -> str:
     if not loop.vm.should_gate():
         return "completed"
 
-    if loop.vm.increment_gate_prompt() <= config.MAX_VERIFICATION_GATE_PROMPTS:
+    if loop.vm.increment_gate_prompt() <= current_run_settings().max_verification_gate_prompts:
         messages.append(stamp_user_message({
             "role": "user",
             "content": loop.vm.make_gate_message(),

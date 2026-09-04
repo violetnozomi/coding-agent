@@ -12,7 +12,7 @@ import threading
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import RunSettings, current_run_settings
 from nz_coder.protocol.attachments import normalize_attachments
 from nz_coder.providers import create_provider
 from nz_coder.runtime.model_gateway import (
@@ -45,6 +45,7 @@ class ProviderImageDescriber:
         api_key: str = "",
         base_url: str = "",
         max_tokens: int = 1200,
+        timeout_seconds: float = 600.0,
         observer: Callable[[str, dict], None] | None = None,
     ) -> None:
         self.provider_name = str(provider_name or "").strip().lower()
@@ -54,6 +55,7 @@ class ProviderImageDescriber:
         self.api_key = str(api_key or "")
         self.base_url = str(base_url or "")
         self.max_tokens = max(64, int(max_tokens))
+        self.timeout_seconds = max(1.0, float(timeout_seconds))
         self.observer = observer
         self._model_runtime = None
 
@@ -62,14 +64,17 @@ class ProviderImageDescriber:
         cls,
         *,
         observer: Callable[[str, dict], None] | None = None,
+        run_settings: RunSettings | None = None,
     ) -> "ProviderImageDescriber":
         """Build the lazy descriptor selected by environment configuration."""
+        settings = run_settings or current_run_settings()
         return cls(
-            config.IMAGE_DESCRIBE_PROVIDER,
-            config.IMAGE_DESCRIBE_MODEL,
-            api_key=config.IMAGE_DESCRIBE_API_KEY,
-            base_url=config.IMAGE_DESCRIBE_BASE_URL,
-            max_tokens=config.IMAGE_DESCRIBE_MAX_TOKENS,
+            settings.image_provider,
+            settings.image_model,
+            api_key=settings.image_api_key,
+            base_url=settings.image_base_url,
+            max_tokens=settings.image_max_tokens,
+            timeout_seconds=settings.provider_hard_timeout,
             observer=observer,
         )
 
@@ -130,7 +135,7 @@ class ProviderImageDescriber:
                     "_nz_user_attachments": [normalized],
                 }],
                 max_output_tokens=self.max_tokens,
-                timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS,
+                timeout_seconds=self.timeout_seconds,
                 capability_options={"stream": False},
             ),
             cancel_event=cancel_event,

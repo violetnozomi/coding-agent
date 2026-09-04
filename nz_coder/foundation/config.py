@@ -1,14 +1,9 @@
 """Configuration management shared by all NZ-Coder product surfaces."""
 
-import os
 from pathlib import Path
 import re
 
 from nz_coder.foundation.workspace_trust import (
-    CONFIG_SCHEMA,
-    ConfigSource,
-    ConfigValue,
-    is_secret_config_key,
     load_config_snapshot,
 )
 
@@ -28,17 +23,6 @@ _FLOAT_DEFAULT = re.compile(
 def get(key: str, default: str = None) -> str:
     """Read one startup-snapshot value with import-safe numeric fallback."""
     fallback = "" if default is None else str(default)
-    # Preserve the historical ability for an embedding host or test harness to
-    # inject a shell value after import.  Workspace files never enter
-    # ``os.environ``, so this compatibility overlay cannot promote workspace
-    # data across the trust boundary.
-    if key in CONFIG_SCHEMA and key in os.environ:
-        CONFIG_SNAPSHOT.values[key] = ConfigValue(
-            key,
-            str(os.environ[key]),
-            ConfigSource.ENVIRONMENT,
-            secret=is_secret_config_key(key),
-        )
     if _INTEGER_DEFAULT.fullmatch(fallback):
         return str(CONFIG_SNAPSHOT.get_int(key, int(fallback)))
     if _FLOAT_DEFAULT.fullmatch(fallback) and any(char in fallback for char in ".eE"):

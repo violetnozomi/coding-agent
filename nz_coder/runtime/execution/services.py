@@ -11,13 +11,13 @@ import threading
 import time
 from typing import Awaitable, Callable
 
-from nz_coder.foundation import config
 from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, SYNTHETIC_USER_KEY
 from nz_coder.foundation.async_utils import start_background_coro
 from nz_coder.runtime.conversation.context_manager import ProductionContextManager
 from nz_coder.runtime.core.contracts import RuntimeServices
 from nz_coder.runtime.core.model_context import ModelExecutionContext
 from nz_coder.runtime.core.execution_context import strict_local_tools
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.runtime.execution.host import ProductionRuntimeHost
 from nz_coder.runtime.model_gateway import ModelCall, ModelCallPurpose, ModelCallStatus
 from nz_coder.runtime.session.runtime import SessionRuntime
@@ -127,7 +127,7 @@ class ProductionTurnModelRuntime:
             messages=messages,
             tools=self._tools(context),
             max_output_tokens=context.prompt_budget().output_reserve_tokens,
-            timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS,
+            timeout_seconds=current_run_settings().provider_hard_timeout,
         ))
         if observe_status and outcome.status is ModelCallStatus.COMPLETED:
             context.record_success()
@@ -158,7 +158,7 @@ class ProductionTurnModelRuntime:
                 8000,
                 context.prompt_budget().output_reserve_tokens,
             ),
-            timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS,
+            timeout_seconds=current_run_settings().provider_hard_timeout,
         ))
         if outcome.status is not ModelCallStatus.COMPLETED:
             raise RuntimeError(outcome.error or outcome.status.value)
@@ -222,10 +222,7 @@ class ProductionTurnModelRuntime:
                 bridge.cancel()
             if message_part is not None:
                 context.retire_message_part(message_part, "cancelled")
-            grace = max(
-                0.0,
-                float(getattr(config, "PROVIDER_CANCEL_GRACE_SECONDS", 0.25)),
-            )
+            grace = current_run_settings().provider_cancel_grace
             if not future.done() and grace > 0:
                 try:
                     await asyncio.wait_for(asyncio.shield(future), timeout=grace)
@@ -272,20 +269,21 @@ class ProductionMemoryService:
             return ""
         if query and query == context.recall.last_query:
             return context.recall.last_block
+        settings = current_run_settings()
         block = context.manager.build_prompt_block(
             query=query or None,
             max_items=5,
             max_chars=2000,
-            rerank_client=context.client if config.MEMORY_LLM_RERANK else None,
-            model=context.model_id if config.MEMORY_LLM_RERANK else None,
+            rerank_client=context.client if settings.memory_llm_rerank else None,
+            model=context.model_id if settings.memory_llm_rerank else None,
             rerank_provider=(
-                context.provider if config.MEMORY_LLM_RERANK else None
+                context.provider if settings.memory_llm_rerank else None
             ),
             rerank_capabilities=(
-                context.capabilities if config.MEMORY_LLM_RERANK else None
+                context.capabilities if settings.memory_llm_rerank else None
             ),
             rerank_observer=(
-                context.observer if config.MEMORY_LLM_RERANK else None
+                context.observer if settings.memory_llm_rerank else None
             ),
         )
         if query:
@@ -297,14 +295,15 @@ class ProductionMemoryService:
     async def finalize(self, context, messages: list, status: str) -> None:
         if strict_local_tools():
             return
+        settings = current_run_settings()
         snapshot = self._snapshot(messages)
         memory_review_key = self._review_key(context, snapshot)
 
         async def persist() -> None:
             from nz_coder.state.memory import run_auto_memory_pipeline_async
 
-            client = context.client if config.MEMORY_LLM_EXTRACT else None
-            model = context.model_id if config.MEMORY_LLM_EXTRACT else None
+            client = context.client if settings.memory_llm_extract else None
+            model = context.model_id if settings.memory_llm_extract else None
             summary = await run_auto_memory_pipeline_async(
                 context.session_id,
                 snapshot,
@@ -324,7 +323,7 @@ class ProductionMemoryService:
         # A detached Provider call can outlive this run and charge its usage to
         # the next run's mutable ledger.  Keep only local/deterministic writes
         # eligible for background execution.
-        if config.MEMORY_ASYNC_WRITE and not config.MEMORY_LLM_EXTRACT:
+        if settings.memory_async_write and not settings.memory_llm_extract:
             start_background_coro(persist())
         else:
             await persist()
@@ -333,14 +332,15 @@ class ProductionMemoryService:
         """Compatibility path for the legacy synchronous finalizer."""
         if strict_local_tools():
             return
+        settings = current_run_settings()
         snapshot = self._snapshot(messages)
         memory_review_key = self._review_key(context, snapshot)
 
         def persist() -> None:
             from nz_coder.state.memory import run_auto_memory_pipeline
 
-            client = context.client if config.MEMORY_LLM_EXTRACT else None
-            model = context.model_id if config.MEMORY_LLM_EXTRACT else None
+            client = context.client if settings.memory_llm_extract else None
+            model = context.model_id if settings.memory_llm_extract else None
             summary = run_auto_memory_pipeline(
                 context.session_id,
                 snapshot,
@@ -357,7 +357,7 @@ class ProductionMemoryService:
                 context.commit_recall(context.recall)
             self._record_outcome(context, memory_review_key, summary)
 
-        if config.MEMORY_ASYNC_WRITE and not config.MEMORY_LLM_EXTRACT:
+        if settings.memory_async_write and not settings.memory_llm_extract:
             context = copy_context()
             threading.Thread(target=lambda: context.run(persist), daemon=True).start()
         else:

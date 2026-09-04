@@ -55,6 +55,7 @@ class ProductionRuntimeHost:
             scoped_config_snapshot,
         )
         from nz_coder.runtime.agent.subagent import scoped_parent_context
+        from nz_coder.runtime.core.run_settings import RunSettings, scoped_run_settings
         from nz_coder.tools.files import bind_tool_state
 
         if run_control is None:
@@ -71,6 +72,11 @@ class ProductionRuntimeHost:
         if run_config_snapshot is None:
             run_config_snapshot = current_config_snapshot(agent.workdir)
             agent.config_snapshot = run_config_snapshot
+        run_settings = (
+            getattr(run_control, "run_settings", None)
+            or getattr(agent, "run_settings", None)
+            or RunSettings.from_snapshot(run_config_snapshot)
+        )
         with agent._mcp_runtime_lock:
             if run_control is not None:
                 agent._mcp_runtime = run_control.mcp_runtime
@@ -99,6 +105,7 @@ class ProductionRuntimeHost:
             with ExitStack() as stack:
                 stack.enter_context(scoped_workdir(agent.workdir))
                 stack.enter_context(scoped_config_snapshot(run_config_snapshot))
+                stack.enter_context(scoped_run_settings(run_settings))
                 stack.enter_context(scoped_broad_test_guard())
                 stack.enter_context(scoped_declared_test_scopes())
                 stack.enter_context(scoped_session(agent.session_id))

@@ -29,10 +29,14 @@ class RunControlBundle:
     model_runtime: Any
     provider_runtimes: dict[tuple[str, str], Any]
     owns_provider_runtimes: bool
+    run_settings: Any = None
+    image_describer: Any = None
+    owns_image_describer: bool = False
     sidecar_verifier: Any = None
     owns_sidecar_verifier: bool = False
     _closed: bool = field(default=False, init=False, repr=False)
     _sidecar_closed: bool = field(default=False, init=False, repr=False)
+    _image_describer_closed: bool = field(default=False, init=False, repr=False)
     _mcp_closed: bool = field(default=False, init=False, repr=False)
     _provider_runtime_ids_closed: set[int] = field(
         default_factory=set, init=False, repr=False,
@@ -50,6 +54,21 @@ class RunControlBundle:
             if self._closed:
                 return
             failures: list[tuple[str, BaseException]] = []
+            close_image = (
+                getattr(self.image_describer, "close", None)
+                if self.owns_image_describer else None
+            )
+            if not self._image_describer_closed:
+                if callable(close_image):
+                    try:
+                        close_image()
+                    except BaseException as exc:
+                        failures.append(("image-provider", exc))
+                    else:
+                        self._image_describer_closed = True
+                        self._cleanup_failures.pop("image-provider", None)
+                else:
+                    self._image_describer_closed = True
             close_sidecar = (
                 getattr(self.sidecar_verifier, "close", None)
                 if self.owns_sidecar_verifier
@@ -96,7 +115,8 @@ class RunControlBundle:
             for label, exc in failures:
                 self._cleanup_failures[label] = type(exc).__name__
             self._closed = bool(
-                self._sidecar_closed
+                self._image_describer_closed
+                and self._sidecar_closed
                 and self._mcp_closed
                 and len(self._provider_runtime_ids_closed) == len(unique)
             )
@@ -119,6 +139,8 @@ class RunControlBundle:
     def incomplete_resources(self) -> tuple[str, ...]:
         with self._close_lock:
             pending: list[str] = []
+            if not self._image_describer_closed:
+                pending.append("image-provider")
             if not self._sidecar_closed:
                 pending.append("sidecar")
             if not self._mcp_closed:

@@ -68,6 +68,13 @@ from nz_coder.runtime.core.execution_context import (
     scoped_declared_test_scopes,
     scoped_runtime_overrides,
 )
+from nz_coder.runtime.core.run_settings import RunSettings, scoped_run_settings
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.foundation.workspace_trust import (
+    active_config_snapshot,
+    load_config_snapshot,
+    scoped_config_snapshot,
+)
 from nz_coder.state.input_expansion import (
     compact_stored as compact_stored_input_expansions,
 )
@@ -184,7 +191,18 @@ class AgentRunner:
         self, request: RunRequest, options: RunOptions,
     ) -> tuple[dict, RunContext]:
         """Execute one immutable request without constructing an AgentLoop."""
+        snapshot = (
+            options.config_snapshot
+            or active_config_snapshot(request.workspace)
+            or load_config_snapshot(request.workspace)
+        )
+        if snapshot.workspace.resolve() != request.workspace.resolve():
+            raise ValueError("ConfigSnapshot belongs to a different workspace")
+        settings = RunSettings.from_snapshot(snapshot)
         with (
+            scoped_workdir(request.workspace),
+            scoped_config_snapshot(snapshot),
+            scoped_run_settings(settings),
             scoped_runtime_overrides(
                 max_agent_turns=_request_max_turns(request),
             ),

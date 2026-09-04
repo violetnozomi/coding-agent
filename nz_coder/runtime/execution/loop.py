@@ -92,6 +92,7 @@ from nz_coder.runtime.core.execution_context import (
     set_broad_tests_blocked,
     strict_local_tools,
 )
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.tool_platform.command_policy import classify_bash
 from nz_coder.intelligence.verification import VerificationManager
 from nz_coder.runtime.execution.tool_executor import (
@@ -410,13 +411,8 @@ class ProductRunEnvironment:
         self._provider_runtimes: dict[tuple[str, str], ResolvedModelRuntime] = {
             (self.provider_id, self.model_id): model_runtime,
         }
-        self.image_describer = (
-            image_describer
-            if image_describer is not None
-            else ProviderImageDescriber.configured(
-                observer=self._model_gateway_observer,
-            )
-        )
+        self._configured_image_describer = image_describer
+        self.image_describer = image_describer
         self.document_reader = document_reader or read_document
         self.system_prompt = system_prompt
         self.tool_allowlist = (
@@ -501,7 +497,10 @@ class ProductRunEnvironment:
         self.recovery = RecoveryState()
         self.rounds_without_todo = 0
         self.txn = TransactionManager()
-        enabled = config.TRACE_ENABLED if trace_enabled is None else trace_enabled
+        enabled = (
+            workspace_snapshot.get_bool("TRACE_ENABLED", True)
+            if trace_enabled is None else trace_enabled
+        )
         self.tracer = tracer or _build_default_tracer(enabled, self.session_id)
         self.agent_id = getattr(self.tracer, "agent_id", f"agent-{self.session_id}")
         self.trace_id = getattr(self.tracer, "trace_id", self.tracer.run_id)
@@ -645,6 +644,7 @@ class ProductRunEnvironment:
             scoped_config_snapshot,
         )
         from nz_coder.runtime.execution.run_control import RunControlBundle
+        from nz_coder.runtime.core.run_settings import RunSettings
         from nz_coder.providers.models import active_model_selection
         from nz_coder.runtime.process.workdir import scoped_workdir
         from nz_coder.state.skills import SkillLoader
@@ -657,6 +657,7 @@ class ProductRunEnvironment:
         )
         if snapshot.workspace.resolve() != self.workdir.resolve():
             raise ValueError("ConfigSnapshot belongs to a different workspace")
+        run_settings = RunSettings.from_snapshot(snapshot)
         with self._run_control_lock:
             self._retry_run_control_cleanup()
             if self._active_run_control is not None:
@@ -667,14 +668,23 @@ class ProductRunEnvironment:
             previous_mcp = self._mcp_runtime
             previous_runtimes = self._provider_runtimes
             previous_sidecar = getattr(self, "_sidecar_verifier_handle", None)
+            previous_image_describer = getattr(self, "image_describer", None)
             candidate_mcp = None
             candidate_runtimes = previous_runtimes
             owns_runtimes = False
             candidate_sidecar = None
             owns_sidecar = False
+            candidate_image_describer = None
+            owns_image_describer = False
             reuse_initial = False
             try:
-                with scoped_workdir(self.workdir), scoped_config_snapshot(snapshot):
+                from nz_coder.runtime.core.run_settings import scoped_run_settings
+
+                with (
+                    scoped_workdir(self.workdir),
+                    scoped_config_snapshot(snapshot),
+                    scoped_run_settings(run_settings),
+                ):
                     permissions = PermissionManager(
                         previous_permissions.mode,
                         renderer=self.renderer,
@@ -800,9 +810,17 @@ class ProductRunEnvironment:
                         owns_sidecar = True
                     if candidate_sidecar is not None and candidate_sidecar not in hooks.stop_hooks:
                         hooks.stop_hooks.insert(0, candidate_sidecar)
+                    candidate_image_describer = self._configured_image_describer
+                    if candidate_image_describer is None:
+                        candidate_image_describer = ProviderImageDescriber.configured(
+                            observer=self._model_gateway_observer,
+                            run_settings=run_settings,
+                        )
+                        owns_image_describer = True
                     hooks.reset_run_state()
                     bundle = RunControlBundle(
                         config_snapshot=snapshot,
+                        run_settings=run_settings,
                         permissions=permissions,
                         plan_mode=plan_mode,
                         skill_loader=skill_loader,
@@ -811,12 +829,15 @@ class ProductRunEnvironment:
                         model_runtime=runtime,
                         provider_runtimes=candidate_runtimes,
                         owns_provider_runtimes=owns_runtimes,
+                        image_describer=candidate_image_describer,
+                        owns_image_describer=owns_image_describer,
                         sidecar_verifier=candidate_sidecar,
                         owns_sidecar_verifier=owns_sidecar,
                     )
             except BaseException:
                 rollback = RunControlBundle(
                     config_snapshot=snapshot,
+                    run_settings=run_settings,
                     permissions=None,
                     plan_mode=None,
                     skill_loader=None,
@@ -828,6 +849,8 @@ class ProductRunEnvironment:
                         if owns_runtimes and not reuse_initial else {}
                     ),
                     owns_provider_runtimes=bool(owns_runtimes and not reuse_initial),
+                    image_describer=candidate_image_describer,
+                    owns_image_describer=owns_image_describer,
                     sidecar_verifier=candidate_sidecar,
                     owns_sidecar_verifier=owns_sidecar,
                 )
@@ -838,14 +861,15 @@ class ProductRunEnvironment:
             # fail. Preserve every mutable binding until the complete new
             # control plane, including its final prompt, is installable.
             install_names = (
-                "config_snapshot", "permissions", "executor", "plan_mode",
+                "config_snapshot", "run_settings", "permissions", "executor", "plan_mode",
                 "_skill_loader", "hooks", "_mcp_runtime", "_provider_runtimes",
                 "model_runtime", "provider", "client", "provider_id",
                 "provider_instance_id", "model_id", "request_model_id",
                 "model_pricing", "model_capabilities", "model_variant",
                 "_default_provider_id", "_default_model_id",
                 "_default_request_model_id", "_default_model_capabilities",
-                "_family_guidance", "_sidecar_verifier_handle", "system_prompt",
+                "_family_guidance", "_sidecar_verifier_handle", "image_describer",
+                "system_prompt",
                 "_active_run_control",
             )
             previous_bindings = {
@@ -853,6 +877,7 @@ class ProductRunEnvironment:
             }
             try:
                 self.config_snapshot = snapshot
+                self.run_settings = run_settings
                 self.permissions = permissions
                 if isinstance(previous_executor, ToolExecutor):
                     self.executor = ToolExecutor(permissions)
@@ -880,6 +905,7 @@ class ProductRunEnvironment:
                 self._sidecar_verifier_handle = (
                     candidate_sidecar if owns_sidecar else None
                 )
+                self.image_describer = candidate_image_describer
                 if self.agent_graph is not None:
                     self._activate_agent_runtime(self.current_agent_name)
                 else:
@@ -909,6 +935,7 @@ class ProductRunEnvironment:
                 }
                 rollback = RunControlBundle(
                     config_snapshot=snapshot,
+                    run_settings=run_settings,
                     permissions=None,
                     plan_mode=None,
                     skill_loader=None,
@@ -917,6 +944,8 @@ class ProductRunEnvironment:
                     model_runtime=None,
                     provider_runtimes=rollback_runtimes,
                     owns_provider_runtimes=bool(rollback_runtimes),
+                    image_describer=candidate_image_describer,
+                    owns_image_describer=owns_image_describer,
                     sidecar_verifier=candidate_sidecar,
                     owns_sidecar_verifier=owns_sidecar,
                 )
@@ -937,6 +966,7 @@ class ProductRunEnvironment:
             }
             retired = RunControlBundle(
                 config_snapshot=previous_bindings.get("config_snapshot"),
+                run_settings=previous_bindings.get("run_settings"),
                 permissions=None,
                 plan_mode=None,
                 skill_loader=None,
@@ -948,6 +978,16 @@ class ProductRunEnvironment:
                 model_runtime=None,
                 provider_runtimes=retired_runtimes,
                 owns_provider_runtimes=bool(retired_runtimes),
+                image_describer=(
+                    previous_image_describer
+                    if previous_image_describer is not candidate_image_describer
+                    else None
+                ),
+                owns_image_describer=bool(
+                    previous_image_describer is not None
+                    and previous_image_describer is not candidate_image_describer
+                    and previous_image_describer is not self._configured_image_describer
+                ),
                 sidecar_verifier=(
                     previous_sidecar
                     if previous_sidecar is not candidate_sidecar else None
@@ -967,6 +1007,8 @@ class ProductRunEnvironment:
                 self._active_run_control = None
                 if self._mcp_runtime is bundle.mcp_runtime:
                     self._mcp_runtime = None
+                if self.image_describer is bundle.image_describer:
+                    self.image_describer = self._configured_image_describer
         self._attempt_run_control_cleanup(bundle, "run-retire")
 
     def _attempt_run_control_cleanup(self, bundle, phase: str) -> bool:
@@ -2251,8 +2293,12 @@ class ProductRunEnvironment:
     def _prompt_budget(self):
         """Derive request thresholds from the active model capability record."""
         capabilities = getattr(self, "model_capabilities", None)
+        settings = current_run_settings()
         if capabilities is None:
-            return prompt_budget()
+            return prompt_budget(
+                settings.max_context_tokens,
+                settings.max_output_tokens,
+            )
         return prompt_budget(
             capabilities.context_tokens,
             capabilities.output_tokens,
@@ -2542,7 +2588,7 @@ class ProductRunEnvironment:
             active_system_prompt += "\n\n" + plan_block
         system_tokens = max(
             _estimate_text_tokens(active_system_prompt),
-            config.SYSTEM_CONTEXT_BUDGET_TOKENS,
+            current_run_settings().system_context_budget_tokens,
         )
         return history_and_tools + system_tokens + instruction_tokens + 256
 
@@ -2807,7 +2853,8 @@ class ProductRunEnvironment:
                         for path in item.expected_artifacts
                     }),
                 )
-        if strict_local_tools() or not config.PLANNING_ENABLED:
+        settings = current_run_settings()
+        if strict_local_tools() or not settings.planning_enabled:
             return
         if self._restored_state or self.runtime_state.plan_generated:
             return
@@ -2914,8 +2961,8 @@ class ProductRunEnvironment:
                 {"role": "system", "content": "You are a concise coding task planner."},
                 {"role": "user", "content": prompt},
             ],
-            max_output_tokens=config.PLANNING_MAX_TOKENS,
-            timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS,
+            max_output_tokens=current_run_settings().planning_max_tokens,
+            timeout_seconds=current_run_settings().provider_hard_timeout,
             response_format={"type": "json_object"},
             metadata={"allow_response_format_fallback": True},
         ))
@@ -2925,18 +2972,19 @@ class ProductRunEnvironment:
 
     def _should_replan(self) -> bool:
         """检查是否需要动态重规划。"""
-        if strict_local_tools() or not config.PLANNING_ENABLED:
+        settings = current_run_settings()
+        if strict_local_tools() or not settings.planning_enabled:
             return False
         if not self.runtime_state.plan_generated:
             return False
-        if self._replan_count >= config.REPLAN_MAX_ATTEMPTS:
+        if self._replan_count >= settings.replan_max_attempts:
             return False
         if self.runtime_state.task_mode == "discuss":
             return False
 
         rs = self.runtime_state
         no_edit_turns = (rs.turn_count - rs.last_edit_turn) if rs.last_edit_turn else rs.turn_count
-        if no_edit_turns >= config.REPLAN_IDLE_TURNS and rs.turn_count >= config.REPLAN_IDLE_TURNS:
+        if no_edit_turns >= settings.replan_idle_turns and rs.turn_count >= settings.replan_idle_turns:
             return True
         if rs.has_diff and not rs.changed_files_verified and rs.verification_attempts >= 2:
             return True
@@ -3034,8 +3082,8 @@ class ProductRunEnvironment:
                 {"role": "system", "content": "You are a concise coding task re-planner."},
                 {"role": "user", "content": prompt},
             ],
-            max_output_tokens=config.PLANNING_MAX_TOKENS,
-            timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS,
+            max_output_tokens=current_run_settings().planning_max_tokens,
+            timeout_seconds=current_run_settings().provider_hard_timeout,
         ))
         if outcome.status is not ModelCallStatus.COMPLETED:
             raise RuntimeError(outcome.error or outcome.status.value)
@@ -3281,7 +3329,7 @@ class ProductRunEnvironment:
         )
 
     def _should_run_reflection(self, status: str) -> bool:
-        if strict_local_tools() or not getattr(config, "REFLECTION_ENABLED", False):
+        if strict_local_tools() or not current_run_settings().reflection_enabled:
             return False
         if status not in {"completed", "completed_unverified"}:
             return False
@@ -3491,7 +3539,7 @@ class ProductRunEnvironment:
         if not self._should_run_reflection(status):
             return status
         signature = self._reflection_progress_signature()
-        max_attempts = max(1, int(getattr(config, "REFLECTION_MAX_ATTEMPTS", 2) or 2))
+        max_attempts = max(1, current_run_settings().reflection_max_attempts)
         if (
             signature == self._reflection_signature
             and self._cached_reflection_review is not None
@@ -3633,7 +3681,7 @@ class ProductRunEnvironment:
 
     def _checkpoint_messages(self, messages: list, run_status: str) -> None:
         """Best-effort durable checkpoint at Agent step boundaries."""
-        if not getattr(config, "RUNTIME_STATE_PERSIST", True):
+        if not current_run_settings().runtime_state_persist:
             return
         try:
             from nz_coder.runtime.session.session_repository import FileSessionRepository
@@ -4510,7 +4558,7 @@ class ProductRunEnvironment:
         )
     def _persist_runtime_state(self, active: bool = True) -> None:
         """将 RuntimeState 持久化到当前 session 的 runtime_state.json。"""
-        if not config.RUNTIME_STATE_PERSIST:
+        if not current_run_settings().runtime_state_persist:
             return
         try:
             self.runtime_state.save(self._runtime_state_path, active=active)

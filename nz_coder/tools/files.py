@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.protocol.attachments import (
     MAX_IMAGE_BYTES,
@@ -135,6 +136,7 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
     if len(files) > 50:
         raise ValueError("max 50 files per batch")
 
+    settings = current_run_settings()
     prepared: list[dict] = []
     seen_paths: set[str] = set()
     total_bytes = 0
@@ -159,12 +161,12 @@ def _write_files_batch_impl(files: list[dict], overwrite: bool = False) -> dict:
         if existed and not overwrite:
             raise ValueError(f"target already exists and overwrite=false: {path}")
         content_bytes = len(content.encode("utf-8"))
-        if content_bytes > config.WRITE_BATCH_MAX_FILE_BYTES:
-            raise ValueError(f"file too large ({content_bytes} bytes > {config.WRITE_BATCH_MAX_FILE_BYTES}): {path}")
+        if content_bytes > settings.write_batch_file_bytes:
+            raise ValueError(f"file too large ({content_bytes} bytes > {settings.write_batch_file_bytes}): {path}")
         total_bytes += content_bytes
-        if total_bytes > config.WRITE_BATCH_MAX_TOTAL_BYTES:
+        if total_bytes > settings.write_batch_total_bytes:
             raise ValueError(
-                f"batch too large ({total_bytes} bytes > {config.WRITE_BATCH_MAX_TOTAL_BYTES})"
+                f"batch too large ({total_bytes} bytes > {settings.write_batch_total_bytes})"
             )
         before = fp.read_text(encoding="utf-8", errors="replace") if existed else ""
         prepared.append({

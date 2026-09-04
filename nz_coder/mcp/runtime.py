@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
 from nz_coder.mcp.client import MCPClient, MCPError, MCPRequestError
 from nz_coder.mcp.config import (
@@ -121,7 +121,7 @@ class MCPRuntime:
 
             config_snapshot = current_config_snapshot(root)
         enabled = (
-            config.MCP_ENABLED
+            current_run_settings().mcp_enabled
             if legacy_globals
             else config_snapshot.get_bool("NZ_MCP_ENABLED", False)
         )

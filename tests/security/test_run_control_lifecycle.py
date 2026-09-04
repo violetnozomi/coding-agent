@@ -359,6 +359,36 @@ def test_repeated_retire_does_not_double_close_completed_resources(tmp_path):
         scope.__exit__(None, None, None)
 
 
+def test_image_provider_rotates_between_top_level_runs(tmp_path, monkeypatch):
+    from nz_coder.capabilities import vision
+
+    created = []
+
+    def configured(cls, **_kwargs):
+        describer = _RetryingCloser()
+        created.append(describer)
+        return describer
+
+    monkeypatch.setattr(
+        vision.ProviderImageDescriber,
+        "configured",
+        classmethod(configured),
+    )
+    scope, agent = _cleanup_agent(tmp_path, _LifecycleMCP)
+    try:
+        first = agent.prepare_run_control()
+        agent.retire_run_control(first)
+        second = agent.prepare_run_control()
+        agent.retire_run_control(second)
+
+        assert len(created) == 2
+        assert created[0] is not created[1]
+        assert [item.calls for item in created] == [1, 1]
+    finally:
+        agent.close()
+        scope.__exit__(None, None, None)
+
+
 def test_prepare_failure_after_install_is_recoverable(tmp_path):
     created = []
 

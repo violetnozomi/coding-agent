@@ -18,6 +18,7 @@ from typing import Any
 from openai import OpenAI
 
 from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.state.changes import ChangeTracker
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.protocol.message_schema import (
@@ -448,7 +449,7 @@ def _subagent_model(agent_type: str, config_snapshot=None) -> str:
     if agent_type == "explore":
         return (
             snapshot.get("SUBAGENT_EXPLORE_MODEL", "")
-            if snapshot is not None else config.SUBAGENT_EXPLORE_MODEL
+            if snapshot is not None else current_run_settings().subagent_explore_model
         ) or parent_model
     return parent_model
 
@@ -469,11 +470,11 @@ def _resolve_subagent_route(
     )
     explore_model = (
         snapshot.get("SUBAGENT_EXPLORE_MODEL", "")
-        if snapshot is not None else config.SUBAGENT_EXPLORE_MODEL
+        if snapshot is not None else current_run_settings().subagent_explore_model
     )
     deep_model = (
         snapshot.get("SUBAGENT_DEEP_MODEL", "")
-        if snapshot is not None else config.SUBAGENT_DEEP_MODEL
+        if snapshot is not None else current_run_settings().subagent_deep_model
     )
     selected = _subagent_model(agent_type, snapshot)
     outcome = "inherited"
@@ -1404,7 +1405,7 @@ def _ensure_subagent_worktree(
         return existing
     worktree_enabled = (
         config_snapshot.get_bool("SUBAGENT_WORKTREE_ENABLED", True)
-        if config_snapshot is not None else config.SUBAGENT_WORKTREE_ENABLED
+        if config_snapshot is not None else current_run_settings().subagent_worktree_enabled
     )
     if not worktree_enabled:
         return _direct_worktree(parent_workspace, state)
@@ -1451,7 +1452,7 @@ def _trace_enabled() -> bool:
     tracer = _PARENT_CONTEXT.get().get("tracer")
     if tracer is not None and hasattr(tracer, "enabled"):
         return bool(getattr(tracer, "enabled"))
-    return bool(config.TRACE_ENABLED)
+    return current_run_settings().trace_enabled
 
 
 def _build_subagent_tracer(parent_workspace: Path, parent_session_id: str, state: dict) -> TraceRecorder:
@@ -1844,7 +1845,7 @@ def run_subagent(
 
     max_turns = max(1, (
         parent_snapshot.get_int("SUBAGENT_MAX_TURNS", 200, minimum=1)
-        if parent_snapshot is not None else config.SUBAGENT_MAX_TURNS
+        if parent_snapshot is not None else current_run_settings().subagent_max_turns
     ))
     verification_repair_budget = (
         1
@@ -1854,7 +1855,7 @@ def run_subagent(
     )
     subagent_timeout = max(1, (
         parent_snapshot.get_int("SUBAGENT_TIMEOUT_SECONDS", 180, minimum=1)
-        if parent_snapshot is not None else config.SUBAGENT_TIMEOUT_SECONDS
+        if parent_snapshot is not None else current_run_settings().subagent_timeout_seconds
     ))
     deadline = time.monotonic() + subagent_timeout
     parent_context = _parent_context_block(parent_session_id)

@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from nz_coder.foundation import config
+from nz_coder.foundation.run_context import active_run_settings_object
 from nz_coder.foundation.json_safety import json_safe_value
 from nz_coder.protocol.message_schema import (
     COMPACTION_KEY,
@@ -139,11 +140,20 @@ def prompt_budget(
     proportional policy. A conservative 64K-derived base is used only for
     ratio thresholds when model context metadata is unavailable.
     """
+    settings = active_run_settings_object()
+    configured_context = (
+        settings.max_context_tokens
+        if settings is not None else config.MAX_CONTEXT_TOKENS
+    )
+    configured_output = (
+        settings.max_output_tokens
+        if settings is not None else config.MAX_OUTPUT_TOKENS
+    )
     context = max(0, int(
-        config.MAX_CONTEXT_TOKENS if context_tokens is None else context_tokens
+        configured_context if context_tokens is None else context_tokens
     ))
     requested_output = max(1, int(
-        config.MAX_OUTPUT_TOKENS if output_tokens is None else output_tokens
+        configured_output if output_tokens is None else output_tokens
     ))
     missing = context <= 0
 
@@ -159,9 +169,10 @@ def prompt_budget(
         usable_input = max(0, context - output_reserve)
         budget_base = usable_input
 
-    configured_replay_limit = max(
-        0, int(config.CONTEXT_REPLAY_COMPACTION_TOKENS)
-    )
+    configured_replay_limit = max(0, (
+        settings.context_replay_compaction_tokens
+        if settings is not None else config.CONTEXT_REPLAY_COMPACTION_TOKENS
+    ))
     replay_limit = (
         min(usable_input, configured_replay_limit)
         if usable_input > 0 and configured_replay_limit > 0

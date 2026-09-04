@@ -14,7 +14,7 @@ known migration set for this security-boundary closure.
 ## Configuration reads
 
 Production code under `runtime`, `tools`, `capabilities`, `providers`, `mcp`,
-and `lsp` currently contains 150 direct `config.<NAME>` reads in 34 modules.
+and `lsp` currently contains 37 direct `config.<NAME>` reads in 11 modules.
 Every key is classified as one of:
 
 - `run-scoped`: execution semantics must come from the immutable RunSettings;
@@ -22,10 +22,20 @@ Every key is classified as one of:
 - `static product default`: immutable product constants only;
 - `test/compatibility-only`: explicitly isolated legacy adapters.
 
-Only `PLANNING_TASK_MODES` and `CONTEXT_TRUNCATE_CHARS` are currently static
-product defaults.  All other inventoried keys are run-scoped.  The architecture
-test records the exact module, key set, and occurrence count so a new read
-cannot silently enter an existing module.
+There are no accepted direct `config.<NAME>` reads classified as `run-scoped`.
+Formal execution policy is captured once in the frozen `RunSettings` owned by
+the current RunControl epoch.  Its coverage includes Provider and stream
+timeouts, tool-call and write quotas, Bash/package policy, persistent-process
+limits, context and output budgets, planning/replanning/reflection, verification
+gates, LSP/MCP limits, repo-map limits, background/subagent policy, memory,
+runtime-state/trace persistence, and image-description Provider identity.
+
+The remaining reads are restricted to host CLI configuration, explicit legacy
+embedding fallbacks, and static command-schema/product defaults.  The
+architecture test records each `(module, key)` classification plus the exact
+occurrence count.  A new direct read, including one added to an existing
+module, fails CI and tells the author to route formal execution through
+`RunSettings`.
 
 ## Workspace-controlled files
 

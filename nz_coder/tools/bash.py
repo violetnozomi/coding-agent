@@ -12,6 +12,7 @@ from itertools import islice
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.foundation.workspace_paths import (
     WorkspacePathError,
@@ -347,10 +348,11 @@ def run_bash(
             "or replace_lines for line-range edits."
         )
 
+    settings = current_run_settings()
     classification = classify_bash(command)
     if classification["dangerous"]:
         return f"Error: Dangerous command blocked ({classification['reason']})"
-    if classification["reason"] in {"package install", "package manager write"} and not config.ALLOW_BASH_PACKAGE_INSTALLS:
+    if classification["reason"] in {"package install", "package manager write"} and not settings.allow_package_installs:
         return (
             "Error: Package install blocked. The agent must not modify the Python/"
             "Node/Ruby environment during benchmark repair. Use existing dependencies, "
@@ -371,11 +373,11 @@ def run_bash(
     if read_only and (classification["mutating"] or not is_known_read_only_command(command)):
         return f"Error: Read-only shell blocked ({classification['reason']})"
     try:
-        timeout_seconds = int(timeout or config.BASH_TIMEOUT_SECONDS)
+        timeout_seconds = int(timeout or settings.bash_timeout)
     except (TypeError, ValueError, OverflowError):
         return "Error: timeout must be an integer"
-    if timeout_seconds < 1 or timeout_seconds > config.BASH_TIMEOUT_SECONDS:
-        return f"Error: timeout must be between 1 and {config.BASH_TIMEOUT_SECONDS}s"
+    if timeout_seconds < 1 or timeout_seconds > settings.bash_timeout:
+        return f"Error: timeout must be between 1 and {settings.bash_timeout}s"
     resolved_workdir, workdir_error = _resolve_bash_workdir(workdir)
     if workdir_error:
         return workdir_error
@@ -466,9 +468,9 @@ def run_bash(
     reader = threading.Thread(target=read_output, name="nz-bash-output", daemon=True)
     reader.start()
     output_buffer = _BoundedCommandOutput(
-        config.PROCESS_BUFFER_BYTES,
-        config.BASH_OUTPUT_HARD_LIMIT_BYTES,
-        config.PROCESS_OUTPUT_ENCODING,
+        settings.process_buffer_bytes,
+        settings.bash_output_hard_limit_bytes,
+        settings.process_output_encoding,
     )
     deadline = time.monotonic() + timeout_seconds
     last_report = 0.0

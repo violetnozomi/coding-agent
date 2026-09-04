@@ -53,6 +53,12 @@ class ConfigSpec:
     value_type: str = "string"
     minimum: float | None = None
     maximum: float | None = None
+    public_projection: str = "value"
+    opaque_configured: bool = False
+    structured_redaction: bool = False
+    allowed_sources: tuple[str, ...] = (
+        "environment", "user", "workspace", "trusted-workspace",
+    )
 
 
 _KNOWN_CONFIG_KEYS = (
@@ -125,11 +131,19 @@ CONFIG_SCHEMA.update({
     ),
     "PERMISSION_MODE": ConfigSpec("default"),
     "NZ_MCP_ENABLED": ConfigSpec("0", value_type="bool"),
-    "NZ_MCP_SERVERS_JSON": ConfigSpec(""),
+    "NZ_MCP_SERVERS_JSON": ConfigSpec(
+        "", public_projection="configured-status",
+        opaque_configured=True, structured_redaction=True,
+    ),
     "NZ_LSP_PYTHON_COMMAND": ConfigSpec(""),
     "NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED": ConfigSpec("1", value_type="bool"),
     "LOG_LEVEL": ConfigSpec("INFO", workspace_trust_required=False),
 })
+for _structured_key in ("MODEL_CAPABILITIES_JSON", "MODEL_CATALOG_JSON"):
+    CONFIG_SCHEMA[_structured_key] = ConfigSpec(
+        "", public_projection="configured-status",
+        opaque_configured=True, structured_redaction=True,
+    )
 for _language in LSP_LANGUAGES:
     CONFIG_SCHEMA[lsp_command_config_key(_language)] = ConfigSpec("")
 
@@ -140,7 +154,7 @@ _BOOL_CONFIG_KEYS = (
     "NZ_LSP_WRITE_DIAGNOSTICS_ENABLED", "NZ_PLANNING_ENABLED",
     "NZ_PROVIDER_NON_STREAMING_FALLBACK", "NZ_READ_DEDUP_ENABLED",
     "NZ_REFLECTION_ENABLED", "RUNTIME_STATE_PERSIST", "SUBAGENT_WORKTREE_ENABLED",
-    "TRACE_ENABLED",
+    "TRACE_ENABLED", "NZ_MCP_ENABLED", "NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED",
 )
 for _key in _BOOL_CONFIG_KEYS:
     CONFIG_SCHEMA[_key] = ConfigSpec(value_type="bool")
@@ -182,6 +196,56 @@ _FLOAT_CONFIG_KEYS = (
 for _key in _FLOAT_CONFIG_KEYS:
     CONFIG_SCHEMA[_key] = ConfigSpec(value_type="float", minimum=0)
 
+_TYPED_DEFAULTS = {
+    "ALLOW_BASH_PACKAGE_INSTALLS": "0",
+    "MEMORY_ASYNC_WRITE": "0", "MEMORY_AUTO_DREAM": "1",
+    "MEMORY_AUTO_EXTRACT": "1", "MEMORY_LLM_EXTRACT": "0",
+    "MEMORY_LLM_RERANK": "0", "NZ_AUTO_MODE_CLASSIFIER_ENABLED": "1",
+    "NZ_CONTINUE_LOOP_ON_DENY": "0", "NZ_LSP_ENABLED": "1",
+    "NZ_LSP_WRITE_DIAGNOSTICS_ENABLED": "1", "NZ_MCP_ENABLED": "0",
+    "NZ_PLANNING_ENABLED": "0", "NZ_PROVIDER_NON_STREAMING_FALLBACK": "1",
+    "NZ_READ_DEDUP_ENABLED": "1", "NZ_REFLECTION_ENABLED": "0",
+    "NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED": "1", "RUNTIME_STATE_PERSIST": "1",
+    "SUBAGENT_WORKTREE_ENABLED": "1", "TRACE_ENABLED": "1",
+    "BASH_TIMEOUT_SECONDS": "120", "MAX_AGENT_TURNS": "500",
+    "MAX_CONTEXT_TOKENS": "100000", "MAX_OUTPUT_TOKENS": "8000",
+    "MAX_PARALLEL_TASKS": "4", "MAX_TOOL_CALLS_PER_RESPONSE": "20",
+    "MAX_VERIFICATION_GATE_PROMPTS": "2", "MEMORY_AUTO_DREAM_MIN_HOURS": "24",
+    "MEMORY_AUTO_DREAM_MIN_NEW_SESSIONS": "5", "MEMORY_CLEANUP_DAYS": "30",
+    "NZ_AUTO_MODE_CLASSIFIER_BLOCK_STREAK": "3",
+    "NZ_AUTO_MODE_CLASSIFIER_INFRA_FAILURES": "5",
+    "NZ_AUTO_MODE_CLASSIFIER_MAX_OUTPUT_TOKENS": "256",
+    "NZ_BASH_OUTPUT_HARD_LIMIT_BYTES": str(64 * 1024 * 1024),
+    "NZ_CONTEXT_REPLAY_COMPACTION_TOKENS": "0", "NZ_DOOM_LOOP_THRESHOLD": "3",
+    "NZ_IMAGE_DESCRIBE_MAX_TOKENS": "1200", "NZ_LSP_MAX_OUTPUT_CHARS": "20000",
+    "NZ_LSP_WRITE_DIAGNOSTIC_MAX_FILES": "8", "NZ_MODEL_REGISTRY_TTL_SECONDS": "300",
+    "NZ_NOMINAL_AGENT_TURNS": "200", "NZ_PLANNING_MAX_TOKENS": "1500",
+    "NZ_PROCESS_BUFFER_BYTES": str(2 * 1024 * 1024),
+    "NZ_PROCESS_MAX_PER_WORKSPACE": "16", "NZ_PROCESS_READ_MAX_BYTES": str(64 * 1024),
+    "NZ_PROCESS_WRITE_MAX_BYTES": str(64 * 1024), "NZ_PROJECT_VERIFY_TIMEOUT_SECONDS": "60",
+    "NZ_PROVIDER_MAX_RETRIES": "3", "NZ_REFLECTION_MAX_ATTEMPTS": "2",
+    "NZ_REMOTE_EVENT_QUEUE_SIZE": "512", "NZ_REPLAN_IDLE_TURNS": "5",
+    "NZ_REPLAN_MAX_ATTEMPTS": "2", "NZ_REPO_MAP_MAX_FILE_BYTES": "1000000",
+    "NZ_REPO_MAP_MAX_FILES": "80", "NZ_REPO_MAP_MAX_SYMBOLS": "600",
+    "NZ_STREAM_CHECKPOINT_MIN_CHARS": "4096", "NZ_SWE_NOMINAL_AGENT_TURNS": "200",
+    "NZ_WRITE_BATCH_MAX_FILE_BYTES": "100000", "NZ_WRITE_BATCH_MAX_TOTAL_BYTES": "500000",
+    "SUBAGENT_BACKGROUND_MAX_CONCURRENT": "4", "SUBAGENT_BACKGROUND_MAX_TASKS": "20",
+    "SUBAGENT_MAX_TURNS": "200", "SUBAGENT_TIMEOUT_SECONDS": "180",
+    "SYSTEM_CONTEXT_BUDGET_TOKENS": "6000",
+    "NZ_AUTO_MODE_CLASSIFIER_INFRA_WINDOW_SECONDS": "600",
+    "NZ_AUTO_MODE_CLASSIFIER_TIMEOUT_SECONDS": "15",
+    "NZ_LSP_DIAGNOSTIC_WAIT_SECONDS": "2", "NZ_LSP_INITIALIZE_TIMEOUT_SECONDS": "20",
+    "NZ_LSP_REQUEST_TIMEOUT_SECONDS": "10", "NZ_MCP_STARTUP_TIMEOUT_SECONDS": "30",
+    "NZ_MCP_TOOL_TIMEOUT_SECONDS": "30", "NZ_PROCESS_KILL_GRACE_SECONDS": "0.5",
+    "NZ_PROVIDER_CANCEL_GRACE_SECONDS": "0.25", "NZ_PROVIDER_HARD_TIMEOUT_SECONDS": "600",
+    "NZ_PROVIDER_STREAM_IDLE_TIMEOUT_SECONDS": "60",
+    "NZ_STREAM_CHECKPOINT_INTERVAL_SECONDS": "0.5", "NZ_STREAM_DELTA_INTERVAL_SECONDS": "0.05",
+    "NZ_SUBAGENT_PROCESS_STOP_GRACE_SECONDS": "0.5",
+}
+for _key, _default in _TYPED_DEFAULTS.items():
+    _spec = CONFIG_SCHEMA[_key]
+    CONFIG_SCHEMA[_key] = replace(_spec, default=_default)
+
 DEFAULT_CONFIG_VALUES: dict[str, str] = {
     key: spec.default for key, spec in CONFIG_SCHEMA.items()
     if spec.default is not None
@@ -219,11 +283,12 @@ class ConfigValue:
     used_default: bool = False
     secret: bool = False
 
-    def public(self) -> dict[str, object]:
+    def public(self, spec: ConfigSpec | None = None) -> dict[str, object]:
+        opaque = bool(spec and spec.opaque_configured)
         return {
-            "value": "<configured>" if self.secret and bool(self.value) else (
-                "<not-configured>" if self.secret else self.value
-            ),
+            "value": (
+                "<configured>" if bool(self.value) else "<not-configured>"
+            ) if self.secret or opaque else self.value,
             "source": self.source.value,
             "ignored": self.ignored,
             "requires_trust": self.requires_trust,
@@ -244,9 +309,9 @@ class ConfigValidationError(ValueError):
     """Raised when a configuration or trust document is structurally unsafe."""
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConfigSnapshot:
-    """Effective configuration values with provenance and accumulated issues."""
+    """Immutable effective configuration selected at one capture boundary."""
 
     workspace: Path
     workspace_fingerprint: str
@@ -254,11 +319,28 @@ class ConfigSnapshot:
     control_fingerprint: str
     control_plane_trusted: bool
     project_control: ProjectControlSnapshot = field(repr=False)
-    values: dict[str, ConfigValue] = field(repr=False)
-    issues: list[ConfigIssue] = field(default_factory=list, repr=False)
+    values: Mapping[str, ConfigValue] = field(repr=False)
+    issues: tuple[ConfigIssue, ...] = field(default_factory=tuple, repr=False)
     user_instructions: ProjectControlSnapshot | None = field(
         default=None, repr=False,
     )
+
+    def __reduce__(self):  # noqa: ANN204
+        """Preserve immutable mappings across private spawn IPC boundaries."""
+        return (
+            _restore_config_snapshot,
+            (
+                self.workspace,
+                self.workspace_fingerprint,
+                self.workspace_trusted,
+                self.control_fingerprint,
+                self.control_plane_trusted,
+                self.project_control,
+                dict(self.values),
+                tuple(self.issues),
+                self.user_instructions,
+            ),
+        )
 
     def get(self, key: str, default: str | None = None) -> str:
         record = self.values.get(key)
@@ -266,21 +348,24 @@ class ConfigSnapshot:
             return record.value
         fallback = "" if default is None else str(default)
         spec = CONFIG_SCHEMA.get(str(key))
-        if spec is None:
-            return fallback
-        record = ConfigValue(
+        return (
+            str(spec.default)
+            if spec is not None and spec.default is not None
+            else fallback
+        )
+
+    def value(self, key: str) -> ConfigValue:
+        record = self.values.get(key)
+        if record is not None:
+            return record
+        spec = CONFIG_SCHEMA.get(str(key), ConfigSpec())
+        return ConfigValue(
             key,
-            spec.default if spec.default is not None else fallback,
+            "" if spec.default is None else str(spec.default),
             ConfigSource.DEFAULT,
             used_default=True,
             secret=spec.secret,
         )
-        self.values[key] = record
-        return record.value
-
-    def value(self, key: str) -> ConfigValue:
-        self.get(key, DEFAULT_CONFIG_VALUES.get(key, ""))
-        return self.values[key]
 
     def get_int(
         self,
@@ -299,8 +384,6 @@ class ConfigSnapshot:
                 raise ValueError(f"must be <= {maximum}")
             return value
         except (TypeError, ValueError):
-            self._record_issue(key, "invalid integer; using default")
-            self._replace_invalid_value(key, str(default))
             return default
 
     def get_float(
@@ -322,8 +405,6 @@ class ConfigSnapshot:
                 raise ValueError(f"must be <= {maximum}")
             return value
         except (TypeError, ValueError):
-            self._record_issue(key, "invalid finite number; using default")
-            self._replace_invalid_value(key, str(default))
             return default
 
     def get_bool(self, key: str, default: bool) -> bool:
@@ -332,25 +413,41 @@ class ConfigSnapshot:
             return True
         if raw in {"0", "false", "no", "off"}:
             return False
-        self._record_issue(key, "invalid boolean; using default")
         return default
 
     def public(self) -> dict[str, dict[str, object]]:
-        return {key: value.public() for key, value in sorted(self.values.items())}
+        return {
+            key: value.public(CONFIG_SCHEMA.get(key))
+            for key, value in sorted(self.values.items())
+        }
 
     def public_json(self) -> str:
         return json.dumps(self.public(), ensure_ascii=False, sort_keys=True)
 
-    def _record_issue(self, key: str, message: str) -> None:
-        if any(item.key == key and item.message == message for item in self.issues):
-            return
-        self.issues.append(ConfigIssue(key, message[:300], self.value(key).source))
 
-    def _replace_invalid_value(self, key: str, fallback: str) -> None:
-        """Discard malformed raw text after recording only its provenance."""
-        record = self.value(key)
-        self.values[key] = replace(record, value=fallback, used_default=True)
-
+def _restore_config_snapshot(
+    workspace: Path,
+    workspace_fingerprint: str,
+    workspace_trusted: bool,
+    control_fingerprint: str,
+    control_plane_trusted: bool,
+    project_control: ProjectControlSnapshot,
+    values: dict[str, ConfigValue],
+    issues: tuple[ConfigIssue, ...],
+    user_instructions: ProjectControlSnapshot | None,
+) -> ConfigSnapshot:
+    """Rebuild a frozen ConfigSnapshot after private multiprocessing transport."""
+    return ConfigSnapshot(
+        workspace=Path(workspace),
+        workspace_fingerprint=str(workspace_fingerprint),
+        workspace_trusted=bool(workspace_trusted),
+        control_fingerprint=str(control_fingerprint),
+        control_plane_trusted=bool(control_plane_trusted),
+        project_control=project_control,
+        values=MappingProxyType(dict(values)),
+        issues=tuple(issues),
+        user_instructions=user_instructions,
+    )
 
 _ACTIVE_CONFIG_SNAPSHOT: ContextVar[ConfigSnapshot | None] = ContextVar(
     "nz_coder_active_config_snapshot",
@@ -406,8 +503,6 @@ def inherited_config_snapshot(
     return replace(
         snapshot,
         workspace=target,
-        values=dict(snapshot.values),
-        issues=list(snapshot.issues),
     )
 
 
@@ -739,6 +834,7 @@ def load_config_snapshot(
                 )
             continue
         values[key] = ConfigValue(key, default, ConfigSource.DEFAULT, used_default=True, secret=secret)
+    values, validation_issues = _validate_captured_values(values)
     snapshot = ConfigSnapshot(
         workspace=root,
         workspace_fingerprint=fingerprint,
@@ -746,28 +842,59 @@ def load_config_snapshot(
         control_fingerprint=control_fingerprint,
         control_plane_trusted=control_trusted,
         project_control=project_control,
-        values=values,
-        issues=issues,
+        values=MappingProxyType(values),
+        issues=tuple([*issues, *validation_issues]),
         user_instructions=user_instructions,
     )
-    # These historically crashed every CLI surface during module import.  Keep
-    # validation here as well as in config.py so ``doctor --workspace`` can
-    # diagnose a workspace other than the process startup directory.
-    snapshot.get_int("MAX_AGENT_TURNS", 500, minimum=1)
-    snapshot.get_int("BASH_TIMEOUT_SECONDS", 120, minimum=1)
-    snapshot.get_int("NZ_PROCESS_BUFFER_BYTES", 2 * 1024 * 1024, minimum=1)
-    snapshot.get_float("NZ_PROVIDER_HARD_TIMEOUT_SECONDS", 600.0, minimum=1.0)
-    snapshot.get_float("NZ_MCP_STARTUP_TIMEOUT_SECONDS", 30.0, minimum=0.001)
-    snapshot.get_float("NZ_MCP_TOOL_TIMEOUT_SECONDS", 30.0, minimum=0.001)
-    snapshot.get_float(
-        "NZ_LSP_INITIALIZE_TIMEOUT_SECONDS", 20.0,
-        minimum=0.001, maximum=600.0,
-    )
-    snapshot.get_float(
-        "NZ_LSP_REQUEST_TIMEOUT_SECONDS", 10.0,
-        minimum=0.001, maximum=600.0,
-    )
     return snapshot
+
+
+def _validate_captured_values(
+    values: dict[str, ConfigValue],
+) -> tuple[dict[str, ConfigValue], list[ConfigIssue]]:
+    """Validate and select fallbacks before publishing an immutable snapshot."""
+    normalized = dict(values)
+    issues: list[ConfigIssue] = []
+    for key, record in values.items():
+        spec = CONFIG_SCHEMA.get(key)
+        if spec is None or spec.value_type == "string":
+            continue
+        valid = True
+        message = ""
+        try:
+            if spec.value_type == "bool":
+                valid = record.value.strip().lower() in {
+                    "1", "true", "yes", "on", "0", "false", "no", "off",
+                }
+                message = "invalid boolean; using default"
+            elif spec.value_type == "int":
+                parsed = int(record.value)
+                valid = (
+                    (spec.minimum is None or parsed >= spec.minimum)
+                    and (spec.maximum is None or parsed <= spec.maximum)
+                )
+                message = "invalid integer; using default"
+            elif spec.value_type == "float":
+                parsed = float(record.value)
+                valid = (
+                    math.isfinite(parsed)
+                    and (spec.minimum is None or parsed >= spec.minimum)
+                    and (spec.maximum is None or parsed <= spec.maximum)
+                )
+                message = "invalid finite number; using default"
+        except (TypeError, ValueError, OverflowError):
+            valid = False
+            message = (
+                "invalid integer; using default"
+                if spec.value_type == "int"
+                else "invalid finite number; using default"
+            )
+        if valid:
+            continue
+        fallback = "" if spec.default is None else str(spec.default)
+        normalized[key] = replace(record, value=fallback, used_default=True)
+        issues.append(ConfigIssue(key, message, record.source))
+    return normalized, issues
 
 
 def _read_env_file(path: Path, source: ConfigSource) -> tuple[dict[str, str], list[ConfigIssue]]:

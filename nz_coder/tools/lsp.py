@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from nz_coder.foundation import config
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.lsp import (
     LSPError,
@@ -15,6 +14,7 @@ from nz_coder.lsp import (
 )
 from nz_coder.lsp.client import path_to_uri, uri_to_path
 from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.tools import register
 
 _OPERATIONS = {
@@ -155,10 +155,11 @@ def lsp(
         )
 
         config_snapshot = active_config_snapshot(workspace)
+        settings = current_run_settings()
         enabled = (
             config_snapshot.get_bool("NZ_LSP_ENABLED", True)
             if config_snapshot is not None
-            else config.LSP_ENABLED
+            else settings.lsp_enabled
         )
         if not enabled:
             return "Error: LSP support is disabled by NZ_LSP_ENABLED."
@@ -187,9 +188,9 @@ def lsp(
         if normalized in (None, [], {}):
             return f"No results found for {operation}"
         output = json.dumps(normalized, indent=2, ensure_ascii=False)
-        if len(output) > config.LSP_MAX_OUTPUT_CHARS:
+        if len(output) > settings.lsp_max_output_chars:
             output = (
-                output[:config.LSP_MAX_OUTPUT_CHARS]
+                output[:settings.lsp_max_output_chars]
                 + "\n... [LSP result truncated]"
             )
         return output

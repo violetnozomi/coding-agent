@@ -14,7 +14,7 @@ from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
 
@@ -84,6 +84,7 @@ class LSPClient:
         analysis_paths: tuple[Path, ...] = (),
         initialize_timeout: float | None = None,
         request_timeout: float | None = None,
+        diagnostic_wait: float | None = None,
     ):
         self.server_id = server_id
         self.command = tuple(command)
@@ -93,12 +94,19 @@ class LSPClient:
         self.initialize_timeout = _validated_timeout(
             initialize_timeout
             if initialize_timeout is not None
-            else config.LSP_INITIALIZE_TIMEOUT_SECONDS
+            else current_run_settings().lsp_initialize_timeout
         )
         self.request_timeout = _validated_timeout(
             request_timeout
             if request_timeout is not None
-            else config.LSP_REQUEST_TIMEOUT_SECONDS
+            else current_run_settings().lsp_request_timeout
+        )
+        self.diagnostic_wait = max(
+            0.0,
+            float(
+                current_run_settings().lsp_diagnostic_wait
+                if diagnostic_wait is None else diagnostic_wait
+            ),
         )
         self._write_lock = threading.Lock()
         self._state_lock = threading.Lock()
@@ -293,14 +301,14 @@ class LSPClient:
             report = self.request(
                 "textDocument/diagnostic",
                 {"textDocument": {"uri": uri}},
-                timeout=config.LSP_DIAGNOSTIC_WAIT_SECONDS,
+                timeout=self.diagnostic_wait,
             )
             if isinstance(report, dict) and isinstance(report.get("items"), list):
                 self._diagnostics[uri] = report["items"]
                 return list(report["items"])
         except (LSPResponseError, LSPTimeoutError):
             pass
-        event.wait(timeout=config.LSP_DIAGNOSTIC_WAIT_SECONDS)
+        event.wait(timeout=self.diagnostic_wait)
         return list(self._diagnostics.get(uri, []))
 
     def close_document(self, path: Path) -> None:

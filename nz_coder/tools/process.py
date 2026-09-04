@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.workspace_paths import model_command_private_path
 from nz_coder.tool_platform.command_policy import classify_bash
 from nz_coder.runtime.core.execution_context import strict_local_tools
@@ -90,7 +91,7 @@ def run_process(
                 return f"Error: Dangerous command blocked ({classification['reason']})"
             if (
                 classification["reason"] in {"package install", "package manager write"}
-                and not config.ALLOW_BASH_PACKAGE_INSTALLS
+                and not current_run_settings().allow_package_installs
             ):
                 return "Error: Package install blocked for persistent processes"
             resolved, error = _resolve_bash_workdir(workdir)

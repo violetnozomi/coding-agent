@@ -21,42 +21,50 @@ CLASSIFICATIONS = {
 # Exact module totals and key sets make line motion harmless while still
 # rejecting a new read in an already-inventoried module.
 CONFIG_READS = {
-    'nz_coder/capabilities/vision.py': (6, {'IMAGE_DESCRIBE_API_KEY', 'IMAGE_DESCRIBE_BASE_URL', 'IMAGE_DESCRIBE_MAX_TOKENS', 'IMAGE_DESCRIBE_MODEL', 'IMAGE_DESCRIBE_PROVIDER', 'PROVIDER_HARD_TIMEOUT_SECONDS'}),
-    'nz_coder/lsp/client.py': (4, {'LSP_DIAGNOSTIC_WAIT_SECONDS', 'LSP_INITIALIZE_TIMEOUT_SECONDS', 'LSP_REQUEST_TIMEOUT_SECONDS'}),
-    'nz_coder/lsp/manager.py': (3, {'LSP_ENABLED', 'LSP_INITIALIZE_TIMEOUT_SECONDS', 'LSP_REQUEST_TIMEOUT_SECONDS'}),
-    'nz_coder/lsp/write_diagnostics.py': (4, {'LSP_ENABLED', 'LSP_MAX_OUTPUT_CHARS', 'LSP_WRITE_DIAGNOSTICS_ENABLED', 'LSP_WRITE_DIAGNOSTIC_MAX_FILES'}),
     'nz_coder/mcp/cli.py': (3, {'MCP_SERVERS_JSON', 'MCP_TRUST_STORE'}),
-    'nz_coder/mcp/config.py': (9, {'MCP_PROJECT_CONFIG', 'MCP_SERVERS_JSON', 'MCP_STARTUP_TIMEOUT_SECONDS', 'MCP_TOOL_TIMEOUT_SECONDS', 'MCP_TRUST_STORE', 'MCP_USER_CONFIG'}),
-    'nz_coder/mcp/runtime.py': (1, {'MCP_ENABLED'}),
+    'nz_coder/mcp/config.py': (7, {'MCP_PROJECT_CONFIG', 'MCP_SERVERS_JSON', 'MCP_TRUST_STORE', 'MCP_USER_CONFIG'}),
     'nz_coder/providers/__init__.py': (2, {'ANTHROPIC_API_VERSION', 'MODEL_PROVIDER'}),
-    'nz_coder/providers/anthropic.py': (1, {'PROVIDER_HARD_TIMEOUT_SECONDS'}),
-    'nz_coder/providers/capabilities.py': (8, {'MAX_CONTEXT_TOKENS', 'MAX_OUTPUT_TOKENS', 'MODEL_CATALOG_PATH', 'MODEL_ID', 'MODEL_PROVIDER'}),
-    'nz_coder/providers/gemini.py': (1, {'PROVIDER_HARD_TIMEOUT_SECONDS'}),
+    'nz_coder/providers/capabilities.py': (4, {'MAX_CONTEXT_TOKENS', 'MAX_OUTPUT_TOKENS', 'MODEL_ID', 'MODEL_PROVIDER'}),
     'nz_coder/providers/models.py': (5, {'ANTHROPIC_API_VERSION', 'MODEL_CATALOG_PATH', 'MODEL_ID', 'MODEL_PROVIDER', 'MODEL_VARIANT'}),
-    'nz_coder/providers/openai_compatible.py': (1, {'PROVIDER_HARD_TIMEOUT_SECONDS'}),
-    'nz_coder/providers/openai_responses.py': (1, {'PROVIDER_HARD_TIMEOUT_SECONDS'}),
-    'nz_coder/runtime/adapters/lifecycle.py': (1, {'RUNTIME_STATE_PERSIST'}),
-    'nz_coder/runtime/agent/agent_manager.py': (6, {'SUBAGENT_BACKGROUND_MAX_CONCURRENT', 'SUBAGENT_BACKGROUND_MAX_TASKS', 'SUBAGENT_PROCESS_ISOLATION_ENABLED', 'SUBAGENT_PROCESS_STOP_GRACE_SECONDS', 'SUBAGENT_WORKTREE_ENABLED'}),
-    'nz_coder/runtime/agent/auto_mode.py': (5, {'AUTO_MODE_CLASSIFIER_BLOCK_STREAK', 'AUTO_MODE_CLASSIFIER_INFRA_FAILURES', 'AUTO_MODE_CLASSIFIER_INFRA_WINDOW_SECONDS', 'AUTO_MODE_CLASSIFIER_MAX_OUTPUT_TOKENS', 'AUTO_MODE_CLASSIFIER_TIMEOUT_SECONDS'}),
-    'nz_coder/runtime/agent/subagent.py': (11, {'MODEL_ID', 'SUBAGENT_DEEP_MODEL', 'SUBAGENT_EXPLORE_MODEL', 'SUBAGENT_MAX_TURNS', 'SUBAGENT_TIMEOUT_SECONDS', 'SUBAGENT_WORKTREE_ENABLED', 'TRACE_ENABLED'}),
-    'nz_coder/runtime/conversation/prompt_builder.py': (1, {'SYSTEM_CONTEXT_BUDGET_TOKENS'}),
+    'nz_coder/runtime/agent/subagent.py': (4, {'MODEL_ID'}),
     'nz_coder/runtime/core/execution_context.py': (2, {'MAX_AGENT_TURNS', 'MAX_PARALLEL_TASKS'}),
-    'nz_coder/runtime/execution/loop.py': (15, {'MODEL_ID', 'PLANNING_ENABLED', 'PLANNING_MAX_TOKENS', 'PLANNING_TASK_MODES', 'PROVIDER_HARD_TIMEOUT_SECONDS', 'REPLAN_IDLE_TURNS', 'REPLAN_MAX_ATTEMPTS', 'RUNTIME_STATE_PERSIST', 'SYSTEM_CONTEXT_BUDGET_TOKENS', 'TRACE_ENABLED'}),
-    'nz_coder/runtime/execution/provider_stream.py': (1, {'PROVIDER_HARD_TIMEOUT_SECONDS'}),
-    'nz_coder/runtime/execution/services.py': (15, {'MEMORY_ASYNC_WRITE', 'MEMORY_LLM_EXTRACT', 'MEMORY_LLM_RERANK', 'PROVIDER_HARD_TIMEOUT_SECONDS'}),
-    'nz_coder/runtime/execution/tool_executor.py': (4, {'MAX_TOOL_CALLS_PER_RESPONSE', 'READ_DEDUP_ENABLED'}),
-    'nz_coder/runtime/process/process_service.py': (8, {'PROCESS_BUFFER_BYTES', 'PROCESS_KILL_GRACE_SECONDS', 'PROCESS_MAX_PER_WORKSPACE', 'PROCESS_OUTPUT_ENCODING', 'PROCESS_READ_MAX_BYTES', 'PROCESS_WRITE_MAX_BYTES'}),
-    'nz_coder/runtime/tool_runtime/pipeline.py': (2, {'MAX_TOOL_CALLS_PER_RESPONSE'}),
-    'nz_coder/runtime/tool_runtime/policy.py': (2, {'DOOM_LOOP_THRESHOLD', 'MAX_TOOL_CALLS_PER_RESPONSE'}),
-    'nz_coder/runtime/verification/hooks.py': (1, {'MAX_VERIFICATION_GATE_PROMPTS'}),
-    'nz_coder/runtime/workflows/workflow_library.py': (1, {'SUBAGENT_WORKTREE_ENABLED'}),
-    'nz_coder/tools/bash.py': (11, {'ALLOW_BASH_PACKAGE_INSTALLS', 'BASH_OUTPUT_HARD_LIMIT_BYTES', 'BASH_TIMEOUT_SECONDS', 'CONTEXT_TRUNCATE_CHARS', 'PROCESS_BUFFER_BYTES', 'PROCESS_OUTPUT_ENCODING'}),
-    'nz_coder/tools/files.py': (6, {'CONTEXT_TRUNCATE_CHARS', 'WRITE_BATCH_MAX_FILE_BYTES', 'WRITE_BATCH_MAX_TOTAL_BYTES'}),
-    'nz_coder/tools/lsp.py': (3, {'LSP_ENABLED', 'LSP_MAX_OUTPUT_CHARS'}),
-    'nz_coder/tools/process.py': (2, {'ALLOW_BASH_PACKAGE_INSTALLS', 'PROCESS_READ_MAX_BYTES'}),
-    'nz_coder/tools/repo_map.py': (4, {'REPO_MAP_MAX_FILES', 'REPO_MAP_MAX_SYMBOLS'}),
+    'nz_coder/runtime/execution/loop.py': (3, {'MODEL_ID', 'PLANNING_TASK_MODES'}),
+    'nz_coder/tools/bash.py': (4, {'BASH_TIMEOUT_SECONDS', 'CONTEXT_TRUNCATE_CHARS'}),
+    'nz_coder/tools/files.py': (2, {'CONTEXT_TRUNCATE_CHARS'}),
+    'nz_coder/tools/process.py': (1, {'PROCESS_READ_MAX_BYTES'}),
 }
-STATIC_DEFAULT_KEYS = {'PLANNING_TASK_MODES', 'CONTEXT_TRUNCATE_CHARS'}
+
+# Every surviving direct read is an explicitly reviewed compatibility, host, or
+# schema/default read.  A formal run-scoped consumer must use RunSettings.
+DIRECT_CONFIG_ALLOWLIST = {
+    ('nz_coder/mcp/cli.py', 'MCP_SERVERS_JSON'): 'host-process-only',
+    ('nz_coder/mcp/cli.py', 'MCP_TRUST_STORE'): 'host-process-only',
+    **{
+        ('nz_coder/mcp/config.py', key): 'test/compatibility-only'
+        for key in {'MCP_PROJECT_CONFIG', 'MCP_SERVERS_JSON', 'MCP_TRUST_STORE', 'MCP_USER_CONFIG'}
+    },
+    **{
+        ('nz_coder/providers/__init__.py', key): 'test/compatibility-only'
+        for key in {'ANTHROPIC_API_VERSION', 'MODEL_PROVIDER'}
+    },
+    **{
+        ('nz_coder/providers/capabilities.py', key): 'test/compatibility-only'
+        for key in {'MAX_CONTEXT_TOKENS', 'MAX_OUTPUT_TOKENS', 'MODEL_ID', 'MODEL_PROVIDER'}
+    },
+    **{
+        ('nz_coder/providers/models.py', key): 'test/compatibility-only'
+        for key in {'ANTHROPIC_API_VERSION', 'MODEL_CATALOG_PATH', 'MODEL_ID', 'MODEL_PROVIDER', 'MODEL_VARIANT'}
+    },
+    ('nz_coder/runtime/agent/subagent.py', 'MODEL_ID'): 'test/compatibility-only',
+    ('nz_coder/runtime/core/execution_context.py', 'MAX_AGENT_TURNS'): 'test/compatibility-only',
+    ('nz_coder/runtime/core/execution_context.py', 'MAX_PARALLEL_TASKS'): 'test/compatibility-only',
+    ('nz_coder/runtime/execution/loop.py', 'MODEL_ID'): 'test/compatibility-only',
+    ('nz_coder/runtime/execution/loop.py', 'PLANNING_TASK_MODES'): 'static product default',
+    ('nz_coder/tools/bash.py', 'BASH_TIMEOUT_SECONDS'): 'static product default',
+    ('nz_coder/tools/bash.py', 'CONTEXT_TRUNCATE_CHARS'): 'static product default',
+    ('nz_coder/tools/files.py', 'CONTEXT_TRUNCATE_CHARS'): 'static product default',
+    ('nz_coder/tools/process.py', 'PROCESS_READ_MAX_BYTES'): 'static product default',
+}
 
 
 WORKSPACE_INPUTS = {
@@ -203,8 +211,25 @@ def test_all_direct_config_reads_are_classified():
         if len(rows) != expected_count or keys != expected_keys:
             problems.append(f'{path}: expected {expected_count} reads/{sorted(expected_keys)}, found {len(rows)} reads/{sorted(keys)}; use RunSettings or update the reviewed inventory')
         for line, key in rows:
-            classification = 'static product default' if key in STATIC_DEFAULT_KEYS else 'run-scoped'
-            assert classification in CLASSIFICATIONS, f'{path}:{line}: config.{key} has invalid classification'
+            classification = DIRECT_CONFIG_ALLOWLIST.get((path, key))
+            if classification is None:
+                problems.append(
+                    f'{path}:{line}: config.{key} lacks a reviewed classification; '
+                    'formal run-scoped consumers must use RunSettings'
+                )
+            elif classification == 'run-scoped':
+                problems.append(
+                    f'{path}:{line}: config.{key} remains run-scoped; use RunSettings'
+                )
+            elif classification not in CLASSIFICATIONS:
+                problems.append(f'{path}:{line}: config.{key} has invalid classification')
+    inventoried_pairs = {
+        (path, key)
+        for path, (_count, keys) in CONFIG_READS.items()
+        for key in keys
+    }
+    if inventoried_pairs != set(DIRECT_CONFIG_ALLOWLIST):
+        problems.append('direct config classification allowlist does not match inventory')
     assert not problems, '\n'.join(problems)
 
 

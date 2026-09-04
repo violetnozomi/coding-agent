@@ -12,7 +12,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.async_utils import to_thread_settled as _to_thread_settled
 from nz_coder.runtime.adapters.tool import (
     policy_context_from_legacy_host,
@@ -98,7 +98,7 @@ class ProductionToolRuntime:
     ) -> ApprovedToolBatch:
         """Apply tool guardrails before any SessionProcessor publication."""
         original, repairs = normalize_raw_tool_calls(
-            copy.deepcopy(list(tool_calls_raw[:config.MAX_TOOL_CALLS_PER_RESPONSE])),
+            copy.deepcopy(list(tool_calls_raw[:current_run_settings().max_tool_calls])),
             _candidate_tool_names(),
         )
         trace = getattr(getattr(host, "tracer", None), "log", lambda *_a, **_k: None)
@@ -132,7 +132,7 @@ class ProductionToolRuntime:
     ) -> ApprovedToolBatch:
         """Apply tool guardrails/admission while raw envelopes stay private."""
         original, repairs = normalize_raw_tool_calls(
-            copy.deepcopy(list(tool_calls_raw[:config.MAX_TOOL_CALLS_PER_RESPONSE])),
+            copy.deepcopy(list(tool_calls_raw[:current_run_settings().max_tool_calls])),
             _candidate_tool_names(),
         )
         for repair in repairs:

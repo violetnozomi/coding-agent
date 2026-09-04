@@ -5,7 +5,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import cast
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 
 from .manager import get_client_for_file
 
@@ -74,11 +74,12 @@ def collect_write_diagnostics(paths: Iterable[str], workspace: Path) -> str:
     Missing servers, unsupported files, protocol errors, and diagnostics timeouts
     are ignored so an optional LSP can never fail a file write.
     """
-    if not config.LSP_ENABLED or not config.LSP_WRITE_DIAGNOSTICS_ENABLED:
+    settings = current_run_settings()
+    if not settings.lsp_enabled or not settings.lsp_write_diagnostics_enabled:
         return ""
 
     targets = _safe_targets(paths, workspace)
-    max_files = max(1, int(config.LSP_WRITE_DIAGNOSTIC_MAX_FILES or 1))
+    max_files = settings.lsp_write_diagnostic_max_files
     omitted = max(0, len(targets) - max_files)
     targets = targets[:max_files]
     rows: list[str] = []
@@ -108,7 +109,7 @@ def collect_write_diagnostics(paths: Iterable[str], workspace: Path) -> str:
     )
     closing = "\n</lsp-diagnostics>"
     body = "\n".join(rows)
-    limit = max(500, int(config.LSP_MAX_OUTPUT_CHARS or 500))
+    limit = max(500, settings.lsp_max_output_chars)
     available = max(0, limit - len(heading) - len(closing))
     if len(body) > available:
         marker = "\n... [LSP diagnostics truncated]"

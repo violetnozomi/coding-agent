@@ -13,6 +13,7 @@ from typing import Any, TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.mcp.trust import MCPTrustStore
 from nz_coder.runtime.process.workdir import current_workdir
 
@@ -305,7 +306,7 @@ def load_mcp_server_configs(
             item.get(
                 "startup_timeout_seconds",
                 (
-                    config.MCP_STARTUP_TIMEOUT_SECONDS
+                    current_run_settings().mcp_startup_timeout
                     if legacy_globals
                     else config_snapshot.get_float(
                     "NZ_MCP_STARTUP_TIMEOUT_SECONDS", 30.0, minimum=0.001,
@@ -319,7 +320,7 @@ def load_mcp_server_configs(
             item.get(
                 "tool_timeout_seconds",
                 (
-                    config.MCP_TOOL_TIMEOUT_SECONDS
+                    current_run_settings().mcp_tool_timeout
                     if legacy_globals
                     else config_snapshot.get_float(
                     "NZ_MCP_TOOL_TIMEOUT_SECONDS", 30.0, minimum=0.001,

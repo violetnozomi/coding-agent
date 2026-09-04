@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 import shlex
 import sys
@@ -14,6 +15,7 @@ from nz_coder.permissions import PermissionManager
 from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.agent.agent_resilience import ProviderAttemptController
 from nz_coder.runtime.execution.tool_executor import ToolExecutor
+from nz_coder.runtime.core.run_settings import current_run_settings, scoped_run_settings
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state.transaction import TransactionManager
 from nz_coder.tools.bash import run_bash
@@ -102,11 +104,12 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
 
     source = workspace / "app.py"
     source.write_text("VALUE = 1\n", encoding="utf-8")
-    with patch(
-        "nz_coder.lsp.write_diagnostics.config.LSP_ENABLED", True,
-    ), patch(
-        "nz_coder.lsp.write_diagnostics.config.LSP_WRITE_DIAGNOSTICS_ENABLED", True,
-    ), patch(
+    diagnostic_settings = replace(
+        current_run_settings(),
+        lsp_enabled=True,
+        lsp_write_diagnostics_enabled=True,
+    )
+    with scoped_run_settings(diagnostic_settings), patch(
         "nz_coder.lsp.write_diagnostics.get_client_for_file",
         side_effect=RuntimeError("LSP unavailable"),
     ):

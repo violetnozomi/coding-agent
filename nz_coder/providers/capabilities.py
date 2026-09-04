@@ -351,13 +351,16 @@ def resolve_model_capabilities(
     normalized_provider = str(provider or "openai-compatible").strip().lower()
     normalized_model = str(model_id or "").strip()
     model_key = normalized_model.lower()
+    from nz_coder.runtime.core.run_settings import current_run_settings
+
+    run_settings = current_run_settings()
     capability = next(
         (rule.build(normalized_provider, normalized_model) for rule in _RULES if rule.matches(model_key)),
         ModelCapabilities(
             provider=normalized_provider,
             model_id=normalized_model,
-            context_tokens=max(0, int(config.MAX_CONTEXT_TOKENS)),
-            output_tokens=max(1, int(config.MAX_OUTPUT_TOKENS)),
+            context_tokens=run_settings.max_context_tokens,
+            output_tokens=run_settings.max_output_tokens,
         ),
     )
 
@@ -395,33 +398,58 @@ def configured_model_capabilities(
     *,
     variant: str | None = None,
 ) -> ModelCapabilities:
-    """Resolve capabilities using the active environment-backed configuration."""
-    context_override = (
-        config.MAX_CONTEXT_TOKENS if os.environ.get("MAX_CONTEXT_TOKENS") else None
-    )
-    output_override = (
-        config.MAX_OUTPUT_TOKENS if os.environ.get("MAX_OUTPUT_TOKENS") else None
-    )
-    catalog: str | dict[str, Any] | None = getattr(
-        config,
-        "MODEL_CATALOG_JSON",
-        "",
-    )
-    if not catalog and getattr(config, "MODEL_CATALOG_PATH", ""):
-        catalog = load_model_catalog_file(config.MODEL_CATALOG_PATH)
+    """Resolve capabilities from the active immutable configuration epoch."""
+    from nz_coder.foundation.workspace_trust import active_config_snapshot, ConfigSource
+    from nz_coder.runtime.core.run_settings import current_run_settings
+
+    snapshot = active_config_snapshot()
+    settings = current_run_settings()
+    if snapshot is not None:
+        context_record = snapshot.value("MAX_CONTEXT_TOKENS")
+        output_record = snapshot.value("MAX_OUTPUT_TOKENS")
+        context_override = (
+            settings.max_context_tokens
+            if context_record.source is not ConfigSource.DEFAULT else None
+        )
+        output_override = (
+            settings.max_output_tokens
+            if output_record.source is not ConfigSource.DEFAULT else None
+        )
+        catalog: str | dict[str, Any] | None = snapshot.get("MODEL_CATALOG_JSON", "")
+        catalog_path = snapshot.get("MODEL_CATALOG_PATH", "")
+        configured_model_id = snapshot.get("MODEL_ID", "deepseek-v4-flash")
+        resolved_model_id = model_id or configured_model_id
+        resolved_provider = provider or snapshot.get("MODEL_PROVIDER", "openai-compatible")
+        configured_variant = snapshot.get("MODEL_VARIANT", "")
+        overrides = snapshot.get("MODEL_CAPABILITIES_JSON", "")
+    else:
+        context_override = (
+            config.MAX_CONTEXT_TOKENS if os.environ.get("MAX_CONTEXT_TOKENS") else None
+        )
+        output_override = (
+            config.MAX_OUTPUT_TOKENS if os.environ.get("MAX_OUTPUT_TOKENS") else None
+        )
+        catalog = getattr(config, "MODEL_CATALOG_JSON", "")
+        catalog_path = getattr(config, "MODEL_CATALOG_PATH", "")
+        configured_model_id = config.MODEL_ID
+        resolved_model_id = model_id or configured_model_id
+        resolved_provider = provider or config.MODEL_PROVIDER
+        configured_variant = getattr(config, "MODEL_VARIANT", "")
+        overrides = getattr(config, "MODEL_CAPABILITIES_JSON", "")
+    if not catalog and catalog_path:
+        catalog = load_model_catalog_file(catalog_path)
     from nz_coder.providers.registry import registry_capability_catalog
 
     registry = registry_capability_catalog()
-    resolved_model_id = model_id or config.MODEL_ID
     selected_variant = variant
-    if selected_variant is None and resolved_model_id == config.MODEL_ID:
-        selected_variant = getattr(config, "MODEL_VARIANT", "") or None
+    if selected_variant is None and resolved_model_id == configured_model_id:
+        selected_variant = configured_variant or None
     return resolve_model_capabilities(
-        provider or config.MODEL_PROVIDER,
+        resolved_provider,
         resolved_model_id,
         context_tokens=context_override,
         output_tokens=output_override,
-        overrides=getattr(config, "MODEL_CAPABILITIES_JSON", ""),
+        overrides=overrides,
         catalog=catalog,
         registry=registry,
         variant=selected_variant,

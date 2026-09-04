@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.json_safety import json_safe_value, reject_nonstandard_json_constant
 from nz_coder.protocol.message_schema import is_synthetic_user_message
 from nz_coder.permissions import PermissionManager
@@ -299,12 +299,12 @@ class AutoModeController:
                 ),
             )
         if decision.decision == "block":
-            self.state.observe_block(config.AUTO_MODE_CLASSIFIER_BLOCK_STREAK)
+            self.state.observe_block(current_run_settings().auto_mode_classifier_block_streak)
         else:
             self.state.observe_failure(
                 context.clock(),
-                config.AUTO_MODE_CLASSIFIER_INFRA_FAILURES,
-                config.AUTO_MODE_CLASSIFIER_INFRA_WINDOW_SECONDS,
+                current_run_settings().auto_mode_classifier_infra_failures,
+                current_run_settings().auto_mode_classifier_infra_window,
             )
         return await self._manual(
             context,
@@ -338,9 +338,9 @@ class AutoModeController:
                 },
             ),
             tools=(),
-            max_output_tokens=config.AUTO_MODE_CLASSIFIER_MAX_OUTPUT_TOKENS,
+            max_output_tokens=current_run_settings().auto_mode_classifier_max_output_tokens,
             streaming=False,
-            timeout_seconds=config.AUTO_MODE_CLASSIFIER_TIMEOUT_SECONDS,
+            timeout_seconds=current_run_settings().auto_mode_classifier_timeout,
             response_format={"type": "json_object"},
             metadata={"allow_response_format_fallback": True},
         )

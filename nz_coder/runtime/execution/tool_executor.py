@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.permissions import PermissionManager
 from nz_coder.runtime.agent.agent_resilience import (
@@ -299,10 +299,11 @@ class ToolExecutor:
         is_write = is_transactional_write_tool(fn_name)
 
         # ── 单轮调用数限制 ──────────────────────────────────────────────────
-        if index >= config.MAX_TOOL_CALLS_PER_RESPONSE:
+        settings = current_run_settings()
+        if index >= settings.max_tool_calls:
             output = (
                 f"Error: Too many tool calls in one response "
-                f"(limit {config.MAX_TOOL_CALLS_PER_RESPONSE})"
+                f"(limit {settings.max_tool_calls})"
             )
             return ToolExecutionResult(fn_name, {}, output, False, True, False, is_write)
 
@@ -352,7 +353,7 @@ class ToolExecutor:
                     permission_denied=True,
                 )
 
-        if fn_name == "read_file" and config.READ_DEDUP_ENABLED:
+        if fn_name == "read_file" and settings.read_dedup_enabled:
             cached_output = self._read_cache.lookup(tool_input)
             if cached_output is not None:
                 return ToolExecutionResult(
@@ -408,7 +409,7 @@ class ToolExecutor:
             metadata["cancelled"] = True
         if (
             fn_name == "read_file"
-            and config.READ_DEDUP_ENABLED
+            and settings.read_dedup_enabled
             and not dispatch_failed
             and metadata.get("encoding")
             and not attachments
