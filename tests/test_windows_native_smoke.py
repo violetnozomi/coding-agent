@@ -147,10 +147,11 @@ def test_space_path_and_cjk_path_file_edit(tmp_path: Path, directory: str):
         assert "print('ok')" in read_file(relative)
 
 
-def test_windows_model_file_junction_swap_fails_closed(tmp_path: Path):
+def test_windows_model_file_junction_swap_fails_closed(tmp_path: Path, monkeypatch):
+    from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
     from nz_coder.runtime.process.platform_runtime import decode_process_output
     from nz_coder.runtime.process.workdir import scoped_workdir
-    from nz_coder.tools.files import read_file, write_file
+    from nz_coder.tools.files import list_directory, read_file, write_file
 
     workspace = tmp_path / "workspace"
     outside = tmp_path / "outside"
@@ -180,6 +181,46 @@ def test_windows_model_file_junction_swap_fails_closed(tmp_path: Path):
         assert str(read_file("external/secret.txt")).startswith("Error: ")
         assert str(write_file("external/new.txt", "blocked")).startswith("Error: ")
     assert not (outside / "new.txt").exists()
+
+    source = workspace / "src"
+    source.mkdir()
+    (source / "inside.txt").write_text("inside", encoding="utf-8")
+    original = WorkspacePathPolicy.validate_model_list
+    swapped = False
+
+    def validate_then_replace_with_junction(policy, path):
+        nonlocal swapped
+        result = original(policy, path)
+        if swapped:
+            return result
+        swapped = True
+        source.rename(workspace / "src-original")
+        environment["NZ_RC_LINK"] = str(source)
+        replacement = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$null=New-Item -ItemType Junction -Path $env:NZ_RC_LINK -Target $env:NZ_RC_TARGET",
+            ],
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        assert replacement.returncode == 0, decode_process_output(replacement.stdout)
+        return result
+
+    monkeypatch.setattr(
+        WorkspacePathPolicy,
+        "validate_model_list",
+        validate_then_replace_with_junction,
+    )
+    with scoped_workdir(workspace):
+        listing = list_directory("src", depth=2)
+    assert str(listing).startswith("Error: ")
+    assert "secret.txt" not in str(listing)
 
 
 def test_persistent_process_and_conpty_repl_and_ctrl_c(tmp_path):
