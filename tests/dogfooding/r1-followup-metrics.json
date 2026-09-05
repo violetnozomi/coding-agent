@@ -1,0 +1,244 @@
+{
+  "schema": "nz.r1-followup.v1",
+  "baseline": "6939f05a3d272c752e8ad8011730c51ee7f01e4b",
+  "production_head": "6b08a8073f7b0a3d8ba8188bd71e4cb23a731b7f",
+  "branch": "codex/dogfood-r1-followup",
+  "pr_base": "codex/dogfood-product-r1",
+  "depends_on_pr": 3,
+  "provider_preflight": {
+    "credential_present": false,
+    "credential_source": "default",
+    "real_adapter_invoked": false,
+    "real_requests": 0,
+    "probe_requests": 0,
+    "actual_cost_usd": 0,
+    "actual_tokens": 0,
+    "paid_budget_gate": "NOT_EXERCISED"
+  },
+  "coding_tasks": [
+    {
+      "id": "T01",
+      "product_status": "NOT_RUN",
+      "acceptance_status": "NOT_RUN",
+      "visual_status": "NOT_VERIFIED",
+      "diff_files": [],
+      "manual_solution": false,
+      "attempts": 0,
+      "retries": 0,
+      "reason": "NO_CREDENTIAL"
+    },
+    {
+      "id": "T02",
+      "product_status": "NOT_RUN",
+      "acceptance_status": "NOT_RUN",
+      "visual_status": "NOT_VERIFIED",
+      "diff_files": [],
+      "manual_solution": false,
+      "attempts": 0,
+      "retries": 0,
+      "reason": "NO_CREDENTIAL"
+    },
+    {
+      "id": "T03",
+      "product_status": "NOT_RUN",
+      "acceptance_status": "NOT_RUN",
+      "visual_status": "NOT_VERIFIED",
+      "diff_files": [],
+      "manual_solution": false,
+      "attempts": 0,
+      "retries": 0,
+      "reason": "T02_NOT_RUN_AND_NO_CREDENTIAL"
+    },
+    {
+      "id": "T04",
+      "product_status": "NOT_RUN",
+      "acceptance_status": "NOT_RUN",
+      "visual_status": "NOT_VERIFIED",
+      "diff_files": [],
+      "manual_solution": false,
+      "attempts": 0,
+      "retries": 0,
+      "reason": "NO_CREDENTIAL"
+    }
+  ],
+  "artifact": {
+    "wheel_sha256": "e869b97de764455c9398b942873870198df4b9aa7809f2c7ea43d16b38bc570e",
+    "sdist_sha256": "d6eef8895e4fba4df27d83866e468e7d3a3d90594e8468179829bcd4a7a15dc3",
+    "source_python_files_matched": 374,
+    "source_external_install": true
+  },
+  "attempts": [
+    {
+      "id": "before",
+      "stage": "baseline_driver",
+      "result": "INVALID",
+      "reason": "Overlapping default cwd and explicit child workspace; startup rejected",
+      "provider_calls": 0
+    },
+    {
+      "id": "before2",
+      "stage": "baseline_driver",
+      "result": "INVALID",
+      "reason": "Scripted transport selected a synthetic feedback message, repeated Bash approval and timed out; shutdown warning retained",
+      "provider_calls": 2
+    },
+    {
+      "id": "before3",
+      "stage": "baseline_installed_f04",
+      "result": "FAIL",
+      "provider_calls": 2,
+      "identity": {
+        "session_id": "http-20260905_233400-a83d6b65",
+        "interaction_run_id": "interaction-c3b128cdc06f48eb9a3e67e1a23f0b60",
+        "tool_call_id": "call_59b80d8f30364114a9d2f7329c690852",
+        "attempt_id": "before3"
+      },
+      "exit": 7,
+      "truncated": true,
+      "pty_bytes": 12480,
+      "capture_observer": "NOT_INSTALLED",
+      "original_marker_checks": {
+        "model": false,
+        "snapshot": false
+      },
+      "measurement_correction": {
+        "basis": "Runtime-generated numeric source line, not new summary formatting",
+        "model_tail_present": true,
+        "snapshot_tail_present": true,
+        "terminal_tail_present": false
+      },
+      "exit_visible": false,
+      "truncation_visible": false,
+      "secret_absent": false,
+      "reconnect_marker": false
+    },
+    {
+      "id": "after",
+      "stage": "intermediate_installed_f04",
+      "result": "PARTIAL",
+      "provider_calls": 6,
+      "exit": 7,
+      "truncated": true,
+      "pty_bytes": 12950,
+      "model_diagnostic": true,
+      "public_snapshot": true,
+      "tool_output_capture": true,
+      "terminal_diagnostic": true,
+      "secret_absent": true,
+      "reconnect_marker": false,
+      "http_file_and_reuse": true
+    },
+    {
+      "id": "release",
+      "stage": "final_installed_f04",
+      "result": "AUTOMATED_BEHAVIOR_PASS",
+      "provider_calls": 6,
+      "identity": {
+        "session_id": "http-20260906_001624-993deb58",
+        "interaction_run_id": "interaction-19f38eb0f76d4cb0811d66a30d4c0c44",
+        "tool_call_id": "call_ec005bfd58964a4fb489039faed0f1b6",
+        "attempt_id": "release"
+      },
+      "exit": 7,
+      "truncated": true,
+      "total_output_bytes": 309458,
+      "retained_decoded_utf8_bytes": 4244,
+      "pty_bytes": 12950,
+      "marker_not_in_command": true,
+      "model_diagnostic": true,
+      "public_snapshot": true,
+      "tool_output_capture": true,
+      "terminal_diagnostic": true,
+      "secret_absent": true,
+      "reconnect_marker": true,
+      "http_file_and_reuse": true
+    }
+  ],
+  "evidence_layers": {
+    "A": "Pass-through return observer of actual installed run_bash, before common projection; not a raw private-buffer observer",
+    "B": "Authoritative current-interaction snapshot, call_id join",
+    "C": "Current-request PTY slice plus separate reconnect PTY; fixed assistant response contains no runtime diagnostic marker"
+  },
+  "visual_status": "NOT_VERIFIED",
+  "raw_trace_policy": "Private state only; no credentials, raw PTY, snapshots, or model replies committed",
+  "validation": [
+    {
+      "command": "python -m pytest -q tests/dogfooding/test_f04_diagnostics.py",
+      "stage": "first_red",
+      "failed": 11,
+      "exit": 1
+    },
+    {
+      "command": "python -m pytest -q",
+      "stage": "first_full",
+      "failed": 3,
+      "passed": 3766,
+      "skipped": 35,
+      "seconds": 458.76,
+      "exit": 1
+    },
+    {
+      "command": "python -m pytest -q",
+      "stage": "interrupted_to_fix_settlement",
+      "passed": 3658,
+      "skipped": 35,
+      "seconds": 321.8,
+      "exit": 2
+    },
+    {
+      "command": "python -m pytest -q",
+      "stage": "before_final_attach_entry_fix",
+      "passed": 3780,
+      "skipped": 35,
+      "seconds": 428.6,
+      "exit": 0
+    },
+    {
+      "command": "python -m pytest -q tests/dogfooding tests/test_session_processor.py tests/test_bash_progress.py tests/test_tool_child_failure_projection_phase4.py tests/test_swebench_strict.py tests/test_tui_product_scenarios.py tests/test_gap_recovery_phase3.py tests/test_run_renderer.py",
+      "stage": "final_targeted",
+      "passed": 195,
+      "seconds": 8.56,
+      "exit": 0
+    },
+    {
+      "command": "python -m pytest -q",
+      "stage": "final_full",
+      "status": "PASSED",
+      "passed": 3781,
+      "skipped": 35,
+      "seconds": 462.69,
+      "exit": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0
+    },
+    {
+      "command": "python -m compileall -q nz_coder tests",
+      "exit": 0
+    },
+    {
+      "command": "python -m ruff check nz_coder tests",
+      "exit": 0
+    },
+    {
+      "command": "python -m build --wheel --sdist",
+      "exit": 0
+    },
+    {
+      "command": "<venv>/bin/python tests/dogfooding/f04_followup.py <fresh-private-directory>",
+      "stage": "final_outside_source",
+      "exit": 0
+    }
+  ],
+  "residuals": [
+    "No real Provider coding samples",
+    "No human visual or Windows/ConPTY acceptance",
+    "Arbitrary failure diagnostic text stays hidden; closed grammar is not general compiler/test recovery",
+    "Successful command output retains existing behavior; shell is not an OS sandbox"
+  ],
+  "ci": {
+    "final_head_only": true,
+    "status": "OBSERVED_SEPARATELY_AFTER_REPORT_COMMIT_ON_DELIVERED_PR_HEAD"
+  }
+}
