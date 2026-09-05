@@ -73,10 +73,11 @@ invoices are not inferred. If the gate cannot be established, mark T01–T04 NOT
 - [x] Freeze first-run table and classify A/B/C/D issues before any product edit.
 - [x] Reproduce one A defect with two failing regressions,
   minimally fix, reinstall wheel and repeat the affected unchanged scenario.
-- [ ] Run diff/compile/Ruff/pytest/build and outside-source final install checks.
-- [ ] Record real task/scene results, separate timing and cost/usage fields,
-  retry ledger, visual limitations and one next recommendation. Commit necessary
-  artifacts only, ordinary push and create a new PR; inspect final-head CI.
+- [x] Run diff/compile/Ruff/pytest/build and outside-source final install checks.
+- [x] Record real task/scene results, separate timing and cost/usage fields,
+  retry ledger, visual limitations and one next recommendation.
+  Git delivery uses necessary artifacts only, ordinary push and a new PR;
+  final-head CI status is recorded in the final handoff, not inferred from tests.
 
 ## Frozen independent conditions
 

@@ -1,0 +1,161 @@
+[
+  {
+    "case": "R1:F01",
+    "request_accepted": 1788599082.49342,
+    "first_frontend_feedback": "UNKNOWN",
+    "frontend_finished": "UNKNOWN",
+    "assistant_turns": 2,
+    "tools": [
+      {
+        "name": "write_file",
+        "status": "error",
+        "time": {
+          "start": 1788599082.6408343,
+          "end": 1788599083.7111762
+        },
+        "exit": null,
+        "truncated": null,
+        "bytes": null
+      }
+    ],
+    "business_final": 1788599083.7864678,
+    "provider_calls_including_auxiliary": "UNKNOWN",
+    "end_reason": "completed"
+  },
+  {
+    "case": "R1:F01",
+    "request_accepted": 1788599084.4363477,
+    "first_frontend_feedback": "UNKNOWN",
+    "frontend_finished": "UNKNOWN",
+    "assistant_turns": 2,
+    "tools": [
+      {
+        "name": "write_file",
+        "status": "completed",
+        "time": {
+          "start": 1788599084.535559,
+          "end": 1788599085.1545393
+        },
+        "exit": null,
+        "truncated": null,
+        "bytes": null
+      }
+    ],
+    "business_final": 1788599085.2480414,
+    "provider_calls_including_auxiliary": "UNKNOWN",
+    "end_reason": "completed"
+  },
+  {
+    "case": "R1:F01",
+    "request_accepted": 1788599085.9999723,
+    "first_frontend_feedback": "UNKNOWN",
+    "frontend_finished": "UNKNOWN",
+    "assistant_turns": 2,
+    "tools": [
+      {
+        "name": "write_file",
+        "status": "error",
+        "time": {
+          "start": 1788599086.0972311,
+          "end": 1788599087.1772788
+        },
+        "exit": null,
+        "truncated": null,
+        "bytes": null
+      }
+    ],
+    "business_final": 1788599087.266861,
+    "provider_calls_including_auxiliary": "UNKNOWN",
+    "end_reason": "completed"
+  },
+  {
+    "case": "R1:F02",
+    "request_accepted": 1788599087.9151468,
+    "first_frontend_feedback": "UNKNOWN",
+    "frontend_finished": "UNKNOWN",
+    "assistant_turns": 1,
+    "tools": [
+      {
+        "name": "bash",
+        "status": "error",
+        "time": {
+          "start": 1788599088.0613983,
+          "end": 1788599088.7470162
+        },
+        "exit": null,
+        "truncated": null,
+        "bytes": null
+      }
+    ],
+    "business_final": null,
+    "provider_calls_including_auxiliary": "UNKNOWN"
+  },
+  {
+    "case": "R1:F05",
+    "request_accepted": 1788599089.467996,
+    "first_frontend_feedback": "UNKNOWN",
+    "frontend_finished": "UNKNOWN",
+    "assistant_turns": 1,
+    "tools": [],
+    "business_final": 1788599089.6004694,
+    "provider_calls_including_auxiliary": "UNKNOWN",
+    "end_reason": "completed"
+  },
+  {
+    "case": "R1:F03",
+    "request_accepted": 1788599090.2864373,
+    "first_frontend_feedback": "UNKNOWN",
+    "frontend_finished": "UNKNOWN",
+    "assistant_turns": 2,
+    "tools": [
+      {
+        "name": "bash",
+        "status": "completed",
+        "time": {
+          "start": 1788599090.3959565,
+          "end": 1788599096.0397232
+        },
+        "exit": 0,
+        "truncated": false,
+        "bytes": 33
+      }
+    ],
+    "business_final": 1788599096.1436985,
+    "provider_calls_including_auxiliary": "UNKNOWN",
+    "end_reason": "completed"
+  },
+  {
+    "case": "R1:F04",
+    "request_accepted": 1788599098.8208542,
+    "first_frontend_feedback": "UNKNOWN",
+    "frontend_finished": "UNKNOWN",
+    "assistant_turns": 2,
+    "tools": [
+      {
+        "name": "bash",
+        "status": "completed",
+        "time": {
+          "start": 1788599098.937612,
+          "end": 1788599099.566635
+        },
+        "exit": 7,
+        "truncated": true,
+        "bytes": 324023
+      }
+    ],
+    "business_final": 1788599099.7642705,
+    "provider_calls_including_auxiliary": "UNKNOWN",
+    "end_reason": "completed"
+  },
+  {
+    "case": "R1:F05",
+    "request_accepted": 1788599101.4826422,
+    "first_frontend_feedback": "UNKNOWN",
+    "frontend_finished": "UNKNOWN",
+    "assistant_turns": 1,
+    "tools": [],
+    "business_final": 1788599101.7022142,
+    "provider_calls_including_auxiliary": "UNKNOWN",
+    "end_reason": "completed"
+  }
+]
