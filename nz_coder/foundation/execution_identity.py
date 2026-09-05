@@ -23,6 +23,35 @@ _MAX_TOTAL_PAYLOAD_BYTES = 32 * 1024 * 1024
 _MAX_PAYLOAD_DEPTH = 16
 
 
+@dataclass
+class _ExecutionPayloadBudget:
+    """One resolution's limits; repeated references are charged on every read."""
+
+    files: int = 0
+    total_bytes: int = 0
+
+    def begin_file(self, size: int) -> None:
+        if self.files >= _MAX_PAYLOAD_FILES or size > _MAX_SINGLE_PAYLOAD_BYTES:
+            raise UnsafeExecutionIdentity("execution payload file budget exceeded")
+        if self.total_bytes + size > _MAX_TOTAL_PAYLOAD_BYTES:
+            raise UnsafeExecutionIdentity("execution payload byte budget exceeded")
+        self.files += 1
+
+    def read_size(self, file_bytes: int) -> int:
+        return min(
+            1024 * 1024,
+            _MAX_SINGLE_PAYLOAD_BYTES - file_bytes + 1,
+            _MAX_TOTAL_PAYLOAD_BYTES - self.total_bytes + 1,
+        )
+
+    def consume(self, size: int, file_bytes: int) -> None:
+        self.total_bytes += size
+        if file_bytes > _MAX_SINGLE_PAYLOAD_BYTES:
+            raise UnsafeExecutionIdentity("execution payload file budget exceeded")
+        if self.total_bytes > _MAX_TOTAL_PAYLOAD_BYTES:
+            raise UnsafeExecutionIdentity("execution payload byte budget exceeded")
+
+
 @dataclass(frozen=True)
 class ExecutionIdentity:
     """Content-bound identity for an interpreter, payload, cwd and argv."""
@@ -121,8 +150,11 @@ def resolve_execution_identity(
     payloads = _explicit_payloads(argv, run_cwd, stem)
     if entrypoint is not None and entrypoint not in payloads:
         payloads.append(entrypoint)
+    budget = _ExecutionPayloadBudget()
     payload_hashes = tuple(
-        (str(path), _hash_module_payload(path, module if path == entrypoint else "", run_cwd))
+        (str(path), _hash_module_payload(
+            path, module if path == entrypoint else "", run_cwd, budget=budget,
+        ))
         for path in payloads
     )
     entrypoint_hash = hashlib.sha256(_canonical(payload_hashes)).hexdigest()
@@ -452,14 +484,17 @@ def _resolve_payload_path(value: str, cwd: Path) -> Path:
     return resolved
 
 
-def _hash_module_payload(path: Path | None, module: str, cwd: Path) -> str:
+def _hash_module_payload(
+    path: Path | None, module: str, cwd: Path,
+    *, budget: _ExecutionPayloadBudget | None = None,
+) -> str:
     if path is None:
         return ""
+    if budget is None:
+        budget = _ExecutionPayloadBudget()
     if module and path.name == "__main__.py":
         package = path.parent
         digest = hashlib.sha256()
-        count = 0
-        total = 0
         stack = [(package, 0)]
         records: list[tuple[str, str]] = []
         while stack:
@@ -473,34 +508,44 @@ def _hash_module_payload(path: Path | None, module: str, cwd: Path) -> str:
                     if entry.is_dir(follow_symlinks=False):
                         stack.append((Path(entry.path), depth + 1))
                     elif entry.is_file(follow_symlinks=False) and entry.name.endswith(".py"):
-                        count += 1
-                        if count > _MAX_PAYLOAD_FILES:
-                            raise UnsafeExecutionIdentity("execution payload file budget exceeded")
                         item = Path(entry.path)
-                        size = item.stat().st_size
-                        total += size
-                        if total > _MAX_TOTAL_PAYLOAD_BYTES:
-                            raise UnsafeExecutionIdentity("execution payload byte budget exceeded")
-                        records.append((item.relative_to(package).as_posix(), _hash_path(item)))
+                        records.append((
+                            item.relative_to(package).as_posix(),
+                            _hash_path(item, budget=budget),
+                        ))
         for relative, item_hash in sorted(records):
             digest.update(relative.encode("utf-8"))
             digest.update(b"\0")
             digest.update(bytes.fromhex(item_hash))
         return digest.hexdigest()
-    return _hash_path(path)
+    return _hash_path(path, budget=budget)
 
 
-def _hash_path(path: Path, *, allow_symlink: bool = False) -> str:
+def _hash_path(
+    path: Path, *, allow_symlink: bool = False,
+    budget: _ExecutionPayloadBudget | None = None,
+) -> str:
     try:
         if path.is_symlink() and not allow_symlink:
             raise UnsafeExecutionIdentity("execution payload symlink is not allowed")
         if not path.is_file():
             return ""
-        if not allow_symlink and path.stat().st_size > _MAX_SINGLE_PAYLOAD_BYTES:
-            raise UnsafeExecutionIdentity("execution payload file budget exceeded")
+        if not allow_symlink:
+            if budget is None:
+                budget = _ExecutionPayloadBudget()
+            budget.begin_file(path.stat().st_size)
         digest = hashlib.sha256()
         with path.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            file_bytes = 0
+            while True:
+                chunk = stream.read(
+                    budget.read_size(file_bytes) if budget is not None else 1024 * 1024
+                )
+                if not chunk:
+                    break
+                file_bytes += len(chunk)
+                if budget is not None:
+                    budget.consume(len(chunk), file_bytes)
                 digest.update(chunk)
         return digest.hexdigest()
     except OSError as exc:
