@@ -6,7 +6,7 @@ from typing import Any, Callable, Iterable, Iterator
 
 from openai import OpenAI
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.attachments import openai_chat_messages
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
@@ -466,7 +466,7 @@ class OpenAIResponsesProvider:
         """Create the official OpenAI SDK client."""
         kwargs = {"api_key": self.api_key, "base_url": self.base_url}
         if self._uses_default_client_factory:
-            kwargs["timeout"] = config.PROVIDER_HARD_TIMEOUT_SECONDS
+            kwargs["timeout"] = current_run_settings().provider_hard_timeout
         return self._client_factory(**kwargs)
 
     def create_completion(self, client: Any, **kwargs: Any) -> Any:

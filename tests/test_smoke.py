@@ -193,7 +193,8 @@ def test_transaction_commit():
 
         txn.begin()
         txn.track("txn_test.txt")
-        test_file.write_text("modified")
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+        WorkspaceFileAccess(tmpdir).write_text("txn_test.txt", "modified", transaction=txn)
         txn.commit()
 
         # After commit, the modified content should remain
@@ -220,7 +221,8 @@ def test_transaction_rollback():
 
         txn.begin()
         txn.track("txn_test.txt")
-        test_file.write_text("bad change")
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+        WorkspaceFileAccess(tmpdir).write_text("txn_test.txt", "bad change", transaction=txn)
         report = txn.rollback()
 
         # After rollback, original content should be restored
@@ -246,7 +248,8 @@ def test_transaction_rollback_new_file():
 
         txn.begin()
         txn.track("new_file.txt")
-        (tmpdir / "new_file.txt").write_text("should be deleted")
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+        WorkspaceFileAccess(tmpdir).write_text("new_file.txt", "should be deleted", transaction=txn)
         report = txn.rollback()
 
         # New file should be deleted on rollback
@@ -519,9 +522,8 @@ def test_persist_large_output_uses_current_workdir():
     config.WORKDIR = tmpdir
     try:
         result = persist_large_output("call_test", "x" * (old_trigger + 1))
-        expected = tmpdir / ".nz-coder" / "tool-results" / "call_test.txt"
-        assert expected.exists()
-        assert "Full output saved to: .nz-coder/tool-results/call_test.txt" in result
+        assert "Full output artifact: artifact_" in result
+        assert str(tmpdir) not in result
         print("OK: large outputs use current WORKDIR")
     finally:
         config.WORKDIR = old_workdir
@@ -1132,9 +1134,10 @@ def test_persist_large_output_uses_active_session_runtime_dir():
     try:
         activate_session("session-output")
         result = persist_large_output("call_test", "x" * (old_trigger + 1))
-        expected = session_tool_results_dir("session-output") / "call_test.txt"
-        assert expected.exists()
-        assert str(expected.relative_to(tmpdir)) in result
+        persisted = list(session_tool_results_dir("session-output").glob("artifact_*.txt"))
+        assert len(persisted) == 1
+        assert "Full output artifact: artifact_" in result
+        assert str(persisted[0]) not in result
     finally:
         config.WORKDIR = old_workdir
         shutil.rmtree(str(tmpdir), ignore_errors=True)

@@ -7,6 +7,9 @@ import subprocess
 import time
 from pathlib import Path
 
+from nz_coder.foundation.user_paths import prepare_user_storage
+from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.runtime.worktree.models import Worktree
 from nz_coder.runtime.worktree.setup import perform_post_creation_setup
 
@@ -23,7 +26,7 @@ class WorktreeError(Exception):
 
 
 class WorktreeManager:
-    """Create or reuse git worktrees under ``.nz-coder/worktrees``."""
+    """Create or reuse child worktrees in a private user cache."""
 
     def __init__(
         self,
@@ -33,11 +36,10 @@ class WorktreeManager:
     ) -> None:
         self.repo_root = Path(repo_root).resolve()
         self.symlink_directories = symlink_directories or []
-        self.worktree_dir = Path(worktree_dir or (self.repo_root / ".nz-coder" / "worktrees")).resolve()
-        try:
-            self.worktree_dir.relative_to(self.repo_root)
-        except ValueError as exc:
-            raise WorktreeError("Managed worktree directory escapes repository root") from exc
+        default = prepare_user_storage(self.repo_root).workspace_cache / "worktrees"
+        self.worktree_dir = Path(worktree_dir or default).resolve()
+        if self.worktree_dir == self.repo_root:
+            raise WorktreeError("Managed worktree directory must not be the repository root")
 
     def create(self, worktree_id: str, base_ref: str = "HEAD") -> Worktree:
         safe_id = _safe_slug(worktree_id)
@@ -62,7 +64,8 @@ class WorktreeManager:
                 mode="git",
             )
 
-        self.worktree_dir.mkdir(parents=True, exist_ok=True)
+        self.worktree_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        harden_private_path(self.worktree_dir)
         result = self._run_git([
             "worktree", "add", "-B", branch_name, "--", str(wt_path), base_ref,
         ])
@@ -92,7 +95,9 @@ class WorktreeManager:
         if wt_path.exists() and not wt_path.is_dir():
             raise WorktreeError("Managed worktree target must be a directory")
         if not wt_path.exists():
-            wt_path.mkdir(parents=True, exist_ok=False)
+            self.worktree_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            harden_private_path(self.worktree_dir)
+            wt_path.mkdir(mode=0o700, parents=True, exist_ok=False)
             self._sync_snapshot(wt_path, preserve_git=False)
             perform_post_creation_setup(
                 self.repo_root,
@@ -240,7 +245,9 @@ class WorktreeManager:
                 check=False,
             )
         except (OSError, subprocess.SubprocessError) as exc:
-            return subprocess.CompletedProcess(["git", *args], 1, "", str(exc))
+            return subprocess.CompletedProcess(
+                ["git", *args], 1, "", to_public_error(exc).message,
+            )
 
     @staticmethod
     def read_worktree_head_sha(wt_path: str | Path) -> str | None:

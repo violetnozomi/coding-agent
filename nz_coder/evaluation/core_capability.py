@@ -581,6 +581,7 @@ def run_local_benchmark(output_dir: Path) -> dict:
 
     from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
     from nz_coder.runtime.agent.subagent import _new_subagent_state
+    from nz_coder.runtime.worktree.manager import WorktreeManager
     conflict_workspace = root / "conflict-workspace"
     conflict_workspace.mkdir(parents=True, exist_ok=True)
     conflict_target = conflict_workspace / "app.py"
@@ -588,14 +589,19 @@ def run_local_benchmark(output_dir: Path) -> dict:
     manager = BackgroundAgentManager(conflict_workspace, "benchmark-parent")
     baseline = manager._baseline(["app.py"])
     state = _new_subagent_state("benchmark-parent", "general-purpose", None)
-    child = conflict_workspace / ".nz-coder" / "worktrees" / state["session_id"]
-    child.mkdir(parents=True, exist_ok=True)
+    child_worktree = WorktreeManager(conflict_workspace).create(state["session_id"])
+    child = Path(child_worktree.path)
     (child / "app.py").write_text("child\n", encoding="utf-8")
     state.update({
         "background": True, "status": "completed", "claimed_paths": ["app.py"],
         "changed_files": ["app.py"], "baseline_hashes": baseline,
         "worktree": {
-            "id": state["session_id"], "path": str(child), "mode": "copy",
+            "id": child_worktree.id,
+            "path": child_worktree.path,
+            "branch": child_worktree.branch,
+            "based_on": child_worktree.based_on,
+            "head_commit": child_worktree.head_commit,
+            "mode": child_worktree.mode,
         },
     })
     manager._save(state)

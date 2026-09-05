@@ -8,7 +8,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from nz_coder.protocol.attachments import MAX_IMAGE_BYTES
 from nz_coder.tools import ToolOutput, dispatch, get_execution_mode, get_specs
-from nz_coder.tools.webfetch import MAX_RESPONSE_BYTES, webfetch
+from nz_coder.foundation.network_policy import NetworkTargetPolicy
+from nz_coder.tools.webfetch import (
+    MAX_RESPONSE_BYTES,
+    scoped_webfetch_network_policy,
+    webfetch,
+)
 
 
 _PNG = b"\x89PNG\r\n\x1a\nweb-image"
@@ -89,7 +94,10 @@ def _server():
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f"http://127.0.0.1:{server.server_address[1]}"
+        with scoped_webfetch_network_policy(NetworkTargetPolicy(
+            _allow_private_for_tests=True,
+        )):
+            yield f"http://127.0.0.1:{server.server_address[1]}"
     finally:
         server.shutdown()
         server.server_close()

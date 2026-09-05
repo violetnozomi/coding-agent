@@ -92,6 +92,7 @@ from nz_coder.runtime.core.execution_context import (
     set_broad_tests_blocked,
     strict_local_tools,
 )
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.tool_platform.command_policy import classify_bash
 from nz_coder.intelligence.verification import VerificationManager
 from nz_coder.runtime.execution.tool_executor import (
@@ -146,6 +147,7 @@ from nz_coder.protocol.message_schema import (
     ASSISTANT_MODEL_KEY,
     ASSISTANT_PARENT_KEY,
     ASSISTANT_PROVIDER_KEY,
+    ASSISTANT_PROVIDER_INSTANCE_KEY,
     ASSISTANT_TIME_KEY,
     ASSISTANT_USAGE_KEY,
     COMPACTION_KEY,
@@ -193,6 +195,7 @@ import nz_coder.tools.repo_intel  # noqa: F401
 import nz_coder.tools.repo_map    # noqa: F401
 import nz_coder.tools.webfetch    # noqa: F401
 import nz_coder.tools.web_search  # noqa: F401
+import nz_coder.tools.artifacts  # noqa: F401
 import nz_coder.runtime.agent.agent_manager  # noqa: F401
 import nz_coder.runtime.workflows.workflow_runtime  # noqa: F401
 import nz_coder.runtime.workflows.workflow_library  # noqa: F401
@@ -336,16 +339,42 @@ class ProductRunEnvironment:
                  model_runtime: ResolvedModelRuntime | None = None,
                  runtime_services: RuntimeServices | None = None,
                  event_bus_owned: bool = True,
-                 auto_mode_classifier_enabled: bool = False):
+                 auto_mode_classifier_enabled: bool = False,
+                 config_snapshot=None,
+                 manage_model_runtime: bool | None = None):
         from nz_coder.providers.models import active_model_selection
 
+        self._environment_cleanup_lock = threading.RLock()
+        self._environment_cleanup_completed: set[str] = set()
+        self._environment_cleanup_failures: dict[str, str] = {}
+        self._environment_provider_ids_closed: set[int] = set()
+        self._run_control_managed_provider = (
+            bool(manage_model_runtime)
+            if manage_model_runtime is not None
+            else model_runtime is None and provider is None and client is None
+        )
+        self._run_control_lock = threading.RLock()
+        self._active_run_control = None
+        self._pending_run_control_cleanup: list[object] = []
+        self._configured_hooks = hooks
+        self._configured_sidecar_verifier = sidecar_verifier
+        self._permission_asker = permission_asker
+        self._base_system_prompt = system_prompt
+        initial_workspace = current_workdir()
+        from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+        workspace_snapshot = config_snapshot or current_config_snapshot(initial_workspace)
+        if workspace_snapshot.workspace.resolve() != initial_workspace.resolve():
+            raise ValueError("ConfigSnapshot belongs to a different workspace")
         if not isinstance(auto_mode_classifier_enabled, bool):
             raise TypeError("auto_mode_classifier_enabled must be a bool")
         self.auto_mode_controller = AutoModeController(
             enabled=auto_mode_classifier_enabled,
         )
         if model_runtime is None:
-            model_selection = active_model_selection()
+            model_selection = active_model_selection(
+                initial_workspace, config_snapshot=workspace_snapshot,
+            )
             model_runtime = resolve_model_runtime(ModelSelectionRequest(
                 provider_name=(
                     model_selection.provider
@@ -353,15 +382,18 @@ class ProductRunEnvironment:
                     else getattr(provider, "name", model_selection.provider)
                 ),
                 model_id=(
-                    model_selection.model_id if provider is None else config.MODEL_ID
+                    model_selection.model_id
                 ),
                 variant=model_selection.variant if provider is None else None,
                 provider=provider,
                 client=client,
+                workspace=initial_workspace,
+                config_snapshot=workspace_snapshot,
             ), provider_factory=create_provider)
         elif not isinstance(model_runtime, ResolvedModelRuntime):
             raise TypeError("model_runtime must be a ResolvedModelRuntime")
         self.model_runtime = model_runtime
+        self._initial_model_runtime_available = True
         self.provider = model_runtime.provider
         self.client = model_runtime.client
         self.stall_sidecar = stall_sidecar or self._provider_stall_sidecar
@@ -374,6 +406,7 @@ class ProductRunEnvironment:
         self.model_pricing = model_runtime.pricing
         self.model_capabilities = model_runtime.capabilities
         self.provider_id = model_runtime.provider_id
+        self.provider_instance_id = model_runtime.provider_instance_id
         self.model_variant = getattr(self.model_capabilities, "selected_variant", None)
         self._default_provider_id = self.provider_id
         self._default_model_id = self.model_id
@@ -382,13 +415,8 @@ class ProductRunEnvironment:
         self._provider_runtimes: dict[tuple[str, str], ResolvedModelRuntime] = {
             (self.provider_id, self.model_id): model_runtime,
         }
-        self.image_describer = (
-            image_describer
-            if image_describer is not None
-            else ProviderImageDescriber.configured(
-                observer=self._model_gateway_observer,
-            )
-        )
+        self._configured_image_describer = image_describer
+        self.image_describer = image_describer
         self.document_reader = document_reader or read_document
         self.system_prompt = system_prompt
         self.tool_allowlist = (
@@ -431,7 +459,7 @@ class ProductRunEnvironment:
         self.question_asker = question_asker
         self.auto_permission_asker = None
         self.workflow_approval_asker = workflow_approval_asker
-        self.workdir = current_workdir()
+        self.workdir = initial_workspace
         self.session_id = activate_session(session_id or create_session_id())
         self.lineage = SessionLineage(
             session_runtime_dir(self.session_id) / "lineage.jsonl",
@@ -455,11 +483,14 @@ class ProductRunEnvironment:
         self._mcp_runtime_lock = threading.Lock()
         self._mcp_runtime_factory = MCPRuntime
         self._tool_metadata_lock = threading.RLock()
-        self.hooks = hooks or build_default_hooks()
+        self.config_snapshot = workspace_snapshot
+        self.hooks = hooks or build_default_hooks(workspace_snapshot.project_control)
         self.permissions = PermissionManager(
             permission_mode,
             renderer=self.renderer,
             asker=permission_asker,
+            workspace_trusted=workspace_snapshot.control_plane_trusted,
+            project_control_snapshot=workspace_snapshot.project_control,
         )
         from nz_coder.tools.plan_mode import PlanModeController
         self.plan_mode = PlanModeController(
@@ -470,7 +501,10 @@ class ProductRunEnvironment:
         self.recovery = RecoveryState()
         self.rounds_without_todo = 0
         self.txn = TransactionManager()
-        enabled = config.TRACE_ENABLED if trace_enabled is None else trace_enabled
+        enabled = (
+            workspace_snapshot.get_bool("TRACE_ENABLED", True)
+            if trace_enabled is None else trace_enabled
+        )
         self.tracer = tracer or _build_default_tracer(enabled, self.session_id)
         self.agent_id = getattr(self.tracer, "agent_id", f"agent-{self.session_id}")
         self.trace_id = getattr(self.tracer, "trace_id", self.tracer.run_id)
@@ -527,8 +561,16 @@ class ProductRunEnvironment:
         project_skills = self.workdir / ".nz-coder" / "skills"
         self._skill_loader = (
             default_skills
-            if default_skills._project_dir.resolve() == project_skills.resolve()
-            else SkillLoader(project_dir=project_skills)
+            if (
+                default_skills._project_dir.resolve() == project_skills.resolve()
+                and default_skills._workspace_trusted
+                == workspace_snapshot.control_plane_trusted
+            )
+            else SkillLoader(
+                project_dir=project_skills,
+                workspace_trusted=workspace_snapshot.control_plane_trusted,
+                project_control_snapshot=workspace_snapshot.project_control,
+            )
         )
         try:
             self._mm.load_all()
@@ -590,6 +632,427 @@ class ProductRunEnvironment:
         self.repo_retrieval_strategy = "guidance"
         self._repo_retrieval_trace_signature = ""
         self._followup_pending: Callable[[], bool] | None = None
+
+    def prepare_run_control(
+        self,
+        config_snapshot=None,
+        *,
+        provider_name: str | None = None,
+        model_id: str | None = None,
+        variant: str | None = None,
+    ):
+        """Build and atomically install all controls for one top-level Run."""
+        from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
+            load_config_snapshot,
+            scoped_config_snapshot,
+        )
+        from nz_coder.runtime.execution.run_control import RunControlBundle
+        from nz_coder.runtime.core.run_settings import RunSettings
+        from nz_coder.providers.models import active_model_selection
+        from nz_coder.runtime.process.workdir import scoped_workdir
+        from nz_coder.state.skills import SkillLoader
+        from nz_coder.tools.plan_mode import PlanModeController
+
+        snapshot = (
+            config_snapshot
+            or active_config_snapshot(self.workdir)
+            or load_config_snapshot(self.workdir)
+        )
+        if snapshot.workspace.resolve() != self.workdir.resolve():
+            raise ValueError("ConfigSnapshot belongs to a different workspace")
+        run_settings = RunSettings.from_snapshot(snapshot)
+        with self._run_control_lock:
+            self._retry_run_control_cleanup()
+            if self._active_run_control is not None:
+                raise RuntimeError("A top-level Run already owns this environment")
+            previous_permissions = self.permissions
+            previous_executor = self.executor
+            previous_loader = self._skill_loader
+            previous_mcp = self._mcp_runtime
+            previous_runtimes = self._provider_runtimes
+            previous_sidecar = getattr(self, "_sidecar_verifier_handle", None)
+            previous_image_describer = getattr(self, "image_describer", None)
+            candidate_mcp = None
+            candidate_runtimes = previous_runtimes
+            owns_runtimes = False
+            candidate_sidecar = None
+            owns_sidecar = False
+            candidate_image_describer = None
+            owns_image_describer = False
+            reuse_initial = False
+            try:
+                from nz_coder.runtime.core.run_settings import scoped_run_settings
+
+                with (
+                    scoped_workdir(self.workdir),
+                    scoped_config_snapshot(snapshot),
+                    scoped_run_settings(run_settings),
+                ):
+                    permissions = PermissionManager(
+                        previous_permissions.mode,
+                        renderer=self.renderer,
+                        asker=self._permission_asker,
+                        workspace_trusted=snapshot.control_plane_trusted,
+                        project_control_snapshot=snapshot.project_control,
+                    )
+                    plan_mode = PlanModeController(
+                        permissions,
+                        session_id=self.session_id,
+                        question_asker=self.question_asker,
+                    )
+                    skill_loader = SkillLoader(
+                        bundled_dir=previous_loader._bundled_dir,
+                        user_dir=previous_loader._user_dir,
+                        project_dir=self.workdir / ".nz-coder" / "skills",
+                        workspace_trusted=snapshot.control_plane_trusted,
+                        project_control_snapshot=snapshot.project_control,
+                    )
+                    hooks = (
+                        copy.copy(self._configured_hooks)
+                        if self._configured_hooks is not None
+                        else build_default_hooks(snapshot.project_control)
+                    )
+                    if self._configured_hooks is not None:
+                        for hook_list_name in (
+                            "before_no_tool_response_hooks",
+                            "stop_hooks",
+                            "after_tool_result_hooks",
+                            "after_tool_batch_hooks",
+                            "configured_hooks",
+                        ):
+                            setattr(
+                                hooks,
+                                hook_list_name,
+                                list(getattr(hooks, hook_list_name)),
+                            )
+                    if self._configured_hooks is None:
+                        for hook_list_name in (
+                            "before_no_tool_response_hooks",
+                            "stop_hooks",
+                            "after_tool_result_hooks",
+                            "after_tool_batch_hooks",
+                        ):
+                            target_hooks = getattr(hooks, hook_list_name)
+                            for existing_hook in getattr(self.hooks, hook_list_name):
+                                if (
+                                    existing_hook is previous_sidecar
+                                    or existing_hook in target_hooks
+                                ):
+                                    continue
+                                target_hooks.append(existing_hook)
+                    runtime_factory = self._mcp_runtime_factory
+                    candidate_mcp = (
+                        runtime_factory([], workspace=self.workdir)
+                        if self.tool_allowlist is not None
+                        else runtime_factory.configured(
+                            workspace=self.workdir,
+                            config_snapshot=snapshot,
+                        )
+                    )
+                    set_change_handler = getattr(candidate_mcp, "set_change_handler", None)
+                    if callable(set_change_handler):
+                        set_change_handler(self._on_mcp_change)
+                    if self._run_control_managed_provider:
+                        selected = (
+                            None
+                            if provider_name is not None and model_id is not None
+                            else active_model_selection(
+                                self.workdir, config_snapshot=snapshot,
+                            )
+                        )
+                        selected_provider = str(
+                            provider_name
+                            or (selected.provider if selected is not None else "")
+                        ).strip().lower()
+                        selected_model = str(
+                            model_id
+                            or (selected.model_id if selected is not None else "")
+                        ).strip()
+                        reuse_initial = bool(
+                            self._initial_model_runtime_available
+                            and snapshot is self.config_snapshot
+                            and (
+                                (provider_name is None and model_id is None)
+                                or (
+                                    self.model_runtime.provider_id == selected_provider
+                                    and self.model_runtime.model_id == selected_model
+                                )
+                            )
+                        )
+                        if reuse_initial:
+                            runtime = self.model_runtime
+                        else:
+                            runtime = resolve_model_runtime(ModelSelectionRequest(
+                                provider_name=provider_name,
+                                model_id=model_id,
+                                variant=variant,
+                                workspace=self.workdir,
+                                config_snapshot=snapshot,
+                            ))
+                        candidate_runtimes = {
+                            (runtime.provider_id, runtime.model_id): runtime,
+                        }
+                        owns_runtimes = True
+                    else:
+                        runtime = self.model_runtime
+                    sidecar_setting = self._configured_sidecar_verifier
+                    if callable(sidecar_setting):
+                        candidate_sidecar = sidecar_setting
+                    elif sidecar_setting is not False and runtime.owns_client:
+                        from nz_coder.runtime.verification.sidecar_verifier import (
+                            create_sidecar_verifier_hook,
+                            resolve_verifier_provider,
+                        )
+
+                        verifier = resolve_verifier_provider(
+                            main_provider=runtime.provider,
+                            main_client=runtime.client,
+                            main_model=runtime.request_model_id,
+                        )
+                        candidate_sidecar = create_sidecar_verifier_hook(self, verifier)
+                        owns_sidecar = True
+                    if candidate_sidecar is not None and candidate_sidecar not in hooks.stop_hooks:
+                        hooks.stop_hooks.insert(0, candidate_sidecar)
+                    candidate_image_describer = self._configured_image_describer
+                    if candidate_image_describer is None:
+                        candidate_image_describer = ProviderImageDescriber.configured(
+                            observer=self._model_gateway_observer,
+                            run_settings=run_settings,
+                        )
+                        owns_image_describer = True
+                    hooks.reset_run_state()
+                    bundle = RunControlBundle(
+                        config_snapshot=snapshot,
+                        run_settings=run_settings,
+                        permissions=permissions,
+                        plan_mode=plan_mode,
+                        skill_loader=skill_loader,
+                        hooks=hooks,
+                        mcp_runtime=candidate_mcp,
+                        model_runtime=runtime,
+                        provider_runtimes=candidate_runtimes,
+                        owns_provider_runtimes=owns_runtimes,
+                        image_describer=candidate_image_describer,
+                        owns_image_describer=owns_image_describer,
+                        sidecar_verifier=candidate_sidecar,
+                        owns_sidecar_verifier=owns_sidecar,
+                    )
+            except BaseException:
+                rollback = RunControlBundle(
+                    config_snapshot=snapshot,
+                    run_settings=run_settings,
+                    permissions=None,
+                    plan_mode=None,
+                    skill_loader=None,
+                    hooks=None,
+                    mcp_runtime=candidate_mcp,
+                    model_runtime=None,
+                    provider_runtimes=(
+                        candidate_runtimes
+                        if owns_runtimes and not reuse_initial else {}
+                    ),
+                    owns_provider_runtimes=bool(owns_runtimes and not reuse_initial),
+                    image_describer=candidate_image_describer,
+                    owns_image_describer=owns_image_describer,
+                    sidecar_verifier=candidate_sidecar,
+                    owns_sidecar_verifier=owns_sidecar,
+                )
+                self._attempt_run_control_cleanup(rollback, "construction-rollback")
+                raise
+
+            # Role activation may validate a declared model and can therefore
+            # fail. Preserve every mutable binding until the complete new
+            # control plane, including its final prompt, is installable.
+            install_names = (
+                "config_snapshot", "run_settings", "permissions", "executor", "plan_mode",
+                "_skill_loader", "hooks", "_mcp_runtime", "_provider_runtimes",
+                "model_runtime", "provider", "client", "provider_id",
+                "provider_instance_id", "model_id", "request_model_id",
+                "model_pricing", "model_capabilities", "model_variant",
+                "_default_provider_id", "_default_model_id",
+                "_default_request_model_id", "_default_model_capabilities",
+                "_family_guidance", "_sidecar_verifier_handle", "image_describer",
+                "system_prompt",
+                "_active_run_control",
+            )
+            previous_bindings = {
+                name: getattr(self, name, None) for name in install_names
+            }
+            try:
+                self.config_snapshot = snapshot
+                self.run_settings = run_settings
+                self.permissions = permissions
+                if isinstance(previous_executor, ToolExecutor):
+                    self.executor = ToolExecutor(permissions)
+                self.plan_mode = plan_mode
+                self._skill_loader = skill_loader
+                self.hooks = hooks
+                self._mcp_runtime = candidate_mcp
+                self._provider_runtimes = candidate_runtimes
+                if self._run_control_managed_provider:
+                    self.model_runtime = runtime
+                    self.provider = runtime.provider
+                    self.client = runtime.client
+                    self.provider_id = runtime.provider_id
+                    self.provider_instance_id = runtime.provider_instance_id
+                    self.model_id = runtime.model_id
+                    self.request_model_id = runtime.request_model_id
+                    self.model_pricing = runtime.pricing
+                    self.model_capabilities = runtime.capabilities
+                    self.model_variant = runtime.capabilities.selected_variant
+                    self._default_provider_id = runtime.provider_id
+                    self._default_model_id = runtime.model_id
+                    self._default_request_model_id = runtime.request_model_id
+                    self._default_model_capabilities = runtime.capabilities
+                    self._family_guidance = prompt_family_guidance(runtime.capabilities)
+                self._sidecar_verifier_handle = (
+                    candidate_sidecar if owns_sidecar else None
+                )
+                self.image_describer = candidate_image_describer
+                if self.agent_graph is not None:
+                    self._activate_agent_runtime(self.current_agent_name)
+                else:
+                    base_prompt = self._base_system_prompt
+                    if (
+                        self._family_guidance
+                        and "## Model-family guidance" not in base_prompt
+                    ):
+                        base_prompt = f"{base_prompt}\n\n{self._family_guidance}"
+                    skill_descriptions = skill_loader.descriptions()
+                    if skill_descriptions:
+                        base_prompt = (
+                            f"{base_prompt}\n\n## Available skills\n{skill_descriptions}"
+                        )
+                    self.system_prompt = base_prompt
+                self._active_run_control = bundle
+            except BaseException:
+                for name, value in previous_bindings.items():
+                    setattr(self, name, value)
+                previous_runtime_ids = {
+                    id(item) for item in previous_runtimes.values()
+                }
+                rollback_runtimes = {
+                    key: owned
+                    for key, owned in candidate_runtimes.items()
+                    if owns_runtimes and id(owned) not in previous_runtime_ids
+                }
+                rollback = RunControlBundle(
+                    config_snapshot=snapshot,
+                    run_settings=run_settings,
+                    permissions=None,
+                    plan_mode=None,
+                    skill_loader=None,
+                    hooks=None,
+                    mcp_runtime=candidate_mcp,
+                    model_runtime=None,
+                    provider_runtimes=rollback_runtimes,
+                    owns_provider_runtimes=bool(rollback_runtimes),
+                    image_describer=candidate_image_describer,
+                    owns_image_describer=owns_image_describer,
+                    sidecar_verifier=candidate_sidecar,
+                    owns_sidecar_verifier=owns_sidecar,
+                )
+                self._attempt_run_control_cleanup(rollback, "install-rollback")
+                raise
+            if reuse_initial:
+                self._initial_model_runtime_available = False
+
+            candidate_ids = {id(item) for item in candidate_runtimes.values()}
+            retired_runtimes = {
+                key: old
+                for key, old in previous_runtimes.items()
+                if (
+                    self._run_control_managed_provider
+                    and previous_runtimes is not candidate_runtimes
+                    and id(old) not in candidate_ids
+                )
+            }
+            retired = RunControlBundle(
+                config_snapshot=previous_bindings.get("config_snapshot"),
+                run_settings=previous_bindings.get("run_settings"),
+                permissions=None,
+                plan_mode=None,
+                skill_loader=None,
+                hooks=None,
+                mcp_runtime=(
+                    previous_mcp
+                    if previous_mcp is not candidate_mcp else None
+                ),
+                model_runtime=None,
+                provider_runtimes=retired_runtimes,
+                owns_provider_runtimes=bool(retired_runtimes),
+                image_describer=(
+                    previous_image_describer
+                    if previous_image_describer is not candidate_image_describer
+                    else None
+                ),
+                owns_image_describer=bool(
+                    previous_image_describer is not None
+                    and previous_image_describer is not candidate_image_describer
+                    and previous_image_describer is not self._configured_image_describer
+                ),
+                sidecar_verifier=(
+                    previous_sidecar
+                    if previous_sidecar is not candidate_sidecar else None
+                ),
+                owns_sidecar_verifier=bool(
+                    previous_sidecar is not None
+                    and previous_sidecar is not candidate_sidecar
+                ),
+            )
+            self._attempt_run_control_cleanup(retired, "predecessor-retire")
+            return bundle
+
+    def retire_run_control(self, bundle) -> None:
+        """Release one completed/cancelled epoch without touching the next one."""
+        with self._run_control_lock:
+            if self._active_run_control is bundle:
+                self._active_run_control = None
+                if self._mcp_runtime is bundle.mcp_runtime:
+                    self._mcp_runtime = None
+                if self.image_describer is bundle.image_describer:
+                    self.image_describer = self._configured_image_describer
+        self._attempt_run_control_cleanup(bundle, "run-retire")
+
+    def _attempt_run_control_cleanup(self, bundle, phase: str) -> bool:
+        """Attempt one ledger and retain incomplete ownership for retry."""
+        with self._run_control_lock:
+            try:
+                bundle.close()
+            except BaseException:
+                if not any(
+                    item is bundle for item in self._pending_run_control_cleanup
+                ):
+                    self._pending_run_control_cleanup.append(bundle)
+                tracer = getattr(self, "tracer", None)
+                if tracer is not None:
+                    try:
+                        tracer.log(
+                            "run_control_cleanup_failed",
+                            phase=str(phase),
+                            resources=list(
+                                getattr(bundle, "incomplete_resources", ())
+                            ),
+                            failure_types=dict(
+                                getattr(bundle, "cleanup_failures", {})
+                            ),
+                        )
+                    except BaseException:
+                        # The cleanup ledger remains authoritative even when
+                        # its optional diagnostic sink is unavailable.
+                        return False
+                return False
+            self._pending_run_control_cleanup = [
+                item for item in self._pending_run_control_cleanup
+                if item is not bundle
+            ]
+            return True
+
+    def _retry_run_control_cleanup(self) -> None:
+        """Best-effort retry without blocking a new committed Run epoch."""
+        for bundle in list(self._pending_run_control_cleanup):
+            self._attempt_run_control_cleanup(bundle, "deferred-retry")
 
     def set_followup_pending(self, callback: Callable[[], bool] | None) -> None:
         """Bind a host-owned check for a newer prompt queued during this run."""
@@ -979,7 +1442,8 @@ class ProductRunEnvironment:
         )
 
     async def run(self, messages: list, on_tool=None, on_text=None,
-                  on_token=None, stream: bool = True) -> dict:
+                  on_token=None, stream: bool = True,
+                  config_snapshot=None) -> dict:
         """Adapt the legacy Main API into the native request boundary."""
         compatibility_override = vars(self).get("_run")
         if callable(compatibility_override) and not hasattr(self, "runtime_services"):
@@ -993,6 +1457,7 @@ class ProductRunEnvironment:
             )
         return await self._run_native_facade(
             messages, on_tool, on_text, on_token, stream,
+            config_snapshot=config_snapshot,
         )
 
     def _native_execution_context(self, run_context, services):
@@ -1014,6 +1479,7 @@ class ProductRunEnvironment:
 
     async def _run_native_facade(
         self, messages, on_tool=None, on_text=None, on_token=None, stream=True,
+        config_snapshot=None,
     ):
         """Bind legacy resources around one native Runner invocation."""
         runner = getattr(self, "runner", None)
@@ -1024,7 +1490,17 @@ class ProductRunEnvironment:
                     self._native_execution_context(run_context, services)
                 ),
             )
-        request = run_request_from_legacy_host(self, messages, stream)
+        run_control = (
+            self.prepare_run_control(config_snapshot)
+            if hasattr(self, "_run_control_lock")
+            else None
+        )
+        try:
+            request = run_request_from_legacy_host(self, messages, stream)
+        except BaseException:
+            if run_control is not None:
+                self.retire_run_control(run_control)
+            raise
         if request.interaction_run_id is None:
             request = replace(
                 request,
@@ -1070,6 +1546,7 @@ class ProductRunEnvironment:
             on_token=on_token,
             stream=stream,
             execute=execute,
+            run_control=run_control,
         )
     def _on_mcp_change(self, change: str, server_name: str) -> None:
         """Publish secret-free MCP lifecycle/cache changes."""
@@ -1303,77 +1780,133 @@ class ProductRunEnvironment:
         }
 
     def close(self) -> None:
-        """Dispose public event subscriptions and optional tracer resources."""
-        stall_orchestrator = getattr(self, "stall_orchestrator", None)
-        if stall_orchestrator is not None:
-            cancel_and_settle = getattr(
-                stall_orchestrator,
-                "cancel_and_settle",
-                None,
+        """Attempt every owned cleanup stage; failed stages remain retryable."""
+        lock = getattr(self, "_environment_cleanup_lock", None)
+        if lock is None:
+            lock = threading.RLock()
+            self._environment_cleanup_lock = lock
+        with lock:
+            if not hasattr(self, "_environment_cleanup_completed"):
+                self._environment_cleanup_completed = set()
+            if not hasattr(self, "_environment_cleanup_failures"):
+                self._environment_cleanup_failures = {}
+            stages = (
+                ("run-control", self._close_environment_run_controls),
+                ("stall-sidecar", self._close_environment_stall_sidecar),
+                ("background-agents", self._close_environment_background_agents),
+                ("repo-intelligence", self._close_repo_intelligence),
+                ("mcp", self._close_environment_mcp),
+                ("sidecar", lambda: self._close_environment_object("_sidecar_verifier_handle")),
+                ("image-provider", lambda: self._close_environment_object("image_describer")),
+                ("provider-runtimes", self._close_environment_provider_runtimes),
+                ("event-bus", self._close_environment_event_bus),
+                ("tracer", lambda: self._close_environment_object("tracer")),
             )
-            if callable(cancel_and_settle):
-                cancel_and_settle(timeout=0.5)
-            else:
-                stall_orchestrator.reset()
-                stall_orchestrator.settle(timeout=0.0)
-        background_agents = getattr(self, "background_agents", None)
-        if background_agents is not None:
-            # A timed-out child remains owned by this Session and can still
-            # emit events or use workspace services. Preserve those resources
-            # so deletion/close can be retried after the child settles.
-            workdir = getattr(self, "workdir", None)
-            session_id = getattr(self, "session_id", None)
-            if workdir is not None and session_id:
-                from nz_coder.runtime.agent.agent_manager import (
-                    dispose_background_agent_manager,
-                )
+            for label, operation in stages:
+                if label in self._environment_cleanup_completed:
+                    continue
+                try:
+                    operation()
+                except BaseException as exc:
+                    self._environment_cleanup_failures[label] = type(exc).__name__
+                    tracer = getattr(self, "tracer", None)
+                    log = getattr(tracer, "log", None)
+                    if callable(log):
+                        try:
+                            log(
+                                "environment_cleanup_failed",
+                                resource=label,
+                                failure_type=type(exc).__name__,
+                            )
+                        except BaseException:
+                            pass
+                else:
+                    self._environment_cleanup_completed.add(label)
+                    self._environment_cleanup_failures.pop(label, None)
 
-                dispose_background_agent_manager(
-                    workdir,
-                    session_id,
-                    timeout=5.0,
-                    manager=background_agents,
-                )
-            else:
-                background_agents.close(timeout=5.0)
-        cleanup_error = None
-        try:
-            self._close_repo_intelligence()
-        except Exception as exc:
-            cleanup_error = exc
+    @property
+    def environment_cleanup_failures(self) -> dict[str, str]:
+        return dict(getattr(self, "_environment_cleanup_failures", {}))
+
+    @property
+    def environment_cleanup_complete(self) -> bool:
+        return len(getattr(self, "_environment_cleanup_completed", ())) == 10
+
+    def _close_environment_run_controls(self) -> None:
+        active = getattr(self, "_active_run_control", None)
+        if active is not None:
+            self.retire_run_control(active)
+        self._retry_run_control_cleanup()
+        if getattr(self, "_pending_run_control_cleanup", ()):
+            raise RuntimeError("run-control cleanup remains pending")
+
+    def _close_environment_stall_sidecar(self) -> None:
+        orchestrator = getattr(self, "stall_orchestrator", None)
+        if orchestrator is None:
+            return
+        cancel = getattr(orchestrator, "cancel_and_settle", None)
+        if callable(cancel):
+            cancel(timeout=0.5)
+            return
+        orchestrator.reset()
+        orchestrator.settle(timeout=0.0)
+
+    def _close_environment_background_agents(self) -> None:
+        background_agents = getattr(self, "background_agents", None)
+        if background_agents is None:
+            return
+        workdir = getattr(self, "workdir", None)
+        session_id = getattr(self, "session_id", None)
+        if workdir is not None and session_id:
+            from nz_coder.runtime.agent.agent_manager import dispose_background_agent_manager
+
+            dispose_background_agent_manager(
+                workdir, session_id, timeout=5.0, manager=background_agents,
+            )
+            return
+        background_agents.close(timeout=5.0)
+
+    def _close_environment_mcp(self) -> None:
         mcp_lock = getattr(self, "_mcp_runtime_lock", None)
         if mcp_lock is None:
-            mcp_runtime = None
+            runtime = getattr(self, "_mcp_runtime", None)
         else:
             with mcp_lock:
-                mcp_runtime = getattr(self, "_mcp_runtime", None)
-                self._mcp_runtime = None
-        if mcp_runtime is not None:
-            mcp_runtime.close()
-        sidecar_verifier = getattr(self, "_sidecar_verifier_handle", None)
-        close_sidecar = getattr(sidecar_verifier, "close", None)
-        if callable(close_sidecar):
-            close_sidecar()
-        image_describer = getattr(self, "image_describer", None)
-        close_image_describer = getattr(image_describer, "close", None)
-        if callable(close_image_describer):
-            try:
-                close_image_describer()
-            except Exception as exc:
-                cleanup_error = cleanup_error or exc
+                runtime = getattr(self, "_mcp_runtime", None)
+        if runtime is not None:
+            runtime.close()
+            self._mcp_runtime = None
+
+    def _close_environment_object(self, attribute: str) -> None:
+        resource = getattr(self, attribute, None)
+        close = getattr(resource, "close", None)
+        if callable(close):
+            close()
+
+    def _close_environment_provider_runtimes(self) -> None:
         runtimes = getattr(self, "_provider_runtimes", {})
-        for runtime in {id(value): value for value in runtimes.values()}.values():
+        completed = getattr(self, "_environment_provider_ids_closed", None)
+        if completed is None:
+            completed = set()
+            self._environment_provider_ids_closed = completed
+        failures: list[BaseException] = []
+        for runtime_id, runtime in {
+            id(value): value for value in runtimes.values()
+        }.items():
+            if runtime_id in completed:
+                continue
             try:
                 runtime.close()
-            except Exception as exc:
-                cleanup_error = cleanup_error or exc
+            except BaseException as exc:
+                failures.append(exc)
+            else:
+                completed.add(runtime_id)
+        if failures:
+            raise RuntimeError("provider runtime cleanup incomplete") from failures[0]
+
+    def _close_environment_event_bus(self) -> None:
         if getattr(self, "_owns_event_bus", True):
-            self.event_bus.close()
-        close_tracer = getattr(self.tracer, "close", None)
-        if callable(close_tracer):
-            close_tracer()
-        if cleanup_error is not None:
-            raise cleanup_error
+            self._close_environment_object("event_bus")
 
     def _initialize_repo_intelligence(
         self, workspace: Path, *, interval: float = 5.0,
@@ -1816,8 +2349,12 @@ class ProductRunEnvironment:
     def _prompt_budget(self):
         """Derive request thresholds from the active model capability record."""
         capabilities = getattr(self, "model_capabilities", None)
+        settings = current_run_settings()
         if capabilities is None:
-            return prompt_budget()
+            return prompt_budget(
+                settings.max_context_tokens,
+                settings.max_output_tokens,
+            )
         return prompt_budget(
             capabilities.context_tokens,
             capabilities.output_tokens,
@@ -2096,7 +2633,10 @@ class ProductRunEnvironment:
                 + 256
             )
         instruction_tokens = estimate_tokens(
-            load_instruction_context(current_workdir()).reminder
+            load_instruction_context(
+                current_workdir(),
+                config_snapshot=getattr(self, "config_snapshot", None),
+            ).reminder
         )
         plan_block = self._plan_mode_prompt_block()
         active_system_prompt = self.system_prompt
@@ -2104,7 +2644,7 @@ class ProductRunEnvironment:
             active_system_prompt += "\n\n" + plan_block
         system_tokens = max(
             _estimate_text_tokens(active_system_prompt),
-            config.SYSTEM_CONTEXT_BUDGET_TOKENS,
+            current_run_settings().system_context_budget_tokens,
         )
         return history_and_tools + system_tokens + instruction_tokens + 256
 
@@ -2118,6 +2658,9 @@ class ProductRunEnvironment:
                 getattr(getattr(self, "provider", None), "name", "")
                 or getattr(self, "provider_id", "")
                 or ""
+            ),
+            target_provider_instance_id=str(
+                getattr(getattr(self, "model_runtime", None), "provider_instance_id", "")
             ),
             target_model_id=str(getattr(self, "model_id", "") or ""),
         )
@@ -2366,7 +2909,8 @@ class ProductRunEnvironment:
                         for path in item.expected_artifacts
                     }),
                 )
-        if strict_local_tools() or not config.PLANNING_ENABLED:
+        settings = current_run_settings()
+        if strict_local_tools() or not settings.planning_enabled:
             return
         if self._restored_state or self.runtime_state.plan_generated:
             return
@@ -2473,8 +3017,8 @@ class ProductRunEnvironment:
                 {"role": "system", "content": "You are a concise coding task planner."},
                 {"role": "user", "content": prompt},
             ],
-            max_output_tokens=config.PLANNING_MAX_TOKENS,
-            timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS,
+            max_output_tokens=current_run_settings().planning_max_tokens,
+            timeout_seconds=current_run_settings().provider_hard_timeout,
             response_format={"type": "json_object"},
             metadata={"allow_response_format_fallback": True},
         ))
@@ -2484,18 +3028,19 @@ class ProductRunEnvironment:
 
     def _should_replan(self) -> bool:
         """检查是否需要动态重规划。"""
-        if strict_local_tools() or not config.PLANNING_ENABLED:
+        settings = current_run_settings()
+        if strict_local_tools() or not settings.planning_enabled:
             return False
         if not self.runtime_state.plan_generated:
             return False
-        if self._replan_count >= config.REPLAN_MAX_ATTEMPTS:
+        if self._replan_count >= settings.replan_max_attempts:
             return False
         if self.runtime_state.task_mode == "discuss":
             return False
 
         rs = self.runtime_state
         no_edit_turns = (rs.turn_count - rs.last_edit_turn) if rs.last_edit_turn else rs.turn_count
-        if no_edit_turns >= config.REPLAN_IDLE_TURNS and rs.turn_count >= config.REPLAN_IDLE_TURNS:
+        if no_edit_turns >= settings.replan_idle_turns and rs.turn_count >= settings.replan_idle_turns:
             return True
         if rs.has_diff and not rs.changed_files_verified and rs.verification_attempts >= 2:
             return True
@@ -2593,8 +3138,8 @@ class ProductRunEnvironment:
                 {"role": "system", "content": "You are a concise coding task re-planner."},
                 {"role": "user", "content": prompt},
             ],
-            max_output_tokens=config.PLANNING_MAX_TOKENS,
-            timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS,
+            max_output_tokens=current_run_settings().planning_max_tokens,
+            timeout_seconds=current_run_settings().provider_hard_timeout,
         ))
         if outcome.status is not ModelCallStatus.COMPLETED:
             raise RuntimeError(outcome.error or outcome.status.value)
@@ -2752,6 +3297,9 @@ class ProductRunEnvironment:
     def _make_assistant_message(self, result: LLMResult) -> dict:
         """把 LLMResult 转成可追加到历史里的 assistant 消息。"""
         provider_id = str(getattr(self.provider, "name", "") or "unknown")
+        provider_instance_id = str(
+            getattr(getattr(self, "model_runtime", None), "provider_instance_id", "")
+        )
         model_id = str(self.model_id or "unknown")
         content = ""
         if not result.tool_calls:
@@ -2761,6 +3309,7 @@ class ProductRunEnvironment:
             assistant_msg.update(provider_private_state(
                 result.extra,
                 provider_id=provider_id,
+                provider_instance_id=provider_instance_id,
                 model_id=model_id,
             ))
         if result.tool_calls:
@@ -2775,6 +3324,7 @@ class ProductRunEnvironment:
                 envelope = provider_private_envelope(
                     provider_extra,
                     provider_id=provider_id,
+                    provider_instance_id=provider_instance_id,
                     model_id=model_id,
                     payload_schema="tool_call_provider_extra.v1",
                 )
@@ -2810,6 +3360,7 @@ class ProductRunEnvironment:
         if result.cost_known:
             assistant_msg[ASSISTANT_COST_KEY] = max(0.0, float(result.cost))
         assistant_msg[ASSISTANT_PROVIDER_KEY] = provider_id
+        assistant_msg[ASSISTANT_PROVIDER_INSTANCE_KEY] = provider_instance_id
         assistant_msg[ASSISTANT_MODEL_KEY] = model_id
         assistant_msg["_timestamp"] = time.time()
         return assistant_msg
@@ -2834,7 +3385,7 @@ class ProductRunEnvironment:
         )
 
     def _should_run_reflection(self, status: str) -> bool:
-        if strict_local_tools() or not getattr(config, "REFLECTION_ENABLED", False):
+        if strict_local_tools() or not current_run_settings().reflection_enabled:
             return False
         if status not in {"completed", "completed_unverified"}:
             return False
@@ -3044,7 +3595,7 @@ class ProductRunEnvironment:
         if not self._should_run_reflection(status):
             return status
         signature = self._reflection_progress_signature()
-        max_attempts = max(1, int(getattr(config, "REFLECTION_MAX_ATTEMPTS", 2) or 2))
+        max_attempts = max(1, current_run_settings().reflection_max_attempts)
         if (
             signature == self._reflection_signature
             and self._cached_reflection_review is not None
@@ -3186,7 +3737,7 @@ class ProductRunEnvironment:
 
     def _checkpoint_messages(self, messages: list, run_status: str) -> None:
         """Best-effort durable checkpoint at Agent step boundaries."""
-        if not getattr(config, "RUNTIME_STATE_PERSIST", True):
+        if not current_run_settings().runtime_state_persist:
             return
         try:
             from nz_coder.runtime.session.session_repository import FileSessionRepository
@@ -4063,7 +4614,7 @@ class ProductRunEnvironment:
         )
     def _persist_runtime_state(self, active: bool = True) -> None:
         """将 RuntimeState 持久化到当前 session 的 runtime_state.json。"""
-        if not config.RUNTIME_STATE_PERSIST:
+        if not current_run_settings().runtime_state_persist:
             return
         try:
             self.runtime_state.save(self._runtime_state_path, active=active)
@@ -4430,13 +4981,14 @@ class ProductRunEnvironment:
         """Compatibility facade for provider message projection."""
         details = continuation_projection_details(messages)
         projection_stats: dict = {}
-        provider_id, model_id = _provider_projection_identity(self)
+        provider_id, provider_instance_id, model_id = _provider_projection_identity(self)
         projected = project_provider_messages(
             messages,
             capabilities=getattr(self, "model_capabilities", None),
             include_attachments=include_attachments,
             projection_stats=projection_stats,
             target_provider_id=provider_id,
+            target_provider_instance_id=provider_instance_id,
             target_model_id=model_id,
         )
         AgentLoop._trace_continuation_projection(self, details)
@@ -4447,14 +4999,19 @@ class ProductRunEnvironment:
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
 
-def _provider_projection_identity(owner) -> tuple[str, str]:
+def _provider_projection_identity(owner) -> tuple[str, str, str]:
     """Resolve the target identity without moving projection into AgentLoop."""
     provider_id = str(
         getattr(getattr(owner, "provider", None), "name", "")
         or getattr(owner, "provider_id", "")
         or ""
     )
-    return provider_id, str(getattr(owner, "model_id", "") or "")
+    provider_instance_id = str(
+        getattr(getattr(owner, "model_runtime", None), "provider_instance_id", "")
+        or getattr(owner, "provider_instance_id", "")
+        or ""
+    )
+    return provider_id, provider_instance_id, str(getattr(owner, "model_id", "") or "")
 
 
 def _trace_evidence_projection(owner, enabled: bool, stats: dict) -> None:

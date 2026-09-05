@@ -1,5 +1,7 @@
-"""Tool: bash - Run shell commands with durable execution progress."""
+"""Tool: bash - Run shell commands with bounded durable execution progress."""
 
+import codecs
+from collections import deque
 import os
 import queue
 import re
@@ -10,13 +12,21 @@ from itertools import islice
 from pathlib import Path
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+from nz_coder.foundation.workspace_paths import (
+    WorkspacePathError,
+    WorkspacePathPolicy,
+    model_command_private_path,
+)
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.core.execution_context import (
     broad_tests_blocked,
     declared_test_scopes,
     strict_local_tools,
 )
 from nz_coder.runtime.process.platform_runtime import (
-    decode_process_output,
     select_shell,
     terminate_process_tree,
 )
@@ -34,6 +44,96 @@ from nz_coder.tools import (
     register,
     report_tool_metadata,
 )
+
+
+class _BoundedCommandOutput:
+    """Incrementally decode output while retaining only fixed head and tail windows."""
+
+    def __init__(self, capacity: int, hard_limit: int, encoding: str = "") -> None:
+        self.capacity = max(1024, int(capacity))
+        self.hard_limit = max(self.capacity, int(hard_limit))
+        self.head_limit = max(1, int(self.capacity * 0.6))
+        self.tail_limit = max(1, self.capacity - self.head_limit)
+        try:
+            decoder_type = codecs.getincrementaldecoder(encoding or "utf-8")
+        except LookupError:
+            decoder_type = codecs.getincrementaldecoder("utf-8")
+        self._decoder = decoder_type(errors="replace")
+        self._initial: list[str] = []
+        self._initial_chars = 0
+        self._head = ""
+        self._tail: deque[str] = deque()
+        self._tail_chars = 0
+        self.total_bytes = 0
+        self.truncated = False
+        self.limit_exceeded = False
+        self._finished = False
+
+    def feed(self, chunk: bytes) -> None:
+        if self._finished:
+            return
+        payload = bytes(chunk)
+        self.total_bytes += len(payload)
+        text = self._decoder.decode(payload, final=False)
+        self._retain(text)
+        if self.total_bytes > self.hard_limit:
+            self.limit_exceeded = True
+
+    def finish(self) -> None:
+        if self._finished:
+            return
+        self._retain(self._decoder.decode(b"", final=True))
+        self._finished = True
+
+    @property
+    def retained_chars(self) -> int:
+        if not self.truncated:
+            return self._initial_chars
+        return len(self._head) + self._tail_chars
+
+    def render(self, limit: int | None = None) -> str:
+        if not self.truncated:
+            value = "".join(self._initial)
+        else:
+            tail = "".join(self._tail)
+            omitted = max(0, self.total_bytes - self.retained_chars)
+            value = (
+                self._head
+                + f"\n\n... [{omitted} bytes omitted] ...\n\n"
+                + tail
+            )
+        return _truncate_output(value, limit) if limit is not None else value
+
+    def _retain(self, text: str) -> None:
+        if not text:
+            return
+        if not self.truncated and self._initial_chars + len(text) <= self.capacity:
+            self._initial.append(text)
+            self._initial_chars += len(text)
+            return
+        if not self.truncated:
+            combined = "".join(self._initial) + text
+            self._initial.clear()
+            self._initial_chars = 0
+            self._head = combined[:self.head_limit]
+            self.truncated = True
+            self._append_tail(combined[self.head_limit:])
+            return
+        self._append_tail(text)
+
+    def _append_tail(self, text: str) -> None:
+        self._tail.append(text)
+        self._tail_chars += len(text)
+        while self._tail_chars > self.tail_limit and self._tail:
+            excess = self._tail_chars - self.tail_limit
+            first = self._tail[0]
+            if len(first) <= excess:
+                self._tail.popleft()
+                self._tail_chars -= len(first)
+            else:
+                self._tail[0] = first[excess:]
+                self._tail_chars -= excess
+                break
 
 
 def _truncate_output(text: str, limit: int) -> str:
@@ -132,7 +232,9 @@ def _apply_sed_via_edit(command: str) -> str | None:
         return None  # file doesn't exist, let bash produce the real error
 
     try:
-        content = fp.read_text(encoding="utf-8", errors="replace")
+        content = WorkspaceFileAccess(current_workdir()).read_text(
+            file_path, errors="replace",
+        )
     except OSError:
         return None
 
@@ -161,14 +263,12 @@ def _resolve_bash_workdir(workdir: str | None) -> tuple[Path | None, str]:
     """Resolve an optional command cwd without permitting workspace escape."""
     workspace = current_workdir().resolve()
     value = str(workdir or "").strip()
-    candidate = Path(value) if value else workspace
-    if not candidate.is_absolute():
-        candidate = workspace / candidate
-    candidate = candidate.resolve()
     try:
-        candidate.relative_to(workspace)
-    except ValueError:
-        return None, "Error: workdir escapes workspace"
+        candidate = WorkspacePathPolicy(workspace).validate_model_execute(value or ".")
+    except WorkspacePathError as exc:
+        if "escapes workspace" in str(exc):
+            return None, "Error: workdir escapes workspace"
+        return None, format_public_error(exc)
     if not candidate.exists():
         return None, f"Error: workdir does not exist: {workdir}"
     if not candidate.is_dir():
@@ -231,6 +331,9 @@ def run_bash(
     escaped = external_workspace_path(command, current_workdir())
     if escaped is not None:
         return f"Error: Command path escapes workspace: {escaped}"
+    private_path = model_command_private_path(command, current_workdir())
+    if private_path is not None:
+        return f"Error: Model access blocked for shell path: {private_path}"
     if strict_local_tools():
         from nz_coder.swebench.policy import strict_bash_guidance, strict_bash_violation
 
@@ -249,10 +352,11 @@ def run_bash(
             "or replace_lines for line-range edits."
         )
 
+    settings = current_run_settings()
     classification = classify_bash(command)
     if classification["dangerous"]:
         return f"Error: Dangerous command blocked ({classification['reason']})"
-    if classification["reason"] in {"package install", "package manager write"} and not config.ALLOW_BASH_PACKAGE_INSTALLS:
+    if classification["reason"] in {"package install", "package manager write"} and not settings.allow_package_installs:
         return (
             "Error: Package install blocked. The agent must not modify the Python/"
             "Node/Ruby environment during benchmark repair. Use existing dependencies, "
@@ -273,19 +377,18 @@ def run_bash(
     if read_only and (classification["mutating"] or not is_known_read_only_command(command)):
         return f"Error: Read-only shell blocked ({classification['reason']})"
     try:
-        timeout_seconds = int(timeout or config.BASH_TIMEOUT_SECONDS)
+        timeout_seconds = int(timeout or settings.bash_timeout)
     except (TypeError, ValueError, OverflowError):
         return "Error: timeout must be an integer"
-    if timeout_seconds < 1 or timeout_seconds > config.BASH_TIMEOUT_SECONDS:
-        return f"Error: timeout must be between 1 and {config.BASH_TIMEOUT_SECONDS}s"
+    if timeout_seconds < 1 or timeout_seconds > settings.bash_timeout:
+        return f"Error: timeout must be between 1 and {settings.bash_timeout}s"
     resolved_workdir, workdir_error = _resolve_bash_workdir(workdir)
     if workdir_error:
         return workdir_error
     assert resolved_workdir is not None
     pythonpath_root = _strict_pytest_source_root(command, resolved_workdir)
-    process_environment = None
+    process_environment = build_sanitized_subprocess_env()
     if pythonpath_root is not None:
-        process_environment = dict(os.environ)
         inherited = str(process_environment.get("PYTHONPATH") or "").strip()
         process_environment["PYTHONPATH"] = os.pathsep.join(filter(None, (
             str(pythonpath_root),
@@ -297,7 +400,7 @@ def run_bash(
     try:
         shell = select_shell()
     except RuntimeError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if shell.kind.value == "sh" and "|" in command:
         from nz_coder.intelligence.verification_planner import classify_verification_command
 
@@ -339,22 +442,40 @@ def run_bash(
             env=process_environment,
         )
     except (FileNotFoundError, OSError) as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
-    output_queue: queue.Queue = queue.Queue()
+    output_queue: queue.Queue = queue.Queue(maxsize=64)
     finished = object()
+    reader_stop = threading.Event()
 
     def read_output() -> None:
         try:
             if process.stdout is not None:
-                for line in process.stdout:
-                    output_queue.put(line)
+                while not reader_stop.is_set():
+                    chunk = process.stdout.read(8192)
+                    if not chunk:
+                        break
+                    while not reader_stop.is_set():
+                        try:
+                            output_queue.put(chunk, timeout=0.1)
+                            break
+                        except queue.Full:
+                            continue
         finally:
-            output_queue.put(finished)
+            while not reader_stop.is_set():
+                try:
+                    output_queue.put(finished, timeout=0.1)
+                    break
+                except queue.Full:
+                    continue
 
     reader = threading.Thread(target=read_output, name="nz-bash-output", daemon=True)
     reader.start()
-    chunks: list[bytes] = []
+    output_buffer = _BoundedCommandOutput(
+        settings.process_buffer_bytes,
+        settings.bash_output_hard_limit_bytes,
+        settings.process_output_encoding,
+    )
     deadline = time.monotonic() + timeout_seconds
     last_report = 0.0
     timed_out = False
@@ -382,14 +503,13 @@ def run_bash(
         # embedders/tests that inject a text stream without weakening the real
         # raw-byte decoding contract.
         chunk = item if isinstance(item, bytes) else str(item).encode("utf-8")
-        chunks.append(chunk)
+        output_buffer.feed(chunk)
+        if output_buffer.limit_exceeded:
+            _stop_process(process)
+            break
         now = time.monotonic()
         if now - last_report >= 0.1:
-            decoded = decode_process_output(
-                b"".join(chunks),
-                preferred_encoding=config.PROCESS_OUTPUT_ENCODING,
-            )
-            preview = _truncate_output(decoded.strip(), progress_limit)
+            preview = output_buffer.render(progress_limit).strip()
             report_tool_metadata(
                 title=title,
                 metadata={
@@ -406,35 +526,51 @@ def run_bash(
             )
             last_report = now
 
+    reader_stop.set()
     try:
         process.wait(timeout=1)
     except subprocess.TimeoutExpired:
         _stop_process(process)
         process.wait()
     reader.join(timeout=1)
+    if reader.is_alive() and process.stdout is not None:
+        try:
+            process.stdout.close()
+        except OSError:
+            pass
+        reader.join(timeout=1)
     while True:
         try:
             item = output_queue.get_nowait()
         except queue.Empty:
             break
-        if item is not finished:
-            chunks.append(bytes(item))
+        if item is not finished and not output_buffer.limit_exceeded:
+            output_buffer.feed(
+                item if isinstance(item, bytes) else str(item).encode("utf-8")
+            )
+    output_buffer.finish()
 
     if timed_out:
-        return f"Error: Command timed out ({timeout_seconds}s)"
+        evidence = output_buffer.render(progress_limit).strip()
+        suffix = f"\n{evidence}" if evidence else ""
+        return f"Error: Command timed out ({timeout_seconds}s){suffix}"
     if cancelled:
-        return "Error: Command cancelled"
+        evidence = output_buffer.render(progress_limit).strip()
+        suffix = f"\n{evidence}" if evidence else ""
+        return f"Error: Command cancelled{suffix}"
 
-    output = decode_process_output(
-        b"".join(chunks),
-        preferred_encoding=config.PROCESS_OUTPUT_ENCODING,
-    ).strip()
+    output = output_buffer.render().strip()
+    if output_buffer.limit_exceeded:
+        output = (
+            "Command output limit exceeded; process terminated after "
+            f"{output_buffer.total_bytes} bytes.\n{output}"
+        )
     if process.returncode != 0:
         prefix = f"Command exited with code {process.returncode}"
         output = f"{prefix}\n{output}" if output else prefix
     if not output:
         output = f"({command.split()[0] if command.split() else 'bash'} completed with no output)"
-    truncated = len(output) > config.CONTEXT_TRUNCATE_CHARS
+    truncated = output_buffer.truncated or len(output) > config.CONTEXT_TRUNCATE_CHARS
     return ToolOutput(
         output,
         title=title,
@@ -445,6 +581,9 @@ def run_bash(
             "workdir": str(resolved_workdir),
             "shell_kind": shell.kind.value,
             "truncated": truncated,
+            "total_output_bytes": output_buffer.total_bytes,
+            "retained_output_bytes": output_buffer.retained_chars,
+            "output_limit_exceeded": output_buffer.limit_exceeded,
             "executed_command": command,
             "requested_command": requested_command,
             "strict_output_filter_removed": strict_output_filter_removed,

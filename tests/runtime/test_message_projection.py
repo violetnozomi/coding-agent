@@ -4,8 +4,14 @@ from __future__ import annotations
 from copy import deepcopy
 from types import SimpleNamespace
 
+from nz_coder.foundation import config
+from nz_coder.providers.configuration import (
+    clear_provider_connection_overrides,
+    provider_connection,
+)
 from nz_coder.runtime.execution.loop import AgentLoop
 from nz_coder.runtime.conversation.message_projection import project_provider_messages
+from nz_coder.runtime.model_gateway.runtime import _provider_instance_id
 from nz_coder.protocol.message_schema import provider_private_state
 
 
@@ -37,7 +43,11 @@ def _write_result(call_id: str, content: str = "FULL DIFF") -> dict:
     }
 
 
-def _private_assistant(provider: str = "provider-a", model: str = "model-1") -> dict:
+def _private_assistant(
+    provider: str = "provider-a",
+    model: str = "model-1",
+    instance: str = "provider-instance-a",
+) -> dict:
     message = {
         "role": "assistant",
         "content": "safe",
@@ -48,8 +58,9 @@ def _private_assistant(provider: str = "provider-a", model: str = "model-1") -> 
             "type": "function",
             "function": {"name": "read_file", "arguments": "{}"},
             "provider_extra": {
-                "schema": "nz.provider_private_state.v1",
+                "schema": "nz.provider_private_state.v2",
                 "provider_id": provider,
+                "provider_instance_id": instance,
                 "model_family": f"{provider}/{model}",
                 "payload_schema": "tool_call_provider_extra.v1",
                 "payload": {"signature": "private-tool-state"},
@@ -63,6 +74,7 @@ def _private_assistant(provider: str = "provider-a", model: str = "model-1") -> 
         },
         provider_id=provider,
         model_id=model,
+        provider_instance_id=instance,
     ))
     return message
 
@@ -78,6 +90,7 @@ def test_same_provider_private_state_round_trip_is_preserved():
         ),
         target_provider_id="provider-a",
         target_model_id="model-1",
+        target_provider_instance_id="provider-instance-a",
     )[0]
 
     assert projected["reasoning_content"] == "private-reasoning"
@@ -104,6 +117,7 @@ def test_provider_extra_not_forwarded_to_different_provider_family():
             capabilities=capabilities,
             target_provider_id=provider,
             target_model_id=model,
+            target_provider_instance_id="provider-instance-a",
         )[0]
         assert projected.get("reasoning_content") == ""
         assert "provider_extra" not in projected
@@ -124,13 +138,14 @@ def test_legacy_unprovenanced_private_state_fails_closed():
         ),
         target_provider_id="provider-a",
         target_model_id="model-1",
+        target_provider_instance_id="provider-instance-a",
     )[0]
 
     assert projected["reasoning_content"] == ""
     assert "provider_extra" not in projected
 
 
-def test_legacy_provider_state_migrates_with_reliable_message_identity():
+def test_legacy_provider_state_without_instance_fails_closed():
     projected = project_provider_messages(
         [{
             "role": "assistant",
@@ -146,10 +161,76 @@ def test_legacy_provider_state_migrates_with_reliable_message_identity():
         ),
         target_provider_id="provider-a",
         target_model_id="model-1",
+        target_provider_instance_id="provider-instance-a",
     )[0]
 
-    assert projected["reasoning_content"] == "legacy-private"
-    assert projected["provider_extra"] == {"response_id": "legacy-private"}
+    assert projected["reasoning_content"] == ""
+    assert "provider_extra" not in projected
+
+
+def test_private_state_fails_closed_after_endpoint_instance_switch():
+    history = [
+        _private_assistant(instance="provider-instance-endpoint-a"),
+        {"role": "tool", "tool_call_id": "call-private", "content": "ok"},
+    ]
+
+    projected = project_provider_messages(
+        history,
+        capabilities=SimpleNamespace(
+            preserve_reasoning_content=True,
+            supports_image_input=False,
+        ),
+        target_provider_id="provider-a",
+        target_model_id="model-1",
+        target_provider_instance_id="provider-instance-endpoint-b",
+    )[0]
+
+    assert projected["reasoning_content"] == ""
+    assert "provider_extra" not in projected
+    assert "provider_extra" not in projected["tool_calls"][0]
+
+
+def test_private_state_not_forwarded_after_account_switch(monkeypatch):
+    provider = SimpleNamespace(name="openai-compatible", base_url="https://api.test/v1")
+    client = SimpleNamespace(base_url="https://api.test/v1")
+    clear_provider_connection_overrides()
+    monkeypatch.setattr(config, "API_KEY", "account-a-key")
+    first_scope = provider_connection("openai-compatible").credential_scope_id
+    first_instance = _provider_instance_id(
+        provider_id="openai-compatible",
+        provider=provider,
+        client=client,
+        explicit_base_url=None,
+        credential_scope_id=first_scope,
+    )
+    monkeypatch.setattr(config, "API_KEY", "account-b-key")
+    second_scope = provider_connection("openai-compatible").credential_scope_id
+    second_instance = _provider_instance_id(
+        provider_id="openai-compatible",
+        provider=provider,
+        client=client,
+        explicit_base_url=None,
+        credential_scope_id=second_scope,
+    )
+
+    projected = project_provider_messages(
+        [
+            _private_assistant("openai-compatible", "model-1", first_instance),
+            {"role": "tool", "tool_call_id": "call-private", "content": "ok"},
+        ],
+        capabilities=SimpleNamespace(
+            preserve_reasoning_content=True,
+            supports_image_input=False,
+        ),
+        target_provider_id="openai-compatible",
+        target_model_id="model-1",
+        target_provider_instance_id=second_instance,
+    )[0]
+
+    assert first_instance != second_instance
+    assert projected["reasoning_content"] == ""
+    assert "provider_extra" not in projected
+    assert "provider_extra" not in projected["tool_calls"][0]
 
 
 def test_private_reasoning_not_forwarded_after_provider_switch():

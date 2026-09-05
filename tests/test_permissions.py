@@ -20,6 +20,12 @@ from nz_coder.tools import (
 )
 
 
+def _configure_grant_store(tmp_path, monkeypatch):
+    user_config = tmp_path.parent / f"{tmp_path.name}-user" / "config.env"
+    monkeypatch.setenv("NZ_CODER_USER_CONFIG", str(user_config))
+    return user_config.with_name("workspace-grants.json")
+
+
 def test_permission_manager_normalizes_unknown_mode():
     pm = PermissionManager("weird-mode")
 
@@ -46,6 +52,50 @@ def test_permission_manager_reports_matching_explicit_rule_source():
     assert pm.explicit_rule_behavior("bash", {"command": "git status"}) == "allow"
     assert pm.explicit_rule_behavior("read_file", {"path": "app.py"}) == "ask"
     assert pm.explicit_rule_behavior("todo", {}) is None
+
+
+def test_untrusted_project_allow_cannot_authorize_bash(tmp_path, monkeypatch):
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps({"permissions": {"allow": ["bash"]}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+
+    manager = PermissionManager("auto", workspace_trusted=False)
+
+    assert manager.check("bash", {"command": "python build.py"})["behavior"] == "ask"
+
+
+def test_untrusted_project_allow_cannot_authorize_process(tmp_path, monkeypatch):
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps({"permissions": {"allow": ["process"]}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+
+    manager = PermissionManager("auto", workspace_trusted=False)
+
+    assert manager.check(
+        "process", {"operation": "start", "command": "python server.py"}
+    )["behavior"] == "ask"
+
+
+def test_untrusted_project_deny_rule_still_applies(tmp_path, monkeypatch):
+    settings = tmp_path / ".nz-coder" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps({"permissions": {"deny": ["bash"]}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+
+    manager = PermissionManager("auto", workspace_trusted=False)
+
+    assert manager.check("bash", {"command": "ls"})["behavior"] == "deny"
 
 
 def test_argv_prefix_rule_rejects_shell_composition():
@@ -99,15 +149,17 @@ def test_permission_manager_supports_http_once_reject_and_scoped_always(
     monkeypatch,
 ):
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    _configure_grant_store(tmp_path, monkeypatch)
     replies = iter(["once", "reject", "always"])
     pm = PermissionManager("default", asker=lambda _name, _input: next(replies))
 
     assert pm.ask_user("edit_file", {"path": "first.py"}) is True
     assert pm.ask_user("edit_file", {"path": "second.py"}) is False
     assert pm.ask_user("edit_file", {"path": "third.py"}) is True
+    assert pm.check("edit_file", {"path": "third.py"})["behavior"] == "allow"
     assert pm.check("edit_file", {"path": "later.py"}) == {
-        "behavior": "allow",
-        "reason": "Rule: edit_file",
+        "behavior": "ask",
+        "reason": "Write operation: edit_file",
     }
 
 
@@ -123,22 +175,24 @@ def test_permission_manager_persists_always_rule_without_clobbering_settings(
         json.dumps({"disabled_skills": ["review"], "permissions": {"deny": []}}),
         encoding="utf-8",
     )
+    grant_path = _configure_grant_store(tmp_path, monkeypatch)
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
     manager = PermissionManager("default", asker=lambda _name, _input: "always")
 
     assert manager.ask_user("edit_file", {"path": "first.py"}) is True
 
     reloaded = PermissionManager("default")
-    assert reloaded.check("edit_file", {"path": "later.py"})["behavior"] == "allow"
+    assert reloaded.check("edit_file", {"path": "first.py"})["behavior"] == "allow"
     assert json.loads(settings_path.read_text(encoding="utf-8"))["disabled_skills"] == [
         "review"
     ]
-    assert inspect_private_path(settings_path).hardened is True
+    assert inspect_private_path(grant_path).hardened is True
 
 
 def test_permission_manager_persists_token_scoped_bash_rule(tmp_path, monkeypatch):
     """Approving one git mutation must never authorize another subcommand."""
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    _configure_grant_store(tmp_path, monkeypatch)
     manager = PermissionManager("default", asker=lambda _name, _input: "always")
 
     assert manager.ask_user("bash", {"command": "git checkout -- app.py"}) is True
@@ -154,9 +208,9 @@ def test_permission_manager_persistence_failure_allows_once_only(
     caplog,
 ):
     """A broken settings file cannot silently turn an approval into session-wide access."""
-    settings_dir = tmp_path / ".nz-coder"
-    settings_dir.mkdir()
-    (settings_dir / "settings.json").write_text("{broken", encoding="utf-8")
+    grant_path = _configure_grant_store(tmp_path, monkeypatch)
+    grant_path.parent.mkdir(parents=True)
+    grant_path.write_text("{broken", encoding="utf-8")
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
     manager = PermissionManager("default", asker=lambda _name, _input: "always")
 
@@ -167,15 +221,17 @@ def test_permission_manager_persistence_failure_allows_once_only(
     assert "could not persist permission rule" in caplog.text.lower()
 
 
-def test_permission_manager_refuses_symlinked_settings_directory(
+def test_permission_manager_refuses_symlinked_grant_store(
     tmp_path,
     monkeypatch,
     caplog,
 ):
     """Persistent approval cannot follow a workspace settings symlink."""
-    real_directory = tmp_path / "real-settings"
-    real_directory.mkdir()
-    (tmp_path / ".nz-coder").symlink_to(real_directory, target_is_directory=True)
+    grant_path = _configure_grant_store(tmp_path, monkeypatch)
+    grant_path.parent.mkdir(parents=True)
+    outside = tmp_path / "outside-grants.json"
+    outside.write_text('{"sentinel":true}', encoding="utf-8")
+    grant_path.symlink_to(outside)
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
     manager = PermissionManager("default", asker=lambda _name, _input: "always")
 
@@ -183,8 +239,8 @@ def test_permission_manager_refuses_symlinked_settings_directory(
         assert manager.ask_user("edit_file", {"path": "first.py"}) is True
 
     assert manager.check("edit_file", {"path": "later.py"})["behavior"] == "ask"
-    assert not (real_directory / "settings.json").exists()
-    assert "symbolic link" in caplog.text.lower()
+    assert json.loads(outside.read_text(encoding="utf-8")) == {"sentinel": True}
+    assert "could not persist permission rule" in caplog.text.lower()
 
 
 def test_special_doom_loop_permission_supports_once_always_and_fail_closed():
@@ -203,6 +259,7 @@ def test_permission_manager_scopes_http_bash_always_to_command_prefix(
     monkeypatch,
 ):
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    _configure_grant_store(tmp_path, monkeypatch)
     pm = PermissionManager("default", asker=lambda _name, _input: "always")
 
     assert pm.ask_user("bash", {"command": "git status"}) is True
@@ -216,6 +273,7 @@ def test_permission_manager_scopes_pytest_approval_without_allowing_arbitrary_py
     monkeypatch,
 ):
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    _configure_grant_store(tmp_path, monkeypatch)
     pm = PermissionManager("acceptEdits", asker=lambda _name, _input: "always")
 
     command = "python -m pytest tests/test_parser.py -q"
@@ -486,6 +544,9 @@ def test_permission_manager_session_allow_rule_applies_to_bash():
 
 
 def test_permission_manager_loads_project_rules(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from nz_coder.foundation.project_control import capture_project_control_snapshot
     settings_dir = tmp_path / ".nz-coder"
     settings_dir.mkdir()
     (settings_dir / "settings.json").write_text(
@@ -502,7 +563,8 @@ def test_permission_manager_loads_project_rules(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
 
-    pm = PermissionManager("default")
+    snapshot = replace(capture_project_control_snapshot(tmp_path), trusted=True)
+    pm = PermissionManager("default", project_control_snapshot=snapshot)
 
     assert pm._allow_rules == [PermissionRule("bash", "allow", "prefix:git ")]
     assert pm._deny_rules == [PermissionRule("write_file", "deny")]

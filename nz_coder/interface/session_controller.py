@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import asyncio
+from dataclasses import replace
 
 from nz_coder.runtime.adapters.runner import run_request_from_legacy_host
 from nz_coder.runtime.execution.native_sdk import NativeSDKRunner
@@ -153,6 +154,7 @@ class TerminalSessionController:
         stream: bool = True,
         allowed_tools: tuple[str, ...] | None = None,
         model: str | None = None,
+        config_snapshot=None,
     ) -> dict:
         """Execute one terminal turn through AgentClient and sync its transcript."""
         # Injected embedders and CLI recovery tests may supply only the public
@@ -167,8 +169,17 @@ class TerminalSessionController:
             )
         provider_override = None
         model_override = model
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+        from nz_coder.providers.models import active_model_selection
+
+        run_snapshot = config_snapshot or load_config_snapshot(self.environment.workdir)
+        selection = active_model_selection(
+            self.environment.workdir, config_snapshot=run_snapshot,
+        )
         if isinstance(model, str) and "/" in model:
             provider_override, model_override = model.split("/", 1)
+        provider_override = provider_override or selection.provider
+        model_override = model_override or selection.model_id
         request = run_request_from_legacy_host(
             self.environment,
             messages,
@@ -177,6 +188,11 @@ class TerminalSessionController:
             provider_override=provider_override,
             model_override=model_override,
         )
+        request = replace(
+            request,
+            reasoning_effort=selection.variant,
+            agent=replace(request.agent, reasoning_effort=selection.variant),
+        )
         self._active_task = asyncio.current_task()
         try:
             result = await self._client.run(
@@ -184,6 +200,7 @@ class TerminalSessionController:
                 on_tool=on_tool,
                 on_text=on_text,
                 on_token=on_token,
+                config_snapshot=run_snapshot,
             )
         finally:
             self._active_task = None

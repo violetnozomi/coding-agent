@@ -20,7 +20,7 @@ from nz_coder.providers.gemini import GeminiProvider
 from nz_coder.providers.openai_compatible import OpenAICompatibleProvider
 from nz_coder.providers.openai_responses import OpenAIResponsesProvider
 from nz_coder.providers.models import ModelSelection, active_model_selection
-from nz_coder.providers.configuration import provider_connection
+from nz_coder.providers.configuration import ProviderConnection, provider_connection
 from nz_coder.providers.extensions import (
     ProviderExtensionNotFound,
     create_extension_provider,
@@ -62,14 +62,27 @@ def create_provider(
     api_key: str | None = None,
     base_url: str | None = None,
     client_factory: Callable[..., Any] | None = None,
+    config_snapshot=None,
+    connection: ProviderConnection | None = None,
 ) -> ModelProvider:
     """Build a configured model provider from explicit values or config."""
-    selected = (name or config.MODEL_PROVIDER).strip().lower()
-    connection = provider_connection(selected)
+    fallback_provider = (
+        config_snapshot.get("MODEL_PROVIDER", "openai-compatible")
+        if config_snapshot is not None
+        else config.MODEL_PROVIDER
+    )
+    selected = (name or fallback_provider).strip().lower()
+    if connection is not None and (api_key is not None or base_url is not None):
+        raise ValueError("connection cannot be combined with raw provider overrides")
+    selected_connection = connection or provider_connection(
+        selected, config_snapshot=config_snapshot,
+    )
+    if selected_connection.provider != selected:
+        raise ValueError("ProviderConnection belongs to a different provider")
     if selected in _OPENAI_RESPONSES_NAMES:
         return OpenAIResponsesProvider(
-            api_key=connection.api_key if api_key is None else api_key,
-            base_url=connection.base_url if base_url is None else base_url,
+            api_key=selected_connection.api_key if api_key is None else api_key,
+            base_url=selected_connection.base_url if base_url is None else base_url,
             provider_name=(
                 "openai-responses"
                 if selected == "openai_responses"
@@ -79,8 +92,8 @@ def create_provider(
         )
     if selected in _OPENAI_COMPATIBLE_NAMES:
         return OpenAICompatibleProvider(
-            api_key=connection.api_key if api_key is None else api_key,
-            base_url=connection.base_url if base_url is None else base_url,
+            api_key=selected_connection.api_key if api_key is None else api_key,
+            base_url=selected_connection.base_url if base_url is None else base_url,
             provider_name=(
                 "openai-compatible"
                 if selected == "openai_compatible"
@@ -90,20 +103,24 @@ def create_provider(
         )
     if selected in _ANTHROPIC_NAMES:
         return AnthropicProvider(
-            api_key=connection.api_key if api_key is None else api_key,
-            base_url=connection.base_url if base_url is None else base_url,
-            api_version=config.ANTHROPIC_API_VERSION,
+            api_key=selected_connection.api_key if api_key is None else api_key,
+            base_url=selected_connection.base_url if base_url is None else base_url,
+            api_version=(
+                config_snapshot.get("ANTHROPIC_API_VERSION", "2023-06-01")
+                if config_snapshot is not None
+                else config.ANTHROPIC_API_VERSION
+            ),
         )
     if selected in _GEMINI_NAMES:
         return GeminiProvider(
-            api_key=connection.api_key if api_key is None else api_key,
-            base_url=connection.base_url if base_url is None else base_url,
+            api_key=selected_connection.api_key if api_key is None else api_key,
+            base_url=selected_connection.base_url if base_url is None else base_url,
         )
     try:
         return create_extension_provider(
             selected,
-            api_key=connection.api_key if api_key is None else api_key,
-            base_url=connection.base_url if base_url is None else base_url,
+            api_key=selected_connection.api_key if api_key is None else api_key,
+            base_url=selected_connection.base_url if base_url is None else base_url,
             client_factory=client_factory,
         )
     except ProviderExtensionNotFound:

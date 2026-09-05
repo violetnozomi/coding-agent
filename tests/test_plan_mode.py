@@ -190,7 +190,7 @@ def test_plan_mode_prompt_exposes_only_the_dedicated_write_exception(tmp_path):
 
         assert "Plan mode is ACTIVE" in block
         assert "write_plan" in block
-        assert ".nz-coder/plans/test-plan.md" in block
+        assert "user-state://plans/test-plan.md" in block
         assert "Do not modify source files" in block
 
 

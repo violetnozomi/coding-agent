@@ -15,6 +15,10 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+from nz_coder.protocol.public_error import format_public_error
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.runtime.agent.task_policy import (
     is_source_file,
@@ -48,13 +52,13 @@ STOPWORDS = frozenset({
 
 
 def _safe_path(p: str = ".") -> Path:
-    wd = Path(current_workdir())
-    path = (wd / (p or ".")).resolve()
-    try:
-        path.relative_to(wd.resolve())
-    except ValueError:
-        raise ValueError(f"Path escapes workspace: {p}")
-    return path
+    return WorkspacePathPolicy(current_workdir()).validate_model_read(p or ".")
+
+
+def _read_source(path: Path, *, errors: str = "replace") -> str:
+    access = WorkspaceFileAccess(current_workdir())
+    relative = path.resolve().relative_to(access.root).as_posix()
+    return access.read_text(relative, errors=errors)
 
 
 def _run_git(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
@@ -66,6 +70,7 @@ def _run_git(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
         encoding="utf-8",
         errors="replace",
         timeout=timeout,
+        env=build_sanitized_subprocess_env(),
     )
 
 
@@ -208,7 +213,7 @@ def diff_status() -> str:
     except subprocess.TimeoutExpired:
         return "Error: git diff/status timed out"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -252,7 +257,9 @@ def _changed_files_for_verification(include_tests: bool) -> list[str]:
 
 def _package_json_scripts() -> dict:
     try:
-        data = json.loads((current_workdir() / "package.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            WorkspaceFileAccess(current_workdir()).read_text("package.json")
+        )
     except (OSError, json.JSONDecodeError):
         return {}
     scripts = data.get("scripts", {}) if isinstance(data, dict) else {}
@@ -292,6 +299,7 @@ def _run_verifier(label: str, cmd: list[str], timeout: int) -> tuple[bool, str]:
             errors="replace",
             timeout=timeout,
             cwd=current_workdir(),
+            env=build_sanitized_subprocess_env(),
         )
     except FileNotFoundError:
         return False, f"FAIL {label}\ncommand not found: {cmd[0]}"
@@ -391,7 +399,7 @@ def verify_changed_files(include_tests: bool = False, timeout: int = 30) -> str:
     except subprocess.TimeoutExpired:
         return f"Error: changed-file verification timed out after {timeout}s"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -453,7 +461,7 @@ def read_symbol(
     """
     try:
         fp = _safe_path(path)
-        source = fp.read_text(encoding="utf-8", errors="replace")
+        source = _read_source(fp)
         lines = source.splitlines()
         tree = ast.parse(source, filename=str(fp))
         symbols = _collect_symbols(tree, max_depth=max_depth)
@@ -509,11 +517,11 @@ def read_symbol(
             f"{_line_numbered(selected, start)}"
         )
     except SyntaxError as exc:
-        return f"Error: Python syntax error in {path}: {exc}"
+        return format_public_error(exc, context=f"Python syntax error in {path}: ")
     except FileNotFoundError:
         return f"Error: file not found: {path}"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -576,7 +584,7 @@ def _parse_python_source(source: str, fp: Path) -> ast.AST | None:
 def _ast_summary(fp: Path, limit: int = 12, tree: ast.AST | None = None) -> list[str]:
     if tree is None:
         try:
-            source = fp.read_text(encoding="utf-8", errors="replace")
+            source = _read_source(fp)
         except OSError:
             return []
         tree = _parse_python_source(source, fp)
@@ -658,6 +666,7 @@ def smart_search(
                     capture_output=True, text=True,
                     encoding="utf-8", errors="replace",
                     timeout=15,
+                    env=build_sanitized_subprocess_env(),
                 )
                 # git grep returns 1 when no matches; 128/129 means command/pathspec error.
                 if result.returncode not in (0, 1):
@@ -707,7 +716,7 @@ def smart_search(
             rel_low = rel.lower()
 
             try:
-                file_text = fp.read_text(encoding="utf-8", errors="replace")
+                file_text = _read_source(fp)
             except OSError:
                 continue
             readable_files += 1
@@ -812,11 +821,11 @@ def smart_search(
         )
         return "\n".join(out).rstrip()
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except OSError as exc:
-        return f"Error: filesystem error during smart_search: {exc}"
+        return format_public_error(exc, context="filesystem error during smart_search: ")
     except Exception as exc:
-        return f"Error: unexpected smart_search failure ({type(exc).__name__}): {exc}"
+        return format_public_error(exc, context="unexpected smart_search failure: ")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -959,7 +968,7 @@ def find_symbol_callers(
         for fp in files:
             rel = str(fp.relative_to(current_workdir()))
             try:
-                source = fp.read_text(encoding="utf-8", errors="replace")
+                source = _read_source(fp)
                 tree = ast.parse(source, filename=str(fp))
             except (SyntaxError, ValueError) as exc:
                 skipped_files.append(f"{rel}: parse error: {exc}")
@@ -988,11 +997,15 @@ def find_symbol_callers(
             out.append(f"  skipped {len(skipped_files)} unparsable/unreadable file(s)")
         return "\n".join(out)
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except OSError as exc:
-        return f"Error: filesystem error during find_symbol_callers: {exc}"
+        return format_public_error(
+            exc, context="filesystem error during find_symbol_callers: ",
+        )
     except Exception as exc:
-        return f"Error: unexpected find_symbol_callers failure ({type(exc).__name__}): {exc}"
+        return format_public_error(
+            exc, context="unexpected find_symbol_callers failure: ",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

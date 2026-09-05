@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from nz_coder.foundation import config
+from nz_coder.foundation.user_paths import user_storage_layout
 from nz_coder.providers import configured_model_capabilities
 from nz_coder.providers.cli import models_main
 from nz_coder.providers.registry import (
@@ -98,6 +99,17 @@ def registry_server():
         server.server_close()
 
 
+@pytest.fixture(autouse=True)
+def private_user_roots(tmp_path, monkeypatch):
+    """Keep registry cache writes inside each test sandbox."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path.parent / f"{tmp_path.name}-state"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path.parent / f"{tmp_path.name}-cache"))
+
+
+def _registry_path(workspace):
+    return user_storage_layout(workspace).workspace_cache / "models/registry.json"
+
+
 def test_registry_sync_projects_exact_capabilities(tmp_path, registry_server, monkeypatch):
     monkeypatch.setattr(config, "MODEL_CATALOG_JSON", "")
     monkeypatch.setattr(config, "MODEL_CATALOG_PATH", "")
@@ -105,8 +117,11 @@ def test_registry_sync_projects_exact_capabilities(tmp_path, registry_server, mo
 
     assert result.refreshed is True
     assert (result.provider_count, result.model_count) == (1, 1)
-    target = tmp_path / ".nz-coder/models/registry.json"
+    target = _registry_path(tmp_path)
     assert os.stat(target).st_mode & 0o777 == 0o600
+    persisted = json.loads(target.read_text(encoding="utf-8"))
+    assert persisted["schema"] == "models.dev.normalized/v1"
+    assert len(persisted["content_digest"]) == 64
     with scoped_workdir(tmp_path):
         capability = configured_model_capabilities("openai", "registry-model")
     assert capability.family == "registry-family"
@@ -216,7 +231,7 @@ def test_registry_rejects_invalid_timeout_before_network(tmp_path, timeout):
 
 
 def test_registry_strict_load_rejects_nonstandard_json_numbers(tmp_path):
-    target = tmp_path / ".nz-coder/models/registry.json"
+    target = _registry_path(tmp_path)
     target.parent.mkdir(parents=True)
     target.write_text(
         '{"version":1,"source":"local","providers":{},"extra":NaN}',
@@ -229,7 +244,7 @@ def test_registry_strict_load_rejects_nonstandard_json_numbers(tmp_path):
 
 def test_registry_path_must_stay_in_workspace(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "MODEL_REGISTRY_PATH", "../registry.json")
-    with pytest.raises(ValueError, match="escapes workspace"):
+    with pytest.raises(ValueError, match="escapes user cache"):
         load_registry_snapshot(tmp_path, strict=True)
 
 

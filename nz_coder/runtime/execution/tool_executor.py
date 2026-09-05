@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.permissions import PermissionManager
 from nz_coder.runtime.agent.agent_resilience import (
@@ -29,6 +29,7 @@ from nz_coder.runtime.agent.agent_resilience import (
     is_tool_result_error_content,
 )
 from nz_coder.protocol.session_events import publish_session_event
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tool_platform.execution import (
     WRITE_TOOLS,
@@ -299,10 +300,11 @@ class ToolExecutor:
         is_write = is_transactional_write_tool(fn_name)
 
         # ── 单轮调用数限制 ──────────────────────────────────────────────────
-        if index >= config.MAX_TOOL_CALLS_PER_RESPONSE:
+        settings = current_run_settings()
+        if index >= settings.max_tool_calls:
             output = (
                 f"Error: Too many tool calls in one response "
-                f"(limit {config.MAX_TOOL_CALLS_PER_RESPONSE})"
+                f"(limit {settings.max_tool_calls})"
             )
             return ToolExecutionResult(fn_name, {}, output, False, True, False, is_write)
 
@@ -318,9 +320,9 @@ class ToolExecutor:
             )
             if isinstance(tool_input, dict):
                 json.dumps(tool_input, ensure_ascii=False, allow_nan=False)
-        except (json.JSONDecodeError, TypeError, ValueError, OverflowError) as e:
+        except (json.JSONDecodeError, TypeError, ValueError, OverflowError):
             output = (
-                f"Error: Invalid JSON arguments for {fn_name}: {e}. "
+                f"Error: Invalid JSON arguments for {fn_name}. "
                 "Your tool call arguments are not valid JSON. "
                 "Common causes: unescaped quotes inside strings, "
                 "literal backslashes not doubled, trailing commas. "
@@ -352,7 +354,7 @@ class ToolExecutor:
                     permission_denied=True,
                 )
 
-        if fn_name == "read_file" and config.READ_DEDUP_ENABLED:
+        if fn_name == "read_file" and settings.read_dedup_enabled:
             cached_output = self._read_cache.lookup(tool_input)
             if cached_output is not None:
                 return ToolExecutionResult(
@@ -377,7 +379,9 @@ class ToolExecutor:
             return ToolExecutionResult(
                 name=fn_name,
                 tool_input=tool_input,
-                output=f"Error: {fn_name} raised {type(exc).__name__}: {exc}",
+                output=format_public_error(
+                    exc, context=f"{fn_name} failed: ",
+                ),
                 executed=True,
                 dispatch_failed=True,
                 command_failed=False,
@@ -393,7 +397,9 @@ class ToolExecutor:
             return ToolExecutionResult(
                 name=fn_name,
                 tool_input=tool_input,
-                output=f"Error: {fn_name} returned an invalid result: {type(exc).__name__}: {exc}",
+                output=format_public_error(
+                    exc, context=f"{fn_name} returned an invalid result: ",
+                ),
                 executed=True,
                 dispatch_failed=True,
                 command_failed=False,
@@ -408,7 +414,7 @@ class ToolExecutor:
             metadata["cancelled"] = True
         if (
             fn_name == "read_file"
-            and config.READ_DEDUP_ENABLED
+            and settings.read_dedup_enabled
             and not dispatch_failed
             and metadata.get("encoding")
             and not attachments

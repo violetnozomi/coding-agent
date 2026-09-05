@@ -70,7 +70,10 @@ def init_main(argv: list[str] | None = None) -> int:
         if security.hardened
         else "best-effort permissions; verify with nz-coder doctor"
     )
-    print(f"Created {target} with {protection}. Fill the credential, then run: nz-coder doctor")
+    print(
+        f"Created project configuration template {target} with {protection}. "
+        "Use nz-coder /connect for credentials, then run: nz-coder doctor"
+    )
     return 0
 
 

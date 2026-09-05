@@ -49,15 +49,18 @@ python -m pip install .
 
 cd /path/to/your/repository
 nz-coder init
-# edit the generated .env, then validate without network access:
+# use /connect (or a shell variable) for credentials, then validate offline:
 nz-coder doctor
 nz-coder doctor --repo-intelligence-only
 ```
 
-`nz-coder init` creates a private mode-0600 `.env` and refuses to overwrite an
-existing file. Shell variables take precedence over `.env`. Provider-specific
-credentials (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY`) work
-without a duplicate generic `API_KEY`. After `doctor` has no FAIL rows, start:
+`nz-coder init` creates a credential-free project configuration template and
+refuses to overwrite an existing file. `/connect` stores Provider credentials
+in the user-private NZ-Coder configuration outside the repository. Shell and
+user configuration take precedence; security-sensitive workspace values are
+ignored until their exact fingerprint is explicitly trusted. Legacy workspace
+credentials are reported by `doctor` for migration. After `doctor` has no FAIL
+rows, start:
 
 ```bash
 nz-coder
@@ -158,9 +161,10 @@ New Sessions use the first real user prompt as a bounded fallback title; a
 manual `/rename` is never overwritten by later checkpoints.
 
 Terminal preferences are workspace-owned in a private atomic state file.
-`/connect` masks the key, writes the workspace `.env` with mode 0600, and applies
-the connection to the current execution context without mutating global runtime
-configuration. `/attach` accepts only regular, non-symlink workspace files and
+`/connect` masks the key, writes the user-private configuration with owner-only
+protection, and applies the connection to the current execution context without
+mutating global runtime configuration. `/attach` accepts only model-visible,
+regular, non-symlink workspace files and
 clears the queue after one request. Large text pastes and attachments receive
 compact metadata cards while their content/reference remains available to the
 Agent. Vision-capable models receive supported images directly. For a text-only
@@ -258,6 +262,25 @@ TTY capability. `nz-coder doctor --json` is suitable for CI; the independent
 `--repo-intelligence-only` probe does not initialize a model provider. `--strict` also
 treats optional warnings as failures. It never prints credential values or starts
 a Provider, language server, or MCP process.
+
+Workspace `.env` files are parsed as project data and are never merged into the
+process environment. Non-sensitive settings work immediately. Provider endpoints,
+credentials, permission modes, MCP activation, and workspace LSP commands are
+ignored until the exact canonical workspace and current security-setting
+fingerprint are explicitly trusted:
+
+```bash
+nz-coder config show --sources
+nz-coder config trust                  # review .env first
+nz-coder config untrust
+```
+
+Changing a security-sensitive value invalidates that trust automatically. New
+credentials should be entered with the interactive `/connect` command; they are
+stored in the private user configuration outside the repository. If `doctor`
+reports a legacy credential in workspace `.env`, run `/connect`, remove the
+workspace copy, and re-run `doctor`. Trusting a repository authorizes NZ-Coder's
+documented workspace behavior; it is not an operating-system sandbox.
 
 Inspect or select models without starting an Agent:
 
@@ -834,6 +857,9 @@ See [EVAL.md](EVAL.md) for setup, metrics, and example result format.
 - Greenfield scaffolding does not overwrite existing files unless `overwrite=True` is explicitly used.
 - There is no OS-level sandbox, Docker isolation, or VM boundary yet.
 - NZ-Coder is intended for local trusted repositories; verification depends on each repo's local tests and typecheck commands.
+- Filesystem and shell path policies block direct access to known private paths,
+  but cannot stop a trusted Python/Node program from dynamically constructing a
+  path. Run untrusted repositories in an external OS sandbox or disposable VM.
 
 ## Limitations
 

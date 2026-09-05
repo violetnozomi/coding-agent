@@ -25,6 +25,10 @@ from nz_coder.foundation.private_paths import (
     inspect_private_path,
     windows_private_acl_available,
 )
+from nz_coder.foundation.workspace_trust import (
+    is_secret_config_key,
+    load_config_snapshot,
+)
 from nz_coder.tool_platform.permissioning.modes import MODES
 
 
@@ -50,6 +54,7 @@ def collect_doctor_checks(workspace: Path | None = None) -> list[DoctorCheck]:
         _check_private_state_security(root),
         _check_credential_file_security(root),
     ]
+    checks.extend(_check_configuration(root))
     checks.extend(_check_repo_intelligence(root))
     selection, model_checks = _check_model(root)
     checks.extend(model_checks)
@@ -298,19 +303,77 @@ def _check_credential_file_security(
             "pass",
             "workspace .env is absent; shell credentials are not persisted here",
         )
+    legacy_credentials = _workspace_credential_names(target)
     selected_os = os.name if os_name is None else os_name
     result = inspect_private_path(
         target,
         os_name=selected_os,
         windows_api=windows_api,
     )
+    legacy = (
+        "Legacy workspace credential configuration detected; migrate with /connect. "
+        if legacy_credentials else ""
+    )
     return DoctorCheck(
         "credential-file-security",
-        "pass" if result.hardened else "warn",
-        result.detail if result.hardened else f"Tier B: {result.detail}",
-        "Run nz-coder init/connect again or restrict .env to the current user."
-        if not result.hardened else "",
+        "warn" if legacy_credentials or not result.hardened else "pass",
+        legacy + (result.detail if result.hardened else f"Tier B: {result.detail}"),
+        "Run /connect to move credentials to the user-private configuration; "
+        "then remove credentials from workspace .env."
+        if legacy_credentials else (
+            "Restrict .env to the current user."
+            if not result.hardened else ""
+        ),
     )
+
+
+def _workspace_credential_names(path: Path) -> tuple[str, ...]:
+    """Return only configured credential names, never their values."""
+    names: list[str] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            name, value = stripped.split("=", 1)
+            name = name.removeprefix("export ").strip()
+            if value.strip() and is_secret_config_key(name):
+                names.append(name)
+    except (OSError, UnicodeError):
+        return ()
+    return tuple(sorted(set(names)))
+
+
+def _check_configuration(root: Path) -> list[DoctorCheck]:
+    """Report all typed configuration issues and ignored workspace controls."""
+    snapshot = load_config_snapshot(root)
+    checks = [
+        DoctorCheck(
+            f"config-{issue.key}",
+            "warn",
+            issue.message,
+            "Correct the value in its reported source; the safe default is active.",
+        )
+        for issue in snapshot.issues
+    ]
+    ignored = sorted(
+        key for key, value in snapshot.values.items()
+        if value.ignored and value.requires_trust
+    )
+    checks.append(DoctorCheck(
+        "workspace-config-trust",
+        "warn" if ignored else "pass",
+        (
+            f"untrusted sensitive workspace settings ignored: {', '.join(ignored)}"
+            if ignored else (
+                "trusted workspace configuration fingerprint"
+                if snapshot.workspace_trusted else "no untrusted sensitive overrides"
+            )
+        ),
+        "Review and explicitly trust the exact workspace configuration fingerprint."
+        if ignored else "",
+    ))
+    return checks
 
 
 def _check_model(root: Path):
@@ -340,7 +403,7 @@ def _check_provider(provider: str) -> list[DoctorCheck]:
         "credential",
         "pass" if connection.configured else "fail",
         f"{connection.credential_name}: {'configured' if connection.configured else 'missing'}",
-        f"Set {connection.credential_name} in the shell or workspace .env."
+        f"Set {connection.credential_name} in the shell or use /connect."
         if not connection.configured else "",
     )
     parsed = urlsplit(connection.base_url)
@@ -407,20 +470,29 @@ def _check_lsp(root: Path) -> DoctorCheck:
         return DoctorCheck("lsp", "pass", "enabled; no supported source files detected", category="optional")
     installed = []
     missing = []
+    trust_required = []
     for language, path in sorted(samples.items()):
         server = resolve_server(path, root)
-        (installed if server else missing).append(
-            f"{language}:{server.server_id}" if server else language
-        )
+        if server is None:
+            missing.append(language)
+        elif not server.trusted:
+            trust_required.append(f"{language}:{server.server_id}")
+        else:
+            installed.append(f"{language}:{server.server_id}")
     detail = "installed=" + (", ".join(installed) or "none")
+    if trust_required:
+        detail += "; trust-required=" + ", ".join(trust_required)
     if missing:
         detail += "; optional missing=" + ", ".join(missing)
     return DoctorCheck(
         "lsp",
-        "warn" if missing else "pass",
+        "warn" if missing or trust_required else "pass",
         detail,
         "Install only the language servers you need; NZ-Coder still has structural search."
-        if missing else "",
+        if missing else (
+            "Review and trust a workspace LSP with nz-coder lsp trust <source-file>."
+            if trust_required else ""
+        ),
         "optional",
     )
 

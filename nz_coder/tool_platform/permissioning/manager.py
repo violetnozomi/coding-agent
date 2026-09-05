@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
+from typing import TYPE_CHECKING
 
 from nz_coder.foundation import config
 
@@ -12,11 +13,15 @@ from .modes import normalize_mode
 from .rules import (
     PermissionRule,
     first_matching_rule,
+    load_rules_from_bytes,
     load_rules_from_settings,
     parse_rules,
     persist_allow_rule,
     scoped_allow_rule,
 )
+
+if TYPE_CHECKING:
+    from nz_coder.foundation.project_control import ProjectControlSnapshot
 
 
 log = logging.getLogger(__name__)
@@ -30,11 +35,38 @@ class PermissionManager:
         mode: str = None,
         renderer=None,
         asker: Callable[[str, dict], bool | str] | None = None,
+        workspace_trusted: bool = True,
+        project_control_snapshot: ProjectControlSnapshot | None = None,
     ):
         self._mode = normalize_mode(mode or config.PERMISSION_MODE)
         self._renderer = renderer
         self._asker = asker
-        self._checker = PermissionChecker(self._mode)
+        if project_control_snapshot is not None:
+            effective_trust = bool(project_control_snapshot.trusted)
+        else:
+            # A legacy boolean may preserve non-project behavior only when no
+            # settings file exists. It can never authorize current disk rules.
+            try:
+                from nz_coder.runtime.process.workdir import current_workdir
+
+                has_project_settings = (
+                    current_workdir() / ".nz-coder" / "settings.json"
+                ).exists()
+            except OSError:
+                has_project_settings = True
+            effective_trust = bool(workspace_trusted and not has_project_settings)
+        self._checker = PermissionChecker(
+            self._mode,
+            workspace_trusted=effective_trust,
+        )
+        self._workspace_trusted = bool(
+            project_control_snapshot is not None
+            and project_control_snapshot.trusted
+        )
+        self._legacy_restrictive_rules = bool(
+            project_control_snapshot is None and not workspace_trusted
+        )
+        self._project_control_snapshot = project_control_snapshot
         self._deny_rules: list[PermissionRule] = []
         self._allow_rules: list[PermissionRule] = []
         self._ask_rules: list[PermissionRule] = []
@@ -51,9 +83,35 @@ class PermissionManager:
         self._checker.mode = self._mode
 
     def _load_settings_rules(self) -> None:
-        """Load permission rules from .nz-coder/settings.json if it exists."""
-        allow_rules, deny_rules, ask_rules = load_rules_from_settings()
-        self._allow_rules = allow_rules
+        """Load Project rules only from the immutable run-owned snapshot."""
+        settings = (
+            self._project_control_snapshot.get(".nz-coder/settings.json")
+            if self._project_control_snapshot is not None
+            else None
+        )
+        if settings is not None:
+            allow_rules, deny_rules, ask_rules = load_rules_from_bytes(settings.content)
+        elif self._legacy_restrictive_rules:
+            _ignored_allow, deny_rules, ask_rules = load_rules_from_settings()
+            allow_rules = []
+        else:
+            allow_rules, deny_rules, ask_rules = [], [], []
+        try:
+            from nz_coder.runtime.process.workdir import current_workdir
+            from .grants import UserGrantStore
+
+            user_allow = parse_rules(
+                UserGrantStore().load(current_workdir()), "allow"
+            )
+        except (OSError, PermissionError, ValueError):
+            user_allow = []
+        # A repository-owned allow rule is authority.  Until the exact
+        # workspace control plane is trusted, only restrictive project rules
+        # may influence execution.
+        self._allow_rules = [
+            *user_allow,
+            *(allow_rules if self._workspace_trusted else []),
+        ]
         self._deny_rules = deny_rules
         self._ask_rules = ask_rules
 

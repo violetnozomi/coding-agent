@@ -18,6 +18,7 @@ def _context(*, streaming: bool) -> tuple[ModelExecutionContext, list]:
     context = ModelExecutionContext(
         capabilities=lambda: capability,
         active_model_id=lambda: "focused-model",
+        provider_instance_id=lambda: "provider-instance-focused",
         active_tool_specs=lambda: [],
         prompt_budget=lambda: None,
         call_streaming=lambda *_args, **_kwargs: LLMResult(content="stream"),

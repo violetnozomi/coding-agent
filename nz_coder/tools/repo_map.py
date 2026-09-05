@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.intelligence.code_index import (
     AmbiguousSymbolError,
     FileEntry,
@@ -24,11 +26,7 @@ from nz_coder.tools.repo_ranking import MatchRank, rank_repo_symbol
 
 def _safe_path(path: str) -> tuple[Path, Path]:
     workspace = current_workdir().resolve()
-    target = (workspace / (path or ".")).resolve()
-    try:
-        _ = target.relative_to(workspace)
-    except ValueError as exc:
-        raise ValueError(f"Path escapes workspace: {path}") from exc
+    target = WorkspacePathPolicy(workspace).validate_model_read(path or ".")
     return workspace, target
 
 
@@ -94,12 +92,12 @@ def code_references(
         if not base.exists():
             return f"Error: path not found: {path}"
         service = workspace_repo_intelligence(
-            workspace, max_files=max(1, min(int(config.REPO_MAP_MAX_FILES), 500)),
+            workspace, max_files=max(1, min(current_run_settings().repo_map_max_files, 500)),
         )
         index = service.index if service is not None else PersistentCodeIndex(workspace)
         entries, reused, _omitted = _build_index(
             workspace, base,
-            max_files=max(1, min(int(config.REPO_MAP_MAX_FILES), 500)),
+            max_files=max(1, min(current_run_settings().repo_map_max_files, 500)),
             refresh=bool(refresh),
         )
         limit = max(1, min(int(max_results), 1000))
@@ -120,11 +118,11 @@ def code_references(
         alternatives = ", ".join(
             str(item["symbol_id"]) for item in exc.alternatives[:8]
         )
-        return f"Error: {exc}. Candidates: {alternatives}"
+        return format_public_error(exc, context=f"Candidates: {alternatives}. ")
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def _rank_symbol(
@@ -157,8 +155,9 @@ def repo_map(
         if base.is_file() and not is_supported_source(base):
             return f"Error: repo_map does not support source file: {path}"
 
-        file_limit = int(max_files or config.REPO_MAP_MAX_FILES)
-        symbol_limit = int(max_symbols or config.REPO_MAP_MAX_SYMBOLS)
+        settings = current_run_settings()
+        file_limit = int(max_files or settings.repo_map_max_files)
+        symbol_limit = int(max_symbols or settings.repo_map_max_symbols)
         file_limit = max(1, min(file_limit, 500))
         symbol_limit = max(1, min(symbol_limit, 5000))
         entries, reused, omitted = _build_index(
@@ -267,9 +266,9 @@ def repo_map(
             header.extend(f"  - {item}" for item in parse_errors[:5])
         return "\n".join(header + rows + semantic_rows)
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

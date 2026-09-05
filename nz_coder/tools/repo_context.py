@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from nz_coder.intelligence.service import workspace_repo_intelligence
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.runtime.core.execution_context import repo_intelligence_mode
 from nz_coder.tools import register
@@ -52,7 +53,7 @@ def repo_context(
         encoded = json.dumps(result, ensure_ascii=False, indent=2, default=str)
         return encoded[:40_000] + ("\n[truncated]" if len(encoded) > 40_000 else "")
     except Exception as error:
-        return f"Error: {error}"
+        return format_public_error(error)
 
 
 register(

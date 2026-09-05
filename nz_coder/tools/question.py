@@ -7,6 +7,7 @@ import json
 from typing import Callable
 import uuid
 
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.tools import ToolOutput, current_tool_call_id, register
 
 
@@ -191,7 +192,7 @@ def question(questions: list) -> str:
             metadata={"answers": reply_answers},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

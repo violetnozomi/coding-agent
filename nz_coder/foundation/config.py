@@ -1,23 +1,33 @@
 """Configuration management shared by all NZ-Coder product surfaces."""
 
-import os
 from pathlib import Path
+import re
 
-from dotenv import load_dotenv
+from nz_coder.foundation.workspace_trust import (
+    load_config_snapshot,
+)
 
-# Shell environment wins. A workspace-local .env is the installed-product
-# contract; the source-tree fallback keeps editable development compatible.
 _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 _PROJECT_ROOT = _PACKAGE_ROOT.parent
 WORKSPACE_ENV_PATH = Path.cwd() / ".env"
 SOURCE_ENV_PATH = _PROJECT_ROOT / ".env"
-load_dotenv(WORKSPACE_ENV_PATH, override=False)
-if SOURCE_ENV_PATH != WORKSPACE_ENV_PATH:
-    load_dotenv(SOURCE_ENV_PATH, override=False)
+CONFIG_SNAPSHOT = load_config_snapshot(Path.cwd())
+CONFIG_ISSUES = CONFIG_SNAPSHOT.issues
+
+_INTEGER_DEFAULT = re.compile(r"[+-]?\d+")
+_FLOAT_DEFAULT = re.compile(
+    r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+)
 
 
 def get(key: str, default: str = None) -> str:
-    return os.environ.get(key, default)
+    """Read one startup-snapshot value with import-safe numeric fallback."""
+    fallback = "" if default is None else str(default)
+    if _INTEGER_DEFAULT.fullmatch(fallback):
+        return str(CONFIG_SNAPSHOT.get_int(key, int(fallback)))
+    if _FLOAT_DEFAULT.fullmatch(fallback) and any(char in fallback for char in ".eE"):
+        return str(CONFIG_SNAPSHOT.get_float(key, float(fallback)))
+    return CONFIG_SNAPSHOT.get(key, fallback)
 
 
 API_KEY = get("API_KEY", "")
@@ -142,6 +152,10 @@ MAX_PARALLEL_TASKS = int(get("MAX_PARALLEL_TASKS", "4"))
 MAX_VERIFICATION_GATE_PROMPTS = int(get("MAX_VERIFICATION_GATE_PROMPTS", "2"))
 BASH_TIMEOUT_SECONDS = int(get("BASH_TIMEOUT_SECONDS", "120"))
 PROCESS_BUFFER_BYTES = int(get("NZ_PROCESS_BUFFER_BYTES", str(2 * 1024 * 1024)))
+BASH_OUTPUT_HARD_LIMIT_BYTES = max(
+    PROCESS_BUFFER_BYTES,
+    int(get("NZ_BASH_OUTPUT_HARD_LIMIT_BYTES", str(64 * 1024 * 1024))),
+)
 PROCESS_READ_MAX_BYTES = int(get("NZ_PROCESS_READ_MAX_BYTES", str(64 * 1024)))
 PROCESS_WRITE_MAX_BYTES = int(get("NZ_PROCESS_WRITE_MAX_BYTES", str(64 * 1024)))
 PROCESS_MAX_PER_WORKSPACE = int(get("NZ_PROCESS_MAX_PER_WORKSPACE", "16"))

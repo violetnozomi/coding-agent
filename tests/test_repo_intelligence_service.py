@@ -1,9 +1,10 @@
 """Workspace-owned repository intelligence prewarm contracts."""
 from __future__ import annotations
 
-import time
 import multiprocessing
+import shutil
 import threading
+import time
 import warnings
 
 
@@ -187,6 +188,21 @@ def test_service_coalesces_burst_events_before_incremental_update(tmp_path) -> N
 
     assert _wait_until(lambda: service.symbol_context("value")["definition"] is not None)
     assert _wait_until(lambda: service.state.incremental_batches == 1)
+    service.close()
+
+
+def test_poll_watcher_exits_cleanly_when_workspace_is_removed(tmp_path) -> None:
+    """Temporary workspaces may disappear before delayed watcher settlement."""
+    from nz_coder.intelligence.service import RepoIntelligenceService
+
+    workspace = tmp_path / "ephemeral"
+    workspace.mkdir()
+    service = RepoIntelligenceService(workspace)
+    service.prewarm(max_files=20).result(timeout=5)
+    shutil.rmtree(workspace)
+
+    service._poll_watch_loop(0.01, 0.0, 20, {})
+
     service.close()
 
 

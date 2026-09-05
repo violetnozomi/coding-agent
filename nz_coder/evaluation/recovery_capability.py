@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 import shlex
 import sys
@@ -14,6 +15,7 @@ from nz_coder.permissions import PermissionManager
 from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.agent.agent_resilience import ProviderAttemptController
 from nz_coder.runtime.execution.tool_executor import ToolExecutor
+from nz_coder.runtime.core.run_settings import current_run_settings, scoped_run_settings
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state.transaction import TransactionManager
 from nz_coder.tools.bash import run_bash
@@ -62,7 +64,11 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
     runs.append({
         "case_id": "R2", "failure": "tool_exception", "expected_action": "return_repair_evidence",
         "observed_action": "return_repair_evidence" if (
-            tool_exception.dispatch_failed and "fault fixture" in tool_exception.output
+            tool_exception.dispatch_failed
+            and tool_exception.output == (
+                "Error: read_file failed: An internal error occurred."
+            )
+            and "fault fixture" not in tool_exception.output
         ) else "incorrect",
         "evidence": tool_exception.output,
     })
@@ -83,7 +89,8 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
         transaction = TransactionManager()
         transaction.begin()
         transaction.track("partial.txt")
-        partial.write_text("partial\n", encoding="utf-8")
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+        WorkspaceFileAccess(workspace).write_text("partial.txt", "partial\n", transaction=transaction)
         rollback = transaction.rollback()
     runs.append({
         "case_id": "R4", "failure": "partial_write", "expected_action": "rollback",
@@ -102,11 +109,12 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
 
     source = workspace / "app.py"
     source.write_text("VALUE = 1\n", encoding="utf-8")
-    with patch(
-        "nz_coder.lsp.write_diagnostics.config.LSP_ENABLED", True,
-    ), patch(
-        "nz_coder.lsp.write_diagnostics.config.LSP_WRITE_DIAGNOSTICS_ENABLED", True,
-    ), patch(
+    diagnostic_settings = replace(
+        current_run_settings(),
+        lsp_enabled=True,
+        lsp_write_diagnostics_enabled=True,
+    )
+    with scoped_run_settings(diagnostic_settings), patch(
         "nz_coder.lsp.write_diagnostics.get_client_for_file",
         side_effect=RuntimeError("LSP unavailable"),
     ):

@@ -26,6 +26,22 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _trust_project_control(workspace: Path, monkeypatch) -> None:
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    trust_path = workspace.parent / f"{workspace.name}-control-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore(trust_path).trust(
+        workspace,
+        "workspace-control",
+        snapshot.control_fingerprint,
+    )
+
+
 def test_layered_configs_replace_by_name_and_require_project_command_trust(
     tmp_path,
     monkeypatch,
@@ -48,13 +64,14 @@ def test_layered_configs_replace_by_name_and_require_project_command_trust(
             "project-only": {"command": ["project-only"]},
         }
     })
+    _trust_project_control(workspace, monkeypatch)
     monkeypatch.setattr(
         config,
         "MCP_SERVERS_JSON",
         json.dumps({"servers": {"shared": {"command": ["environment-command"]}}}),
     )
 
-    configs = load_mcp_server_configs(workspace=workspace)
+    configs = load_mcp_server_configs(workspace=workspace, compatibility_mode=True)
     by_name = {server.name: server for server in configs}
 
     assert by_name["shared"].command == ("environment-command",)
@@ -70,7 +87,7 @@ def test_layered_configs_replace_by_name_and_require_project_command_trust(
     store.trust(workspace, project_server.name, project_server.fingerprint)
     trusted = {
         server.name: server
-        for server in load_mcp_server_configs(workspace=workspace)
+        for server in load_mcp_server_configs(workspace=workspace, compatibility_mode=True)
     }["project-only"]
     assert trusted.trusted is True
     assert stat_mode(trust_path) == 0o600
@@ -80,11 +97,76 @@ def test_layered_configs_replace_by_name_and_require_project_command_trust(
             "project-only": {"command": ["changed-command"]},
         }
     })
+    _trust_project_control(workspace, monkeypatch)
     changed = {
         server.name: server
-        for server in load_mcp_server_configs(workspace=workspace)
+        for server in load_mcp_server_configs(workspace=workspace, compatibility_mode=True)
     }["project-only"]
     assert changed.fingerprint != project_server.fingerprint
+    assert changed.trusted is False
+
+
+def test_project_remote_mcp_requires_trust_and_security_changes_invalidate_it(
+    tmp_path,
+    monkeypatch,
+):
+    from nz_coder.foundation import config
+    from nz_coder.mcp import MCPTrustStore, load_mcp_server_configs
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _, project, trust_path = _configure_paths(monkeypatch, config, tmp_path)
+    _write_json(project, {
+        "servers": {
+            "remote": {
+                "type": "remote",
+                "url": "https://mcp.example.test/service",
+                "header_env": {"Authorization": "MCP_REMOTE_TOKEN"},
+                "tool_effects": {"lookup": "read"},
+            }
+        }
+    })
+    _trust_project_control(workspace, monkeypatch)
+
+    server = load_mcp_server_configs(workspace=workspace, compatibility_mode=True)[0]
+    assert server.source == "project"
+    assert server.trusted is False
+    MCPTrustStore(trust_path).trust(workspace, server.name, server.fingerprint)
+    assert load_mcp_server_configs(workspace=workspace, compatibility_mode=True)[0].trusted is True
+
+    _write_json(project, {
+        "servers": {
+            "remote": {
+                "type": "remote",
+                "url": "https://other.example.test/service",
+                "header_env": {"Authorization": "MCP_REMOTE_TOKEN"},
+                "tool_effects": {"lookup": "read"},
+            }
+        }
+    })
+    assert load_mcp_server_configs(workspace=workspace, compatibility_mode=True)[0].trusted is False
+
+
+def test_project_mcp_executable_change_invalidates_trust(tmp_path, monkeypatch):
+    from nz_coder.foundation import config
+    from nz_coder.mcp import MCPTrustStore, load_mcp_server_configs
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    executable = workspace / "mcp-server"
+    executable.write_text("version-one\n", encoding="utf-8")
+    _, project, trust_path = _configure_paths(monkeypatch, config, tmp_path)
+    _write_json(project, {
+        "servers": {"local": {"command": ["./mcp-server"]}}
+    })
+    _trust_project_control(workspace, monkeypatch)
+    server = load_mcp_server_configs(workspace=workspace, compatibility_mode=True)[0]
+    MCPTrustStore(trust_path).trust(workspace, server.name, server.fingerprint)
+    assert load_mcp_server_configs(workspace=workspace, compatibility_mode=True)[0].trusted is True
+
+    executable.write_text("version-two\n", encoding="utf-8")
+    changed = load_mcp_server_configs(workspace=workspace, compatibility_mode=True)[0]
+    assert changed.fingerprint != server.fingerprint
     assert changed.trusted is False
 
 
@@ -103,12 +185,7 @@ def test_project_config_symlink_escape_is_rejected_before_read(tmp_path, monkeyp
     (workspace / ".nz-coder").symlink_to(outside, target_is_directory=True)
     _configure_paths(monkeypatch, config, tmp_path)
 
-    try:
-        load_mcp_server_configs(workspace=workspace)
-    except ValueError as exc:
-        assert "escapes workspace" in str(exc)
-    else:
-        raise AssertionError("project MCP config symlink escape was not rejected")
+    assert load_mcp_server_configs(workspace=workspace, compatibility_mode=True) == []
 
 
 def test_runtime_reconcile_add_change_remove_and_untrusted_status(tmp_path):
@@ -183,13 +260,16 @@ def test_real_project_stdio_server_trust_and_file_reconcile(tmp_path, monkeypatc
             }
         }
     })
+    _trust_project_control(workspace, monkeypatch)
 
-    runtime = MCPRuntime.configured(workspace=workspace).start()
+    runtime = MCPRuntime.configured(
+        workspace=workspace, compatibility_mode=True,
+    ).start()
     try:
         assert runtime.status_summary()[0]["status"] == "untrusted"
         assert runtime.tool_bindings() == []
 
-        server = load_mcp_server_configs(workspace=workspace)[0]
+        server = load_mcp_server_configs(workspace=workspace, compatibility_mode=True)[0]
         MCPTrustStore(trust_path).trust(workspace, "echo", server.fingerprint)
         bindings = runtime.tool_bindings()
 
@@ -208,11 +288,16 @@ def test_real_project_stdio_server_trust_and_file_reconcile(tmp_path, monkeypatc
                 }
             }
         })
+        assert {item["name"] for item in runtime.tool_bindings()} >= {
+            "mcp_echo_echo"
+        }
+        assert runtime.reload_config() is True
         assert runtime.tool_bindings() == []
         assert runtime.status_summary()[0]["status"] == "untrusted"
         assert process is not None and process.poll() is not None
 
         project.unlink()
+        assert runtime.reload_config() is True
         assert runtime.tool_bindings() == []
         assert runtime.status_summary() == []
     finally:
@@ -274,17 +359,21 @@ def test_mcp_cli_lists_trusts_and_untrusts_project_command(
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    _, project, _ = _configure_paths(monkeypatch, config, tmp_path)
+    (workspace / "server.py").write_text("print('ok')\n", encoding="utf-8")
+    user, project, trust = _configure_paths(monkeypatch, config, tmp_path)
+    monkeypatch.setenv("NZ_MCP_USER_CONFIG", str(user))
+    monkeypatch.setenv("NZ_MCP_TRUST_STORE", str(trust))
     monkeypatch.chdir(workspace)
     _write_json(project, {
         "servers": {"local": {"command": ["python3", "server.py"]}}
     })
+    _trust_project_control(workspace, monkeypatch)
 
     assert mcp_main(["list"]) == 0
     assert "source=project" in capsys.readouterr().out
     assert mcp_main(["trust", "local"]) == 0
     assert "trusted" in capsys.readouterr().out
-    assert load_mcp_server_configs(workspace=workspace)[0].trusted is True
+    assert load_mcp_server_configs(workspace=workspace, compatibility_mode=True)[0].trusted is True
     assert mcp_main(["untrust", "local"]) == 0
     assert "untrusted" in capsys.readouterr().out
-    assert load_mcp_server_configs(workspace=workspace)[0].trusted is False
+    assert load_mcp_server_configs(workspace=workspace, compatibility_mode=True)[0].trusted is False

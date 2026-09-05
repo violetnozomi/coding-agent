@@ -46,6 +46,14 @@ class TrustedPublicMessage:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+class PublicInputError(ValueError):
+    """A local, predefined input-validation failure safe for public display."""
+
+    def __init__(self, message: str, *, code: str = "invalid_input"):
+        self.public_error = _normalized_public_error(code, message, False, {})
+        super().__init__(self.public_error.message)
+
+
 class PublicRuntimeError(RuntimeError):
     """Exception wrapper that cannot reveal a private cause via ``str``."""
 
@@ -70,7 +78,7 @@ def to_public_error(error: object) -> PublicError:
             error.retryable,
             error.metadata,
         )
-    if isinstance(error, PublicRuntimeError):
+    if isinstance(error, (PublicRuntimeError, PublicInputError)):
         return to_public_error(error.public_error)
     # Protocol is a lower layer than the runtime. Guardrail exceptions expose
     # a stable structural contract, so recognize that contract without a
@@ -122,7 +130,9 @@ def to_public_error(error: object) -> PublicError:
 
 def public_error_message(value: object) -> str:
     """Read a safe message from a projected wire payload."""
-    if isinstance(value, (PublicError, TrustedPublicMessage, PublicRuntimeError)):
+    if isinstance(value, (
+        PublicError, TrustedPublicMessage, PublicRuntimeError, PublicInputError,
+    )):
         return to_public_error(value).message
     if isinstance(value, dict):
         public = public_error_from_wire(value)
@@ -134,6 +144,17 @@ def public_error_message(value: object) -> str:
             if public is not None:
                 return public.message
     return "Request failed."
+
+
+def format_public_error(
+    error: object,
+    *,
+    prefix: str = "Error: ",
+    context: str = "",
+) -> str:
+    """Format one projected failure for legacy string-based public surfaces."""
+    public = to_public_error(error)
+    return f"{prefix}{context}{public.message}"
 
 
 def public_error_from_wire(value: object) -> PublicError | None:

@@ -130,6 +130,18 @@ def _extract_subagent_session_id(result: str) -> str:
     return result[start:end]
 
 
+def _worktree_root(workspace: Path) -> Path:
+    from nz_coder.runtime.worktree import WorktreeManager
+
+    return WorktreeManager(workspace).worktree_dir
+
+
+def _subagent_state_root(workspace: Path, parent: str = "main-session") -> Path:
+    from nz_coder.runtime.agent.subagent import _subagent_root
+
+    return _subagent_root(parent, workspace)
+
+
 def test_subagent_exposes_expected_tool_tiers():
     from nz_coder.runtime.agent.subagent import _subagent_tools
 
@@ -228,9 +240,11 @@ def test_subagent_injects_parent_context(monkeypatch):
     config.SUBAGENT_TIMEOUT_SECONDS = 30
     scratchpad.clear()
     try:
-        state_dir = tmp / ".nz-coder"
-        state_dir.mkdir(exist_ok=True)
-        (state_dir / "runtime_state.json").write_text(
+        from nz_coder.state.sessions import session_runtime_state_path
+
+        state_file = session_runtime_state_path("main-session")
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(
             json.dumps({
                 "active": True,
                 "turn_count": 3,
@@ -499,7 +513,7 @@ def test_subagent_gets_one_same_session_verification_repair(monkeypatch):
                 canonical["session_id"],
                 "verification-repair-parent",
             ),
-            tmp / state["worktree_rel"],
+                Path(state["worktree"]["path"]),
         ))
         assert session is not None
         repairs = [
@@ -804,10 +818,7 @@ def test_subagent_persists_usage_and_returns_only_invocation_cost_delta(monkeypa
         assert first.metadata["child_total_cost"] == pytest.approx(0.25)
         assert second.metadata["child_cost_delta"] == pytest.approx(0.10)
         assert second.metadata["child_total_cost"] == pytest.approx(0.35)
-        state_path = (
-            tmp / ".nz-coder/sessions/_artifacts/main-session/subagents"
-            / child_session / "state.json"
-        )
+        state_path = _subagent_state_root(tmp) / child_session / "state.json"
         persisted = json.loads(state_path.read_text(encoding="utf-8"))
         assert "cost" not in persisted
         assert "cost_known" not in persisted
@@ -1014,7 +1025,7 @@ def test_fork_clones_write_child_changed_and_deleted_files():
         )
         source["status"] = "completed"
         source["changed_files"] = ["app.py", "deleted.py"]
-        old_worktree = tmp / ".nz-coder" / "worktrees" / source["session_id"]
+        old_worktree = _worktree_root(tmp) / source["session_id"]
         old_worktree.mkdir(parents=True)
         (old_worktree / "app.py").write_text("child\n", encoding="utf-8")
         source["worktree"] = {
@@ -1064,7 +1075,7 @@ def test_fork_child_overlay_failure_preserves_source_and_removes_clone(monkeypat
         )
         source["status"] = "completed"
         source["changed_files"] = ["app.py"]
-        old_worktree = tmp / ".nz-coder" / "worktrees" / source["session_id"]
+        old_worktree = _worktree_root(tmp) / source["session_id"]
         old_worktree.mkdir(parents=True)
         old_file = old_worktree / "app.py"
         old_file.write_text("child\n", encoding="utf-8")
@@ -1100,10 +1111,7 @@ def test_fork_child_overlay_failure_preserves_source_and_removes_clone(monkeypat
         assert parent_messages[0]["_nz_parts"][0]["state"]["metadata"][
             "child_session_id"
         ] == source["session_id"]
-        worktrees = [
-            path for path in (tmp / ".nz-coder" / "worktrees").iterdir()
-            if path.is_dir()
-        ]
+        worktrees = [path for path in _worktree_root(tmp).iterdir() if path.is_dir()]
         assert worktrees == [old_worktree]
     finally:
         subagent.set_parent_session(None)
@@ -1425,7 +1433,7 @@ def test_subagent_reports_completed_worktree_conflict(monkeypatch):
     config.SUBAGENT_TIMEOUT_SECONDS = 30
     try:
         subagent.set_parent_session("main-session")
-        sibling_dir = tmp / ".nz-coder" / "worktrees" / "sibling"
+        sibling_dir = _worktree_root(tmp) / "sibling"
         sibling_dir.mkdir(parents=True, exist_ok=True)
         sibling = subagent._new_subagent_state("main-session", "general-purpose", None)
         sibling["status"] = "completed"
@@ -1438,10 +1446,10 @@ def test_subagent_reports_completed_worktree_conflict(monkeypatch):
             "head_commit": "abc123",
             "mode": "git",
         }
-        sibling["worktree_rel"] = str(sibling_dir.relative_to(tmp))
+        sibling["worktree_rel"] = f"user-cache://worktrees/{sibling['session_id']}"
         subagent._save_subagent_state("main-session", sibling, tmp)
 
-        child_dir = tmp / ".nz-coder" / "worktrees" / "child"
+        child_dir = _worktree_root(tmp) / "child"
         child_dir.mkdir(parents=True, exist_ok=True)
 
         def fake_create(self, worktree_id: str, base_ref: str = "HEAD"):
@@ -1535,7 +1543,7 @@ def test_subagent_persists_worktree_and_child_trace(monkeypatch):
     config.TRACE_ENABLED = True
     parent_tracer = FakeParentTracer()
     try:
-        wt_dir = tmp / ".nz-coder" / "worktrees" / "subagent-test"
+        wt_dir = _worktree_root(tmp) / "subagent-test"
         wt_dir.mkdir(parents=True, exist_ok=True)
 
         def fake_create(self, worktree_id: str, base_ref: str = "HEAD"):
@@ -1566,7 +1574,7 @@ def test_subagent_persists_worktree_and_child_trace(monkeypatch):
             subagent._subagent_session_path("main-session", sub_session_id, tmp).read_text(encoding="utf-8")
         )
         assert state["worktree"]["mode"] == "git"
-        assert state["worktree_rel"].startswith(".nz-coder/worktrees/")
+        assert state["worktree_rel"].startswith("user-cache://worktrees/")
         assert Path(tmp / state["trace_rel"]).exists()
         trace_rows = [
             json.loads(line)

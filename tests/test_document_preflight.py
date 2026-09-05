@@ -246,9 +246,12 @@ def test_document_reader_cancellation_settles_worker_without_cache(
 
     asyncio.run(scenario())
 
+    from nz_coder.foundation.user_paths import user_storage_layout
+
     cache = (
-        tmp_path / ".nz-coder" / "sessions" / "session-document-cancel"
-        / "documents" / ".cache"
+        user_storage_layout(tmp_path).workspace_cache
+        / "documents"
+        / "session-document-cancel"
     )
     assert not cache.exists() or not list(cache.glob("*.md"))
 

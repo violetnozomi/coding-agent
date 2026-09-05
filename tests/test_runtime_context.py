@@ -8,6 +8,7 @@ from threading import Barrier, Lock, get_ident
 from types import MethodType
 
 from nz_coder.foundation import config
+from nz_coder.foundation.user_paths import user_storage_layout
 from nz_coder.state.memory import MemoryManager, bind_memory_manager, current_memory_manager
 from nz_coder.foundation.async_utils import start_background_coro
 from nz_coder.runtime.execution.loop import (
@@ -57,7 +58,9 @@ def test_workspace_and_tool_state_are_isolated_across_threads(tmp_path):
         with scoped_workdir(root), bind_tool_state(txn=txn, change_tracker=tracker):
             barrier.wait()
             assert current_workdir() == root.resolve()
-            assert current_derived_path("SESSION_DIR") == root.resolve() / ".nz-coder" / "sessions"
+            assert current_derived_path("SESSION_DIR") == (
+                user_storage_layout(root).workspace_state / "sessions"
+            )
             assert _get_txn() is txn
             assert _get_change_tracker() is tracker
             result = write_file("shared.txt", name)
@@ -290,6 +293,7 @@ def test_agent_loops_bind_their_own_runtime_context(tmp_path):
         expected = []
         for name in ("alpha", "beta"):
             root = tmp_path / name
+            root.mkdir()
             txn = TransactionManager()
             tracker = _Tracker()
             agent = AgentLoop.__new__(AgentLoop)

@@ -30,7 +30,8 @@ class ProductionRuntimeHost:
     """Bind run-scoped resources, then enter the one shared AgentRunner."""
 
     async def run(self, agent, messages: list, on_tool=None, on_text=None,
-                  on_token=None, stream: bool = True, execute=None) -> dict:
+                  on_token=None, stream: bool = True, execute=None,
+                  run_control=None) -> dict:
         if not callable(execute):
             raise TypeError("ProductionRuntimeHost requires an execution callback")
         if not hasattr(agent, "event_bus"):
@@ -49,19 +50,45 @@ class ProductionRuntimeHost:
         from nz_coder.state.memory import bind_memory_manager
         from nz_coder.mcp import scoped_mcp_runtime
         from nz_coder.state.skills import bind_skill_loader
+        from nz_coder.foundation.workspace_trust import (
+            current_config_snapshot,
+            scoped_config_snapshot,
+        )
         from nz_coder.runtime.agent.subagent import scoped_parent_context
+        from nz_coder.runtime.core.run_settings import RunSettings, scoped_run_settings
         from nz_coder.tools.files import bind_tool_state
 
+        if run_control is None:
+            prepare = getattr(agent, "prepare_run_control", None)
+            if callable(prepare) and hasattr(agent, "_run_control_lock"):
+                run_control = prepare()
         if not hasattr(agent, "_mcp_runtime_lock"):
             agent._mcp_runtime_lock = threading.Lock()
             agent._mcp_runtime = None
+        run_config_snapshot = (
+            getattr(run_control, "config_snapshot", None)
+            or getattr(agent, "config_snapshot", None)
+        )
+        if run_config_snapshot is None:
+            run_config_snapshot = current_config_snapshot(agent.workdir)
+            agent.config_snapshot = run_config_snapshot
+        run_settings = (
+            getattr(run_control, "run_settings", None)
+            or getattr(agent, "run_settings", None)
+            or RunSettings.from_snapshot(run_config_snapshot)
+        )
         with agent._mcp_runtime_lock:
-            if agent._mcp_runtime is None:
+            if run_control is not None:
+                agent._mcp_runtime = run_control.mcp_runtime
+            elif agent._mcp_runtime is None:
                 runtime_factory = getattr(agent, "_mcp_runtime_factory", MCPRuntime)
                 agent._mcp_runtime = (
                     runtime_factory([], workspace=agent.workdir)
                     if getattr(agent, "tool_allowlist", None) is not None
-                    else runtime_factory.configured(workspace=agent.workdir)
+                    else runtime_factory.configured(
+                        workspace=agent.workdir,
+                        config_snapshot=run_config_snapshot,
+                    )
                 )
                 set_change_handler = getattr(agent._mcp_runtime, "set_change_handler", None)
                 if callable(set_change_handler):
@@ -77,6 +104,8 @@ class ProductionRuntimeHost:
             await to_thread_settled(mcp_runtime.start)
             with ExitStack() as stack:
                 stack.enter_context(scoped_workdir(agent.workdir))
+                stack.enter_context(scoped_config_snapshot(run_config_snapshot))
+                stack.enter_context(scoped_run_settings(run_settings))
                 stack.enter_context(scoped_broad_test_guard())
                 stack.enter_context(scoped_declared_test_scopes())
                 stack.enter_context(scoped_session(agent.session_id))
@@ -108,6 +137,7 @@ class ProductionRuntimeHost:
                     agent_id=agent.agent_id,
                     trace_id=agent.trace_id,
                     model_id=agent._active_model_id(),
+                    config_snapshot=run_config_snapshot,
                 ))
                 mcp_status = mcp_runtime.status_summary()
                 if mcp_status:
@@ -131,6 +161,10 @@ class ProductionRuntimeHost:
                 "error": public_error.to_dict(),
             })
             raise
+        finally:
+            retire = getattr(agent, "retire_run_control", None)
+            if run_control is not None and callable(retire):
+                retire(run_control)
 
 
 def _last_user_message_position(messages: list) -> int:

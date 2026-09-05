@@ -5,12 +5,16 @@ import ipaddress
 import math
 import re
 import zlib
+from contextlib import contextmanager
+from contextvars import ContextVar
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
+from nz_coder.foundation.network_policy import NetworkTargetPolicy
 from nz_coder.protocol.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
+from nz_coder.protocol.public_error import PublicInputError, format_public_error
 from nz_coder.tools import ToolOutput, register
 
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -23,25 +27,43 @@ _BLOCK_TAGS = frozenset({
     "header", "main", "nav", "p", "section", "table", "tbody", "td",
     "tfoot", "th", "thead", "tr",
 })
+_NETWORK_POLICY: ContextVar[NetworkTargetPolicy | None] = ContextVar(
+    "nz_coder_webfetch_network_policy",
+    default=None,
+)
+
+
+@contextmanager
+def scoped_webfetch_network_policy(policy: NetworkTargetPolicy):
+    """Inject a policy for host tests; this is not part of the model tool schema."""
+    token = _NETWORK_POLICY.set(policy)
+    try:
+        yield
+    finally:
+        _NETWORK_POLICY.reset(token)
+
+
+def _current_network_policy() -> NetworkTargetPolicy:
+    return _NETWORK_POLICY.get() or NetworkTargetPolicy()
 
 
 def _normalize_url(value: str) -> str:
     """Return one absolute HTTP(S) URL with an ASCII hostname."""
     raw = str(value or "").strip()
     if not raw or any(ord(character) < 0x20 for character in raw):
-        raise ValueError("URL must be a non-empty HTTP(S) URL")
+        raise PublicInputError("URL must be a non-empty HTTP(S) URL")
     parsed = urlsplit(raw)
     if parsed.scheme.lower() not in {"http", "https"}:
-        raise ValueError("URL must start with http:// or https://")
+        raise PublicInputError("URL must start with http:// or https://")
     if not parsed.hostname:
-        raise ValueError("URL must include a hostname")
+        raise PublicInputError("URL must include a hostname")
     if parsed.username is not None or parsed.password is not None:
-        raise ValueError("URL cannot contain credentials")
+        raise PublicInputError("URL cannot contain credentials")
     try:
         port = parsed.port
         hostname = parsed.hostname.encode("idna").decode("ascii")
     except (UnicodeError, ValueError) as exc:
-        raise ValueError("URL contains an invalid hostname or port") from exc
+        raise PublicInputError("URL contains an invalid hostname or port") from exc
     if ":" in hostname and not hostname.startswith("["):
         hostname = f"[{hostname}]"
     netloc = hostname + (f":{port}" if port is not None else "")
@@ -51,9 +73,14 @@ def _normalize_url(value: str) -> str:
 class _SafeRedirectHandler(HTTPRedirectHandler):
     """Keep redirects inside the same HTTP(S)-only URL contract."""
 
+    def __init__(self, policy: NetworkTargetPolicy):
+        super().__init__()
+        self._policy = policy
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
         try:
             normalized = _normalize_url(urljoin(req.full_url, newurl))
+            self._policy.validate_url(normalized)
         except ValueError as exc:
             raise URLError(str(exc)) from exc
         return super().redirect_request(req, fp, code, msg, headers, normalized)
@@ -152,13 +179,13 @@ def _bounded_decompress(data: bytes, encoding: str) -> bytes:
     elif selected == "deflate":
         decoder = zlib.decompressobj()
     else:
-        raise ValueError(f"Unsupported content encoding: {encoding}")
+        raise PublicInputError(f"Unsupported content encoding: {encoding}")
     output = decoder.decompress(data, MAX_RESPONSE_BYTES + 1)
     if decoder.unconsumed_tail or len(output) > MAX_RESPONSE_BYTES:
-        raise ValueError("Response too large (exceeds 5MB limit)")
+        raise PublicInputError("Response too large (exceeds 5MB limit)")
     output += decoder.flush(MAX_RESPONSE_BYTES + 1 - len(output))
     if len(output) > MAX_RESPONSE_BYTES:
-        raise ValueError("Response too large (exceeds 5MB limit)")
+        raise PublicInputError("Response too large (exceeds 5MB limit)")
     return output
 
 
@@ -183,9 +210,25 @@ def _opener_for(url: str):
         loopback = ipaddress.ip_address(hostname).is_loopback
     except ValueError:
         loopback = hostname.lower() == "localhost"
+    policy = _current_network_policy()
     if loopback:
-        return build_opener(ProxyHandler({}), _SafeRedirectHandler())
-    return build_opener(_SafeRedirectHandler())
+        return build_opener(ProxyHandler({}), _SafeRedirectHandler(policy))
+    return build_opener(_SafeRedirectHandler(policy))
+
+
+def _validate_response_peer(response, policy: NetworkTargetPolicy) -> None:  # noqa: ANN001
+    """Best-effort peer validation for urllib response implementations."""
+    current = response
+    for attribute in ("fp", "raw", "_sock"):
+        current = getattr(current, attribute, None)
+        if current is None:
+            return
+    getpeername = getattr(current, "getpeername", None)
+    if not callable(getpeername):
+        return
+    peer = getpeername()
+    if isinstance(peer, tuple) and peer:
+        policy.validate_ip(str(peer[0]))
 
 
 def webfetch(
@@ -197,20 +240,22 @@ def webfetch(
     try:
         selected_format = str(format or "markdown").strip().lower()
         if selected_format not in _FORMATS:
-            raise ValueError("format must be one of: text, markdown, html")
+            raise PublicInputError("format must be one of: text, markdown, html")
         if timeout is None:
             timeout_seconds = DEFAULT_TIMEOUT_SECONDS
         elif isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
-            raise ValueError("timeout must be a number of seconds")
+            raise PublicInputError("timeout must be a number of seconds")
         else:
             timeout_seconds = float(timeout)
             if not math.isfinite(timeout_seconds):
-                raise ValueError("timeout must be a positive finite number")
+                raise PublicInputError("timeout must be a positive finite number")
             if timeout_seconds <= 0:
-                raise ValueError("timeout must be greater than zero")
+                raise PublicInputError("timeout must be greater than zero")
             timeout_seconds = min(timeout_seconds, MAX_TIMEOUT_SECONDS)
 
         normalized_url = _normalize_url(url)
+        network_policy = _current_network_policy()
+        network_policy.validate_url(normalized_url)
         request = Request(
             normalized_url,
             headers={
@@ -227,6 +272,7 @@ def webfetch(
         )
         opener = _opener_for(normalized_url)
         with opener.open(request, timeout=timeout_seconds) as response:
+            _validate_response_peer(response, network_policy)
             content_length = response.headers.get("Content-Length")
             if content_length:
                 try:
@@ -234,10 +280,10 @@ def webfetch(
                 except ValueError:
                     declared_size = 0
                 if declared_size > MAX_RESPONSE_BYTES:
-                    raise ValueError("Response too large (exceeds 5MB limit)")
+                    raise PublicInputError("Response too large (exceeds 5MB limit)")
             data = response.read(MAX_RESPONSE_BYTES + 1)
             if len(data) > MAX_RESPONSE_BYTES:
-                raise ValueError("Response too large (exceeds 5MB limit)")
+                raise PublicInputError("Response too large (exceeds 5MB limit)")
             data = _bounded_decompress(
                 data,
                 str(response.headers.get("Content-Encoding") or ""),
@@ -245,6 +291,7 @@ def webfetch(
             content_type = str(response.headers.get("Content-Type") or "")
             mime = content_type.split(";", 1)[0].strip().lower()
             final_url = _normalize_url(str(response.geturl()))
+            network_policy.validate_url(final_url)
 
         title = f"{final_url} ({content_type})"
         if mime in SUPPORTED_IMAGE_MIMES:
@@ -270,11 +317,11 @@ def webfetch(
     except HTTPError as exc:
         return f"Error: HTTP {exc.code} while fetching URL"
     except URLError as exc:
-        return f"Error: Request failed: {exc.reason}"
+        return format_public_error(exc, context="Request failed: ")
     except (OSError, TimeoutError, ValueError, zlib.error) as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: {type(exc).__name__}: {exc}"
+        return format_public_error(exc)
 
 
 register(

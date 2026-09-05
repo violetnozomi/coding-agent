@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from nz_coder.tools import register
+from nz_coder.protocol.public_error import to_public_error
 
 _items_by_session: dict[tuple[str, str], list[dict]] = {}
 _loaded_sessions: set[tuple[str, str]] = set()
@@ -58,7 +59,7 @@ def _persist_items(session_id: str, items: list[dict]) -> str | None:
     try:
         write_session_runtime_json(path, {"version": 1, "items": items})
     except Exception as exc:
-        return str(exc)
+        return to_public_error(exc).message
     return None
 
 

@@ -314,6 +314,14 @@ class RepoIntelligenceService:
                 if self._watch_stop.is_set():
                     break
         except Exception:
+            if self._watch_stop.is_set() or not self.workspace.is_dir():
+                with self._lock:
+                    self._state = replace(self._state, watcher_backend="none")
+                self._emit(
+                    "repo_intelligence_watcher_stopped",
+                    reason="workspace-unavailable",
+                )
+                return
             # Native watcher failure is observable and degrades to a slower poll.
             with self._lock:
                 self._state = replace(self._state, watcher_backend="adaptive-polling")
@@ -351,7 +359,16 @@ class RepoIntelligenceService:
         unchanged_rounds = 0
         current_interval = interval
         while not self._watch_stop.wait(current_interval):
-            current = self._fingerprints(max_files)
+            try:
+                current = self._fingerprints(max_files)
+            except OSError:
+                with self._lock:
+                    self._state = replace(self._state, watcher_backend="none")
+                self._emit(
+                    "repo_intelligence_watcher_stopped",
+                    reason="workspace-unavailable",
+                )
+                return
             changed = {
                 path for path in set(known) | set(current)
                 if known.get(path) != current.get(path)

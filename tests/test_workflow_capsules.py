@@ -54,6 +54,20 @@ def _capsule(**overrides) -> dict:
     return create_workflow_capsule(**values)
 
 
+def _trust_project_control(workspace: Path, monkeypatch) -> None:
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    trust_path = workspace.parent / f"{workspace.name}-workflow-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore(trust_path).trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
+
+
 def test_capsule_is_json_only_versioned_and_rejects_source():
     from nz_coder.runtime.workflows.workflow_capsule import validate_workflow_capsule
 
@@ -106,7 +120,7 @@ def test_capsule_preflight_reports_version_environment_and_inventory():
     } <= requirements
 
 
-def test_capsule_discovery_project_overrides_personal_and_ignores_symlink(tmp_path):
+def test_capsule_discovery_project_overrides_personal_when_trusted(tmp_path, monkeypatch):
     from nz_coder.runtime.workflows.workflow_library import (
         discover_workflow_capsules,
         load_workflow_capsule,
@@ -117,7 +131,7 @@ def test_capsule_discovery_project_overrides_personal_and_ignores_symlink(tmp_pa
     personal = tmp_path / "personal"
     workspace.mkdir()
     personal.mkdir()
-    personal_ref = save_workflow_capsule(
+    save_workflow_capsule(
         "review", _capsule(), scope="personal",
         workspace=workspace, personal_dir=personal,
     )
@@ -125,8 +139,7 @@ def test_capsule_discovery_project_overrides_personal_and_ignores_symlink(tmp_pa
         "review", _capsule(), scope="project",
         workspace=workspace, personal_dir=personal,
     )
-    project_dir = Path(project_ref["path"]).parent
-    (project_dir / "linked.workflow.json").symlink_to(personal_ref["path"])
+    _trust_project_control(workspace, monkeypatch)
 
     refs = discover_workflow_capsules(workspace, personal)
     capsule, ref = load_workflow_capsule(
@@ -137,6 +150,81 @@ def test_capsule_discovery_project_overrides_personal_and_ignores_symlink(tmp_pa
     assert ref["source"] == "project"
     assert capsule["manifest"]["name"] == "saved-review"
     assert os.stat(project_ref["path"]).st_mode & 0o777 == 0o600
+
+
+def test_untrusted_project_workflow_is_not_discovered_or_loaded(tmp_path, monkeypatch):
+    from nz_coder.runtime.workflows.workflow_library import (
+        discover_workflow_capsules,
+        load_workflow_capsule,
+        save_workflow_capsule,
+    )
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    save_workflow_capsule("repo-only", _capsule(), workspace=workspace)
+    monkeypatch.setenv(
+        "NZ_CODER_WORKSPACE_TRUST_STORE", str(tmp_path / "empty-trust.json")
+    )
+
+    assert discover_workflow_capsules(workspace) == []
+    with pytest.raises(ValueError, match="not trusted"):
+        load_workflow_capsule("repo-only", workspace=workspace, source="project")
+
+
+def test_untrusted_project_workflow_cannot_override_personal(tmp_path, monkeypatch):
+    from nz_coder.runtime.workflows.workflow_library import (
+        load_workflow_capsule,
+        save_workflow_capsule,
+    )
+
+    workspace = tmp_path / "workspace"
+    personal = tmp_path / "personal"
+    workspace.mkdir()
+    personal.mkdir()
+    personal_manifest = _manifest()
+    personal_manifest["description"] = "personal"
+    personal_capsule = _capsule(manifest=personal_manifest)
+    project_manifest = _manifest()
+    project_manifest["description"] = "project"
+    project_capsule = _capsule(manifest=project_manifest)
+    save_workflow_capsule(
+        "review", personal_capsule, scope="personal",
+        workspace=workspace, personal_dir=personal,
+    )
+    save_workflow_capsule(
+        "review", project_capsule, scope="project",
+        workspace=workspace, personal_dir=personal,
+    )
+    monkeypatch.setenv(
+        "NZ_CODER_WORKSPACE_TRUST_STORE", str(tmp_path / "empty-trust.json")
+    )
+
+    capsule, ref = load_workflow_capsule(
+        "review", workspace=workspace, personal_dir=personal
+    )
+    assert ref["source"] == "personal"
+    assert capsule["manifest"]["description"] == "personal"
+
+
+def test_trusted_project_workflow_loads_until_exact_control_change(
+    tmp_path, monkeypatch,
+):
+    from nz_coder.runtime.workflows.workflow_library import (
+        load_workflow_capsule,
+        save_workflow_capsule,
+    )
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    ref = save_workflow_capsule("review", _capsule(), workspace=workspace)
+    _trust_project_control(workspace, monkeypatch)
+
+    _capsule_value, trusted_ref = load_workflow_capsule("review", workspace=workspace)
+    assert trusted_ref["source"] == "project"
+
+    Path(ref["path"]).write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="not found"):
+        load_workflow_capsule("review", workspace=workspace)
 
 
 def test_workflow_project_library_rejects_workspace_symlink_escape(tmp_path):
@@ -164,7 +252,8 @@ def test_workflow_capsule_rejects_nonstandard_json_numbers(tmp_path):
     with pytest.raises(ValueError, match="strict JSON"):
         save_workflow_capsule("review", capsule, workspace=tmp_path)
 
-    target = tmp_path / ".nz-coder/workflows/review.workflow.json"
+    personal = tmp_path / "personal"
+    target = personal / "review.workflow.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         json.dumps(_capsule()).replace(
@@ -175,7 +264,9 @@ def test_workflow_capsule_rejects_nonstandard_json_numbers(tmp_path):
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="invalid workflow capsule"):
-        load_workflow_capsule("review", workspace=tmp_path)
+        load_workflow_capsule(
+            "review", workspace=tmp_path, personal_dir=personal, source="personal"
+        )
 
 
 def test_workflow_exact_load_does_not_scan_the_library(tmp_path, monkeypatch):
@@ -186,6 +277,7 @@ def test_workflow_exact_load_does_not_scan_the_library(tmp_path, monkeypatch):
         _capsule(),
         workspace=tmp_path,
     )
+    _trust_project_control(tmp_path, monkeypatch)
     monkeypatch.setattr(
         workflow_library,
         "discover_workflow_capsules",
@@ -215,6 +307,7 @@ def test_saved_capsule_preflights_and_executes_through_real_runtime(
     _install_fake_child(monkeypatch, tmp_path)
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)
     save_workflow_capsule("review", _capsule(), workspace=tmp_path)
+    _trust_project_control(tmp_path, monkeypatch)
 
     with scoped_workdir(tmp_path), scoped_background_agent_manager(manager):
         result = workflow_run(capsule_name="review")

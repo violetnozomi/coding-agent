@@ -147,10 +147,11 @@ def test_space_path_and_cjk_path_file_edit(tmp_path: Path, directory: str):
         assert "print('ok')" in read_file(relative)
 
 
-def test_junction_escape_blocks_existing_read_and_new_file_write(tmp_path: Path):
+def test_windows_model_file_junction_swap_fails_closed(tmp_path: Path, monkeypatch):
+    from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
     from nz_coder.runtime.process.platform_runtime import decode_process_output
     from nz_coder.runtime.process.workdir import scoped_workdir
-    from nz_coder.tools.files import read_file, write_file
+    from nz_coder.tools.files import list_directory, read_file, write_file
 
     workspace = tmp_path / "workspace"
     outside = tmp_path / "outside"
@@ -180,6 +181,145 @@ def test_junction_escape_blocks_existing_read_and_new_file_write(tmp_path: Path)
         assert str(read_file("external/secret.txt")).startswith("Error: ")
         assert str(write_file("external/new.txt", "blocked")).startswith("Error: ")
     assert not (outside / "new.txt").exists()
+
+    source = workspace / "src"
+    source.mkdir()
+    (source / "inside.txt").write_text("inside", encoding="utf-8")
+    original = WorkspacePathPolicy.validate_model_list
+    swapped = False
+
+    def validate_then_replace_with_junction(policy, path):
+        nonlocal swapped
+        result = original(policy, path)
+        if swapped:
+            return result
+        swapped = True
+        source.rename(workspace / "src-original")
+        environment["NZ_RC_LINK"] = str(source)
+        replacement = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$null=New-Item -ItemType Junction -Path $env:NZ_RC_LINK -Target $env:NZ_RC_TARGET",
+            ],
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        assert replacement.returncode == 0, decode_process_output(replacement.stdout)
+        return result
+
+    monkeypatch.setattr(
+        WorkspacePathPolicy,
+        "validate_model_list",
+        validate_then_replace_with_junction,
+    )
+    with scoped_workdir(workspace):
+        listing = list_directory("src", depth=2)
+    assert str(listing).startswith("Error: ")
+    assert "secret.txt" not in str(listing)
+
+
+def test_windows_instruction_junction_is_rejected(tmp_path: Path):
+    from nz_coder.runtime.process.platform_runtime import decode_process_output
+    from nz_coder.state.instructions import delete_instruction_file, list_instruction_files
+
+    project = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    project.mkdir()
+    outside.mkdir()
+    sentinel = outside / "sentinel.txt"
+    sentinel.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    link = project / "AGENTS.md"
+    environment = os.environ.copy()
+    environment["NZ_RC_LINK"] = str(link)
+    environment["NZ_RC_TARGET"] = str(outside)
+    completed = subprocess.run(
+        [
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+            "$null=New-Item -ItemType Junction -Path $env:NZ_RC_LINK -Target $env:NZ_RC_TARGET",
+        ],
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    assert completed.returncode == 0, decode_process_output(completed.stdout)
+
+    listed = list_instruction_files(project)
+    assert listed.files == ()
+    assert listed.warnings
+    with pytest.raises(ValueError):
+        delete_instruction_file(project, "project", "AGENTS.md")
+    assert sentinel.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+
+
+def test_windows_instruction_regular_file_lifecycle(tmp_path: Path):
+    """Normal instruction deletion must work through the native handle path."""
+    from nz_coder.state.instructions import (
+        create_instruction_file,
+        delete_instruction_file,
+        list_instruction_files,
+        set_instruction_file_enabled,
+    )
+
+    project = tmp_path / "workspace"
+    project.mkdir()
+    created = create_instruction_file(project, "project")
+    assert created.filename == "AGENTS.md"
+    target = project / "AGENTS.md"
+    target.write_text("native Windows instruction\n", encoding="utf-8")
+
+    disabled = set_instruction_file_enabled(
+        project, "project", "AGENTS.md", False,
+    )
+    assert disabled.enabled is False
+    assert list_instruction_files(project, "project").files[0].enabled is False
+
+    delete_instruction_file(project, "project", "AGENTS.md")
+    assert not target.exists()
+    assert not (project / ".nz-coder" / "instruction-file-state.json").exists()
+
+
+def test_windows_directory_limit_stops_scandir_early(tmp_path: Path, monkeypatch):
+    import nz_coder.foundation.workspace_file_access as workspace_access
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.protocol.public_error import PublicInputError
+
+    for index in range(20):
+        (tmp_path / f"file-{index:02}.txt").write_text("x", encoding="utf-8")
+    real_scandir = workspace_access.os.scandir
+    consumed = 0
+
+    class CountingScandir:
+        def __init__(self, target):
+            self._iterator = real_scandir(target)
+
+        def __enter__(self):
+            self._iterator.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._iterator.__exit__(*args)
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            nonlocal consumed
+            item = next(self._iterator)
+            consumed += 1
+            return item
+
+    monkeypatch.setattr(workspace_access.os, "scandir", CountingScandir)
+    with pytest.raises(PublicInputError, match="entry limit"):
+        WorkspaceFileAccess(tmp_path).walk_directory(
+            ".", max_depth=1, maximum_entries=2,
+        )
+    assert consumed == 3
 
 
 def test_persistent_process_and_conpty_repl_and_ctrl_c(tmp_path):

@@ -777,7 +777,7 @@ def test_load_configured_hooks_from_settings(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
 
-    hooks = load_configured_hooks_from_settings()
+    hooks = load_configured_hooks_from_settings(settings_dir / "settings.json")
 
     assert [hook.id for hook in hooks] == ["reopen-missing-tests", "block-write"]
     assert hooks[0].event == "no_tool_response"

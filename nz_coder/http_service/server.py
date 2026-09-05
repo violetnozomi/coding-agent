@@ -459,13 +459,17 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
                     return
             if len(segments) == 3 and segments[2] == "run" and method == "POST":
                 body = self._read_json()
-                self._reject_unknown(body, {"message", "attachments", "allowed_tools", "model"})
+                self._reject_unknown(body, {
+                    "message", "attachments", "allowed_tools", "model",
+                    "command_digest",
+                })
                 info = self.service.manager.start_run(
                     session.session_id,
                     body.get("message"),
                     attachments=body.get("attachments", ()),
                     allowed_tools=body.get("allowed_tools", ()),
                     model=body.get("model"),
+                    command_digest=body.get("command_digest"),
                 )
                 self._json(HTTPStatus.ACCEPTED, info)
                 return

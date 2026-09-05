@@ -7,6 +7,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.capabilities.ripgrep import (
     RipgrepCancelled,
     RipgrepSearchMatch,
@@ -55,12 +58,7 @@ def _m_in_workspace(m: Path, base: Path) -> bool:
 
 
 def _safe_path(p: str = ".") -> Path:
-    path = (current_workdir() / (p or ".")).resolve()
-    try:
-        path.relative_to(current_workdir().resolve())
-    except ValueError:
-        raise ValueError(f"Path escapes workspace: {p}")
-    return path
+    return WorkspacePathPolicy(current_workdir()).validate_model_read(p or ".")
 
 
 def _default_ignores_enabled(base: Path, pattern: str = "") -> bool:
@@ -156,6 +154,7 @@ def _python_rg_search(
         candidates = [cwd / item for item in files]
     else:
         candidates = _iter_fallback_files(cwd)
+    access = WorkspaceFileAccess(current_workdir())
     matches: list[_RGMatch] = []
     partial = False
     for candidate in candidates:
@@ -172,25 +171,26 @@ def _python_rg_search(
             continue
         absolute_offset = 0
         try:
-            with candidate.open("r", encoding="utf-8", errors="replace") as stream:
-                for line_number, text in enumerate(stream, 1):
-                    _raise_if_cancelled()
-                    found = list(regex.finditer(text))
-                    if found:
-                        submatches = tuple({
-                            "text": item.group(0),
-                            "start": len(text[:item.start()].encode("utf-8")),
-                            "end": len(text[:item.end()].encode("utf-8")),
-                        } for item in found)
-                        matches.append(_RGMatch(
-                            path=relative.as_posix(),
-                            text=text,
-                            line=line_number,
-                            absolute_offset=absolute_offset,
-                            submatches=submatches,
-                        ))
-                    absolute_offset += len(text.encode("utf-8"))
-        except OSError:
+            relative_to_workspace = candidate.resolve().relative_to(access.root).as_posix()
+            source = access.read_text(relative_to_workspace, errors="replace")
+            for line_number, text in enumerate(source.splitlines(keepends=True), 1):
+                _raise_if_cancelled()
+                found = list(regex.finditer(text))
+                if found:
+                    submatches = tuple({
+                        "text": item.group(0),
+                        "start": len(text[:item.start()].encode("utf-8")),
+                        "end": len(text[:item.end()].encode("utf-8")),
+                    } for item in found)
+                    matches.append(_RGMatch(
+                        path=relative.as_posix(),
+                        text=text,
+                        line=line_number,
+                        absolute_offset=absolute_offset,
+                        submatches=submatches,
+                    ))
+                absolute_offset += len(text.encode("utf-8"))
+        except (OSError, ValueError):
             partial = True
     return matches, partial
 
@@ -226,10 +226,13 @@ def _search_matches(
     by_path: dict[Path, float | None] = {}
     matches: list[_SearchMatch] = []
     workspace = current_workdir().resolve()
+    policy = WorkspacePathPolicy(workspace)
     for row in rows:
         _raise_if_cancelled()
         full = (cwd / row.path).resolve()
         if not _m_in_workspace(full, workspace):
+            continue
+        if not policy.is_model_visible(full):
             continue
         if full not in by_path:
             try:
@@ -271,6 +274,7 @@ def _render_infcode_content(
     current: Path | None = None
     emitted_context: set[tuple[Path, int]] = set()
     source_cache: dict[Path, list[str]] = {}
+    access = WorkspaceFileAccess(current_workdir())
     for match in selected:
         if current != match.path:
             if current is not None:
@@ -282,9 +286,9 @@ def _render_infcode_content(
             continue
         if match.path not in source_cache:
             try:
-                source_cache[match.path] = match.path.read_text(
-                    encoding="utf-8",
-                    errors="replace",
+                relative = match.path.relative_to(access.root).as_posix()
+                source_cache[match.path] = access.read_text(
+                    relative, errors="replace",
                 ).splitlines(keepends=True)
             except OSError:
                 source_cache[match.path] = []
@@ -397,7 +401,7 @@ def grep_search(
     except subprocess.TimeoutExpired:
         return "Error: Search timed out (30s)"
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 def _expand_braces(pattern: str, limit: int = 64) -> tuple[str, ...]:
     """Expand bounded comma braces used by ripgrep's globset syntax."""
@@ -506,11 +510,7 @@ def glob_search(pattern: str, path: str = ".") -> str:
         if absolute is None:
             base = _safe_path(path)
         else:
-            base = absolute[0].resolve()
-            try:
-                base.relative_to(current_workdir().resolve())
-            except ValueError:
-                return f"Error: Pattern escapes workspace: {pattern}"
+            base = WorkspacePathPolicy(current_workdir()).validate_model_list(absolute[0])
             raw = absolute[1]
         if base.is_file():
             return f"Error: glob path must be a directory: {base}"
@@ -528,10 +528,13 @@ def glob_search(pattern: str, path: str = ".") -> str:
             )
         )
         entries: list[tuple[str, float]] = []
+        policy = WorkspacePathPolicy(current_workdir())
         for relative in files:
             _raise_if_cancelled()
             full = (base / relative).resolve()
             if not _m_in_workspace(full, current_workdir().resolve()):
+                continue
+            if not policy.is_model_visible(full):
                 continue
             try:
                 mtime = full.stat().st_mtime
@@ -564,7 +567,7 @@ def glob_search(pattern: str, path: str = ".") -> str:
     except subprocess.TimeoutExpired:
         return "Error: Search timed out (30s)"
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 register(
     name="grep_search",

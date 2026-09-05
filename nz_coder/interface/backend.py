@@ -17,7 +17,8 @@ class TerminalBackend(Protocol):
     def info(self) -> dict[str, Any]: ...
     def attach_snapshot(self) -> dict[str, Any]: ...
     def start_run(
-        self, message: str, *, attachments=(), allowed_tools=(), model: str | None = None,
+        self, message: str, *, attachments=(), allowed_tools=(),
+        model: str | None = None, command_digest: str | None = None,
     ) -> dict[str, Any]: ...
     def abort(self) -> bool: ...
     def events(self, *, last_event_id: str | None = None) -> Iterator[dict]: ...
@@ -76,11 +77,14 @@ class RemoteTerminalBackend:
         return self.client.attach_snapshot(self.session_id)
 
     def start_run(
-        self, message: str, *, attachments=(), allowed_tools=(), model: str | None = None,
+        self, message: str, *, attachments=(), allowed_tools=(),
+        model: str | None = None, command_digest: str | None = None,
     ) -> dict[str, Any]:
         options = {"attachments": attachments, "allowed_tools": allowed_tools}
         if model:
             options["model"] = model
+        if command_digest:
+            options["command_digest"] = command_digest
         return self.client.run(self.session_id, message, **options)
 
     def commands(self) -> list[dict[str, Any]]:
@@ -261,7 +265,8 @@ class EmbeddedTerminalBackend:
         }
 
     def start_run(
-        self, message: str, *, attachments=(), allowed_tools=(), model: str | None = None,
+        self, message: str, *, attachments=(), allowed_tools=(),
+        model: str | None = None, command_digest: str | None = None,
     ) -> dict[str, Any]:
         raise RuntimeError("embedded turn execution is owned by the local terminal loop")
 

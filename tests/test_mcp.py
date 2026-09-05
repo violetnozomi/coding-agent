@@ -55,6 +55,7 @@ def _server_config(tmp_path: Path, *, name: str = "echo") -> MCPServerConfig:
 def test_mcp_config_validates_command_workspace_and_effects(tmp_path):
     child = tmp_path / "service"
     child.mkdir()
+    (child / "server.py").write_text("print('ok')\n", encoding="utf-8")
     configs = load_mcp_server_configs(
         {
             "servers": {
@@ -71,18 +72,19 @@ def test_mcp_config_validates_command_workspace_and_effects(tmp_path):
         workspace=tmp_path,
     )
 
-    assert configs == [
-        MCPServerConfig(
-            name="local",
-            command=("python3", "server.py"),
-            cwd=child,
-            environment=(("MCP_MODE", "test"),),
-            startup_timeout_seconds=2,
-            tool_timeout_seconds=4,
-            tool_effects=(("lookup", "read"), ("update", "write")),
-        )
-    ]
-    assert configs[0].effect_for("undeclared") == "serial"
+    assert len(configs) == 1
+    selected = configs[0]
+    assert selected.name == "local"
+    assert selected.command == ("python3", "server.py")
+    assert selected.cwd == child
+    assert selected.environment == (("MCP_MODE", "test"),)
+    assert selected.startup_timeout_seconds == 2
+    assert selected.tool_timeout_seconds == 4
+    assert selected.tool_effects == (("lookup", "read"), ("update", "write"))
+    assert selected.execution_identity is not None
+    assert selected.execution_identity.workspace_controlled is True
+    assert selected.trusted is False
+    assert selected.effect_for("undeclared") == "serial"
 
 
 @pytest.mark.parametrize(
@@ -962,7 +964,7 @@ def test_child_scope_clears_and_restores_parent_dynamic_tool_overlay():
         assert dispatch("mcp_parent_private", {}) == "parent"
 
 
-def test_agent_loop_reuses_mcp_runtime_until_agent_close(tmp_path, monkeypatch):
+def test_mcp_runtime_rotates_with_run_snapshot(tmp_path, monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.runtime.execution import loop as loop_module
 
@@ -993,13 +995,12 @@ def test_agent_loop_reuses_mcp_runtime_until_agent_close(tmp_path, monkeypatch):
         def close(self):
             events.append("close")
 
-    runtime = FakeRuntime()
-
     class RuntimeFactory:
         @staticmethod
-        def configured(*, workspace=None):
+        def configured(*, workspace=None, config_snapshot=None):
             assert workspace == tmp_path
-            return runtime
+            assert config_snapshot.workspace == tmp_path
+            return FakeRuntime()
 
     class Message:
         content = "done"
@@ -1042,7 +1043,7 @@ def test_agent_loop_reuses_mcp_runtime_until_agent_close(tmp_path, monkeypatch):
     assert result["status"] == "completed"
     assert second["status"] == "completed"
     assert "mcp_fake_ping" in tool_names
-    assert events == ["start", "start"]
+    assert events == ["start", "close", "start", "close"]
     agent.close()
-    assert events == ["start", "start", "close"]
+    assert events == ["start", "close", "start", "close"]
     assert dispatch("mcp_fake_ping", {}) == "Error: Unknown tool 'mcp_fake_ping'"

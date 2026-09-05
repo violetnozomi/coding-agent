@@ -198,6 +198,83 @@ def test_windows_lsp_override_preserves_backslashes_and_quoted_paths():
     )
 
 
+def _lsp_config_snapshot(tmp_path, workspace, *, environment=None, user_text=""):
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    user_config = tmp_path / "user.env"
+    if user_text:
+        user_config.write_text(user_text, encoding="utf-8")
+    return load_config_snapshot(
+        workspace,
+        environ=environment or {},
+        user_config_path=user_config,
+        trust_store=WorkspaceTrustStore(tmp_path / "trust.json"),
+    )
+
+
+def test_all_lsp_specs_have_matching_config_schema_entries():
+    from nz_coder.foundation.workspace_trust import CONFIG_SCHEMA
+    from nz_coder.lsp.servers import language_server_specs
+
+    expected = {
+        f"NZ_LSP_{spec.language.upper()}_COMMAND" for spec in language_server_specs()
+    }
+    assert expected <= set(CONFIG_SCHEMA)
+    assert all(CONFIG_SCHEMA[key].value_type == "string" for key in expected)
+    assert all(CONFIG_SCHEMA[key].workspace_trust_required for key in expected)
+
+
+def test_typescript_lsp_command_loads_from_user_config(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    snapshot = _lsp_config_snapshot(
+        tmp_path, workspace,
+        user_text="NZ_LSP_TYPESCRIPT_COMMAND=typescript-language-server --stdio\n",
+    )
+    assert snapshot.get("NZ_LSP_TYPESCRIPT_COMMAND") == (
+        "typescript-language-server --stdio"
+    )
+
+
+def test_go_lsp_command_loads_from_explicit_environment(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    snapshot = _lsp_config_snapshot(
+        tmp_path, workspace, environment={"NZ_LSP_GO_COMMAND": "gopls -remote=auto"}
+    )
+    assert snapshot.get("NZ_LSP_GO_COMMAND") == "gopls -remote=auto"
+
+
+def test_workspace_typescript_lsp_command_requires_exact_trust(tmp_path):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    (workspace / ".env").write_text(
+        "NZ_LSP_TYPESCRIPT_COMMAND=repo-ts-server --stdio\n", encoding="utf-8"
+    )
+    untrusted = _lsp_config_snapshot(tmp_path, workspace)
+    assert untrusted.get("NZ_LSP_TYPESCRIPT_COMMAND", "") == ""
+
+    store = WorkspaceTrustStore(tmp_path / "trust.json")
+    store.trust(workspace, "workspace-config", untrusted.workspace_fingerprint)
+    trusted = _lsp_config_snapshot(tmp_path, workspace)
+    assert trusted.get("NZ_LSP_TYPESCRIPT_COMMAND") == "repo-ts-server --stdio"
+
+
+def test_windows_quoted_lsp_command_survives_schema_loading(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    command = r'"C:\Program Files\TypeScript\server.cmd" --stdio'
+    snapshot = _lsp_config_snapshot(
+        tmp_path, workspace, environment={"NZ_LSP_TYPESCRIPT_COMMAND": command}
+    )
+    assert snapshot.get("NZ_LSP_TYPESCRIPT_COMMAND") == command
+
+
 def test_windows_file_uri_roundtrip_removes_uri_drive_prefix():
     from nz_coder.lsp.client import uri_to_path
 
@@ -211,6 +288,16 @@ def _write_fake_server(tmp_path):
     path = tmp_path / "fake_lsp.py"
     path.write_text(textwrap.dedent(_FAKE_SERVER), encoding="utf-8")
     return path
+
+
+def _trust_test_lsp(tmp_path, monkeypatch, source_name="app.py"):
+    from nz_coder.lsp.servers import trust_server
+
+    monkeypatch.setenv(
+        "NZ_CODER_WORKSPACE_TRUST_STORE",
+        str(tmp_path.parent / f"{tmp_path.name}-workspace-trust.json"),
+    )
+    trust_server(tmp_path / source_name, tmp_path)
 
 
 def test_close_workspace_clients_preserves_other_workspaces(tmp_path):
@@ -263,6 +350,7 @@ def test_lsp_tool_roundtrip_normalizes_paths_and_positions(tmp_path, monkeypatch
     )
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     (tmp_path / "app.py").write_text("answer = 42\n", encoding="utf-8")
+    _trust_test_lsp(tmp_path, monkeypatch)
 
     close_all_clients()
     try:
@@ -298,6 +386,7 @@ def test_lsp_tool_supports_symbols_hover_and_call_hierarchy(tmp_path, monkeypatc
         f"{sys.executable} -u {server}",
     )
     (tmp_path / "app.py").write_text("answer = 42\n", encoding="utf-8")
+    _trust_test_lsp(tmp_path, monkeypatch)
 
     close_all_clients()
     try:
@@ -361,13 +450,14 @@ def test_lsp_tool_reports_server_initialization_failure(tmp_path, monkeypatch):
         f"{sys.executable} -u {broken}",
     )
     (tmp_path / "app.py").write_text("answer = 42\n", encoding="utf-8")
+    _trust_test_lsp(tmp_path, monkeypatch)
 
     close_all_clients()
     try:
         with scoped_workdir(tmp_path):
             result = lsp("hover", "app.py")
         assert result.startswith("Error: LSP server failed to initialize:")
-        assert "broken server" in result
+        assert "broken server" not in result
     finally:
         close_all_clients()
 
@@ -456,6 +546,7 @@ def test_write_diagnostics_use_real_protocol_and_normalize_locations(
         encoding="utf-8",
     )
     (tmp_path / "app.py").write_text("answer = missing\n", encoding="utf-8")
+    _trust_test_lsp(tmp_path, monkeypatch)
 
     close_all_clients()
     try:
@@ -487,3 +578,129 @@ def test_write_diagnostics_silently_skip_missing_server(tmp_path, monkeypatch):
         assert collect_write_diagnostics(["app.py"], tmp_path) == ""
     finally:
         close_all_clients()
+
+
+def test_lsp_open_document_uses_anchored_source_bytes(tmp_path):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.lsp.client import LSPClient
+
+    source = tmp_path / "source.py"
+    source.write_text("anchored = 1\n", encoding="utf-8")
+    text, identity = WorkspaceFileAccess(tmp_path).read_text_with_identity("source.py")
+    source.write_text("swapped = 2\n", encoding="utf-8")
+    sent = []
+    client = object.__new__(LSPClient)
+    client.root = tmp_path.resolve()
+    client.language_id = "python"
+    client._documents = {}
+    client.notify = lambda method, params: sent.append((method, params))
+
+    client.open_document(source, text, identity)
+
+    assert sent[0][1]["textDocument"]["text"] == text
+
+
+def test_lsp_diagnostics_does_not_reread_source_path(tmp_path):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.lsp.client import LSPClient, LSPResponseError
+
+    source = tmp_path / "source.py"
+    source.write_text("anchored = 1\n", encoding="utf-8")
+    text, identity = WorkspaceFileAccess(tmp_path).read_text_with_identity("source.py")
+    client = object.__new__(LSPClient)
+    client.root = tmp_path.resolve()
+    client.language_id = "python"
+    client._documents = {}
+    client._diagnostics = {}
+    client._diagnostic_events = {}
+    client.diagnostic_wait = 0
+    client.notify = lambda *_args, **_kwargs: None
+    client.request = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        LSPResponseError({"code": -1}),
+    )
+    source.unlink()
+
+    assert client.diagnostics(source, text, identity) == []
+
+
+def test_lsp_outside_and_private_uris_are_redacted(tmp_path):
+    from nz_coder.tools.lsp import _normalize_result
+
+    private = tmp_path / ".nz-coder" / "secret.py"
+    outside = tmp_path.parent / "host-secret.py"
+
+    assert _normalize_result({"uri": private.as_uri()}, tmp_path)["path"] == (
+        "private-workspace"
+    )
+    assert _normalize_result({"targetUri": outside.as_uri()}, tmp_path)[
+        "targetPath"
+    ] == "outside-workspace"
+
+
+def test_lsp_outside_uri_does_not_expose_absolute_path(tmp_path):
+    from nz_coder.tools.lsp import _normalize_result
+
+    outside = tmp_path.parent / "host-secret.py"
+    result = _normalize_result({"uri": outside.as_uri()}, tmp_path)
+    assert result["path"] == "outside-workspace"
+    assert str(outside) not in repr(result)
+
+
+def test_lsp_private_uri_is_redacted(tmp_path):
+    from nz_coder.tools.lsp import _normalize_result
+
+    private = tmp_path / ".nz-coder" / "secret.py"
+    result = _normalize_result({"uri": private.as_uri()}, tmp_path)
+    assert result["path"] == "private-workspace"
+    assert str(private) not in repr(result)
+
+
+def test_lsp_source_change_is_observed_only_on_next_request(tmp_path):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.lsp.client import LSPClient
+
+    source = tmp_path / "source.py"
+    source.write_text("first = 1\n", encoding="utf-8")
+    access = WorkspaceFileAccess(tmp_path)
+    first_text, first_identity = access.read_text_with_identity("source.py")
+    source.write_text("second = 2\n", encoding="utf-8")
+    sent = []
+    client = object.__new__(LSPClient)
+    client.root = tmp_path.resolve()
+    client.language_id = "python"
+    client._documents = {}
+    client.notify = lambda method, params: sent.append((method, params))
+
+    client.open_document(source, first_text, first_identity)
+    second_text, second_identity = access.read_text_with_identity("source.py")
+    client.open_document(source, second_text, second_identity)
+
+    assert sent[0][1]["textDocument"]["text"] == first_text
+    assert sent[-1][1]["contentChanges"][0]["text"] == second_text
+
+
+def test_lsp_parent_swap_after_tool_validation_cannot_escape(tmp_path, monkeypatch):
+    from nz_coder.tools import lsp as lsp_tool
+
+    workspace = tmp_path / "workspace"
+    source_parent = workspace / "src"
+    parked = workspace / "src-original"
+    outside = tmp_path / "outside"
+    source_parent.mkdir(parents=True)
+    outside.mkdir()
+    (source_parent / "main.py").write_text("inside = 1\n", encoding="utf-8")
+    (outside / "main.py").write_text("SENTINEL-LSP-OUTSIDE\n", encoding="utf-8")
+    original = lsp_tool._safe_path
+
+    def validate_then_swap(path):
+        validated = original(path)
+        source_parent.rename(parked)
+        source_parent.symlink_to(outside, target_is_directory=True)
+        return validated
+
+    monkeypatch.setattr(lsp_tool, "_safe_path", validate_then_swap)
+    with scoped_workdir(workspace):
+        result = lsp_tool.lsp("hover", "src/main.py", 1, 1)
+
+    assert str(result).startswith("Error: ")
+    assert "SENTINEL-LSP-OUTSIDE" not in str(result)

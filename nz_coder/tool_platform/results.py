@@ -2,16 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
-import os
-from pathlib import Path
-import re
-import tempfile
 from typing import Callable
 
 from nz_coder.state.context import estimate_tokens, prompt_budget
 from nz_coder.state.workdir import current_workdir
-from nz_coder.state.sessions import session_tool_results_dir
+from nz_coder.state.sessions import active_session_id
+from nz_coder.tool_platform.artifacts import ArtifactStore
 
 
 @dataclass(frozen=True)
@@ -268,30 +264,7 @@ def _fit_prefix(value: str, max_tokens: int) -> str:
 
 
 def _persist_full_output(tool_call_id: str, output: str) -> str:
-    """Atomically persist one immutable full result in the active Session."""
-    directory = session_tool_results_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    safe_id = re.sub(r"[^a-zA-Z0-9_.-]", "_", tool_call_id or "unknown")[:120]
-    digest = hashlib.sha256(output.encode("utf-8")).hexdigest()[:16]
-    path = directory / f"{safe_id}-{digest}.txt"
-    if not path.exists():
-        descriptor, temporary = tempfile.mkstemp(
-            prefix=f".{safe_id}-",
-            suffix=".tmp",
-            dir=str(directory),
-        )
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                handle.write(output)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, path)
-        finally:
-            try:
-                Path(temporary).unlink()
-            except FileNotFoundError:
-                pass
-    try:
-        return str(path.relative_to(current_workdir()))
-    except ValueError:
-        return str(path)
+    """Persist one immutable result and expose only an opaque Session handle."""
+    del tool_call_id  # IDs are generated independently to prevent path influence.
+    session_id = active_session_id() or "direct-tool"
+    return ArtifactStore(current_workdir(), session_id).put(output, kind="tool-result")

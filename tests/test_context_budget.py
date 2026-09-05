@@ -170,22 +170,15 @@ def test_oversized_user_input_is_persisted_with_readable_reference(tmp_path):
 
     with scoped_workdir(tmp_path), scoped_session("context-budget"):
         count = persist_oversized_user_inputs(messages, max_tokens=1_000)
+        from nz_coder.tool_platform.artifacts import ArtifactStore
 
-    input_dir = (
-        tmp_path
-        / ".nz-coder"
-        / "sessions"
-        / "_artifacts"
-        / "context-budget"
-        / "runtime"
-        / "user-inputs"
-    )
-    persisted = list(input_dir.glob("*.txt"))
+        store = ArtifactStore(tmp_path, "context-budget")
+        artifact_id = next(iter(store._load_manifest()["entries"]))
     assert count == 1
-    assert len(persisted) == 1
-    assert persisted[0].read_text(encoding="utf-8") == "x" * 12_000
+    assert store.read(artifact_id) == "x" * 12_000
     assert "<oversized-user-input>" in messages[0]["content"]
-    assert str(persisted[0].relative_to(tmp_path)) in messages[0]["content"]
+    assert artifact_id in messages[0]["content"]
+    assert str(store.directory) not in messages[0]["content"]
 
 
 def test_reused_tool_call_id_does_not_alias_different_large_outputs(
@@ -200,16 +193,10 @@ def test_reused_tool_call_id_does_not_alias_different_large_outputs(
         first = persist_large_output("same-call", "first-output")
         second = persist_large_output("same-call", "second-output")
 
-    results_dir = (
-        tmp_path
-        / ".nz-coder"
-        / "sessions"
-        / "_artifacts"
-        / "duplicate-tool-call"
-        / "runtime"
-        / "tool-results"
-    )
-    persisted = sorted(results_dir.glob("same-call*.txt"))
+        from nz_coder.tool_platform.artifacts import ArtifactStore
+
+        store = ArtifactStore(tmp_path, "duplicate-tool-call")
+    persisted = sorted(store.directory.glob("artifact_*.txt"))
     assert len(persisted) == 2
     assert {path.read_text(encoding="utf-8") for path in persisted} == {
         "first-output",
@@ -823,15 +810,18 @@ def test_auto_compact_persists_structured_tail_boundary(tmp_path, monkeypatch):
 
     with scoped_workdir(tmp_path), scoped_session("structured-compact"):
         result = auto_compact(messages, client, "fake-model", auto=True, overflow=True)
+        archives = list(context_module.session_transcript_dir().glob("transcript_*.jsonl"))
 
     marker = result[0]["_nz_compaction"]
     assert marker["auto"] is True
     assert marker["overflow"] is True
     assert marker["tail_start_id"] == "msg-recent"
     assert marker["head_message_ids"] == ["msg-old", "msg-old-answer"]
-    archive = tmp_path / marker["archive"]
-    assert archive.is_file()
-    assert '"msg-old"' in archive.read_text(encoding="utf-8")
+    assert marker["archive"].startswith(
+        "user-state://transcripts/structured-compact/"
+    )
+    assert len(archives) == 1
+    assert '"msg-old"' in archives[0].read_text(encoding="utf-8")
 
 
 def test_auto_compact_retries_once_only_after_payload_shrinks(tmp_path, monkeypatch):

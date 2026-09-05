@@ -5,40 +5,146 @@ import atexit
 import threading
 from pathlib import Path
 
-from nz_coder.foundation import config
+from nz_coder.foundation.workspace_trust import ConfigSnapshot
+from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.protocol.public_error import to_public_error
+from nz_coder.foundation.capability_lease import capability_leases
 
 from .client import LSPClient
 from .servers import ResolvedServer, resolve_server
 
 _LOCK = threading.RLock()
-_CLIENTS: dict[tuple[str, str, str], LSPClient] = {}
-_BROKEN: set[tuple[str, str, str]] = set()
-_ERRORS: dict[tuple[str, str, str], str] = {}
+_ClientKey = tuple
+_CLIENTS: dict[_ClientKey, LSPClient] = {}
+_BROKEN: set[_ClientKey] = set()
+_ERRORS: dict[_ClientKey, str] = {}
+_TRUST_REQUIRED: set[_ClientKey] = set()
+_LEASES: dict[_ClientKey, str] = {}
+
+
+def _release_lease(key: _ClientKey) -> None:
+    lease_id = _LEASES.pop(key, "")
+    if lease_id:
+        capability_leases().release(lease_id)
+
+
+def _revoke_client(key: _ClientKey, expected: LSPClient) -> None:
+    with _LOCK:
+        client = _CLIENTS.get(key)
+        if client is expected:
+            _CLIENTS.pop(key, None)
+            _release_lease(key)
+    if client is expected:
+        client.close(force=True)
 
 
 def _client_key(
     path: Path,
     workspace: Path,
-) -> tuple[ResolvedServer | None, tuple[str, str, str] | None]:
-    resolved = resolve_server(path, workspace)
+    config_snapshot: ConfigSnapshot | None = None,
+) -> tuple[ResolvedServer | None, _ClientKey | None]:
+    legacy_globals = config_snapshot is None
+    if config_snapshot is None:
+        from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
+            current_config_snapshot,
+        )
+
+        config_snapshot = (
+            active_config_snapshot(workspace)
+            or current_config_snapshot(workspace)
+        )
+        legacy_globals = active_config_snapshot(workspace) is None
+    resolved = resolve_server(path, workspace, config_snapshot=config_snapshot)
     if resolved is None:
         return None, None
     key = (
         str(workspace.resolve()),
         resolved.server_id,
         str(resolved.root.resolve()),
+        resolved.fingerprint,
+        resolved.command,
+        resolved.config_source,
+        str(
+            current_run_settings().lsp_initialize_timeout
+            if legacy_globals
+            else config_snapshot.get_float(
+                "NZ_LSP_INITIALIZE_TIMEOUT_SECONDS", 20.0,
+                minimum=0.001, maximum=600.0,
+            )
+        ),
+        str(
+            current_run_settings().lsp_diagnostic_wait
+            if legacy_globals
+            else config_snapshot.get_float(
+                "NZ_LSP_DIAGNOSTIC_WAIT_SECONDS", 2.0,
+                minimum=0.0, maximum=600.0,
+            )
+        ),
+        str(
+            current_run_settings().lsp_request_timeout
+            if legacy_globals
+            else config_snapshot.get_float(
+                "NZ_LSP_REQUEST_TIMEOUT_SECONDS", 10.0,
+                minimum=0.001, maximum=600.0,
+            )
+        ),
     )
     return resolved, key
 
 
-def get_client_for_file(path: Path, workspace: Path) -> LSPClient | None:
+def get_client_for_file(
+    path: Path,
+    workspace: Path,
+    *,
+    config_snapshot: ConfigSnapshot | None = None,
+) -> LSPClient | None:
     """Return a cached client, starting it on first use."""
-    if not config.LSP_ENABLED:
+    legacy_globals = config_snapshot is None
+    if config_snapshot is None:
+        from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
+            current_config_snapshot,
+        )
+
+        config_snapshot = (
+            active_config_snapshot(workspace)
+            or current_config_snapshot(workspace)
+        )
+        legacy_globals = active_config_snapshot(workspace) is None
+    if legacy_globals:
+        enabled = current_run_settings().lsp_enabled
+    else:
+        enabled = config_snapshot.get_bool("NZ_LSP_ENABLED", True)
+    if not enabled:
+        close_workspace_clients(workspace)
         return None
-    resolved, key = _client_key(path, workspace)
+    resolved, key = _client_key(path, workspace, config_snapshot)
     if resolved is None or key is None:
         return None
     with _LOCK:
+        identity = key[:3]
+        stale_keys = [candidate for candidate in _CLIENTS if candidate[:3] == identity and candidate != key]
+        stale_clients = [_CLIENTS.pop(candidate) for candidate in stale_keys]
+        for candidate in stale_keys:
+            _release_lease(candidate)
+            _BROKEN.discard(candidate)
+            _ERRORS.pop(candidate, None)
+            _TRUST_REQUIRED.discard(candidate)
+        for stale in stale_clients:
+            stale.close()
+        if not resolved.trusted:
+            stale = _CLIENTS.pop(key, None)
+            if stale is not None:
+                _release_lease(key)
+                stale.close()
+            _TRUST_REQUIRED.add(key)
+            _ERRORS[key] = (
+                f"Workspace LSP executable '{resolved.server_id}' requires trust; "
+                "run `nz-coder lsp trust <source-file>` after review"
+            )
+            return None
+        _TRUST_REQUIRED.discard(key)
         existing = _CLIENTS.get(key)
         if existing is not None and existing.process.poll() is None:
             return existing
@@ -51,19 +157,41 @@ def get_client_for_file(path: Path, workspace: Path) -> LSPClient | None:
                 root=resolved.root,
                 language_id=resolved.language_id,
                 analysis_paths=resolved.analysis_paths,
+                initialize_timeout=float(key[-3]),
+                request_timeout=float(key[-1]),
+                diagnostic_wait=float(key[-2]),
+                execution_identity=resolved.execution_identity,
             )
         except Exception as exc:
             _BROKEN.add(key)
-            _ERRORS[key] = str(exc)
+            _ERRORS[key] = to_public_error(exc).message
             return None
         _CLIENTS[key] = client
+        from nz_coder.state.sessions import active_session_id
+
+        lease = capability_leases().create(
+            kind="lsp-client",
+            resource_id=f"{resolved.server_id}:{resolved.fingerprint}",
+            workspace=workspace,
+            control_fingerprint=config_snapshot.control_fingerprint,
+            run_id=active_session_id() or "lsp-cache",
+            interaction_id=active_session_id() or "lsp-cache",
+            owner_session=active_session_id() or "lsp-cache",
+            revoke=lambda: _revoke_client(key, client),
+        )
+        _LEASES[key] = lease.lease_id
         _ERRORS.pop(key, None)
         return client
 
 
-def client_startup_error(path: Path, workspace: Path) -> str:
+def client_startup_error(
+    path: Path,
+    workspace: Path,
+    *,
+    config_snapshot: ConfigSnapshot | None = None,
+) -> str:
     """Return the cached initialization failure for a source file."""
-    _, key = _client_key(path, workspace)
+    _, key = _client_key(path, workspace, config_snapshot)
     if key is None:
         return ""
     with _LOCK:
@@ -75,7 +203,8 @@ def client_status_summary(workspace: Path) -> list[dict[str, str]]:
     root = str(workspace.resolve())
     rows = []
     with _LOCK:
-        for (owner, server_id, server_root), client in _CLIENTS.items():
+        for key, client in _CLIENTS.items():
+            owner, server_id, server_root = key[:3]
             if owner != root:
                 continue
             rows.append({
@@ -83,13 +212,26 @@ def client_status_summary(workspace: Path) -> list[dict[str, str]]:
                 "root": server_root,
                 "status": "connected" if client.process.poll() is None else "failed",
             })
-        for owner, server_id, server_root in _BROKEN:
+        for key in _BROKEN:
+            owner, server_id, server_root = key[:3]
             if owner != root or any(
                 row["id"] == server_id and row["root"] == server_root
                 for row in rows
             ):
                 continue
             rows.append({"id": server_id, "root": server_root, "status": "failed"})
+        for key in _TRUST_REQUIRED:
+            owner, server_id, server_root = key[:3]
+            if owner != root or any(
+                row["id"] == server_id and row["root"] == server_root
+                for row in rows
+            ):
+                continue
+            rows.append({
+                "id": server_id,
+                "root": server_root,
+                "status": "trust-required",
+            })
     return sorted(rows, key=lambda item: (item["id"], item["root"]))
 
 
@@ -97,11 +239,16 @@ def close_all_clients() -> None:
     """Close every cached language server."""
     with _LOCK:
         clients = list(_CLIENTS.values())
+        lease_ids = list(_LEASES.values())
         _CLIENTS.clear()
+        _LEASES.clear()
         _BROKEN.clear()
         _ERRORS.clear()
+        _TRUST_REQUIRED.clear()
     for client in clients:
         client.close()
+    for lease_id in lease_ids:
+        capability_leases().release(lease_id)
 
 
 def close_workspace_clients(workspace: Path) -> None:
@@ -110,14 +257,21 @@ def close_workspace_clients(workspace: Path) -> None:
     with _LOCK:
         selected_keys = [key for key in _CLIENTS if key[0] == owner]
         clients = [_CLIENTS.pop(key) for key in selected_keys]
+        lease_ids = [_LEASES.pop(key, "") for key in selected_keys]
         _BROKEN.difference_update(tuple(
             key for key in _BROKEN if key[0] == owner
+        ))
+        _TRUST_REQUIRED.difference_update(tuple(
+            key for key in _TRUST_REQUIRED if key[0] == owner
         ))
         for key in tuple(_ERRORS):
             if key[0] == owner:
                 _ERRORS.pop(key, None)
     for client in clients:
         client.close()
+    for lease_id in lease_ids:
+        if lease_id:
+            capability_leases().release(lease_id)
 
 
 atexit.register(close_all_clients)
