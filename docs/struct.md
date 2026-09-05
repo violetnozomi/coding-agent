@@ -1383,3 +1383,19 @@ Workspace mutation 会保留既有 POSIX permission bits，新文件使用安全
 Credential-bearing dataclass 对 key、environment、headers、command argv 和嵌套 runtime 对象使用 `repr=False` 或安全 `__repr__`。安全门禁扫描整个 `nz_coder/**/*.py`，识别 config alias、from-import、`getattr`、同数量位置交换、LSP direct I/O、间接 exception formatting 与 secret-like dataclass 字段。MCP 默认按 explicit snapshot、active snapshot、current workspace snapshot 选择配置，只有明确 `compatibility_mode=True` 的宿主兼容调用能读取 legacy globals。
 
 本轮继续保留的真实边界：Shell 不是 OS sandbox；Webfetch DNS rebinding、跨 daemon revoke IPC、Artifact 永久保留、GitHub Action 完整 SHA 固定不在冻结范围；Windows replace 与 executable launch 的最终一步仍依赖平台 handle/share 语义。
+
+### 22.6 PR #2：创建回滚所有权与整次解析预算（2026-09-05）
+
+在 `24424788` 上用真实生产模块重建复核中的三条测试，首次运行得到 3 failed：两个 Node 多 payload 累计预算没有拒绝超限，exclusive create 在最终发布点遭遇竞争创建后，rollback 删除了竞争文件。审查提及的 zip 未出现在执行环境，因此 `tests/security/test_pr2_remaining_regressions.py` 明确标为依据文字时序重建，不能把此前隔离实验当作产品验证。
+
+Transaction 的备份记录现在包含同一事务内的 `MutationReceipt`。`track()` / `track_anchored()` 只准备恢复信息，未应用记录不获得恢复或删除权。POSIX 从临时文件 fd 捕获 identity，在 link/replace 成功后标记 applied；Windows 在 O_EXCL 得到有效 fd 后立即标记，再从该 fd 对应 handle 捕获 File ID/Volume，因此 fdopen、写入、flush/fsync 随后失败也不会丢失创建副作用。delete 在 unlink/handle disposition 成功后标记。重复修改同一路径保留首次 backup，只有下一次发布成功才更新已应用 identity。rollback 只处理 applied 项，删除新文件必须匹配已捕获 identity；外部替换会保留文件并进入 `rollback_partial`，恢复原对象后可以 retry。已恢复项从清单移除，重复 rollback 不触碰后续外部文件。
+
+调用点盘点：四个正式 `track_anchored()` 配对都位于 WorkspaceFileAccess 的 POSIX/Windows write/delete；batch、direct apply_patch 和 Agent tool transaction 共用这些入口。评测 recovery probe 是唯一另一个生产 Transaction `track()` 调用点，其写入已改用 WorkspaceFileAccess 产生 receipt。旧测试中手写的 track + Path.write_text 也改为生产 mutation 路径，保留原有 metadata、parent swap、取消和 partial retry 断言。Session snapshot store 的 `track()` 属于不同 API，不涉及文件事务。单独调用 Transaction `track()` 后绕过 WorkspaceFileAccess 的写入不会自动取得 rollback 所有权。
+
+每次 `resolve_execution_identity()` 创建独立 `_ExecutionPayloadBudget`，显式 main/preload/loader/import、jar/dll 及 Python package 遍历都使用该对象。文件数在打开前计费，stat 只做预检，读取过程中按实际 bytes 计费；最多读取剩余预算加一字节以检测增长，超限立即停止后续打开和哈希。重复引用按引用次数计费，每次读取都消耗配额，不使用去重缓存；argv 的顺序和重复继续影响 fingerprint。解释器二进制沿用独立政策，不套用 payload 单文件限制。计数不跨调用或线程共享，动态 import 传递依赖的既有声明不扩大。
+
+边界测试覆盖最终 syscall 前竞争、前序成员恢复、新建成功后异常、fdopen/写入失败、替换后的拒删和 retry、重复 rollback、hook/main 整体上限、package、独立/并发预算、重复引用、超限早停和读取中增长。该测试文件同时进入 Windows Product RC，Windows 结论以实际 runner 结果为准。POSIX 最终名称检查至 unlink 的竞态、系统崩溃后的持久恢复，以及文件原地改写的所有权区分未被宣称由这次内存 receipt 全面解决。
+
+范围外既有问题：`TransactionManager._track_windows()` 捕获原文件 metadata，但 `_restore_backup_windows()` 仅将私有 backup 通过句柄 rename 回目标，没有应用原时间戳/属性；因此 Windows 现有内容恢复不等于 metadata 恢复。本轮保留 POSIX metadata 回归断言、Windows 内容恢复断言，不声称修复这项既有 Windows 差距，也不扩展本轮冻结的两个修复目标。
+
+本地验收：原始三条重建测试修复前 3 failed（exit 1），修复后 3 passed；新增文件完整运行 25 passed / 2 Windows-only skipped。`python -m pytest -q` 得到 3751 passed / 35 skipped（280.62s，exit 0）。`git diff --check`、`python -m compileall -q nz_coder tests`、`ruff check nz_coder tests`、`python -m build --wheel --sdist` 均 exit 0。源码外 `/tmp/pr2-remaining-wheel.HzOo3j/venv` 安装 wheel，移除 PYTHONPATH 后 help 与完整新增测试 exit 0（25 passed / 2 skipped）；transaction、workspace_file_access、execution_identity 的 `__file__` 均位于该 venv 的 `lib/python3.13/site-packages`。这些 Linux 结果不替代最终提交的 Windows CI；远端结果记录在 PR #2。
