@@ -90,6 +90,15 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
         )))
     if info.get("status") == "running":
         await _follow_run(backend, console)
+    elif messages:
+        # A settled attach has no event replay. Restore only failure cards
+        # from the current-run snapshot; transcript text was printed above.
+        baseline = await asyncio.to_thread(backend.attach_snapshot)
+        view = TerminalRunRenderer(console, None)
+        try:
+            _feed_snapshot_events(view, baseline)
+        finally:
+            view.close()
 
     remote_commands = await asyncio.to_thread(backend.commands)
     remote_registry = _remote_command_registry(remote_commands)

@@ -243,6 +243,30 @@ def project_public_tool_part(part: object) -> dict:
         projected["state"] = {}
         return projected
     status = str(state.get("status") or "").casefold()
+    if projected.get("tool") == "bash":
+        from nz_coder.protocol.shell_diagnostics import shell_failure_text, shell_output_facts
+
+        facts = shell_output_facts(state.get("metadata"))
+        command_failed = facts["exit"] is not None and facts["exit"] != 0
+        if command_failed or status in {"error", "failed", "nonzero", "interrupted", "blocked"}:
+            trusted = None
+            for candidate in (state.get("public_error"), state.get("error"), state.get("output")):
+                if isinstance(candidate, (PublicError, PublicRuntimeError, TrustedPublicMessage)):
+                    trusted = to_public_error(candidate)
+                    break
+                trusted = public_error_from_wire(candidate)
+                if trusted is not None:
+                    break
+            state["metadata"] = facts
+            state.pop("raw", None)
+            state.pop("public_error", None)
+            state.pop("error", None)
+            state["output"] = trusted.message if trusted else shell_failure_text(
+                facts, infrastructure=not command_failed and status != "nonzero",
+            )
+            if status != "completed":
+                state["error"] = (trusted or PublicError("shell_failed", state["output"])).to_dict()
+            return projected
     if status not in {"error", "failed", "blocked", "nonzero", "interrupted"}:
         return projected
     public = None
@@ -1874,6 +1898,10 @@ def _tool_part(value: dict, message_id: str) -> dict | None:
         if attachments:
             clean_state["attachments"] = attachments
     if status == "error":
+        if tool == "bash" and isinstance(state.get("metadata"), dict):
+            from nz_coder.protocol.shell_diagnostics import shell_output_facts
+
+            clean_state["metadata"] = shell_output_facts(state["metadata"])
         clean_state["error"] = str(
             state.get("error") or "Tool execution failed"
         )[:4000]

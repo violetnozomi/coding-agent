@@ -17,6 +17,7 @@ from nz_coder.interface.presentation_tokens import clip_terminal_text
 from nz_coder.protocol.message_schema import message_records, normalize_assistant_error
 from nz_coder.protocol.run_view_reducer import RunViewReducer
 from nz_coder.protocol.public_error import public_error_message, to_public_error
+from nz_coder.protocol.shell_diagnostics import capture_shell_diagnostic, shell_failure_text, shell_output_facts
 from nz_coder.protocol.session_events import (
     EventSubscriptionGapError,
     SessionEvent,
@@ -150,6 +151,27 @@ class TerminalRunRenderer:
         self._run_reducer.replace_snapshot(selected)
         self._sync_text_projection()
         self._refresh_status()
+        self._restore_failure_cards()
+
+    def _restore_failure_cards(self) -> None:
+        """Restore bounded Bash diagnostics after either local or remote rebase."""
+        # A settled attach has no replay events. Restore the current run's
+        # failure cards from its authoritative ToolParts, using the same dedupe.
+        for part in self._run_reducer.state.tool_parts.values():
+            state = part.get("state", {})
+            if part.get("tool") != "bash" or state.get("status") in {"pending", "running"}:
+                continue
+            facts = shell_output_facts(state.get("metadata"))
+            nonzero = facts["exit"] is not None and facts["exit"] != 0
+            if not nonzero and state.get("status") not in {"error", "failed", "nonzero", "interrupted", "blocked"}:
+                continue
+            call_id = str(part.get("call_id") or part.get("id") or "")
+            if call_id and call_id not in self._rendered_tool_ids:
+                self._pending_completed[call_id] = {
+                    "name": "bash", "category": "execute", "tool_call_id": call_id,
+                    "status": "nonzero" if nonzero else "error", "metadata": facts,
+                }
+        self._flush_completed()
 
     def feed(
         self,
@@ -207,6 +229,7 @@ class TerminalRunRenderer:
                     "duration_ms": 0.0,
                     "category": "tool",
                     "summary": name,
+                    "metadata": {"diagnostic": capture_shell_diagnostic(output)} if name == "bash" else {},
                 })
             )
 
@@ -413,6 +436,7 @@ class TerminalRunRenderer:
                     self._run_reducer.apply_event(event)
             self._sync_text_projection()
             self._refresh_status()
+            self._restore_failure_cards()
         except (RuntimeError, TypeError, ValueError):
             if replacement is not None:
                 replacement.close()
@@ -529,6 +553,10 @@ class TerminalRunRenderer:
         duration = float(properties.get("duration_ms") or 0.0)
         summary = _sanitize(str(properties.get("summary") or name), 240)
         raw_output = str(properties.get("output") or "")
+        if name == "bash" and status in {"error", "failed", "nonzero", "blocked", "interrupted"}:
+            raw_output = shell_failure_text(
+                properties.get("metadata"), infrastructure=status != "nonzero",
+            )
         if name == "process":
             process_card = _process_card(raw_output, properties)
             if process_card is not None:

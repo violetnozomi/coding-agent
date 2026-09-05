@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from nz_coder.foundation import config
+from nz_coder.protocol.shell_diagnostics import shell_output_facts
 from nz_coder.state.changes import ChangeTracker
 from nz_coder.state.context import (
     auto_compact,
@@ -4380,6 +4381,9 @@ class ProductRunEnvironment:
                 ),
                 "output_len": len(output),
                 "output": output,
+                **({"metadata": shell_output_facts(result_r.metadata)}
+                   if result_r.name == "bash" and (result_r.command_failed or result_r.dispatch_failed)
+                   else {}),
             },
         )
 

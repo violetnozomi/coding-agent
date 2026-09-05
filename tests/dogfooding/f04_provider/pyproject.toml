@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nzcoder-f04-offline-provider"
+version = "0.0.1"
+requires-python = ">=3.10"
+
+[project.entry-points."nz_coder.providers"]
+f04-offline = "f04_scripted:factory"
+
+[tool.setuptools]
+py-modules = ["f04_scripted"]
