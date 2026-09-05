@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nzcoder-r1-acceptance-provider"
+version = "0.0.1"
+description = "Private-run instrumentation, not an NZ-Coder product dependency"
+requires-python = ">=3.10"
+
+[project.entry-points."nz_coder.providers"]
+r1-metered = "r1_provider:factory"
+r1-scripted = "r1_scripted:factory"
+
+[tool.setuptools]
+py-modules = ["r1_provider", "r1_scripted"]
