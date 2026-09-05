@@ -67,6 +67,7 @@ jobs:
             tests/security/test_project_control_snapshot.py `
             tests/security/test_transaction_recovery.py `
             tests/security/test_transaction_track.py `
+            tests/security/test_pr2_remaining_regressions.py `
             tests/test_lsp.py `
             tests/test_lsp_workspace_config.py `
             tests/test_mcp.py 2>&1 | Tee-Object artifacts/windows-product-tests.txt
