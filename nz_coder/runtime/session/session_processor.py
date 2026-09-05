@@ -547,12 +547,18 @@ class SessionProcessor:
         error: object,
         *,
         interrupted: bool = False,
+        metadata: dict | None = None,
     ) -> None:
         """Settle a tool as error, discarding partial interrupted output."""
         part = self._tool_part(call_id)
         if part is None:
             return
         start = part.get("state", {}).get("time", {}).get("start", time.time())
+        facts = {}
+        if part.get("tool") == "bash" and metadata is not None:
+            from nz_coder.protocol.shell_diagnostics import shell_output_facts
+
+            facts = {"metadata": shell_output_facts(metadata)}
         self._update({
             **part,
             "state": {
@@ -561,6 +567,7 @@ class SessionProcessor:
                 "error": to_public_error(error).message,
                 "interrupted": bool(interrupted),
                 "time": {"start": start, "end": time.time()},
+                **facts,
             },
         })
 
@@ -578,7 +585,7 @@ class SessionProcessor:
     ) -> None:
         """Consume one tool-result/error event and update processor control state."""
         if failed:
-            self.fail_tool(call_id, output, interrupted=False)
+            self.fail_tool(call_id, output, interrupted=False, metadata=metadata)
         else:
             self.complete_tool(
                 call_id,

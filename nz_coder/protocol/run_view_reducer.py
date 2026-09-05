@@ -200,6 +200,8 @@ class RunViewReducer:
                 "status": str(properties.get("status") or "completed"),
                 "output": str(properties.get("output") or ""),
             })
+            if isinstance(properties.get("metadata"), dict):
+                state["metadata"] = copy.deepcopy(properties["metadata"])
             self._state.tool_parts[selected_key] = {
                 **copy.deepcopy(existing),
                 "id": call_id,

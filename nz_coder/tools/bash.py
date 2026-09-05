@@ -21,6 +21,7 @@ from nz_coder.foundation.workspace_paths import (
     model_command_private_path,
 )
 from nz_coder.protocol.public_error import format_public_error
+from nz_coder.protocol.shell_diagnostics import capture_shell_diagnostic, shell_failure_text
 from nz_coder.runtime.core.execution_context import (
     broad_tests_blocked,
     declared_test_scopes,
@@ -103,6 +104,12 @@ class _BoundedCommandOutput:
                 + tail
             )
         return _truncate_output(value, limit) if limit is not None else value
+
+    @property
+    def retained_bytes(self) -> int:
+        """UTF-8 size of retained decoded text, excluding synthetic notices."""
+        text = self._head + "".join(self._tail) if self.truncated else "".join(self._initial)
+        return len(text.encode("utf-8"))
 
     def _retain(self, text: str) -> None:
         if not text:
@@ -509,7 +516,9 @@ def run_bash(
             break
         now = time.monotonic()
         if now - last_report >= 0.1:
-            preview = output_buffer.render(progress_limit).strip()
+            # Exit status is not known yet. Publishing raw progress would leak
+            # failure diagnostics before the final public boundary can hide them.
+            preview = f"Command running; {output_buffer.total_bytes} output bytes captured."
             report_tool_metadata(
                 title=title,
                 metadata={
@@ -550,14 +559,19 @@ def run_bash(
             )
     output_buffer.finish()
 
-    if timed_out:
-        evidence = output_buffer.render(progress_limit).strip()
-        suffix = f"\n{evidence}" if evidence else ""
-        return f"Error: Command timed out ({timeout_seconds}s){suffix}"
-    if cancelled:
-        evidence = output_buffer.render(progress_limit).strip()
-        suffix = f"\n{evidence}" if evidence else ""
-        return f"Error: Command cancelled{suffix}"
+    if timed_out or cancelled:
+        facts = {
+            "exit": process.returncode,
+            "truncated": output_buffer.truncated or len(output_buffer.render()) > config.CONTEXT_TRUNCATE_CHARS,
+            "total_output_bytes": output_buffer.total_bytes,
+            "retained_output_bytes": output_buffer.retained_bytes,
+            "termination": "timeout" if timed_out else "cancelled",
+            "diagnostic": capture_shell_diagnostic(output_buffer.render()),
+        }
+        text = f"Error: Command timed out ({timeout_seconds}s)" if timed_out else "Error: Command cancelled"
+        if output_buffer.total_bytes:
+            text += "\n" + shell_failure_text(facts)
+        return ToolOutput(text, title=title, metadata=facts)
 
     output = output_buffer.render().strip()
     if output_buffer.limit_exceeded:
@@ -571,18 +585,31 @@ def run_bash(
     if not output:
         output = f"({command.split()[0] if command.split() else 'bash'} completed with no output)"
     truncated = output_buffer.truncated or len(output) > config.CONTEXT_TRUNCATE_CHARS
+    diagnostic = capture_shell_diagnostic(output_buffer.render())
+    if process.returncode != 0:
+        output = (
+            f"Command exited with code {process.returncode}\n"
+            + shell_failure_text({"exit": process.returncode, "truncated": truncated,
+                                  "diagnostic": diagnostic,
+                                  "output_limit_exceeded": output_buffer.limit_exceeded})
+        )
+    else:
+        # Keep normal command results compatible; publish their live preview
+        # only after successful settlement, not while status is still unknown.
+        report_tool_metadata(title=title, metadata={"output": _truncate_output(output, progress_limit)})
     return ToolOutput(
         output,
         title=title,
         metadata={
             "output": _truncate_output(output, progress_limit),
-            "exit": int(process.returncode or 0),
+            "exit": process.returncode,
             "description": description,
             "workdir": str(resolved_workdir),
             "shell_kind": shell.kind.value,
             "truncated": truncated,
             "total_output_bytes": output_buffer.total_bytes,
-            "retained_output_bytes": output_buffer.retained_chars,
+            "retained_output_bytes": output_buffer.retained_bytes,
+            "diagnostic": diagnostic,
             "output_limit_exceeded": output_buffer.limit_exceeded,
             "executed_command": command,
             "requested_command": requested_command,

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from nz_coder.foundation.json_safety import json_safe_value
+from nz_coder.protocol.shell_diagnostics import shell_failure_text, shell_output_facts
 from nz_coder.protocol.message_schema import (
     normalize_assistant_error,
     project_public_protocol_value,
@@ -62,8 +63,14 @@ def _safe_event_properties(properties: dict[str, Any]) -> dict[str, Any]:
         "failed",
         "nonzero",
         "blocked",
+        "interrupted",
     }:
-        if "output" in projected:
+        if projected.get("name") == "bash":
+            projected["metadata"] = shell_output_facts(projected.get("metadata"))
+            projected["output"] = shell_failure_text(
+                projected["metadata"], infrastructure=projected.get("status") != "nonzero",
+            )
+        elif "output" in projected:
             projected["output"] = "Tool execution failed."
     payload = json_safe_value(projected)
     return payload if isinstance(payload, dict) else {}
