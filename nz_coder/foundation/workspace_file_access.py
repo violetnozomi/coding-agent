@@ -284,6 +284,8 @@ class WorkspaceFileAccess:
             return
         parent, name = self._open_parent_posix(relative, create=True)
         temporary = f".nzcoder-{uuid.uuid4().hex}.tmp"
+        receipt = None
+        published_identity = None
         try:
             try:
                 current_info = os.stat(name, dir_fd=parent, follow_symlinks=False)
@@ -300,7 +302,7 @@ class WorkspaceFileAccess:
             if current.expected_exists and not overwrite:
                 raise PublicInputError("target already exists and overwrite=false")
             if transaction is not None and getattr(transaction, "active", False):
-                transaction.track_anchored(
+                receipt = transaction.track_anchored(
                     relative.as_posix(), parent_fd=parent,
                 )
             flags = (
@@ -309,6 +311,10 @@ class WorkspaceFileAccess:
             )
             descriptor = os.open(temporary, flags, 0o600, dir_fd=parent)
             try:
+                if receipt is not None:
+                    candidate = type(receipt)()
+                    candidate.capture(descriptor)
+                    published_identity = candidate.identity
                 data = content.encode("utf-8")
                 view = memoryview(data)
                 while view:
@@ -328,6 +334,10 @@ class WorkspaceFileAccess:
                     temporary, name, src_dir_fd=parent, dst_dir_fd=parent,
                     follow_symlinks=False,
                 )
+            if receipt is not None:
+                receipt.identity = published_identity
+                receipt.applied = True
+            if not overwrite:
                 os.unlink(temporary, dir_fd=parent)
             os.fsync(parent)
         finally:
@@ -347,16 +357,20 @@ class WorkspaceFileAccess:
             self._delete_windows(relative, transaction, expected=expected)
             return
         parent, name = self._open_parent_posix(relative, create=False)
+        receipt = None
         try:
             info = os.stat(name, dir_fd=parent, follow_symlinks=False)
             if not stat.S_ISREG(info.st_mode):
                 raise ValueError("Workspace target is not a regular file")
             self._validate_expected(self._identity_from_stat(info), expected)
             if transaction is not None and getattr(transaction, "active", False):
-                transaction.track_anchored(
+                receipt = transaction.track_anchored(
                     relative.as_posix(), parent_fd=parent,
                 )
             os.unlink(name, dir_fd=parent)
+            if receipt is not None:
+                receipt.identity = None
+                receipt.applied = True
             os.fsync(parent)
         finally:
             os.close(parent)
@@ -828,6 +842,8 @@ class WorkspaceFileAccess:
         )
         parent_path = Path(_windows_final_path(handle))
         temporary: Path | None = None
+        receipt = None
+        published_identity = None
         try:
             target_path = parent_path / relative.name
             try:
@@ -844,19 +860,34 @@ class WorkspaceFileAccess:
             if current.expected_exists and not overwrite:
                 raise PublicInputError("target already exists and overwrite=false")
             if transaction is not None and getattr(transaction, "active", False):
-                transaction.track_anchored(
+                receipt = transaction.track_anchored(
                     relative.as_posix(), windows_parent_handle=handle,
                 )
             if not overwrite:
                 descriptor = os.open(target_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                with os.fdopen(descriptor, "wb") as stream:
-                    stream.write(data)
-                    stream.flush()
-                    os.fsync(stream.fileno())
+                if receipt is not None:
+                    receipt.applied = True
+                    receipt.identity = None
+                try:
+                    if receipt is not None:
+                        receipt.capture(descriptor)
+                    stream = os.fdopen(descriptor, "wb")
+                    descriptor = -1  # fdopen now owns the descriptor.
+                    with stream:
+                        stream.write(data)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                finally:
+                    if descriptor >= 0:
+                        os.close(descriptor)
                 return
             descriptor, raw = tempfile.mkstemp(prefix=".nzcoder-", suffix=".tmp", dir=parent_path)
             temporary = Path(raw)
             with os.fdopen(descriptor, "wb") as stream:
+                if receipt is not None:
+                    candidate = type(receipt)()
+                    candidate.capture(stream.fileno())
+                    published_identity = candidate.identity
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
@@ -865,6 +896,9 @@ class WorkspaceFileAccess:
             if Path(_windows_final_path(handle)) != parent_path.resolve():
                 raise ValueError("Workspace parent identity changed")
             os.replace(temporary, parent_path / relative.name)
+            if receipt is not None:
+                receipt.identity = published_identity
+                receipt.applied = True
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
@@ -891,9 +925,10 @@ class WorkspaceFileAccess:
         )
         parent_path = Path(_windows_final_path(handle))
         target_handle: int | None = None
+        receipt = None
         try:
             if transaction is not None and getattr(transaction, "active", False):
-                transaction.track_anchored(
+                receipt = transaction.track_anchored(
                     relative.as_posix(), windows_parent_handle=handle,
                 )
 
@@ -962,6 +997,9 @@ class WorkspaceFileAccess:
                 raise OSError(
                     ctypes.get_last_error(), "Workspace target cannot be deleted",
                 )
+            if receipt is not None:
+                receipt.identity = None
+                receipt.applied = True
         finally:
             if target_handle is not None:
                 _windows_close(target_handle)

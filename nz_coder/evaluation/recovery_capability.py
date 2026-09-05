@@ -89,7 +89,8 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
         transaction = TransactionManager()
         transaction.begin()
         transaction.track("partial.txt")
-        partial.write_text("partial\n", encoding="utf-8")
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+        WorkspaceFileAccess(workspace).write_text("partial.txt", "partial\n", transaction=transaction)
         rollback = transaction.rollback()
     runs.append({
         "case_id": "R4", "failure": "partial_write", "expected_action": "rollback",

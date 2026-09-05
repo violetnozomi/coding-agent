@@ -1,7 +1,7 @@
 """Recoverable, workspace-confined multi-file edit transactions."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import os
 from pathlib import Path
@@ -36,6 +36,26 @@ class _Backup:
     original_atime_ns: int | None = None
     original_mtime_ns: int | None = None
     original_size: int | None = None
+    mutation: MutationReceipt = field(default_factory=lambda: MutationReceipt())
+
+
+@dataclass
+class MutationReceipt:
+    """Prepared recovery data gains ownership only at a successful syscall."""
+
+    applied: bool = False
+    identity: tuple[int, int] | None = None
+
+    def capture(self, descriptor: int) -> None:
+        """Capture the opened object's identity without reopening its path."""
+        if os.name == "nt":
+            import msvcrt
+            from nz_coder.foundation.project_control import _windows_handle_info
+
+            self.identity = _windows_handle_info(msvcrt.get_osfhandle(descriptor))
+        else:
+            info = os.fstat(descriptor)
+            self.identity = (int(info.st_dev), int(info.st_ino))
 
 
 @dataclass
@@ -93,7 +113,7 @@ class TransactionManager:
         self._backups = {}
         self._backup_dir = Path(tempfile.mkdtemp(prefix="nzcoder_txn_"))
 
-    def track(self, file_path: str | os.PathLike[str]) -> None:
+    def track(self, file_path: str | os.PathLike[str]) -> MutationReceipt | None:
         """Snapshot a target through handles anchored at the workspace root."""
         if not self._active:
             return
@@ -107,7 +127,7 @@ class TransactionManager:
             raise ValueError("Transaction target escapes workspace") from exc
         key = str(target)
         if key in self._backups:
-            return
+            return self._backups[key].mutation
         if self._backup_dir is None:
             raise RuntimeError("Transaction backup directory is unavailable")
         if os.name == "nt":
@@ -115,6 +135,7 @@ class TransactionManager:
         else:
             record = self._track_posix(root, target, relative)
         self._backups[key] = record
+        return record.mutation
 
     @staticmethod
     def _verify_anchored_parent(
@@ -147,10 +168,10 @@ class TransactionManager:
         *,
         parent_fd: int | None = None,
         windows_parent_handle: int | None = None,
-    ) -> None:
+    ) -> MutationReceipt | None:
         """Snapshot through the same held parent used by the pending mutation."""
         if not self._active:
-            return
+            return None
         root = current_workdir().resolve(strict=True)
         raw = Path(file_path)
         lexical = raw if raw.is_absolute() else root / raw
@@ -167,7 +188,7 @@ class TransactionManager:
                 parent_fd=parent_fd,
                 windows_parent_handle=windows_parent_handle,
             )
-            return
+            return existing.mutation
         if self._backup_dir is None:
             raise RuntimeError("Transaction backup directory is unavailable")
         if os.name == "nt":
@@ -183,6 +204,7 @@ class TransactionManager:
                 root, target, relative, parent_fd,
             )
         self._backups[key] = record
+        return record.mutation
 
     def _track_posix_anchored(
         self,
@@ -635,6 +657,8 @@ class TransactionManager:
         deleted: list[str] = []
         failed: dict[str, _Backup] = {}
         for key, record in tuple(self._backups.items()):
+            if not record.mutation.applied:
+                continue
             parent: _RecoveryParent | None = None
             try:
                 parent = self._validate_recovery_target(record)
@@ -951,6 +975,8 @@ class TransactionManager:
                 return
             if stat.S_ISDIR(info.st_mode):
                 raise ValueError("Transaction cannot safely remove a new directory")
+            if record.mutation.identity != (int(info.st_dev), int(info.st_ino)):
+                raise ValueError("Transaction created target identity changed")
             os.unlink(target.name, dir_fd=parent.fd)
             os.fsync(parent.fd)
             return
@@ -998,6 +1024,12 @@ class TransactionManager:
             parent_path = cls._windows_final_path(parent_handle)
             if ntpath.normcase(ntpath.dirname(target_path)) != ntpath.normcase(parent_path):
                 raise ValueError("Transaction recovery parent identity changed")
+
+            from nz_coder.foundation.project_control import _windows_handle_info
+
+            attributes, device, inode, _size = _windows_handle_info(value, full=True)
+            if attributes & (0x400 | 0x10) or record.mutation.identity != (device, inode):
+                raise ValueError("Transaction created target identity changed")
 
             class _FileDispositionInfo(ctypes.Structure):
                 _fields_ = (("delete_file", wintypes.BOOLEAN),)

@@ -193,7 +193,8 @@ def test_transaction_commit():
 
         txn.begin()
         txn.track("txn_test.txt")
-        test_file.write_text("modified")
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+        WorkspaceFileAccess(tmpdir).write_text("txn_test.txt", "modified", transaction=txn)
         txn.commit()
 
         # After commit, the modified content should remain
@@ -220,7 +221,8 @@ def test_transaction_rollback():
 
         txn.begin()
         txn.track("txn_test.txt")
-        test_file.write_text("bad change")
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+        WorkspaceFileAccess(tmpdir).write_text("txn_test.txt", "bad change", transaction=txn)
         report = txn.rollback()
 
         # After rollback, original content should be restored
@@ -246,7 +248,8 @@ def test_transaction_rollback_new_file():
 
         txn.begin()
         txn.track("new_file.txt")
-        (tmpdir / "new_file.txt").write_text("should be deleted")
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+        WorkspaceFileAccess(tmpdir).write_text("new_file.txt", "should be deleted", transaction=txn)
         report = txn.rollback()
 
         # New file should be deleted on rollback

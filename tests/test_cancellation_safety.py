@@ -66,7 +66,8 @@ def test_cancelled_write_thread_is_drained_then_rolled_back(monkeypatch, tmp_pat
                 started.set()
                 release.wait(timeout=2)
                 self.txn.track("late.txt")
-                target.write_text("after-cancel", encoding="utf-8")
+                from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+                WorkspaceFileAccess(tmp_path).write_text("late.txt", "after-cancel", transaction=self.txn)
 
             await _to_thread_settled(late_write)
             return []
@@ -156,7 +157,8 @@ def test_post_dispatch_failure_rolls_back_active_transaction(monkeypatch, tmp_pa
 
         async def _dispatch_tool_calls_async(self, _calls, _has_write, _messages):
             self.txn.track("callback.txt")
-            target.write_text("after", encoding="utf-8")
+            from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+            WorkspaceFileAccess(tmp_path).write_text("callback.txt", "after", transaction=self.txn)
             return []
 
         def _consume_dispatched_tools(self, _dispatched, _messages, *, on_tool=None):

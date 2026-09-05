@@ -6,6 +6,8 @@ import os
 
 import pytest
 
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
 
 def test_partial_rollback_continues_and_can_retry(tmp_path, monkeypatch):
     from nz_coder.runtime.process.workdir import scoped_workdir
@@ -21,7 +23,7 @@ def test_partial_rollback_continues_and_can_retry(tmp_path, monkeypatch):
         transaction.begin()
         for path in (first, second, third):
             transaction.track(path.name)
-            path.write_text("after", encoding="utf-8")
+            WorkspaceFileAccess(tmp_path).write_text(str(path), "after", transaction=transaction)
         original = transaction._restore_backup
         failed_once = False
 
@@ -82,7 +84,7 @@ def test_rollback_handles_new_file_and_is_idempotent(tmp_path):
         transaction.begin()
         transaction.track("new-target")
         target = tmp_path / "new-target"
-        target.write_text("generated", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "generated", transaction=transaction)
         report = transaction.rollback()
         second = transaction.rollback()
 
@@ -102,7 +104,7 @@ def test_original_exception_remains_primary_when_rollback_is_partial(tmp_path, m
     with scoped_workdir(tmp_path):
         transaction.begin()
         transaction.track("app.py")
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=transaction)
         monkeypatch.setattr(
             transaction,
             "_restore_backup",
@@ -134,7 +136,7 @@ def test_parent_symlink_swap_after_track_is_rejected_and_retryable(tmp_path):
     with scoped_workdir(tmp_path):
         transaction.begin()
         transaction.track("package/module.py")
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=transaction)
         parent.rename(original_parent)
         try:
             parent.symlink_to(outside, target_is_directory=True)
@@ -172,7 +174,7 @@ def test_rollback_detects_parent_identity_change(tmp_path):
     with scoped_workdir(tmp_path):
         transaction.begin()
         transaction.track("package/module.py")
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=transaction)
         parent.rename(moved)
         parent.mkdir()
         (parent / "module.py").write_text("replacement", encoding="utf-8")
@@ -203,7 +205,7 @@ def test_parent_junction_swap_after_track_is_rejected(tmp_path):
     with scoped_workdir(tmp_path):
         transaction.begin()
         transaction.track("package/module.py")
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=transaction)
         parent.rename(original_parent)
         os.system(f'mklink /J "{parent}" "{outside}" >NUL')
         if not parent.exists():
@@ -239,7 +241,7 @@ def test_parent_swap_after_validation_before_restore_cannot_escape(
     with scoped_workdir(tmp_path):
         transaction.begin()
         transaction.track("package/module.py")
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=transaction)
         original = transaction._restore_backup_posix
 
         def swap_after_validation(record, backup, *args):
@@ -274,7 +276,7 @@ def test_parent_swap_after_validation_before_delete_cannot_escape(
         transaction.begin()
         transaction.track("generated/new.py")
         target = parent / "new.py"
-        target.write_text("generated", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "generated", transaction=transaction)
         original = transaction._validate_recovery_target
 
         def swap_after_validation(record):
@@ -299,6 +301,8 @@ def test_unsafe_new_directory_delete_fails_closed_and_preserves_retry(tmp_path):
         transaction.begin()
         transaction.track("generated")
         target = tmp_path / "generated"
+        WorkspaceFileAccess(tmp_path).write_text("generated", "owned", transaction=transaction)
+        target.unlink()
         target.mkdir()
         (target / "sentinel.txt").write_text("keep", encoding="utf-8")
 
@@ -330,7 +334,7 @@ def test_intermediate_parent_swap_is_handle_anchored(tmp_path, monkeypatch):
     with scoped_workdir(tmp_path):
         transaction.begin()
         transaction.track("src/pkg/app.py")
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=transaction)
         original = transaction._restore_backup_posix
 
         def swap_after_open(record, backup, parent_guard):
@@ -361,8 +365,8 @@ def test_nonexistent_parent_created_after_track_cannot_escape(tmp_path):
         (tmp_path / "missing").symlink_to(outside, target_is_directory=True)
         report = transaction.rollback()
 
-    assert transaction.state == "rollback_partial"
-    assert "retry is available" in report
+    assert transaction.state == "rolled_back"
+    assert report == ""  # PREPARED only: no mutation and no recovery authority.
     assert sentinel.read_text(encoding="utf-8") == "sentinel"
 
 
@@ -378,7 +382,7 @@ def test_windows_handle_relative_restore_works(tmp_path):
     with scoped_workdir(tmp_path):
         transaction.begin()
         transaction.track("module.py")
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=transaction)
         record = next(iter(transaction._backups.values()))
         assert record.backup is not None
         parent = transaction._validate_recovery_target(record)
@@ -411,7 +415,7 @@ def test_windows_parent_swap_during_recovery_is_blocked_or_fails_closed(
     with scoped_workdir(tmp_path):
         transaction.begin()
         transaction.track("package/module.py")
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=transaction)
         original = transaction._restore_backup
 
         def attempt_swap(record, backup, parent_guard):

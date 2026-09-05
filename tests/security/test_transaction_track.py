@@ -7,6 +7,8 @@ import stat
 
 import pytest
 
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
 
 def _manager(workspace: Path):
     from nz_coder.state.transaction import TransactionManager
@@ -215,7 +217,7 @@ def test_posix_rollback_restores_mode_and_mtime(tmp_path, mode):
         manager = _manager(tmp_path)
         manager.track("script.sh")
         target.chmod(0o600)
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=manager)
         manager.rollback()
     restored = target.stat()
     assert target.read_text(encoding="utf-8") == "before"
@@ -243,7 +245,7 @@ def test_metadata_restore_failure_keeps_backup_for_retry(tmp_path, monkeypatch):
     with scoped_workdir(tmp_path):
         manager = _manager(tmp_path)
         manager.track("script.sh")
-        target.write_text("after", encoding="utf-8")
+        WorkspaceFileAccess(tmp_path).write_text(str(target), "after", transaction=manager)
         monkeypatch.setattr(os, "fchmod", fail_once)
         first = manager.rollback()
         assert manager.state == "rollback_partial"
