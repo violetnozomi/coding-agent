@@ -19,6 +19,7 @@ from nz_coder.protocol.message_schema import (
     project_provider_private_payload,
 )
 from nz_coder.runtime.conversation.continuation_context import project_continuation_messages
+from nz_coder.runtime.conversation.tool_recovery import project_tool_recovery_messages
 from nz_coder.state.input_expansion import render_expanded_message
 
 
@@ -43,7 +44,9 @@ def project_provider_messages(
         or getattr(capabilities, "model_id", "")
         or ""
     )
+    original_messages = messages
     messages = project_continuation_messages(messages)
+    messages = project_tool_recovery_messages(messages, original_messages=original_messages)
     empty_tool_assistant_ordinals = _empty_tool_assistant_ordinals(messages)
     calls_before, results_before = _tool_envelope_counts(messages)
     messages = cleanup_incomplete_tool_history(messages)

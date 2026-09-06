@@ -242,6 +242,12 @@ def project_public_tool_part(part: object) -> dict:
     if not isinstance(state, dict):
         projected["state"] = {}
         return projected
+    if "recovery" in state:
+        recovery = normalize_tool_recovery(state["recovery"])
+        if recovery:
+            state["recovery"] = recovery
+        else:
+            state.pop("recovery", None)
     status = str(state.get("status") or "").casefold()
     if projected.get("tool") == "bash":
         from nz_coder.protocol.shell_diagnostics import shell_failure_text, shell_output_facts
@@ -899,6 +905,16 @@ def settle_interrupted_parts(messages: list[dict]) -> int:
                 state = part.get("state")
                 if isinstance(state, dict) and state.get("status") in {"pending", "running"}:
                     start = state.get("time", {}).get("start", now)
+                    # This is display settlement, not evidence that dispatch
+                    # never happened or that file effects were compensated.
+                    recovery = normalize_tool_recovery(state.get("recovery")) or {
+                        "version": 1,
+                        "execution_state": (
+                            "running" if state["status"] == "running" else "uncertain"
+                        ),
+                        "terminal_cause": "unknown",
+                        "side_effect_state": "unknown",
+                    }
                     part["state"] = {
                         "status": "error",
                         "input": copy.deepcopy(state.get("input"))
@@ -906,6 +922,7 @@ def settle_interrupted_parts(messages: list[dict]) -> int:
                         else {},
                         "error": "Tool execution aborted",
                         "interrupted": True,
+                        "recovery": recovery,
                         "time": {"start": start, "end": now},
                     }
                     settled += 1
@@ -1858,6 +1875,65 @@ def _handoff_part(value: dict, message_id: str) -> dict | None:
     return result
 
 
+def normalize_tool_recovery(value: object) -> dict:
+    """Validate the closed, runtime-authored ledger projection on a ToolPart.
+
+    Absence of ledger identities denotes legacy facts, never ledger ownership.
+    Normalization and model projection do not reconcile execution ownership.
+    """
+    if (
+        not isinstance(value, dict)
+        or type(value.get("version")) is not int
+        or value["version"] != 1
+    ):
+        return {}
+    clean: dict = {"version": 1}
+    enums = {
+        "execution_state": {
+            "registered", "running", "succeeded", "failed", "not_executed", "uncertain",
+        },
+        "terminal_cause": {
+            "none", "user_cancelled", "permission_denied", "timeout", "exception",
+            "process_lost", "unknown",
+        },
+        "side_effect_state": {
+            "unknown", "none", "committed", "compensated", "reverted", "conflict",
+        },
+    }
+    for key, values in enums.items():
+        item = value.get(key)
+        if isinstance(item, str) and item in values:
+            clean[key] = item
+    for key in (
+        "execution_id", "workspace_id", "session_id", "interaction_id",
+        "assistant_step_id", "agent_id", "attempt_id", "result_ref",
+    ):
+        item = value.get(key)
+        if isinstance(item, str) and item and len(item) <= 500:
+            clean[key] = item
+    sequence = value.get("sequence")
+    if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence >= 0:
+        clean["sequence"] = sequence
+    files = value.get("files")
+    if isinstance(files, list):
+        clean["files"] = []
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            record = {}
+            for key in ("path", "operation_id", "before_ref", "after_ref"):
+                entry = item.get(key)
+                if isinstance(entry, str) and entry and len(entry) <= 4096:
+                    record[key] = entry
+            if item.get("state") in (
+                "unknown", "confirmed", "committed", "compensated", "reverted", "conflict",
+            ):
+                record["state"] = item["state"]
+            if record:
+                clean["files"].append(record)
+    return clean
+
+
 def _tool_part(value: dict, message_id: str) -> dict | None:
     tool = value.get("tool")
     call_id = value.get("call_id")
@@ -1873,6 +1949,9 @@ def _tool_part(value: dict, message_id: str) -> dict | None:
         "status": status,
         "input": copy.deepcopy(state.get("input")) if isinstance(state.get("input"), dict) else {},
     }
+    recovery = normalize_tool_recovery(state.get("recovery"))
+    if recovery:
+        clean_state["recovery"] = recovery
     timing = _normalized_time(state.get("time"), allow_compacted=True)
     if timing:
         clean_state["time"] = timing
