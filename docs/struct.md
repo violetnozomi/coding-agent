@@ -1460,3 +1460,21 @@ HTTP undo/redo/recover 统一进入 `SessionReverter → RecoveryJournal`。不�
 可能读到跨代状态而报 KeyError。独立同步复现在基线与本轮均成立，Undo 的索引刷新
 期间也受影响；恢复返回后两者内容已刷新，不等于刷新中提供原子查询视图。本轮未
 扩展为索引架构重构，也没有删断言或新增 skip；后续通过不能抹掉这条失败记录。
+
+### 22.9 工具恢复补验：Windows identity、风险预算与 CLI 范围（2026-09-06）
+
+Windows 实际 RC 在 `fad7056` 暴露了同一文件混用 Python stat 与 WinAPI volume
+identity 的问题。共享 handle snapshot 现在供 read/overwrite/delete 和事务 receipt
+使用，不关闭 expected、parent/reparse 或 no-replace 检查；覆盖写入 fdopen 失败也
+显式释放未转交的描述符。Linux double 只是复现，不能替代原生 Windows 验收。
+
+恢复上下文先保留 unknown/conflict 副作用（包括执行成功的工具），再按已有任务
+相关性与持久顺序选择；短身份优先于长参数，三文件预览也优先未解决成员。6000
+字符内计算转义后的真实长度和遗漏风险数，不新增权威状态。每次 attach 清除旧
+工件提示，再复用/创建本次可读的工件，不能仅凭 artifact ID 格式承诺可回读。
+
+CLI 文件恢复成功不等于全部外部副作用已撤销。Undo 明示未撤销的 call ID，Redo
+明示没有重新执行外部工具；冲突/未完成保留 operation ID 和安全路径。原始参数
+不进入提示，Rich markup 和控制字符转义，SDK/HTTP schema 与 journal 状态不变。
+全部失败记录、独立复核与最终 Linux/Windows 分开验收见
+[R1–R3 追加记录](../tests/recovery/README.md#r1r3-repair-acceptance-2026-09-06-append-only-follow-up)。

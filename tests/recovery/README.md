@@ -357,3 +357,160 @@ Baseline: `72c793f74f19ffe9c35f8ce4bb48e2be26e24f37`.
 The following documentation-only commit records this acceptance report and the
 learning notes in `docs/struct.md`. The branch/worktree is kept locally; no push,
 PR or merge was performed. The root checkout is not the changed implementation.
+
+## R1–R3 repair acceptance (2026-09-06; append-only follow-up)
+
+This section follows the historical report above; its earlier unpushed/Windows
+unverified statements describe that earlier handoff, not the current branch.
+Baseline: `fad7056df72cdbe2f11355d7f5d455d9f8d798dc`.
+Code candidate: `48cf23384843fc056062522154e387320d6757b8` on
+`codex/tool-recovery-checkpoints`. Root `main` is unchanged. This round does not
+merge, create a PR, relax path/identity checks or call a paid Provider.
+
+### R1: one Windows handle identity convention
+
+The actual baseline Windows Product RC [run 34015217165](https://github.com/violetnozomi/coding-agent/actions/runs/34015217165)
+failed: **26 failed, 450 passed, 20 skipped, 11 errors**, exit 1. The job log shows
+`current.device=5969225261885072001` versus `expected.device=3606225537`, while
+inode, size and mtime match. This is a reproducible identity representation
+mismatch, not eleven independent HTTP defects. The failure remains evidence.
+
+`foundation/project_control.py::_windows_handle_snapshot` now obtains volume
+serial, file ID, size, FILETIME-derived timestamps and normalized Windows mode
+from the same `GetFileInformationByHandle` record. `_windows_handle_info` keeps
+its existing tuple interface for transaction receipts. In
+`foundation/workspace_file_access.py`, read-before/read-after, overwrite expected
+validation and deletion use that shared convention on held handles, rather than
+mixing handle identity with Python `os.stat().st_dev`. Existing type/reparse,
+parent/final-path, expected size/mtime, no-replace and receipt checks remain.
+Untransferred read/overwrite descriptors close even if `fdopen` fails.
+
+Tests exercise actual existing-file overwrite, binary/empty/create/read/delete,
+external modification and same-bytes/same-mtime replacement refusal, plus four
+registered file tools through ToolExecutor checkpoints. A Linux WinAPI double
+executes the real Windows overwrite method, but is not native Windows evidence.
+
+### R2: reserve recovery budget for unresolved effects
+
+`runtime/conversation/tool_recovery.py` ranks unknown/conflicted file effects
+first (including execution `succeeded`), then other unsettled execution, settled
+success, compensated/reverted effects, and proven non-execution. Within a tier,
+existing task/continuation path relevance precedes persisted sequence/position;
+new invocation IDs and UUID lexical order do not determine priority. An explicit
+new target is not overridden by an old continuation goal. File previews select
+unresolved files before their three-file limit, so a fourth conflicted file is
+not silently excluded from risk classification.
+
+Within the existing 6000-character block, compact high-risk call identities and
+states are reserved before long inputs/results/paths. Escaping is measured
+before admission. Total and unresolved omission counts are exact; repeated
+projection remains deterministic and does not change durable facts. Full facts
+still use the existing quota-bounded artifact service. `RecoveryRun._archive`
+clears stale historical hints, then publishes only a checked/recreated artifact
+for this run; small facts or missing/quota-failed storage do not promise an old,
+unreadable artifact. Output previews still require the prior guardrail admission.
+
+Actual first Native SDK → ModelGateway → offline FakeProvider request after a
+published-but-unconfirmed write contains these fields (other fields omitted):
+
+```json
+{"call_id":"call-recent-write","tool":"write_file","execution_state":"uncertain","terminal_cause":"process_lost","side_effect_state":"unknown"}
+```
+
+Thirty old refusals precede that write in the real ledger. The test verifies the
+new fact survives, the written bytes still exist, an archive reference is present,
+and no fabricated provider tool-result messages appear. Additional real native
+requests reject stale archive markers in both older and latest user messages.
+
+### R3: show the actual Undo/Redo scope
+
+`interface/commands/handlers/core.py` renders recorded files plus safe unsupported
+call IDs; no raw tool arguments/host paths are loaded for display. Nonprintable
+characters and Rich markup are escaped. Journal `completed` still means its
+recorded scope completed, not that arbitrary external effects were reversed.
+`RecoveryJournal.redo` now retains an existing pending operation ID in refusals.
+CLI tests use an actual journal and persisted mixed file/shell ownership, not a
+hand-constructed successful result. Ordinary file, conflict, legacy refusal and
+existing HTTP/SDK structured-result tests remain.
+
+Mixed-effect output includes (line wrapping depends on terminal width):
+
+```text
+Warning: external or unowned side effects were not automatically undone for tool calls: call-shell. Inspect their remaining effects.
+Warning: only recorded files were restored. External tool calls were not re-executed: call-shell. Inspect their remaining effects.
+```
+
+The first warning follows Undo's file success line; the second follows Redo's.
+Pending/conflicted output includes its status and available `recovery-…` operation
+ID or workspace-relative conflict path. It never recommends deleting the journal.
+
+### Retained RED results and independent review
+
+All commands ran in this branch worktree on Linux, Python 3.13.12; exit codes
+below are actual command results, not inferred from passed counts.
+
+| Command / stage | Actual result |
+| --- | --- |
+| `python -m pytest -q tests/recovery/test_windows_identity.py --tb=short`, before R1 | 1 failed, 9 passed; exit 1 |
+| Same file plus `-k overwrite`, before descriptor cleanup | 1 failed, 5 passed, 6 deselected; exit 1 |
+| `python -m pytest -q tests/recovery/test_recovery_priority.py --tb=short`, before R2 | 10 failed; exit 1 |
+| Priority/entry tests, `-k 'stale_archive or conflicted_effect or pending_recovery_retains' --tb=short`, review reproductions | 5 failed, 40 deselected; exit 1 |
+| Priority tests, `-k conflicted_effect --tb=short`, fourth-file reproduction | 2 failed, 2 passed, 15 deselected; exit 1 |
+| Targeted mixed/pending entry regressions, before R3 | 3 failed, 24 deselected; exit 1 |
+| Priority tests, `-k large_valid_operation_refs --tb=short`, long-reference reproduction | 1 failed, 19 deselected; exit 1 |
+| Priority + entry + model-recovery files after first review fixes | 79 passed; exit 0 |
+| Priority + model-recovery files after fourth-file fix | 53 passed; exit 0 |
+| Priority + model-recovery files after long-reference fix | 54 passed; exit 0 |
+
+The independent code reviewer found the stale artifact, missing pending ID and
+oversized optional-reference cases and confirmed the conflict classification gap.
+These were reproduced before fixing. Main-agent follow-up reproduced the
+truncated fourth-file gap. Optional result/file operation references now enter
+only after minimum call identity/state is reserved, without truncating usable IDs.
+Neither review uses Linux tests as a substitute for native Windows execution.
+
+First full run, started at `0c5e878`, using
+`python -m pytest -q --tb=short --junitxml=/tmp/nzcoder-recovery-r123.62vsc2/linux-full.xml`:
+**1 failed, 3927 passed, 35 skipped**, exit 1, 527.27 seconds. The parent-resume
+test expected a bare user string; R2 correctly prefixes `message_parent`'s
+`succeeded/unknown` state mutation. Source review confirmed that tool is registered
+serial/nontransactional, so it must not be mislabelled as a read-only/no-effect
+tool just to satisfy the old assertion. `946c8c5` strengthens the assertion to
+parse the actual recovery call/tool/states and require the exact original parent
+reply after the block. The original status assertions remain. Other source
+fixes landed while this first run was active; it is interim evidence only.
+
+The second full run at `946c8c5` (`linux-final.log/xml`) was deliberately stopped
+by the operator, exit 143, when the fourth-file fix required a new frozen source
+version. It is **not** a full-suite pass. The next run at `2f4cd63` used
+`linux-candidate.log/xml` and was likewise stopped (exit 143) for the final
+long-reference fix. The final run uses `linux-reviewed.log/xml`, without source
+changes during execution. No failed index/graph assertion was removed or skipped;
+the existing cross-generation race above remains an unresolved limitation.
+
+### Candidate verification and remote CI
+
+At this record's creation, final frozen-source full pytest, fresh-install recheck
+and native Windows CI are **pending**, so this is not yet merge-review approval.
+Observed interim subset results: recovery 151 passed; session/HTTP 82 passed;
+Ruff/compile/diff check exit 0. The candidate has two additional fourth-file
+regressions; final counts and exact CI SHAs will be appended after execution.
+Local evidence directory: `/tmp/nzcoder-recovery-r123.62vsc2` (not committed).
+
+| Commit | Scope |
+| --- | --- |
+| `7209c93` | R1 shared handle identity and real file/checkpoint regressions. |
+| `4d82717` | R2 joint risk, relevance, recency and bounded identity reservation. |
+| `ecab373` | R3 mixed-effect CLI scope, escaping and conflict diagnostics. |
+| `0c5e878` | R1 overwrite descriptor cleanup on `fdopen` failure. |
+| `c8f20da` | R2 archive revalidation and conflict priority from review. |
+| `7404b28` | R3 existing pending operation ID on refused Redo. |
+| `946c8c5` | Parent-resume integration assertion for the intended recovery prefix. |
+| `2f4cd63` | R2 unresolved fourth-file selection before preview truncation. |
+| `48cf233` | R2 minimum identity cannot be displaced by oversized optional references. |
+
+Remaining boundaries are unchanged: no arbitrary Bash/MCP rollback, no filesystem
+ACID or power-loss proof, no full Windows ACL/POSIX metadata restoration, no new
+ledger GC, and no atomic cross-generation index publication. Artifact availability
+is checked at attachment; ordinary subsequent quota/expiry races still require a
+safe read failure, not an indefinite retention guarantee.
