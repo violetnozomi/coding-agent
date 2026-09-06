@@ -103,8 +103,9 @@ class RecoveryJournal:
         return self.apply(operation, messages)
 
     def redo(self, messages: list[dict]) -> SessionRevertResult:
-        if self.pending():
-            raise RecoveryError("unfinished recovery must be reconciled first")
+        pending = self.pending()
+        if pending:
+            raise RecoveryError("unfinished recovery must be reconciled first", operation_id=pending["operation_id"])
         previous = self.latest()
         if not previous or previous["direction"] != "undo" or previous["status"] != "completed":
             raise RecoveryError("redo unavailable: no completed Undo or new work invalidated Redo", recovery_required=False)

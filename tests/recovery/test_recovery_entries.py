@@ -137,6 +137,11 @@ def test_cli_pending_recovery_retains_operation_status_and_safe_conflict_path(tm
     text = "\n".join(ctx.output)
     assert operation_id in text and "recovery_required" in text
     assert "PRIVATE_RAW_FAILURE" not in text and "delete" not in text.lower()
+    ctx.output.clear()
+    core.handle_redo(ctx)
+    text = "\n".join(ctx.output)
+    assert operation_id in text and "recovery_required" in text
+    assert "(not created)" not in text
 
 
 def test_cli_real_external_edit_conflict_keeps_path_and_status(tmp_path):
