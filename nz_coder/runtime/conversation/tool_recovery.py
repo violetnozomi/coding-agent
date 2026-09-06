@@ -161,16 +161,16 @@ def _risk(fact: dict) -> int:
     return 4  # Known non-execution with no unresolved file effect.
 
 
-def _compact_fact(fact: dict) -> dict:
+def _compact_fact(fact: dict, *, include_refs: bool = True) -> dict:
     """Reserve exact call identity and state before optional, bulky details."""
     compact = {key: fact[key] for key in (
         "call_id", "tool", "execution_state", "terminal_cause", "side_effect_state",
     )}
-    if fact.get("result_ref"):
+    if include_refs and fact.get("result_ref"):
         compact["result_ref"] = fact["result_ref"]
     files = fact.get("files", [])
     refs = [file["operation_id"] for file in files if file.get("operation_id")]
-    if refs:
+    if include_refs and refs:
         compact["file_operation_refs"] = refs
     if files or fact.get("omitted_files"):
         compact["omitted_files"] = len(files) + fact.get("omitted_files", 0)
@@ -236,7 +236,7 @@ def _block(facts: list[dict], messages: list[dict]) -> str:
     # path or result preview. Phase 2 upgrades details, then admits lower risks.
     for index, fact in enumerate(facts):
         if _risk(fact) == 0:
-            put(index, render(_compact_fact(fact)))
+            put(index, render(_compact_fact(fact, include_refs=False)))
     for index, fact in enumerate(facts):
         if _risk(fact) == 0 and index not in rows:
             continue
@@ -246,7 +246,7 @@ def _block(facts: list[dict], messages: list[dict]) -> str:
             detailed = dict(fact)
             detailed["omitted_files"] = fact.get("omitted_files", 0) + len(detailed.pop("files"))
             row = render(detailed)
-        if not put(index, row) and index not in rows:
+        if not put(index, row):
             put(index, render(_compact_fact(fact)))
     omitted = len(facts) - len(rows)
     risky_omitted = sum(_risk(fact) == 0 and index not in rows for index, fact in enumerate(facts))

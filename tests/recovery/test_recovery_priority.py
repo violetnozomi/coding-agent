@@ -163,3 +163,14 @@ def test_conflicted_effect_keeps_high_risk_identity_before_old_failures(effect, 
     request = project_provider_messages(_history([*_old("failed"), latest]))
     assert next(iter(_records(request))) == "call-conflict"
     assert "Unresolved tool facts omitted: 0 of 1" in _recovery_text(request)
+
+
+def test_large_valid_operation_refs_cannot_consume_minimum_high_risk_identity():
+    latest = _tool("call-critical", "running", recovery=_recovery(sequence=61,
+        files=[{"path": f"file-{i}.py", "state": "unknown", "operation_id": str(i) * 4096} for i in range(3)]))
+    request = project_provider_messages(_history([*_old("failed"), latest]))
+    record = _records(request)["call-critical"]
+    assert record["execution_state"] == "running" and record["side_effect_state"] == "unknown"
+    assert record["omitted_files"] == 3
+    assert "file_operation_refs" not in record  # Never advertise truncated/unreadable IDs.
+    assert len(_recovery_text(request)) <= 6000
