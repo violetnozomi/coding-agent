@@ -151,6 +151,10 @@ def test_first_native_request_does_not_promise_stale_archive_for_small_facts(mon
 
 @pytest.mark.parametrize("effect,files", [
     ("conflict", []), ("committed", [{"path": "parser.py", "state": "conflict"}]),
+    ("committed", [{"path": f"safe-{i}.py", "state": "committed"} for i in range(3)]
+     + [{"path": "parser.py", "state": "conflict"}]),
+    ("committed", [{"path": f"safe-{i}.py", "state": "committed"} for i in range(3)]
+     + [{"path": "parser.py", "state": "unknown"}]),
 ])
 def test_conflicted_effect_keeps_high_risk_identity_before_old_failures(effect, files):
     latest = _tool("call-conflict", "completed", recovery=_recovery(

@@ -111,7 +111,9 @@ def _facts(messages: list[dict]) -> list[dict]:
                 fact["error_summary"] = _preview(error.get("message", "Tool execution failed.") if isinstance(error, dict) else "Tool execution failed.", 300)
             files = fact.get("files")
             if isinstance(files, list) and len(files) > 3:
-                fact["files"] = files[:3]
+                # A settled prefix must not hide a later unresolved file from
+                # either risk selection or the bounded file preview.
+                fact["files"] = sorted(files, key=lambda file: file.get("state") not in {"unknown", "conflict"})[:3]
                 fact["omitted_files"] = len(files) - 3
             key = (
                 recovery.get("execution_id") or fact["session_ref"],
