@@ -514,3 +514,121 @@ ACID or power-loss proof, no full Windows ACL/POSIX metadata restoration, no new
 ledger GC, and no atomic cross-generation index publication. Artifact availability
 is checked at attachment; ordinary subsequent quota/expiry races still require a
 safe read failure, not an indefinite retention guarantee.
+
+### Checks at 48cf233 (before the native Windows follow-up below)
+
+Production changes for this verification pass are frozen at `48cf23384843fc056062522154e387320d6757b8`;
+`df62839ee428785873d58102c2ae8c38e015fabd` adds only this report and learning notes.
+The commands below ran on that unchanged source in
+`/home/pyh/nzcoder/.worktrees/tool-recovery`, Linux/Python 3.13.12.
+
+| Actual command | Result / exit code |
+| --- | --- |
+| `python -m pytest -q tests/recovery --tb=short` | 154 passed in 20.08s; exit 0 |
+| `python -m pytest -q tests/test_session_revert.py tests/test_http_service.py --tb=short` | 82 passed in 14.60s; exit 0 |
+| `python -m pytest -q --tb=short --junitxml=/tmp/nzcoder-recovery-r123.62vsc2/linux-reviewed.xml` | **1 failed, 3934 passed, 35 skipped** in 530.57s; exit 1 |
+| `python -m pytest -q tests/test_repo_intelligence_service.py::test_service_watcher_incrementally_indexes_create_change_delete --tb=short` | diagnostic isolated rerun: 1 passed in 0.39s; exit 0; does not erase the full-suite failure |
+| `python -m ruff check nz_coder tests` | All checks passed; exit 0 |
+| `python -m compileall -q nz_coder tests` | exit 0 |
+| `git diff --check` | exit 0 |
+| `python -m build --no-isolation --wheel --sdist --outdir /tmp/nzcoder-recovery-r123.62vsc2/reviewed-dist` | wheel + sdist built; exit 0 (`reviewed-build.log`) |
+
+Independent reviewer command on `48cf233`:
+
+```sh
+python -m pytest -q tests/recovery/test_recovery_priority.py tests/recovery/test_model_recovery.py tests/recovery/test_recovery_entries.py tests/recovery/test_windows_identity.py tests/test_subagent.py::test_subagent_can_request_parent_input_and_resume --tb=short
+```
+
+Reviewer-observed result: **95 passed in 13.09s**, exit 0. Final review found no
+remaining Critical/Important code blocker in R1/R2/R3, retained expected identity
+checks and output admission, and found no second recovery authority. The earlier
+findings and the separate index/graph limitation remain documented above.
+
+Fresh package commands ran **outside** the checkout, in
+`/tmp/nzcoder-recovery-r123.62vsc2`, using a new venv without system site packages:
+
+```sh
+python -m venv /tmp/nzcoder-recovery-r123.62vsc2/venv
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -m pip install /tmp/nzcoder-recovery-r123.62vsc2/final-dist/nz_coder-0.1.0-py3-none-any.whl
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -m pip install --no-deps --force-reinstall /tmp/nzcoder-recovery-r123.62vsc2/reviewed-dist/nz_coder-0.1.0-py3-none-any.whl
+XDG_STATE_HOME=/tmp/nzcoder-recovery-r123.62vsc2/reviewed-state /tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -I /home/pyh/nzcoder/.worktrees/tool-recovery/tests/recovery/fresh_install_smoke.py
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -m pip check
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/nz-coder --version
+python -m pip wheel --no-deps --no-build-isolation /tmp/nzcoder-recovery-r123.62vsc2/reviewed-dist/nz_coder-0.1.0.tar.gz --wheel-dir /tmp/nzcoder-recovery-r123.62vsc2/reviewed-sdist-wheel
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -m pip install --no-deps --force-reinstall /tmp/nzcoder-recovery-r123.62vsc2/reviewed-sdist-wheel/nz_coder-0.1.0-py3-none-any.whl
+XDG_STATE_HOME=/tmp/nzcoder-recovery-r123.62vsc2/reviewed-sdist-state /tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -I /home/pyh/nzcoder/.worktrees/tool-recovery/tests/recovery/fresh_install_smoke.py
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -m pip check
+```
+
+The initial `final-dist` wheel installs dependencies only; it predates the last R2
+changes and is **not** the final package acceptance. The `reviewed-dist` wheel and
+wheel rebuilt from its sdist contain the frozen source. Both isolated SDK smokes
+exit 0, assert imports from the venv, restore non-UTF-8 bytes through Undo/Redo and
+print `fresh-wheel SDK recovery smoke passed; provider_calls=0`. Install/build
+commands exit 0, both `pip check` runs exit 0, CLI version is `0.1.0`. Network
+dependency installation bypassed the host's failing proxy for those commands only;
+no user proxy or credential configuration was modified.
+
+The final Linux full suite is **not green**. Its remaining failure is
+`test_service_watcher_incrementally_indexes_create_change_delete`, at the first
+`_wait_until` for symbol `first` after creating `live.py`. No KeyError appears in
+this run. This is not proof that the earlier mixed-generation KeyError has the
+same cause; the timeout's cause remains unconfirmed. A single isolated diagnostic
+rerun passes. `git diff fad7056 -- nz_coder/intelligence tests/test_repo_intelligence_service.py`
+is empty. No watcher/index code, timing assertion or skip marker was changed to
+obtain a green result. Both the prior index race and this observed failure remain
+follow-up items outside R1/R2/R3. The full failure prevents claiming all required
+checks passed or giving an unconditional merge-review recommendation.
+
+### Actual remote CI at df62839 and Windows lock follow-up
+
+All four remote workflows finished on
+`df62839ee428785873d58102c2ae8c38e015fabd`, without rerunning failed jobs:
+
+| Workflow | Observed outcome |
+| --- | --- |
+| [Core Runtime 34022405906](https://github.com/violetnozomi/coding-agent/actions/runs/34022405906) | success; Linux Python 3.12 full suite 3934 passed, 36 skipped in 652.99s, exit 0; does not erase the local Linux failure |
+| [Repo Intelligence 34022405948](https://github.com/violetnozomi/coding-agent/actions/runs/34022405948) | success |
+| [Windows Installer 34022405884](https://github.com/violetnozomi/coding-agent/actions/runs/34022405884) | success; not a substitute for native product acceptance |
+| [Windows Product RC 34022405886](https://github.com/violetnozomi/coding-agent/actions/runs/34022405886) | **failure**; native product job 101457259478: 5 failed, 518 passed, 20 skipped in 436.73s, exit 1; fresh-install step skipped. Linux product sanity passed. |
+
+The actual native command still includes the entire `tests/recovery` directory.
+The Windows identity regression file has no skip and no failed case; the old
+device mismatch is absent. However, these five native failures remain evidence:
+
+1. `test_http_abort_retires_stream_part_before_run_settles`: second run did not
+   reach completed within the test's wait.
+2. `test_http_run_settled_is_the_manager_commit_barrier`: received
+   `server.heartbeat` where the test expected `session.run.settled` next.
+3. `test_sdk_cannot_recover_a_live_owned_session`: nonblocking Windows lock
+   acquisition leaks `PermissionError(errno=13)` instead of the shared live-owner
+   refusal. This is a deterministic recovery entry bug, not a timeout.
+4. `test_http_conflict_exposes_typed_details_without_overwriting_user_file`:
+   client response timeout; the server had generated the correct RecoveryError,
+   then its attempted response encountered WinError 10053 after client abort.
+5. `test_http_recovery_required_is_safe_and_retry_completes_actual_journal`:
+   client response timeout.
+
+The four HTTP cases are **not diagnosed as merely a slow runner**, nor silently
+declared fixed. Their timings/assertions and production HTTP code are unchanged.
+Native logs are retained locally as `windows-df62839.log`; Core full output as
+`core-df62839.log` in the same evidence directory, alongside the original
+`windows-raw-fad7056.log`.
+
+`f3343c6d265070693cac85f0503e5398da133a98` fixes only the confirmed recovery lock
+entry failure. `foundation/file_lock.py` normalizes nonblocking CRT lock
+acquisition EACCES/EAGAIN/EDEADLK to `BlockingIOError`; the existing reverter maps
+that to typed `RecoveryError`. It does not catch path permission errors, alter
+blocking behavior, enter the protected body, or unlock a byte it never owned.
+The contender descriptor still closes, allowing a later retry.
+
+```sh
+python -m pytest -q tests/recovery/test_recovery_locks.py --tb=short
+python -m pytest -q tests/recovery/test_recovery_locks.py tests/recovery/test_recovery_entries.py tests/security/test_protocol_and_lock_limits.py --tb=short
+```
+
+First command before the fix: **2 failed, 3 passed**, exit 1. Second command after
+the fix: **39 passed, 1 existing skip** in 5.47s, exit 0. The actual native live
+owner SDK test is retained; Linux CRT fault injection does not replace it.
+Full/source-package/native checks must now be repeated on this new source;
+none of the prior green checks alone approves this follow-up. No merge is made.
