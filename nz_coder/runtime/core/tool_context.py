@@ -53,7 +53,7 @@ class ToolPolicyContext:
 class ToolLifecycleContext:
     """Persistence and execution lifecycle operations for one tool run."""
 
-    checkpoint: Callable[[str], Awaitable[None]]
+    checkpoint: Callable[[list[dict], str], Awaitable[None]]
     processor_for_messages: ToolCallback
     write_override: ToolCallback | None
     begin_transaction: ToolCallback

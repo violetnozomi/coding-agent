@@ -1,0 +1,9 @@
+{
+  "include": [
+    "../../nz_coder/runtime/core/tool_context.py",
+    "tool_boundary_contracts.py"
+  ],
+  "extraPaths": ["../.."],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "basic"
+}
