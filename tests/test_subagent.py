@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import shutil
 import tempfile
@@ -1236,7 +1237,16 @@ def test_subagent_can_request_parent_input_and_resume(monkeypatch):
             if msg.get("role") == "user"
         ]
         assert user_messages[0] == "find the correct file"
-        assert user_messages[-1] == "Use src/app.py."
+        # Parent messaging is a completed but unowned external/state effect.
+        # Recovery data may prefix the input; the exact parent reply survives.
+        recovery, parent_reply = user_messages[-1].split("\n</tool-recovery-context>\n\n", 1)
+        assert recovery.startswith("<tool-recovery-context>\n")
+        assert parent_reply == "Use src/app.py."
+        facts = [json.loads(html.unescape(line)) for line in recovery.splitlines() if line.startswith("{")]
+        parent_fact, = [fact for fact in facts if fact["tool"] == "message_parent"]
+        assert parent_fact["call_id"] == "call_1"
+        assert parent_fact["execution_state"] == "succeeded"
+        assert parent_fact["side_effect_state"] == "unknown"
         assert "[Subagent status: completed]" in result2
     finally:
         subagent.set_parent_session(None)
