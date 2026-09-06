@@ -21,7 +21,9 @@ from nz_coder.protocol.tool_recovery_parts import (
     _public_recovery_part,
     carry_tool_recovery_parts as carry_tool_recovery_parts,
 )
-from nz_coder.runtime.conversation.continuation_context import MAX_CONTINUATION_CHARS
+from nz_coder.runtime.conversation.continuation_context import (
+    MAX_CONTINUATION_CHARS, continuation_task_text, _CONTINUATION_ONLY_RE,
+)
 
 
 _OPEN = "<tool-recovery-context>"
@@ -41,7 +43,7 @@ def project_tool_recovery_messages(
     facts = _facts(source)
     if not facts:
         return messages
-    if not any(fact["execution_state"] != "succeeded" for fact in facts) and not any(
+    if not any(fact["execution_state"] != "succeeded" or _risk(fact) == 0 for fact in facts) and not any(
         isinstance(m, dict) and (CONTINUATION_KEY in m or COMPACTION_KEY in m)
         for m in source
     ):
@@ -117,10 +119,60 @@ def _facts(messages: list[dict]) -> list[dict]:
                 fact["call_id"],
             )
             facts[key] = fact
-    # Stable order of legacy messages is retained; UUID ordering is never used.
-    return sorted(facts.values(), key=lambda fact: (
-        fact["execution_state"] == "succeeded", fact.get("sequence", 0),
-    ))
+    # Reuse task/continuation context, never the newly allocated invocation ID.
+    context = continuation_task_text(messages)
+    for message in reversed(messages) if _CONTINUATION_ONLY_RE.fullmatch(context.strip()) else ():
+        boundary = message.get(CONTINUATION_KEY) if isinstance(message, dict) else None
+        if isinstance(boundary, dict):
+            context += " " + str(boundary.get("summary") or "")
+            break
+        if isinstance(message, dict) and COMPACTION_KEY in message:
+            context += " " + str(message.get("content") or "")
+            break
+    task_tokens = set(re.findall(r"[\w./-]+", context.casefold()))
+
+    def priority(item):
+        ordinal, fact = item
+        evidence = str(fact.get("input") or "") + " " + " ".join(
+            str(file.get("path") or "") for file in fact.get("files", [])
+        )
+        tokens = set(re.findall(r"[\w./-]+", evidence.casefold()))
+        tokens.update(token.rsplit("/", 1)[-1] for token in tuple(tokens))
+        related = any(len(token) >= 3 and token in task_tokens for token in tokens)
+        return (_risk(fact), not related, -fact.get("sequence", 0), -ordinal)
+
+    # Persisted sequence and history position are time evidence; UUIDs are not.
+    return [fact for _ordinal, fact in sorted(enumerate(facts.values()), key=priority)]
+
+
+def _risk(fact: dict) -> int:
+    """Unresolved effects outrank execution outcome; settled effects do not."""
+    effect = fact["side_effect_state"]
+    if effect == "unknown" or any(file.get("state") == "unknown" for file in fact.get("files", [])):
+        return 0
+    if effect in {"compensated", "reverted"}:
+        return 3
+    if fact["execution_state"] in {"uncertain", "running", "registered", "failed"}:
+        return 1
+    if fact["execution_state"] == "succeeded":
+        return 2
+    return 4  # Known non-execution with no unresolved file effect.
+
+
+def _compact_fact(fact: dict) -> dict:
+    """Reserve exact call identity and state before optional, bulky details."""
+    compact = {key: fact[key] for key in (
+        "call_id", "tool", "execution_state", "terminal_cause", "side_effect_state",
+    )}
+    if fact.get("result_ref"):
+        compact["result_ref"] = fact["result_ref"]
+    files = fact.get("files", [])
+    refs = [file["operation_id"] for file in files if file.get("operation_id")]
+    if refs:
+        compact["file_operation_refs"] = refs
+    if files or fact.get("omitted_files"):
+        compact["omitted_files"] = len(files) + fact.get("omitted_files", 0)
+    return compact
 
 
 def _block(facts: list[dict], messages: list[dict]) -> str:
@@ -151,19 +203,49 @@ def _block(facts: list[dict], messages: list[dict]) -> str:
         footer = f"\nFull recovery facts: read_tool_result artifact_id={recovery_archive}." + footer
     elif recovery_archive:
         footer += "; full recovery artifact unavailable (quota/storage); inspect Session history"
-    footer = html.escape(_preview(footer, 900), quote=False)
-    rows = []
-    used = len(header) + len(footer) + 100
-    for fact in facts:
-        row = html.escape(json.dumps(fact, ensure_ascii=False, separators=(",", ":")), quote=False)
-        if len(row) > MAX_CONTINUATION_CHARS // 2 and fact.get("files"):
-            # A few very long paths must not displace an unresolved call ID.
-            fact = dict(fact)
-            fact["omitted_files"] = fact.get("omitted_files", 0) + len(fact.pop("files"))
-            row = html.escape(json.dumps(fact, ensure_ascii=False, separators=(",", ":")), quote=False)
-        if used + len(row) + 1 > MAX_CONTINUATION_CHARS:
+    else:
+        footer += "; full recovery artifact unavailable; inspect Session history"
+    footer = _preview(html.escape(footer, quote=False), 900)
+    unresolved = sum(_risk(fact) == 0 for fact in facts)
+
+    def counts(omitted, risky):
+        return (f"\nTool facts omitted: {omitted} of {len(facts)}."
+                f"\nUnresolved tool facts omitted: {risky} of {unresolved}.")
+
+    # Include separators/wrappers in the reservation; escaping happens BEFORE
+    # measuring, so markup-heavy historical text cannot bypass the budget.
+    budget = MAX_CONTINUATION_CHARS - len(header + footer + counts(len(facts), unresolved)) - len(_OPEN + _CLOSE) - 8
+    rows: dict[int, str] = {}
+
+    def render(value):
+        return html.escape(json.dumps(value, ensure_ascii=False, separators=(",", ":")), quote=False)
+
+    def put(index, row):
+        nonlocal budget
+        previous = len(rows[index]) + 1 if index in rows else 0
+        extra = len(row) + 1 - previous
+        if extra > budget:
+            return False
+        rows[index] = row
+        budget -= extra
+        return True
+
+    # Phase 1 reserves ALL fitting high-risk identities before any long input,
+    # path or result preview. Phase 2 upgrades details, then admits lower risks.
+    for index, fact in enumerate(facts):
+        if _risk(fact) == 0:
+            put(index, render(_compact_fact(fact)))
+    for index, fact in enumerate(facts):
+        if _risk(fact) == 0 and index not in rows:
             continue
-        rows.append(row)
-        used += len(row) + 1
+        detailed = fact
+        row = render(detailed)
+        if len(row) > MAX_CONTINUATION_CHARS // 2 and fact.get("files"):
+            detailed = dict(fact)
+            detailed["omitted_files"] = fact.get("omitted_files", 0) + len(detailed.pop("files"))
+            row = render(detailed)
+        if not put(index, row) and index not in rows:
+            put(index, render(_compact_fact(fact)))
     omitted = len(facts) - len(rows)
-    return header + "\n".join(rows) + f"\nTool facts omitted: {omitted} of {len(facts)}." + footer
+    risky_omitted = sum(_risk(fact) == 0 and index not in rows for index, fact in enumerate(facts))
+    return header + "\n".join(rows[index] for index in sorted(rows)) + counts(omitted, risky_omitted) + footer
