@@ -1411,3 +1411,52 @@ Native Runner 两条回归修复前失败、修复后通过。重装后权限、
 本地全量 3758 passed / 35 skipped；这不等同于真实编码能力验收。当前无可用 API
 凭据，四个编码任务均 NOT_RUN；长输出错误详情/截断提示和人工终端视觉检查仍有缺口。
 完整首次结果、所有重试与验证限制见 [R1 验收报告](../tests/dogfooding/r1-results.md)。
+
+### 22.8 中断续接、工具归属账本与可恢复 Undo/Redo（2026-09-06）
+
+本轮从 `72c793f` 建立独立分支 `codex/tool-recovery-checkpoints`，参考本地
+InfCode 的 `message-v2.ts`、checkpoint recorder/schema/rollback 及实际文件工具
+调用链。不是逐行复制 TypeScript，也不宣称整个 Agent 已与参考项目完全等价。
+
+工具结果现在分开表达执行状态、终止原因和文件副作用。已经发布文件但未留下正常
+完成记录，续接时是“执行不确定”，而不是“未执行”或“成功”。`recovery_run` 取得
+OS Session 所有权后才处理旧未完成执行；普通 HTTP attach 不改变 daemon 的存活
+状态。账本事实经过有界、数据型恢复投影进入第一次 Provider 请求，文档展开和
+compaction 不再无声覆盖它；超量事实复用 `read_tool_result` 的受限工件回读。
+执行结算与可公开输出分开：只有经过工具输出 guardrail 的结果，才可写入恢复预览；
+取消/拦截不公开原文。v4 迁移清理无准入证明的旧预览，迁移中断后可重试，读取端也
+检查准入标记。受控取消时，尚未启动的批次尾部记为 not_executed/user_cancelled，
+不等下次进程误判为 process_lost，也不覆盖已经运行或完成的执行事实。
+
+权威边界：用户私有状态目录的独立 `tool-recovery/ledger.sqlite3` 管执行顺序、
+工具归属、Session-file base、逐工具 before/after 和恢复进度；Session JSON 仍管
+对话历史，ToolPart recovery 字段只是投影。workspace、session、用户 interaction、
+assistant step、invocation、call、attempt 分开关联，以整数 sequence 排序。
+新增内容对象复用 step snapshot 的字节发布原语，避免 state/foundation 反向依赖
+Runtime。`WorkspaceFileAccess` 通过 ContextVar 注入的变更钩子执行“before/意图
+持久化 → 原有句柄锚定写入 → after 确认”，保留原始字节与可表达权限。写前登记失败
+拒绝修改；写后记录失败保留 unknown；事务补偿更新同一 mutation，而不重写执行事实。
+
+CLI `/undo`、`/redo`，SDK 的 `undo_session`/`redo_session`/`recover_session`，以及
+HTTP undo/redo/recover 统一进入 `SessionReverter → RecoveryJournal`。不再用全局
+快照差异自动认定文件归属，也不在入口重复保存历史。恢复操作先登记，再改文件，
+按 source/target/neither 向前协调：已在目标不重复写，冲突不覆盖。历史源版本从
+磁盘复核，提交完成由 operation marker 与目标 hash 共同证明。未完成恢复阻止新
+受控写入；Redo 同样检查后续外来工具归属。Undo/Redo 使本 Session 旧验证证据失效，
+刷新现有代码索引，并清除内容缓存。
+
+重点回归包括真实文件工具发布后杀死子进程，再启动另一个进程，捕获完整 Native SDK
+链路的第一次 Fake Provider 请求；以及 Undo/Redo 各四个同步崩溃窗口的独立进程恢复。
+没有消耗真实模型 API。完整验收矩阵、首次失败、修复后的命令/exit code、未验证项
+保存在 [恢复验收记录](../tests/recovery/README.md)。Windows 测试已纳入 RC workflow，
+但本轮没有远端 CI/Windows 实机结果；kill 测试也不等于真实断电验证。
+
+边界保持明确：任意 Shell/MCP/网络副作用不自动取得文件回退归属；没有通用三方合并、
+跨文件 ACID 或外部工具 exactly-once 保证。私有账本不自动清理，冲突保留证据交由
+授权操作者检查，不能删除 journal 强行解锁。Windows 不承诺完整 POSIX metadata/ACL
+恢复，旧 Session 能加载也不等于旧快照拥有新账本的精确回退能力。
+
+保留问题：全量测试暴露基线已有的索引/图分阶段发布竞态，并发 symbol_context
+可能读到跨代状态而报 KeyError。独立同步复现在基线与本轮均成立，Undo 的索引刷新
+期间也受影响；恢复返回后两者内容已刷新，不等于刷新中提供原子查询视图。本轮未
+扩展为索引架构重构，也没有删断言或新增 skip；后续通过不能抹掉这条失败记录。
