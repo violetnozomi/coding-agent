@@ -749,6 +749,32 @@ def _windows_handle_info(
     *,
     full: bool = False,
 ) -> tuple[int, int] | tuple[int, int, int, int]:
+    info = _windows_handle_snapshot(handle)
+    if full:
+        return info.attributes, info.device, info.inode, info.size
+    return info.device, info.inode
+
+
+@dataclass(frozen=True)
+class _WindowsHandleSnapshot:
+    """One GetFileInformationByHandle identity and metadata observation."""
+
+    attributes: int
+    device: int
+    inode: int
+    size: int
+    atime_ns: int
+    mtime_ns: int
+    mode: int
+
+
+def _windows_handle_snapshot(handle: int) -> _WindowsHandleSnapshot:
+    """Keep the Win32 volume/file ID representation used by existing receipts.
+
+    Python stat may use a different volume ID API. Never combine its device
+    value with this snapshot or truncate a stat value to manufacture equality.
+    FILETIME is an integer count of 100 ns ticks since 1601, not a float time.
+    """
     import ctypes
     from ctypes import wintypes
 
@@ -776,9 +802,15 @@ def _windows_handle_info(
     device = int(info.volume_serial_number)
     inode = (int(info.file_index_high) << 32) | int(info.file_index_low)
     size = (int(info.file_size_high) << 32) | int(info.file_size_low)
-    if full:
-        return int(info.file_attributes), device, inode, size
-    return device, inode
+    def unix_ns(value):
+        ticks = (int(value.dwHighDateTime) << 32) | int(value.dwLowDateTime)
+        return (ticks - 116_444_736_000_000_000) * 100
+
+    attributes = int(info.file_attributes)
+    kind = stat.S_IFDIR if attributes & 0x10 else stat.S_IFREG
+    mode = kind | 0o444 | (0 if attributes & 0x1 else 0o222)
+    return _WindowsHandleSnapshot(attributes, device, inode, size,
+                                  unix_ns(info.last_access_time), unix_ns(info.last_write_time), mode)
 
 
 def _windows_read_file(

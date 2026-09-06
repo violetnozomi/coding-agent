@@ -563,6 +563,17 @@ class WorkspaceFileAccess:
         )
 
     @staticmethod
+    def _identity_from_windows_handle(handle: int) -> WorkspaceFileIdentity:
+        """Use the same Win32 identity for read, mutation and receipt checks."""
+        from nz_coder.foundation.project_control import _windows_handle_snapshot
+
+        info = _windows_handle_snapshot(handle)
+        if info.attributes & (0x400 | 0x10):
+            raise ValueError("Workspace target is not a regular file")
+        return WorkspaceFileIdentity(True, info.device, info.inode, info.size,
+                                     info.mtime_ns, "", stat.S_IMODE(info.mode))
+
+    @staticmethod
     def _validate_expected(
         current: WorkspaceFileIdentity,
         expected: ExpectedFileIdentity | None,
@@ -809,7 +820,6 @@ class WorkspaceFileAccess:
         from nz_coder.foundation.project_control import (
             UnsafeProjectControl,
             _windows_close,
-            _windows_handle_info,
             _windows_open,
         )
 
@@ -837,25 +847,30 @@ class WorkspaceFileAccess:
             if target is None:
                 raise FileNotFoundError(os.fspath(cursor / relative.name))
             handles.append(target)
-            _attrs, device, inode, size = _windows_handle_info(target, full=True)
-            if maximum is not None and size > maximum:
+            before = self._identity_from_windows_handle(target)
+            if maximum is not None and before.size > maximum:
                 raise PublicInputError("Workspace file exceeds the allowed size")
             import msvcrt
 
             source_fd = msvcrt.open_osfhandle(target, os.O_RDONLY)
             handles.pop()
-            with os.fdopen(source_fd, "rb", closefd=True) as stream:
-                before = os.fstat(stream.fileno())
-                data = stream.read(maximum + 1 if maximum is not None else -1)
-                after = os.fstat(stream.fileno())
-                if _stat_tuple(after) != _stat_tuple(before):
-                    raise PublicInputError("Workspace file changed while it was read")
+            try:
+                stream = os.fdopen(source_fd, "rb", closefd=True)
+                source_fd = -1  # Ownership transferred, including error paths.
+                with stream:
+                    data = stream.read(maximum + 1 if maximum is not None else -1)
+                    after = self._identity_from_windows_handle(target)
+                    if after != before:
+                        raise PublicInputError("Workspace file changed while it was read")
+            finally:
+                if source_fd >= 0:
+                    os.close(source_fd)
             if maximum is not None and len(data) > maximum:
                 raise PublicInputError("Workspace file exceeds the allowed size")
             return data, WorkspaceFileIdentity(
-                True, int(device), int(inode), int(size), int(after.st_mtime_ns),
+                True, after.device, after.inode, after.size, after.mtime_ns,
                 hashlib.sha256(data).hexdigest(),
-                stat.S_IMODE(after.st_mode),
+                after.mode,
             )
         except UnsafeProjectControl as exc:
             raise ValueError("Workspace file boundary is unsafe") from exc
@@ -870,7 +885,7 @@ class WorkspaceFileAccess:
         # Windows directory handles are retained and verified by the project
         # control helper; replacement still has a documented final path/rename
         # TOCTOU window because Python exposes no handle-relative ReplaceFile.
-        from nz_coder.foundation.project_control import _windows_close, _windows_final_path
+        from nz_coder.foundation.project_control import _windows_close, _windows_final_path, _windows_open
 
         handles, handle, _lexical_parent = self._open_windows_parent(
             relative, create=True,
@@ -881,16 +896,13 @@ class WorkspaceFileAccess:
         published_identity = None
         try:
             target_path = parent_path / relative.name
+            target_handle = _windows_open(target_path, directory=False, missing_ok=True, parent=handle)
             try:
-                current_info = os.stat(target_path, follow_symlinks=False)
-            except FileNotFoundError:
-                current_info = None
-            if current_info is not None and not stat.S_ISREG(current_info.st_mode):
-                raise ValueError("Workspace target is not a regular file")
-            current = (
-                self._identity_from_stat(current_info)
-                if current_info is not None else WorkspaceFileIdentity.missing()
-            )
+                current = (self._identity_from_windows_handle(target_handle)
+                           if target_handle is not None else WorkspaceFileIdentity.missing())
+            finally:
+                if target_handle is not None:
+                    _windows_close(target_handle)
             self._validate_expected(current, expected)
             if current.expected_exists and not overwrite:
                 raise PublicInputError("target already exists and overwrite=false")
@@ -928,8 +940,8 @@ class WorkspaceFileAccess:
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
-            if current_info is not None or mode is not None:
-                os.chmod(temporary, stat.S_IMODE(current_info.st_mode if mode is None else mode))
+            if current.expected_exists or mode is not None:
+                os.chmod(temporary, stat.S_IMODE(current.mode if mode is None else mode))
             if Path(_windows_final_path(handle)) != parent_path.resolve():
                 raise ValueError("Workspace parent identity changed")
             os.replace(temporary, parent_path / relative.name)
@@ -954,7 +966,6 @@ class WorkspaceFileAccess:
         from nz_coder.foundation.project_control import (
             _windows_close,
             _windows_final_path,
-            _windows_handle_info,
         )
 
         handles, handle, _lexical_parent = self._open_windows_parent(
@@ -993,28 +1004,13 @@ class WorkspaceFileAccess:
                 raise OSError(error, "Workspace target cannot be opened for deletion")
             target_handle = value
 
-            attributes, device, inode, size = _windows_handle_info(
-                target_handle, full=True,
-            )
-            if attributes & 0x00000400 or attributes & 0x00000010:
-                raise ValueError("Workspace target is not a regular file")
+            current = self._identity_from_windows_handle(target_handle)
             target_path = _windows_final_path(target_handle)
             if ntpath.normcase(ntpath.dirname(target_path)) != ntpath.normcase(
                 os.fspath(parent_path)
             ):
                 raise ValueError("Workspace parent identity changed")
-            current_info = os.stat(target_path, follow_symlinks=False)
-            self._validate_expected(
-                WorkspaceFileIdentity(
-                    True,
-                    int(device),
-                    int(inode),
-                    int(size),
-                    int(current_info.st_mtime_ns),
-                    "",
-                ),
-                expected,
-            )
+            self._validate_expected(current, expected)
 
             class _FileDispositionInfo(ctypes.Structure):
                 _fields_ = (("delete_file", wintypes.BOOLEAN),)
