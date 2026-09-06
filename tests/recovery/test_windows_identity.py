@@ -33,7 +33,8 @@ def test_windows_snapshot_uses_one_win32_observation_and_exact_integer_times(mon
     assert info.mode & 0o777 == 0o444
 
 
-def test_windows_overwrite_uses_handle_identity_not_python_stat(monkeypatch, tmp_path):
+@pytest.mark.parametrize("fdopen_failure", [False, True])
+def test_windows_overwrite_uses_handle_identity_not_python_stat(monkeypatch, tmp_path, fdopen_failure):
     """Exercise the real Windows write method with only WinAPI calls doubled."""
     from nz_coder.foundation import project_control as control
 
@@ -59,8 +60,25 @@ def test_windows_overwrite_uses_handle_identity_not_python_stat(monkeypatch, tmp
     monkeypatch.setattr(control, "_windows_close", lambda handle: handles.pop(handle))
     monkeypatch.setattr(control, "_windows_handle_snapshot", snapshot, raising=False)
     expected = WorkspaceFileIdentity(True, 3606225537, info.st_ino, info.st_size, info.st_mtime_ns)
-    access._write_windows(Path("a.bin"), b"after", None, expected=expected, overwrite=True)
-    assert target.read_bytes() == b"after"
+    if fdopen_failure:
+        descriptors = []
+        def fail(fd, *_args, **_kwargs):
+            descriptors.append(fd)
+            raise OSError("injected fdopen failure")
+        monkeypatch.setattr(os, "fdopen", fail)
+        with pytest.raises(OSError, match="fdopen failure"):
+            access._write_windows(Path("a.bin"), b"after", None, expected=expected, overwrite=True)
+        try:
+            os.fstat(descriptors[0])
+        except OSError:
+            pass
+        else:
+            os.close(descriptors[0])
+            pytest.fail("fdopen failure leaked the untransferred descriptor")
+        assert target.read_bytes() == b"before"
+    else:
+        access._write_windows(Path("a.bin"), b"after", None, expected=expected, overwrite=True)
+        assert target.read_bytes() == b"after"
     assert handles == {}, "the write must release all acquired handles"
 
 

@@ -932,14 +932,20 @@ class WorkspaceFileAccess:
                 return
             descriptor, raw = tempfile.mkstemp(prefix=".nzcoder-", suffix=".tmp", dir=parent_path)
             temporary = Path(raw)
-            with os.fdopen(descriptor, "wb") as stream:
-                if receipt is not None:
-                    candidate = type(receipt)()
-                    candidate.capture(stream.fileno())
-                    published_identity = candidate.identity
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
+            try:
+                stream = os.fdopen(descriptor, "wb")
+                descriptor = -1
+                with stream:
+                    if receipt is not None:
+                        candidate = type(receipt)()
+                        candidate.capture(stream.fileno())
+                        published_identity = candidate.identity
+                    stream.write(data)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            finally:
+                if descriptor >= 0:
+                    os.close(descriptor)
             if current.expected_exists or mode is not None:
                 os.chmod(temporary, stat.S_IMODE(current.mode if mode is None else mode))
             if Path(_windows_final_path(handle)) != parent_path.resolve():
