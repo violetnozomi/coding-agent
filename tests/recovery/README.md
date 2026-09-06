@@ -726,3 +726,39 @@ with the final report commit without pretending that the report itself existed
 before the runs. Any newly triggered checks for the documentation commit are
 reported separately in the final handoff, not substituted for the native source
 evidence above. The repair worktree/branch is retained and root `main` is untouched.
+
+## Follow-up: repository view consistency (2026-09-06)
+
+The historical mixed-generation failure above is addressed in the separate
+`codex/repo-intelligence-consistency` dependency branch, based on `c26c134`.
+Production commit: `f37e876cd2339e0778fa81574585afb68f04be2f`.
+This does not reopen or redefine the accepted R1/R2/R3 recovery scope.
+
+Index update, graph update, published generation and query-cache invalidation now
+share one service boundary. The actual `RecoveryJournal._invalidate` calls the
+same `refresh_paths` as normal committed edits. A failed refresh propagates through
+the existing RecoveryError path instead of letting Undo claim completed. Applied
+file receipts remain durable; retry avoids duplicate file writes/history commits,
+and verification remains invalidated.
+
+`tests/test_repo_intelligence_consistency.py` includes Event-synchronized actual
+Undo/Redo queries during index publication, related-test/call-edge content checks,
+and a real refresh failure after file restoration with write/history counters.
+All 31 dedicated cases pass locally; a fixed ten-run supplementary check also
+passed all ten runs. Initial RED evidence and the complete T1–T11 mapping are in
+[the new acceptance record](../../docs/repo-intelligence-consistency.md).
+
+At this append's creation, final-source full Linux and native Windows CI are still
+being observed. Earlier failures here remain historical evidence: the confirmed
+native startup gap has its own proof and fix, but cannot be assumed to explain
+every prior watcher wait failure. Windows HTTP intermittent failures remain a
+separate stability issue, not silently closed by this index repair.
+
+Final follow-up evidence on frozen source `f37e876`: local Linux full
+**3971 passed / 35 skipped**, exit 0; remote Core Runtime **3970 passed / 36 skipped**,
+exit 0. Native Windows job `101495811676` executed the new consistency file and
+completed **559 passed / 20 skipped**, exit 0, followed by successful wheel/sdist
+and fresh-install steps. All four workflows on that SHA succeeded without reruns.
+The exact commands, log paths, microbench cost and limitations are appended in
+the new acceptance record. This closes the known mixed-generation/recovery-refresh
+scope, not every historical HTTP or watcher stability symptom.

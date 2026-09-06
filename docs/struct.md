@@ -1490,3 +1490,37 @@ BlockingIOError。共享锁边界现在仅对锁获取动作做错误归一化�
 产品验收 528 passed / 20 skipped，随后的 wheel/sdist 与源码外安装冒烟成功。
 这支持本轮 R1–R3 冻结范围的人工合并审查，不是对上述 HTTP/索引稳定性问题已经
 解决的保证。本轮没有修改 main、创建 PR 或消耗真实 Provider 调用。
+
+### 22.10 索引、仓库图与查询缓存的一致视图（2026-09-06）
+
+这轮修复的是上一阶段保留的真实并发缺陷：SQLite 索引已提交新文件，但仓库图
+还没更新时，组合查询可能用新符号去问旧图，从而得到 Unknown repository module。
+缓存键里有 generation 不够，必须保证计算、版本标签与缓存写回来自同一份数据。
+
+本轮采用最小同步方案：复用 index 的锁，在 `RepoIntelligenceService._update`
+中完成索引变更、图更新、generation 校验和缓存失效；结构查询通过 `_read_view`
+在既有预算内尝试取得同一边界。拿不到就明确退化，不能返回混合数据或空成功。
+失败时保留待刷新路径，后续无关事件也会补做；原生 watcher 在建立订阅后才做
+启动核对，避免核对期间的修改丢失。普通写后 hook、repo_map 显式刷新、LSP 增强
+和 Undo/Redo 均接到这个边界，不再只更新 SQLite 就假装全服务已刷新。
+
+图仍持有实时 index，并没有变成不可变 MVCC 快照。同步边界负责保护组合读取。
+只有可选 embedding 取冻结的 IndexSnapshot 后在锁外调用 Provider，返回时核对
+generation、cache epoch 和关闭/超时状态，避免慢模型阻塞正常文件刷新。
+metrics 对 Provider 属性的读取也必须放在服务锁外。缓存深拷贝防止调用方改坏
+后续答案，截断的 Process 不进入 LRU 或目录缓存。Git、文件片段和 LSP 仍是外部
+采样，其 freshness/provenance 不冒充索引快照。
+
+恢复文件成功但刷新失败时，原 RecoveryJournal 保留 applied 进度和验证失效标记，
+通过既有 recovery_required 拒绝“完成”。重试检查文件已在 target 就不重复写，
+刷新成功后才一次性提交历史。本轮没有另建恢复状态机，也不承诺任意副作用回滚。
+
+源码提交 `f37e876`，基于未合并的恢复里程碑 `c26c134` 建立依赖分支。31 项确定性
+专项、固定十轮重复、Linux 全量/Windows 原生/源码外 wheel-sdist 验收分别记录在
+[索引一致性验收](repo-intelligence-consistency.md)；旧失败证据继续保留在恢复文档。
+一致性检查和防御性复制有实际开销，不能把正确性修复写成未经测量的性能提升。
+
+最终验收：本地 Linux 全量 3971 passed / 35 skipped；远端原生 Windows
+559 passed / 20 skipped，后续安装冒烟成功；源码提交四组 CI 全部通过。
+本轮 I1/I2/I3 已达到限定停止条件，可以另行开展真实编码任务基线，不代表 Agent
+完全无竞态，也没有把旧 HTTP 间歇失败或保持 mtime/size 的外部编辑风险写成已解决。
