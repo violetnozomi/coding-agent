@@ -632,3 +632,97 @@ the fix: **39 passed, 1 existing skip** in 5.47s, exit 0. The actual native live
 owner SDK test is retained; Linux CRT fault injection does not replace it.
 Full/source-package/native checks must now be repeated on this new source;
 none of the prior green checks alone approves this follow-up. No merge is made.
+
+### Post-lock final-source verification
+
+Production source: `f3343c6d265070693cac85f0503e5398da133a98`.
+Pushed verification commit: `48c7a25575bdfc4a0ec2aea41fddf7bb968de96b` (only the
+acceptance record changed after `f3343c6`). A direct push first failed with a
+GitHub connection timeout, exit 128. The normal retry using the existing local
+proxy succeeded; GitHub's ref API confirmed the exact remote SHA. No force push
+or global proxy/credential configuration change was used.
+
+Linux/Python 3.13.12, same unchanged production source:
+
+| Actual command | Result / exit code |
+| --- | --- |
+| `python -m pytest -q tests/recovery --tb=short` | **159 passed** in 20.04s; exit 0 |
+| `python -m pytest -q tests/test_session_revert.py tests/test_http_service.py --tb=short` | **82 passed** in 14.42s; exit 0 |
+| `python -m pytest -q --tb=short --junitxml=/tmp/nzcoder-recovery-r123.62vsc2/linux-winlock.xml` | **3940 passed, 35 skipped** in 507.76s; exit 0 (`linux-winlock.log`) |
+| `python -m ruff check nz_coder tests` | All checks passed; exit 0 |
+| `python -m compileall -q nz_coder tests` | exit 0 |
+| `git diff --check` | exit 0 |
+| `python -m build --no-isolation --wheel --sdist --outdir /tmp/nzcoder-recovery-r123.62vsc2/winlock-dist` | wheel + sdist; exit 0 (`winlock-build.log`) |
+
+The final local Linux full run is green, but the earlier index watcher failure remains
+valid evidence of unresolved stability. No timing/skip/assertion change was made
+to that test. The Windows lock delta also passed independent source review; the
+reviewer found no remaining code blocker in that bounded change.
+
+From `/tmp/nzcoder-recovery-r123.62vsc2` outside the checkout, the following actual
+commands all exit 0 and repeat package verification on the **post-lock** source:
+
+```sh
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -m pip install --no-deps --force-reinstall /tmp/nzcoder-recovery-r123.62vsc2/winlock-dist/nz_coder-0.1.0-py3-none-any.whl
+XDG_STATE_HOME=/tmp/nzcoder-recovery-r123.62vsc2/winlock-state /tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -I /home/pyh/nzcoder/.worktrees/tool-recovery/tests/recovery/fresh_install_smoke.py
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -m pip check
+python -m pip wheel --no-deps --no-build-isolation /tmp/nzcoder-recovery-r123.62vsc2/winlock-dist/nz_coder-0.1.0.tar.gz --wheel-dir /tmp/nzcoder-recovery-r123.62vsc2/winlock-sdist-wheel
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -m pip install --no-deps --force-reinstall /tmp/nzcoder-recovery-r123.62vsc2/winlock-sdist-wheel/nz_coder-0.1.0-py3-none-any.whl
+XDG_STATE_HOME=/tmp/nzcoder-recovery-r123.62vsc2/winlock-sdist-state /tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -I /home/pyh/nzcoder/.worktrees/tool-recovery/tests/recovery/fresh_install_smoke.py
+/tmp/nzcoder-recovery-r123.62vsc2/venv/bin/python -m pip check
+```
+
+Both smokes again report `provider_calls=0`. No paid/live Provider or SWE run was
+used anywhere in this repair. Windows Product RC and Core Runtime at `48c7a25`
+remain pending at draft time; both results must be recorded before a full
+acceptance decision.
+
+### Final native results and handoff
+
+All four workflows on `48c7a25575bdfc4a0ec2aea41fddf7bb968de96b` have now finished:
+
+| Workflow | Actual result |
+| --- | --- |
+| [Core Runtime 34023362618](https://github.com/violetnozomi/coding-agent/actions/runs/34023362618) | **success**; Linux/Python 3.12 full suite **3939 passed, 36 skipped**, 776.71s, exit 0. Python 3.10 compatibility and installed-wheel contract jobs also success. |
+| [Repo Intelligence 34023362621](https://github.com/violetnozomi/coding-agent/actions/runs/34023362621) | **success** |
+| [Windows Installer 34023362626](https://github.com/violetnozomi/coding-agent/actions/runs/34023362626) | **success** |
+| [Windows Product RC 34023362619](https://github.com/violetnozomi/coding-agent/actions/runs/34023362619) | **success**; native Windows/Python 3.12.10 job 101459899232: **528 passed, 20 skipped**, 369.12s, exit 0. Linux sanity also success. |
+
+The Windows raw job log confirms `tests/recovery` is in the executed command,
+not skipped as a directory. Both native product acceptance and the subsequent
+wheel/sdist/fresh-install smoke steps completed successfully. Existing-file
+identity, checkpoint Undo/Redo and live-owned-session refusal are included in
+that native suite. No new Windows skips, expected-check relaxation, timeout
+extension or workflow weakening were used. Logs: `windows-48c7a25.log` and
+`core-48c7a25.log` in the local evidence directory.
+
+The earlier Windows runs at `fad7056` and `df62839`, local Linux failures and
+operator-stopped intermediate runs remain in this report. In particular, this
+green Windows run **does not establish the cause or resolution of the four HTTP
+failures at df62839**. Those remain a separate stability follow-up, as do the
+index/graph publication race and the observed watcher wait failure. No failed
+run was rerun on the same SHA until green; a new native run followed the specific,
+regression-backed Windows lock fix.
+
+R1, R2 and R3 now have implementation, RED/GREEN regressions, independent code
+review, full local Linux, native Windows and package evidence on the same final
+production source. In this frozen scope, there is no remaining confirmed code
+blocker; this supports **human merge review with the recorded limitations**, not
+a claim that the entire product is free of bugs. No merge or PR was created.
+
+Additional handoff commits after the table above:
+
+| Commit | Responsibility |
+| --- | --- |
+| `df62839` | First append-only R1–R3 failure/evidence report and learning notes. |
+| `f3343c6` | Confirmed native CRT lock-contention error normalization and regressions. |
+| `48c7a25` | Preserve actual failed Linux/Windows runs and the lock follow-up evidence. |
+
+The following documentation-only handoff commit adds the final measured results.
+It does not alter runtime, tests or workflows. The `nz_coder` Git tree object at
+both production `f3343c6` and fully CI-tested `48c7a25` is
+`0842f59486ee42f8d7d9dfe63413393268143013`; this also permits explicit comparison
+with the final report commit without pretending that the report itself existed
+before the runs. Any newly triggered checks for the documentation commit are
+reported separately in the final handoff, not substituted for the native source
+evidence above. The repair worktree/branch is retained and root `main` is untouched.

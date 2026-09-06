@@ -1478,3 +1478,15 @@ CLI 文件恢复成功不等于全部外部副作用已撤销。Undo 明示未�
 不进入提示，Rich markup 和控制字符转义，SDK/HTTP schema 与 journal 状态不变。
 全部失败记录、独立复核与最终 Linux/Windows 分开验收见
 [R1–R3 追加记录](../tests/recovery/README.md#r1r3-repair-acceptance-2026-09-06-append-only-follow-up)。
+
+原生 Windows 补验随后暴露 CRT 非阻塞锁忙会抛 PermissionError，而 POSIX 抛
+BlockingIOError。共享锁边界现在仅对锁获取动作做错误归一化，让既有恢复入口返回
+“会话仍被持有”的类型化拒绝；路径权限和其他 I/O 错误不被吞掉。失败不进入临界区、
+不解锁未取得的锁，描述符仍关闭。最终 Linux 全量 3940 passed / 35 skipped；此前
+索引 watcher 的全量失败与 Windows HTTP 失败继续保留，不能把后续绿色当成它们
+已经修复的证据。Windows 原生结果与完整提交链继续追加在同一验收文档。
+
+最终源码 `f3343c6` 对应的远端验收提交 `48c7a25` 四组 CI 均通过；原生 Windows
+产品验收 528 passed / 20 skipped，随后的 wheel/sdist 与源码外安装冒烟成功。
+这支持本轮 R1–R3 冻结范围的人工合并审查，不是对上述 HTTP/索引稳定性问题已经
+解决的保证。本轮没有修改 main、创建 PR 或消耗真实 Provider 调用。
