@@ -19,6 +19,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install -e '.[dev]'
+      - name: Verify index graph and cache publication consistency
+        run: python -m pytest -q tests/test_repo_intelligence_consistency.py --tb=short
       - name: Verify installed parser tiers
         run: |
           nz-coder doctor --repo-intelligence-only --json

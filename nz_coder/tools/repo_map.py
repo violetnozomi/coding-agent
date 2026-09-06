@@ -10,7 +10,6 @@ from nz_coder.protocol.public_error import format_public_error
 from nz_coder.intelligence.code_index import (
     AmbiguousSymbolError,
     FileEntry,
-    PersistentCodeIndex,
     SymbolEntry,
 )
 from nz_coder.intelligence.service import workspace_repo_intelligence
@@ -41,18 +40,14 @@ def _build_index(
     service = existing_service or workspace_repo_intelligence(
         workspace, max_files=max_files,
     )
-    index = service.index if service is not None else PersistentCodeIndex(workspace)
+    if service is None:
+        raise RuntimeError("Repository intelligence service unavailable")
     was_ready = bool(
         existing_service is not None and service is not None
         and service.state.status == "ready"
     )
-    if service is not None and not refresh and service.state.status == "warming":
-        try:
-            service.wait_ready(timeout=0.1)
-        except TimeoutError:
-            pass
-    if service is not None and not refresh and service.state.status == "ready":
-        snapshot = index.snapshot()
+    if not refresh:
+        snapshot, state = service.read_index(lambda index: (index.snapshot(), service.state))
         entries = list(snapshot.files)
         if base != workspace:
             relative = base.relative_to(workspace).as_posix()
@@ -63,9 +58,9 @@ def _build_index(
         omitted = max(0, len(entries) - max_files)
         return (
             entries[:max_files], len(entries[:max_files]) if was_ready else 0,
-            max(omitted, service.state.files_omitted),
+            max(omitted, state.files_omitted),
         )
-    entries, stats = index.scan(
+    entries, stats = service.scan(
         base,
         max_files=max_files,
         refresh=refresh,
@@ -94,14 +89,15 @@ def code_references(
         service = workspace_repo_intelligence(
             workspace, max_files=max(1, min(current_run_settings().repo_map_max_files, 500)),
         )
-        index = service.index if service is not None else PersistentCodeIndex(workspace)
+        if service is None:
+            raise RuntimeError("Repository intelligence service unavailable")
         entries, reused, _omitted = _build_index(
             workspace, base,
             max_files=max(1, min(current_run_settings().repo_map_max_files, 500)),
             refresh=bool(refresh),
         )
         limit = max(1, min(int(max_results), 1000))
-        references = index.references(name, base, limit)
+        references = service.read_index(lambda index: index.references(name, base, limit))
         if not references:
             return f"No indexed references found for {name!r} under {path!r}"
         rows = [

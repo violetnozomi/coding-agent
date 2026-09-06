@@ -305,7 +305,10 @@ class RecoveryJournal:
 
         service = workspace_repo_intelligence(self.ledger.workspace, create=False)
         if service is not None:
-            service._apply_incremental(tuple(paths), 5000)
+            # File progress is already durable. Let refresh failure enter the
+            # existing recovery_required path, so retry only reconciles missing
+            # effects/history instead of announcing a completed partial view.
+            service.refresh_paths(paths)
 
     def locked(self):
         return exclusive_file_lock(self.ledger.root / "workspace-write.lock")

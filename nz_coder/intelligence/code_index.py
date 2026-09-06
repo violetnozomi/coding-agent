@@ -708,7 +708,7 @@ class PersistentCodeIndex:
     def update_paths(self, paths: list[str]) -> IndexStats:
         """Update explicit paths and remove deleted/renamed identities atomically."""
         unique = tuple(dict.fromkeys(str(item) for item in paths))
-        indexed = removed = 0
+        indexed = removed = reused = 0
         affected_paths: set[str] = set()
         affected_names: set[str] = set()
         affected_ids: set[str] = set()
@@ -716,6 +716,12 @@ class PersistentCodeIndex:
             for value in unique:
                 target = (self.workspace / value).resolve()
                 relative = self._relative(target)
+                if target.is_file() and _is_supported_source(target):
+                    stat = target.stat()
+                    known = connection.execute("SELECT mtime_ns,size FROM files WHERE path=?", (relative,)).fetchone()
+                    if known is not None and (int(known[0]), int(known[1])) == (stat.st_mtime_ns, stat.st_size):
+                        reused += 1
+                        continue
                 affected_paths.add(relative)
                 for row in connection.execute(
                     "SELECT symbol_id, name FROM symbols WHERE path = ?", (relative,),
@@ -747,7 +753,7 @@ class PersistentCodeIndex:
                 generation = self._generation(connection)
             connection.commit()
         return IndexStats(
-            len(unique), indexed, 0, removed, 0, generation, calls_resolved,
+            len(unique), indexed, reused, removed, 0, generation, calls_resolved,
             references_resolved,
         )
 
@@ -1833,7 +1839,12 @@ class PersistentCodeIndex:
 
 
 def update_code_index_after_write(paths: list[str], workspace: Path) -> IndexStats:
-    """Best-effort write hook; the shared service watcher observes the same generation."""
+    """Publish committed edits synchronously when a live workspace view exists."""
+    from nz_coder.intelligence.service import workspace_repo_intelligence
+
+    service = workspace_repo_intelligence(workspace, create=False)
+    if service is not None:
+        return service.refresh_paths(paths)
     return PersistentCodeIndex(workspace).update_paths(paths)
 
 

@@ -14,7 +14,7 @@ from threading import RLock
 import time
 from typing import Protocol, Sequence
 
-from nz_coder.intelligence.code_index import PersistentCodeIndex
+from nz_coder.intelligence.code_index import IndexSnapshot, PersistentCodeIndex
 
 
 class EmbeddingProvider(Protocol):
@@ -166,28 +166,34 @@ class RepositorySemanticIndex:
 
     def search(
         self, query: str, *, path: str | None = None, limit: int = 10,
+        snapshot: IndexSnapshot | None = None,
     ) -> list[SemanticSearchResult]:
         if not str(query).strip():
             return []
-        self._ensure_generation()
-        vector = self.provider.embed([str(query)])[0]
-        return [
-            SemanticSearchResult(
-                file=chunk.file, start_line=chunk.start_line,
-                end_line=chunk.end_line, code_chunk=chunk.code_chunk,
-                score=round(float(score), 6), symbol_id=chunk.symbol_id,
-                module_id=chunk.module_id,
-                source=f"embedding:{self.provider.identity}",
-            )
-            for chunk, score in self.store.search(vector, path=path, limit=limit)
-        ]
+        snapshot = snapshot or self.index.snapshot()
+        # This provider/store lock is independent of the structural view lock.
+        # A late old request must not replace a newer generation's vectors.
+        with self._lock:
+            self._ensure_generation(snapshot)
+            vector = self.provider.embed([str(query)])[0]
+            return [
+                SemanticSearchResult(
+                    file=chunk.file, start_line=chunk.start_line,
+                    end_line=chunk.end_line, code_chunk=chunk.code_chunk,
+                    score=round(float(score), 6), symbol_id=chunk.symbol_id,
+                    module_id=chunk.module_id,
+                    source=f"embedding:{self.provider.identity}",
+                )
+                for chunk, score in self.store.search(vector, path=path, limit=limit)
+            ]
 
-    def _ensure_generation(self) -> None:
-        snapshot = self.index.snapshot()
+    def _ensure_generation(self, snapshot: IndexSnapshot | None = None) -> None:
+        snapshot = snapshot or self.index.snapshot()
         if self._generation == snapshot.generation:
             return
         with self._lock:
-            snapshot = self.index.snapshot()
+            if snapshot.generation < self._generation:
+                raise RuntimeError("Semantic snapshot superseded by a newer generation")
             if self._generation == snapshot.generation:
                 return
             started = time.perf_counter()
