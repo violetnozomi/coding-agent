@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import warnings
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Protocol, runtime_checkable
 
 from nz_coder.protocol.message_schema import ASSISTANT_USAGE_KEY
@@ -14,6 +15,7 @@ from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
 from nz_coder.runtime.execution.runner import AgentRunner
 from nz_coder.runtime.execution.native_sdk import build_native_sdk_runner
 from nz_coder.runtime.session import Session
+from nz_coder.runtime.session.session_revert import SessionRevertResult
 from nz_coder.state.workdir import scoped_workdir
 
 
@@ -42,6 +44,22 @@ class AgentClient:
             raise TypeError("AgentClient runner must expose async run_result")
         if self.runner is not None and self.agent_factory is not None:
             raise ValueError("AgentClient accepts runner or agent_factory, not both")
+
+    async def undo_session(
+        self, *, workspace: str | Path, session_id: str, message_id: str | None = None,
+    ) -> SessionRevertResult:
+        """Undo owned files/history without a Provider or legacy snapshot fallback."""
+        return await _recover_session(workspace, session_id, "undo", message_id=message_id)
+
+    async def redo_session(self, *, workspace: str | Path, session_id: str) -> SessionRevertResult:
+        """Redo from the durable journal, independent of optional UI state."""
+        return await _recover_session(workspace, session_id, "redo")
+
+    async def recover_session(
+        self, *, workspace: str | Path, session_id: str,
+    ) -> SessionRevertResult | None:
+        """Finish a pending recovery, or return None when nothing is pending."""
+        return await _recover_session(workspace, session_id, "recover")
 
     async def run(
         self,
@@ -157,6 +175,35 @@ class AgentClient:
             cancel_event=cancel_event,
             config_snapshot=config_snapshot,
         )
+
+
+async def _recover_session(
+    workspace: str | Path, session_id: str, direction: str, *, message_id: str | None = None,
+) -> SessionRevertResult | None:
+    """Load exactly one Session; the locked coordinator owns every file/save."""
+    from nz_coder.foundation.async_utils import to_thread_settled
+    from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
+    from nz_coder.runtime.session.model import SessionIdentity
+    from nz_coder.runtime.session.session_revert import SessionReverter
+    from nz_coder.runtime.session.store import LegacyJsonSessionStore
+    from nz_coder.state.sessions import session_runtime_dir, session_snapshot_dir
+
+    identity = SessionIdentity(session_id)
+    root = Path(workspace).resolve()
+    if not root.is_dir():
+        raise ValueError("Recovery workspace must be an existing directory")
+    session = await LegacyJsonSessionStore().load(identity, root)
+    if session is None:
+        raise ValueError("Recovery Session was not found in this workspace")
+    with scoped_workdir(root):
+        reverter = SessionReverter(
+            WorkspaceSnapshotStore(root, session_snapshot_dir(session_id)),
+            session_runtime_dir(session_id) / "message_revert.json", session_id=session_id,
+        )
+    if direction == "undo":
+        return await to_thread_settled(reverter.revert, session.transcript, message_id=message_id)
+    operation = reverter.unrevert if direction == "redo" else reverter.recover
+    return await to_thread_settled(operation, session.transcript)
 
 
 async def run_agent(

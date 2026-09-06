@@ -350,6 +350,7 @@ class ManagedSession:
         return SessionReverter(
             WorkspaceSnapshotStore(self.workspace, snapshot_root),
             state_path,
+            session_id=self.session_id,
         )
 
     def undo(self) -> dict:
@@ -357,16 +358,31 @@ class ManagedSession:
             if self._run_thread is not None:
                 raise SessionBusyError("cannot undo during an active session run")
             result = self._reverter().revert(self.history)
-            self._persist_transition_locked()
-            return {"message_id": result.message_id, "files": list(result.files), "removed_messages": result.removed_messages}
+            return self._recovery_transition_result(result)
 
     def redo(self) -> dict:
         with self._lock:
             if self._run_thread is not None:
                 raise SessionBusyError("cannot redo during an active session run")
             result = self._reverter().unrevert(self.history)
-            self._persist_transition_locked()
-            return {"message_id": result.message_id, "files": list(result.files), "removed_messages": result.removed_messages}
+            return self._recovery_transition_result(result)
+
+    def recover(self) -> dict:
+        """Reconcile one pending owned transition without starting a model run."""
+        with self._lock:
+            if self._run_thread is not None:
+                raise SessionBusyError("cannot recover during an active session run")
+            result = self._reverter().recover(self.history)
+            return self._recovery_transition_result(result)
+
+    def _recovery_transition_result(self, result) -> dict:
+        """Mirror the journal's committed status without a second history save."""
+        self.updated_at = time.time()
+        if result is not None:
+            self.status = "interrupted"
+            self.last_result = {}
+            return result.to_dict()
+        return {"version": 1, "status": "idle", "recovery_required": False}
 
     def _persist_transition_locked(self) -> None:
         with scoped_workdir(self.workspace):

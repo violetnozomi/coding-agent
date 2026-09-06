@@ -15,9 +15,7 @@ from rich.table import Table
 
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.changes import (
-    redo_latest,
     render_latest_diff,
-    undo_latest,
 )
 from nz_coder.state.memory import memory_mgr
 from nz_coder.providers.models import (
@@ -1535,75 +1533,46 @@ def handle_diff(ctx: CommandContext) -> None:
 
 
 def handle_undo(ctx: CommandContext) -> None:
-    reverter = getattr(ctx.agent, "session_reverter", None)
-    if reverter is not None:
-        from nz_coder.runtime.process.workspace_snapshot import SnapshotError
-        try:
-            result = (
-                ctx.controller.undo(ctx.history)
-                if ctx.controller is not None
-                else ctx.agent.revert_message(ctx.history)
-            )
-        except SnapshotError as exc:
-            if "no revertible message" not in str(exc) and "incomplete step snapshots" not in str(exc):
-                ctx.console.print(f"Refused to undo: {exc}")
-                return
-        else:
-            _save_transition_session(ctx)
-            files = ", ".join(result.files) if result.files else "no file changes"
-            ctx.console.print(
-                f"Undid message {result.message_id}: {files} "
-                f"({result.removed_messages} message(s) removed)"
-            )
-            return
-    tracker = ctx.agent.change_tracker
-    result = (
-        tracker.undo(ctx.history)
-        if tracker is not None
-        else undo_latest(history=ctx.history)
-    )
-    if result.startswith("Undid agent changes:"):
-        _save_transition_session(ctx)
-    ctx.console.print(result)
+    _handle_owned_recovery(ctx, "undo")
 
 
 def handle_redo(ctx: CommandContext) -> None:
-    reverter = getattr(ctx.agent, "session_reverter", None)
-    state_path = getattr(reverter, "state_path", None)
-    if reverter is not None and state_path is not None and state_path.exists():
-        from nz_coder.runtime.process.workspace_snapshot import SnapshotError
-        try:
-            result = (
-                ctx.controller.redo(ctx.history)
-                if ctx.controller is not None
-                else ctx.agent.unrevert_message(ctx.history)
-            )
-        except SnapshotError as exc:
-            ctx.console.print(f"Refused to redo: {exc}")
-            return
-        _save_transition_session(ctx)
-        files = ", ".join(result.files) if result.files else "no file changes"
-        ctx.console.print(
-            f"Redid message {result.message_id}: {files} "
-            f"({result.removed_messages} message(s) restored)"
-        )
+    _handle_owned_recovery(ctx, "redo")
+
+
+def _handle_owned_recovery(ctx: CommandContext, direction: str) -> None:
+    """Route only to owned recovery; the coordinator commits history once."""
+    from nz_coder.runtime.session.session_revert import RecoveryError
+    from nz_coder.runtime.process.workspace_snapshot import SnapshotError
+
+    operation = None
+    if ctx.controller is not None:
+        operation = getattr(ctx.controller, direction, None)
+    elif getattr(ctx.agent, "session_reverter", None) is not None:
+        method = "revert_message" if direction == "undo" else "unrevert_message"
+        operation = getattr(ctx.agent, method, None)
+    if not callable(operation):
+        ctx.console.print(f"Refused to {direction}: legacy file ownership is unknown.")
         return
-    tracker = ctx.agent.change_tracker
-    result = (
-        tracker.redo(ctx.history)
-        if tracker is not None
-        else redo_latest(history=ctx.history)
-    )
-    if result.startswith("Redid agent changes:"):
-        _save_transition_session(ctx)
-    ctx.console.print(result)
-
-
-def _save_transition_session(ctx: CommandContext) -> None:
-    save_session(
-        ctx.history,
-        mode=ctx.agent.permissions.mode,
-        session_id=ctx.session_id,
+    try:
+        result = operation(ctx.history)
+    except RecoveryError as exc:
+        detail = exc.result
+        reason = (
+            "file conflict: " + ", ".join(detail.conflicts)
+            if detail.conflicts else "recovery required" if detail.recovery_required
+            else "owned recovery is unavailable; legacy ownership cannot be inferred"
+        )
+        ctx.console.print(f"Refused to {direction}: {escape(reason)}.")
+        return
+    except SnapshotError:
+        ctx.console.print(f"Refused to {direction}: no owned recovery checkpoint is available.")
+        return
+    files = ", ".join(result.files) if result.files else "no file changes"
+    verb, action = ("Undid", "removed") if direction == "undo" else ("Redid", "restored")
+    ctx.console.print(
+        f"{verb} message {escape(result.message_id)}: {escape(files)} "
+        f"({result.removed_messages} message(s) {action})"
     )
 
 

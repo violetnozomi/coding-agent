@@ -18,6 +18,7 @@ from nz_coder.foundation.json_safety import (
 )
 from nz_coder.protocol.session_events import EventCursorExpiredError, iter_sse
 from nz_coder.protocol.public_error import to_public_error
+from nz_coder.runtime.session.session_revert import RecoveryError
 from nz_coder.state.instructions import (
     create_instruction_file,
     delete_instruction_file,
@@ -151,6 +152,15 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
                 "session_busy",
                 "The session or workspace is busy.",
             )
+        except RecoveryError as exc:
+            conflict = bool(exc.result.conflicts)
+            self._error(
+                HTTPStatus.CONFLICT,
+                "recovery_conflict" if conflict else "recovery_required",
+                "Session recovery conflicts with current state." if conflict
+                else "Session recovery requires reconciliation or owned checkpoint evidence.",
+                details=exc.result.to_dict(),
+            )
         except ValueError:
             self._error(
                 HTTPStatus.BAD_REQUEST,
@@ -226,7 +236,7 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
                 turn = int(raw_turn) if raw_turn is not None else None
                 self._json(HTTPStatus.CREATED, self.service.manager.fork(session.session_id, turn))
                 return
-            if len(segments) == 3 and segments[2] in {"undo", "redo"} and method == "POST":
+            if len(segments) == 3 and segments[2] in {"undo", "redo", "recover"} and method == "POST":
                 body = self._read_json()
                 self._reject_unknown(body, set())
                 operation = getattr(session, segments[2])
@@ -688,12 +698,15 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
         self._response_committed = True
         self.wfile.write(data)
 
-    def _error(self, status: int, code: str, message: str) -> None:
+    def _error(self, status: int, code: str, message: str, *, details: dict | None = None) -> None:
         if getattr(self, "_response_committed", False):
             self.close_connection = True
             return
         self.close_connection = True
-        self._json(status, {"error": {"code": code, "message": message}})
+        error = {"code": code, "message": message}
+        if details is not None:
+            error["details"] = details
+        self._json(status, {"error": error})
 
 
 class _ResponseSent(Exception):

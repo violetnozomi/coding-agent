@@ -1120,8 +1120,13 @@ def test_handle_command_fork_child_clone_failure_closes_new_agent_and_restores(m
     assert "child clone failed" in fake_console.messages[-1]
 
 
-def test_handle_command_undo_alias_and_redo_sync_history(monkeypatch):
+def test_handle_command_undo_alias_and_redo_sync_history(monkeypatch, tmp_path):
     from nz_coder.interface.commands.handlers import core
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.runtime.process.checkpoint_runtime import checkpoint_execution
+    from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
+    from nz_coder.runtime.session.session_revert import SessionReverter
+    from nz_coder.state.tool_ledger import ToolLedger
 
     fake_console = FakeConsole()
     monkeypatch.setattr(cli, "console", fake_console)
@@ -1132,18 +1137,24 @@ def test_handle_command_undo_alias_and_redo_sync_history(monkeypatch):
         lambda history, **kwargs: saved.append(list(history)),
     )
 
-    class Tracker:
-        def undo(self, history):
-            history.clear()
-            return "Undid agent changes:\n- restored app.py"
-
-        def redo(self, history):
-            history.append({"role": "user", "content": "restored"})
-            return "Redid agent changes:\n- restored app.py"
-
     agent = FakeAgent()
-    agent.change_tracker = Tracker()
-    history = [{"role": "user", "content": "edit"}]
+    history = [
+        {"role": "user", "content": "edit", "_nz_message_id": "msg-user", "_nz_session_id": "session-1"},
+        {"role": "assistant", "content": "edited", "_nz_message_id": "msg-step", "_nz_session_id": "session-1"},
+    ]
+    ledger = ToolLedger(tmp_path)
+    execution = ledger.register(
+        session_id="session-1", interaction_id="interaction-cli", assistant_step_id="msg-step",
+        agent_id="agent-cli", call_id="call-cli", tool="write_file", tool_input={"path": "app.py"},
+    )
+    with checkpoint_execution(ledger, execution["execution_id"]):
+        WorkspaceFileAccess(tmp_path).write_bytes("app.py", b"owned edit")
+    agent.session_reverter = SessionReverter(
+        WorkspaceSnapshotStore(tmp_path, tmp_path / ".nz-coder" / "snapshots"),
+        tmp_path / ".nz-coder" / "revert.json", session_id="session-1",
+    )
+    agent.revert_message = agent.session_reverter.revert
+    agent.unrevert_message = agent.session_reverter.unrevert
     session_state = {"id": "session-1", "agent": agent}
 
     assert cli.handle_command(
@@ -1154,7 +1165,8 @@ def test_handle_command_undo_alias_and_redo_sync_history(monkeypatch):
         object(),
     )
     assert history == []
-    assert saved[-1] == []
+    assert not (tmp_path / "app.py").exists()
+    assert saved == []
 
     assert cli.handle_command(
         "/redo",
@@ -1163,5 +1175,6 @@ def test_handle_command_undo_alias_and_redo_sync_history(monkeypatch):
         "sys",
         object(),
     )
-    assert history == [{"role": "user", "content": "restored"}]
-    assert saved[-1] == history
+    assert [message["content"] for message in history] == ["edit", "edited"]
+    assert (tmp_path / "app.py").read_bytes() == b"owned edit"
+    assert saved == []
