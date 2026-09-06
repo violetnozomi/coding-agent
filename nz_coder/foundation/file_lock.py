@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import errno
 import os
 from pathlib import Path
 import stat
@@ -34,7 +35,15 @@ def exclusive_file_lock(path: Path, *, blocking: bool = True) -> Iterator[None]:
                 handle.write(b"\0")
                 handle.flush()
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1)
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                # CRT reports byte-lock contention as EACCES/EDEADLK, unlike
+                # flock's BlockingIOError. Normalize only acquisition here;
+                # path permissions and other I/O errors must still propagate.
+                if not blocking and exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                    raise BlockingIOError(errno.EAGAIN, "private lock is already held") from exc
+                raise
             try:
                 yield
             finally:
