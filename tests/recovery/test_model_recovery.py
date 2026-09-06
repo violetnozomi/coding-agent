@@ -61,7 +61,7 @@ def _records(messages):
             if line.startswith("{") for record in [json.loads(html.unescape(line))]}
 
 
-def _native_request(monkeypatch, tmp_path, history):
+def _native_request(monkeypatch, tmp_path, history, *, resume_tail=1):
     """Real SessionRuntime -> native runner -> Gateway -> fake transport."""
     from nz_coder.providers.capabilities import ModelCapabilities
     from nz_coder.runtime.core.profiles import MAIN_PROFILE
@@ -92,14 +92,17 @@ def _native_request(monkeypatch, tmp_path, history):
         capabilities=ModelCapabilities(provider="offline", model_id="offline-model", supports_streaming=False),
     )
     store = EphemeralSessionStore()
-    session = Session.create("recovery-session", history[:-1], workspace=tmp_path)
+    session = Session.create("recovery-session", history[:-resume_tail], workspace=tmp_path)
     session.finish(SessionStatus.INTERRUPTED)
     asyncio.run(store.save(session))
     monkeypatch.setattr("nz_coder.runtime.execution.native_sdk.resolve_model_runtime", lambda _request: runtime)
     monkeypatch.setattr("nz_coder.runtime.execution.native_sdk.EphemeralSessionStore", lambda: store)
+    requested_messages = history[-resume_tail:]
+    if resume_tail > 1:
+        requested_messages = [*session.transcript, *requested_messages]
     request = RunRequest(
         agent=AgentDefinition("recovery", "Report recovery facts.", allowed_tools=()),
-        profile=MAIN_PROFILE, messages=(history[-1],), workspace=tmp_path,
+        profile=MAIN_PROFILE, messages=tuple(requested_messages), workspace=tmp_path,
         session_id="recovery-session", stream=False,
         metadata={"permission_mode": "auto", "persist_session": False},
     )
@@ -347,3 +350,64 @@ def test_direct_public_tool_projection_applies_the_closed_recovery_boundary():
     ))
     assert "SECRET" not in json.dumps(projected)
     assert projected["state"]["recovery"]["execution_id"] == "exec-1"
+
+
+def _document_resume_history():
+    from nz_coder.state.input_expansion import render_expanded_message
+
+    history = _history([_tool("call-document-resume", "running", recovery=_recovery())])
+    history[-1].update({
+        "_nz_message_id": "msg-resume", "_nz_session_id": "recovery-session",
+        "_nz_user_text": "continue",
+        "_nz_input_expansions": [
+            {"kind": "document", "source": "report.docx", "resolved": True,
+             "text": "[Attached document queued for document_read preflight: report.docx]"},
+            {"kind": "file", "source": "notes.txt", "resolved": True,
+             "text": "Keep this non-document expansion."},
+        ],
+    })
+    render_expanded_message(history[-1])
+    history.append({
+        "role": "assistant", "content": "", "_nz_message_id": "msg-document",
+        "_nz_session_id": "recovery-session", "_nz_parts": [{
+            "id": "part-document-result", "message_id": "msg-document", "type": "text",
+            "text": "Extracted document text",
+            "metadata": {"document_read": {
+                "status": "completed", "source_message_id": "msg-resume", "items": [],
+            }},
+        }],
+    })
+    return history
+
+
+def test_first_native_document_resume_request_preserves_recovery_and_continuation(monkeypatch, tmp_path):
+    request = _native_request(monkeypatch, tmp_path, _document_resume_history(), resume_tail=2)
+    record = _records(request)["call-document-resume"]
+    assert record["terminal_cause"] == "user_cancelled"
+    text = "\n".join(message.get("content", "") for message in request if message.get("role") == "user")
+    assert text.count("<tool-recovery-context>") == 1
+    assert "<continuation-context>" in text
+    assert "Goal: Repair parser.py" in text
+    assert "pytest tests/test_parser.py" in text
+    assert "Extracted document text" in text
+    assert "Keep this non-document expansion." in text
+    assert "queued for document_read preflight" not in text
+
+
+def test_document_replacement_preserves_image_description_and_is_pure():
+    history = _document_resume_history()
+    history[-1]["_nz_parts"].append({
+        "id": "part-image-result", "message_id": "msg-document", "type": "text",
+        "text": "Extracted image description",
+        "metadata": {"image_describe": {
+            "status": "completed", "source_message_id": "msg-resume", "items": [],
+        }},
+    })
+    before = copy.deepcopy(history)
+    projected = project_provider_messages(history)
+    text = "\n".join(message.get("content", "") for message in projected if message.get("role") == "user")
+    assert "Extracted image description" in text
+    assert "Extracted document text" in text
+    assert "<tool-recovery-context>" in text and "<continuation-context>" in text
+    assert project_provider_messages(history) == projected
+    assert history == before

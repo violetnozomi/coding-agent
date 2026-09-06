@@ -45,6 +45,9 @@ def project_provider_messages(
         or ""
     )
     original_messages = messages
+    # Expansion rendering rebuilds from durable user text. Complete it before
+    # adding runtime context, otherwise it can erase continuation and recovery.
+    messages = _project_document_reads(messages)
     messages = project_continuation_messages(messages)
     messages = project_tool_recovery_messages(messages, original_messages=original_messages)
     empty_tool_assistant_ordinals = _empty_tool_assistant_ordinals(messages)
@@ -80,7 +83,6 @@ def project_provider_messages(
     attachment_by_call: dict[str, list[dict]] = {}
     user_attachment_by_message: dict[str, list[dict]] = {}
     image_description_by_message: dict[str, list[str]] = {}
-    document_read_by_message: dict[str, list[str]] = {}
     latest_write_generation: dict[str, int] = {}
     latest_pass_generation: dict[str, int] = {}
     latest_acceptance_generation = -1
@@ -130,22 +132,6 @@ def project_provider_messages(
             ):
                 image_description_by_message.setdefault(
                     image_description["source_message_id"], []
-                ).append(part["text"])
-            document_read = (
-                metadata.get("document_read")
-                if isinstance(metadata, dict)
-                else None
-            )
-            if (
-                part.get("type") == "text"
-                and isinstance(document_read, dict)
-                and document_read.get("status") in {"completed", "error"}
-                and isinstance(document_read.get("source_message_id"), str)
-                and isinstance(part.get("text"), str)
-                and part["text"].strip()
-            ):
-                document_read_by_message.setdefault(
-                    document_read["source_message_id"], []
                 ).append(part["text"])
             if part.get("type") == "file":
                 files = _safe_attachments([part])
@@ -241,15 +227,6 @@ def project_provider_messages(
             if descriptions:
                 clean["content"] = "\n\n".join(
                     [clean["content"], *descriptions]
-                ).strip()
-            documents = document_read_by_message.get(message_id, [])
-            if documents:
-                clean["content"] = _content_without_document_expansions(
-                    message,
-                    clean["content"],
-                )
-                clean["content"] = "\n\n".join(
-                    [clean["content"], *documents]
                 ).strip()
         if (
             include_attachments
@@ -498,6 +475,42 @@ def _safe_generation(value) -> int:
     if isinstance(value, str) and value.strip().isdigit():
         return int(value.strip())
     return 0
+
+
+def _project_document_reads(messages: list[dict]) -> list[dict]:
+    """Replace document placeholders before adding other model-only context."""
+    documents_by_message: dict[str, list[str]] = {}
+    for owner in messages:
+        if not isinstance(owner, dict):
+            continue
+        for part in owner.get(PARTS_KEY, []):
+            if not isinstance(part, dict) or part.get("type") != "text":
+                continue
+            metadata = part.get("metadata")
+            document = metadata.get("document_read") if isinstance(metadata, dict) else None
+            if (
+                isinstance(document, dict)
+                and document.get("status") in {"completed", "error"}
+                and isinstance(document.get("source_message_id"), str)
+                and isinstance(part.get("text"), str)
+                and part["text"].strip()
+            ):
+                documents_by_message.setdefault(document["source_message_id"], []).append(part["text"])
+    if not documents_by_message:
+        return messages
+    projected = list(messages)
+    for index, message in enumerate(messages):
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+        documents = documents_by_message.get(str(message.get(MESSAGE_ID_KEY) or ""))
+        content = message.get("content")
+        if documents and isinstance(content, str):
+            copied = copy.deepcopy(message)
+            copied["content"] = "\n\n".join([
+                _content_without_document_expansions(message, content), *documents,
+            ]).strip()
+            projected[index] = copied
+    return projected
 
 
 def _content_without_document_expansions(message: dict, content: str) -> str:
