@@ -148,7 +148,7 @@ def _facts(messages: list[dict]) -> list[dict]:
 def _risk(fact: dict) -> int:
     """Unresolved effects outrank execution outcome; settled effects do not."""
     effect = fact["side_effect_state"]
-    if effect == "unknown" or any(file.get("state") == "unknown" for file in fact.get("files", [])):
+    if effect in {"unknown", "conflict"} or any(file.get("state") in {"unknown", "conflict"} for file in fact.get("files", [])):
         return 0
     if effect in {"compensated", "reverted"}:
         return 3

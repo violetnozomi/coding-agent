@@ -131,6 +131,12 @@ class RecoveryRun:
         from nz_coder.protocol.message_schema import project_public_protocol_value
         from nz_coder.tool_platform.artifacts import ArtifactError, ArtifactStore
 
+        # Historical markers are only hints: GC, quota eviction or a different
+        # Session can invalidate them. Publish only this run's checked archive,
+        # including when small current facts need no archive at all.
+        for message in messages:
+            if isinstance(message, dict):
+                message.pop("_nz_tool_recovery_archive", None)
         owner = next((m for m in reversed(messages) if m.get("role") == "user"), None)
         if owner is None:
             return

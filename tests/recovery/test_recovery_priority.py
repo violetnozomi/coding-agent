@@ -131,3 +131,31 @@ def test_priority_survives_document_and_carried_compaction_history(compacted):
     assert len(_recovery_text(request)) <= 6000
     assert "Extracted document text" in json.dumps(request)
     assert project_provider_messages(history) == request
+
+
+@pytest.mark.parametrize("marker_index", [0, -1])
+def test_first_native_request_does_not_promise_stale_archive_for_small_facts(monkeypatch, tmp_path, marker_index):
+    from nz_coder.tool_platform.artifacts import ArtifactAccessError, ArtifactStore
+
+    history = _history([_tool("call-risk", "running", recovery=_recovery())])
+    missing = "artifact_" + "f" * 32
+    history[marker_index]["_nz_tool_recovery_archive"] = missing
+    with pytest.raises(ArtifactAccessError):
+        ArtifactStore(tmp_path, "recovery-session").read(missing)
+    request = _native_request(monkeypatch, tmp_path, history)
+    assert "call-risk" in _records(request)
+    text = _recovery_text(request)
+    assert "artifact unavailable" in text
+    assert "read_tool_result artifact_id=" not in text
+
+
+@pytest.mark.parametrize("effect,files", [
+    ("conflict", []), ("committed", [{"path": "parser.py", "state": "conflict"}]),
+])
+def test_conflicted_effect_keeps_high_risk_identity_before_old_failures(effect, files):
+    latest = _tool("call-conflict", "completed", recovery=_recovery(
+        sequence=61, execution_state="succeeded", side_effect_state=effect, files=files,
+    ))
+    request = project_provider_messages(_history([*_old("failed"), latest]))
+    assert next(iter(_records(request))) == "call-conflict"
+    assert "Unresolved tool facts omitted: 0 of 1" in _recovery_text(request)
