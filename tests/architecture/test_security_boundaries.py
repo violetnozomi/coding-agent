@@ -207,7 +207,7 @@ PUBLIC_ERROR_MODULE_COUNTS = {
     'nz_coder/foundation/workspace_trust.py': ('trusted local validation', 1),
     'nz_coder/intelligence/semantic.py': ('trusted local validation', 1),
     'nz_coder/intelligence/verification.py': ('trusted local validation', 1),
-    'nz_coder/interface/commands/handlers/core.py': ('trusted local validation', 8),
+    'nz_coder/interface/commands/handlers/core.py': ('trusted local validation', 6),
     'nz_coder/interface/commands/handlers/workflow.py': ('trusted local validation', 3),
     'nz_coder/interface/custom_commands.py': ('trusted local validation', 1),
     'nz_coder/interface/setup/doctor.py': ('trusted local validation', 2),

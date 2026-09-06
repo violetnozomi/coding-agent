@@ -985,7 +985,7 @@ class RuntimeState:
 
     def restore(self, data: dict, *, allow_inactive: bool = False) -> bool:
         """Restore persisted fields, optionally for a resumable activation."""
-        if not isinstance(data, dict) or (
+        if not isinstance(data, dict) or data.get("verification_invalidated") or (
             not data.get("active") and not allow_inactive
         ):
             return False

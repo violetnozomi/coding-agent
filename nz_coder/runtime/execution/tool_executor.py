@@ -44,6 +44,7 @@ from nz_coder.tools import (
     collect_filesystem_mutation_paths,
     dispatch,
     get_tool_side_effect,
+    current_tool_cancel_event,
     scoped_dynamic_tool_snapshot,
     scoped_tool_call,
 )
@@ -231,8 +232,20 @@ class ToolExecutor:
 
     def execute_one(self, tool_call: dict, index: int) -> ToolExecutionResult:
         """Resolve one dynamic generation before authorization and dispatch."""
-        with scoped_dynamic_tool_snapshot():
-            return self._execute_one_with_snapshot(tool_call, index)
+        from nz_coder.runtime.process.checkpoint_runtime import settle_execution
+
+        call_id = str(tool_call.get("id") or "") if isinstance(tool_call, dict) else ""
+        try:
+            with scoped_dynamic_tool_snapshot():
+                result = self._execute_one_with_snapshot(tool_call, index)
+        except BaseException as exc:
+            import asyncio
+
+            cancelled = isinstance(exc, (asyncio.CancelledError, KeyboardInterrupt))
+            settle_execution(call_id, cancelled=cancelled, failed=not cancelled)
+            raise
+        settle_execution(call_id, result)
+        return result
 
     def _execute_one_with_snapshot(
         self,
@@ -369,8 +382,18 @@ class ToolExecutor:
                 )
 
         # ── 执行 ───────────────────────────────────────────────────────────
+        from nz_coder.runtime.process.checkpoint_runtime import dispatch_checkpoint
+
+        cancellation = current_tool_cancel_event()
+        if cancellation is not None and cancellation.is_set():
+            return ToolExecutionResult(fn_name, tool_input, "Error: Tool cancelled before execution",
+                                       False, True, False, is_write, metadata={"cancelled": True})
         try:
-            with scoped_tool_call(str(tool_call.get("id") or "")):
+            with scoped_tool_call(str(tool_call.get("id") or "")), dispatch_checkpoint(str(tool_call.get("id") or "")) as admitted:
+                if not admitted:
+                    return ToolExecutionResult(fn_name, tool_input,
+                                               "Error: Tool attempt already started; verify recorded effects before retrying",
+                                               False, True, False, is_write)
                 raw_output = dispatch(fn_name, tool_input)
         except Exception as exc:
             # Tool implementation failures are repair evidence, not Provider

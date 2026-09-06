@@ -525,6 +525,7 @@ class ProductRunEnvironment:
         self.session_reverter = SessionReverter(
             self.workspace_snapshots,
             session_runtime_dir(self.session_id) / "message_revert.json",
+            session_id=self.session_id,
         )
         self.vm = VerificationManager(
             self.recovery,

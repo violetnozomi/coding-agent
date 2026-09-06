@@ -78,6 +78,7 @@ from nz_coder.foundation.workspace_trust import (
 from nz_coder.state.input_expansion import (
     compact_stored as compact_stored_input_expansions,
 )
+from nz_coder.runtime.process.checkpoint_runtime import recovery_run, attach_recovery_context
 
 _MAX_STEPS_PROMPT = """CRITICAL - EMERGENCY HARD-CAP CALL
 
@@ -174,14 +175,13 @@ class AgentRunner:
             raise TypeError("Legacy AgentRunner.run does not accept RunOptions")
         if messages is None:
             raise TypeError("Legacy AgentRunner.run requires messages")
-        return await self._run_legacy(
-            request_or_host,
-            messages,
-            on_tool=on_tool,
-            on_text=on_text,
-            on_token=on_token,
-            stream=stream,
-        )
+        from nz_coder.state.workdir import current_workdir
+
+        with recovery_run(getattr(request_or_host, "workdir", current_workdir()), request_or_host.session_id):
+            return await self._run_legacy(
+                request_or_host, messages, on_tool=on_tool, on_text=on_text,
+                on_token=on_token, stream=stream,
+            )
 
     async def _run_request(self, request: RunRequest, options: RunOptions) -> dict:
         result, _context = await self._execute_request(request, options)
@@ -208,6 +208,7 @@ class AgentRunner:
             ),
             scoped_broad_test_guard(),
             scoped_declared_test_scopes(),
+            recovery_run(request.workspace, request.session_id),
         ):
             return await self._execute_request_in_scope(request, options)
 
@@ -222,6 +223,7 @@ class AgentRunner:
         if not callable(factory):
             raise TypeError("Native AgentRunner requires an execution context factory")
         run_context = await services.session_runtime.open(request)
+        attach_recovery_context(run_context)
         run_context.cancellation = options.cancellation
         # Metadata crosses result/persistence boundaries and must contain data,
         # not the live publisher (which owns locks, subscribers and file handles).
@@ -382,6 +384,7 @@ class AgentRunner:
             raise TypeError("AgentRunner requires a RuntimeServices graph")
         request = run_request_from_legacy_host(host, messages, stream)
         run_context = await services.session_runtime.open(request)
+        attach_recovery_context(run_context)
         event_bus = getattr(host, "event_bus", None)
         create_publisher = getattr(event_bus, "for_interaction", None)
         if callable(create_publisher):

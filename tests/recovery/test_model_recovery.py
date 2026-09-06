@@ -411,3 +411,108 @@ def test_document_replacement_preserves_image_description_and_is_pure():
     assert "<tool-recovery-context>" in text and "<continuation-context>" in text
     assert project_provider_messages(history) == projected
     assert history == before
+
+
+def test_first_native_request_rebuilds_lost_projection_from_owned_ledger(monkeypatch, tmp_path):
+    from nz_coder.state.tool_ledger import ToolLedger
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.runtime.process.checkpoint_runtime import checkpoint_execution
+
+    ledger = ToolLedger(tmp_path)
+    row = ledger.register(session_id="recovery-session", interaction_id="interaction-old",
+                          assistant_step_id="msg-lost", agent_id="invocation-old", call_id="call-lost",
+                          tool="write_file", tool_input={"path": "parser.py", "content": "written"})
+    with ledger.connection() as db:
+        db.execute("UPDATE executions SET execution_state='running'")
+    with checkpoint_execution(ledger, row["execution_id"]):
+        WorkspaceFileAccess(tmp_path).write_text("parser.py", "written")
+    # No ToolPart or result survived in Session JSON. Intent and after did.
+    request = _native_request(monkeypatch, tmp_path, _history([]))
+    fact = _records(request)["call-lost"]
+    assert fact["execution_id"] == row["execution_id"]
+    assert fact["execution_state"] == "uncertain"
+    assert fact["terminal_cause"] == "process_lost"
+    assert fact["side_effect_state"] == "committed"
+    assert fact["files"][0]["path"] == "parser.py"
+    assert "result_summary" not in fact
+    assert not any(m.get("role") == "tool" for m in request)
+
+
+@pytest.mark.parametrize("action", ["rewrite", "block", "cancel"])
+def test_first_request_never_republishes_pre_guardrail_tool_output(monkeypatch, tmp_path, action):
+    from nz_coder.runtime.agent.guardrails import ToolGuardrail
+    from nz_coder.runtime.agent.guardrail_runtime import ProductionGuardrailRuntime
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.checkpoint_runtime import recovery_run, register_batch, settle_batch
+    from nz_coder.state.workdir import scoped_workdir
+    from nz_coder.tools import files  # noqa: F401
+
+    def after_tool(*_args):
+        if action == "cancel":
+            raise asyncio.CancelledError()
+        return {"action": action, "reason": "output policy", "payload": {"content": "PUBLIC REDACTED", "is_error": False}}
+    guard = ToolGuardrail("redact", after_tool=after_tool)
+    host = SimpleNamespace(agent_graph=AgentGraph([AgentSpec("agent", "test", guardrails=(guard,))], "agent"),
+                           current_agent_name="agent", tracer=SimpleNamespace(log=lambda *a, **k: None))
+    call = {"id": "call-private-output", "function": {"name": "read_file", "arguments": {"path": "a.txt"}}}
+    pending = {"id": "call-pending-output", "function": {"name": "read_file", "arguments": {"path": "b.txt"}}}
+    messages = [{"role": "user", "content": "Read, then verify", "_nz_message_id": "msg-user"},
+                {"role": "assistant", "content": "", "_nz_message_id": "msg-tools"}]
+    permissions = SimpleNamespace(check=lambda *_: {"behavior": "allow"})
+    with scoped_workdir(tmp_path), recovery_run(tmp_path, "recovery-session") as run:
+        run.attach("interaction-old", messages)
+        register_batch(messages, [call, pending])
+        monkeypatch.setattr("nz_coder.runtime.execution.tool_executor.dispatch", lambda *_: "PRIVATE_RAW_SENTINEL")
+        result = ToolExecutor(permissions).execute_one(call, 0)
+        assert run.ledger.executions("recovery-session")[0]["result_preview"] == ""
+        if action == "cancel":
+            with pytest.raises(asyncio.CancelledError):
+                asyncio.run(ProductionGuardrailRuntime().after_tool(host, call, result, messages))
+        else:
+            result = asyncio.run(ProductionGuardrailRuntime().after_tool(host, call, result, messages))
+            settle_batch([(0, call, result)], messages)
+        expected = "PUBLIC REDACTED" if action == "rewrite" else ""
+        assert run.ledger.executions("recovery-session")[0]["result_preview"] == expected
+    request = _native_request(monkeypatch, tmp_path, _history([]))
+    assert "PRIVATE_RAW_SENTINEL" not in json.dumps(request)
+    assert ("PUBLIC REDACTED" in json.dumps(request)) == (action == "rewrite")
+
+
+@pytest.mark.parametrize("checkpoint_cancel", [False, True])
+def test_unstarted_batch_tail_reaches_first_request_as_cancelled_not_process_lost(monkeypatch, tmp_path, checkpoint_cancel):
+    from tests.runtime.tool_runtime.test_session_checkpoint import _Harness, _Processor
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
+    from nz_coder.runtime.tool_runtime.scheduler import _execute_scheduled
+    from nz_coder.runtime.process.checkpoint_runtime import recovery_run
+    from nz_coder.state.workdir import scoped_workdir
+    from nz_coder.tools import files  # noqa: F401
+
+    dispatched = []
+    def cancel(*args):
+        dispatched.append(args)
+        raise asyncio.CancelledError()
+    monkeypatch.setattr("nz_coder.runtime.execution.tool_executor.dispatch", cancel)
+    executor = ToolExecutor(SimpleNamespace(check=lambda *_: {"behavior": "allow"}))
+    class Harness(_Harness):
+        async def _dispatch_tool_calls_async(self, calls, has_write, messages):
+            return _execute_scheduled(executor, calls, lambda _: False)
+    calls = [{"id": f"call-tail-{index}", "type": "function", "function": {"name": "read_file", "arguments": {"path": f"{index}.txt"}}} for index in range(2)]
+    messages = [{"role": "user", "content": "Read two files then verify", "_nz_message_id": "msg-user"},
+                {"role": "assistant", "content": "", "_nz_message_id": "msg-tools"}]
+    async def checkpoint(status):
+        if checkpoint_cancel and status == "running":
+            raise asyncio.CancelledError()
+    async def scenario():
+        with scoped_workdir(tmp_path), recovery_run(tmp_path, "recovery-session") as run:
+            run.attach("interaction-old", messages)
+            with pytest.raises(asyncio.CancelledError):
+                await ProductionToolRuntime().execute_batch_async(Harness(), calls, messages, processor=_Processor(), checkpoint=checkpoint)
+    asyncio.run(scenario())
+    assert len(dispatched) == (0 if checkpoint_cancel else 1)
+    request = _native_request(monkeypatch, tmp_path, _history([]))
+    fact = _records(request)["call-tail-1"]
+    assert fact["execution_state"] == "not_executed"
+    assert fact["terminal_cause"] == "user_cancelled"
+    assert fact["side_effect_state"] == "none"

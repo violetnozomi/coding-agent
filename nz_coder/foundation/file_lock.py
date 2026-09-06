@@ -13,7 +13,7 @@ class UnsafeFileLock(OSError):
 
 
 @contextmanager
-def exclusive_file_lock(path: Path) -> Iterator[None]:
+def exclusive_file_lock(path: Path, *, blocking: bool = True) -> Iterator[None]:
     """Hold an OS-released exclusive lock on one stable lock file."""
     target = Path(path).absolute()
     if os.name == "nt":
@@ -34,7 +34,7 @@ def exclusive_file_lock(path: Path) -> Iterator[None]:
                 handle.write(b"\0")
                 handle.flush()
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1)
             try:
                 yield
             finally:
@@ -60,7 +60,7 @@ def exclusive_file_lock(path: Path) -> Iterator[None]:
     try:
         import fcntl
 
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
         try:
             yield
         finally:

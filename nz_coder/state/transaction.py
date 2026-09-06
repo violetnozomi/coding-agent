@@ -95,6 +95,8 @@ class TransactionManager:
         self._state = "inactive"
         self._backups: dict[str, _Backup] = {}
         self._backup_dir: Path | None = None
+        self._checkpoints: list[tuple[object, dict]] = []
+        self._compensation_receipts: dict[str, object] = {}
 
     @property
     def active(self) -> bool:
@@ -111,7 +113,54 @@ class TransactionManager:
         self._active = True
         self._state = "active"
         self._backups = {}
+        self._checkpoints = []
+        self._compensation_receipts = {}
         self._backup_dir = Path(tempfile.mkdtemp(prefix="nzcoder_txn_"))
+
+    def record_checkpoint(self, ledger, mutation: dict) -> None:
+        """Associate immediate compensation with the durable owned mutation."""
+        if not any(item[1]["operation_id"] == mutation["operation_id"] for item in self._checkpoints):
+            self._checkpoints.append((ledger, mutation))
+
+    def _record_compensation(self, relative: str) -> None:
+        selected = [(ledger, item) for ledger, item in self._checkpoints if item["path"] == relative]
+        for ledger, mutation in selected:
+            try:
+                ledger.record_compensation([mutation["operation_id"]])
+            except Exception as exc:
+                raise RuntimeError("transaction compensation checkpoint remains unconfirmed") from exc
+
+    def _compensation_guard(self, relative: str):
+        """Keep the cooperative write lock through ownership check and restore."""
+        from contextlib import ExitStack
+        from nz_coder.foundation.file_lock import exclusive_file_lock
+
+        stack = ExitStack()
+        try:
+            selected = [(ledger, item) for ledger, item in self._checkpoints if item["path"] == relative]
+            if selected:
+                ledger = selected[0][0]
+                stack.enter_context(exclusive_file_lock(ledger.root / "workspace-write.lock"))
+                ids = {item["operation_id"] for _, item in selected}
+                with ledger.connection() as db:
+                    rows = [dict(row) for row in db.execute("SELECT * FROM mutations WHERE path=? ORDER BY sequence", (relative,))]
+                chain = [row for row in rows if row["operation_id"] in ids]
+                if len(chain) != len(ids) or any((a["after_ref"] or a["planned_ref"]) != b["before_ref"] for a, b in zip(chain, chain[1:])):
+                    raise RuntimeError("transaction checkpoint chain conflict")
+                if any(row["sequence"] >= chain[0]["sequence"] and row["operation_id"] not in ids
+                       and row["disposition"] not in {"compensated", "reverted"} for row in rows):
+                    raise RuntimeError("foreign mutation prevents transaction compensation")
+                current, identity = ledger.capture_file(ledger.access, relative)
+                compensated = self._compensation_receipts.get(relative)
+                expected = chain[0]["before_ref"] if compensated is not None else (chain[-1]["after_ref"] or chain[-1]["planned_ref"])
+                if current != expected:
+                    raise RuntimeError("workspace changed after transaction mutation")
+                if compensated is not None:
+                    ledger.access._validate_expected(identity, compensated)
+            return stack
+        except BaseException:
+            stack.close()
+            raise
 
     def track(self, file_path: str | os.PathLike[str]) -> MutationReceipt | None:
         """Snapshot a target through handles anchored at the workspace root."""
@@ -648,6 +697,7 @@ class TransactionManager:
         self._active = False
         self._state = "committed"
         self._backups = {}
+        self._checkpoints = []
 
     def rollback(self) -> str:
         """Attempt every recovery operation and retain only failures for retry."""
@@ -661,13 +711,21 @@ class TransactionManager:
                 continue
             parent: _RecoveryParent | None = None
             try:
-                parent = self._validate_recovery_target(record)
-                if record.backup is None:
-                    self._delete_new_target(record, parent)
-                    deleted.append(record.relative)
-                else:
-                    self._restore_backup(record, record.backup, parent)
-                    restored.append(record.relative)
+                with self._compensation_guard(record.relative):
+                    if record.relative not in self._compensation_receipts:
+                        parent = self._validate_recovery_target(record)
+                        if record.backup is None:
+                            self._delete_new_target(record, parent)
+                            deleted.append(record.relative)
+                        else:
+                            self._restore_backup(record, record.backup, parent)
+                            restored.append(record.relative)
+                        for ledger, mutation in self._checkpoints:
+                            if mutation["path"] == record.relative:
+                                _reference, identity = ledger.capture_file(ledger.access, record.relative)
+                                self._compensation_receipts[record.relative] = identity
+                                break
+                    self._record_compensation(record.relative)
             except (OSError, ValueError, RuntimeError):
                 failed[key] = record
             finally:

@@ -882,7 +882,7 @@ def auto_compact(
     )
     if latest_summary is not None:
         summary_message[SESSION_SUMMARY_KEY] = copy.deepcopy(latest_summary)
-    from nz_coder.runtime.conversation.tool_recovery import carry_tool_recovery_parts
+    from nz_coder.protocol.tool_recovery_parts import carry_tool_recovery_parts
 
     carry_tool_recovery_parts(head, summary_message, session_id=active_session_id() or "session")
     return [summary_message, *tail]

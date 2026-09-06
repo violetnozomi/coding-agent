@@ -69,6 +69,8 @@ class SessionRuntime:
     ) -> None:
         """Persist one settled non-terminal state from the live RunContext."""
         self._validate_context(context)
+        from nz_coder.runtime.process.checkpoint_runtime import overlay_recovery
+        overlay_recovery(context.transcript)
         if context.finalized or context.terminal_status is not None:
             return
         normalized = _session_status(status)
@@ -109,8 +111,14 @@ class SessionRuntime:
     async def finalize(self, context: RunContext, status: RunStatus) -> None:
         """Persist one terminal run state exactly once."""
         self._validate_context(context)
+        from nz_coder.runtime.process.checkpoint_runtime import overlay_recovery, abort_registered
         if context.finalized or context.terminal_status is not None:
             raise RuntimeError("RunContext is already terminal")
+        abort_registered(cause=(
+            "user_cancelled" if status == RunStatus.CANCELLED
+            else "exception" if status == RunStatus.ERROR else "unknown"
+        ))
+        overlay_recovery(context.transcript)
         self._clean_tool_history(context)
         previous_status = context.session.status
         previous_usage = context.session.usage

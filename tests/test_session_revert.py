@@ -21,7 +21,16 @@ def _history(tmp_path):
     attach_message_identity(assistant, "msg-assistant", session_id="session-a")
     processor = SessionProcessor(assistant)
     processor.start_step(start)
-    app.write_text("after\n", encoding="utf-8")
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.runtime.process.checkpoint_runtime import checkpoint_execution
+    from nz_coder.state.tool_ledger import ToolLedger
+
+    ledger = ToolLedger(tmp_path)
+    execution = ledger.register(session_id="session-a", interaction_id="interaction-a",
+                                assistant_step_id="msg-assistant", agent_id="agent-a", call_id="call-edit",
+                                tool="write_file", tool_input={"path": "app.py"})
+    with checkpoint_execution(ledger, execution["execution_id"]):
+        WorkspaceFileAccess(tmp_path).write_text("app.py", "after\n")
     finish = store.track()
     processor.finish_step("stop", snapshot=finish)
     return store, app, [user, assistant]
@@ -52,7 +61,7 @@ def test_message_revert_refuses_later_edit_without_truncating_history(tmp_path):
     reverter = SessionReverter(store, tmp_path / ".nz-coder" / "revert.json")
     app.write_text("user edit\n", encoding="utf-8")
 
-    with pytest.raises(SnapshotError, match="workspace changed"):
+    with pytest.raises(SnapshotError, match="conflict"):
         reverter.revert(messages)
 
     assert messages == original
@@ -70,7 +79,7 @@ def test_unrevert_refuses_after_conversation_advances(tmp_path):
         reverter.unrevert(messages)
 
 
-def test_revert_persistence_failure_restores_workspace_and_history(tmp_path, monkeypatch):
+def test_revert_persistence_failure_retains_progress_for_retry(tmp_path, monkeypatch):
     store, app, messages = _history(tmp_path)
     original = list(messages)
     reverter = SessionReverter(store, tmp_path / ".nz-coder" / "revert.json")
@@ -78,13 +87,15 @@ def test_revert_persistence_failure_restores_workspace_and_history(tmp_path, mon
     def fail_write(*_args, **_kwargs):
         raise OSError("disk full")
 
-    monkeypatch.setattr(
-        "nz_coder.runtime.session.session_revert.write_session_runtime_json",
-        fail_write,
-    )
+    with monkeypatch.context() as patch:
+        patch.setattr("nz_coder.runtime.session.recovery_journal.RecoveryJournal._commit_history", fail_write)
+        with pytest.raises(SnapshotError, match="recovery incomplete"):
+            reverter.revert(messages)
 
-    with pytest.raises(SnapshotError, match="transition rolled back"):
-        reverter.revert(messages)
-
+    assert messages == original
+    assert app.read_text(encoding="utf-8") == "before\n"
+    recovered = reverter.revert(messages)
+    assert recovered.status == "completed" and messages == []
+    reverter.unrevert(messages)
     assert messages == original
     assert app.read_text(encoding="utf-8") == "after\n"

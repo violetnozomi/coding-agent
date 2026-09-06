@@ -39,6 +39,7 @@ class WorkspaceFileIdentity:
     size: int = 0
     mtime_ns: int = 0
     content_hash: str = ""
+    mode: int = 0o600
 
     @classmethod
     def missing(cls) -> "WorkspaceFileIdentity":
@@ -114,6 +115,7 @@ class WorkspaceFileAccess:
                 return data, WorkspaceFileIdentity(
                     True, int(after.st_dev), int(after.st_ino), int(after.st_size),
                     int(after.st_mtime_ns), hashlib.sha256(data).hexdigest(),
+                    stat.S_IMODE(after.st_mode),
                 )
             finally:
                 os.close(descriptor)
@@ -274,12 +276,34 @@ class WorkspaceFileAccess:
         expected: ExpectedFileIdentity | None = None,
         overwrite: bool = True,
     ) -> None:
+        """Encode text, then use the same checkpointed raw-byte write boundary."""
+        self.write_bytes(path, content.encode("utf-8"), transaction=transaction,
+                         expected=expected, overwrite=overwrite)
+
+    def write_bytes(
+        self, path: str, data: bytes, *, transaction=None,
+        expected: ExpectedFileIdentity | None = None, overwrite: bool = True,
+        mode: int | None = None,
+    ) -> None:
+        """Write exact bytes through the normal path, checkpoint and permissions."""
+        from nz_coder.foundation.mutation_hooks import recorded_mutation
+
+        self._relative(path, write=True)
+        with recorded_mutation(self, path, data, transaction, expected, mode) as captured:
+            self._write_bytes(path, data, transaction=transaction,
+                              expected=captured, overwrite=overwrite, mode=mode)
+
+    def _write_bytes(
+        self, path: str, data: bytes, *, transaction=None,
+        expected: ExpectedFileIdentity | None = None, overwrite: bool = True,
+        mode: int | None = None,
+    ) -> None:
         """Atomically replace a file beneath a verified, held parent handle."""
         relative = self._relative(path, write=True)
         if os.name == "nt":
             self._write_windows(
-                relative, content.encode("utf-8"), transaction,
-                expected=expected, overwrite=overwrite,
+                relative, data, transaction,
+                expected=expected, overwrite=overwrite, mode=mode,
             )
             return
         parent, name = self._open_parent_posix(relative, create=True)
@@ -315,15 +339,14 @@ class WorkspaceFileAccess:
                     candidate = type(receipt)()
                     candidate.capture(descriptor)
                     published_identity = candidate.identity
-                data = content.encode("utf-8")
                 view = memoryview(data)
                 while view:
                     written = os.write(descriptor, view)
                     if written <= 0:
                         raise OSError("workspace write made no progress")
                     view = view[written:]
-                if current.expected_exists:
-                    os.fchmod(descriptor, stat.S_IMODE(current_mode))
+                if current.expected_exists or mode is not None:
+                    os.fchmod(descriptor, stat.S_IMODE(current_mode if mode is None else mode))
                 os.fsync(descriptor)
             finally:
                 os.close(descriptor)
@@ -348,6 +371,17 @@ class WorkspaceFileAccess:
             os.close(parent)
 
     def delete(
+        self, path: str, *, transaction=None,
+        expected: ExpectedFileIdentity | None = None,
+    ) -> None:
+        """Checkpoint a deletion before crossing the anchored mutation boundary."""
+        from nz_coder.foundation.mutation_hooks import recorded_mutation
+
+        self._relative(path, write=True)
+        with recorded_mutation(self, path, None, transaction, expected, None) as captured:
+            self._delete(path, transaction=transaction, expected=captured)
+
+    def _delete(
         self, path: str, *, transaction=None,
         expected: ExpectedFileIdentity | None = None,
     ) -> None:
@@ -821,6 +855,7 @@ class WorkspaceFileAccess:
             return data, WorkspaceFileIdentity(
                 True, int(device), int(inode), int(size), int(after.st_mtime_ns),
                 hashlib.sha256(data).hexdigest(),
+                stat.S_IMODE(after.st_mode),
             )
         except UnsafeProjectControl as exc:
             raise ValueError("Workspace file boundary is unsafe") from exc
@@ -830,7 +865,7 @@ class WorkspaceFileAccess:
 
     def _write_windows(
         self, relative: Path, data: bytes, transaction,
-        *, expected: ExpectedFileIdentity | None, overwrite: bool,
+        *, expected: ExpectedFileIdentity | None, overwrite: bool, mode: int | None = None,
     ) -> None:
         # Windows directory handles are retained and verified by the project
         # control helper; replacement still has a documented final path/rename
@@ -876,6 +911,8 @@ class WorkspaceFileAccess:
                     with stream:
                         stream.write(data)
                         stream.flush()
+                        if mode is not None:
+                            os.chmod(target_path, stat.S_IMODE(mode))
                         os.fsync(stream.fileno())
                 finally:
                     if descriptor >= 0:
@@ -891,8 +928,8 @@ class WorkspaceFileAccess:
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
-            if current_info is not None:
-                os.chmod(temporary, stat.S_IMODE(current_info.st_mode))
+            if current_info is not None or mode is not None:
+                os.chmod(temporary, stat.S_IMODE(current_info.st_mode if mode is None else mode))
             if Path(_windows_final_path(handle)) != parent_path.resolve():
                 raise ValueError("Workspace parent identity changed")
             os.replace(temporary, parent_path / relative.name)

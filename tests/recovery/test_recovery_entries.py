@@ -123,6 +123,20 @@ def test_sdk_undo_redo_and_noop_recover_do_not_build_provider(tmp_path, monkeypa
     assert asyncio.run(client.recover_session(workspace=tmp_path, session_id="entry-session")) is None
 
 
+def test_sdk_recovery_hint_uses_explicit_workspace_not_ambient_scope(tmp_path, monkeypatch):
+    from nz_coder.sdk import AgentClient
+
+    workspace = tmp_path / "workspace"
+    ambient = tmp_path / "host"
+    workspace.mkdir()
+    ambient.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", str(ambient / "state"))
+    _messages, _reverter, target = _owned(workspace)
+    with scoped_workdir(ambient):
+        assert asyncio.run(AgentClient().undo_session(workspace=workspace, session_id="entry-session")).status == "completed"
+    assert target.read_bytes() == b"before\r\n"
+
+
 @pytest.mark.parametrize("session_id", ["../escape", "missing-session", "active", "latest"])
 def test_sdk_recovery_refuses_invalid_or_missing_session(tmp_path, session_id):
     from nz_coder.sdk import AgentClient

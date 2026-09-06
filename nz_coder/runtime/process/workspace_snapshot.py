@@ -18,6 +18,8 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+from nz_coder.foundation.content_objects import ContentObjectStore, SnapshotError
+
 
 _EXCLUDED_NAMES = {
     ".git", ".hg", ".svn", ".nz-coder", ".nz-coder-runs",
@@ -30,10 +32,6 @@ _MAX_PATCH_BYTES = 256 * 1024
 
 def _is_excluded_name(name: str) -> bool:
     return name in _EXCLUDED_NAMES
-
-
-class SnapshotError(RuntimeError):
-    """Raised when a snapshot cannot be read or safely applied."""
 
 
 @dataclass(frozen=True)
@@ -337,24 +335,11 @@ class WorkspaceSnapshotStore:
         return self.root / "manifests" / f"{snapshot_id}.json"
 
     def _blob_path(self, digest: str) -> Path:
-        return self.root / "blobs" / digest[:2] / digest[2:]
+        return ContentObjectStore._blob_path(self, digest)
 
     @staticmethod
     def _atomic_bytes(path: Path, data: bytes, mode: int, *, sync: bool = True) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-        temp = Path(temp_name)
-        try:
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(data)
-                handle.flush()
-                if sync:
-                    os.fsync(handle.fileno())
-            os.chmod(temp, stat.S_IMODE(mode))
-            temp.replace(path)
-        except Exception:
-            temp.unlink(missing_ok=True)
-            raise
+        ContentObjectStore._atomic_bytes(path, data, mode, sync=sync)
 
     @classmethod
     def _atomic_json(cls, path: Path, payload: dict) -> None:

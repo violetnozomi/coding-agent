@@ -47,6 +47,7 @@ from nz_coder.tools import (
 )
 from nz_coder.protocol.public_error import to_public_error
 from nz_coder.tools.question import scoped_question_lifecycle_reporter
+from nz_coder.runtime.process.checkpoint_runtime import register_batch, settle_batch, overlay_recovery, abort_registered
 
 
 @dataclass
@@ -196,9 +197,14 @@ class ProductionToolRuntime:
             messages,
         )
         tool_calls_raw[:] = approved_batch.calls
-        if processor is not None:
-            processor.start_tools(approved_batch.calls)
-            host._checkpoint_messages(messages, "running")
+        try:
+            register_batch(messages, approved_batch.calls)
+            if processor is not None:
+                processor.start_tools(approved_batch.calls)
+                host._checkpoint_messages(messages, "running")
+        except BaseException as exc:
+            abort_registered(approved_batch.calls, error=exc)
+            raise
         write_override = _legacy_dispatch_override(host, "_tool_batch_has_write")
         has_write = (
             write_override(tool_calls_raw)
@@ -256,6 +262,7 @@ class ProductionToolRuntime:
                         "read_image_describe_skipped",
                         reason="sync_tool_pipeline_inside_event_loop",
                     )
+            settle_batch(dispatched, messages)
             consume_kwargs = {"on_tool": on_tool}
             if processor is not None:
                 consume_kwargs["processor"] = processor
@@ -289,7 +296,8 @@ class ProductionToolRuntime:
                 host._notify_agent_switched(transition)
             if describe_interrupted:
                 raise asyncio.CancelledError
-        except BaseException:
+        except BaseException as exc:
+            abort_registered(approved_batch.calls, error=exc)
             if processor is not None:
                 processor.interrupt_unsettled()
                 host._checkpoint_messages(messages, "interrupted")
@@ -407,6 +415,7 @@ class ProductionToolRuntime:
             processor = lifecycle.processor_for_messages(messages)
 
         async def checkpoint_state(status: str) -> None:
+            overlay_recovery(messages)
             if checkpoint is not None:
                 await checkpoint(status)
             else:
@@ -418,9 +427,14 @@ class ProductionToolRuntime:
             messages,
         )
         tool_calls_raw[:] = approved_batch.calls
-        if processor is not None:
-            processor.start_tools(approved_batch.calls)
-            await checkpoint_state("running")
+        try:
+            register_batch(messages, approved_batch.calls)
+            if processor is not None:
+                processor.start_tools(approved_batch.calls)
+                await checkpoint_state("running")
+        except BaseException as exc:
+            abort_registered(approved_batch.calls, error=exc)
+            raise
         write_override = lifecycle.write_override
         has_write = (
             write_override(tool_calls_raw)
@@ -451,6 +465,7 @@ class ProductionToolRuntime:
             describe_interrupted = await lifecycle.describe_read_results(
                 dispatched, messages,
             )
+            settle_batch(dispatched, messages)
             consume_kwargs = {"on_tool": on_tool}
             if processor is not None:
                 consume_kwargs["processor"] = processor
@@ -482,6 +497,7 @@ class ProductionToolRuntime:
             if describe_interrupted:
                 raise asyncio.CancelledError
         except BaseException as exc:
+            abort_registered(approved_batch.calls, error=exc)
             policy_escalation = isinstance(exc, GuardrailEscalateError)
             if processor is not None:
                 # Escalation belongs to the Runner's atomic policy boundary.
