@@ -75,6 +75,83 @@ def test_cli_owned_undo_redo_has_one_history_owner_and_no_hint_dependency(tmp_pa
         assert len(load_session("entry-session")["messages"]) == 2
 
 
+@pytest.mark.parametrize("call_id", ["call-shell", "call-shell[bold]\x1b[2J\nspoof"])
+def test_cli_real_mixed_journal_reports_unrestored_scope_and_never_reexecutes(tmp_path, call_id):
+    import io
+    from rich.console import Console
+    from nz_coder.interface.commands.handlers import core
+    from nz_coder.tools import bash  # noqa: F401
+
+    messages, reverter, target = _owned(tmp_path)
+    ledger = ToolLedger(tmp_path)
+    shell = ledger.register(session_id="entry-session", interaction_id="interaction-entry", assistant_step_id="msg-step",
+                            agent_id="agent-entry", call_id=call_id, tool="bash", tool_input={"command": "SECRET_ARG_NEVER_DISPLAY"})
+    with ledger.connection() as db:
+        db.execute("UPDATE executions SET execution_state='succeeded' WHERE execution_id=?", (shell["execution_id"],))
+    ctx = _cli_context(messages, reverter)
+    output = io.StringIO()
+    ctx.console = Console(file=output, force_terminal=False, color_system=None, width=240)
+    results = []
+    def undo(history):
+        result = reverter.revert(history)
+        results.append(result)
+        return result
+    def redo(history):
+        result = reverter.unrevert(history)
+        results.append(result)
+        return result
+    ctx.controller = SimpleNamespace(undo=undo, redo=redo)
+    core.handle_undo(ctx)
+    text = output.getvalue()
+    assert target.read_bytes() == b"before\r\n"
+    assert results[-1].status == "completed" and results[-1].unsupported_tools == (call_id,)
+    assert "not automatically undone" in text and "call-shell" in text
+    assert "app.py" in text and "Inspect" in text
+    assert "SECRET_ARG" not in text and str(tmp_path) not in text and "\x1b" not in text
+    if "[bold]" in call_id:
+        assert "[bold]" in text and "\\u001b" in text and "\\u000a" in text
+    output.seek(0)
+    output.truncate(0)
+    core.handle_redo(ctx)
+    text = output.getvalue()
+    assert target.read_bytes() == b"after\r\n"
+    assert results[-1].status == "completed" and results[-1].unsupported_tools == (call_id,)
+    assert "not re-executed" in text and "only recorded files" in text
+    assert "SECRET_ARG" not in text and "\x1b" not in text
+    assert len(ledger.executions("entry-session")) == 2
+
+
+def test_cli_pending_recovery_retains_operation_status_and_safe_conflict_path(tmp_path, monkeypatch):
+    from nz_coder.interface.commands.handlers import core
+    from nz_coder.runtime.session.recovery_journal import RecoveryJournal
+
+    messages, reverter, _target = _owned(tmp_path)
+    ctx = _cli_context(messages, reverter)
+    def fail(*_args):
+        raise OSError("PRIVATE_RAW_FAILURE")
+    with monkeypatch.context() as patch:
+        patch.setattr(RecoveryJournal, "_commit_history", fail)
+        core.handle_undo(ctx)
+    with ToolLedger(tmp_path).connection() as db:
+        operation_id, = db.execute("SELECT operation_id FROM recovery_operations").fetchone()
+    text = "\n".join(ctx.output)
+    assert operation_id in text and "recovery_required" in text
+    assert "PRIVATE_RAW_FAILURE" not in text and "delete" not in text.lower()
+
+
+def test_cli_real_external_edit_conflict_keeps_path_and_status(tmp_path):
+    from nz_coder.interface.commands.handlers import core
+
+    messages, reverter, target = _owned(tmp_path)
+    target.write_bytes(b"user edit")
+    ctx = _cli_context(messages, reverter)
+    core.handle_undo(ctx)
+    text = "\n".join(ctx.output)
+    assert "app.py" in text and "conflicted" in text and "Refused" in text
+    assert "Undid" not in text
+    assert target.read_bytes() == b"user edit" and len(messages) == 2
+
+
 def test_cli_refuses_legacy_unknown_ownership_without_global_fallback(tmp_path, monkeypatch):
     from nz_coder.interface.commands.handlers import core
 

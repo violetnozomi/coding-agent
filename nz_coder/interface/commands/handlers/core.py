@@ -1540,6 +1540,11 @@ def handle_redo(ctx: CommandContext) -> None:
     _handle_owned_recovery(ctx, "redo")
 
 
+def _recovery_label(value: str) -> str:
+    """Display result identifiers as literal text, never markup or controls."""
+    return escape("".join(char if char.isprintable() else f"\\u{ord(char):04x}" for char in value))
+
+
 def _handle_owned_recovery(ctx: CommandContext, direction: str) -> None:
     """Route only to owned recovery; the coordinator commits history once."""
     from nz_coder.runtime.session.session_revert import RecoveryError
@@ -1563,7 +1568,10 @@ def _handle_owned_recovery(ctx: CommandContext, direction: str) -> None:
             if detail.conflicts else "recovery required" if detail.recovery_required
             else "owned recovery is unavailable; legacy ownership cannot be inferred"
         )
-        ctx.console.print(f"Refused to {direction}: {escape(reason)}.")
+        scope = ""
+        if detail.operation_id or detail.conflicts or detail.recovery_required:
+            scope = f" Status: {detail.status}; operation: {detail.operation_id or '(not created)'}."
+        ctx.console.print(f"Refused to {direction}: {_recovery_label(reason)}.{_recovery_label(scope)}")
         return
     except SnapshotError:
         ctx.console.print(f"Refused to {direction}: no owned recovery checkpoint is available.")
@@ -1571,9 +1579,17 @@ def _handle_owned_recovery(ctx: CommandContext, direction: str) -> None:
     files = ", ".join(result.files) if result.files else "no file changes"
     verb, action = ("Undid", "removed") if direction == "undo" else ("Redid", "restored")
     ctx.console.print(
-        f"{verb} message {escape(result.message_id)}: {escape(files)} "
+        f"{verb} message {_recovery_label(result.message_id)}: {_recovery_label(files)} "
         f"({result.removed_messages} message(s) {action})"
     )
+    if result.unsupported_tools:
+        calls = _recovery_label(", ".join(result.unsupported_tools))
+        warning = (
+            "external or unowned side effects were not automatically undone for tool calls: "
+            if direction == "undo" else
+            "only recorded files were restored. External tool calls were not re-executed: "
+        )
+        ctx.console.print(f"Warning: {warning}{calls}. Inspect their remaining effects.")
 
 
 def handle_save_session(ctx: CommandContext) -> None:
