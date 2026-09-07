@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from dataclasses import replace
 
@@ -172,10 +173,11 @@ def test_shared_batch_contract(tmp_path, real, sync, scenario):
                 assert ledger.executions("session-contract") == before
 
 
+@pytest.mark.parametrize("single_worker", [False, True])
 def test_real_cancel_drains_started_write_and_distinguishes_mixed_execution_facts(
-    tmp_path,
+    tmp_path, single_worker,
 ):
-    started, release = threading.Event(), threading.Event()
+    release = threading.Event()
     with components(tmp_path, True) as (dependencies, context):
 
         class SelectivePermissions(Permissions):
@@ -189,23 +191,6 @@ def test_real_cancel_drains_started_write_and_distinguishes_mixed_execution_fact
 
         executor = ToolExecutor(SelectivePermissions())
 
-        def execute(selected, index, messages):
-            result = executor.execute_one(selected, index)
-            if selected["id"] == "call-started":
-                started.set()
-                assert release.wait(5), (
-                    "test failed to release the already-started worker"
-                )
-            return result
-
-        context = replace(
-            context,
-            lifecycle=replace(
-                context.lifecycle,
-                execute_one=execute,
-                has_pre_tool_hooks=lambda: True,
-            ),
-        )
         calls = [
             call("write_file", "call-denied", path="denied.txt", content="denied"),
             call("write_file", "call-success", path="success.txt", content="first"),
@@ -219,14 +204,50 @@ def test_real_cancel_drains_started_write_and_distinguishes_mixed_execution_fact
         ]
 
         async def run():
+            loop = asyncio.get_running_loop()
+            if single_worker:
+                loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
+            started = loop.create_future()
+
+            def notify_started():
+                if not started.done():
+                    started.set_result(None)
+
+            def execute(selected, index, messages):
+                result = executor.execute_one(selected, index)
+                if selected["id"] == "call-started":
+                    loop.call_soon_threadsafe(notify_started)
+                    assert release.wait(30), (
+                        "test failed to release the already-started worker"
+                    )
+                return result
+
+            batch_context = replace(
+                context,
+                lifecycle=replace(
+                    context.lifecycle,
+                    execute_one=execute,
+                    has_pre_tool_hooks=lambda: True,
+                ),
+            )
             dependencies.prepare(calls)
             task = asyncio.create_task(
                 ProductionToolRuntime().execute_batch_async(
-                    context, calls, dependencies.messages
+                    batch_context, calls, dependencies.messages
                 )
             )
             try:
-                assert await asyncio.wait_for(asyncio.to_thread(started.wait, 3), 4)
+                # Await the actual write boundary without consuming a worker
+                # needed by the real JSON checkpoint or tool dispatch. The
+                # deadline is a deadlock watchdog, not a three-second disk SLA.
+                done, _ = await asyncio.wait(
+                    {started, task}, timeout=30,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if task in done:
+                    await task  # Preserve the real pre-readiness exception.
+                    pytest.fail("Batch completed before the write readiness boundary")
+                assert started in done, "Batch is still pending before write readiness"
                 assert (tmp_path / "started.txt").exists()
                 task.cancel()
                 await asyncio.sleep(0)
@@ -235,6 +256,12 @@ def test_real_cancel_drains_started_write_and_distinguishes_mixed_execution_fact
                 assert not task.done()
             finally:
                 release.set()
+                started.cancel()
+                if not task.done():
+                    task.cancel()
+                # Also settle on setup/assertion failure before the scopes
+                # close; otherwise a late worker may outlive its ledger/txn.
+                await asyncio.gather(task, return_exceptions=True)
             with pytest.raises(asyncio.CancelledError):
                 await task
 

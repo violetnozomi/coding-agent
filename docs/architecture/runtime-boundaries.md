@@ -374,3 +374,57 @@ Native Windows here means GitHub's real Windows runner, not a Linux platform moc
 or a manual Windows desktop UX session. Existing HTTP/watcher historical failures,
 the documented recovery limitations and `actions/upload-artifact@v4` Node-runtime
 deprecation warnings remain separate; this phase does not silently close them.
+
+## Corrected-contract CI and real-component readiness regression
+
+Remote SHA `068f0be340686a09aa271335372dd0eb52d251ca` retained the identical
+production tree. [Core Runtime](https://github.com/violetnozomi/coding-agent/actions/runs/34077830868)
+passed: Python 3.12 job `101607305847` completed **4043 passed / 36 skipped**,
+713.94 s, exit 0; Python 3.10 job `101607305999` completed **284 passed**,
+488.93 s, exit 0. Scoped positive/negative typing, compile, Ruff, CLI, distribution
+build and installed-wheel checks succeeded. Repo Intelligence `34077830927` and
+Windows Installer `34077830928` also succeeded.
+
+The [Windows Product RC](https://github.com/violetnozomi/coding-agent/actions/runs/34077830916)
+native job `101607306016` instead recorded **1 failed / 668 passed / 20 skipped**,
+483.53 s, exit 1. Its subsequent wheel/fresh-install step was skipped. The failing
+test was this phase's
+`test_real_cancel_drains_started_write_and_distinguishes_mixed_execution_facts`,
+waiting three seconds for the third tool's completed write. This is not silently
+classified as the historical HTTP/watcher failure. Raw job log:
+`ci-windows-068f0be-job.log`; Core job logs: `ci-core-068f0be-runtime.log` and
+`ci-core-068f0be-python310.log`. This failed workflow was not rerun at that SHA.
+
+The test had two established synchronization weaknesses: its readiness wait used
+`asyncio.to_thread`, consuming the same default pool required by real Store/dispatch
+work; and it did not observe a batch error before readiness, reporting only False.
+Its three-second limit also included four ledger registrations, a JSON checkpoint,
+permission settlement and two complete file writes with ledger settlement and Git
+status subprocesses. No product contract guarantees this startup latency.
+
+Adding a single-worker parameter to the unchanged wait reproduced a deterministic
+failure locally: **1 failed / 1 passed**, exit 1 (`worker-readiness-red.log`). The
+Windows log alone does not prove that its pool was exhausted; this local reproduction
+proves the test's unsafe synchronization, not the runner's unobserved resource state.
+
+The test now receives a loop Future notification from the actual completed write
+via `call_soon_threadsafe`, races that notification with early batch termination,
+and propagates a real early exception. A separate bounded deadlock watchdog remains.
+The finally path always releases and drains the batch before closing ledger/transaction
+scopes, including when setup or an assertion fails. Both original file and execution
+facts, repeated-cancellation and compensation assertions remain. No product feature
+or path/permission check was disabled, and production source is unchanged.
+
+The default- and single-worker cases then both passed, exit 0
+(`worker-readiness-green.log`). Python 3.10's complete tool/architecture selection
+passed **111 tests**, 7.08 s, exit 0 (`python310-readiness-green.log`). Ruff,
+compileall and diff checks passed. This test-only correction needs a new native
+Windows run; neither prior failed workflow is erased or relabeled.
+
+After this correction the exact combined required-suite command above completed
+**429 passed**, 45.23 s, exit 0 (`required-readiness-correction.log`). Independent
+review reran both worker cases successfully and used in-memory mutations to skip
+file compensation and omit the ledger compensation fact separately; both failed
+at the corresponding unchanged file/ledger assertions, exit 1. The final complete
+Linux run is `full-readiness-final.log`; its result and current-code remote results
+will be appended after completion, without changing the frozen runtime or tests.

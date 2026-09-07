@@ -807,3 +807,15 @@ test-only correction; production tree remains `45aea5b0d3d5111f0199ec253615f7d61
 The detailed commands, failed log and validation are appended to the architecture
 record. Corrected-commit CI must be recorded separately, not called a passing rerun
 of this failed workflow.
+
+On `068f0be`, Core Runtime then passed: Python 3.12 **4043 passed / 36 skipped**
+and Python 3.10 **284 passed**, exit 0. However, native Windows job `101607306016`
+failed a different new real-component test at its three-second write-readiness
+wait (**1 failed / 668 passed / 20 skipped**); fresh-install was skipped on that
+job. No HTTP/watcher failure is inferred. The test's pool-consuming wait was
+deterministically reproduced as failing with a single worker, then replaced by
+an actual write-completion Future plus early-task-error observation and guaranteed
+test cleanup drainage. Default/single-worker file and ledger assertions remain;
+Python 3.10's 111 tool/architecture tests pass. Production remains unchanged.
+See the architecture record for the original failed job and the evidence limits;
+this is not a passing rerun of `068f0be`.
