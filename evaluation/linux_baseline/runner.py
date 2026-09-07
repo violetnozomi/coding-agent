@@ -438,11 +438,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--dry-run", action="store_true", help="also exercise real native chain with Fake Provider")
-    parser.add_argument("--live", action="store_true", help="reserved; currently fails closed before any request")
+    parser.add_argument("--live", action="store_true", help="P1 only: explicit authorization, T01 then T04, one attempt each")
+    parser.add_argument("--live-config", type=Path, help="user-confirmed P1 grant and frozen billing configuration; never implicit")
     parser.add_argument("--publish", type=Path, help="new durable directory for safe offline evidence")
     args = parser.parse_args(argv)
     if args.live:
-        parser.error("Paid execution disabled: freeze authorization, model, pricing and per-request reservation adapter first")
+        if args.live_config is None or args.dry_run or args.publish:
+            parser.error("Paid execution disabled: require --live-config; cannot combine with offline options")
+        from .live import run
+        try:
+            summary = run(args.output.resolve(), json.loads(args.live_config.read_text()))
+        except Exception as exc:
+            # Config values and upstream exception strings may contain credentials.
+            parser.error(f"P1 stopped ({type(exc).__name__}); inspect the authorization and private evidence")
+        print(json.dumps({"stopped": summary["stopped"], "tasks": {
+            key: value["final_status"] for key, value in summary["tasks"].items()}}, indent=2))
+        return 0 if all(summary["tasks"][key]["final_status"] == "success" for key in ("T01", "T04")) else 1
+    if args.live_config:
+        parser.error("--live-config requires --live; refusing to rebuild P0")
     summary = prepare(args.output.resolve(), dry_run=args.dry_run)
     if args.publish:
         publish(args.output.resolve(), args.publish.resolve())

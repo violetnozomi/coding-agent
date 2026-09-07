@@ -214,3 +214,116 @@ python -c 'import json; from pathlib import Path; from evaluation.linux_baseline
 此前 Windows HTTP 的 `test_http_abort_retires_stream_part_before_run_settles` 与
 `test_http_run_settled_is_the_manager_commit_barrier` 开放失败继续保留，不因 Linux 离线检查而关闭。
 没有跑无关全量 CI，没有修改 main、创建 PR 或合并。
+
+## P1 续接：离线计费适配，真实运行仍关闭（2026-09-08）
+
+本节追加于 P0，不替换 P0 的任务、验收或成绩。续接时 HEAD 为
+`174dcb67728f60dbb535e9ee47775a700f2488a2`，中断留下的 P1 文件尚未提交。
+本节不是已冻结的 live 实验，也不宣称真实预算闭环已通过验证。
+
+### 授权、连接与待冻结项
+
+没有获得明确付费授权。CNY 10 总额、每题 CNY 5 仍是建议，不是授权。
+允许申请的范围仍为 T01 → T04 串行，各一次，不含独立付费探针或剩余十题。
+
+通过产品的 `load_config_snapshot → active_model_selection → provider_connection`
+进行只读检查：Provider 为 `openai-compatible`，model ID 为
+`deepseek-v4-flash`，endpoint 为官方 `api.deepseek.com` HTTPS 根路径或 v1 路径，
+但此次快照未解析到凭据（credential source 为 default），variant 为 None。
+这只确认配置解析结果，不证明账户属于哪一计费合同、使用哪种币种或费率。
+没有读取或打印凭据正文，没有调用账户 API 或付费健康探针。
+
+现有适配候选仅支持官方 DeepSeek、CNY、thinking enabled / high；
+这些限制不是对现有 effort 的继承证明，也不适用于第三方接口。
+候选费率为每百万 Token 缓存命中 0.10、未命中 3、输出 9，候选来源为
+`https://api-docs.deepseek.com/zh-cn/quick_start/pricing/`，代码日期为 2026-09-07。
+**这些数值与日期来自中断实现，尚未核实当前页面及该账户的适用规则。**
+时段规则、费率版本及账户币种必须在 live 前重新确认；不能把候选费率写成真实账单。
+
+候选每请求预留：输入 1,048,576 Token、输出最多 8,000 Token。
+按上述候选价格，预留为 `(1048576 × 3 + 8000 × 9) / 1000000 = 3.217728 CNY`，
+预留 Token 为 1,056,576。输入预留意在覆盖完整模型输入上界，而不是用字符数除四估算；
+这个模型上界本身仍需官方模型限制证据支持。
+因此 P0 草案的 100,000 **累计用量**无法准入首请求。
+中断实现使用每题 2,000,000 累计 Token 的候选值，尚未成为本次冻结配置；
+不是宣称模型上下文窗口为二百万，也没有在运行中增加预算。
+30 轮只限制主循环；600 秒为整个 worker 的墙钟时间，包含辅助调用，
+补丁导出和独立验收在 worker 终止后执行，不包含在这 600 秒内。
+
+### 已接入的离线可验证边界
+
+- 保留正式 headless CLI → Native 链；仅在独立 worker 中替换 Provider 客户端工厂，未另写 Agent 循环。
+- OpenAI SDK 下方的 HTTP transport 在每次发送前检查授权、任务/实验金额与累计 Token，
+  先持久化预留和 dispatch intent，再允许 transport 执行。
+- `max_tokens` 实际进入请求且不超过 8,000；拒绝同时携带 `max_completion_tokens` 的冲突请求。
+- SDK 最多两次内部重试，每次重新经过 transport；底层 HTTP transport 重试为零。
+  一旦已发送请求的费用不确定，后续 SDK 或 Agent 重试不得再次发送。
+- 缓存命中/未命中拆分输入；reasoning 是输出子项，不重复加总。Decimal 按 1e-9 向上取整。
+  `usage_derived_cost` 只是配置费率下的计算值，`provider_reported_cost` 保持 null。
+- 缺失 usage、超时、取消、响应丢失、身份不符及结算落盘失败均保留不确定预留并阻断后续请求。
+  汇总按 request ID 折叠事件，不重复统计 reserve/dispatch/settle；损坏日志令余额未知，不返还为全额。
+- 兼容客户端及继承主客户端的 sidecar 共享 ledger；其他内置 Provider 的客户端创建被拒绝。
+  子 Agent、handoff、动态工具、MCP、规划、反思、外部模型探测等不在本次受限工具/环境配置中。
+  Bash 子进程沿用产品的凭据环境过滤；临时目录并非操作系统沙箱，不能据此承诺任意恶意命令的网络隔离。
+- 实验目录、任务目录与 worker-started 标记拒绝重复启动；两题组织器遇到费用或基础设施不确定即停止。
+  普通解题失败可以继续 T04，失败现场仍导出补丁并调用 P0 干净副本重放与独立验收。
+  组织器在等待 worker 时被取消，也继续保存可获取的补丁与结果，清理状态保守记为未核实；
+  独立验收进程启动失败、超时、缺少有效用例证据或缺失验收组，不会被当成普通题目失败而继续 T04。
+
+请求日志只存用量、金额、状态与请求/系统/工具哈希，不保存 Authorization、key 或模型正文。
+原始运行 JSONL 属于私有现场，不进入公开报告；未来真实结果仍需独立隐私审查。
+dispatch 计数表示持久化发送意图，崩溃发生在写入意图与 socket 发送之间时可能高估，不能冒充精确账单请求数。
+
+### 本次验证与真实成绩分离
+
+复用中断前的 `.nz-coder-runs/p1-env`，Python 3.13.12、pytest 8.4.2、
+openai 2.36.0、httpx 0.28.1；pytest 已符合项目 `>=7,<9`。
+没有重建十二题或重跑整套 P0。受控 transport 经真实 SDK/Provider/Native 接线，
+其脚本响应及 probe 写入不属于模型解题结果。
+
+本次实际执行的最终定向命令：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .nz-coder-runs/p1-env/bin/python -m pytest -q \
+  tests/evaluation/test_p1_billing.py tests/evaluation/test_p1_live.py \
+  tests/test_headless_cli.py --tb=short \
+  --junitxml=.nz-coder-runs/p1-resume-20260908/contracts-reviewed.xml
+.nz-coder-runs/p1-env/bin/python -m evaluation.linux_baseline.runner --help
+.nz-coder-runs/p1-env/bin/python -m ruff check \
+  evaluation/linux_baseline/billing.py evaluation/linux_baseline/live.py \
+  evaluation/linux_baseline/live_worker.py evaluation/linux_baseline/runner.py \
+  tests/evaluation/test_p1_billing.py tests/evaluation/test_p1_live.py \
+  tests/evaluation/p1_controlled_worker.py --output-format concise
+git diff --check
+```
+
+最终定向测试 **67 passed，57.05 秒，退出码 0**。帮助命令退出码 0。
+对本轮七个 Python 文件运行上述 Ruff 检查通过，
+`git diff --check` 通过；没有把这些结果计入 T01/T04 正式成绩。
+
+`--live` 与 `--live-config` 已进入帮助并有拒绝无授权启动的测试；本次没有执行 live 命令，
+也没有创建填入建议金额后标记 authorized=true 的配置。
+
+本次修复先复现了冲突输出上限、其他内置 Provider 工厂未阻断、验收基础设施故障继续下一题、
+空验收映射及组织器取消丢失收尾等失败，再做最小修正。
+独立只读审查没有写代码；Token 跨题重置建议经对照“单题累计预算”的原要求未采纳，
+快照字段改为 `per_task_cumulative_token_budget` 以消除歧义。
+
+| 项目 | T01 | T04 |
+| --- | --- | --- |
+| 正式启动次数 | 0 | 0 |
+| 实际模型请求/内部重试 | 0 / 0 | 0 / 0 |
+| 真实独立验收 | 未运行 | 未运行 |
+| 最终补丁及重放证据 | 无正式 attempt | 无正式 attempt |
+| runtime_completed / patch_verified | null / null | null / null |
+| within_budget / usage_complete / cleanup_ok | 不适用 | 不适用 |
+| final_status | not_run | not_run |
+
+本次新增真实调用支出、实际预留、不确定在途预留均为 0，依据是没有打开真实请求，
+不是依据离线 usage 或余额变化。未获授权的任务/实验剩余额度为不适用；账户实际币种与费率仍未知。
+十二题全部 not_run（含预选两题及其余十题），没有成功率样本。
+没有观察到真实请求绕过预算，因为根本没有真实请求；离线契约通过不能替代此项真实证据。
+
+下一步先补齐账户连接、适用费率证据、effort/Token 限制决定和明确授权，
+再冻结已提交 Agent/驱动、任务/验收哈希、依赖及功能配置，才能创建新的 live experiment_id。
+当前不运行剩余任务，不修改 main、不合并、不创建 PR、不 push。
