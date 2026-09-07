@@ -819,3 +819,33 @@ test cleanup drainage. Default/single-worker file and ledger assertions remain;
 Python 3.10's 111 tool/architecture tests pass. Production remains unchanged.
 See the architecture record for the original failed job and the evidence limits;
 this is not a passing rerun of `068f0be`.
+
+Final current-code evidence: `a2ff1005ed2ab3343a3058db4fc1a626b44b4842`.
+Local full `env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 PYTHONUTF8=1 python -m pytest -q --tb=short`
+completed **4045 passed / 35 skipped**, 532.42 s, exit 0. The combined required
+selection completed **429 passed**, exit 0; Python 3.10 tool/architecture selection
+completed **111 passed**, exit 0. Actual scoped typing and negative fixtures passed.
+
+The first remote Core attempt on this SHA recorded **3 failed / 4041 passed /
+36 skipped**: two existing repo_map cases returned a redacted internal error and
+one workflow ordering assertion failed. The first native Windows attempt recorded
+**1 failed / 669 passed / 20 skipped** in the unchanged daemon option-like nonce
+startup case (`not_started`); the installed-wheel step was skipped on that job.
+The underlying daemon.log and map exception are not in the collected output, so
+no specific common root cause or runner-load explanation is claimed. The three
+Linux cases passed in a local exact-case probe; their assertions were not changed.
+
+After retaining those failures, one same-SHA rerun of each affected workflow
+succeeded. Remote Linux job `101646303328`: **4044 passed / 36 skipped**, 776.04 s,
+exit 0, followed by CLI/lint/build. Native Windows job `101644681021`:
+**670 passed / 20 skipped**, 352.51 s, exit 0, followed by wheel/sdist and actual
+source-external fresh-install smoke. All four workflows on `a2ff100` now succeeded;
+Repo Intelligence and Windows Installer did not need reruns. Exact commands,
+failed/passing job links, raw-log paths and the one-rerun limits are in
+[Runtime boundaries](../../docs/architecture/runtime-boundaries.md).
+
+These results close the ToolRuntime ownership phase; they do not fix or erase
+the observed daemon, map or workflow stability symptoms, nor the older HTTP/watcher
+records. No RecoveryJournal schema/Undo contract or index-service algorithm was
+rewritten in this phase. The final evidence seal changes only Markdown and keeps
+the tested production code and executable tests unchanged.

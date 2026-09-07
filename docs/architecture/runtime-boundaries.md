@@ -102,12 +102,15 @@ contexts remain three focused views, not an immutable copy of the whole run.
 | Concrete capability | Actual business rules moved out of the product owner | Authoritative dependencies |
 | --- | --- | --- |
 | `execution/tool_effects.py::ToolTransaction` | Commit versus compensation and rollback report projection | Existing TransactionManager; no replacement transaction state |
-| `ToolResultRecorder` in the same module | Tool counters, verification/task observations, child cost/evidence and strict completion decision | ToolRunFacts, VerificationManager, RuntimeState, RunEvidence, admission/lineage, scratchpad/skills |
+| `ToolResultRecorder` in the same module | Tool counters, verification/task observations, child task evidence and strict completion decision | ToolRunFacts, VerificationManager, RuntimeState, RunEvidence, admission/lineage, scratchpad/skills |
 | `CodingWriteEffects` in the same module | Successful-write path selection, patch-risk update, index refresh and LSP result attachment | ChangeTracker, task/evidence/recovery owners; accepted index service helper |
 | `tool_runtime/operations.py::HookedToolExecutor` | Existing pre-tool hook rejection and execution timing | Declared executor plus explicit outer hook callback |
 | `session/tool_progress.py::ToolSessionBoundary` | Processor lookup, metadata/question conversion and owned progress persistence | Session checkpoint callback and event publisher; no product object |
 | `process/tool_snapshots.py::ToolStepSnapshots` | Optional step snapshot/patch conversion and bounded summary projection | Existing WorkspaceSnapshotStore; not the tool recovery authority |
 | `tool_runtime/observers.py::CodingToolObserver` | Ordered committed effects, batch hooks and approved plan-mode application | Focused effects/snapshot services and the declared batch-hook bridge |
+
+Admitted child cost remains projected by `ProductionToolResultProjector` through
+`SessionProcessor.add_child_cost`; it is not written by ToolResultRecorder.
 
 The old product methods remain compatibility delegates where needed. Native tool
 batches do not call `_record_tool_result`, `_finish_tool_transaction`,
@@ -217,13 +220,33 @@ production composition, real ports and test dependencies with basedpyright. It t
 requires rejection of a status-only checkpoint and an executor returning a string.
 The checker is a pinned CI development tool, not a new runtime dependency.
 
-A failure-injection example raises ValueError at tool execution and OSError during
-compensation. The original ValueError remains the raised cause. The existing tracer
-receives `tool_batch_failed` and `tool_batch_cleanup_failed` with Session/interaction/
-assistant-step/call identities, the failure stage, primary and secondary exception
-types, and transaction activity. The associated ledger answers whether the tool ran
-and whether its file effects were compensated. No raw arguments, unadmitted output,
-exception strings or private sentinel values are added to these diagnostics.
+A module-level failure-injection example raises ValueError at tool execution and
+OSError during compensation. The original ValueError remains the raised cause;
+the test asserts cleanup stage, primary/secondary types and call identity. Its
+declared context has no RunContext or ledger, so this example alone does not prove
+nonempty Session/interaction identity or persisted file effects.
+
+The separate real-component `test_real_compensation_failure_keeps_file_and_partial_transaction`
+executes an actual write, raises RuntimeError during output admission and injects
+OSError during restore. It asserts the primary error, a rollback trace event,
+`rollback_partial`, the still-written file, a succeeded execution, no admitted
+preview and a mutation not marked compensated. Production diagnostics populate
+Session/interaction/assistant-step/call fields from that real context; the test
+does not separately assert every identity field. Together these checks and the
+declared trace implementation support boundary diagnosis without pretending the
+small in-memory example is a durable integration test. No raw arguments,
+unadmitted output, exception strings or private sentinel values are added to the
+batch-failure diagnostics.
+
+A supplementary independent Python 3.10 rerun of that real compensation case
+passed (1 test, exit 0); a read-only pytest hook captured the existing trace, without
+editing production or tests. The observed `tool_batch_failed` had a nonempty
+interaction ID, `session_id=session-contract`, `assistant_step_id=msg-step`,
+`call_ids=[call-write]`, `failure_stage=dispatch_and_output_admission`,
+`primary_error_type=RuntimeError`, and `transaction_active=true`. The following
+`transaction_rollback` report described one failed restore. This partial-rollback
+case returns a report rather than throwing a cleanup exception, so it must not be
+described as emitting the unit example's `tool_batch_cleanup_failed` event.
 
 ## Intermediate validation and retained failures (2026-09-07)
 
@@ -428,3 +451,105 @@ file compensation and omit the ledger compensation fact separately; both failed
 at the corresponding unchanged file/ledger assertions, exit 1. The final complete
 Linux run is `full-readiness-final.log`; its result and current-code remote results
 will be appended after completion, without changing the frozen runtime or tests.
+
+## Final frozen-source acceptance (`a2ff100`)
+
+Final runtime/test revision: `a2ff1005ed2ab3343a3058db4fc1a626b44b4842`.
+Production tree `45aea5b0d3d5111f0199ec253615f7d618f21dea`; test tree
+`5aeb43675504096cd94e2d76862aa4f25289a16c`. This revision was normally pushed
+and verified using `git ls-remote`. Its first push hit a TLS error; the retry
+succeeded before any result was reported as belonging to the updated remote.
+
+The exact sanitized full Linux command in the local acceptance table completed
+**4045 passed / 35 skipped**, 532.42 s, **exit 0** (`full-readiness-final.log`).
+The required combined selection completed **429 passed**, exit 0, and Python 3.10
+tool/architecture selection **111 passed**, exit 0. Final scoped type checking
+again produced 0 errors and rejected both intentionally incompatible fixtures,
+exit 0 (`typecheck-final.log`). Ruff, compileall and diff checks passed. No
+runtime/test changes occurred during this full run; only evidence is appended.
+
+The first native Windows attempt on this revision, run `34090323034`, job
+`101642293486`, completed **1 failed / 669 passed / 20 skipped**, 322.13 s,
+exit 1. Both worker variants and the other new boundary cases passed. The
+remaining failure was the existing
+`tests/test_daemon.py::test_daemon_start_accepts_option_like_nonce`:
+`daemon did not become ready: not_started` after a requested 20-second readiness
+budget. The native packaging/fresh-install step was consequently skipped.
+Its daemon implementation and test are unchanged from this branch's base;
+that fact alone does not establish why this particular attempt failed.
+
+Raw evidence is `ci-windows-a2ff100-first.log`. The workflow artifact contains
+the pytest output, platform and doctor records, but not the referenced temporary
+daemon.log; no claim is made that the failure is only runner load or the same
+root cause as prior HTTP failures. One same-SHA failed-job rerun was requested
+after retaining this evidence. Its outcome must be reported separately. The
+daemon readiness symptom remains an independent stability follow-up, not a
+new production workaround, disabled test, or silent extension of this phase.
+
+The first Core Runtime job on the same revision, run `34090322981`, Python 3.12
+job `101642292966`, then completed **3 failed / 4041 passed / 36 skipped**,
+900.99 s, exit 1 (`ci-core-a2ff100-first.log`). Failed cases:
+
+- `tests/test_repo_languages.py::test_repo_map_indexes_mixed_language_directory`;
+- `tests/test_repo_languages.py::test_repo_map_semantic_probe_uses_ranked_non_python_file`;
+- `tests/test_workflow_runtime.py::test_pipeline_streams_items_without_stage_barrier_and_preserves_order`.
+
+The two map calls returned a safely redacted internal error, without the underlying
+exception in the job output. The workflow case observed the slow reducer before the
+fast reducer despite its sleep-based ordering expectation. Their production modules
+and test files are unchanged from the task base; neither that diff nor the successful
+local run establishes the root cause or proves these unrelated subsystems stable.
+The three exact cases passed locally (**3 passed**, 0.85 s, exit 0,
+`ci-failures-local-probe.log`). No failure assertion was modified. One same-SHA
+failed-job rerun was requested after preserving the failure. Its outcome is separate
+evidence, not a fix for the map/workflow symptoms. The first job's post-pytest lint,
+CLI and build steps were skipped and are not counted as executed.
+
+The same SHA's Python 3.10 job `101642292802` succeeded with **285 passed**,
+506.19 s, exit 0 (`ci-python310-a2ff100.log`), followed by CLI/build checks;
+the separate installed-wheel job also succeeded. These successes do not turn the
+first failed Core workflow green.
+
+Native Windows same-SHA rerun outcome: run `34090323034`, job `101644681021`
+completed **670 passed / 20 skipped**, 352.51 s, **exit 0**. Its command includes
+the new tool/architecture contracts, recovery and index-consistency cases. The
+following wheel/sdist and source-external fresh-install smoke both executed and
+passed (`ci-windows-a2ff100-rerun.log`). This is real Windows 3.12, not a mock or
+substitution of the `ab67968` result. It does not diagnose or close the retained
+daemon failure from the first attempt. The same-SHA Core rerun remains pending
+at this append; no green full-Core claim is made yet.
+
+Final same-SHA Core rerun: job `101646303328` completed **4044 passed / 36 skipped**,
+776.04 s, **exit 0** (`ci-core-a2ff100-rerun.log`). Its positive/negative contract
+type checks, compile, CLI smoke, Ruff and wheel/sdist build all executed and passed.
+The compatibility and installed-wheel jobs also succeeded. The four workflows on
+`a2ff1005ed2ab3343a3058db4fc1a626b44b4842` now have final success conclusions:
+
+| Final workflow evidence | Result |
+| --- | --- |
+| [Core Runtime](https://github.com/violetnozomi/coding-agent/actions/runs/34090322981) | Passed after one same-SHA rerun; original three failures retained |
+| [Windows Product RC](https://github.com/violetnozomi/coding-agent/actions/runs/34090323034) | Passed after one same-SHA rerun; original daemon failure retained |
+| [Repo Intelligence](https://github.com/violetnozomi/coding-agent/actions/runs/34090323016) | Passed on the original attempt |
+| [Windows Installer](https://github.com/violetnozomi/coding-agent/actions/runs/34090322990) | Passed on the original attempt |
+
+The [failed Linux job](https://github.com/violetnozomi/coding-agent/actions/runs/34090322981/job/101642292966)
+and [failed native Windows job](https://github.com/violetnozomi/coding-agent/actions/runs/34090323034/job/101642293486)
+are still separate evidence. Passing reruns demonstrate an observed passing
+execution, not a root-cause repair of repo_map, workflow ordering or daemon startup.
+Their diagnostics gaps and the previously recorded HTTP/watcher symptoms remain
+follow-ups outside this ownership migration. No benchmark score, paid-model coding
+performance, manual Windows desktop UX or whole-repository safety claim is made.
+
+The final documentation-only commit seals these records and the recovery history.
+It does not change the verified production code, executable tests or workflows;
+`git diff a2ff100 HEAD` is limited to these two Markdown records. Local main and
+all earlier worktrees remain intact. No PR, merge, force push or branch cleanup
+was performed. Any automatically scheduled checks on the documentation-only head
+are distinct from the completed current-code evidence listed above.
+
+Final commit responsibilities: `2520f08` baseline/design; `8001016` checkpoint
+declaration; `2626d39` focused production owners; `08c3c07` contracts/composition
+tests and CI; `ab67968` frozen local evidence; `068f0be` Python 3.10 cancellation
+test boundary; `a2ff100` real-write readiness synchronization. The final seal adds
+only evidence and clarified ownership wording. This closes phases 0–4 within the
+defined boundary, with the explicit migration exceptions and stability limits above.
