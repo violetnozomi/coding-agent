@@ -15,12 +15,13 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, TextIO
+from typing import Any, BinaryIO, TextIO
 from urllib.parse import urlsplit
 
 from nz_coder import __version__
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.state.diagnostics import OperationDiagnostic
 
 from .client import NZCoderClient
 from .server import SessionHTTPService
@@ -133,60 +134,69 @@ def start_daemon(
         raise ValueError("daemon only accepts a loopback host")
     if not isinstance(port, int) or isinstance(port, bool) or not 0 <= port <= 65535:
         raise ValueError("port must be between 0 and 65535")
+    started = time.monotonic()
+    deadline = started + ready_timeout
     paths = daemon_paths(profile, state_root)
-    _prepare_private_dir(paths.root)
-    current = daemon_status(profile, state_root=state_root)
-    if current.get("running"):
-        return {**current, "already_running": True}
-    stale_pid = current.get("pid")
-    if isinstance(stale_pid, int) and _pid_alive(stale_pid):
-        marker = current.get("process_identity")
-        if marker and marker == _process_identity(stale_pid):
-            raise RuntimeError(
-                "daemon state owns a live process but its endpoint is unavailable; stop it first"
-            )
-    # State may be stale, but an extant lock belongs to another lifecycle
-    # operation until proven otherwise. Acquire first; only its owner may
-    # replace state/token files.
-    _clear_stale_lock(paths.lock)
-    _acquire_lock(paths.lock)
-    for path in (paths.state, paths.token):
-        path.unlink(missing_ok=True)
-    nonce = secrets.token_urlsafe(24)
-    token = secrets.token_urlsafe(32)
-    _atomic_private_text(paths.token, token + "\n")
-    _ensure_private_log(paths.log)
-    roots = [str(Path(item).expanduser().resolve()) for item in (workspaces or [])]
-    command = [
-        sys.executable,
-        "-m",
-        "nz_coder",
-        "daemon",
-        "_serve",
-        "--profile",
-        profile,
-        "--state-root",
-        str(paths.root.parent),
-        f"--nonce={nonce}",
-        "--host",
-        host,
-        "--port",
-        str(port),
-        "--interaction-timeout",
-        str(interaction),
-        "--handoff-timeout",
-        str(ready_timeout),
-    ]
-    for root in roots:
-        command.extend(("--workspace", root))
-    log_handle = paths.log.open("ab", buffering=0)
+    diagnostic = OperationDiagnostic("daemon", directory=paths.root / "diagnostics" / "parent")
+    diagnostic.advance("requested")
+    process: subprocess.Popen | None = None
+    log_handle = None
+    log_offset = 0
+    nonce = ""
+
+    def remaining() -> float:
+        budget = deadline - time.monotonic()
+        if budget <= 0:
+            diagnostic.advance("deadline_exhausted", remaining_ms=0)
+            raise TimeoutError("daemon startup deadline exhausted")
+        return budget
+
     try:
+        diagnostic.advance("prepare")
+        _prepare_private_dir(paths.root)
+        current = daemon_status(profile, state_root=state_root, timeout=min(0.75, remaining()))
+        remaining()
+        if current.get("running"):
+            diagnostic.advance("ready", identity_matches=True)
+            return {**current, "already_running": True}
+        stale_pid = current.get("pid")
+        if isinstance(stale_pid, int) and _pid_alive(stale_pid):
+            marker = current.get("process_identity")
+            if marker and marker == _process_identity(stale_pid):
+                raise RuntimeError("daemon owns a live process with an unavailable endpoint")
+        # The operation ID distinguishes concurrent starters even in one process.
+        _clear_stale_lock(paths.lock)
+        _acquire_lock(paths.lock, owner_id=diagnostic.id)
+        for path in (paths.state, paths.token):
+            path.unlink(missing_ok=True)
+        nonce = secrets.token_urlsafe(24)
+        token = secrets.token_urlsafe(32)
+        _atomic_private_text(paths.token, token + "\n")
+        _ensure_private_log(paths.log)
+        roots = [str(Path(item).expanduser().resolve()) for item in (workspaces or [])]
+        command = [
+            sys.executable, "-m", "nz_coder", "daemon", "_serve",
+            "--profile", profile, "--state-root", str(paths.root.parent),
+            f"--nonce={nonce}", "--host", host, "--port", str(port),
+            "--interaction-timeout", str(interaction),
+            "--handoff-timeout", str(remaining()),
+            "--startup-deadline", str(deadline),
+            "--diagnostic-id", diagnostic.id,
+        ]
+        for root in roots:
+            command.extend(("--workspace", root))
+        # Retain this attempt's descriptor through failure capture. Even if the
+        # pathname disappears before worker initialization, its bytes survive.
+        log_handle = paths.log.open("a+b", buffering=0)
+        log_handle.seek(0, os.SEEK_END)
+        log_offset = log_handle.tell()
         kwargs: dict[str, Any] = {
             "stdin": subprocess.DEVNULL,
             "stdout": log_handle,
             "stderr": log_handle,
             "close_fds": True,
             "cwd": str(Path.cwd()),
+            "shell": False,
         }
         if os.name == "nt":
             flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -194,45 +204,74 @@ def start_daemon(
             kwargs["creationflags"] = flags
         else:
             kwargs["start_new_session"] = True
+        remaining()
+        diagnostic.advance("spawn", token_present=True)
         process = subprocess.Popen(command, **kwargs)
-    finally:
-        log_handle.close()
-    starting = {
-        "schema_version": 1,
-        "status": "starting",
-        "profile": profile,
-        "pid": process.pid,
-        "process_identity": _wait_for_process_identity(process.pid),
-        "nonce": nonce,
-        "endpoint": "",
-        "started_at": time.time(),
-        "version": __version__,
-        "log_path": str(paths.log),
-        "token_path": str(paths.token),
-        "workspaces": roots,
-        "state_path": str(paths.state),
-        "state": str(paths.state),
-    }
-    _atomic_state(paths.state, starting)
-    deadline = time.monotonic() + ready_timeout
-    last_status: dict[str, Any] = starting
-    while time.monotonic() < deadline:
+        diagnostic.advance("spawned", pid=process.pid, spawned=True)
         if process.poll() is not None:
-            break
-        last_status = daemon_status(profile, state_root=state_root, timeout=0.5)
-        if last_status.get("running"):
-            _replace_lock_owner(
-                paths.lock,
-                pid=process.pid,
-                process_identity=starting["process_identity"],
-            )
-            return last_status
-        time.sleep(0.05)
-    if process.poll() is None and _process_identity(process.pid) == starting["process_identity"]:
-        _terminate_pid(process.pid, timeout=2.0)
-    _remove_runtime_files(paths, keep_log=True)
-    reason = str(last_status.get("reason") or f"exit_{process.poll()}")
-    raise RuntimeError(f"daemon did not become ready: {reason}; see {paths.log}")
+            diagnostic.advance("child_exited", exit_code=process.returncode, alive=False)
+            raise ChildProcessError("daemon exited before handoff")
+        diagnostic.advance("process_identity")
+        marker = _wait_for_process_identity(process.pid, deadline=deadline, process=process)
+        remaining()
+        starting = {
+            "schema_version": 1, "status": "starting", "profile": profile,
+            "pid": process.pid, "process_identity": marker, "nonce": nonce,
+            "endpoint": "", "started_at": time.time(), "version": __version__,
+            "log_path": str(paths.log), "token_path": str(paths.token),
+            "workspaces": roots, "state_path": str(paths.state), "state": str(paths.state),
+            "diagnostic_id": diagnostic.id,
+        }
+        diagnostic.advance("handoff", identity_matches=True)
+        _atomic_state(paths.state, starting)
+        diagnostic.advance("handoff", state_present=True, identity_matches=True)
+        diagnostic.advance("health_check", alive=True)
+        while True:
+            if process.poll() is not None:
+                diagnostic.advance("child_exited", exit_code=process.returncode, alive=False)
+                raise ChildProcessError("daemon exited during startup")
+            status = daemon_status(profile, state_root=state_root, timeout=min(0.5, remaining()))
+            remaining()
+            if status.get("running"):
+                if (
+                    status.get("pid") != process.pid or status.get("nonce") != nonce
+                    or status.get("process_identity") != marker
+                    or _load_state(paths.lock).get("owner_id") != diagnostic.id
+                ):
+                    diagnostic.advance("identity_mismatch", identity_matches=False)
+                    raise RuntimeError("daemon readiness identity mismatch")
+                _replace_lock_owner(
+                    paths.lock, pid=process.pid, process_identity=marker, owner_id=diagnostic.id,
+                )
+                diagnostic.advance("ready", alive=True, identity_matches=True, endpoint_matches=True)
+                return status
+            if status.get("reason") in {"endpoint_identity_mismatch", "process_identity_mismatch"}:
+                diagnostic.advance("identity_mismatch", identity_matches=False)
+                raise RuntimeError("daemon readiness identity mismatch")
+            time.sleep(min(0.05, remaining()))
+    except BaseException as error:
+        if isinstance(error, ChildProcessError):
+            diagnostic.advance("child_exited")
+        elif isinstance(error, TimeoutError):
+            diagnostic.advance("deadline_exhausted")
+        # Capture the primary failure and pre-cleanup facts before touching files
+        # or terminating this Popen instance. Diagnostic failure is best effort.
+        if isinstance(error, Exception):
+            diagnostic.failure(error)
+        try:
+            _startup_snapshot(diagnostic, paths, process, log_handle, log_offset, started, deadline)
+        except Exception as capture_error:
+            diagnostic.cleanup_error(capture_error)
+        _cleanup_started_instance(paths, process, nonce, diagnostic)
+        if not isinstance(error, Exception):
+            raise
+        raise diagnostic.public_failure() from None
+    finally:
+        if log_handle is not None:
+            try:
+                log_handle.close()
+            except Exception as close_error:
+                diagnostic.cleanup_error(close_error)
 
 
 def stop_daemon(
@@ -307,6 +346,8 @@ def daemon_main(argv: list[str] | None = None, *, output: TextIO | None = None) 
     worker.add_argument("--workspace", action="append", default=[])
     worker.add_argument("--interaction-timeout", type=float, default=300.0)
     worker.add_argument("--handoff-timeout", type=float, default=15.0)
+    worker.add_argument("--startup-deadline", type=float, default=None)
+    worker.add_argument("--diagnostic-id", default="")
     args = parser.parse_args(argv)
     try:
         if args.command == "_serve":
@@ -374,19 +415,30 @@ def _add_profile(parser: argparse.ArgumentParser) -> None:
 
 def _serve_worker(args: argparse.Namespace) -> int:
     paths = daemon_paths(args.profile, args.state_root)
-    handoff_timeout = _validated_timeout(args.handoff_timeout, "handoff", 300.0)
-    state = _wait_for_handoff(paths.state, args.nonce, handoff_timeout)
-    if not state or state.get("nonce") != args.nonce:
-        return 3
-    token = _read_private_token(paths.token)
-    identity = {
-        "kind": "daemon",
-        "profile": args.profile,
-        "nonce": args.nonce,
-        "version": __version__,
-    }
+    diagnostic = OperationDiagnostic(
+        "daemon", directory=paths.root / "diagnostics" / "worker",
+        diagnostic_id=getattr(args, "diagnostic_id", ""),
+    )
+    diagnostic.advance("worker_entered", pid=os.getpid(), alive=True)
     service: SessionHTTPService | None = None
+    result = 4
     try:
+        handoff_timeout = _validated_timeout(args.handoff_timeout, "handoff", 300.0)
+        deadline = getattr(args, "startup_deadline", None)
+        if deadline is not None and not math.isfinite(deadline):
+            raise ValueError("invalid startup deadline")
+        diagnostic.advance("handoff")
+        state = _wait_for_handoff(paths.state, args.nonce, handoff_timeout, deadline=deadline)
+        if not state or state.get("nonce") != args.nonce:
+            diagnostic.advance("deadline_exhausted")
+            raise TimeoutError("daemon handoff deadline exhausted")
+        diagnostic.advance("token_read", state_present=True)
+        token = _read_private_token(paths.token)
+        identity = {
+            "kind": "daemon", "profile": args.profile,
+            "nonce": args.nonce, "version": __version__,
+        }
+        diagnostic.advance("service_init", token_present=True)
         service = SessionHTTPService(
             host=args.host,
             port=args.port,
@@ -396,6 +448,8 @@ def _serve_worker(args: argparse.Namespace) -> int:
             runtime_identity=identity,
             allow_shutdown=True,
         )
+        # Binding/listening is not proof of the authenticated instance's health.
+        diagnostic.advance("listening", alive=True)
         state.update({
             "status": "ready",
             "pid": os.getpid(),
@@ -408,28 +462,51 @@ def _serve_worker(args: argparse.Namespace) -> int:
         })
         _atomic_state(paths.state, state)
         service.serve_forever()
-        return 0
+        result = 0
     except Exception as exc:
-        _append_log(paths.log, f"daemon startup/runtime failure: {type(exc).__name__}: {exc}\n")
-        return 4
+        public = diagnostic.failure(exc)
+        try:
+            _append_log(paths.log, str(public) + "\n")
+        except Exception as log_error:
+            diagnostic.cleanup_error(log_error)
+        if isinstance(exc, TimeoutError) and service is None:
+            result = 3
     finally:
+        diagnostic.advance("cleanup", state_present=bool(_load_state(paths.state)), cleanup_attempted=True)
+        cleanup_ok = True
         if service is not None:
-            service.close_after_serve()
+            try:
+                service.close_after_serve()
+            except Exception as error:
+                diagnostic.cleanup_error(error)
+                cleanup_ok = False
+                result = 4
         current = _load_state(paths.state)
-        if current.get("nonce") == args.nonce:
-            _remove_runtime_files(paths, keep_log=True)
+        if current.get("nonce") == args.nonce and current.get("pid") == os.getpid():
+            try:
+                cleanup_ok = _remove_owned_files(paths, args.nonce, diagnostic.id, worker=True) and cleanup_ok
+            except Exception as error:
+                diagnostic.cleanup_error(error)
+                cleanup_ok = False
+        diagnostic.advance(
+            "finished",
+            cleanup_complete=cleanup_ok and not any(path.exists() for path in (paths.state, paths.token, paths.lock)),
+        )
+    return result
 
 
-def _wait_for_handoff(path: Path, nonce: str, timeout: float) -> dict[str, Any]:
+def _wait_for_handoff(
+    path: Path, nonce: str, timeout: float, *, deadline: float | None = None,
+) -> dict[str, Any]:
     """Wait within the caller's startup budget for the parent's nonce state."""
-    deadline = time.monotonic() + timeout
+    deadline = min(deadline, time.monotonic() + timeout) if deadline is not None else time.monotonic() + timeout
     while True:
         state = _load_state(path)
         if state.get("nonce") == nonce:
             return state
         if time.monotonic() >= deadline:
             return {}
-        time.sleep(0.01)
+        time.sleep(min(0.01, max(0, deadline - time.monotonic())))
 
 
 def _logs(args: argparse.Namespace, stream: TextIO) -> int:
@@ -464,7 +541,7 @@ def _prepare_private_dir(path: Path) -> None:
     harden_private_path(path)
 
 
-def _acquire_lock(path: Path) -> None:
+def _acquire_lock(path: Path, *, owner_id: str = "") -> None:
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError as exc:
@@ -473,17 +550,19 @@ def _acquire_lock(path: Path) -> None:
         handle.write(json.dumps({
             "pid": os.getpid(),
             "process_identity": _process_identity(os.getpid()),
+            "owner_id": owner_id,
         }) + "\n")
     harden_private_path(path)
 
 
-def _replace_lock_owner(path: Path, *, pid: int, process_identity: str) -> None:
+def _replace_lock_owner(path: Path, *, pid: int, process_identity: str, owner_id: str = "") -> None:
     """Transfer the lifecycle fence from the starter to the daemon process."""
     _atomic_private_text(
         path,
         json.dumps({
             "pid": int(pid),
             "process_identity": str(process_identity),
+            "owner_id": owner_id,
         }, sort_keys=True) + "\n",
     )
 
@@ -610,6 +689,105 @@ def _remove_runtime_files(paths: DaemonPaths, *, keep_log: bool) -> None:
             paths.log.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def _startup_snapshot(
+    diagnostic: OperationDiagnostic, paths: DaemonPaths, process: subprocess.Popen | None,
+    capture: BinaryIO | None, offset: int, started: float, deadline: float,
+) -> None:
+    """Persist only this attempt's bounded structural output before owned cleanup."""
+    facts = {
+        "spawned": process is not None,
+        "alive": process is not None and process.poll() is None,
+        "exit_code": process.poll() if process is not None else None,
+        "state_present": paths.state.exists(),
+        "token_present": paths.token.exists(),
+        "log_present": paths.log.exists(),
+        "elapsed_ms": max(0, int((time.monotonic() - started) * 1000)),
+        "remaining_ms": max(0, int((deadline - time.monotonic()) * 1000)),
+        "stderr_merged": True,
+    }
+    try:
+        if capture is not None:
+            capture.seek(offset)
+            bounded = capture.read(_MAX_STATE_BYTES + 1)
+            truncated = len(bounded) > _MAX_STATE_BYTES
+            bounded = bounded[:_MAX_STATE_BYTES]
+            facts.update({
+                "stderr_present": bool(bounded), "stderr_bytes": len(bounded),
+                "stderr_lines": bounded.count(b"\n"), "stderr_truncated": truncated,
+                "log_bytes": len(bounded), "log_truncated": truncated,
+            })
+        else:
+            facts["stderr_present"] = False
+    except Exception:
+        facts["stderr_read_failed"] = True
+    diagnostic.advance(diagnostic.phase, **facts)
+
+
+def _remove_owned_files(paths: DaemonPaths, nonce: str, owner_id: str, *, worker: bool = False) -> bool:
+    """Never remove a replacement instance's state, token, or lifecycle fence."""
+    state = _load_state(paths.state)
+    lock = _load_state(paths.lock)
+    if state and (not nonce or state.get("nonce") != nonce):
+        return False
+    if lock.get("owner_id") != owner_id:
+        # A directly invoked worker can own nonce state without a parent lock.
+        if not (worker and not paths.lock.exists() and state.get("nonce") == nonce):
+            return not any(path.exists() for path in (paths.state, paths.token, paths.lock))
+    for path in (paths.state, paths.token, paths.lock):
+        path.unlink(missing_ok=True)
+    return True
+
+
+def _cleanup_started_instance(
+    paths: DaemonPaths, process: subprocess.Popen | None, nonce: str,
+    diagnostic: OperationDiagnostic,
+) -> None:
+    """A separate two-second reap budget applies only to this retained Popen."""
+    diagnostic.advance("cleanup", cleanup_attempted=True)
+    reaped = process is None
+    if process is not None:
+        cleanup_deadline = time.monotonic() + 2.0
+        try:
+            if process.poll() is None:
+                try:
+                    process.terminate()
+                except Exception as error:
+                    diagnostic.cleanup_error(error)
+            try:
+                process.wait(timeout=min(1.0, max(0, cleanup_deadline - time.monotonic())))
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=max(0, cleanup_deadline - time.monotonic()))
+            reaped = True
+        except Exception as error:
+            diagnostic.cleanup_error(error)
+    removed = False
+    foreign = False
+    if reaped:
+        try:
+            removed = _remove_owned_files(paths, nonce, diagnostic.id)
+            foreign = not removed
+        except Exception as error:
+            diagnostic.cleanup_error(error)
+    alive: bool | None = False
+    exit_code: int | None = None
+    if process is not None:
+        try:
+            exit_code = process.poll()
+            alive = exit_code is None
+        except Exception as error:
+            # A diagnostic sample is not allowed to replace the primary failure
+            # or turn an unknown process state into a definite liveness claim.
+            diagnostic.cleanup_error(error)
+            alive = None
+    diagnostic.advance(
+        "finished", cleanup_complete=reaped and removed,
+        foreign_state_preserved=foreign,
+        alive=alive,
+        exit_code=exit_code,
+    )
 
 
 def _pid_alive(pid: int) -> bool:
@@ -766,12 +944,18 @@ def _windows_process_start_time(pid: int, *, kernel32=None) -> str:
         return ""
 
 
-def _wait_for_process_identity(pid: int) -> str:
+def _wait_for_process_identity(
+    pid: int, *, deadline: float | None = None, process: subprocess.Popen | None = None,
+) -> str:
     for _ in range(40):
+        if process is not None and process.poll() is not None:
+            raise ChildProcessError("daemon exited before process identity")
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError("daemon process identity deadline exhausted")
         marker = _process_identity(pid)
         if marker:
             return marker
-        time.sleep(0.01)
+        time.sleep(0.01 if deadline is None else min(0.01, max(0, deadline - time.monotonic())))
     raise RuntimeError("could not establish daemon process identity")
 
 
