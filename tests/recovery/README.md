@@ -791,3 +791,19 @@ and Bash progress regressions were fixed in production, not by weakening their
 tests. Historical Windows HTTP/watcher failures above remain independent records.
 Native Windows on this branch's current code is pending remote CI at this append;
 the earlier recovery/index Windows green runs are not substituted for it.
+
+First remote evidence is now available for `ab67968`: Python 3.12 full suite
+**4043 passed / 36 skipped**, exit 0; native Windows job `101604689751`
+**669 passed / 20 skipped**, exit 0, with this phase's tool contracts included,
+followed by successful build and fresh-install checks. Repo Intelligence and
+Windows Installer also passed. Core Runtime as a whole **failed**, because two
+new Python 3.10 test assertions compared cancellation object identity across
+`asyncio.run` (282 other tests passed). The original errors remained chained;
+this stdlib behavior was reproduced independently before correcting the test
+boundary. The new async assertion remains exact; the sync check follows only
+cancellation wrappers to the original error, and keeps compensation assertions.
+Independent skip-compensation and mask-primary mutations still fail. This is a
+test-only correction; production tree remains `45aea5b0d3d5111f0199ec253615f7d618f21dea`.
+The detailed commands, failed log and validation are appended to the architecture
+record. Corrected-commit CI must be recorded separately, not called a passing rerun
+of this failed workflow.

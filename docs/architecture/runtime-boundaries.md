@@ -318,3 +318,59 @@ Commit responsibilities so far: `2520f08` baseline/ownership document;
 `2626d39` actual production owners plus required old-fixture migrations;
 `08c3c07` standalone/real/native regressions, architectural constraints and CI/type
 checks. Current-source remote/Windows evidence will be appended after branch push.
+
+## First remote acceptance and Python 3.10 test correction
+
+The first push was verified as
+`ab67968ae72d3cab0483d44f144101e8e2599d3e`. The production tree is still
+`45aea5b0d3d5111f0199ec253615f7d618f21dea`. These are this branch's actual
+jobs, not the previous recovery/index branch results:
+
+| Workflow / actual job | Result on `ab67968` |
+| --- | --- |
+| [Core Runtime](https://github.com/violetnozomi/coding-agent/actions/runs/34076897825), Python 3.12 job `101604689759` | Full `python -m pytest -q`: **4043 passed, 36 skipped**, 795.11 s, exit 0; real scoped typing, Ruff, compile, CLI and wheel/sdist also passed |
+| Same workflow, Python 3.10 job `101604689669` | **2 failed, 282 passed**, 482.37 s, exit 1; subsequent CLI/build steps skipped, so the workflow as a whole failed |
+| Same workflow, installed-wheel job `101604689681` | Build, clean source-external install, CLI/doctor/config/package-resource checks passed |
+| [Windows Product RC](https://github.com/violetnozomi/coding-agent/actions/runs/34076897831), native job `101604689751` | **669 passed, 20 skipped**, 302.20 s, exit 0; actual command included `tests/runtime/tool_runtime`, architecture, recovery, security and index consistency; subsequent wheel/sdist and source-external fresh-install smoke passed |
+| Same workflow, Linux product job `101604689858` | **151 passed**, 34.06 s, exit 0; CLI/build passed |
+| [Repo Intelligence](https://github.com/violetnozomi/coding-agent/actions/runs/34076897816) | Consistency 31, native parser 6 and fallback 1 tests passed, exit 0 |
+| [Windows Installer](https://github.com/violetnozomi/coding-agent/actions/runs/34076897804) | 9 installer contracts passed; frozen executable build and silent install/upgrade/product/uninstall checks passed |
+
+Logs: `ci-core-first-ab67968.log`, `ci-py310-first-ab67968.log`,
+`ci-windows-ab67968.log`, `ci-repo-ab67968.log`, `ci-installer-ab67968.log`
+in the same local evidence directory. The failed Python 3.10 run is retained;
+it was not rerun at that SHA to hide the failure. A transient GitHub API TLS
+timeout occurred while retrieving status, not during these test jobs.
+
+Both Python 3.10 failures were the new cancellation identity assertion at
+`standalone/test_failure_boundary.py`. A stdlib-only local Python 3.10.20 probe
+confirmed that direct `await` preserves the original CancelledError object,
+while `asyncio.run` recreates it and retains the original through `__context__`.
+The unchanged test reproduced **2 failed, 12 passed**, exit 1 locally
+(`python310-cancel-red.log`). No production bridge change is necessary.
+
+The test-only correction catches at the actual asynchronous API boundary and
+keeps the exact original-object assertion. At the synchronous API, it follows
+only CancelledError context links with cycle protection back to that original;
+other exception types and lost causes still fail. All transaction/execution
+assertions remain, and cleanup error type and primary error type are additionally
+asserted. No skip was added. Both Python 3.10 and 3.13 then passed the 14 fault
+tests, exit 0 (`python310-cancel-green.log`, `python313-cancel-green.log`).
+The complete tool boundary plus architecture selection on Python 3.10 passed
+**110 tests**, 14.56 s, exit 0 (`python310-boundary-green.log`).
+The exact combined required-suite command from the local acceptance table was
+rerun after this correction: **428 passed**, 96.29 s, exit 0
+(`required-py310-correction.log`). Ruff, compileall and diff checks also passed.
+
+An independent reviewer reran the 14 tests on Python 3.10 successfully. Two
+in-memory mutations, without modifying production files, each produced four
+expected failures, pytest exit 1: skipping compensation; replacing the primary
+error with a checkpoint OSError. Logs are `reviewer-py310-skip_compensation.log`
+and `reviewer-py310-mask_original.log`. Thus the correction does not remove the
+original-failure or compensation guarantees. Final corrected-commit CI is pending
+the next push; the first Core workflow is not reported as green.
+
+Native Windows here means GitHub's real Windows runner, not a Linux platform mock
+or a manual Windows desktop UX session. Existing HTTP/watcher historical failures,
+the documented recovery limitations and `actions/upload-artifact@v4` Node-runtime
+deprecation warnings remain separate; this phase does not silently close them.

@@ -41,18 +41,35 @@ def test_checkpoint_failure_cannot_skip_compensation_or_mask_primary(sync, cance
 
     context = dependencies.context(after_tool=after, checkpoint=checkpoint)
     dependencies.prepare([call()])
-    with pytest.raises(type(original)) as caught:
-        if sync:
+    if sync:
+        with pytest.raises(type(original)) as caught:
             ProductionToolRuntime().execute_batch_sync(
                 context, [call()], dependencies.messages
             )
-        else:
-            asyncio.run(
-                ProductionToolRuntime().execute_batch_async(
+        observed = caught.value
+        # Python 3.10's Task creates a new CancelledError at asyncio.run's
+        # boundary and retains the original in __context__. Accept only that
+        # cancellation chain, never a replacement cleanup error or lost cause.
+        seen = set()
+        while (
+            observed is not original
+            and isinstance(observed, asyncio.CancelledError)
+            and id(observed) not in seen
+        ):
+            seen.add(id(observed))
+            observed = observed.__context__
+    else:
+        async def run():
+            # Assert at the actual async API boundary, before asyncio.run can
+            # recreate a cancelled Task's exception on supported Python 3.10.
+            with pytest.raises(type(original)) as caught:
+                await ProductionToolRuntime().execute_batch_async(
                     context, [call()], dependencies.messages
                 )
-            )
-    assert caught.value is original
+            return caught.value
+
+        observed = asyncio.run(run())
+    assert observed is original
     assert dependencies.transactions.finishes == [(True, False)]
     assert not dependencies.transactions.active
     assert dependencies.executor.calls == ["call-write"]
@@ -62,6 +79,8 @@ def test_checkpoint_failure_cannot_skip_compensation_or_mask_primary(sync, cance
         if event == "tool_batch_cleanup_failed"
     ]
     assert failures and failures[0]["stage"] == "checkpoint"
+    assert failures[0]["error_type"] == "OSError"
+    assert failures[0]["primary_error_type"] == type(original).__name__
     assert "PRIVATE" not in repr(failures)
 
 
