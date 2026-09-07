@@ -23,6 +23,10 @@ jobs:
         run: python -m pip install -e '.[dev]' build
       - name: Compile runtime
         run: python -m compileall -q nz_coder
+      - name: Check focused ToolRuntime contracts
+        run: |
+          python -m pip install basedpyright==1.39.9
+          python tests/typecheck/check_tool_contracts.py
       - name: Run complete Python test suite
         run: python -m pytest -q
       - name: Smoke CLI entrypoint
@@ -51,6 +55,7 @@ jobs:
         run: >-
           python -m pytest -q
           tests/runtime/test_native_runner.py
+          tests/runtime/tool_runtime
           tests/test_loop_fake.py
           tests/test_public_error_boundary_phase3.py
       - name: Smoke CLI on the declared Python floor

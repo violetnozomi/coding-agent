@@ -69,6 +69,8 @@ jobs:
             tests/security/test_transaction_track.py `
             tests/security/test_pr2_remaining_regressions.py `
             tests/recovery `
+            tests/runtime/tool_runtime `
+            tests/test_architecture_boundary.py `
             tests/test_repo_intelligence_consistency.py `
             tests/test_lsp.py `
             tests/test_lsp_workspace_config.py `

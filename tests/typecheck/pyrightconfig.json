@@ -1,6 +1,16 @@
 {
   "include": [
+    "../../nz_coder/foundation/async_utils.py",
     "../../nz_coder/runtime/core/tool_context.py",
+    "../../nz_coder/runtime/core/tool_contracts.py",
+    "../../nz_coder/runtime/tool_runtime/pipeline.py",
+    "../../nz_coder/runtime/tool_runtime/result_projection.py",
+    "../../nz_coder/runtime/tool_runtime/operations.py",
+    "../../nz_coder/runtime/tool_runtime/observers.py",
+    "../../nz_coder/runtime/session/tool_progress.py",
+    "../../nz_coder/runtime/execution/tool_assembly.py",
+    "../../nz_coder/runtime/execution/tool_effects.py",
+    "../runtime/tool_runtime/standalone/support.py",
     "tool_boundary_contracts.py"
   ],
   "extraPaths": ["../.."],
