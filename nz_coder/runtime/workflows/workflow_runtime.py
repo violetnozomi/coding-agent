@@ -29,6 +29,7 @@ from nz_coder.runtime.workflows.workflow_run_store import (
     build_workflow_cost_report,
 )
 from nz_coder.tools import ToolOutput, register
+from nz_coder.state.diagnostics import exception_evidence
 from nz_coder.protocol.public_error import (
     PublicInputError,
     format_public_error,
@@ -757,6 +758,7 @@ class WorkflowRuntime:
             self.manager.record_workflow_event("phase_finished", data={"name": name, "run_id": self.run_id})
 
     def parallel(self, thunks: list[Callable[[], Any]], *, concurrency: int | None = None) -> list[Any | None]:
+        """Run bounded thunks concurrently and return input-indexed results."""
         self._check_control()
         if len(thunks) > _MAX_ITEMS:
             raise WorkflowLimitError(f"parallel received more than {_MAX_ITEMS} items")
@@ -777,13 +779,40 @@ class WorkflowRuntime:
                 index = pending[future]
                 try:
                     results[index] = future.result()
-                except WorkflowControlError:
+                except WorkflowControlError as control_error:
+                    for peer in pending:
+                        peer.cancel()
+                    try:
+                        self.stop_active(
+                            "workflow stopped"
+                            if isinstance(control_error, WorkflowAbortError)
+                            else "workflow failed"
+                        )
+                    except Exception as cleanup_error:
+                        # Cleanup must not replace the structural failure. The
+                        # execute boundary retries owned-task cleanup after the
+                        # executor has drained.
+                        try:
+                            self.manager.record_workflow_event(
+                                "workflow_log",
+                                data={
+                                    "run_id": self.run_id,
+                                    "message": "parallel peer cleanup failed",
+                                    "data": {
+                                        "stage": "parallel-control-cleanup",
+                                        "error_type": exception_evidence(cleanup_error)[0]["type"],
+                                    },
+                                },
+                            )
+                        except Exception:
+                            pass
                     raise
                 except Exception:
                     results[index] = None
         return results
 
     def pipeline(self, items: list[Any], stages: list[dict], *, phase: str) -> list[Any | None]:
+        """Advance ready items without a stage barrier; return input-indexed results."""
         def chain(item: Any, index: int) -> Any | None:
             previous: Any = item
             for template in stages:

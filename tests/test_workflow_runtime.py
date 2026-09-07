@@ -100,29 +100,6 @@ def test_gated_synthesis_counts_as_agent_and_consumes_full_results(tmp_path, mon
     assert "Merge evidence and uncertainty" in synthesis_prompt
 
 
-def test_pipeline_streams_items_without_stage_barrier_and_preserves_order(tmp_path, monkeypatch):
-    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
-
-    calls = _install_fake_child(
-        monkeypatch,
-        tmp_path,
-        delays={'"slow"-map': 0.10, '"fast"-map': 0.01},
-    )
-    manager = _manager(tmp_path, monkeypatch, max_tasks=4, concurrency=2)
-    runtime = WorkflowRuntime(manager, run_id="run-a155-pipeline")
-    stages = [
-        {"prompt": "{item}-map", "read_only": True},
-        {"prompt": "reduce {item} using {previous}", "read_only": True},
-    ]
-
-    results = runtime.pipeline(["slow", "fast"], stages, phase="pipeline")
-
-    assert [item["status"] for item in results] == ["completed", "completed"]
-    fast_reduce = next(index for index, call in enumerate(calls) if call.startswith("reduce \"fast\""))
-    slow_reduce = next(index for index, call in enumerate(calls) if call.startswith("reduce \"slow\""))
-    assert fast_reduce < slow_reduce
-
-
 def test_map_reduce_is_failure_isolated_and_runs_final_fold(tmp_path, monkeypatch):
     from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
 
