@@ -29,7 +29,7 @@ def test_loop_keeps_only_tool_runtime_compatibility_facades() -> None:
     }
     for name in ("_execute_tools", "_execute_tools_async", "_dispatch_tool_calls", "_dispatch_tool_calls_async"):
         segment = ast.get_source_segment(source, methods[name]) or ""
-        assert "ProductionToolRuntime" in segment or "tool_runtime" in segment
+        assert "LegacyToolRuntime" in segment or "ProductionToolRuntime" in segment or "tool_runtime" in segment
         assert "txn.begin" not in segment
         assert "_execute_scheduled" not in segment
 

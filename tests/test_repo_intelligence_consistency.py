@@ -355,9 +355,9 @@ def test_restart_rebuilds_graph_after_persisted_index_publication_failure(tmp_pa
 
 
 def test_real_executor_and_product_observer_refresh_without_watcher(tmp_path):
-    from types import SimpleNamespace
     from tests.recovery.test_execution_tracking import Permissions, batch
-    from nz_coder.runtime.execution.loop import ProductRunEnvironment
+    from tests.test_code_index import _write_effects
+    from nz_coder.intelligence.code_index import update_code_index_after_write
     from nz_coder.runtime.execution.tool_executor import ToolExecutor
     from nz_coder.runtime.process.checkpoint_runtime import recovery_run, register_batch
     from nz_coder.intelligence.service import workspace_repo_intelligence, release_repo_intelligence
@@ -370,17 +370,19 @@ def test_real_executor_and_product_observer_refresh_without_watcher(tmp_path):
         assert instance.wait_ready(5).status == "ready"
         call, messages = batch()
         call["function"]["arguments"] = {"path": "new.py", "content": "def created(): pass\n"}
-        environment = object.__new__(ProductRunEnvironment)
         events = []
-        environment.tracer = SimpleNamespace(log=lambda event, **kw: events.append((event, kw)))
-        environment.change_tracker = SimpleNamespace(current_changed_paths=lambda: [], current_deleted_paths=lambda: [])
+        effects = _write_effects(
+            tmp_path,
+            update_code_index_after_write,
+            lambda event, **payload: events.append((event, payload)),
+        )
         with scoped_workdir(tmp_path), recovery_run(tmp_path, "session-a") as run:
             run.attach("interaction-a", messages)
             register_batch(messages, [call])
             result = ToolExecutor(Permissions()).execute_one(call, 0)
             assert result.executed and not result.dispatch_failed
             # This is the real post-write observer entry, not a copied hook.
-            environment._refresh_code_index([(0, call, result)])
+            effects.refresh_code_index([(0, call, result)])
         assert len(ToolLedger(tmp_path).mutations("session-a")) == 1
         assert events[-1][0] == "code_index_refreshed"
         assert instance.symbol_context("created")["definition"]["path"] == "new.py"

@@ -1,6 +1,8 @@
 """Production integration for the interactive Auto-mode guardrail."""
 from __future__ import annotations
 
+from tests.runtime.tool_runtime.standalone.support import Transaction, Dependencies
+
 import asyncio
 import inspect
 from types import SimpleNamespace
@@ -67,8 +69,11 @@ def _rewriting_tool_batch():
     host.runtime_services = SimpleNamespace(
         guardrails=ProductionGuardrailRuntime(),
     )
+    async def before(call, messages):
+        return await host.runtime_services.guardrails.before_tool_sync(host, call, messages)
+
     batch = ProductionToolRuntime().approve_tool_calls_sync(
-        host,
+        Dependencies().context(before_tool=before),
         [{
             "id": "call-rewrite",
             "type": "function",
@@ -422,8 +427,13 @@ def test_sync_dispatch_never_invokes_async_auto_admission() -> None:
                 is_write=False,
             )
 
+    host = Host()
+
+    async def before(call, messages):
+        return await host.runtime_services.guardrails.before_tool_sync(host, call, messages)
+
     dispatched = ProductionToolRuntime().dispatch_sync(
-        Host(),
+        Dependencies().context(before_tool=before, execute_one=host._execute_tool_call_with_hooks),
         [{
             "id": "sync-call",
             "function": {"name": "read_file", "arguments": {"path": "app.py"}},
@@ -520,9 +530,8 @@ def test_auto_admission_settles_batch_serially_before_scheduling() -> None:
             checkpoint=noop_async,
             processor_for_messages=lambda _messages: None,
             write_override=None,
-            begin_transaction=lambda: None,
-            transaction_active=lambda: False,
-            finish_transaction=lambda *_args: None,
+            transaction=Transaction(),
+            drain_progress=noop_async,
             metadata_reporter=lambda *_args: None,
             question_reporter=lambda *_args: None,
             dispatch_override_async=None,

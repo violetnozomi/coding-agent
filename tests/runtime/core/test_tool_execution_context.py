@@ -51,6 +51,9 @@ class _Hooks:
 
 class _Host:
     def __init__(self) -> None:
+        from tests.runtime.tool_runtime.standalone.support import Executor, Transaction
+        self.executor = Executor()
+        self.txn = Transaction()
         self.tracer = _Tracer()
         self.current_agent_name = "coder"
         self.agent_graph = None
@@ -66,6 +69,12 @@ class _Host:
 
     def _best_effort_tool_input(self, value):
         return value if isinstance(value, dict) else {}
+
+    def _checkpoint_messages(self, messages, status):
+        self.checkpoint = (messages, status)
+
+    def _finish_tool_transaction(self, has_write, all_succeeded, messages):
+        self.txn.finish(has_write, all_succeeded, messages)
 
     def _record_tool_result(self, _result) -> bool:
         return False

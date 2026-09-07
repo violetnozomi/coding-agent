@@ -241,13 +241,12 @@ def test_local_gap_restores_snapshot_only_failure(failed_output):
 
 
 @pytest.mark.parametrize("name", ["read_file", "bash"])
-def test_success_completion_does_not_erase_part_metadata(name):
-    from nz_coder.runtime.execution.loop import AgentLoop
+def test_success_completion_does_not_erase_part_metadata(name, tmp_path):
+    from tests.test_session_events import _tool_result_recorder
     from nz_coder.tool_platform.execution import ToolExecutionResult
     from nz_coder.protocol.run_view_reducer import RunViewReducer
     bus = SessionEventBus(session_id="sid")
-    host = SimpleNamespace(tracer=SimpleNamespace(log=lambda *a, **k: None),
-                           _emit_session_event=bus.publish)
+    recorder = _tool_result_recorder(tmp_path, bus.publish)
     result = ToolExecutionResult(name, {}, "ok", True, False, False, False,
                                  metadata={"encoding": "utf-8", "exit": 0, "output": "ok"})
     reducer = RunViewReducer()
@@ -256,7 +255,7 @@ def test_success_completion_does_not_erase_part_metadata(name):
             "id": "part", "call_id": "call", "type": "tool", "tool": name,
             "state": {"status": "completed", "metadata": result.metadata},
         }}))
-        AgentLoop._trace_tool_result(host, result, "ok", "call", 0)
+        recorder.trace_result(result, "ok", "call", 0)
         reducer.apply_event(bus.recent()[-1])
         assert next(iter(reducer.state.tool_parts.values()))["state"]["metadata"]["encoding"] == "utf-8"
     finally:

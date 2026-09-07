@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Awaitable, Callable, Protocol, runtime_checkable
 
 from nz_coder.runtime.core.events import RuntimeEventSink
 
 if TYPE_CHECKING:
+    from nz_coder.runtime.core.tool_contracts import ApprovedToolBatch, ToolDisplay, TextDisplay
+    from nz_coder.runtime.conversation.model_result import LLMResult
+    from nz_coder.runtime.session.session_processor import SessionProcessor
+    from nz_coder.tool_platform.execution import ToolExecutionResult
     from nz_coder.runtime.core.context import ContextExecutionContext
     from nz_coder.runtime.core.lifecycle_context import LifecycleExecutionContext
     from nz_coder.runtime.core.model_context import ModelExecutionContext
@@ -34,10 +38,17 @@ class ToolRuntime(Protocol):
     async def execute_batch_async(
         self,
         context: ToolExecutionContext,
-        calls: list,
-        messages: list,
-        **kwargs,
-    ):
+        tool_calls_raw: list[dict],
+        messages: list[dict],
+        on_tool: ToolDisplay | None = None,
+        on_text: TextDisplay | None = None,
+        *,
+        processor: SessionProcessor | None = None,
+        usage: LLMResult | None = None,
+        finish_step: bool = True,
+        checkpoint: Callable[[str], Awaitable[None]] | None = None,
+        approved_batch: ApprovedToolBatch | None = None,
+    ) -> str:
         """Settle every admitted tool call and return the batch transition."""
         ...
 
@@ -153,10 +164,13 @@ class GuardrailRuntime(Protocol):
     async def run_output(self, host, content: str, messages: list) -> str:
         ...
 
-    async def before_tool(self, host, tool_call: dict, messages: list):
+    async def before_tool(self, host, tool_call: dict, messages: list) -> tuple[dict, ToolExecutionResult | None]:
         ...
 
-    async def after_tool(self, host, tool_call: dict, result, messages: list):
+    async def before_tool_sync(self, host, tool_call: dict, messages: list) -> tuple[dict, ToolExecutionResult | None]:
+        ...
+
+    async def after_tool(self, host, tool_call: dict, result: ToolExecutionResult, messages: list) -> ToolExecutionResult:
         ...
 
 

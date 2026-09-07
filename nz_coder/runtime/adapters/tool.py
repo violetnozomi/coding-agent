@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 from nz_coder.runtime.core.tool_context import (
     ToolExecutionContext,
@@ -9,16 +10,27 @@ from nz_coder.runtime.core.tool_context import (
     ToolPolicyContext,
     ToolProjectionContext,
 )
-from nz_coder.runtime.tool_runtime.observers import LegacyCodingToolObserver
+from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
 
 
 def tool_context_from_legacy_host(
     host,
     run_context=None,
     services=None,
+    *, sync: bool = False,
 ) -> ToolExecutionContext:
     """Snapshot policy identity and bind Session-owned lifecycle operations."""
+    factory = getattr(host, "tool_execution_context", None)
+    if callable(factory):
+        return factory(run_context, services, sync=sync)
     active_marker = getattr(host, "active_run_context", None)
+    if active_marker is not None and (run_context is None or services is None):
+        raise RuntimeError("Active Tool Runtime requires a SessionRuntime checkpoint callback")
+    if run_context is None and not callable(getattr(host, "_checkpoint_messages", None)):
+        raise TypeError("Legacy ToolRuntime requires checkpoint")
+    for name in ("_finish_tool_transaction", "_record_tool_result", "_trace_tool_result"):
+        if not callable(getattr(host, name, None)):
+            raise TypeError(f"Legacy ToolRuntime requires {name}")
     policy_context = policy_context_from_legacy_host(host, fresh=True)
 
     async def checkpoint(messages: list[dict], status: str) -> None:
@@ -30,8 +42,12 @@ def tool_context_from_legacy_host(
                 "Active Tool Runtime requires a SessionRuntime checkpoint callback"
             )
         legacy = getattr(host, "_checkpoint_messages", None)
-        if callable(legacy):
-            legacy(messages, status)
+        if not callable(legacy):
+            raise TypeError("Legacy ToolRuntime requires checkpoint")
+        legacy(messages, status)
+
+    async def drain_progress() -> None:
+        """Legacy progress persistence is synchronous; no pending work exists."""
 
     services = services or getattr(host, "runtime_services", None)
     transitions = getattr(services, "transitions", None)
@@ -77,7 +93,8 @@ def tool_context_from_legacy_host(
     async def before_tool(tool_call: dict, messages: list[dict]):
         if guardrails is None:
             return tool_call, None
-        return await guardrails.before_tool(host, tool_call, messages)
+        callback = guardrails.before_tool_sync if sync else guardrails.before_tool
+        return await callback(host, tool_call, messages)
 
     async def after_tool(tool_call: dict, result, messages: list[dict]):
         if guardrails is None:
@@ -101,6 +118,7 @@ def tool_context_from_legacy_host(
         run=run_context,
         policy=policy_context,
         lifecycle=ToolLifecycleContext(
+            drain_progress=drain_progress,
             checkpoint=checkpoint,
             processor_for_messages=getattr(
                 host,
@@ -108,12 +126,11 @@ def tool_context_from_legacy_host(
                 lambda _messages: None,
             ),
             write_override=write_override,
-            begin_transaction=(getattr(txn, "begin", _discard_trace)),
-            transaction_active=lambda: bool(getattr(txn, "active", False)),
-            finish_transaction=getattr(host, "_finish_tool_transaction", _discard_trace),
+            transaction=LegacyToolTransaction(txn, host._finish_tool_transaction),
             metadata_reporter=metadata_reporter,
             question_reporter=question_reporter,
             dispatch_override_async=dispatch_override,
+            dispatch_override_sync=_legacy_override(host, "_dispatch_tool_calls"),
             consume_override=_legacy_override(host, "_consume_dispatched_tools"),
             model_capabilities=getattr(host, "model_capabilities", None),
             describe_read_results=describe_read_results,
@@ -220,8 +237,8 @@ def projection_context_from_legacy_host(
 
     return ToolProjectionContext(
         signal_from_metadata=signal_from_metadata,
-        record_result=getattr(host, "_record_tool_result", lambda _result: False),
-        trace_result=getattr(host, "_trace_tool_result", _discard_trace),
+        record_result=host._record_tool_result,
+        trace_result=host._trace_tool_result,
         stall_orchestrator=getattr(host, "stall_orchestrator", None),
         after_result=after_result,
         available_result_tokens=available_result_tokens,
@@ -257,3 +274,114 @@ def _legacy_override(host, name: str):
     if getattr(function, "__module__", "") == "nz_coder.runtime.execution.loop":
         return None
     return candidate
+
+
+class LegacyCodingToolObserver:
+    """Own index, diagnostics, patch, hook, and plan effects after tool work."""
+
+    def __init__(self, host) -> None:
+        self._host = host
+
+    def post_write(self, dispatched: list, messages: list[dict]) -> None:
+        admission = getattr(self._host, "_admission_session", None)
+        if admission is not None:
+            for _index, _tool_call, result in dispatched:
+                admission.record_committed_mutation(result)
+        self._host.recovery.reset_tool_call_history(reason="workspace_changed")
+        self._required("_refresh_patch_risk")(messages)
+        self._required("_refresh_code_index")(dispatched)
+        self._required("_attach_lsp_write_diagnostics")(dispatched, messages)
+
+    def after_batch(self, messages: list[dict], batch_state: dict, on_text) -> None:
+        self._host.hooks.after_tool_batch(
+            self._host,
+            messages,
+            manual_compact=batch_state["manual_compact"],
+            used_todo=batch_state["used_todo"],
+            on_text=on_text,
+            write_total=batch_state["write_total"],
+            write_denied=batch_state["write_denied"],
+        )
+
+    def apply_plan_mode(self) -> None:
+        self._required("_apply_pending_plan_mode")()
+
+    async def capture_snapshot(self, processor):
+        if not processor.step_snapshot:
+            return None
+        return await self._required("_capture_step_snapshot_async")(
+            "step-finish", processor.message_id,
+        )
+
+    def record_patch(self, messages, processor, finish_snapshot) -> None:
+        self._required("_record_step_patch")(
+            messages, processor, finish_snapshot,
+        )
+
+    def _required(self, name: str):
+        value = getattr(self._host, name, None)
+        if not callable(value):
+            raise RuntimeError(f"Tool observer is missing required capability {name}")
+        return value
+
+
+class LegacyToolTransaction:
+    """Named outer exception for existing non-product host characterization."""
+    def __init__(self, txn, finish):
+        if txn is None or not callable(getattr(txn, "begin", None)) or not callable(finish):
+            raise TypeError("Legacy ToolRuntime requires transaction begin/finish")
+        self.txn = txn
+        self._finish = finish
+
+    @property
+    def active(self):
+        return self.txn.active
+
+    def begin(self):
+        self.txn.begin()
+
+    def finish(self, has_write, all_succeeded, messages):
+        return self._finish(has_write, all_succeeded, messages)
+
+
+class LegacyToolRuntime(ProductionToolRuntime):
+    """Compatibility entry only; native service graph uses the strict core."""
+
+    def __init__(self, runtime=None):
+        super().__init__()
+        self.runtime = runtime
+
+    def execute_batch_sync(self, host, calls, messages, on_tool=None, on_text=None, **kwargs):
+        context = self._context(host, sync=True)
+        if self.runtime is not None:
+            return self.runtime.execute_batch_sync(context, calls, messages, on_tool=on_tool, on_text=on_text, **kwargs)
+        return super().execute_batch_sync(context, calls, messages, on_tool, on_text, **kwargs)
+
+    async def execute_batch_async(self, host, calls, messages, on_tool=None, on_text=None, **kwargs):
+        context = self._context(host)
+        if self.runtime is not None:
+            return await self.runtime.execute_batch_async(context, calls, messages, on_tool=on_tool, on_text=on_text, **kwargs)
+        return await super().execute_batch_async(context, calls, messages, on_tool, on_text, **kwargs)
+
+    def approve_tool_calls_sync(self, host, calls, messages):
+        context = host if isinstance(host, ToolExecutionContext) else tool_context_from_legacy_host(host, sync=True)
+        return super().approve_tool_calls_sync(context, calls, messages)
+
+    def dispatch_sync(self, host, calls, has_write, messages, **kwargs):
+        context = host if isinstance(host, ToolExecutionContext) else tool_context_from_legacy_host(host, sync=True)
+        return super().dispatch_sync(context, calls, has_write, messages, **kwargs)
+
+    @staticmethod
+    def _context(host, *, sync=False):
+        if isinstance(host, ToolExecutionContext):
+            return host
+        context = tool_context_from_legacy_host(host, sync=sync)
+        # Only this explicitly legacy entry honors old caller overrides.
+        # Native assembly never selects or introspects these methods.
+        return replace(context, lifecycle=replace(
+            context.lifecycle,
+            write_override=_legacy_override(host, "_tool_batch_has_write"),
+            dispatch_override_async=_legacy_override(host, "_dispatch_tool_calls_async"),
+            dispatch_override_sync=_legacy_override(host, "_dispatch_tool_calls"),
+            consume_override=_legacy_override(host, "_consume_dispatched_tools"),
+        ))

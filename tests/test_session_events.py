@@ -32,6 +32,38 @@ def _drain(subscription) -> list:
             return events
 
 
+def _tool_result_recorder(tmp_path, publish):
+    """Build the real result publisher with isolated, explicitly owned state."""
+    from nz_coder.intelligence.verification import VerificationManager
+    from nz_coder.runtime.agent.lineage import SessionLineage
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.runtime.execution.tool_effects import ToolResultRecorder, ToolRunFacts
+    from nz_coder.runtime.observability.run_evidence import RunEvidence
+    from nz_coder.runtime.verification.recovery import RecoveryState
+    from nz_coder.state.skills import SkillLoader
+    from nz_coder.state.trace import TraceRecorder
+    from nz_coder.tools.scratchpad import Scratchpad
+
+    tracer = TraceRecorder(run_id="event-contract", trace_dir=tmp_path / "trace", enabled=False)
+    return ToolResultRecorder(
+        facts=ToolRunFacts(),
+        vm=VerificationManager(RecoveryState(), tracer),
+        runtime_state=RuntimeState(),
+        scratchpad=Scratchpad(),
+        skills=SkillLoader(
+            bundled_dir=tmp_path / "bundled-skills",
+            user_dir=tmp_path / "user-skills",
+            project_dir=tmp_path / "project-skills",
+        ),
+        run_evidence=RunEvidence(run_id=tracer.run_id),
+        admission=None,
+        lineage=SessionLineage(tmp_path / "lineage.jsonl", "event-contract"),
+        run_id=tracer.run_id,
+        trace=tracer.log,
+        publish=publish,
+    )
+
+
 def test_session_event_envelope_sequence_identity_and_copy():
     bus = SessionEventBus(
         session_id="session-a",
@@ -471,9 +503,9 @@ def test_tool_started_event_classifies_serial_readonly_extension_as_read(
         bus.close()
 
 
-def test_tool_completed_event_classifies_serial_readonly_extension_as_read():
+def test_tool_completed_event_classifies_serial_readonly_extension_as_read(tmp_path):
     """Completed and started event projections must use the same semantics."""
-    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.tool_platform.execution import ToolExecutionResult
     from nz_coder.tools import (
         TOOL_EXECUTION_MODES,
         TOOL_HANDLERS,
@@ -494,13 +526,12 @@ def test_tool_completed_event_classifies_serial_readonly_extension_as_read():
             execution="serial",
             side_effect="readonly",
         )
-        agent = AgentLoop.__new__(AgentLoop)
-        agent.tracer = SimpleNamespace(log=lambda *_args, **_kwargs: None)
-        agent._emit_session_event = lambda event, properties: events.append(
-            (event, properties)
+        recorder = _tool_result_recorder(
+            tmp_path, lambda event, properties: events.append((event, properties))
         )
-        result = SimpleNamespace(
+        result = ToolExecutionResult(
             name=name,
+            output="ok",
             executed=True,
             dispatch_failed=False,
             command_failed=False,
@@ -510,7 +541,7 @@ def test_tool_completed_event_classifies_serial_readonly_extension_as_read():
             queue_wait_ms=0.0,
         )
 
-        agent._trace_tool_result(result, "ok")
+        recorder.trace_result(result, "ok")
 
         assert events[0][0] == "session.tool.completed"
         assert events[0][1]["category"] == "read"
@@ -536,10 +567,9 @@ def test_tool_event_category_marks_agent_control_tools_as_agent(name):
     assert tool_category(name) == "agent"
 
 
-def test_completed_event_keeps_authorized_dynamic_tool_generation():
+def test_completed_event_keeps_authorized_dynamic_tool_generation(tmp_path):
     """A live MCP refresh must not relabel a call after it has executed."""
     from nz_coder.permissions import PermissionManager
-    from nz_coder.runtime.execution.loop import AgentLoop
     from nz_coder.runtime.execution.tool_executor import ToolExecutor
     from nz_coder.tools import scoped_dynamic_tool_provider
 
@@ -563,12 +593,10 @@ def test_completed_event_keeps_authorized_dynamic_tool_generation():
         }, 0)
         generation.update(effect="mutates-network", execution="write")
 
-        agent = AgentLoop.__new__(AgentLoop)
-        agent.tracer = SimpleNamespace(log=lambda *_args, **_kwargs: None)
-        agent._emit_session_event = lambda event, properties: events.append(
-            (event, properties)
+        recorder = _tool_result_recorder(
+            tmp_path, lambda event, properties: events.append((event, properties))
         )
-        agent._trace_tool_result(result, result.output)
+        recorder.trace_result(result, result.output)
 
     assert events[0][1]["category"] == "read"
 

@@ -133,6 +133,9 @@ class _ExecutionServices:
         return model_context_from_legacy_host(self.host)
 
     def tools(self):
+        factory = getattr(self.host, "tool_execution_context", None)
+        if callable(factory):
+            return factory(self.run_context, self.services)
         return tool_context_from_legacy_host(
             self.host, self.run_context, self.services,
         )

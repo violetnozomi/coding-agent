@@ -5,10 +5,11 @@
   - Non-streaming: 完整响应一次性返回（用于 benchmark）
 """
 
+from __future__ import annotations
+
 import asyncio
 import copy
 import json
-import hashlib
 import inspect
 import re as _re
 import threading
@@ -19,7 +20,6 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from nz_coder.foundation import config
-from nz_coder.protocol.shell_diagnostics import shell_output_facts
 from nz_coder.state.changes import ChangeTracker
 from nz_coder.state.context import (
     auto_compact,
@@ -28,7 +28,6 @@ from nz_coder.state.context import (
     prompt_budget,
 )
 from nz_coder.permissions import PermissionManager
-from nz_coder.tool_platform.permissioning.interaction import format_tool_summary
 from nz_coder.tool_platform.exposure import filter_specs_for_permission_mode
 from nz_coder.providers import (
     create_provider,
@@ -40,9 +39,7 @@ from nz_coder.runtime.execution.runtime_state import RuntimeState
 from nz_coder.state.trace import TraceRecorder
 from nz_coder.state.transaction import TransactionManager
 from nz_coder.tools import (
-    collect_filesystem_mutation_paths,
     get_specs,
-    is_filesystem_mutation_tool,
 )
 from nz_coder.mcp import MCPRuntime
 from nz_coder.runtime.verification.hooks import AgentHooks, build_default_hooks
@@ -60,9 +57,6 @@ from nz_coder.runtime.conversation.structured_output import (
     STRUCTURED_OUTPUT_REPAIR_SYSTEM_PROMPT,
 )
 from nz_coder.runtime.agent.lineage import AgentCallStackStore, SessionLineage
-from nz_coder.runtime.agent.child_result import (
-    ChildAgentResult,
-)
 from nz_coder.runtime.model_gateway import (
     ModelCall,
     ModelCallOutcome,
@@ -89,18 +83,13 @@ from nz_coder.state.sessions import (
 )
 from nz_coder.runtime.process.workdir import current_derived_path, current_workdir
 from nz_coder.runtime.core.execution_context import (
-    broad_tests_blocked,
-    set_broad_tests_blocked,
     strict_local_tools,
 )
 from nz_coder.runtime.core.run_settings import current_run_settings
-from nz_coder.tool_platform.command_policy import classify_bash
 from nz_coder.intelligence.verification import VerificationManager
 from nz_coder.runtime.execution.tool_executor import (
     ToolExecutionResult,
     ToolExecutor,
-    is_transactional_write_tool,
-    tool_category,
 )
 from nz_coder.runtime.tool_runtime.scheduler import (
     _execute_concurrent as _execute_concurrent,
@@ -116,6 +105,15 @@ from nz_coder.runtime.conversation.context_manager import (
 )
 from nz_coder.runtime.execution.runner import AgentRunner
 from nz_coder.runtime.core.contracts import RuntimeServices
+from nz_coder.runtime.core.run_context import RunContext
+from nz_coder.runtime.core.tool_context import ToolExecutionContext
+from nz_coder.runtime.execution.tool_effects import ToolRunFacts
+from nz_coder.protocol.session_events import SessionEventPublisher
+from nz_coder.runtime.process.tool_snapshots import (
+    _first_part_snapshot as _first_part_snapshot,
+    _lightweight_diffs as _lightweight_diffs,
+    _bounded_snapshot_diffs as _bounded_snapshot_diffs,
+)
 from nz_coder.runtime.core.request import RunOptions
 from nz_coder.runtime.adapters.runner import (
     run_request_from_legacy_host,
@@ -153,9 +151,6 @@ from nz_coder.protocol.message_schema import (
     ASSISTANT_USAGE_KEY,
     COMPACTION_KEY,
     MESSAGE_ID_KEY,
-    PARTS_KEY,
-    SESSION_SUMMARY_KEY,
-    SUMMARY_KEY,
     SYNTHETIC_USER_KEY,
     assistant_error_from_exception,
     attach_message_identity,
@@ -326,6 +321,65 @@ def _iter_completion_with_timeouts(
 
 class ProductRunEnvironment:
     """Complete Production capability owner used by every product surface."""
+    event_publisher: SessionEventPublisher
+
+    @property
+    def tool_run_facts(self) -> ToolRunFacts:
+        """One owner for tool counters; legacy names below are compatibility views."""
+        if "_tool_run_facts" not in self.__dict__:
+            self._tool_run_facts = ToolRunFacts()
+        return self._tool_run_facts
+
+    def tool_execution_context(self, run_context: RunContext | None = None,
+                               services: RuntimeServices | None = None, *,
+                               sync: bool = False) -> ToolExecutionContext:
+        """Composition only: bind current owners after lifecycle initialization."""
+        from nz_coder.runtime.execution.tool_assembly import build_tool_execution_context
+        return build_tool_execution_context(
+            self, run_context, services or self.runtime_services, sync=sync,
+            refresh_index=update_code_index_after_write, diagnostics=collect_write_diagnostics,
+        )
+
+    @property
+    def tool_calls_this_run(self):
+        return self.tool_run_facts.tool_calls_this_run
+
+    @tool_calls_this_run.setter
+    def tool_calls_this_run(self, value):
+        self.tool_run_facts.tool_calls_this_run = value
+
+    @property
+    def used_save_memory(self):
+        return self.tool_run_facts.used_save_memory
+
+    @used_save_memory.setter
+    def used_save_memory(self, value):
+        self.tool_run_facts.used_save_memory = value
+
+    @property
+    def _sidecar_risky_shell_ops(self):
+        return self.tool_run_facts.sidecar_risky_shell_ops
+
+    @_sidecar_risky_shell_ops.setter
+    def _sidecar_risky_shell_ops(self, value):
+        self.tool_run_facts.sidecar_risky_shell_ops = value
+
+    @property
+    def _sidecar_unattributed_write_ops(self):
+        return self.tool_run_facts.sidecar_unattributed_write_ops
+
+    @_sidecar_unattributed_write_ops.setter
+    def _sidecar_unattributed_write_ops(self, value):
+        self.tool_run_facts.sidecar_unattributed_write_ops = value
+
+    @property
+    def _last_terminal_summary(self):
+        return self.tool_run_facts.last_terminal_summary
+
+    @_last_terminal_summary.setter
+    def _last_terminal_summary(self, value):
+        self.tool_run_facts.last_terminal_summary = value
+
     def __init__(self, system_prompt: str, permission_mode: str = None,
                  client=None, tracer: TraceRecorder = None, trace_enabled: bool = None,
                  change_tracker: ChangeTracker = None, renderer=None,
@@ -2086,129 +2140,20 @@ class ProductRunEnvironment:
             change_dir=self.change_tracker.change_dir,
         )
 
-    def _capture_step_snapshot(
-        self,
-        boundary: str,
-        message_id: str,
-        cancel_event: threading.Event | None = None,
-    ) -> str | None:
-        """Best-effort workspace capture without making Agent execution depend on it."""
-        store = getattr(self, "workspace_snapshots", None)
-        if not isinstance(store, WorkspaceSnapshotStore):
-            return None
-        try:
-            snapshot = store.track(cancel_event=cancel_event)
-        except Exception as exc:
-            self.tracer.log(
-                "workspace_snapshot_failed",
-                boundary=boundary,
-                message_id=message_id,
-                error=str(exc),
-            )
-            return None
-        self.tracer.log(
-            "workspace_snapshot_created",
-            boundary=boundary,
-            message_id=message_id,
-            snapshot=snapshot,
-        )
-        return snapshot
+    def _capture_step_snapshot(self, boundary: str, message_id: str, cancel_event: threading.Event | None = None) -> str | None:
+        from nz_coder.runtime.process.tool_snapshots import ToolStepSnapshots
+        return ToolStepSnapshots(getattr(self, "workspace_snapshots", None), self.tracer.log).capture(boundary, message_id, cancel_event)
 
     async def _capture_step_snapshot_async(self, boundary: str, message_id: str) -> str | None:
         return await _to_thread_settled(self._capture_step_snapshot, boundary, message_id)
 
-    def _record_step_patch(
-        self,
-        messages: list[dict],
-        processor: SessionProcessor,
-        finish_snapshot: str | None,
-    ) -> None:
-        """Create PatchPart plus turn/session summaries from snapshot truth."""
-        start_snapshot = processor.step_snapshot
-        store = getattr(self, "workspace_snapshots", None)
-        if (
-            not start_snapshot
-            or not finish_snapshot
-            or not isinstance(store, WorkspaceSnapshotStore)
-        ):
-            return
-        # Content-addressed snapshots are identical when the step did not
-        # change the workspace. Avoid rebuilding the complete Session diff for
-        # a guaranteed-empty PatchPart; this is especially expensive in large
-        # repositories and delayed queued follow-up takeover after read steps.
-        if start_snapshot == finish_snapshot:
-            self.tracer.log(
-                "workspace_patch_unchanged",
-                message_id=processor.message_id,
-                snapshot=start_snapshot,
-            )
-            return
-        try:
-            files = store.changed_files(start_snapshot, finish_snapshot)
-            if files:
-                processor.add_patch(start_snapshot, files)
-            self._refresh_snapshot_summaries(
-                messages,
-                processor.message_id,
-                finish_snapshot,
-            )
-            self.tracer.log(
-                "workspace_patch_created",
-                message_id=processor.message_id,
-                snapshot=start_snapshot,
-                files=len(files),
-            )
-        except Exception as exc:
-            self.tracer.log(
-                "workspace_patch_failed",
-                message_id=processor.message_id,
-                error=str(exc),
-            )
+    def _record_step_patch(self, messages: list[dict], processor: SessionProcessor, finish_snapshot: str | None) -> None:
+        from nz_coder.runtime.process.tool_snapshots import ToolStepSnapshots
+        ToolStepSnapshots(getattr(self, "workspace_snapshots", None), self.tracer.log).record_patch(messages, processor, finish_snapshot)
 
-    def _refresh_snapshot_summaries(
-        self,
-        messages: list[dict],
-        assistant_message_id: str,
-        finish_snapshot: str,
-    ) -> None:
-        """Persist net file diffs for one user turn and the whole Session."""
-        store = self.workspace_snapshots
-        assistant_index = next(
-            (
-                index for index, message in enumerate(messages)
-                if isinstance(message, dict)
-                and message.get(MESSAGE_ID_KEY) == assistant_message_id
-            ),
-            None,
-        )
-        if assistant_index is None:
-            return
-        user_index = next(
-            (
-                index for index in range(assistant_index - 1, -1, -1)
-                if isinstance(messages[index], dict)
-                and messages[index].get("role") == "user"
-                and not is_synthetic_user_message(messages[index])
-            ),
-            None,
-        )
-        if user_index is not None:
-            turn_start = _first_part_snapshot(messages[user_index:assistant_index + 1], "step-start")
-            if turn_start:
-                messages[user_index][SUMMARY_KEY] = {
-                    "diffs": _lightweight_diffs(store.diff_full(turn_start, finish_snapshot)),
-                }
-
-        session_start = _first_part_snapshot(messages, "step-start")
-        if not session_start:
-            return
-        full = _bounded_snapshot_diffs(store.diff_full(session_start, finish_snapshot))
-        messages[assistant_index][SESSION_SUMMARY_KEY] = {
-            "additions": sum(item["additions"] for item in full),
-            "deletions": sum(item["deletions"] for item in full),
-            "files": len(full),
-            "diffs": full,
-        }
+    def _refresh_snapshot_summaries(self, messages: list[dict], assistant_message_id: str, finish_snapshot: str) -> None:
+        from nz_coder.runtime.process.tool_snapshots import ToolStepSnapshots
+        ToolStepSnapshots(self.workspace_snapshots, self.tracer.log)._refresh_snapshot_summaries(messages, assistant_message_id, finish_snapshot)
 
     @staticmethod
     def _retire_snapshot_task(
@@ -3643,7 +3588,8 @@ class ProductRunEnvironment:
                        processor: SessionProcessor | None = None,
                        usage: LLMResult | None = None) -> str:
         """Compatibility facade for the canonical Tool Runtime pipeline."""
-        runtime = getattr(self, "tool_runtime", None) or ProductionToolRuntime()
+        from nz_coder.runtime.adapters.tool import LegacyToolRuntime
+        runtime = LegacyToolRuntime(getattr(self, "tool_runtime", None))
         return runtime.execute_batch_sync(
             self,
             tool_calls_raw,
@@ -3660,7 +3606,8 @@ class ProductRunEnvironment:
                                    usage: LLMResult | None = None,
                                    finish_step: bool = True) -> str:
         """Compatibility facade for the canonical async Tool Runtime pipeline."""
-        runtime = getattr(self, "tool_runtime", None) or ProductionToolRuntime()
+        from nz_coder.runtime.adapters.tool import LegacyToolRuntime
+        runtime = LegacyToolRuntime(getattr(self, "tool_runtime", None))
         return await runtime.execute_batch_async(
             self,
             tool_calls_raw,
@@ -3698,26 +3645,8 @@ class ProductRunEnvironment:
             dispatched, messages, on_tool=on_tool, processor=processor,
         )
     def _strict_verification_completed(self, dispatched: list) -> bool:
-        """Consume settled generation evidence as a strict terminal signal."""
-        verification = self.vm.status()
-        if (
-            not strict_local_tools()
-            or not self.runtime_state.strict_generation_terminal_ready()
-            or verification.get("verification_needed")
-            or verification.get("verification_state") not in {"passed", "degraded"}
-        ):
-            return False
-        self._last_terminal_summary = (
-            "Changed-file verification passed for a non-empty source diff; "
-            "the strict SWE-bench patch is finalized."
-        )
-        self.tracer.log(
-            "strict_verification_terminal",
-            changed_files=list(self.runtime_state.changed_files),
-            diff_chars=self.runtime_state.diff_chars,
-            mutation_generation=self.runtime_state.mutation_generation,
-        )
-        return True
+        from nz_coder.runtime.execution.tool_assembly import result_recorder
+        return result_recorder(self).strict_completed(dispatched)
 
     def _processor_for_latest_assistant(
         self,
@@ -3901,7 +3830,8 @@ class ProductRunEnvironment:
     def _dispatch_tool_calls(self, tool_calls_raw: list, has_write: bool, messages: list) -> list:
         """Compatibility facade for canonical Tool Runtime dispatch."""
         runtime = getattr(self, "tool_runtime", None) or ProductionToolRuntime()
-        return runtime.dispatch_sync(self, tool_calls_raw, has_write, messages)
+        from nz_coder.runtime.adapters.tool import tool_context_from_legacy_host
+        return runtime.dispatch_sync(tool_context_from_legacy_host(self, sync=True), tool_calls_raw, has_write, messages)
 
     async def _dispatch_tool_calls_async(
         self, tool_calls_raw: list, has_write: bool, messages: list,
@@ -4030,363 +3960,74 @@ class ProductRunEnvironment:
 
 
     def _execute_tool_call_with_hooks(self, tool_call: dict, index: int, messages: list):
-        """Run pre-tool hooks before permission checks and dispatch."""
-        started = time.perf_counter()
-        fn_name = tool_call["function"]["name"]
-        tool_input = self._best_effort_tool_input(tool_call["function"].get("arguments", {}))
-        call_is_write = is_transactional_write_tool(fn_name)
-        decision = self.hooks.before_tool_use(
-            self,
-            messages,
-            fn_name,
-            tool_input,
-            file_path=self._infer_hook_file_path(tool_input),
-            is_write=call_is_write,
-        )
-        if decision is not None and decision.rejected:
-            reason = decision.message or f"Blocked by hook {decision.hook_id}"
-            result = ToolExecutionResult(
-                name=fn_name,
-                tool_input=tool_input,
-                output=f"Denied: {reason}",
-                executed=False,
-                dispatch_failed=True,
-                command_failed=False,
-                is_write=call_is_write,
-                permission_denied=True,
-            )
-        else:
-            result = self.executor.execute_one(tool_call, index)
-        result.duration_ms = round((time.perf_counter() - started) * 1000, 3)
-        return result
+        """Legacy Hook argument conversion; decision policy is shared."""
+        from nz_coder.runtime.tool_runtime.operations import HookedToolExecutor
+        def before(items, name, arguments, path, is_write):
+            return self.hooks.before_tool_use(self, items, name, arguments, file_path=path, is_write=is_write)
+        return HookedToolExecutor(self.executor, before).execute_one(tool_call, index, messages)
 
     def _best_effort_tool_input(self, raw_arguments) -> dict:
-        """Parse tool arguments best-effort for hook matching without failing dispatch."""
-        if isinstance(raw_arguments, dict):
-            return dict(raw_arguments)
-        if not isinstance(raw_arguments, str):
-            return {}
-        try:
-            payload = json.loads(raw_arguments)
-        except json.JSONDecodeError:
-            return {}
-        return payload if isinstance(payload, dict) else {}
+        from nz_coder.runtime.tool_runtime.operations import parse_tool_input
+        return parse_tool_input(raw_arguments)
 
     def _infer_hook_file_path(self, tool_input: dict) -> str:
-        """Infer a primary file path for hook matching from common tool arguments."""
-        if not isinstance(tool_input, dict):
-            return ""
-        for key in ("path", "file_path", "project_dir", "target_dir"):
-            value = tool_input.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return ""
+        from nz_coder.runtime.tool_runtime.operations import infer_tool_path
+        return infer_tool_path(tool_input)
 
-    def _committed_write_paths(self, dispatched: list) -> tuple[list[str], str]:
-        """Collect file paths from successful, committed write tool calls."""
-        paths: list[str] = []
-        last_tool_call_id = ""
-        for _index, tool_call, result in dispatched:
-            if not (
-                is_filesystem_mutation_tool(result.name)
-                and result.executed
-                and not result.dispatch_failed
-            ):
-                continue
-            if result.tool_input.get("dry_run"):
-                continue
+    def _committed_write_paths(self, dispatched):
+        """Compatibility entry into the shared committed-write effects."""
+        from nz_coder.runtime.execution.tool_assembly import write_effects
+        return write_effects(self, refresh_index=update_code_index_after_write, diagnostics=collect_write_diagnostics)._committed_write_paths(dispatched)
 
-            result_paths = list(
-                collect_filesystem_mutation_paths(result.tool_input)
-            )
+    def _refresh_code_index(self, dispatched):
+        """Compatibility entry into the shared committed-write effects."""
+        from nz_coder.runtime.execution.tool_assembly import write_effects
+        return write_effects(self, refresh_index=update_code_index_after_write, diagnostics=collect_write_diagnostics).refresh_code_index(dispatched)
 
-            if result_paths:
-                paths.extend(result_paths)
-                last_tool_call_id = str(tool_call.get("id") or "")
-
-        return list(dict.fromkeys(paths)), last_tool_call_id
-
-    def _refresh_code_index(self, dispatched: list) -> None:
-        """Incrementally refresh indexed files after a successful transaction."""
-        paths, _ = self._committed_write_paths(dispatched)
-        paths.extend(self.change_tracker.current_changed_paths())
-        paths.extend(self.change_tracker.current_deleted_paths())
-        paths = list(dict.fromkeys(paths))
-        if not paths:
-            return
-        try:
-            stats = update_code_index_after_write(paths, current_workdir())
-        except Exception as exc:
-            self.tracer.log("code_index_refresh_failed", error=str(exc))
-            return
-        self.tracer.log(
-            "code_index_refreshed",
-            files=len(paths),
-            indexed=stats.indexed,
-            removed=stats.removed,
-        )
-
-    def _attach_lsp_write_diagnostics(self, dispatched: list, messages: list) -> None:
-        """Append committed-file diagnostics to the last write tool message."""
-        paths, last_tool_call_id = self._committed_write_paths(dispatched)
-
-        if not paths or not last_tool_call_id:
-            return
-        try:
-            block = collect_write_diagnostics(paths, current_workdir())
-        except Exception as exc:
-            self.tracer.log("lsp_write_diagnostics_failed", error=str(exc))
-            return
-        if not block:
-            return
-        tool_message = next(
-            (
-                message
-                for message in reversed(messages)
-                if message.get("role") == "tool"
-                and message.get("tool_call_id") == last_tool_call_id
-            ),
-            None,
-        )
-        if tool_message is None:
-            return
-        tool_message["content"] = f"{tool_message.get('content', '')}\n\n{block}"
-        self.tracer.log(
-            "lsp_write_diagnostics",
-            files=len(dict.fromkeys(paths)),
-            output_len=len(block),
-        )
+    def _attach_lsp_write_diagnostics(self, dispatched, messages):
+        """Compatibility entry into the shared committed-write effects."""
+        from nz_coder.runtime.execution.tool_assembly import write_effects
+        return write_effects(self, refresh_index=update_code_index_after_write, diagnostics=collect_write_diagnostics).attach_lsp_write_diagnostics(dispatched, messages)
 
     def _record_tool_result(self, result_r) -> bool:
-        """观察工具结果并更新 verification/scratchpad/runtime 状态。"""
-        if result_r.executed and not result_r.dispatch_failed:
-            self.tool_calls_this_run += 1
-            if result_r.name == "save_memory":
-                self.used_save_memory = True
-            if result_r.name == "bash":
-                command = str((result_r.tool_input or {}).get("command") or "")
-                classification = classify_bash(command)
-                if classification.get("dangerous") or classification.get("mutating"):
-                    self._sidecar_risky_shell_ops += 1
-            if result_r.is_write and not str(
-                (result_r.tool_input or {}).get("path") or ""
-            ).strip():
-                self._sidecar_unattributed_write_ops += 1
-        self._observe_write_tool(result_r)
-        self._observe_verification_tool(result_r)
-        self._observe_runtime_tool(result_r)
-        self._observe_run_evidence(result_r)
-        if self._admission_session is not None:
-            self._admission_session.record_tool_result(result_r)
-        return result_r.dispatch_failed
+        """Compatibility entry into the focused observation owner."""
+        from nz_coder.runtime.execution.tool_assembly import result_recorder
+        return result_recorder(self).record_result(result_r)
 
     def _observe_write_tool(self, result_r) -> None:
-        """写工具成功后更新验证状态并激活路径相关 skill。"""
-        if not (result_r.is_write and result_r.executed and not result_r.dispatch_failed):
-            return
-        self.vm.mark_write(
-            result_r.name,
-            result_r.tool_input,
-            output=result_r.output,
-        )
-        edited_path = result_r.tool_input.get("path", "")
-        if not edited_path:
-            return
-        activated = self._skill_loader.activate_for_paths([str(current_workdir() / edited_path)])
-        if activated:
-            self.tracer.log("skills_activated", names=activated)
+        """Compatibility entry; shared observation policy lives in ToolResultRecorder."""
+        from nz_coder.runtime.execution.tool_assembly import result_recorder
+        return result_recorder(self)._observe_write_tool(result_r)
 
     def _observe_verification_tool(self, result_r) -> None:
-        """根据 bash / symbol check / verify 工具结果更新验证状态。"""
-        if result_r.executed and result_r.name == "bash":
-            self.vm.observe_bash(
-                result_r.tool_input,
-                result_r.output,
-                result_r.dispatch_failed,
-                result_r.command_failed,
-                exit_code=(result_r.metadata or {}).get("exit"),
-            )
-            self._record_bash_failure(result_r)
-        if (result_r.executed and not result_r.dispatch_failed
-                and result_r.name == "python_symbol_check"):
-            self.vm.observe_symbol_check(result_r.output, result_r.tool_input)
-        if (result_r.executed and not result_r.dispatch_failed
-                and result_r.name == "verify_changed_files"):
-            self.vm.observe_verify_changed_files(result_r.output)
+        """Compatibility entry; shared observation policy lives in ToolResultRecorder."""
+        from nz_coder.runtime.execution.tool_assembly import result_recorder
+        return result_recorder(self)._observe_verification_tool(result_r)
 
     def _record_bash_failure(self, result_r) -> None:
-        """把失败测试摘要写入 scratchpad，减少同一 session 内重复踩坑。"""
-        if not result_r.command_failed:
-            return
-        from nz_coder.runtime.verification.recovery import _extract_failed_tests, _extract_traceback
-        failed = _extract_failed_tests(result_r.output)
-        tb = _extract_traceback(result_r.output, max_chars=300)
-        if not failed and not tb:
-            return
-        note = ""
-        if failed:
-            note += "Failed: " + ", ".join(failed[:3])
-        if tb:
-            first_line = tb.splitlines()[-1][:120] if tb.splitlines() else ""
-            note += (" | " if note else "") + first_line
-        if note:
-            self._sp.update("failure", note[:500])
+        """Compatibility entry; shared observation policy lives in ToolResultRecorder."""
+        from nz_coder.runtime.execution.tool_assembly import result_recorder
+        return result_recorder(self)._record_bash_failure(result_r)
 
     def _observe_runtime_tool(self, result_r) -> None:
-        """把成功工具调用写入 RuntimeState。"""
-        if not (result_r.executed and not result_r.dispatch_failed):
-            return
-        acceptance = self.runtime_state.observe_tool(
-            result_r.name,
-            result_r.tool_input,
-            result_r.output,
-            succeeded=not result_r.command_failed,
-        )
-        if acceptance is not None:
-            self.vm.observe_acceptance_contract(
-                acceptance["command"],
-                acceptance["output"],
-                passed=acceptance["passed"],
-            )
-        if self.runtime_state.has_diff and not broad_tests_blocked():
-            set_broad_tests_blocked(True)
+        """Compatibility entry; shared observation policy lives in ToolResultRecorder."""
+        from nz_coder.runtime.execution.tool_assembly import result_recorder
+        return result_recorder(self)._observe_runtime_tool(result_r)
 
     def _observe_run_evidence(self, result_r) -> None:
-        """Best-effort record structured evidence without affecting loop control."""
-        try:
-            self.run_evidence.task_mode = self.runtime_state.task_mode
-            self.run_evidence.record_tool_result(
-                result_r.name,
-                result_r.tool_input,
-                result_r.output,
-                success=(result_r.executed and not result_r.dispatch_failed and not result_r.command_failed),
-                dispatch_failed=result_r.dispatch_failed,
-                command_failed=result_r.command_failed,
-                metadata=result_r.metadata,
-            )
-            metadata = result_r.metadata if isinstance(result_r.metadata, dict) else {}
-            child_outcome = ChildAgentResult.from_metadata(
-                metadata,
-                final_text=str(result_r.output or ""),
-                name=str(result_r.name or "child"),
-            )
-            if result_r.name in {"task", "apply_agent_changes"} and child_outcome is not None:
-                self.lineage.append("child_outcome", {
-                    "task_id": child_outcome.task_id,
-                    "name": child_outcome.name,
-                    "session_id": child_outcome.session_id,
-                    "agent_id": child_outcome.agent_id,
-                    "trace_id": child_outcome.trace_id,
-                    "status": child_outcome.status,
-                    "changed_files": list(child_outcome.changed_files),
-                    "structured": child_outcome.structured_present,
-                    "limit_reached": child_outcome.limit_reached,
-                    "interrupted": child_outcome.interrupted,
-                })
-            self._record_lineage_artifact(result_r)
-        except Exception as exc:
-            self.tracer.log("run_evidence_failed", tool=result_r.name, error=str(exc))
+        """Compatibility entry; shared observation policy lives in ToolResultRecorder."""
+        from nz_coder.runtime.execution.tool_assembly import result_recorder
+        return result_recorder(self)._observe_run_evidence(result_r)
 
     def _record_lineage_artifact(self, result_r) -> None:
-        """Record bounded file, command, and attachment provenance for recovery."""
-        if not result_r.executed or result_r.dispatch_failed:
-            return
-        payload: dict = {
-            "tool": str(result_r.name)[:120],
-            "action": "write" if result_r.is_write else "observe",
-        }
-        tool_input = result_r.tool_input if isinstance(result_r.tool_input, dict) else {}
-        paths: list[str] = []
-        path = tool_input.get("path")
-        if isinstance(path, str) and path.strip():
-            paths.append(path.strip())
-        for key in ("files", "changes"):
-            values = tool_input.get(key)
-            if not isinstance(values, list):
-                continue
-            for item in values:
-                candidate = item.get("path") if isinstance(item, dict) else item
-                if isinstance(candidate, str) and candidate.strip() and candidate not in paths:
-                    paths.append(candidate.strip())
-        if paths:
-            payload["paths"] = paths[:50]
-        if result_r.name == "bash" and isinstance(tool_input.get("command"), str):
-            payload["command"] = str(tool_input["command"])[:1000]
-            payload["status"] = "failed" if result_r.command_failed else "passed"
-        attachments = result_r.attachments if isinstance(result_r.attachments, list) else []
-        if attachments:
-            payload["attachments"] = [
-                {
-                    "mime": str(item.get("mime") or "")[:200],
-                    "filename": str(item.get("filename") or "")[:300],
-                }
-                for item in attachments[:20]
-                if isinstance(item, dict)
-            ]
-        if not any(key in payload for key in ("paths", "command", "attachments")):
-            return
-        artifact_key = (
-            f"{self.tracer.run_id}:{self.tool_calls_this_run}:"
-            f"{result_r.name}:{hashlib.sha256(json.dumps(tool_input, sort_keys=True, default=str).encode()).hexdigest()[:16]}"
-        )
-        self.lineage.append_unique("artifact_ledger", artifact_key, payload)
+        """Compatibility entry; shared observation policy lives in ToolResultRecorder."""
+        from nz_coder.runtime.execution.tool_assembly import result_recorder
+        return result_recorder(self)._record_lineage_artifact(result_r)
 
-    def _trace_tool_result(
-        self,
-        result_r,
-        output: str,
-        tool_call_id: str = "",
-        index: int | None = None,
-    ) -> None:
-        """记录工具调用 trace。"""
-        self.tracer.log(
-            "tool_call",
-            tool_call_id=tool_call_id or None,
-            index=index,
-            name=result_r.name,
-            status=(
-                "error" if output.startswith("Error:") or output.startswith("Denied")
-                else ("nonzero" if output.startswith("Command exited with code") else "ok")
-            ),
-            executed=bool(result_r.executed),
-            dispatch_failed=bool(result_r.dispatch_failed),
-            command_failed=bool(result_r.command_failed),
-            is_write=bool(result_r.is_write),
-            input=result_r.tool_input,
-            duration_ms=round(float(getattr(result_r, "duration_ms", 0.0) or 0.0), 3),
-            queue_wait_ms=round(float(getattr(result_r, "queue_wait_ms", 0.0) or 0.0), 3),
-            output_len=len(output),
-            output=output,
-        )
-        self._emit_session_event(
-            "session.tool.completed",
-            {
-                "tool_call_id": tool_call_id or None,
-                "index": index,
-                "name": result_r.name,
-                "status": (
-                    "error" if result_r.dispatch_failed
-                    else ("nonzero" if result_r.command_failed else "ok")
-                ),
-                "executed": bool(result_r.executed),
-                "is_write": bool(result_r.is_write),
-                "command_failed": bool(result_r.command_failed),
-                "category": (
-                    str(getattr(result_r, "category", "") or "")
-                    or tool_category(result_r.name)
-                ),
-                "summary": format_tool_summary(result_r.name, result_r.tool_input),
-                "duration_ms": round(
-                    float(getattr(result_r, "duration_ms", 0.0) or 0.0),
-                    3,
-                ),
-                "output_len": len(output),
-                "output": output,
-                **({"metadata": shell_output_facts(result_r.metadata)}
-                   if result_r.name == "bash" and (result_r.command_failed or result_r.dispatch_failed)
-                   else {}),
-            },
-        )
+    def _trace_tool_result(self, result_r, output: str, tool_call_id: str = "", index: int | None = None) -> None:
+        """Compatibility result publication through the focused owner."""
+        from nz_coder.runtime.execution.tool_assembly import result_recorder
+        result_recorder(self).trace_result(result_r, output, tool_call_id, index)
 
     def _append_tool_recovery_diagnostic(self, messages: list, name: str, output: str) -> None:
         """Legacy wrapper retained for compatibility; runtime hooks emit diagnostics now."""
@@ -4396,97 +4037,20 @@ class ProductRunEnvironment:
 
         self.hooks.after_tool_result(self, messages, _ResultProxy(name), output)
 
-    def _finish_tool_transaction(self, has_write: bool, all_succeeded: bool,
-                                 messages: list) -> None:
-        """根据工具分发结果提交或回滚事务。"""
-        if not has_write:
-            return
-        if all_succeeded:
-            self.txn.commit()
-            return
-        rollback_report = self.txn.rollback()
-        if not rollback_report:
-            return
-        self.tracer.log("transaction_rollback", report=rollback_report)
-        messages.append(stamp_user_message({
-            "role": "user",
-            "content": f"<transaction-rollback>\n{rollback_report}\n</transaction-rollback>",
-            "_nz_synthetic": True,
-        }))
+    def _finish_tool_transaction(self, has_write: bool, all_succeeded: bool, messages: list) -> None:
+        """Compatibility entry; the transaction component owns finish policy."""
+        from nz_coder.runtime.execution.tool_effects import ToolTransaction
+        ToolTransaction(self.txn, self.tracer.log).finish(has_write, all_succeeded, messages)
 
-    def _refresh_patch_risk(self, messages: list) -> None:
-        """Analyze committed agent changes and inject one conservative review per patch."""
-        try:
-            from nz_coder.intelligence.impact_analyzer import analyze_patch_impact, format_impact_report
-
-            changed = self.change_tracker.current_changed_paths()
-            deleted = self.change_tracker.current_deleted_paths()
-            diff = self.change_tracker.render_current_diff() if changed else ""
-            report = analyze_patch_impact(
-                changed_files=changed,
-                diff_text=diff,
-                project_profile=self._project_profile_data(),
-                deleted_files=deleted,
-                requested_paths=self.runtime_state.requested_paths,
-                task_mode=self.runtime_state.task_mode,
-                diff_chars=len(diff),
-            )
-            self.runtime_state.patch_risk = report
-            self.runtime_state.has_diff = bool(changed)
-            self.runtime_state.changed_files = list(changed)
-            self.runtime_state.diff_chars = len(diff)
-            from nz_coder.runtime.agent.task_policy import is_test_file
-            self.runtime_state.tests_modified = any(is_test_file(path) for path in changed)
-            self.run_evidence.impact_review = dict(report)
-            self.tracer.log(
-                "patch_risk_refreshed",
-                risk=report.get("risk"),
-                requires_replan=bool(report.get("requires_replan")),
-                fingerprint=report.get("fingerprint"),
-                signals=len(report.get("risk_signals", [])),
-            )
-            fingerprint = str(report.get("fingerprint") or "")
-            if not report.get("requires_replan") or not fingerprint:
-                return
-            if fingerprint == self.runtime_state.risk_feedback_fingerprint:
-                return
-            self.runtime_state.risk_feedback_fingerprint = fingerprint
-            messages.append(stamp_user_message({
-                "role": "user",
-                "content": (
-                    "<patch-risk-review>\n"
-                    + format_impact_report(report)
-                    + "\nReview whether these public API or scope changes are required by the user task. "
-                    "Revise the approach before finalizing; do not mechanically preserve risky hunks.\n"
-                    "</patch-risk-review>"
-                ),
-                "_nz_synthetic": True,
-            }))
-        except Exception as exc:
-            self.tracer.log("patch_risk_failed", error=str(exc))
+    def _refresh_patch_risk(self, messages):
+        """Compatibility entry into the shared committed-write effects."""
+        from nz_coder.runtime.execution.tool_assembly import write_effects
+        return write_effects(self, refresh_index=update_code_index_after_write, diagnostics=collect_write_diagnostics).refresh_patch_risk(messages)
 
     def _apply_pending_plan_mode(self) -> None:
-        """Activate approved Build mode only after the current tool batch."""
-        controller = getattr(self, "plan_mode", None)
-        if controller is None:
-            return
-        transition = controller.apply_pending_mode()
-        if transition is None:
-            return
-        previous, current = transition
-        approved_summary = str(
-            getattr(controller, "pending_terminal_summary", "") or ""
-        ).strip()
-        if approved_summary and bool(
-            getattr(controller, "pending_exit_terminal", False)
-        ):
-            self._last_terminal_summary = approved_summary
-        self.tracer.log(
-            "plan_mode_changed",
-            previous=previous,
-            current=current,
-            source="plan_exit",
-        )
+        """Compatibility projection of the shared post-batch mode transition."""
+        from nz_coder.runtime.tool_runtime.observers import apply_pending_plan_mode
+        apply_pending_plan_mode(self.plan_mode, self.tool_run_facts.set_terminal_summary, self.tracer.log)
 
     def _maybe_add_todo_reminder(self, messages: list, used_todo: bool) -> None:
         """Legacy wrapper retained for compatibility; runtime hooks emit todo reminders now."""
@@ -5023,51 +4587,6 @@ def _trace_evidence_projection(owner, enabled: bool, stats: dict) -> None:
     tracer = getattr(owner, "tracer", None)
     if enabled and any(stats.values()) and tracer is not None:
         tracer.log("context_evidence_projected", **stats)
-
-
-def _first_part_snapshot(messages: list[dict], part_type: str) -> str | None:
-    for message in messages:
-        if not isinstance(message, dict):
-            continue
-        for part in message.get(PARTS_KEY, []):
-            if isinstance(part, dict) and part.get("type") == part_type:
-                snapshot = part.get("snapshot")
-                if isinstance(snapshot, str) and snapshot:
-                    return snapshot
-    return None
-
-
-def _lightweight_diffs(diffs) -> list[dict]:  # noqa: ANN001
-    return [
-        {
-            "file": item.file,
-            "additions": max(0, int(item.additions)),
-            "deletions": max(0, int(item.deletions)),
-            "status": item.status,
-        }
-        for item in diffs
-    ]
-
-
-def _bounded_snapshot_diffs(diffs, *, patch_budget: int = 2 * 1024 * 1024) -> list[dict]:  # noqa: ANN001
-    """Bound cumulative persisted patch text while retaining every file stat."""
-    remaining = max(0, int(patch_budget))
-    result = []
-    for item in diffs:
-        patch = str(item.patch or "")
-        size = len(patch.encode("utf-8"))
-        if size > remaining:
-            patch = ""
-        else:
-            remaining -= size
-        result.append({
-            "file": item.file,
-            "patch": patch,
-            "additions": max(0, int(item.additions)),
-            "deletions": max(0, int(item.deletions)),
-            "status": item.status,
-        })
-    return result
 
 
 def _extract_usage_tokens(usage) -> dict[str, int]:

@@ -1,6 +1,8 @@
 """Tool Runtime checkpoint ownership at stable async processor boundaries."""
 from __future__ import annotations
 
+from tests.runtime.tool_runtime.standalone.support import Transaction, Dependencies
+
 import asyncio
 
 import pytest
@@ -94,6 +96,7 @@ class _Harness:
 def test_async_tool_boundaries_use_injected_session_checkpoint() -> None:
     """Removing callback precedence would leak production persistence to host."""
     harness = _Harness()
+    dependencies = Dependencies()
     processor = _Processor()
     statuses: list[str] = []
 
@@ -102,7 +105,7 @@ def test_async_tool_boundaries_use_injected_session_checkpoint() -> None:
 
     result = asyncio.run(
         ProductionToolRuntime().execute_batch_async(
-            harness,
+            dependencies.context(dispatch_override_async=harness._dispatch_tool_calls_async),
             [],
             [],
             processor=processor,
@@ -119,6 +122,7 @@ def test_async_tool_boundaries_use_injected_session_checkpoint() -> None:
 def test_async_tool_cancellation_checkpoints_interrupted_through_session_runtime() -> None:
     """Cancellation must not bypass the Session-owned interrupted checkpoint."""
     harness = _Harness(interrupt=True)
+    dependencies = Dependencies()
     processor = _Processor()
     statuses: list[str] = []
 
@@ -128,7 +132,7 @@ def test_async_tool_cancellation_checkpoints_interrupted_through_session_runtime
     async def scenario() -> None:
         with pytest.raises(asyncio.CancelledError):
             await ProductionToolRuntime().execute_batch_async(
-                harness,
+                dependencies.context(dispatch_override_async=harness._dispatch_tool_calls_async),
                 [],
                 [],
                 processor=processor,
@@ -184,9 +188,8 @@ def test_tool_guardrail_escalation_defers_settlement_to_run_boundary() -> None:
         checkpoint=checkpoint,
         processor_for_messages=lambda _messages: processor,
         write_override=None,
-        begin_transaction=lambda: None,
-        transaction_active=lambda: False,
-        finish_transaction=lambda *_args: None,
+        transaction=Transaction(),
+        drain_progress=noop_async,
         metadata_reporter=lambda *_args: (lambda *_a, **_k: None),
         question_reporter=lambda *_args: (lambda *_a, **_k: None),
         dispatch_override_async=None,
@@ -242,18 +245,10 @@ def test_tool_guardrail_escalation_defers_settlement_to_run_boundary() -> None:
 
 def test_active_run_rejects_missing_session_checkpoint_callback() -> None:
     """An active production run must not silently fall back to legacy storage."""
+    from nz_coder.runtime.adapters.tool import tool_context_from_legacy_host
     harness = _Harness()
-
     with pytest.raises(RuntimeError, match="SessionRuntime checkpoint"):
-        asyncio.run(
-            ProductionToolRuntime().execute_batch_async(
-                harness,
-                [],
-                [],
-                processor=_Processor(),
-            )
-        )
-
+        tool_context_from_legacy_host(harness)
     assert harness.legacy_checkpoints == []
 
 
@@ -292,7 +287,7 @@ def test_async_tool_batch_freezes_one_dynamic_provider_generation() -> None:
         provider_calls.clear()  # Ignore eager scope validation.
         result = asyncio.run(
             ProductionToolRuntime().execute_batch_async(
-                SnapshotHarness(),
+                Dependencies().context(dispatch_override_async=SnapshotHarness()._dispatch_tool_calls_async),
                 [],
                 [],
                 processor=_Processor(),

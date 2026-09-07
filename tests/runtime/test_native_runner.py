@@ -534,6 +534,8 @@ class _Guardrails:
     async def before_tool(self, _owner, tool_call, _messages):
         return tool_call, None
 
+    before_tool_sync = before_tool
+
     async def after_tool(self, _owner, _tool_call, result, _messages):
         return result
 

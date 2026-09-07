@@ -224,7 +224,11 @@ def test_async_tool_runtime_is_host_free_but_sync_compatibility_is_explicit() ->
         and node.name == "_execute_batch_sync_snapshot"
     )
     sync_source = ast.get_source_segment(pipeline_source, sync_method) or ""
-    assert "host." in sync_source
+    assert "host." not in sync_source
+    assert "context: ToolExecutionContext" in sync_source
+    adapter = (ROOT / "nz_coder/runtime/adapters/tool.py").read_text(encoding="utf-8")
+    assert "class LegacyToolRuntime" in adapter
+    assert "tool_context_from_legacy_host" in adapter
 
 
 def test_main_loop_is_owned_by_shared_runner() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import math
 
 from nz_coder.runtime.agent.guardrails import (
     GuardrailBlockedError,
@@ -235,6 +236,14 @@ class ProductionGuardrailRuntime:
                 result.permission_denied = True
             elif action == "escalate":
                 raise GuardrailEscalateError(guardrail.name, "tool", verdict["reason"])
+            if action in {"rewrite", "block"}:
+                # The verdict admits only its replacement body, not aliases of
+                # the original body in metadata, title or media attachments.
+                # Keep execution facts in the result/ledger, separate from UI
+                # payloads. An unmodified allow retains normal diagnostics.
+                result.metadata = _admitted_control_metadata(host, result, action)
+                result.title = ""
+                result.attachments = []
         return result
 
     @staticmethod
@@ -272,3 +281,33 @@ class ProductionGuardrailRuntime:
             reason="",
             reason_provided=bool(reason),
         )
+
+
+def _admitted_control_metadata(host, result: ToolExecutionResult, action: str) -> dict:
+    """Keep typed control facts, never the replaced tool's presentation aliases."""
+    admitted: dict = {"guardrail_output_action": action}
+    if action != "rewrite" or result.dispatch_failed or not result.executed:
+        return admitted
+    metadata = result.metadata if isinstance(result.metadata, dict) else {}
+    if result.name == "plan_exit":
+        for name in ("plan_exit_approved", "plan_exit_terminal"):
+            if type(metadata.get(name)) is bool:
+                admitted[name] = metadata[name]
+    elif result.name == "task":
+        cost = metadata.get("child_cost_delta")
+        if type(cost) in {float, int} and 0 <= cost < math.inf:
+            admitted["child_cost_delta"] = cost
+    elif result.name == "emit_handoff":
+        graph = getattr(host, "agent_graph", None)
+        source = getattr(host, "current_agent_name", "")
+        if graph is None or source not in graph.names():
+            return admitted
+        target = metadata.get("handoffTarget")
+        edge = graph.handoff(source, target) if isinstance(target, str) else None
+        if edge is not None:
+            admitted.update(handoffSource=source, handoffTarget=edge.target,
+                            handoffKind=edge.kind, handoffInput=result.output[:4000])
+        elif metadata.get("isTerminal") is True and not target and not graph.agent(source).handoffs:
+            admitted.update(handoffSource=source, isTerminal=True,
+                            terminalSummary=result.output[:4000])
+    return admitted

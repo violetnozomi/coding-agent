@@ -10,6 +10,33 @@ from typing import Awaitable, Callable, TypeVar
 _T = TypeVar("_T")
 
 
+async def await_settled(operation: Awaitable[_T]) -> _T:
+    """Retain a started async operation until its side effects have settled.
+
+    Used at persistence boundaries whose implementation may await a worker
+    thread. Cancellation stops the caller, but cannot retire that worker early.
+    The original cancellation wins; secondary failure notes contain types only.
+    """
+    task = asyncio.ensure_future(operation)
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError as cancel_error:
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                continue
+            except BaseException:
+                break
+        try:
+            task.result()
+        except BaseException as error:
+            add_note = getattr(cancel_error, "add_note", None)
+            if callable(add_note):
+                add_note(f"Settled operation failure: {type(error).__name__}")
+        raise cancel_error
+
+
 async def to_thread_settled(
     function: Callable[..., _T],
     /,
@@ -51,8 +78,11 @@ def start_background_coro(coro: Awaitable[object]) -> threading.Thread:
 
     context = copy_context()
 
+    async def invoke() -> object:
+        return await coro
+
     def runner() -> None:
-        asyncio.run(coro)
+        asyncio.run(invoke())
 
     thread = threading.Thread(target=lambda: context.run(runner), daemon=True)
     thread.start()

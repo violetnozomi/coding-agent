@@ -360,20 +360,20 @@ class _CountingExecutor:
         self.max_active = 0
 
     def execute_one(self, tool_call, index):
+        from nz_coder.tool_platform.execution import ToolExecutionResult
+
         with self.lock:
             self.active += 1
             self.max_active = max(self.max_active, self.active)
         try:
             time.sleep(self.delay)
-            return index
+            return ToolExecutionResult(
+                "task", tool_call["function"]["arguments"], str(index),
+                True, False, False, False,
+            )
         finally:
             with self.lock:
                 self.active -= 1
-
-
-class _NoToolHooks:
-    def has_pre_tool_use_hooks(self):
-        return False
 
 
 def _task_call(agent_type, index):
@@ -384,25 +384,23 @@ def _task_call(agent_type, index):
 
 
 def test_read_only_tasks_parallelize_but_general_tasks_remain_serial():
+    from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
+    from tests.runtime.tool_runtime.standalone.support import Dependencies
+
     old_limit = config.MAX_PARALLEL_TASKS
     config.MAX_PARALLEL_TASKS = 2
     try:
-        agent = AgentLoop.__new__(AgentLoop)
-        agent.hooks = _NoToolHooks()
-
         def run_batch(agent_types):
             executor = _CountingExecutor()
-            agent.executor = executor
-
-            def execute_with_hooks(self, tool_call, index, messages):
-                return self.executor.execute_one(tool_call, index)
-
-            agent._execute_tool_call_with_hooks = MethodType(execute_with_hooks, agent)
+            dependencies = Dependencies()
+            dependencies.executor = executor
             calls = [
                 _task_call(agent_type, i) for i, agent_type in enumerate(agent_types)
             ]
-            results = asyncio.run(agent._dispatch_tool_calls_async(calls, False, []))
-            return executor.max_active, [item[2] for item in results]
+            results = asyncio.run(ProductionToolRuntime().dispatch_async(
+                dependencies.context(), calls, False, dependencies.messages,
+            ))
+            return executor.max_active, [int(item[2].output) for item in results]
 
         read_max, read_order = run_batch(["explore", "plan", "reflection"])
         general_max, general_order = run_batch(["general-purpose", "general-purpose"])

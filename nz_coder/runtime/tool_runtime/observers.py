@@ -1,51 +1,98 @@
-"""Coding-specific observations injected into the generic Tool Runtime."""
+"""Declared post-batch enrichment, separate from authoritative execution settlement."""
+
 from __future__ import annotations
 
+from typing import Callable
 
-class LegacyCodingToolObserver:
-    """Own index, diagnostics, patch, hook, and plan effects after tool work."""
+from nz_coder.runtime.core.tool_contracts import (
+    DispatchedTools,
+    TextDisplay,
+    ToolBatchState,
+    ToolTrace,
+)
+from nz_coder.runtime.process.tool_snapshots import ToolStepSnapshots
+from nz_coder.runtime.session.session_processor import SessionProcessor
+from nz_coder.tools.plan_mode import PlanModeController
 
-    def __init__(self, host) -> None:
-        self._host = host
 
-    def post_write(self, dispatched: list, messages: list[dict]) -> None:
-        admission = getattr(self._host, "_admission_session", None)
-        if admission is not None:
-            for _index, _tool_call, result in dispatched:
-                admission.record_committed_mutation(result)
-        self._host.recovery.reset_tool_call_history(reason="workspace_changed")
-        self._required("_refresh_patch_risk")(messages)
-        self._required("_refresh_code_index")(dispatched)
-        self._required("_attach_lsp_write_diagnostics")(dispatched, messages)
+class CodingToolObserver:
+    """Only focused effect/snapshot services and a named legacy batch-hook bridge."""
 
-    def after_batch(self, messages: list[dict], batch_state: dict, on_text) -> None:
-        self._host.hooks.after_tool_batch(
-            self._host,
-            messages,
-            manual_compact=batch_state["manual_compact"],
-            used_todo=batch_state["used_todo"],
-            on_text=on_text,
-            write_total=batch_state["write_total"],
-            write_denied=batch_state["write_denied"],
-        )
+    def __init__(
+        self,
+        *,
+        post_write: Callable[[DispatchedTools, list[dict]], None],
+        after_batch: Callable[[list[dict], ToolBatchState, TextDisplay | None], None],
+        snapshots: ToolStepSnapshots,
+        plan_mode: PlanModeController | None,
+        terminal_summary: Callable[[str], None],
+        trace: ToolTrace,
+    ) -> None:
+        self._post_write = post_write
+        self._after_batch = after_batch
+        self.snapshots = snapshots
+        self.plan_mode = plan_mode
+        self.terminal_summary = terminal_summary
+        self.trace = trace
+
+    def post_write(self, dispatched: DispatchedTools, messages: list[dict]) -> None:
+        self._post_write(dispatched, messages)
+
+    def after_batch(
+        self, messages: list[dict], state: ToolBatchState, on_text: TextDisplay | None
+    ) -> None:
+        self._after_batch(messages, state, on_text)
 
     def apply_plan_mode(self) -> None:
-        self._required("_apply_pending_plan_mode")()
+        apply_pending_plan_mode(self.plan_mode, self.terminal_summary, self.trace)
 
-    async def capture_snapshot(self, processor):
+    async def capture_snapshot(self, processor: SessionProcessor) -> str | None:
         if not processor.step_snapshot:
             return None
-        return await self._required("_capture_step_snapshot_async")(
-            "step-finish", processor.message_id,
-        )
+        return await self.snapshots.capture_async("step-finish", processor.message_id)
 
-    def record_patch(self, messages, processor, finish_snapshot) -> None:
-        self._required("_record_step_patch")(
-            messages, processor, finish_snapshot,
-        )
+    def record_patch(
+        self, messages: list[dict], processor: SessionProcessor, snapshot: str | None
+    ) -> None:
+        self.snapshots.record_patch(messages, processor, snapshot)
 
-    def _required(self, name: str):
-        value = getattr(self._host, name, None)
-        if not callable(value):
-            raise RuntimeError(f"Tool observer is missing required capability {name}")
-        return value
+
+def apply_pending_plan_mode(
+    controller: PlanModeController | None,
+    terminal_summary: Callable[[str], None],
+    trace: ToolTrace,
+) -> None:
+    """Apply an approved transition after the batch, never during dispatch."""
+    if controller is None:
+        return
+    transition = controller.apply_pending_mode()
+    if transition is None:
+        return
+    previous, current = transition
+    summary = str(controller.pending_terminal_summary or "").strip()
+    if summary and controller.pending_exit_terminal:
+        terminal_summary(summary)
+    trace("plan_mode_changed", previous=previous, current=current, source="plan_exit")
+
+
+class NoOpToolObserver:
+    """Explicitly disabled product enrichment; never an execution/persistence substitute."""
+
+    def post_write(self, dispatched: DispatchedTools, messages: list[dict]) -> None:
+        pass
+
+    def after_batch(
+        self, messages: list[dict], state: ToolBatchState, on_text: TextDisplay | None
+    ) -> None:
+        pass
+
+    def apply_plan_mode(self) -> None:
+        pass
+
+    async def capture_snapshot(self, processor: SessionProcessor) -> str | None:
+        return None
+
+    def record_patch(
+        self, messages: list[dict], processor: SessionProcessor, snapshot: str | None
+    ) -> None:
+        pass

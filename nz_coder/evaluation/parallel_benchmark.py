@@ -1,8 +1,8 @@
 """Offline performance benchmark for task-tool parallel scheduling.
 
-The benchmark exercises :meth:`AgentLoop._dispatch_tool_calls_async` with a
-synthetic, deterministic latency executor.  It needs no model credentials and
-reports both throughput improvement and scheduler safety properties.
+The benchmark exercises the production task-concurrency policy and scheduler
+with a synthetic, deterministic latency executor. It needs no model credentials
+and reports both throughput improvement and scheduler safety properties.
 """
 from __future__ import annotations
 
@@ -12,10 +12,15 @@ from dataclasses import asdict, dataclass
 import json
 from threading import Lock
 import time
-from types import MethodType
 
+from nz_coder.permissions import PermissionManager
 from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
-from nz_coder.runtime.execution.loop import AgentLoop
+from nz_coder.runtime.core.tool_context import ToolPolicyContext
+from nz_coder.runtime.tool_runtime.operations import parse_tool_input
+from nz_coder.runtime.tool_runtime.policy import ProductionToolPolicy
+from nz_coder.runtime.tool_runtime.scheduler import _execute_scheduled_async
+from nz_coder.runtime.verification.recovery import RecoveryState
+from nz_coder.tool_platform.execution import ToolExecutionResult
 
 
 @dataclass(frozen=True)
@@ -37,11 +42,6 @@ class ParallelBenchmarkResult:
         return asdict(self)
 
 
-class _NoToolHooks:
-    def has_pre_tool_use_hooks(self) -> bool:
-        return False
-
-
 class _LatencyExecutor:
     def __init__(self, delay_seconds: float):
         self.delay_seconds = delay_seconds
@@ -49,13 +49,21 @@ class _LatencyExecutor:
         self._active = 0
         self.max_active = 0
 
-    def execute_one(self, tool_call: dict, index: int) -> int:
+    def execute_one(self, tool_call: dict, index: int) -> ToolExecutionResult:
         with self._lock:
             self._active += 1
             self.max_active = max(self.max_active, self._active)
         try:
             time.sleep(self.delay_seconds)
-            return index
+            return ToolExecutionResult(
+                name=tool_call["function"]["name"],
+                tool_input=parse_tool_input(tool_call["function"].get("arguments", {})),
+                output=str(index),
+                executed=True,
+                dispatch_failed=False,
+                command_failed=False,
+                is_write=False,
+            )
         finally:
             with self._lock:
                 self._active -= 1
@@ -75,20 +83,22 @@ async def _run_batch(
     agent_types: list[str],
     delay_seconds: float,
 ) -> tuple[float, int, list[int]]:
-    agent = AgentLoop.__new__(AgentLoop)
-    agent.hooks = _NoToolHooks()
+    policy = ProductionToolPolicy()
+    context = ToolPolicyContext(
+        agent_name="parallel-benchmark", agent_graph=None, tool_allowlist=None,
+        admission_handle=None, runtime_state=None, recovery=RecoveryState(),
+        permissions=PermissionManager("auto"), stall_orchestrator=None,
+        parse_input=parse_tool_input, trace=lambda _event, **_payload: None,
+    )
     executor = _LatencyExecutor(delay_seconds)
-    agent.executor = executor
-
-    def execute_with_hooks(self, tool_call: dict, index: int, messages: list) -> int:
-        return self.executor.execute_one(tool_call, index)
-
-    agent._execute_tool_call_with_hooks = MethodType(execute_with_hooks, agent)
     calls = [_task_call(agent_type, index) for index, agent_type in enumerate(agent_types)]
     started = time.perf_counter()
-    results = await agent._dispatch_tool_calls_async(calls, False, [])
+    results = await _execute_scheduled_async(
+        executor, calls,
+        lambda call: policy.tool_call_can_run_concurrently(context, call),
+    )
     elapsed = time.perf_counter() - started
-    return elapsed, executor.max_active, [item[2] for item in results]
+    return elapsed, executor.max_active, [int(item[2].output) for item in results]
 
 
 async def run_parallel_benchmark_async(

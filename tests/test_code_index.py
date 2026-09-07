@@ -2,7 +2,28 @@
 from __future__ import annotations
 
 import sqlite3
-from types import SimpleNamespace
+
+
+def _write_effects(tmp_path, refresh_index, trace):
+    """Build committed-write effects without constructing a product environment."""
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.runtime.execution.tool_effects import CodingWriteEffects
+    from nz_coder.runtime.observability.run_evidence import RunEvidence
+    from nz_coder.runtime.verification.recovery import RecoveryState
+    from nz_coder.state.changes import ChangeTracker
+
+    return CodingWriteEffects(
+        workspace=tmp_path.resolve(),
+        change_tracker=ChangeTracker(change_dir=tmp_path / ".test-changes"),
+        runtime_state=RuntimeState(),
+        run_evidence=RunEvidence(run_id="index-contract"),
+        recovery=RecoveryState(),
+        admission=None,
+        project_profile=dict,
+        refresh_index=refresh_index,
+        diagnostics=lambda paths, workspace: "",
+        trace=trace,
+    )
 
 
 def test_index_persists_symbols_and_references_across_instances(tmp_path):
@@ -273,41 +294,39 @@ def test_structural_search_localizes_symbol_without_known_file_or_exact_name(tmp
     assert matches[0]["name"] == "normalize_input"
 
 
-def test_loop_refreshes_index_from_successful_write_results(tmp_path, monkeypatch):
-    import nz_coder.runtime.execution.loop as loop_module
-    from nz_coder.foundation import config
-    from nz_coder.loop import AgentLoop
+def test_loop_refreshes_index_from_successful_write_results(tmp_path):
+    from nz_coder.intelligence.code_index import IndexStats
+    from nz_coder.tool_platform.execution import ToolExecutionResult
 
-    monkeypatch.setattr(config, "WORKDIR", tmp_path)
     calls = []
-    monkeypatch.setattr(
-        loop_module,
-        "update_code_index_after_write",
-        lambda paths, workspace: calls.append((paths, workspace))
-        or SimpleNamespace(indexed=1, removed=0),
+
+    def refresh_index(paths, workspace):
+        calls.append((paths, workspace))
+        return IndexStats(indexed=1, removed=0)
+
+    effects = _write_effects(
+        tmp_path, refresh_index, lambda event, **payload: None
     )
-    agent = object.__new__(AgentLoop)
-    agent.tracer = SimpleNamespace(log=lambda *args, **kwargs: None)
-    agent.change_tracker = SimpleNamespace(
-        current_changed_paths=lambda: [],
-        current_deleted_paths=lambda: [],
-    )
-    successful = SimpleNamespace(
+    successful = ToolExecutionResult(
         is_write=True,
         executed=True,
         dispatch_failed=False,
+        command_failed=False,
+        output="written",
         name="write_file",
         tool_input={"path": "app.py"},
     )
-    failed = SimpleNamespace(
+    failed = ToolExecutionResult(
         is_write=True,
         executed=True,
         dispatch_failed=True,
+        command_failed=False,
+        output="Error: write failed",
         name="write_file",
         tool_input={"path": "ignored.py"},
     )
 
-    agent._refresh_code_index([
+    effects.refresh_code_index([
         (0, {"id": "ok"}, successful),
         (1, {"id": "failed"}, failed),
     ])

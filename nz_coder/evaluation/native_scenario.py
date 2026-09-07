@@ -140,6 +140,8 @@ class _Guardrails:
     async def before_tool(self, _owner, call, _messages):
         return call, None
 
+    before_tool_sync = before_tool
+
     async def after_tool(self, _owner, _call, result, _messages):
         return result
 

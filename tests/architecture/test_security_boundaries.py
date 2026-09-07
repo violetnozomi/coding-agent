@@ -214,7 +214,10 @@ PUBLIC_ERROR_MODULE_COUNTS = {
     'nz_coder/project_creation/verifier.py': ('trusted local validation', 1),
     'nz_coder/runtime/agent/agent_manager.py': ('private diagnostic', 1),
     'nz_coder/runtime/agent/agent_resilience.py': ('trusted local validation', 1),
-    'nz_coder/runtime/execution/loop.py': ('private diagnostic', 20),
+    # Six existing diagnostic sites moved with their actual policy owners.
+    'nz_coder/runtime/execution/loop.py': ('private diagnostic', 14),
+    'nz_coder/runtime/execution/tool_effects.py': ('private diagnostic', 4),
+    'nz_coder/runtime/process/tool_snapshots.py': ('private diagnostic', 2),
     'nz_coder/runtime/execution/provider_stream.py': ('private diagnostic', 1),
     'nz_coder/runtime/execution/run_lifecycle.py': ('private diagnostic', 2),
     'nz_coder/runtime/execution/runner.py': ('private diagnostic', 2),

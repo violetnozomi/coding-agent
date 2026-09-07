@@ -14,6 +14,9 @@ from nz_coder.runtime.execution.loop import (
 )
 from nz_coder.state.transaction import TransactionManager
 from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
+from nz_coder.runtime.execution.tool_effects import ToolTransaction
+from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
+from tests.runtime.tool_runtime.standalone.support import Dependencies, call
 
 
 class _Tracer:
@@ -83,9 +86,15 @@ def test_cancelled_write_thread_is_drained_then_rolled_back(monkeypatch, tmp_pat
     harness = Harness()
 
     async def exercise():
-        task = asyncio.create_task(AgentLoop._execute_tools_async(harness, [{}], []))
-        while not started.is_set():
+        dependencies = Dependencies()
+        context = dependencies.context(
+            transaction=ToolTransaction(harness.txn, harness.tracer.log),
+            dispatch_override_async=harness._dispatch_tool_calls_async,
+        )
+        task = asyncio.create_task(ProductionToolRuntime().execute_batch_async(context, [call()], dependencies.messages))
+        while not started.is_set() and not task.done():
             await asyncio.sleep(0)
+        assert started.is_set(), task.exception() if task.done() else None
         task.cancel()
         await asyncio.sleep(0.02)
         assert task.done() is False
@@ -177,11 +186,21 @@ def test_post_dispatch_failure_rolls_back_active_transaction(monkeypatch, tmp_pa
     harness = Harness()
 
     async def exercise():
+        dependencies = Dependencies()
+
+        def consume(dispatched, messages, *, on_tool=None, processor=None):
+            return harness._consume_dispatched_tools(dispatched, messages, on_tool=on_tool)
+
+        context = dependencies.context(
+            transaction=ToolTransaction(harness.txn, harness.tracer.log),
+            dispatch_override_async=harness._dispatch_tool_calls_async,
+            consume_override=consume,
+        )
         with pytest.raises(RuntimeError, match="renderer failed"):
-            await AgentLoop._execute_tools_async(
-                harness,
-                [{}],
-                [],
+            await ProductionToolRuntime().execute_batch_async(
+                context,
+                [call()],
+                dependencies.messages,
                 on_tool=lambda _name, _output: (_ for _ in ()).throw(
                     RuntimeError("renderer failed")
                 ),

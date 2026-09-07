@@ -1,8 +1,30 @@
 """Focused run-scoped capabilities consumed by the production Tool Runtime."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Awaitable, Callable
+
+from nz_coder.runtime.agent.admission import AdmittedAgentHandle
+from nz_coder.runtime.agent.handoffs import AgentGraph, HandoffSignal
+from nz_coder.runtime.session.session_processor import SessionProcessor
+from nz_coder.tool_platform.execution import ToolExecutionResult
+from nz_coder.providers.capabilities import ModelCapabilities
+from nz_coder.runtime.core.tool_contracts import (
+    DispatchedTools,
+    MetadataReporter,
+    ToolBatchObserver,
+    ToolCheckpoint,
+    ToolExecutorPort,
+    ToolResultConsumer,
+    ToolResultTrace,
+    ToolTaskState,
+    ToolTrace,
+    ToolTransactionPort,
+    ToolPolicyPermissions,
+    ToolRecoveryPort,
+    ToolStallPort,
+)
 
 from nz_coder.runtime.core.run_context import RunContext
 
@@ -26,15 +48,15 @@ class ToolPolicyContext:
     """Policy inputs and mutable observations for exactly one run."""
 
     agent_name: str
-    agent_graph: object | None
+    agent_graph: AgentGraph | None
     tool_allowlist: frozenset[str] | None
-    admission_handle: object | None
-    runtime_state: object
-    recovery: object
-    permissions: object
-    stall_orchestrator: object | None
+    admission_handle: AdmittedAgentHandle | None
+    runtime_state: ToolTaskState | None
+    recovery: ToolRecoveryPort
+    permissions: ToolPolicyPermissions
+    stall_orchestrator: ToolStallPort | None
     parse_input: Callable[[object], dict]
-    trace: Callable[..., None]
+    trace: ToolTrace
     observability: dict = field(default_factory=_empty_observability)
     _batch_sequence: int = 0
 
@@ -53,35 +75,44 @@ class ToolPolicyContext:
 class ToolLifecycleContext:
     """Persistence and execution lifecycle operations for one tool run."""
 
-    checkpoint: Callable[[list[dict], str], Awaitable[None]]
-    processor_for_messages: ToolCallback
-    write_override: ToolCallback | None
-    begin_transaction: ToolCallback
-    transaction_active: ToolCallback
-    finish_transaction: ToolCallback
-    metadata_reporter: ToolCallback
-    question_reporter: ToolCallback
-    dispatch_override_async: ToolCallback | None
-    consume_override: ToolCallback | None
-    model_capabilities: object | None
-    describe_read_results: ToolCallback
-    strict_completed: ToolCallback
-    apply_transition: ToolCallback
-    observer: object
-    has_pre_tool_hooks: ToolCallback
-    executor: object
-    execute_one: ToolCallback
-    before_tool: ToolCallback
-    after_tool: ToolCallback
-    trace: ToolCallback
+    checkpoint: ToolCheckpoint
+    drain_progress: Callable[[], Awaitable[None]]
+    processor_for_messages: Callable[[list[dict]], SessionProcessor | None]
+    transaction: ToolTransactionPort
+    metadata_reporter: Callable[[SessionProcessor | None, list[dict]], MetadataReporter]
+    question_reporter: Callable[[SessionProcessor | None, list[dict]], MetadataReporter]
+    model_capabilities: ModelCapabilities | None
+    describe_read_results: Callable[[DispatchedTools, list[dict]], Awaitable[bool]]
+    strict_completed: Callable[[DispatchedTools], bool]
+    apply_transition: Callable[
+        [HandoffSignal, list[dict], SessionProcessor | None], Awaitable[dict | None]
+    ]
+    observer: ToolBatchObserver
+    has_pre_tool_hooks: Callable[[], bool]
+    executor: ToolExecutorPort
+    execute_one: Callable[[dict, int, list[dict]], ToolExecutionResult]
+    before_tool: Callable[
+        [dict, list[dict]], Awaitable[tuple[dict, ToolExecutionResult | None]]
+    ]
+    after_tool: Callable[
+        [dict, ToolExecutionResult, list[dict]], Awaitable[ToolExecutionResult]
+    ]
+    trace: ToolTrace
+    # Explicit legacy-only overrides. Native composition leaves these empty.
+    write_override: Callable[[list[dict]], bool] | None = None
+    dispatch_override_async: (
+        Callable[[list[dict], bool, list[dict]], Awaitable[DispatchedTools]] | None
+    ) = None
+    dispatch_override_sync: (
+        Callable[[list[dict], bool, list[dict]], DispatchedTools] | None
+    ) = None
+    consume_override: ToolResultConsumer | None = None
 
     def __post_init__(self) -> None:
         for name in (
             "checkpoint",
+            "drain_progress",
             "processor_for_messages",
-            "begin_transaction",
-            "transaction_active",
-            "finish_transaction",
             "metadata_reporter",
             "question_reporter",
             "describe_read_results",
@@ -95,9 +126,21 @@ class ToolLifecycleContext:
         ):
             if not callable(getattr(self, name)):
                 raise TypeError(f"ToolLifecycleContext {name} must be callable")
+        if self.executor is None or not callable(
+            getattr(self.executor, "execute_one", None)
+        ):
+            raise TypeError("ToolLifecycleContext requires an executor")
+        if self.transaction is None or not all(
+            callable(getattr(self.transaction, name, None))
+            for name in ("begin", "finish")
+        ):
+            raise TypeError("ToolLifecycleContext requires transaction begin/finish")
         for name in (
-            "post_write", "after_batch", "apply_plan_mode",
-            "capture_snapshot", "record_patch",
+            "post_write",
+            "after_batch",
+            "apply_plan_mode",
+            "capture_snapshot",
+            "record_patch",
         ):
             if not callable(getattr(self.observer, name, None)):
                 raise TypeError(f"ToolLifecycleContext observer must implement {name}")
@@ -107,13 +150,13 @@ class ToolLifecycleContext:
 class ToolProjectionContext:
     """Stable result projection operations separated from AgentLoop."""
 
-    signal_from_metadata: Callable[[dict | None], object | None]
-    record_result: Callable[[object], bool]
-    trace_result: Callable[..., None]
-    stall_orchestrator: object | None
-    after_result: Callable[[list[dict], object, str], None]
+    signal_from_metadata: Callable[[dict | None], HandoffSignal | None]
+    record_result: Callable[[ToolExecutionResult], bool]
+    trace_result: ToolResultTrace
+    stall_orchestrator: ToolStallPort | None
+    after_result: Callable[[list[dict], ToolExecutionResult, str], None]
     available_result_tokens: Callable[[list[dict]], int] | None = None
-    runtime_state: object | None = None
+    runtime_state: ToolTaskState | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -138,6 +181,3 @@ class ToolExecutionContext:
     def __post_init__(self) -> None:
         if self.run is not None and not isinstance(self.run, RunContext):
             raise TypeError("ToolExecutionContext run must be RunContext or None")
-
-
-ToolCallback = Callable[..., Any]

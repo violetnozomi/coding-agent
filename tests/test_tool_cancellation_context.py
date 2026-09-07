@@ -13,12 +13,14 @@ import pytest
 from nz_coder.capabilities.documents import _DocumentInterrupted, _pdf_page_count
 from nz_coder.protocol.message_schema import PARTS_KEY, attach_message_identity
 from nz_coder.foundation.async_utils import to_thread_settled
-from nz_coder.runtime.execution.loop import AgentLoop, _execute_concurrent_async
+from nz_coder.runtime.execution.tool_executor import ToolExecutor
+from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
 from nz_coder.runtime.session.session_processor import SessionProcessor
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools import dispatch, register, scoped_tool_cancellation
+from nz_coder.tools import files  # noqa: F401 -- register the real read_file handler
 from nz_coder.tools.bash import run_bash
-from nz_coder.tools.files import read_file
+from tests.runtime.tool_runtime.standalone.support import Dependencies, Permissions
 
 
 def test_thread_bridge_signals_callback_before_waiting_for_worker():
@@ -97,27 +99,17 @@ def test_cancelled_pdf_read_settles_worker_without_cache_or_completed_toolpart(
     processor = SessionProcessor(assistant)
     processor.register_tool_calls([tool_call])
 
-    class Executor:
-        def execute_one(self, _tool_call, _index):
-            return read_file("slow.pdf")
-
-    class Harness:
-        executor = Executor()
-
-        def _tool_batch_has_write(self, _calls):
-            return False
-
-        async def _dispatch_tool_calls_async(self, calls, _has_write, _messages):
-            return await _execute_concurrent_async(self.executor, calls)
-
-        def _checkpoint_messages(self, _messages, _status):
-            return None
+    dependencies = Dependencies()
+    dependencies.messages = [assistant]
+    dependencies.processor = processor
+    dependencies.executor = ToolExecutor(Permissions())
+    context = dependencies.context()
 
     async def scenario():
-        task = asyncio.create_task(AgentLoop._execute_tools_async(
-            Harness(),
+        task = asyncio.create_task(ProductionToolRuntime().execute_batch_async(
+            context,
             [tool_call],
-            [assistant],
+            dependencies.messages,
             processor=processor,
         ))
         await asyncio.to_thread(started.wait, 1)

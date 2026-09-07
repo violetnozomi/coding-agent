@@ -205,83 +205,39 @@ def test_strict_private_path_policy_tolerates_malformed_path_collections() -> No
     assert rejected == {}
 
 
-def test_strict_private_paths_are_blocked_before_sync_tool_execution() -> None:
-    """Removing the sync pipeline gate would execute this deliberately fatal host."""
-    from types import SimpleNamespace
+def _fatal_execute(call, index, messages):
+    raise AssertionError("strict private tool call reached the executor")
 
+
+def test_strict_private_paths_are_blocked_before_sync_tool_execution() -> None:
     from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
     from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
+    from tests.runtime.tool_runtime.standalone.support import Dependencies
 
-    class Guardrails:
-        async def before_tool(self, _host, tool_call, _messages):
-            return tool_call, None
-
-        async def after_tool(self, _host, _tool_call, result, _messages):
-            return result
-
-    class Hooks:
-        @staticmethod
-        def has_pre_tool_use_hooks():
-            return False
-
-    class Host:
-        runtime_services = SimpleNamespace(guardrails=Guardrails())
-        hooks = Hooks()
-        executor = object()
-
-        @staticmethod
-        def _execute_tool_call_with_hooks(_tool_call, _index, _messages):
-            raise AssertionError("strict private tool call reached the executor")
-
-    calls = _private_path_calls()
+    dependencies = Dependencies()
     with scoped_runtime_overrides(strict_local_tools=True):
         dispatched = ProductionToolRuntime().dispatch_sync(
-            Host(), calls, has_write=True, messages=[], policy_context=_context(),
+            dependencies.context(execute_one=_fatal_execute), _private_path_calls(),
+            has_write=True, messages=[], policy_context=_context(),
         )
-
-    assert [result.metadata["guardrail"] for _, _, result in dispatched] == [
-        "strict_private_path",
-    ] * len(calls)
+    assert [result.metadata["guardrail"] for _, _, result in dispatched] == ["strict_private_path"] * len(_private_path_calls())
+    assert dependencies.executor.calls == []
 
 
 def test_strict_private_paths_are_blocked_before_async_tool_execution() -> None:
-    """Removing the async pipeline gate would execute this deliberately fatal lifecycle."""
     import asyncio
-    from types import SimpleNamespace
-
     from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
     from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
+    from tests.runtime.tool_runtime.standalone.support import Dependencies
 
-    class Lifecycle:
-        executor = object()
-
-        @staticmethod
-        async def before_tool(tool_call, _messages):
-            return tool_call, None
-
-        @staticmethod
-        async def after_tool(_tool_call, result, _messages):
-            return result
-
-        @staticmethod
-        def has_pre_tool_hooks():
-            return False
-
-        @staticmethod
-        def execute_one(_tool_call, _index, _messages):
-            raise AssertionError("strict private tool call reached the executor")
-
-    context = _context()
-    focused = SimpleNamespace(policy=context, lifecycle=Lifecycle())
-    calls = _private_path_calls()
+    dependencies = Dependencies()
     with scoped_runtime_overrides(strict_local_tools=True):
         dispatched = asyncio.run(ProductionToolRuntime().dispatch_async(
-            focused, calls, has_write=True, messages=[], policy_context=context,
+            dependencies.context(execute_one=_fatal_execute), _private_path_calls(),
+            has_write=True, messages=[], policy_context=_context(),
         ))
-
-    assert [result.metadata["guardrail"] for _, _, result in dispatched] == [
-        "strict_private_path",
-    ] * len(calls)
+    assert [result.metadata["guardrail"] for _, _, result in dispatched] == ["strict_private_path"] * len(_private_path_calls())
+    assert dependencies.executor.calls == []
 
 
 def test_focused_policy_denies_tool_outside_agent_allowlist() -> None:

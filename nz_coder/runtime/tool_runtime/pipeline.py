@@ -9,21 +9,20 @@ from __future__ import annotations
 import asyncio
 import copy
 import threading
-from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Awaitable, Callable, TypeVar
+
+from nz_coder.runtime.conversation.model_result import LLMResult
+from nz_coder.runtime.session.session_processor import SessionProcessor
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.async_utils import to_thread_settled as _to_thread_settled
-from nz_coder.runtime.adapters.tool import (
-    policy_context_from_legacy_host,
-    projection_context_from_legacy_host,
-    tool_context_from_legacy_host,
-)
+from nz_coder.foundation.async_utils import await_settled
 from nz_coder.runtime.core.tool_context import ToolExecutionContext, ToolPolicyContext
+from nz_coder.runtime.core.tool_contracts import (
+    ApprovedToolBatch as ApprovedToolBatch, DispatchedTools, ToolBatchState, ToolDisplay, TextDisplay, ToolCheckpoint,
+)
 from nz_coder.runtime.agent.guardrails import GuardrailEscalateError
-from nz_coder.runtime.agent.guardrail_runtime import ProductionGuardrailRuntime
 from nz_coder.runtime.agent.auto_mode import parse_tool_arguments
-from nz_coder.runtime.conversation.input_preflight import ProductionInputPreflight
 from nz_coder.tool_platform.execution import (
     ToolExecutionResult,
     is_transactional_write_tool,
@@ -50,14 +49,6 @@ from nz_coder.tools.question import scoped_question_lifecycle_reporter
 from nz_coder.runtime.process.checkpoint_runtime import register_batch, settle_batch, overlay_recovery, abort_registered
 
 
-@dataclass
-class ApprovedToolBatch:
-    """Tool calls that crossed repair/guardrail admission exactly once."""
-
-    calls: list[dict]
-    blocked: dict[int, ToolExecutionResult] = field(default_factory=dict)
-
-
 class ProductionToolRuntime:
     """Settle one tool batch through the canonical lifecycle."""
 
@@ -71,19 +62,21 @@ class ProductionToolRuntime:
 
     def execute_batch_sync(
         self,
-        host,
-        tool_calls_raw: list,
-        messages: list,
-        on_tool=None,
-        on_text=None,
+        context: ToolExecutionContext,
+        tool_calls_raw: list[dict],
+        messages: list[dict],
+        on_tool: ToolDisplay | None = None,
+        on_text: TextDisplay | None = None,
         *,
-        processor: Any | None = None,
-        usage: Any | None = None,
+        processor: SessionProcessor | None = None,
+        usage: LLMResult | None = None,
     ) -> str:
         """Execute one batch against one immutable dynamic-tool generation."""
+        _require_context(context)
+        _require_sync_entry()
         with scoped_dynamic_tool_snapshot():
             return self._execute_batch_sync_snapshot(
-                host,
+                context,
                 tool_calls_raw,
                 messages,
                 on_tool=on_tool,
@@ -94,34 +87,32 @@ class ProductionToolRuntime:
 
     def approve_tool_calls_sync(
         self,
-        host,
-        tool_calls_raw: list,
-        messages: list,
+        context: ToolExecutionContext,
+        tool_calls_raw: list[dict],
+        messages: list[dict],
     ) -> ApprovedToolBatch:
         """Apply tool guardrails before any SessionProcessor publication."""
+        _require_context(context)
+        _require_sync_entry()
         original, repairs = normalize_raw_tool_calls(
             copy.deepcopy(list(tool_calls_raw[:current_run_settings().max_tool_calls])),
             _candidate_tool_names(),
         )
-        trace = getattr(getattr(host, "tracer", None), "log", lambda *_a, **_k: None)
+        _require_context(context)
+        trace = context.lifecycle.trace
         for repair in repairs:
             trace("tool_call_repaired", **repair)
         calls: list[dict] = []
         blocked: dict[int, ToolExecutionResult] = {}
-        guardrails = _guardrail_runtime(host)
-        before_tool = getattr(guardrails, "before_tool_sync", guardrails.before_tool)
+        before_tool = context.lifecycle.before_tool
         for index, tool_call in enumerate(original):
-            guarded, rejected = asyncio.run(before_tool(host, tool_call, messages))
-            function = guarded.get("function", {})
-            parsed = parse_tool_arguments(function.get("arguments", {}))
-            if parsed is None:
-                parsed = {}
-                rejected = rejected or _invalid_tool_arguments_result(guarded)
-            calls.append(approved_tool_call(guarded, parsed).to_wire())
+            guarded, rejected = _run_sync(before_tool(tool_call, messages))
+            approved, rejected = _normalize_guarded_call(guarded, rejected)
+            calls.append(approved)
             if rejected is not None:
                 blocked[index] = rejected
         blocked.update(self._static_policy_rejections(
-            policy_context_from_legacy_host(host),
+            context.policy,
             calls,
         ))
         return ApprovedToolBatch(calls, blocked)
@@ -129,10 +120,11 @@ class ProductionToolRuntime:
     async def approve_tool_calls_async(
         self,
         context: ToolExecutionContext,
-        tool_calls_raw: list,
-        messages: list,
+        tool_calls_raw: list[dict],
+        messages: list[dict],
     ) -> ApprovedToolBatch:
         """Apply tool guardrails/admission while raw envelopes stay private."""
+        _require_context(context)
         original, repairs = normalize_raw_tool_calls(
             copy.deepcopy(list(tool_calls_raw[:current_run_settings().max_tool_calls])),
             _candidate_tool_names(),
@@ -146,12 +138,8 @@ class ProductionToolRuntime:
                 tool_call,
                 messages,
             )
-            function = guarded.get("function", {})
-            parsed = parse_tool_arguments(function.get("arguments", {}))
-            if parsed is None:
-                parsed = {}
-                rejected = rejected or _invalid_tool_arguments_result(guarded)
-            calls.append(approved_tool_call(guarded, parsed).to_wire())
+            approved, rejected = _normalize_guarded_call(guarded, rejected)
+            calls.append(approved)
             if rejected is not None:
                 blocked[index] = rejected
         blocked.update(self._static_policy_rejections(context.policy, calls))
@@ -175,24 +163,24 @@ class ProductionToolRuntime:
 
     def _execute_batch_sync_snapshot(
         self,
-        host,
-        tool_calls_raw: list,
-        messages: list,
-        on_tool=None,
-        on_text=None,
+        context: ToolExecutionContext,
+        tool_calls_raw: list[dict],
+        messages: list[dict],
+        on_tool: ToolDisplay | None = None,
+        on_text: TextDisplay | None = None,
         *,
-        processor: Any | None = None,
-        usage: Any | None = None,
+        processor: SessionProcessor | None = None,
+        usage: LLMResult | None = None,
         approved_batch: ApprovedToolBatch | None = None,
     ) -> str:
         """执行一批工具调用，并分发执行后的状态更新。"""
-        policy_context = policy_context_from_legacy_host(host)
-        projection_context = projection_context_from_legacy_host(host)
-        resolver = getattr(host, "_processor_for_latest_assistant", None)
-        if processor is None and callable(resolver):
-            processor = resolver(messages)
+        _require_context(context)
+        policy_context = context.policy
+        lifecycle = context.lifecycle
+        if processor is None:
+            processor = lifecycle.processor_for_messages(messages)
         approved_batch = approved_batch or self.approve_tool_calls_sync(
-            host,
+            context,
             tool_calls_raw,
             messages,
         )
@@ -201,45 +189,34 @@ class ProductionToolRuntime:
             register_batch(messages, approved_batch.calls)
             if processor is not None:
                 processor.start_tools(approved_batch.calls)
-                host._checkpoint_messages(messages, "running")
+                _run_sync(lifecycle.checkpoint(messages, "running"))
         except BaseException as exc:
             abort_registered(approved_batch.calls, error=exc)
             raise
-        write_override = _legacy_dispatch_override(host, "_tool_batch_has_write")
+        write_override = lifecycle.write_override
         has_write = (
             write_override(tool_calls_raw)
             if write_override is not None
             else self.policy.tool_batch_has_write(policy_context, tool_calls_raw)
         )
-        if has_write:
-            host.txn.begin()
-
         transaction_finished = False
-        callback_factory = getattr(host, "_tool_metadata_callback", None)
-        reporter = (
-            callback_factory(processor, messages)
-            if callable(callback_factory)
-            else (lambda _title, _metadata: None)
-        )
-        question_factory = getattr(host, "_question_lifecycle_callback", None)
-        question_reporter = (
-            question_factory(processor, messages)
-            if callable(question_factory)
-            else (lambda _action, _payload: None)
-        )
+        failure_stage = "transaction_begin"
         try:
+            if has_write:
+                lifecycle.transaction.begin()
+            reporter = lifecycle.metadata_reporter(processor, messages)
+            question_reporter = lifecycle.question_reporter(processor, messages)
+            failure_stage = "dispatch_and_output_admission"
             with (
                 scoped_tool_metadata_reporter(reporter),
                 scoped_question_lifecycle_reporter(question_reporter),
             ):
-                legacy_dispatch = _legacy_dispatch_override(
-                    host, "_dispatch_tool_calls",
-                )
+                legacy_dispatch = lifecycle.dispatch_override_sync
                 dispatched = (
                     legacy_dispatch(tool_calls_raw, has_write, messages)
                     if legacy_dispatch is not None
                     else self.dispatch_sync(
-                        host,
+                        context,
                         tool_calls_raw,
                         has_write,
                         messages,
@@ -247,135 +224,69 @@ class ProductionToolRuntime:
                         approved_batch=approved_batch,
                     )
                 )
+            failure_stage = "progress_checkpoint"
+            _run_sync(lifecycle.drain_progress())
+            failure_stage = "media_description"
             describe_interrupted = False
-            if _has_read_image_result(dispatched, getattr(host, "model_capabilities", None)):
+            if _has_read_image_result(dispatched, lifecycle.model_capabilities):
                 try:
                     asyncio.get_running_loop()
                 except RuntimeError:
-                    describe_interrupted = asyncio.run(
-                        _input_preflight(host).describe_read_results(
-                            host, dispatched, messages,
-                        )
+                    describe_interrupted = _run_sync(
+                        lifecycle.describe_read_results(dispatched, messages)
                     )
                 else:
-                    host.tracer.log(
+                    lifecycle.trace(
                         "read_image_describe_skipped",
                         reason="sync_tool_pipeline_inside_event_loop",
                     )
-            settle_batch(dispatched, messages)
-            consume_kwargs = {"on_tool": on_tool}
-            if processor is not None:
-                consume_kwargs["processor"] = processor
-            consume_override = _legacy_dispatch_override(
-                host, "_consume_dispatched_tools",
-            )
-            batch_state = (
-                consume_override(dispatched, messages, **consume_kwargs)
-                if consume_override is not None
-                else self.results.consume(
-                    projection_context, dispatched, messages, **consume_kwargs,
-                )
-            )
-            if host._strict_verification_completed(dispatched):
-                batch_state["terminal"] = True
-            host._finish_tool_transaction(
-                has_write,
-                batch_state["all_succeeded"],
-                messages,
-            )
+            failure_stage = "result_settlement"
+            batch_state = self._settle_results(context, dispatched, messages, on_tool, processor)
+            failure_stage = "transaction_finish"
+            lifecycle.transaction.finish(has_write, batch_state["all_succeeded"], messages)
             transaction_finished = True
             signal = batch_state.get("handoff_signal")
             if signal is not None:
-                transition = host.runtime_services.transitions.apply(
-                    host, signal, messages, processor,
-                )
+                transition = _run_sync(lifecycle.apply_transition(signal, messages, processor))
                 batch_state["agent_transition"] = transition
                 batch_state["terminal"] = bool(
                     transition and transition.get("terminal")
                 )
-                host._notify_agent_switched(transition)
             if describe_interrupted:
                 raise asyncio.CancelledError
         except BaseException as exc:
-            abort_registered(approved_batch.calls, error=exc)
-            if processor is not None:
-                processor.interrupt_unsettled()
-                host._checkpoint_messages(messages, "interrupted")
-            if has_write and not transaction_finished and host.txn.active:
-                host._finish_tool_transaction(has_write, False, messages)
+            _run_sync(self._cleanup_failed_batch(
+                context, approved_batch.calls, messages, processor, has_write,
+                transaction_finished, exc, lifecycle.checkpoint, failure_stage,
+            ))
             raise
 
-        if has_write and batch_state["all_succeeded"]:
-            if host._admission_session is not None:
-                for _index, _tool_call, result in dispatched:
-                    host._admission_session.record_committed_mutation(result)
-            host.recovery.reset_tool_call_history(reason="workspace_changed")
-            self.policy.trace_tool_streak_reset(policy_context)
-            host._refresh_patch_risk(messages)
-            host._refresh_code_index(dispatched)
-            host._attach_lsp_write_diagnostics(dispatched, messages)
-        host.hooks.after_tool_batch(
-            host,
-            messages,
-            manual_compact=batch_state["manual_compact"],
-            used_todo=batch_state["used_todo"],
-            on_text=on_text,
-            write_total=batch_state["write_total"],
-            write_denied=batch_state["write_denied"],
-        )
-        host._apply_pending_plan_mode()
+        self._post_batch(context, dispatched, messages, has_write, batch_state, on_text)
         if processor is not None:
-            finish_snapshot = (
-                host._capture_step_snapshot("step-finish", processor.message_id)
-                if processor.step_snapshot else None
-            )
-            processor.finish_step(
-                (usage.finish_reason if usage is not None else "") or "tool-calls",
-                input_tokens=(usage.input_tokens if usage is not None else 0),
-                output_tokens=(usage.output_tokens if usage is not None else 0),
-                total_tokens=(usage.total_tokens if usage is not None else 0),
-                reasoning_tokens=(usage.reasoning_tokens if usage is not None else 0),
-                cache_read_tokens=(usage.cache_read_tokens if usage is not None else 0),
-                cache_write_tokens=(usage.cache_write_tokens if usage is not None else 0),
-                cost=(usage.cost if usage is not None and usage.cost_known else None),
-                snapshot=finish_snapshot,
-            )
-            host._record_step_patch(messages, processor, finish_snapshot)
-            host._checkpoint_messages(messages, "running")
-        action = (
-            processor.process_result()
-            if processor is not None
-            else ("stop" if batch_state["blocked"] else "continue")
-        )
-        if batch_state.get("terminal"):
-            action = "terminal"
-        host.tracer.log(
-            "step_processor_result",
-            result=action,
-            blocked=bool(batch_state["blocked"]),
-            tool_calls=len(tool_calls_raw),
-        )
-        return action
+            finish_snapshot = _run_sync(lifecycle.observer.capture_snapshot(processor))
+            _complete_processor(processor, usage, finish_snapshot)
+            lifecycle.observer.record_patch(messages, processor, finish_snapshot)
+            _run_sync(lifecycle.checkpoint(messages, "running"))
+        return self._result_action(context, processor, batch_state, len(tool_calls_raw))
 
     async def execute_batch_async(
         self,
-        owner,
-        tool_calls_raw: list,
-        messages: list,
-        on_tool=None,
-        on_text=None,
+        context: ToolExecutionContext,
+        tool_calls_raw: list[dict],
+        messages: list[dict],
+        on_tool: ToolDisplay | None = None,
+        on_text: TextDisplay | None = None,
         *,
-        processor: Any | None = None,
-        usage: Any | None = None,
+        processor: SessionProcessor | None = None,
+        usage: LLMResult | None = None,
         finish_step: bool = True,
         checkpoint: Callable[[str], Awaitable[None]] | None = None,
-        tool_context: ToolExecutionContext | None = None,
         approved_batch: ApprovedToolBatch | None = None,
     ) -> str:
         """Execute one async batch against one dynamic-tool generation."""
         with scoped_dynamic_tool_snapshot():
             return await self._execute_batch_async_snapshot(
-                owner,
+                context,
                 tool_calls_raw,
                 messages,
                 on_tool=on_tool,
@@ -384,40 +295,35 @@ class ProductionToolRuntime:
                 usage=usage,
                 finish_step=finish_step,
                 checkpoint=checkpoint,
-                tool_context=tool_context,
                 approved_batch=approved_batch,
             )
 
     async def _execute_batch_async_snapshot(
         self,
-        owner,
-        tool_calls_raw: list,
-        messages: list,
-        on_tool=None,
-        on_text=None,
+        context: ToolExecutionContext,
+        tool_calls_raw: list[dict],
+        messages: list[dict],
+        on_tool: ToolDisplay | None = None,
+        on_text: TextDisplay | None = None,
         *,
-        processor: Any | None = None,
-        usage: Any | None = None,
+        processor: SessionProcessor | None = None,
+        usage: LLMResult | None = None,
         finish_step: bool = True,
         checkpoint: Callable[[str], Awaitable[None]] | None = None,
-        tool_context: ToolExecutionContext | None = None,
         approved_batch: ApprovedToolBatch | None = None,
     ) -> str:
         """Async variant of one tool batch execution."""
-        context = (
-            owner
-            if isinstance(owner, ToolExecutionContext)
-            else tool_context or tool_context_from_legacy_host(owner)
-        )
+        _require_context(context)
         policy_context = context.policy
         lifecycle = context.lifecycle
         if processor is None:
             processor = lifecycle.processor_for_messages(messages)
 
         async def checkpoint_state(status: str) -> None:
+            await lifecycle.drain_progress()
             overlay_recovery(messages)
             if checkpoint is not None:
-                await checkpoint(status)
+                await await_settled(checkpoint(status))
             else:
                 await lifecycle.checkpoint(messages, status)
 
@@ -441,13 +347,14 @@ class ProductionToolRuntime:
             if write_override is not None
             else self.policy.tool_batch_has_write(policy_context, tool_calls_raw)
         )
-        if has_write:
-            lifecycle.begin_transaction()
-
         transaction_finished = False
-        reporter = lifecycle.metadata_reporter(processor, messages)
-        question_reporter = lifecycle.question_reporter(processor, messages)
+        failure_stage = "transaction_begin"
         try:
+            if has_write:
+                lifecycle.transaction.begin()
+            reporter = lifecycle.metadata_reporter(processor, messages)
+            question_reporter = lifecycle.question_reporter(processor, messages)
+            failure_stage = "dispatch_and_output_admission"
             with (
                 scoped_tool_metadata_reporter(reporter),
                 scoped_question_lifecycle_reporter(question_reporter),
@@ -462,28 +369,16 @@ class ProductionToolRuntime:
                         approved_batch=approved_batch,
                     )
                 )
+            failure_stage = "progress_checkpoint"
+            await lifecycle.drain_progress()
+            failure_stage = "media_description"
             describe_interrupted = await lifecycle.describe_read_results(
                 dispatched, messages,
             )
-            settle_batch(dispatched, messages)
-            consume_kwargs = {"on_tool": on_tool}
-            if processor is not None:
-                consume_kwargs["processor"] = processor
-            consume_override = lifecycle.consume_override
-            batch_state = (
-                consume_override(dispatched, messages, **consume_kwargs)
-                if consume_override is not None
-                else self.results.consume(
-                    context.projection, dispatched, messages, **consume_kwargs,
-                )
-            )
-            if lifecycle.strict_completed(dispatched):
-                batch_state["terminal"] = True
-            lifecycle.finish_transaction(
-                has_write,
-                batch_state["all_succeeded"],
-                messages,
-            )
+            failure_stage = "result_settlement"
+            batch_state = self._settle_results(context, dispatched, messages, on_tool, processor)
+            failure_stage = "transaction_finish"
+            lifecycle.transaction.finish(has_write, batch_state["all_succeeded"], messages)
             transaction_finished = True
             signal = batch_state.get("handoff_signal")
             if signal is not None:
@@ -497,42 +392,26 @@ class ProductionToolRuntime:
             if describe_interrupted:
                 raise asyncio.CancelledError
         except BaseException as exc:
-            abort_registered(approved_batch.calls, error=exc)
-            policy_escalation = isinstance(exc, GuardrailEscalateError)
-            if processor is not None:
-                # Escalation belongs to the Runner's atomic policy boundary.
-                # Settling here would publish an intermediate checkpoint and
-                # make the same failed attempt observable twice.
-                if not policy_escalation:
-                    processor.interrupt_unsettled()
-                    await checkpoint_state("interrupted")
-            # Executor cancellation cannot stop an already-running write. The
-            # scheduler drains it before re-raising, then this rollback keeps
-            # late side effects from escaping an interrupted Agent turn.
-            if has_write and not transaction_finished and lifecycle.transaction_active():
-                lifecycle.finish_transaction(has_write, False, messages)
+            async def interrupted_checkpoint(transcript: list[dict], status: str) -> None:
+                await checkpoint_state(status)
+            await self._cleanup_failed_batch(
+                context, approved_batch.calls, messages, processor, has_write,
+                transaction_finished, exc, interrupted_checkpoint, failure_stage,
+            )
             raise
 
-        if has_write and batch_state["all_succeeded"]:
-            lifecycle.observer.post_write(dispatched, messages)
-            self.policy.trace_tool_streak_reset(policy_context)
-        lifecycle.observer.after_batch(messages, batch_state, on_text)
-        lifecycle.observer.apply_plan_mode()
+        self._post_batch(context, dispatched, messages, has_write, batch_state, on_text)
         if processor is not None and finish_step:
             finish_snapshot = await lifecycle.observer.capture_snapshot(processor)
-            processor.finish_step(
-                (usage.finish_reason if usage is not None else "") or "tool-calls",
-                input_tokens=(usage.input_tokens if usage is not None else 0),
-                output_tokens=(usage.output_tokens if usage is not None else 0),
-                total_tokens=(usage.total_tokens if usage is not None else 0),
-                reasoning_tokens=(usage.reasoning_tokens if usage is not None else 0),
-                cache_read_tokens=(usage.cache_read_tokens if usage is not None else 0),
-                cache_write_tokens=(usage.cache_write_tokens if usage is not None else 0),
-                cost=(usage.cost if usage is not None and usage.cost_known else None),
-                snapshot=finish_snapshot,
-            )
+            _complete_processor(processor, usage, finish_snapshot)
             lifecycle.observer.record_patch(messages, processor, finish_snapshot)
             await checkpoint_state("running")
+        return self._result_action(context, processor, batch_state, len(tool_calls_raw))
+
+
+    @staticmethod
+    def _result_action(context: ToolExecutionContext, processor: SessionProcessor | None,
+                       batch_state: ToolBatchState, call_count: int) -> str:
         action = (
             processor.process_result()
             if processor is not None
@@ -540,30 +419,113 @@ class ProductionToolRuntime:
         )
         if batch_state.get("terminal"):
             action = "terminal"
-        lifecycle.trace(
+        context.lifecycle.trace(
             "step_processor_result",
             result=action,
             blocked=bool(batch_state["blocked"]),
-            tool_calls=len(tool_calls_raw),
+            tool_calls=call_count,
         )
         return action
+
+    def _settle_results(self, context: ToolExecutionContext, dispatched: DispatchedTools,
+                        messages: list[dict], on_tool: ToolDisplay | None,
+                        processor: SessionProcessor | None) -> ToolBatchState:
+        """Share admission, observations and completion classification across drivers."""
+        settle_batch(dispatched, messages)
+        consume = context.lifecycle.consume_override
+        state = (
+            consume(dispatched, messages, on_tool=on_tool, processor=processor)
+            if consume is not None else self.results.consume(
+                context.projection, dispatched, messages, on_tool=on_tool, processor=processor,
+            )
+        )
+        if context.lifecycle.strict_completed(dispatched):
+            state["terminal"] = True
+        return state
+
+    async def _cleanup_failed_batch(self, context: ToolExecutionContext, calls: list[dict],
+                                    messages: list[dict], processor: SessionProcessor | None,
+                                    has_write: bool, transaction_finished: bool,
+                                    original: BaseException, checkpoint: ToolCheckpoint,
+                                    failure_stage: str = "tool_batch") -> None:
+        """Keep the primary error; cleanup failures cannot prevent compensation."""
+        lifecycle = context.lifecycle
+        identity = {
+            "session_id": context.run.session.session_id if context.run is not None else "",
+            "interaction_id": context.run.interaction_run_id if context.run is not None else "",
+            "assistant_step_id": processor.message_id if processor is not None else "",
+            "call_ids": [str(call.get("id", "")) for call in calls],
+            "primary_error_type": type(original).__name__,
+            "failure_stage": failure_stage,
+        }
+
+        def trace_failure(stage, error):
+            # Do not emit exception strings, tool input, output or local secrets.
+            try:
+                lifecycle.trace("tool_batch_cleanup_failed", **identity,
+                                stage=stage, error_type=type(error).__name__,
+                                transaction_active=lifecycle.transaction.active)
+            except Exception:
+                pass
+            add_note = getattr(original, "add_note", None)
+            if callable(add_note):
+                add_note(f"Tool batch cleanup {stage} failed ({type(error).__name__})")
+
+        try:
+            lifecycle.trace("tool_batch_failed", **identity,
+                            transaction_active=lifecycle.transaction.active)
+        except Exception:
+            pass
+        try:
+            abort_registered(calls, error=original)
+        except BaseException as error:
+            trace_failure("execution_settlement", error)
+        # Started workers have already drained at the scheduler boundary.
+        # Compensate before publishing interrupted state, including after a
+        # failed commit. A partial rollback remains active and is not success.
+        if has_write and not transaction_finished and lifecycle.transaction.active:
+            try:
+                lifecycle.transaction.finish(has_write, False, messages)
+            except BaseException as error:
+                trace_failure("compensation", error)
+        try:
+            await lifecycle.drain_progress()
+        except BaseException as error:
+            trace_failure("progress", error)
+        if processor is not None and not isinstance(original, GuardrailEscalateError):
+            try:
+                processor.interrupt_unsettled()
+                await checkpoint(messages, "interrupted")
+            except BaseException as error:
+                trace_failure("checkpoint", error)
+
+
+    def _post_batch(self, context: ToolExecutionContext, dispatched: DispatchedTools,
+                    messages: list[dict], has_write: bool, batch_state: ToolBatchState,
+                    on_text: TextDisplay | None) -> None:
+        """Shared committed-write and product-effect ordering for both drivers."""
+        if has_write and batch_state["all_succeeded"]:
+            context.lifecycle.observer.post_write(dispatched, messages)
+            self.policy.trace_tool_streak_reset(context.policy)
+        context.lifecycle.observer.after_batch(messages, batch_state, on_text)
+        context.lifecycle.observer.apply_plan_mode()
 
 
     def dispatch_sync(
         self,
-        host,
-        tool_calls_raw: list,
+        context: ToolExecutionContext,
+        tool_calls_raw: list[dict],
         has_write: bool,
-        messages: list,
+        messages: list[dict],
         *,
         policy_context: ToolPolicyContext | None = None,
         approved_batch: ApprovedToolBatch | None = None,
-    ) -> list:
+    ) -> DispatchedTools:
         """只分发本轮允许执行的工具调用前缀。"""
 
-        policy_context = policy_context or policy_context_from_legacy_host(host)
+        policy_context = policy_context or context.policy
         approved_batch = approved_batch or self.approve_tool_calls_sync(
-            host,
+            context,
             tool_calls_raw,
             messages,
         )
@@ -580,9 +542,9 @@ class ProductionToolRuntime:
         blocked.update(guardrail_blocked)
         mode = "scheduled"
         try:
-            if len(will_execute) > 1 and not blocked and not host.hooks.has_pre_tool_use_hooks():
+            if len(will_execute) > 1 and not blocked and not context.lifecycle.has_pre_tool_hooks():
                 dispatched = _execute_scheduled(
-                    host.executor,
+                    context.lifecycle.executor,
                     will_execute,
                     lambda call: self.policy.tool_call_can_run_concurrently(
                         policy_context, call,
@@ -595,7 +557,7 @@ class ProductionToolRuntime:
                     (
                         i,
                         tc,
-                        blocked.get(i) or host._execute_tool_call_with_hooks(tc, i, messages),
+                        blocked.get(i) or context.lifecycle.execute_one(tc, i, messages),
                     )
                     for i, tc in enumerate(will_execute)
                 ]
@@ -616,11 +578,7 @@ class ProductionToolRuntime:
                 tool_call,
                 result
                 if index in guardrail_blocked
-                else asyncio.run(
-                    _guardrail_runtime(host).after_tool(
-                        host, tool_call, result, messages,
-                    )
-                ),
+                else _run_sync(context.lifecycle.after_tool(tool_call, result, messages)),
             )
             for index, tool_call, result in dispatched
         ]
@@ -637,13 +595,13 @@ class ProductionToolRuntime:
     async def dispatch_async(
         self,
         context: ToolExecutionContext,
-        tool_calls_raw: list,
+        tool_calls_raw: list[dict],
         has_write: bool,
-        messages: list,
+        messages: list[dict],
         *,
         policy_context: ToolPolicyContext | None = None,
         approved_batch: ApprovedToolBatch | None = None,
-    ) -> list:
+    ) -> DispatchedTools:
         """Async variant for dispatching the executable tool prefix."""
         policy_context = policy_context or context.policy
         lifecycle = context.lifecycle
@@ -719,6 +677,32 @@ class ProductionToolRuntime:
         return dispatched
 
 
+def _complete_processor(processor: SessionProcessor, usage: LLMResult | None,
+                        finish_snapshot: str | None) -> None:
+    """One shared final usage/snapshot projection for sync and async drivers."""
+    processor.finish_step(
+        (usage.finish_reason if usage is not None else "") or "tool-calls",
+        input_tokens=(usage.input_tokens if usage is not None else 0),
+        output_tokens=(usage.output_tokens if usage is not None else 0),
+        total_tokens=(usage.total_tokens if usage is not None else 0),
+        reasoning_tokens=(usage.reasoning_tokens if usage is not None else 0),
+        cache_read_tokens=(usage.cache_read_tokens if usage is not None else 0),
+        cache_write_tokens=(usage.cache_write_tokens if usage is not None else 0),
+        cost=(usage.cost if usage is not None and usage.cost_known else None),
+        snapshot=finish_snapshot,
+    )
+
+
+def _normalize_guarded_call(guarded: dict, rejected: ToolExecutionResult | None) -> tuple[dict, ToolExecutionResult | None]:
+    """Pure approved-input normalization, shared by both admission drivers."""
+    function = guarded.get("function", {})
+    parsed = parse_tool_arguments(function.get("arguments", {}))
+    if parsed is None:
+        parsed = {}
+        rejected = rejected or _invalid_tool_arguments_result(guarded)
+    return approved_tool_call(guarded, parsed).to_wire(), rejected
+
+
 def _has_read_image_result(dispatched: list, capabilities) -> bool:
     """Return whether a non-vision host must describe Read image attachments."""
     if bool(getattr(capabilities, "supports_image_input", False)):
@@ -759,47 +743,32 @@ def _invalid_tool_arguments_result(tool_call: dict) -> ToolExecutionResult:
     )
 
 
-def _guardrail_runtime(host):
-    """Resolve the production service or its compatibility implementation."""
-    services = getattr(host, "runtime_services", None)
-    return (
-        services.guardrails
-        if services is not None
-        else ProductionGuardrailRuntime()
-    )
+
+_T = TypeVar("_T")
 
 
-def _input_preflight(host):
-    """Resolve the production service or its compatibility implementation."""
-    services = getattr(host, "runtime_services", None)
-    return services.inputs if services is not None else ProductionInputPreflight()
-
-
-def _legacy_dispatch_override(host, name: str):
-    """Honor characterization harness overrides without coupling to AgentLoop."""
-    candidate = getattr(host, name, None)
-    if not callable(candidate):
-        return None
-    function = getattr(candidate, "__func__", candidate)
-    if getattr(function, "__module__", "") == "nz_coder.runtime.execution.loop":
-        return None
-    return candidate
-
-
-async def _checkpoint_async(
-    host,
-    messages: list,
-    status: str,
-    checkpoint: Callable[[str], Awaitable[None]] | None,
-) -> None:
-    """Persist through SessionRuntime, with fallback only outside active runs."""
-    if checkpoint is not None:
-        await checkpoint(status)
+def _require_sync_entry() -> None:
+    """Reject before registration; a sync driver cannot own a running event loop."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
         return
-    if getattr(host, "active_run_context", None) is not None:
-        raise RuntimeError(
-            "Active Tool Runtime requires a SessionRuntime checkpoint callback"
-        )
-    legacy = getattr(host, "_checkpoint_messages", None)
-    if callable(legacy):
-        legacy(messages, status)
+    raise RuntimeError("Use execute_batch_async inside a running event loop")
+
+
+def _run_sync(operation: Awaitable[_T]) -> _T:
+    """Sync I/O adapter; never nest a loop or block its own async checkpoint."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        async def run() -> _T:
+            return await operation
+        return asyncio.run(run())
+    if asyncio.iscoroutine(operation):
+        operation.close()
+    raise RuntimeError("Synchronous ToolRuntime requires a thread without a running event loop; use execute_batch_async")
+
+
+def _require_context(context: ToolExecutionContext) -> None:
+    if not isinstance(context, ToolExecutionContext):
+        raise TypeError("ToolRuntime requires ToolExecutionContext; adapt legacy hosts outside the core")

@@ -481,11 +481,11 @@ def test_first_request_never_republishes_pre_guardrail_tool_output(monkeypatch, 
 
 @pytest.mark.parametrize("checkpoint_cancel", [False, True])
 def test_unstarted_batch_tail_reaches_first_request_as_cancelled_not_process_lost(monkeypatch, tmp_path, checkpoint_cancel):
-    from tests.runtime.tool_runtime.test_session_checkpoint import _Harness, _Processor
+    from tests.runtime.tool_runtime.standalone.support import Dependencies
     from nz_coder.runtime.execution.tool_executor import ToolExecutor
     from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
-    from nz_coder.runtime.tool_runtime.scheduler import _execute_scheduled
     from nz_coder.runtime.process.checkpoint_runtime import recovery_run
+    from nz_coder.runtime.session.session_processor import SessionProcessor
     from nz_coder.state.workdir import scoped_workdir
     from nz_coder.tools import files  # noqa: F401
 
@@ -495,20 +495,28 @@ def test_unstarted_batch_tail_reaches_first_request_as_cancelled_not_process_los
         raise asyncio.CancelledError()
     monkeypatch.setattr("nz_coder.runtime.execution.tool_executor.dispatch", cancel)
     executor = ToolExecutor(SimpleNamespace(check=lambda *_: {"behavior": "allow"}))
-    class Harness(_Harness):
-        async def _dispatch_tool_calls_async(self, calls, has_write, messages):
-            return _execute_scheduled(executor, calls, lambda _: False)
     calls = [{"id": f"call-tail-{index}", "type": "function", "function": {"name": "read_file", "arguments": {"path": f"{index}.txt"}}} for index in range(2)]
     messages = [{"role": "user", "content": "Read two files then verify", "_nz_message_id": "msg-user"},
                 {"role": "assistant", "content": "", "_nz_message_id": "msg-tools"}]
-    async def checkpoint(status):
+    dependencies = Dependencies()
+    dependencies.messages = messages
+    dependencies.processor = SessionProcessor(messages[-1])
+    dependencies.processor.start_step()
+    dependencies.executor = executor
+    dependencies.prepare(calls)
+
+    async def checkpoint(transcript, status):
+        assert transcript is messages
         if checkpoint_cancel and status == "running":
             raise asyncio.CancelledError()
+
+    context = dependencies.context(checkpoint=checkpoint, has_pre_tool_hooks=lambda: True)
+
     async def scenario():
         with scoped_workdir(tmp_path), recovery_run(tmp_path, "recovery-session") as run:
             run.attach("interaction-old", messages)
             with pytest.raises(asyncio.CancelledError):
-                await ProductionToolRuntime().execute_batch_async(Harness(), calls, messages, processor=_Processor(), checkpoint=checkpoint)
+                await ProductionToolRuntime().execute_batch_async(context, calls, messages)
     asyncio.run(scenario())
     assert len(dispatched) == (0 if checkpoint_cancel else 1)
     request = _native_request(monkeypatch, tmp_path, _history([]))

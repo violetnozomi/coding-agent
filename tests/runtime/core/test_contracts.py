@@ -91,6 +91,8 @@ class FakeGuardrailRuntime:
     async def before_tool(self, host, tool_call, messages):  # noqa: ANN001
         return tool_call, None
 
+    before_tool_sync = before_tool
+
     async def after_tool(self, host, tool_call, result, messages):  # noqa: ANN001
         return result
 

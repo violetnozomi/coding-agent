@@ -104,6 +104,8 @@ class PassThroughGuardrails:
     async def before_tool(self, host, tool_call, messages):
         return tool_call, None
 
+    before_tool_sync = before_tool
+
     async def after_tool(self, host, tool_call, result, messages):
         return result
 

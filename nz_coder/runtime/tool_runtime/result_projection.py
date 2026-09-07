@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from nz_coder.runtime.core.tool_context import ToolProjectionContext
+from nz_coder.runtime.core.tool_contracts import DispatchedTools, ToolBatchState, ToolDisplay
+from nz_coder.runtime.session.session_processor import SessionProcessor
+from nz_coder.tool_platform.execution import ToolExecutionResult
 from nz_coder.tool_platform.permissioning.interaction import format_tool_summary
 from nz_coder.tool_platform.results import ToolResultProjector
 
@@ -20,13 +23,13 @@ class ProductionToolResultProjector:
     def consume(
         self,
         context: ToolProjectionContext,
-        dispatched: list,
-        messages: list,
+        dispatched: DispatchedTools,
+        messages: list[dict],
         *,
-        on_tool=None,
-        processor=None,
-    ) -> dict:
-        state = {
+        on_tool: ToolDisplay | None = None,
+        processor: SessionProcessor | None = None,
+    ) -> ToolBatchState:
+        state: ToolBatchState = {
             "manual_compact": False,
             "used_todo": False,
             "all_succeeded": True,
@@ -37,7 +40,7 @@ class ProductionToolResultProjector:
             "agent_transition": None,
             "terminal": False,
         }
-        post_result_hooks: list[tuple[object, str]] = []
+        post_result_hooks: list[tuple[ToolExecutionResult, str]] = []
         batch_items = [
             (str(tool_call["id"]), result.name, result.output)
             for _index, tool_call, result in dispatched
@@ -91,6 +94,12 @@ class ProductionToolResultProjector:
                     "projection": projected.metadata,
                 }
             if processor is not None:
+                if not result.dispatch_failed and isinstance(result.metadata.get("output"), str):
+                    # Preserve the progress/result UI contract, but publish its
+                    # body only here, after output admission and ledger settlement.
+                    processor.update_tool_metadata(
+                        str(tool_call["id"]), title=result.title, metadata=result.metadata,
+                    )
                 if (
                     result.name == "task"
                     and not result.dispatch_failed
