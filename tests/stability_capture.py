@@ -216,11 +216,15 @@ class _Capture:
                 "test_workflow", "test_stability", "test_controlled_failure",
             ))
             if isinstance(temporary, Path) and (selected or report.failed):
-                base = item.config._tmp_path_factory.getbasetemp().resolve()
-                temporary.resolve().relative_to(base)
-                roots = [temporary] + [temporary.parent / f"{prefix}-{temporary.name}"
-                                       for prefix in ("user-state", "local-app-data")]
-                evidence = collect_diagnostics(roots, max_bytes=min(256 * 1024, self.remaining))
+                try:
+                    base = item.config._tmp_path_factory.getbasetemp().resolve()
+                    temporary.resolve().relative_to(base)
+                    roots = [temporary] + [temporary.parent / f"{prefix}-{temporary.name}"
+                                           for prefix in ("user-state", "local-app-data")]
+                    evidence = collect_diagnostics(roots, max_bytes=min(256 * 1024, self.remaining))
+                except Exception:
+                    self.collection_failed = True
+                    evidence = {"status": "collection_failed", "records": []}
             row = {**_node(item.nodeid), "phase": report.when, "outcome": report.outcome,
                    "diagnostics": evidence}
             if call.excinfo is not None:
@@ -363,8 +367,10 @@ def main(argv=None) -> int:
     if run["evidence_present"]:
         try:
             captured = json.loads((output / "tests.json").read_text())
-            print("; ".join(f"{name}={sum(row['outcome'] == name for row in captured['tests'])}"
+            print("; ".join(f"captured_{name}={sum(row['outcome'] == name for row in captured['tests'])}"
                             for name in ("passed", "failed", "skipped")))
+            print(f"records_omitted={captured['records_omitted']}; "
+                  f"collection_failed={captured['collection_failed']}")
         except Exception:
             print("Test totals unavailable.")
     if options.self_test:

@@ -330,7 +330,7 @@ with exact command/output in `s2-final-reviewed.log`. Earlier S2 runs were retai
 in tool output, not retrospectively rerun to manufacture log files. Independent
 review is repeated only for this confirmed missing path.
 
-## Current integration snapshot — frozen code, remote verification pending
+## Earlier integration snapshot — first frozen code, remote verification then pending
 
 | Task | Layer 1: production diagnostics / regression contracts | Layer 2: historical failure |
 | --- | --- | --- |
@@ -567,8 +567,99 @@ The `3df04bd` Core run `34105145693`, attempt 1, job `101688331021`, then comple
 **1 failed / 4112 passed / 36 skipped**, exit 1. Actual artifact `10012502222`
 is retained at `remote-core-3df/`. Its sole failure is the existing
 `test_process_service.py::test_service_close_kills_spawned_descendant_process_group`,
-`ProcessLookupError` at line 1028. That failure is separate from the collection
-support changes; its cause is not established by this artifact and it is not
+`ProcessLookupError` at the innermost external frame's line 1028. The preceding
+frame corresponds to the test's line 354: reading `/proc/<child>/status` **after**
+`service.close()`. That polling probe catches FileNotFoundError, not
+ProcessLookupError. This identifies the observed failure boundary, not a failure
+of the service to kill the child. That failure is separate from the collection
+support changes; the artifact does not establish all race details and it is not
 silently fixed or retried in this bounded S1/S2/S3 task. Both the Python 3.10
 and installed-wheel Core jobs passed. This first failure remains visible even
 if subsequent changed-source CI passes.
+
+## Final-source verification checkpoint — 21a6bce
+
+Executable test/support revision:
+`21a6bce6679b05391c8f87776fb190a849a4223e`. Production files remain byte-identical
+to `dd02ed045d0e11a81c1c0a953272b9f5ee5eb44d`. A normal push succeeded; GitHub's
+branch-ref API independently returned the exact full `21a6bce` SHA.
+
+At that frozen revision the exact sanitized command
+`python -m pytest -q tests/test_daemon.py tests/test_daemon_diagnostics.py tests/test_stability_diagnostics.py tests/test_stability_capture.py tests/test_repo_map_diagnostics.py tests/test_workflow_runtime.py tests/test_workflow_deterministic.py --tb=short`
+completed **120 passed**, 12.72 s, exit 0 (`scoped-final-21a.log`).
+Global Ruff, compileall and diff checks also exited 0. This is necessary scoped
+validation after test-support corrections; it is not another natural repetition
+campaign and is not labeled a new local full-suite run.
+
+The following first-attempt workflows were started by that push; their final
+status and downloaded artifacts must be recorded below, not inferred from older
+green runs:
+
+| Workflow | Run / attempt | Status at this checkpoint |
+| --- | --- | --- |
+| Core Runtime | `34106709274` / 1 | Running |
+| Windows Product RC | `34106709395` / 1 | Running |
+| Windows Installer | `34106709479` / 1 | Running |
+| Repo Intelligence | `34106709283` / 1 | Running |
+
+Additional independently reviewable commits after the four implementation commits
+listed earlier:
+
+| Commit | Responsibility |
+| --- | --- |
+| `2aa38ff64fb95400950d682759f99284df870dc3` | Documentation snapshot only |
+| `dd02ed045d0e11a81c1c0a953272b9f5ee5eb44d` | Proven Repo Map public-prefix compatibility correction; CI README/test contract |
+| `3df04bdb952291f110470f9afa5d1e861a1c36bf` | Collection exception capture and platform-correct permission assertions; tests/support/docs only |
+| `21a6bce6679b05391c8f87776fb190a849a4223e` | Bounded specimen collection, external-name/alias redaction and their RED/GREEN regressions; tests/support/docs only |
+
+No same-SHA CI rerun has been requested. All failed attempts described above
+remain distinct records, not overwritten by later changed-source runs.
+
+## Evidence-count correction after native artifact inspection
+
+Native Windows run `34106709395`, attempt 1, job `101693288577`, completed
+successfully on `21a6bce`. The actual product step, controlled-failure self-check,
+wheel/sdist build, fresh install and upload all succeeded. Downloaded artifact
+`10012982207` is under `remote-windows-21a/`; its suite reports exit 0,
+**774 captured passed records / 20 captured skipped records**, Python 3.12.10,
+matching SHA/job/attempt, and 349 structural diagnostic records. Its separate
+controlled-failure child exited exactly 1, retained two diagnostic records with
+zero omissions/collection failures, and removed all private raw output.
+
+**Important accounting correction:** the suite-level `collection_failed=true`
+must not be hidden. The deliberate collector-failure test monkeypatches
+`collect_diagnostics` until its fixture teardown; consequently the real active
+pytest plugin also encounters that injection during this test's makereport.
+Previously its outer catch set the honest gap flag but dropped the test outcome
+along with the unavailable optional diagnostics. This is a test-evidence defect,
+not a native product-test failure. It also explains why earlier opt-in artifact
+counts are **captured report counts, not complete raw pytest totals**. In the
+earlier `7300136` through `21a6bce` remote sections, counts derived from these
+`tests.json` files must be read with that qualification; those actual pytest exits
+and workflow conclusions remain unchanged. The original `a2ff100` job-log counts
+and local direct-pytest counts are not affected by this correction.
+
+The strengthened regression first failed because the original failed outcome
+was absent (`collector-outcome-red.log`: 1 failed / exit 1). Optional evidence
+acquisition now has its own failure boundary: retain the original test outcome
+and exception, mark only its diagnostic field `collection_failed`, and keep the
+suite's gap flag true. The CLI explicitly labels **captured** counts and prints
+omission/gap metadata instead of implying complete totals. No failure is made
+successful and no collector exception replaces the original test exception.
+
+The normal collector selection passed **13 tests / exit 0**
+(`collector-outcome-green.log`); the same Python 3.10 selection passed
+**13 / exit 0** (`collector-outcome-python310.log`). More importantly, the real
+wrapper was used to capture the collector tests themselves:
+
+`python -m tests.stability_capture --output /tmp/nzcoder-stability-diagnostics.XtvVBL/collector-outcome-integration -- tests/test_stability_capture.py`
+
+It returned **exit 0**, retained all **13** outcomes including the injected
+test's own passed result, and explicitly recorded that row's missing diagnostics.
+`records_omitted=0`, `collection_failed=true` are expected for this controlled
+injection, not a claim that all optional evidence exists. Files and exact output
+are in `collector-outcome-integration/` and `collector-outcome-integration.log`.
+The independent review also verified that a real ValueError → KeyError test
+exception chain survives a sensitive collector OSError, without publishing the
+sentinel or changing either a failed or a passed outcome. These last changes
+remain test-support-only; Agent production code is still `dd02ed0`.

@@ -98,12 +98,15 @@ def test_collection_exception_preserves_pytest_failure_and_reports_gap(tmp_path,
                            funcargs={"tmp_path": tmp_path},
                            config=SimpleNamespace(_tmp_path_factory=factory))
     report = SimpleNamespace(when="call", failed=True, passed=False, outcome="failed")
-    hook = plugin.pytest_runtest_makereport(item, SimpleNamespace())
+    hook = plugin.pytest_runtest_makereport(item, SimpleNamespace(excinfo=None))
     next(hook)
     with pytest.raises(StopIteration):
         hook.send(SimpleNamespace(get_result=lambda: report))
     assert report.outcome == "failed"
     assert plugin.collection_failed
+    assert len(plugin.tests) == 1
+    assert plugin.tests[0]["outcome"] == "failed"
+    assert plugin.tests[0]["diagnostics"]["status"] == "collection_failed"
     plugin.flush()
     assert "SENTINEL" not in (tmp_path / "evidence" / "tests.json").read_text()
 
