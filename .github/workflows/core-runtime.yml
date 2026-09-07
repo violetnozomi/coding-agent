@@ -28,7 +28,16 @@ jobs:
           python -m pip install basedpyright==1.39.9
           python tests/typecheck/check_tool_contracts.py
       - name: Run complete Python test suite
-        run: python -m pytest -q
+        run: python -m tests.stability_capture --output artifacts/safe/suite --
+      - name: Verify controlled failure evidence capture
+        if: always()
+        run: python -m tests.stability_capture --self-test --output artifacts/safe/controlled-failure
+      - name: Upload safe runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/safe/
       - name: Smoke CLI entrypoint
         run: python -m nz_coder --help
       - name: Lint tracked runtime and tests
@@ -53,11 +62,23 @@ jobs:
         run: python -m compileall -q nz_coder
       - name: Run critical runtime compatibility contracts
         run: >-
-          python -m pytest -q
+          python -m tests.stability_capture --output artifacts/safe/suite --
           tests/runtime/test_native_runner.py
           tests/runtime/tool_runtime
           tests/test_loop_fake.py
           tests/test_public_error_boundary_phase3.py
+          tests/test_daemon_diagnostics.py
+          tests/test_stability_diagnostics.py
+          tests/test_stability_capture.py
+          tests/test_repo_map_diagnostics.py
+          tests/test_workflow_runtime.py
+          tests/test_workflow_deterministic.py
+      - name: Upload safe compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python310-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/safe/
       - name: Smoke CLI on the declared Python floor
         run: python -m nz_coder --help
       - name: Build distributions on the declared Python floor

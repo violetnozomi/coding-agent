@@ -51,7 +51,7 @@ jobs:
       - name: Native Windows product acceptance
         shell: pwsh
         run: |
-          python -m pytest -q `
+          python -m tests.stability_capture --output artifacts/safe/suite -- `
             tests/test_windows_platform_runtime.py `
             tests/test_windows_shell_runtime.py `
             tests/test_windows_native_smoke.py `
@@ -61,6 +61,13 @@ jobs:
             tests/test_process_service.py `
             tests/test_http_service.py `
             tests/test_daemon.py `
+            tests/test_daemon_diagnostics.py `
+            tests/test_stability_diagnostics.py `
+            tests/test_stability_capture.py `
+            tests/test_repo_languages.py `
+            tests/test_repo_map_diagnostics.py `
+            tests/test_workflow_runtime.py `
+            tests/test_workflow_deterministic.py `
             tests/test_terminal_backend.py `
             tests/test_tui_product_frames.py `
             tests/test_fullscreen.py `
@@ -74,8 +81,11 @@ jobs:
             tests/test_repo_intelligence_consistency.py `
             tests/test_lsp.py `
             tests/test_lsp_workspace_config.py `
-            tests/test_mcp.py 2>&1 | Tee-Object artifacts/windows-product-tests.txt
-          if ($LASTEXITCODE -ne 0) { throw "Windows product acceptance failed." }
+            tests/test_mcp.py
+          exit $LASTEXITCODE
+      - name: Verify controlled failure evidence capture
+        if: always()
+        run: python -m tests.stability_capture --self-test --output artifacts/safe/controlled-failure
       - name: Wheel sdist and fresh-install smoke
         shell: pwsh
         run: |
@@ -94,8 +104,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: windows-rc-evidence
-          path: artifacts/
+          name: windows-rc-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/safe/
 
   linux-product-sanity:
     runs-on: ubuntu-latest
@@ -111,19 +121,18 @@ jobs:
       - run: mkdir -p artifacts
       - name: Linux product acceptance
         run: >-
-          python -m pytest -q
+          python -m tests.stability_capture --output artifacts/safe/suite --
           tests/test_terminal_product_final.py
           tests/test_terminal_backend.py
           tests/test_tui_product_frames.py
           tests/test_fullscreen.py
           tests/test_http_service.py
           tests/test_daemon.py
-          | tee artifacts/linux-product-tests.txt
       - run: python -m nz_coder --help
       - run: python -m build --wheel --sdist
       - name: Upload Linux product evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: linux-product-evidence
-          path: artifacts/
+          name: linux-product-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/safe/
