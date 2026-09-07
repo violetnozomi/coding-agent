@@ -178,8 +178,17 @@ def _node(value: str) -> dict:
     parts = static.split("::")
     filename = parts[0].rsplit("/", 1)[-1]
     valid = re.fullmatch(r"test_[A-Za-z0-9_]+\.py", filename)
+    try:
+        source = (_REPO / parts[0]).absolute()
+        source.relative_to(_REPO / "tests")
+        source = source.resolve()
+        source.relative_to(_REPO / "tests")
+        valid = valid and source.is_file()
+    except (OSError, ValueError):
+        valid = False
     label = filename if valid else "external_test"
-    label += "".join("::" + part for part in parts[1:] if _NAME.fullmatch(part))
+    if valid:
+        label += "".join("::" + part for part in parts[1:] if _NAME.fullmatch(part))
     return {"node_id": label, "node_ref": hashlib.sha256(value.encode()).hexdigest()}
 
 
@@ -313,7 +322,10 @@ def main(argv=None) -> int:
                 '    diag.failure(ValueError("SENTINEL-secret-nonce-input"))\n'
                 '    assert False, "SENTINEL-private-exception"\n', encoding="utf-8",
             )
-            arguments = [str(test)]
+            # Generated tests live outside the checkout. Without an explicit
+            # cutoff pytest enumerates their ancestors (including other drives
+            # on Windows), which need not be readable by this process.
+            arguments = ["--confcutdir", str(private), str(test)]
         command = [sys.executable, "-m", "pytest", "-q", "--tb=short", "-p",
                    "tests.stability_capture", "--stability-evidence-dir", str(output), *arguments]
         with (private / "pytest-private.log").open("wb") as stream:

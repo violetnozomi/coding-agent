@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -177,18 +178,72 @@ def test_controlled_failed_subprocess_retains_safe_evidence_after_tmp_cleanup(tm
 
 
 def test_collection_failure_retains_safe_cause_and_real_exit(tmp_path):
-    specimen = tmp_path / "test_collection_failure.py"
+    specimen = tmp_path / "test_SENTINEL_private_filename.py"
     specimen.write_text('raise ImportError("SENTINEL-private-import")\n', encoding="utf-8")
     output = tmp_path / "evidence"
     result = subprocess.run(
-        [sys.executable, "-m", "tests.stability_capture", "--output", str(output), "--", str(specimen)],
+        [sys.executable, "-m", "tests.stability_capture", "--output", str(output), "--",
+         "--confcutdir", str(tmp_path), str(specimen)],
         cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 2
     records = json.loads((output / "tests.json").read_text())
     run = json.loads((output / "run.json").read_text())
     assert run["exit_code"] == 2
+    assert not run["private_output_retained"]
     failures = [row for row in records["tests"] if row["phase"] == "collect"]
     assert len(failures) == 1
+    assert failures[0]["node_id"] == "external_test"
     assert any(error["type"] == "ImportError" for error in failures[0]["exceptions"])
-    assert "SENTINEL" not in json.dumps(records) + result.stdout + result.stderr
+    assert "SENTINEL" not in json.dumps(records) + json.dumps(run) + result.stdout + result.stderr
+
+
+def test_controlled_specimen_does_not_enumerate_unowned_ancestors(tmp_path, monkeypatch):
+    import tests.stability_capture as capture
+
+    guard = tmp_path / "collection_guard.py"
+    guard.write_text(
+        'import os\nfrom pathlib import Path\n'
+        'def pytest_sessionstart(session):\n'
+        '    ancestors = set(Path(session.config.args[0]).resolve().parent.parents)\n'
+        '    original = os.scandir\n'
+        '    def restricted(path):\n'
+        '        if isinstance(path, (str, os.PathLike)) and Path(path).resolve() in ancestors:\n'
+        '            raise PermissionError("SENTINEL-unowned-ancestor")\n'
+        '        return original(path)\n'
+        '    os.scandir = restricted\n', encoding="utf-8",
+    )
+    original = subprocess.run
+
+    def with_guard(command, **kwargs):
+        # Keep real pytest collection/subprocess behavior; only deny directory
+        # enumeration above its owned specimen, like restricted Windows parents.
+        env = dict(os.environ, PYTHONPATH=os.pathsep.join((str(tmp_path), str(capture._REPO))))
+        return original([*command, "-p", "collection_guard"], env=env, **kwargs)
+
+    monkeypatch.setattr(capture.subprocess, "run", with_guard)
+    output = tmp_path / "evidence"
+    assert capture.main(["--self-test", "--output", str(output)]) == 0
+    run = json.loads((output / "run.json").read_text())
+    assert run["exit_code"] == 1
+    assert not run["private_output_retained"]
+    assert "SENTINEL" not in "".join(path.read_text() for path in output.glob("*.json"))
+
+
+def test_external_source_alias_cannot_authorize_its_private_name(tmp_path, monkeypatch):
+    import tests.stability_capture as capture
+
+    alias = tmp_path / "test_SENTINEL_private_filename.py"
+    target = Path(__file__).resolve()
+    try:
+        alias.symlink_to(target)
+    except OSError:
+        # Native Windows may not grant symlink creation. The lexical boundary
+        # must also hold if resolution reports an existing trusted target.
+        original = Path.resolve
+        monkeypatch.setattr(Path, "resolve", lambda self, *args, **kwargs:
+                            target if self == alias else original(self, *args, **kwargs))
+    result = capture._node(str(alias) + "::test_SENTINEL_private_function")
+    assert result["node_id"] == "external_test"
+    assert "SENTINEL" not in json.dumps(result)
+    assert capture._node("tests/test_stability_capture.py")["node_id"] == "test_stability_capture.py"

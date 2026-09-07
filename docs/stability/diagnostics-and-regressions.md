@@ -476,3 +476,99 @@ The combined collector/helper/workflow slice completed **54 passed / exit 0**
 The collection-root cause on Windows is **not yet confirmed**; the next commit
 adds evidence rather than inventing a cause or labeling an unobserved fix complete.
 These subsequent changes are test/CI-support only; production remains `dd02ed0`.
+
+## Collection isolation correction and native first-cause evidence
+
+Run `34105145624`, attempt 1, native job `101688330903`, on `3df04bd`
+completed **2 failed / 770 passed / 20 skipped**, exit 1. The two POSIX-only mode
+checks now pass; the two failures are the controlled assertion and import-error
+specimens, both generated outside the checkout. Actual artifact `10012321426`,
+downloaded to `remote-windows-3df/`, now retains a collection-phase
+**PermissionError**. Its innermost frames map to pytest **8.4.2**
+`main.py:528` (`Dir.collect`) and `_pytest/pathlib.py:963` (`os.scandir`).
+No raw exception, denied path, or private stdout was uploaded or reconstructed.
+
+The corresponding pytest source explicitly walks an initial file's parents,
+stopping only at its `confcutdir`. The checkout cutoff does not bound unrelated
+temporary paths, including Windows paths on a different drive. A real subprocess
+regression now denies enumeration **only above the generated specimen's owned
+directory**. Before correction it reproduces collection `PermissionError`
+(wrapper 1, child 4 on both local pytest 9.0.3 and 8.4.2; Windows originally
+returned 2). This distinguishes the filesystem collection boundary from a daemon
+startup defect; it does not claim identical OS permission causes or denied paths.
+The self-test now passes `--confcutdir <owned specimen directory>`; the separate
+import-error specimen explicitly uses its own cutoff. Normal repository suite
+arguments/configuration are unchanged. No test is skipped or made successful
+after a business failure; the controlled assertion must still produce child 1,
+and the controlled import failure must still produce child 2.
+
+Independent review additionally demonstrated that a generated filename containing
+a private sentinel could enter the public node label. `_node` now only exposes
+readable labels for resolved existing files below this checkout's `tests/`;
+external nodes retain `external_test` plus their digest. The real import-error
+specimen now puts a sentinel in its filename as well as its exception and checks
+all JSON, stdout/stderr, original exit and private-output removal.
+
+`collection-isolation-red.log` retains **2 failed / exit 1**; the isolated
+pytest-8 ancestor counterexample is in `collection-isolation-pytest8-red.log`
+(**1 failed / exit 1**). After correction the exact collector command
+`python -m pytest -q tests/test_stability_capture.py --tb=short` completed
+**12 passed / exit 0** (`collection-isolation-green.log`). The lowest-supported
+Python command
+`/tmp/nzcoder-runtime-boundary.ug3MGN/python310/bin/python -m pytest -q tests/test_stability_capture.py tests/test_stability_diagnostics.py tests/test_repo_map_diagnostics.py tests/test_workflow_runtime.py tests/test_workflow_deterministic.py --tb=short`
+completed **72 passed / exit 0** (`python310-collection-final.log`). Both used
+the previously documented sanitized environment. Native validation of this
+specific collection correction is still pending at this checkpoint.
+
+Other first-attempt results are retained independently:
+
+- `2aa38ff` Core run `34103107937`: **2 failed / 4108 passed / 36 skipped**, exit 1;
+  only the known release-document and map-path integration assertions failed.
+  Actual artifact `10011739848` is under `remote-core-2aa/`.
+- `dd02ed0` Core run `34104163456`: **4112 passed / 36 skipped**, exit 0;
+  actual artifact `10012109776` is under `remote-core-dd02/`.
+  All three Core jobs passed, including Python 3.10 and installed-wheel contract.
+- `dd02ed0` Windows run `34104163492`: **3 failed / 768 passed / 20 skipped**,
+  exit 1; same two POSIX assertions plus the controlled collection failure.
+  Artifact `10011964087` is under `remote-windows-dd02/`.
+
+The corrected production wheel from `dist-corrected/` was installed into a new
+venv `installed-corrected/` using
+`python -m venv /tmp/nzcoder-stability-diagnostics.XtvVBL/installed-corrected`
+then its `python -m pip install -q /tmp/nzcoder-stability-diagnostics.XtvVBL/dist-corrected/nz_coder-0.1.0-py3-none-any.whl`;
+both exited 0. Installed `nz-coder --help` and
+`nz-coder doctor --repo-intelligence-only --json` exited 0 from
+`/tmp/nzcoder-installed-smoke.ffPp1S`, with separate
+`XDG_STATE_HOME=/tmp/nzcoder-stability-diagnostics.XtvVBL/installed-production-state`.
+Logs: `install-production-corrected.log`, `installed-production-help.log`,
+`installed-production-doctor.json`. An initial resource assertion incorrectly
+looked for old `nz_coder/config.py` and exited 1; the actual package stores config
+under `foundation/`. The corrected resource check verifies the installed
+diagnostic module is in site-packages, package version, and bundled
+`bundled_skills/code-review/SKILL.md`; exit 0 (`installed-production-resources.log`).
+No package code was changed to satisfy that mistaken smoke assertion.
+
+The same independent filename review found an external symlink alias could
+resolve into a trusted repository test while retaining its private original
+name. The node boundary now checks both lexical and resolved containment.
+The new actual-symlink counterexample first failed (1 failed / exit 1,
+`collection-alias-red.log`), then the complete collector slice passed
+**13 tests / exit 0** (`collection-alias-green.log`). On a Windows runner without
+symlink privilege, that one test exercises the equivalent resolved-target report;
+it does not claim to create a native symlink. Native daemon/process acceptance
+remains real and separate. Readable ordinary repository labels remain asserted.
+
+The final narrow independent re-review accepted the filename and alias fixes
+(3 targeted tests passed / exit 0; `collection-review.md`). Python 3.10's final
+collector-only selection also passed **13 tests / exit 0**
+(`python310-collector-seal.log`).
+
+The `3df04bd` Core run `34105145693`, attempt 1, job `101688331021`, then completed
+**1 failed / 4112 passed / 36 skipped**, exit 1. Actual artifact `10012502222`
+is retained at `remote-core-3df/`. Its sole failure is the existing
+`test_process_service.py::test_service_close_kills_spawned_descendant_process_group`,
+`ProcessLookupError` at line 1028. That failure is separate from the collection
+support changes; its cause is not established by this artifact and it is not
+silently fixed or retried in this bounded S1/S2/S3 task. Both the Python 3.10
+and installed-wheel Core jobs passed. This first failure remains visible even
+if subsequent changed-source CI passes.
