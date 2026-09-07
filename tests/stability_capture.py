@@ -219,17 +219,35 @@ class _Capture:
                 # Same structural cause projection as production: no messages,
                 # locals, source lines, or arbitrary traceback paths.
                 row["exceptions"] = exception_evidence(call.excinfo.value)
-            size = len(json.dumps(row, ensure_ascii=True, separators=(",", ":")).encode()) + 1
-            if size <= self.remaining:
-                self.tests.append(row)
-                self.remaining -= size
-            else:
-                self.omitted += 1
-            if report.failed:
-                self.flush()  # Persist failure before temporary fixture cleanup.
+            self._admit(row, flush=report.failed)
         except Exception:
             self.collection_failed = True
             # Collector failures must not replace pytest's original report.
+
+    def _admit(self, row: dict, *, flush: bool) -> None:
+        size = len(json.dumps(row, ensure_ascii=True, separators=(",", ":")).encode()) + 1
+        if size <= self.remaining:
+            self.tests.append(row)
+            self.remaining -= size
+        else:
+            self.omitted += 1
+        if flush:
+            self.flush()  # Persist failure before temporary fixture cleanup.
+
+    def pytest_exception_interact(self, node, call, report):
+        # Collection errors never reach runtest_makereport. Capture the actual
+        # exception here, without rendering CollectReport.longrepr/source text.
+        if report.when != "collect" or call.excinfo is None:
+            return
+        try:
+            self._admit({
+                **_node(node.nodeid), "phase": "collect", "outcome": "failed",
+                "diagnostics": {"status": "not_requested", "records": []},
+                "exception_type": _exception_type(call.excinfo.type.__name__),
+                "exceptions": exception_evidence(call.excinfo.value),
+            }, flush=True)
+        except Exception:
+            self.collection_failed = True
 
     def flush(self):
         _write_json(self.output / "tests.json", {

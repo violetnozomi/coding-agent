@@ -232,6 +232,7 @@ def test_resume_cache_replays_success_but_reruns_synthesis(tmp_path, monkeypatch
 
 
 def test_result_cache_is_private_and_treats_corruption_or_failure_as_miss(tmp_path):
+    import stat
     from nz_coder.runtime.agent.child_result import ChildAgentResult
     from nz_coder.runtime.workflows.workflow_runtime import WorkflowResultCache
 
@@ -246,7 +247,9 @@ def test_result_cache_is_private_and_treats_corruption_or_failure_as_miss(tmp_pa
     files = list(cache.results_dir.glob("*.json"))
 
     assert len(files) == 1
-    assert files[0].stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        # Windows mode bits do not represent its inherited user-state DACL.
+        assert stat.S_IMODE(files[0].stat().st_mode) == 0o600
     assert cache.get("abc#0")["final_text"] == "done"
     files[0].write_text("{broken", encoding="utf-8")
     assert cache.get("abc#0") is None
@@ -623,7 +626,8 @@ def test_artifact_log_cost_report_and_terminal_run_record(tmp_path, monkeypatch)
 
     assert artifact.name == "final_review.json"
     assert artifact.is_file()
-    assert os.stat(artifact).st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert os.stat(artifact).st_mode & 0o777 == 0o600
     assert record["status"] == "completed"
     assert record["efficiency_report"]["agent_starts"] == 1
     assert record["efficiency_report"]["model_tokens"]["total"] == 7

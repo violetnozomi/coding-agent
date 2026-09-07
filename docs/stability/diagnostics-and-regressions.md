@@ -427,3 +427,52 @@ OpenAI 3.8.0, Tree-sitter 0.26.0 and watchfiles 1.2.0, actual command/SHA/job/at
 and removed private raw output. `tests.json` reports zero omitted records and no
 collection failure. Files are under `remote-linux-2aa/`. Full Core and native
 Windows are not replaced by this subset result.
+
+## Corrected local full run and first native Windows evidence
+
+On production/test revision `dd02ed045d0e11a81c1c0a953272b9f5ee5eb44d`, the
+same exact sanitized full pytest command completed **4114 passed / 35 skipped**,
+477.18 s, **exit 0** (`full-corrected.log`). This is necessary verification after
+the real path-format correction, not a same-SHA passing rerun of the first failure.
+Its separately rebuilt wheel/sdist also succeeded (`build-corrected.log`).
+
+First remote Core run `34102988245`, attempt 1, job `101681475468` on `7300136`
+failed the two known integration cases and
+`test_streaming_state_consistency.py::test_cancel_during_provider_connect` at
+line 1692 (the existing `< 0.2 s` assertion). Safe artifact `10011688640` was
+downloaded into `remote-core-730/`; its controlled-failure child returned exactly
+1 and was captured. The Provider timing case is unchanged in this phase; the
+safe record identifies its assertion, not the measured elapsed value or cause.
+It remains a separate unconfirmed timing symptom, not claimed fixed by a later
+pass, diagnostic wiring or a documentation commit. No same-SHA rerun was requested.
+
+Native Windows run `34103107855`, attempt 1, job `101681854748` on `2aa38ff`
+completed **3 failed / 766 passed / 20 skipped**, exit 1. Fresh-install was skipped
+on that job. The actual `remote-windows-2aa/` artifact retains all three nodes and
+the independently failed controlled-failure step. Two failures are the exact
+POSIX-mode assertions in `test_workflow_runtime.py` (then lines 249 and 626).
+Windows mode bits are not a DACL; the tests had already produced their files.
+The real manager uses the verified, inheritable private user-state root. Independent
+source review found no evidence of failed workflow execution or exposed state in
+these failures. Only exact mode assertions are now POSIX-conditional; neither
+whole test nor its corruption/result/artifact/usage assertions is skipped.
+Arbitrary caller-provided workflow roots are not independently DACL-hardened by
+these two stores; no new all-root privacy guarantee is claimed or implemented.
+
+The third node, `test_controlled_failed_subprocess_retains_safe_evidence_after_tmp_cleanup`,
+failed because the Windows controlled child exited **2 during collection**, not
+the intended assertion exit 1. The separate controlled-failure step confirms exit
+2, zero test rows and 1241 bytes of removed private output. This exposed a real
+collector gap: collection exceptions never reach `pytest_runtest_makereport`.
+The plugin now captures their actual cause chain through `pytest_exception_interact`,
+using the same safe projection and byte quota, without formatting `longrepr`.
+A real import-failure subprocess first proved the gap (1 failed / exit 1), then
+the collector set passed **11 tests / exit 0**; child exit 2 remains unchanged.
+Logs: `collection-boundary-red.log`, `collection-boundary-green.log`.
+
+The combined collector/helper/workflow slice completed **54 passed / exit 0**
+(`windows-integration-local.log`). Its exact sanitized suffix was
+`python -m pytest -q tests/test_stability_capture.py tests/test_stability_diagnostics.py tests/test_workflow_runtime.py tests/test_workflow_deterministic.py --tb=short`.
+The collection-root cause on Windows is **not yet confirmed**; the next commit
+adds evidence rather than inventing a cause or labeling an unobserved fix complete.
+These subsequent changes are test/CI-support only; production remains `dd02ed0`.

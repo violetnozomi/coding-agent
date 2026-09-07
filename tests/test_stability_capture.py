@@ -174,3 +174,21 @@ def test_controlled_failed_subprocess_retains_safe_evidence_after_tmp_cleanup(tm
     assert not run["private_output_retained"]
     serialized = "".join(path.read_text() for path in output.glob("*.json"))
     assert "SENTINEL" not in serialized + result.stdout + result.stderr
+
+
+def test_collection_failure_retains_safe_cause_and_real_exit(tmp_path):
+    specimen = tmp_path / "test_collection_failure.py"
+    specimen.write_text('raise ImportError("SENTINEL-private-import")\n', encoding="utf-8")
+    output = tmp_path / "evidence"
+    result = subprocess.run(
+        [sys.executable, "-m", "tests.stability_capture", "--output", str(output), "--", str(specimen)],
+        cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 2
+    records = json.loads((output / "tests.json").read_text())
+    run = json.loads((output / "run.json").read_text())
+    assert run["exit_code"] == 2
+    failures = [row for row in records["tests"] if row["phase"] == "collect"]
+    assert len(failures) == 1
+    assert any(error["type"] == "ImportError" for error in failures[0]["exceptions"])
+    assert "SENTINEL" not in json.dumps(records) + result.stdout + result.stderr
