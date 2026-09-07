@@ -95,6 +95,13 @@ For source development, use `python -m pip install -e .`. Before a release, run
 `python -m build --wheel --sdist`. The `Core Runtime`, `Windows Product RC`, and
 `Windows Installer` workflows enforce the same tracked release boundary.
 
+CI runs the test command through
+`python -m tests.stability_capture --output artifacts/safe/suite --`.
+This invokes `python -m pytest -q` and preserves its exit code while exporting
+only bounded, secret-safe evidence; the output directory must be empty to avoid
+overwriting an earlier attempt. The direct pytest command above remains suitable
+for local development.
+
 Inside the REPL:
 
 ```text

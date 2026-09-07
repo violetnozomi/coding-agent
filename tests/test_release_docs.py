@@ -46,12 +46,13 @@ def test_readme_release_commands_match_the_core_workflow():
     ).read_text(encoding="utf-8")
     for command in (
         "python -m compileall -q nz_coder",
-        "python -m pytest -q",
+        "python -m tests.stability_capture --output artifacts/safe/suite --",
         "ruff check .",
         "python -m build --wheel --sdist",
     ):
         assert command in README
         assert command in workflow
+    assert "python -m pytest -q" in README  # Direct local invocation stays documented.
 
 
 def test_release_linter_and_distribution_data_are_reproducible():

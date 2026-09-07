@@ -7,7 +7,7 @@ from functools import partial
 from pathlib import Path
 
 from nz_coder.runtime.core.run_settings import current_run_settings
-from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.foundation.workspace_paths import WorkspacePathError, WorkspacePathPolicy
 from nz_coder.protocol.public_error import TrustedPublicMessage, format_public_error
 from nz_coder.intelligence.code_index import (
     AmbiguousSymbolError,
@@ -350,6 +350,14 @@ def repo_map(
         return "\n".join(header + rows + semantic_rows)
     except _RepoIntelligenceUnavailable as exc:
         return _index_unavailable(diagnostic, exc)
+    except WorkspacePathError as exc:
+        public = diagnostic.failure(exc)
+        # Preserve the established rejection category, never the embedded path.
+        context = (
+            "Path escapes workspace: "
+            if exc.public_error.message.startswith("Path escapes workspace:") else ""
+        )
+        return format_public_error(public, context=context)
     except ValueError as exc:
         return format_public_error(diagnostic.failure(exc))
     except Exception as exc:

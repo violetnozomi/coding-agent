@@ -23,6 +23,26 @@ def _diagnostic_id(result: str) -> str:
     return match.group(0)
 
 
+@pytest.mark.parametrize("recorder_failed", [False, True])
+def test_real_path_escape_keeps_rejection_prefix_without_echoing_input(
+    tmp_path, monkeypatch, recorder_failed,
+):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.trace import TraceRecorder
+    from nz_coder.tools.repo_map import repo_map
+
+    if recorder_failed:
+        def fail_record(*args, **kwargs):
+            raise OSError("SENTINEL-private-recorder")
+        monkeypatch.setattr(TraceRecorder, "log", fail_record)
+    with scoped_workdir(tmp_path):
+        result = repo_map("../SENTINEL-private-path")
+    assert result.startswith("Error: Path escapes workspace:")
+    assert "SENTINEL" not in result
+    assert _diagnostic_id(result)
+    assert ("evidence=unavailable" if recorder_failed else "evidence=saved") in result
+
+
 def _operations(workspace: Path, diagnostic_id: str) -> list[dict]:
     directory = prepare_user_storage(workspace).workspace_state / "diagnostics"
     path = directory / f"diagnostic__{diagnostic_id}.jsonl"

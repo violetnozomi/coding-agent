@@ -371,3 +371,59 @@ test's `finally`, so failed assertions cannot skip executor/registry drainage;
 its focused case passed / exit 0 afterwards. Product source is unchanged by that
 correction. Whole frozen-revision verification below is still required and is not
 replaced by these earlier/incremental selections.
+
+## First frozen integration — retained failures and minimal corrections
+
+The first full command was exactly
+`env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 PYTHONUTF8=1 python -m pytest -q --tb=short`.
+It completed **2 failed / 4110 passed / 35 skipped**, 499.82 s, **exit 1**
+(`full-frozen.log`). Executable source/tests were `7300136`; `2aa38ff` only added
+the documentation already present in that worktree. A read-only `--collect-only`
+probe while the slower suite segment was running collected 4147 tests; no test
+process was restarted. The initial push and a later documentation push scheduled
+distinct CI SHAs, not same-SHA reruns. The documentation push had one TLS transport
+failure and then succeeded; remote ref `2aa38ff64fb95400950d682759f99284df870dc3`
+was verified through GitHub's ref API.
+
+Confirmed failures and bounded fixes:
+
+- `test_readme_release_commands_match_the_core_workflow`: the command inventory
+  still expected direct pytest in the workflow after the actual capture wrapper
+  was introduced. README now documents both direct local pytest and the exact CI
+  wrapper. The test still requires the same command to exist in README/workflow,
+  and additionally retains the direct local-command documentation assertion.
+  No comment-only workaround or CI test removal was used.
+- `test_repo_map_blocks_escape_and_non_python_file`: the new generic diagnostic
+  replaced the established `Error: Path escapes workspace:` category. The real
+  WorkspacePathError path now retains that fixed prefix plus safe diagnostic
+  correlation, **without echoing the embedded input path**. The old test is
+  unchanged. Two new real-path sentinel cases verify working/failed recorders.
+
+The new focused RED was **4 failed / 5 passed**, exit 1
+(`integration-compat-red.log`). After the corrections,
+`python -m pytest -q tests/test_release_docs.py tests/test_repo_map.py tests/test_repo_map_diagnostics.py tests/test_repo_languages.py tests/test_stability_diagnostics.py tests/test_stability_capture.py --tb=short`
+completed **68 passed**, 3.21 s, exit 0 (`integration-compat-green.log`), under
+the same sanitized prefix. Ruff and diff check passed. A necessary new frozen
+full verification follows the actual source correction; this does not enlarge
+the exhausted natural/predecessor repetition budgets or erase the first failure.
+
+The initial wheel/sdist build used
+`python -m build --no-isolation --wheel --sdist --outdir /tmp/nzcoder-stability-diagnostics.XtvVBL/dist`
+and exited 0 (`build-frozen.log`). A brand-new venv installed that wheel outside
+the source tree, exit 0 (`install-frozen.log`). Its first CLI help/doctor probes
+both exited 1 because the test's XDG_STATE_HOME was inside its own cwd/workspace;
+the existing storage boundary correctly rejected it. Original logs
+`installed-help.log` / `installed-doctor.json` are retained. Moving the smoke cwd
+to `/tmp/nzcoder-installed-smoke.ffPp1S` while keeping state separately under the
+evidence directory made both identical commands exit 0
+(`installed-help-corrected.log`, `installed-doctor-corrected.json`). This is a
+test-layout correction, not a runtime fix. Installed module/resource assertions
+also exited 0. Packaging of the source correction must be verified separately.
+
+Actual downloaded artifact `10011295374` from `2aa38ff` run `34103107855`,
+attempt 1, Linux job `101681854992`, confirms **151 passed / exit 0** and 113
+safe operation records. Its `run.json` records Python 3.12.14, pytest 8.4.2,
+OpenAI 3.8.0, Tree-sitter 0.26.0 and watchfiles 1.2.0, actual command/SHA/job/attempt,
+and removed private raw output. `tests.json` reports zero omitted records and no
+collection failure. Files are under `remote-linux-2aa/`. Full Core and native
+Windows are not replaced by this subset result.
