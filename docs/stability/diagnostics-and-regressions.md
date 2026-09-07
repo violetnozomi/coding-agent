@@ -1,5 +1,26 @@
 # Stability diagnostics and deterministic regressions — S1 / S2 / S3
 
+## Final scoped decision
+
+**S1/S2/S3 diagnostic and deterministic-regression work is closed. This is not a
+claim that all historical faults, or the whole Windows product, are fixed.**
+Verified executable revision: `040bbcb5a549cc6c5a7406b5faf16ec34e8d7b8b`;
+production implementation remains `dd02ed0`. Later document sealing must be
+distinguished from this source-verification SHA.
+
+| Task | Layer 1: capability delivered | Layer 2: historical failure |
+| --- | --- | --- |
+| S1 daemon | Production parent/worker stages, first cause, shared identity, bounded budget and owned cleanup verified, including real native Windows execution | **Not reproduced this round; diagnostics completed.** Original `not_started` cause remains unconfirmed |
+| S2 repo_map | Standalone and product prewarm first-catch correlation, safe public error, concurrent-workspace/cancellation and failed-recorder paths verified | **Not reproduced this round; diagnostics completed.** Original redacted CI exception remains unconfirmed |
+| S3 workflow | Actual-manager streaming/order gates, mutations, error/cancel/drain and minimal stop-before-drain correction verified | **Confirmed test synchronization defect; test repaired.** Separately reproduced product drainage defect fixed and verified, not substituted for the historical cause |
+
+Current-source CI: **Core Runtime, Repo Intelligence and Windows Installer pass;
+Windows Product RC fails two HTTP tests outside the frozen S1/S2/S3 scope.**
+The available failure records, safe artifact and platform result are retained below.
+No same-SHA passing rerun was sought. Linux CLI can enter a small, budget-bounded
+real coding-task acceptance run; **Windows HTTP/daemon-backed workflows are not
+declared release-stable** while those acceptance failures remain open.
+
 ## Scope, baseline and predeclared budget
 
 Branch `codex/stability-diagnostics`, based on
@@ -47,12 +68,14 @@ Linux local evidence: `/tmp/nzcoder-stability-diagnostics.XtvVBL`.
 - [x] S3: replace elapsed-sleep assertions with explicit worker/controller gates
   in the real pipeline; separately prove streaming and stable output order.
   Cover failures/cancel/drain and execute in-memory barrier/order mutations.
-- [ ] CI/evidence: scoped pytest collection before tmp cleanup, strict safe schema,
+- [x] CI/evidence: scoped pytest collection before tmp cleanup, strict safe schema,
   bounded artifacts, explicit omissions/collection failures, actual exit codes and
   attempt-aware names. Inject one controlled test failure to verify capture and
   upload, without making the normal job swallow test failures.
-- [ ] Verify required suites, Python 3.10, frozen full Linux, typing/lint/build,
+- [x] Verify required suites, Python 3.10, frozen full Linux, typing/lint/build,
   outside-checkout installation and actual native Windows/remote artifacts.
+  Execution completed and results recorded; this checkbox does not mean every
+  whole-product CI test passed. See the final scoped decision and HTTP failures.
 
 Each S1/S2/S3 implementation is committed separately with its tests. Shared
 diagnostic primitives have no global singleton; artifact collection cannot grant
@@ -663,3 +686,105 @@ The independent review also verified that a real ValueError → KeyError test
 exception chain survives a sensitive collector OSError, without publishing the
 sentinel or changing either a failed or a passed outcome. These last changes
 remain test-support-only; Agent production code is still `dd02ed0`.
+
+The completed `21a6bce` workflows all succeeded on attempt 1: Core Runtime
+`34106709274`, Windows Product RC `34106709395`, Windows Installer `34106709479`,
+Repo Intelligence `34106709283`. Actual Core artifact `10013160996` is under
+`remote-core-21a/` (exit 0, **4115 captured passed / 36 captured skipped**,
+Python 3.12.14); Python-floor artifact `10013020364` is under
+`remote-python310-21a/` (exit 0, **376 captured passed**, Python 3.10.21).
+Both retain the intentional collector gap described above. Linux product artifact
+`10012676784` under `remote-linux-21a/` has **151 passed**, exit 0, and no collector
+gap. The independently rerun contract typecheck at this source state also exited
+0: `typecheck-seal.log`, zero errors and both negative fixtures rejected.
+
+The final evidence-outcome correction was committed separately as
+`040bbcb5a549cc6c5a7406b5faf16ec34e8d7b8b` (test support/regression/documentation
+only), and a normal push succeeded. Its new attempt-1 workflows are Core Runtime
+`34108192819`, Windows Product RC `34108192919`, Windows Installer `34108192771`,
+and Repo Intelligence `34108192922`. Their status is not replaced by the earlier
+`21a6bce` success. No additional natural-repetition or predecessor budget was used.
+
+## Final current-source CI and retained open failures — 040bbcb
+
+All runs below are **attempt 1** on exact SHA
+`040bbcb5a549cc6c5a7406b5faf16ec34e8d7b8b`; every job finished. No rerun was requested.
+
+| Workflow | Actual run | Conclusion and evidence |
+| --- | --- | --- |
+| Core Runtime | [34108192819](https://github.com/violetnozomi/coding-agent/actions/runs/34108192819) | **Success**, all three jobs; full child pytest exit 0, 4116 captured passed / 36 skipped; Python-floor exit 0, 377 passed |
+| Windows Product RC | [34108192919](https://github.com/violetnozomi/coding-agent/actions/runs/34108192919) | **Failure** in native product step: exit 1, 2 failed / 773 passed / 20 skipped records; controlled-failure check and upload passed; that job's fresh-install step was skipped; Linux product job passed |
+| Windows Installer | [34108192771](https://github.com/violetnozomi/coding-agent/actions/runs/34108192771) | **Success** |
+| Repo Intelligence | [34108192922](https://github.com/violetnozomi/coding-agent/actions/runs/34108192922) | **Success** |
+
+Actual downloaded artifacts, all under the task evidence directory:
+
+- Core `10013667651`, `core-runtime-34108192819-1`, in `remote-core-040/`;
+  full job `101698005491`, Python **3.12.14**. Full tests, controlled failure,
+  CLI, lint, typecheck and distribution build all passed. Independent
+  installed-wheel job `101698005516` passed its source-external probes.
+- Python-floor `10013530787`, `python310-runtime-34108192819-1`, in
+  `remote-python310-040/`; job `101698005169`, Python **3.10.21**. All 377
+  captured outcomes passed, actual exit 0; CLI and distribution build passed.
+- Windows `10013563420`, `windows-rc-evidence-34108192919-1`, in
+  `remote-windows-040/`; native job `101698005643`, Python **3.12.10**.
+  S1/S2/S3/helper/collector-related selection has **132 passed / 1 existing
+  platform skip**, no failure. The skip is the old POSIX forced-termination
+  daemon case; it is not substituted for native Windows process tests.
+- Linux product job `101698005440` passed. Actual downloaded attempt artifact
+  `10013256945` is under `remote-linux-040/`: exit 0, 151 passed records,
+  zero omissions/collection failures, matching source SHA. The earlier
+  `21a6bce` Linux artifact is separately retained, not substituted for this run.
+
+The latest Core and Windows suite JSONs both retain `collection_failed=true`
+**only for the intentionally injected collector-failure test row**;
+that row's original passed outcome is now present and its optional diagnostic
+status is explicitly `collection_failed`. Both have `records_omitted=0`.
+This flag is not hidden or rewritten to false. Windows controlled failure has
+no collector gap: exactly one failed row, two safe operation records, actual
+child exit 1, and `private_output_retained=false`. The self-check's success did
+not convert the native suite's exit 1 or workflow failure into success.
+
+### Two current Windows HTTP failures — open, not expanded into this task
+
+1. `tests/test_http_service.py::test_http_abort_retires_stream_part_before_run_settles`:
+   AssertionError at line **1085**, `first_delta.wait(timeout=2)` returned false.
+   The artifact locates the unobserved first-stream signal, not its cause.
+   It does not establish a slow runner, broken abort logic, or a Provider defect.
+2. `tests/test_http_service.py::test_http_run_settled_is_the_manager_commit_barrier`:
+   AssertionError at line **1158**, the next event was not the expected
+   `session.run.settled`. The actual event value was not in the approved
+   structural artifact, so duplicate/ordering/race causes are not invented.
+
+Both original outcomes, safe source locations and missing-operation-diagnostic
+statuses are retained. The first optional diagnostic traversal also reports
+`truncated=true`; no claim is made to have recovered a hidden HTTP trace.
+These tests/code were not modified by this task. They are a separate HTTP
+stability acceptance follow-up, not evidence that the original daemon nonce or
+Repo Map root cause has now been reproduced. They prevent a claim of complete
+Windows product acceptance. No HTTP rewrite, timeout inflation, skip or same-SHA
+rerun was performed to turn this result green.
+
+### Stop decision and remaining limits
+
+The requested production failure paths now leave safe, correlated first-cause
+evidence; deterministic workflow tests reject both inserted barriers and reordered
+outputs; proven in-scope defects have minimal fixes and RED/GREEN evidence.
+Required regression executions and actual platform/artifact results are recorded.
+Independent production/shared-helper/collector and documentation reviews are
+retained alongside the logs. Thus this bounded **diagnostic completion** task
+stops here, without expanding into whole-repository flaky-test repair.
+
+Remaining open: original daemon/map causes, the two HTTP failures above, earlier
+Provider-connect latency and post-close `/proc` polling observations, older
+watcher/index historical records, and diagnostic loss after forced runner/machine
+termination. No arbitrary-side-effect rollback, absolute product-stability
+guarantee, or model/benchmark capability claim is made. Local `/tmp` evidence is
+temporary; downloaded GitHub attempt artifacts and this document provide the
+review trail. No paid Provider call or SWE/benchmark was run. Main and the prior
+worktree remain unchanged; there is no PR, merge, reset, stash or force push.
+
+The final document-sealing commit changes only this Markdown report. Its parent
+`040bbcb` is the fully observed executable revision above, not a claim that any
+automatically scheduled checks on the documentation-only head have completed.
+No source, test or workflow change is hidden in the document seal.
