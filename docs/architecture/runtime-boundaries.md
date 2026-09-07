@@ -553,3 +553,18 @@ tests and CI; `ab67968` frozen local evidence; `068f0be` Python 3.10 cancellatio
 test boundary; `a2ff100` real-write readiness synchronization. The final seal adds
 only evidence and clarified ownership wording. This closes phases 0–4 within the
 defined boundary, with the explicit migration exceptions and stability limits above.
+
+## Follow-up: S1/S2/S3 stability evidence
+
+Starting from this phase's documentation seal `e56b07e`, the independent
+`codex/stability-diagnostics` branch addresses the retained daemon/map diagnostic
+gaps and workflow's timing-dependent regression. Existing owner relationships,
+checkpoint authority, the published index/graph read boundary and ToolRuntime
+contracts are preserved; no dependency on legacy host private methods is restored.
+
+See [Stability diagnostics](../stability/diagnostics-and-regressions.md) for the
+two-layer acceptance table, original run/job/attempt identifiers, fixed natural
+reproduction budget, controlled counterexamples, current verification and safe
+artifact results. An improved error record is not proof that an old failure is
+fixed. None of the original failed attempts or independent HTTP/watcher records
+above is superseded by this follow-up's successful tests.

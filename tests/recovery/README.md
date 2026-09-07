@@ -849,3 +849,21 @@ the observed daemon, map or workflow stability symptoms, nor the older HTTP/watc
 records. No RecoveryJournal schema/Undo contract or index-service algorithm was
 rewritten in this phase. The final evidence seal changes only Markdown and keeps
 the tested production code and executable tests unchanged.
+
+## Follow-up: stability diagnostics and deterministic regressions
+
+The separate `codex/stability-diagnostics` branch starts at `e56b07e` and retains
+all failed-attempt evidence above. It adds operation-scoped, secret-safe daemon
+and repository-map evidence plus deterministic workflow scheduling contracts;
+it does not reopen checkpoint/Undo/Redo ownership or ToolRuntime host boundaries.
+The original Windows daemon and Linux map causes remain unconfirmed. Workflow's
+old sleep assertion is a confirmed test-synchronization defect; a distinct
+controlled failure also proved and fixed stop-before-executor-drain ordering.
+
+Current-code commands, independent review, exact failed/passing attempts, scoped
+artifacts and the final integration gate are recorded in
+[Stability diagnostics](../../docs/stability/diagnostics-and-regressions.md).
+That record must be consulted for this branch's validation, not replaced with
+the earlier recovery/architecture CI successes. Historical HTTP/watcher symptoms
+remain independent follow-ups. No recovery schema or external-side-effect
+rollback guarantee is changed by this work.
