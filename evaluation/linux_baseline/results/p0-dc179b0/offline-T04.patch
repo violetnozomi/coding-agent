@@ -1,0 +1,7 @@
+diff --git a/tests/driver_probe.txt b/tests/driver_probe.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..846ce0a687083c8c2771dc3e59691bd75a63b802
+--- /dev/null
++++ b/tests/driver_probe.txt
+@@ -0,0 +1 @@
++OFFLINE wiring only; not a task solution.

@@ -1,0 +1,444 @@
+{
+  "schema": 1,
+  "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+  "pilot_task_ids": [
+    "T01",
+    "T04"
+  ],
+  "source": "synthetic/local fixtures; not SWE-bench",
+  "entry": "nz-coder run (headless CLI -> Native SDK -> Runner)",
+  "tasks": [
+    {
+      "task_id": "T01",
+      "category": "single_file",
+      "repository": "textkit",
+      "source": "synthetic/local",
+      "task_revision": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "prompt": "Fix parse_items: empty or whitespace-only input returns []; preserve trimming, order, and empty fields inside a nonempty comma-separated input. Add public regression tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T01] (outside task workspace)",
+      "acceptance_revision": "14fa64af7a685d66daa0a5b49ad731a7b6592c70c83b2ce4ef4f2905f150cd54",
+      "allowed_paths": [
+        "textkit/parser.py",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T02",
+      "category": "single_file",
+      "repository": "worklog",
+      "source": "synthetic/local",
+      "task_revision": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "prompt": "Make total_hours sum Decimal hours exactly, without float conversion. Support iterators and return Decimal(0) for an empty input. Preserve average_hours for nonempty input; add tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T02] (outside task workspace)",
+      "acceptance_revision": "784de13c01d116aabcb6d77bd9c9b902343f42450834b1b060cd40e6ee6ddaf4",
+      "allowed_paths": [
+        "worklog/reports.py",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T03",
+      "category": "single_file",
+      "repository": "textkit",
+      "source": "synthetic/local",
+      "task_revision": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "prompt": "Make top_words deterministic: frequency descending, alphabetical ascending on ties. Keep case-insensitive whitespace tokenization and the limit argument; add tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T03] (outside task workspace)",
+      "acceptance_revision": "b8a29806012db2e6bc4f985d29cd0ec62d88250843c03714c2617336f59de794",
+      "allowed_paths": [
+        "textkit/stats.py",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T04",
+      "category": "cross_file",
+      "repository": "worklog",
+      "source": "synthetic/local",
+      "task_revision": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "prompt": "Preserve Entry.project through JSON dumps/loads and CLI render output, including Unicode project names. Old rows without project load as ''. CLI default output must now include project; keep title/hours/archive behavior. Add tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T04] (outside task workspace)",
+      "acceptance_revision": "04a0c372b2d29a1921a3794324dfd045b2ff21f0952c49ca065e50c51c8823c9",
+      "allowed_paths": [
+        "worklog/",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T05",
+      "category": "cross_file",
+      "repository": "textkit",
+      "source": "synthetic/local",
+      "task_revision": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "prompt": "Wire lower=True through normalize_lines and --lower through textkit.cli, so both library and CLI lowercase normalized text when requested, while default retains case. Test both paths.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T05] (outside task workspace)",
+      "acceptance_revision": "b18ec4f05bba1ae55f119bcbc24d327fcd3d8553a7b0463939e856da6b666e2d",
+      "allowed_paths": [
+        "textkit/",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T06",
+      "category": "cross_file",
+      "repository": "worklog",
+      "source": "synthetic/local",
+      "task_revision": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "prompt": "Implement include_archived=True in store.select and pass --include-archived from CLI. Default still excludes archived entries; preserve order and do not mutate the input. Add tests for both layers.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T06] (outside task workspace)",
+      "acceptance_revision": "e90be14895f62501f4b2ac541a4654b2a04ae83f1c23ba241f72c04cd2e056d3",
+      "allowed_paths": [
+        "worklog/",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T07",
+      "category": "small_feature",
+      "repository": "textkit",
+      "source": "synthetic/local",
+      "task_revision": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "prompt": "Add textkit.slug.slugify(text) and export it from textkit. Lowercase Unicode letters, remove punctuation except hyphens, collapse whitespace/hyphen runs into one hyphen, strip edge hyphens. Empty/punctuation-only => ''. Add tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T07] (outside task workspace)",
+      "acceptance_revision": "6a421489aeeedf2795a04e1dd44e8b2bf6a350358bd7eb95e46b85419d34e5d1",
+      "allowed_paths": [
+        "textkit/",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T08",
+      "category": "small_feature",
+      "repository": "worklog",
+      "source": "synthetic/local",
+      "task_revision": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "prompt": "Add reports.project_totals(entries): dictionary of project to exact Decimal totals. Add CLI --summary output as a JSON object of project to decimal string; parse project from input (legacy missing => ''). Preserve ordinary list output and default archived filtering. Add tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T08] (outside task workspace)",
+      "acceptance_revision": "5ec66cddad7f1bb374aa6d61f4809ed9da8ddf48e534ae3e0e2e21f5e805521f",
+      "allowed_paths": [
+        "worklog/",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T09",
+      "category": "small_feature",
+      "repository": "textkit",
+      "source": "synthetic/local",
+      "task_revision": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "prompt": "Add textkit.table.select_columns(rows, columns), exported from textkit: produce fresh dicts in requested column order for iterable mapping rows. Missing keys map to None, duplicate columns occur once at their first position. Do not mutate inputs; support a columns iterator. Add tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T09] (outside task workspace)",
+      "acceptance_revision": "90abb0964686b7b27a878007782d6e0cf09f29b7c2957ac7bdabf619c13e7ef3",
+      "allowed_paths": [
+        "textkit/",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T10",
+      "category": "boundary_regression",
+      "repository": "worklog",
+      "source": "synthetic/local",
+      "task_revision": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "prompt": "Make average_hours return Decimal(0) for an empty sequence or exhausted iterator; keep nonempty average and consume iterators only once. Add regression tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T10] (outside task workspace)",
+      "acceptance_revision": "aa0790bbbdfcea5c36d86ad084f96aea0fb97fb43058fd81f060f030844e4fbc",
+      "allowed_paths": [
+        "worklog/reports.py",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T11",
+      "category": "boundary_regression",
+      "repository": "textkit",
+      "source": "synthetic/local",
+      "task_revision": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "prompt": "Make save_lines validate/consume its input before opening the output: a non-string or a generator error must leave an existing file byte-for-byte unchanged, and must not create a new file. Preserve newline formatting. This task does not require OS/crash atomicity. Add tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T11] (outside task workspace)",
+      "acceptance_revision": "9f91b9191d08dcaf78f947879f951c165774610b711b8d53eb09b876cc87bd9f",
+      "allowed_paths": [
+        "textkit/io.py",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    },
+    {
+      "task_id": "T12",
+      "category": "boundary_regression",
+      "repository": "worklog",
+      "source": "synthetic/local",
+      "task_revision": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "prompt": "Make append_entries all-or-nothing for input validation: a negative hours entry or an iterator exception must leave existing unchanged. A successful batch appends in order, preserves existing identity, and handles append_entries(existing, existing) without looping. Add tests.",
+      "setup": "Python >=3.10, pytest from frozen evaluator environment; no runtime dependencies",
+      "public_tests": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ],
+      "independent_acceptance": "catalog.TASK_SPECS[T12] (outside task workspace)",
+      "acceptance_revision": "4e38163f58359f9a25af026de52560252abaaead31b3029a30a74dea79e1e6f3",
+      "allowed_paths": [
+        "worklog/store.py",
+        "tests/"
+      ],
+      "forbidden_paths": [
+        ".git/",
+        ".gitignore",
+        "README.md",
+        "evaluator/",
+        "outside workspace"
+      ],
+      "proposed_budget": {
+        "max_turns": 30,
+        "wall_seconds": 600,
+        "total_tokens": 100000,
+        "cost": null,
+        "currency": null
+      }
+    }
+  ]
+}

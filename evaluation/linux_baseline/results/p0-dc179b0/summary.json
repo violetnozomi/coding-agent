@@ -1,0 +1,1157 @@
+{
+  "experiment_id": "linux-baseline-v1-p0-dc179b0",
+  "evidence_kind": "offline/preparation",
+  "delivery": "A: offline preparation; real baseline not executed",
+  "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+  "harness_revision": "dc179b07411bc3ff45830db7fbd4fd8bf459b8d8",
+  "harness_dirty": false,
+  "manifest_sha256": "e6dbaf4407e96ec4c814951028d265588f027d796fe313b57adcae88a247ae89",
+  "environment": {
+    "python": "3.13.12",
+    "os": "Linux",
+    "packages": {
+      "pytest": "9.0.3",
+      "openai": "2.36.0",
+      "rich": "14.2.0",
+      "prompt_toolkit": "3.0.52",
+      "PyYAML": "6.0.3",
+      "tree-sitter": "0.26.0",
+      "watchfiles": "1.1.1"
+    }
+  },
+  "model_config_status": "not authorized/frozen",
+  "real_model_calls": 0,
+  "paid_consumption": 0,
+  "paid_consumption_basis": "no real provider instantiated",
+  "planned": 12,
+  "started": 0,
+  "runtime_completed": 0,
+  "end_to_end_success": 0,
+  "patch_verified": 0,
+  "failures": 0,
+  "not_run": 12,
+  "started_with_unknown_usage": 0,
+  "success_rate": null,
+  "initial_tasks_valid": 12,
+  "offline_wiring_valid": true,
+  "offline_attempts": [
+    {
+      "task_id": "T01",
+      "attempt_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578",
+      "evidence_kind": "offline/driver_validation",
+      "counts_as_real_attempt": false,
+      "usage": null,
+      "cost": null,
+      "started_at": "2026-09-07T12:22:29.919952+00:00",
+      "patch": {
+        "file": "final.patch",
+        "sha256": "605dcc102c90ab7020f979f48a0cb140677624bb220bc6817e2406e755de5025",
+        "bytes": 271,
+        "changed_files": [
+          "tests/driver_probe.txt"
+        ]
+      },
+      "patch_verified": false,
+      "runtime_completed": false,
+      "within_budget": true,
+      "classification": "budget_exceeded",
+      "cleanup": "workspace retained; no rollback",
+      "runtime_status": "max_turns",
+      "events": [
+        {
+          "event": "session.created",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.run.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.tool.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.tool.finished",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.tool.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.tool.finished",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.tool.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.tool.finished",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        },
+        {
+          "event": "session.run.completed",
+          "run_id": "interaction-5b31d059793d4babb65bd7fb4c5fff94",
+          "session_id": "baseline-offline-b9cff3a7092a45a496173f808bc04578"
+        }
+      ],
+      "wiring": {
+        "evidence_kind": "offline/driver_validation",
+        "provider_calls": 6,
+        "budget_stopped": false,
+        "network_attempts": 0,
+        "profile": "main",
+        "assembly": "declared-agent-graph",
+        "permission_mode": "auto",
+        "stream": false,
+        "persist_session": true,
+        "provider": "offline",
+        "model": "offline-model",
+        "effort": null,
+        "system_instruction_source": "nz_coder.runtime.conversation.prompt.build",
+        "tool_schemas_by_request": [
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ]
+        ],
+        "request_facts": [
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "user"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "user",
+              "assistant",
+              "user",
+              "assistant"
+            ]
+          }
+        ],
+        "workspace_trust": "exact fixture fingerprint in isolated user store",
+        "environment_class": "ProductRunEnvironment",
+        "runner_class": "AgentRunner",
+        "services": {
+          "model": "ProductionTurnModelRuntime",
+          "tools": "ProductionToolRuntime",
+          "context": "ProductionContextManager",
+          "memory": "ProductionMemoryService",
+          "verifier": "ProductionCompletionVerifier",
+          "session_runtime": "SessionRuntime"
+        },
+        "session_files_in_isolated_home": 1,
+        "private_state_in_isolated_home": true,
+        "workspace_local_state_directories": [
+          "index"
+        ],
+        "reserved_fake_tokens": 60,
+        "reserved_fake_credits": "6"
+      },
+      "tool_calls": 3,
+      "tool_failed_events": 0,
+      "execution": {
+        "exit_code": 1,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 1.366
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 1,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.1139,
+          "collected": 3,
+          "passed": 1,
+          "failed": 2,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": false
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.114,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "finished_at": "2026-09-07T12:22:31.530695+00:00"
+    },
+    {
+      "task_id": "T04",
+      "attempt_id": "baseline-offline-b36426b34bb34b9db589008b716c1475",
+      "evidence_kind": "offline/driver_validation",
+      "counts_as_real_attempt": false,
+      "usage": null,
+      "cost": null,
+      "started_at": "2026-09-07T12:22:31.539627+00:00",
+      "patch": {
+        "file": "final.patch",
+        "sha256": "605dcc102c90ab7020f979f48a0cb140677624bb220bc6817e2406e755de5025",
+        "bytes": 271,
+        "changed_files": [
+          "tests/driver_probe.txt"
+        ]
+      },
+      "patch_verified": false,
+      "runtime_completed": false,
+      "within_budget": true,
+      "classification": "budget_exceeded",
+      "cleanup": "workspace retained; no rollback",
+      "runtime_status": "max_turns",
+      "events": [
+        {
+          "event": "session.created",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.run.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.tool.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.tool.finished",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.tool.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.tool.finished",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.tool.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.tool.finished",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        },
+        {
+          "event": "session.run.completed",
+          "run_id": "interaction-cdf152cdc618411b85d6ee0d47575725",
+          "session_id": "baseline-offline-b36426b34bb34b9db589008b716c1475"
+        }
+      ],
+      "wiring": {
+        "evidence_kind": "offline/driver_validation",
+        "provider_calls": 6,
+        "budget_stopped": false,
+        "network_attempts": 0,
+        "profile": "main",
+        "assembly": "declared-agent-graph",
+        "permission_mode": "auto",
+        "stream": false,
+        "persist_session": true,
+        "provider": "offline",
+        "model": "offline-model",
+        "effort": null,
+        "system_instruction_source": "nz_coder.runtime.conversation.prompt.build",
+        "tool_schemas_by_request": [
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ]
+        ],
+        "request_facts": [
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "user"
+            ]
+          },
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "tool",
+              "assistant",
+              "user",
+              "assistant",
+              "user",
+              "assistant"
+            ]
+          }
+        ],
+        "workspace_trust": "exact fixture fingerprint in isolated user store",
+        "environment_class": "ProductRunEnvironment",
+        "runner_class": "AgentRunner",
+        "services": {
+          "model": "ProductionTurnModelRuntime",
+          "tools": "ProductionToolRuntime",
+          "context": "ProductionContextManager",
+          "memory": "ProductionMemoryService",
+          "verifier": "ProductionCompletionVerifier",
+          "session_runtime": "SessionRuntime"
+        },
+        "session_files_in_isolated_home": 1,
+        "private_state_in_isolated_home": true,
+        "workspace_local_state_directories": [
+          "index"
+        ],
+        "reserved_fake_tokens": 60,
+        "reserved_fake_credits": "6"
+      },
+      "tool_calls": 3,
+      "tool_failed_events": 0,
+      "execution": {
+        "exit_code": 1,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 1.4669
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 1,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.164,
+          "collected": 3,
+          "passed": 0,
+          "failed": 3,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": false
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.1647,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "finished_at": "2026-09-07T12:22:33.352818+00:00"
+    },
+    {
+      "task_id": "T01",
+      "attempt_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7",
+      "evidence_kind": "offline/driver_validation",
+      "counts_as_real_attempt": false,
+      "usage": null,
+      "cost": null,
+      "started_at": "2026-09-07T12:22:33.363398+00:00",
+      "patch": {
+        "file": "final.patch",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0,
+        "changed_files": []
+      },
+      "patch_verified": false,
+      "runtime_completed": false,
+      "within_budget": false,
+      "classification": "budget_exceeded",
+      "cleanup": "workspace retained; no rollback",
+      "runtime_status": "error",
+      "events": [
+        {
+          "event": "session.created",
+          "run_id": "interaction-6788d5aed559433fa85b639ebe7c2073",
+          "session_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7"
+        },
+        {
+          "event": "session.run.started",
+          "run_id": "interaction-6788d5aed559433fa85b639ebe7c2073",
+          "session_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-6788d5aed559433fa85b639ebe7c2073",
+          "session_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-6788d5aed559433fa85b639ebe7c2073",
+          "session_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7"
+        },
+        {
+          "event": "session.tool.started",
+          "run_id": "interaction-6788d5aed559433fa85b639ebe7c2073",
+          "session_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7"
+        },
+        {
+          "event": "session.tool.finished",
+          "run_id": "interaction-6788d5aed559433fa85b639ebe7c2073",
+          "session_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7"
+        },
+        {
+          "event": "session.model.started",
+          "run_id": "interaction-6788d5aed559433fa85b639ebe7c2073",
+          "session_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7"
+        },
+        {
+          "event": "session.model.finished",
+          "run_id": "interaction-6788d5aed559433fa85b639ebe7c2073",
+          "session_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7"
+        },
+        {
+          "event": "session.run.completed",
+          "run_id": "interaction-6788d5aed559433fa85b639ebe7c2073",
+          "session_id": "baseline-offline-908f2a06b2f4410f8121562236ab81e7"
+        }
+      ],
+      "wiring": {
+        "evidence_kind": "offline/driver_validation",
+        "provider_calls": 1,
+        "budget_stopped": true,
+        "network_attempts": 0,
+        "profile": "main",
+        "assembly": "declared-agent-graph",
+        "permission_mode": "auto",
+        "stream": false,
+        "persist_session": true,
+        "provider": "offline",
+        "model": "offline-model",
+        "effort": null,
+        "system_instruction_source": "nz_coder.runtime.conversation.prompt.build",
+        "tool_schemas_by_request": [
+          [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ]
+        ],
+        "request_facts": [
+          {
+            "model": "offline-model",
+            "max_tokens": 8000,
+            "system_sha256_workspace_normalized": "21fe38207d9aec21b33bee5bb3fedc50ddf28e891de897d1c9788876ed88d2dc",
+            "message_roles": [
+              "system",
+              "user"
+            ]
+          }
+        ],
+        "workspace_trust": "exact fixture fingerprint in isolated user store",
+        "environment_class": "ProductRunEnvironment",
+        "runner_class": "AgentRunner",
+        "services": {
+          "model": "ProductionTurnModelRuntime",
+          "tools": "ProductionToolRuntime",
+          "context": "ProductionContextManager",
+          "memory": "ProductionMemoryService",
+          "verifier": "ProductionCompletionVerifier",
+          "session_runtime": "SessionRuntime"
+        },
+        "session_files_in_isolated_home": 1,
+        "private_state_in_isolated_home": true,
+        "workspace_local_state_directories": [
+          "index"
+        ],
+        "reserved_fake_tokens": 10,
+        "reserved_fake_credits": "1"
+      },
+      "tool_calls": 1,
+      "tool_failed_events": 0,
+      "execution": {
+        "exit_code": 1,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 14.9165
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 1,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2143,
+          "collected": 3,
+          "passed": 1,
+          "failed": 2,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": false
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.1169,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "finished_at": "2026-09-07T12:22:48.624330+00:00"
+    }
+  ],
+  "limitations": [
+    "synthetic local tasks, not open-source bug benchmark",
+    "no interactive CLI, daemon/HTTP, Windows or SWE-bench validation",
+    "temporary directories are not an OS sandbox",
+    "live pricing/admission adapter must be frozen and checked after authorization"
+  ]
+}

@@ -1,0 +1,710 @@
+[
+  {
+    "task_id": "T01",
+    "initial_git_revision": "8bad966a61313d52fafedf6c52d932f38be8601b",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1139,
+      "collected": 3,
+      "passed": 1,
+      "failed": 2,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1643,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1137,
+        "collected": 3,
+        "passed": 3,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1141,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T02",
+    "initial_git_revision": "b86d360006cce691efcd474dd923f9ac8d885c1c",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1139,
+      "collected": 3,
+      "passed": 1,
+      "failed": 2,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1141,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1138,
+        "collected": 3,
+        "passed": 3,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1144,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T03",
+    "initial_git_revision": "8bad966a61313d52fafedf6c52d932f38be8601b",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1138,
+      "collected": 3,
+      "passed": 1,
+      "failed": 2,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1142,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1137,
+        "collected": 3,
+        "passed": 3,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1641,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T04",
+    "initial_git_revision": "b86d360006cce691efcd474dd923f9ac8d885c1c",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1639,
+      "collected": 3,
+      "passed": 0,
+      "failed": 3,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1641,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1641,
+        "collected": 3,
+        "passed": 3,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1142,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T05",
+    "initial_git_revision": "8bad966a61313d52fafedf6c52d932f38be8601b",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.164,
+      "collected": 3,
+      "passed": 1,
+      "failed": 2,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1142,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1138,
+        "collected": 3,
+        "passed": 3,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1146,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T06",
+    "initial_git_revision": "b86d360006cce691efcd474dd923f9ac8d885c1c",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.164,
+      "collected": 3,
+      "passed": 1,
+      "failed": 2,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1646,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1139,
+        "collected": 3,
+        "passed": 3,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1641,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T07",
+    "initial_git_revision": "8bad966a61313d52fafedf6c52d932f38be8601b",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.164,
+      "collected": 4,
+      "passed": 0,
+      "failed": 4,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1144,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1137,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1643,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T08",
+    "initial_git_revision": "b86d360006cce691efcd474dd923f9ac8d885c1c",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.164,
+      "collected": 4,
+      "passed": 0,
+      "failed": 4,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.114,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1639,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1642,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T09",
+    "initial_git_revision": "8bad966a61313d52fafedf6c52d932f38be8601b",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1639,
+      "collected": 4,
+      "passed": 0,
+      "failed": 4,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1641,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1138,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1644,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T10",
+    "initial_git_revision": "b86d360006cce691efcd474dd923f9ac8d885c1c",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1639,
+      "collected": 3,
+      "passed": 1,
+      "failed": 2,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1144,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1137,
+        "collected": 3,
+        "passed": 3,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1142,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T11",
+    "initial_git_revision": "8bad966a61313d52fafedf6c52d932f38be8601b",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1642,
+      "collected": 3,
+      "passed": 0,
+      "failed": 3,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1146,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1138,
+        "collected": 3,
+        "passed": 3,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1144,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  },
+  {
+    "task_id": "T12",
+    "initial_git_revision": "b86d360006cce691efcd474dd923f9ac8d885c1c",
+    "valid": true,
+    "target": {
+      "exit_code": 1,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.164,
+      "collected": 4,
+      "passed": 1,
+      "failed": 3,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": false
+    },
+    "regression": {
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup_error": null,
+      "elapsed_seconds": 0.1641,
+      "collected": 4,
+      "passed": 4,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "accepted": true
+    },
+    "organizer_reference_replay": {
+      "target": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1139,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      },
+      "regression": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 0.1641,
+        "collected": 4,
+        "passed": 4,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "accepted": true
+      }
+    }
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "evidence_kind": "offline/driver_validation",
+  "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+  "harness_revision": "dc179b07411bc3ff45830db7fbd4fd8bf459b8d8",
+  "path_convention": "Private absolute artifact prefixes replaced with <LOCAL_ARTIFACT_ROOT>; commands otherwise preserved.",
+  "checks": [
+    {
+      "command": "env -u API_KEY -u OPENAI_API_KEY -u ANTHROPIC_API_KEY PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/evaluation/test_linux_baseline.py tests/test_headless_cli.py --tb=short --basetemp=<LOCAL_ARTIFACT_ROOT>/linux-baseline-v1-p0-tests-2",
+      "exit_code": 0,
+      "passed": 55,
+      "elapsed_seconds": 30.09,
+      "phase": "immediately before harness commit; same executable source"
+    },
+    {
+      "command": "python -m ruff check evaluation/linux_baseline tests/evaluation/test_linux_baseline.py --output-format concise",
+      "exit_code": 0,
+      "phase": "frozen harness"
+    },
+    {
+      "command": "python -m nz_coder run --help",
+      "exit_code": 0,
+      "phase": "entry inspection; product unchanged"
+    },
+    {
+      "command": "python -m evaluation.linux_baseline.runner --output <LOCAL_ARTIFACT_ROOT>/linux-baseline-v1-p0-dc179b0 --dry-run --publish evaluation/linux_baseline/results/p0-dc179b0",
+      "exit_code": 0,
+      "initial_tasks_valid": 12,
+      "offline_wiring_valid": true,
+      "real_model_calls": 0,
+      "phase": "frozen harness; clean at start"
+    }
+  ],
+  "earlier_failures_retained": [
+    "Development probe: wrong unused helper import in worker finalizer; untrusted fixture shell approval denied under auto; no paid calls.",
+    "Driver tests: 1 failed, 30 passed; directory-presence assertion confused auxiliary workspace index with private Session storage.",
+    "Driver focused test: 1 failed, 30 deselected; scripted responses hit real max_turns completion gate. Test now asserts faithful terminal classification, not forced completion."
+  ],
+  "no_product_files_changed": true,
+  "no_full_platform_ci_requested": true
+}
