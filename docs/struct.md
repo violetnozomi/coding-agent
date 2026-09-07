@@ -1,5 +1,10 @@
 # NZ-Coder 核心系统架构
 
+本轮 ToolRuntime 边界收紧的实际负责人、调用契约、兼容例外和验收记录见
+[Runtime boundaries](architecture/runtime-boundaries.md)。工具批次现在通过声明的
+policy/lifecycle/projection 能力运行；事务、结果观察和写后分析由独立组件持有明确依赖。
+这不代表整个 ProductRunEnvironment 或所有旧 host 接口都已删除。
+
 > 范围说明：这份文档讲 NZ-Coder 主干 Agent；历史 Dodo/PySide 平行产品已在 A034 收敛删除，不再构成第二套架构。
 > 目标是帮助你从“代码能跑”提升到“我知道它为什么这么设计、每层怎么协作、以后该怎么改”。
 

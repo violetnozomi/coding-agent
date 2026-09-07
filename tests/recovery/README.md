@@ -762,3 +762,32 @@ and fresh-install steps. All four workflows on that SHA succeeded without reruns
 The exact commands, log paths, microbench cost and limitations are appended in
 the new acceptance record. This closes the known mixed-generation/recovery-refresh
 scope, not every historical HTTP or watcher stability symptom.
+
+## Follow-up: ToolRuntime ownership boundary (2026-09-07)
+
+The separate `codex/runtime-boundary-tightening` branch starts at `6c1c0e5`,
+preserving accepted recovery and index consistency. It moves actual tool
+transaction/result/post-write policy to focused owners; it does not rewrite
+RecoveryJournal, change ledger schema, or redefine Undo/Redo guarantees.
+
+Production commit `2626d39`, contract/CI commit `08c3c07` share production tree
+`45aea5b0d3d5111f0199ec253615f7d618f21dea`. Final frozen local Linux acceptance:
+`env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 PYTHONUTF8=1 python -m pytest -q --tb=short`
+→ **4044 passed / 35 skipped**, exit 0. The combined Native Runner, package,
+architecture, tool contracts, recovery, session-revert and HTTP run completed
+**428 passed**, exit 0. Scope/commands and retained intermediate failures are in
+[Runtime boundaries](../../docs/architecture/runtime-boundaries.md).
+
+Real-component regressions keep the distinction between execution and admitted
+output, committed/compensated/partial file effects, and the first resumed request.
+Direct/external checkpoint cancellation waits for already-started real JSON Store
+workers; the final stored interrupted state cannot be overwritten by that retired
+tool batch. Progress content waits for output admission. Pure text rewrites retain
+validated Plan/handoff control facts without restoring private output aliases.
+
+The initial full runs (21 failures, then 3 compatibility failures) remain recorded.
+Required fixture migrations retained all original assertions; Question metadata
+and Bash progress regressions were fixed in production, not by weakening their
+tests. Historical Windows HTTP/watcher failures above remain independent records.
+Native Windows on this branch's current code is pending remote CI at this append;
+the earlier recovery/index Windows green runs are not substituted for it.
