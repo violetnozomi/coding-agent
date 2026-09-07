@@ -6,11 +6,14 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from nz_coder.lsp.client import uri_to_path
 from nz_coder.lsp.manager import get_client_for_file
 from nz_coder.tools.repo_ranking import MatchRank, rank_repo_symbol
+
+if TYPE_CHECKING:
+    from nz_coder.state.diagnostics import OperationDiagnostic
 
 
 _SYMBOL_KIND_NAMES = {
@@ -159,6 +162,7 @@ def collect_workspace_symbols(
     base: Path,
     query: str,
     limit: int,
+    operation_diagnostic: OperationDiagnostic | None = None,
 ) -> WorkspaceSymbolResult:
     """Collect bounded, in-scope workspace symbols without failing Repo Map."""
     try:
@@ -235,11 +239,19 @@ def collect_workspace_symbols(
             symbols=symbols,
             notice=notice,
         )
-    except Exception:
+    except Exception as exc:
+        notice = "LSP semantic enrichment unavailable"
+        if operation_diagnostic is not None:
+            operation_diagnostic.failure(exc)
+            evidence = "saved" if operation_diagnostic.saved else "unavailable"
+            notice += (
+                f"; diagnostic={operation_diagnostic.id}; "
+                f"evidence={evidence}"
+            )
         return WorkspaceSymbolResult(
             source="",
             symbols=(),
-            notice="LSP semantic enrichment unavailable",
+            notice=notice,
         )
 
 

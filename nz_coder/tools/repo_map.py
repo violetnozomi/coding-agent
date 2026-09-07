@@ -2,23 +2,30 @@
 # pyright: reportUnknownVariableType=false
 from __future__ import annotations
 
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
-from nz_coder.protocol.public_error import format_public_error
+from nz_coder.protocol.public_error import TrustedPublicMessage, format_public_error
 from nz_coder.intelligence.code_index import (
     AmbiguousSymbolError,
     FileEntry,
     SymbolEntry,
 )
-from nz_coder.intelligence.service import workspace_repo_intelligence
+from nz_coder.intelligence.service import (
+    _RepoIntelligenceUnavailable,
+    workspace_repo_intelligence,
+)
 from nz_coder.lsp.workspace_symbols import (
     collect_workspace_symbols,
     format_workspace_symbols,
 )
 from nz_coder.runtime.process.workdir import current_workdir
-from nz_coder.tools import register
+from nz_coder.state.diagnostics import OperationDiagnostic
+from nz_coder.state.sessions import active_session_id
+from nz_coder.tools import current_tool_call_id, register
 from nz_coder.tools.repo_languages import is_supported_source
 from nz_coder.tools.repo_ranking import MatchRank, rank_repo_symbol
 
@@ -35,10 +42,17 @@ def _build_index(
     *,
     max_files: int,
     refresh: bool,
+    operation_diagnostic: OperationDiagnostic | None = None,
 ) -> tuple[list[FileEntry], int, int]:
     existing_service = workspace_repo_intelligence(workspace, create=False)
+    failure_diagnostic = (
+        partial(_capture_failure, operation_diagnostic)
+        if operation_diagnostic is not None else None
+    )
     service = existing_service or workspace_repo_intelligence(
-        workspace, max_files=max_files,
+        workspace,
+        max_files=max_files,
+        failure_diagnostic=failure_diagnostic,
     )
     if service is None:
         raise RuntimeError("Repository intelligence service unavailable")
@@ -64,8 +78,72 @@ def _build_index(
         base,
         max_files=max_files,
         refresh=refresh,
+        failure_diagnostic=failure_diagnostic,
     )
     return entries, stats.reused, stats.omitted
+
+
+def _capture_failure(
+    diagnostic: OperationDiagnostic,
+    error: BaseException,
+) -> Callable[[], tuple[str, bool]]:
+    captured = diagnostic.capture(error)
+
+    def persist() -> tuple[str, bool]:
+        public = diagnostic.persist(captured)
+        return diagnostic.id, bool(
+            public.public_error.metadata.get("evidence_saved")
+        )
+
+    return persist
+
+
+def _operation_diagnostic() -> OperationDiagnostic:
+    identities = {"call_id": current_tool_call_id()}
+    try:
+        identities["session_id"] = active_session_id() or ""
+    except Exception:
+        identities["session_id"] = ""
+    return OperationDiagnostic(
+        "repo_map", workspace=current_workdir(), identities=identities,
+    )
+
+
+def _index_unavailable(
+    diagnostic: OperationDiagnostic,
+    error: _RepoIntelligenceUnavailable,
+) -> str:
+    public = diagnostic.failure(error)
+    current_evidence_saved = bool(
+        public.public_error.metadata.get("evidence_saved")
+    )
+    diagnostic.advance(
+        "index_read",
+        generation=error.generation,
+        cache_hits=0,
+        index_warming=error.status == "warming",
+        index_failed=error.status == "failed",
+        index_ready=error.status == "ready",
+    )
+    diagnostic_id = error.diagnostic_id or diagnostic.id
+    evidence_saved = (
+        error.diagnostic_evidence_saved
+        if error.diagnostic_id else current_evidence_saved
+    )
+    category = error.status if error.status in {"warming", "failed"} else "unavailable"
+    evidence = "saved" if evidence_saved else "unavailable"
+    return format_public_error(TrustedPublicMessage(
+        "repo_map_index_unavailable",
+        (
+            f"Repository index unavailable ({category}); "
+            f"diagnostic={diagnostic_id}; evidence={evidence}."
+        ),
+        metadata={
+            "diagnostic_id": diagnostic_id,
+            "evidence_saved": evidence_saved,
+            "index_status": category,
+        },
+    ))
 
 
 def code_references(
@@ -144,6 +222,8 @@ def repo_map(
     semantic: bool = False,
 ) -> str:
     """Return a compact multi-language repository structure map."""
+    diagnostic = _operation_diagnostic()
+    diagnostic.advance("path_validation")
     try:
         workspace, base = _safe_path(path)
         if not base.exists():
@@ -151,27 +231,31 @@ def repo_map(
         if base.is_file() and not is_supported_source(base):
             return f"Error: repo_map does not support source file: {path}"
 
+        diagnostic.advance("settings")
         settings = current_run_settings()
         file_limit = int(max_files or settings.repo_map_max_files)
         symbol_limit = int(max_symbols or settings.repo_map_max_symbols)
         file_limit = max(1, min(file_limit, 500))
         symbol_limit = max(1, min(symbol_limit, 5000))
+        diagnostic.advance("index_read")
         entries, reused, omitted = _build_index(
             workspace,
             base,
             max_files=file_limit,
             refresh=bool(refresh),
+            operation_diagnostic=diagnostic,
         )
         if not entries:
             return f"No supported source files found under {path!r}"
 
+        diagnostic.advance("ranking")
         ranked_files: list[
             tuple[MatchRank, FileEntry, list[tuple[MatchRank, SymbolEntry]]]
         ] = []
         parse_errors: list[str] = []
         for entry in entries:
             if entry.parse_error:
-                parse_errors.append(f"{entry.path}: {entry.parse_error}")
+                parse_errors.append(f"{entry.path}: parse unavailable")
                 continue
             module_prefix = entry.path.rsplit(".", 1)[0].replace("/", ".") + "."
             ranked_symbols = []
@@ -219,6 +303,7 @@ def repo_map(
 
         semantic_rows: list[str] = []
         if semantic:
+            diagnostic.advance("semantic_probe")
             probe_entry = ranked_files[0][1] if ranked_files else entries[0]
             semantic_result = collect_workspace_symbols(
                 probe=workspace / probe_entry.path,
@@ -226,9 +311,11 @@ def repo_map(
                 base=base,
                 query=query,
                 limit=symbol_limit,
+                operation_diagnostic=diagnostic,
             )
             semantic_rows = format_workspace_symbols(semantic_result)
 
+        diagnostic.advance("render", files=len(entries), symbols=shown_symbols)
         if not rows and not semantic_rows:
             suffix = f" matching {query!r}" if query else ""
             return f"No source definitions found under {path!r}{suffix}"
@@ -261,10 +348,12 @@ def repo_map(
             )
             header.extend(f"  - {item}" for item in parse_errors[:5])
         return "\n".join(header + rows + semantic_rows)
+    except _RepoIntelligenceUnavailable as exc:
+        return _index_unavailable(diagnostic, exc)
     except ValueError as exc:
-        return format_public_error(exc)
+        return format_public_error(diagnostic.failure(exc))
     except Exception as exc:
-        return format_public_error(exc)
+        return format_public_error(diagnostic.failure(exc))
 
 
 register(

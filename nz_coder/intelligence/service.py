@@ -1,7 +1,9 @@
 """Workspace-owned production lifecycle for repository intelligence."""
 from __future__ import annotations
 
+import builtins
 from collections import OrderedDict
+from collections.abc import Callable
 from concurrent.futures import CancelledError, Future, ThreadPoolExecutor, TimeoutError as FutureTimeout
 from contextlib import contextmanager
 from copy import deepcopy
@@ -10,7 +12,9 @@ from pathlib import Path
 from threading import Event, RLock, Thread, current_thread, local
 import atexit
 import os
+import re
 import time
+import uuid
 import weakref
 
 from nz_coder.intelligence.code_index import (
@@ -20,6 +24,33 @@ from nz_coder.intelligence.code_index import (
 )
 from nz_coder.intelligence.repository_graph import RepositoryGraph
 from nz_coder.lsp.servers import language_for_path
+from nz_coder.state.diagnostics import OperationDiagnostic
+
+
+_DIAGNOSTIC_ID = re.compile(r"^diag-[0-9a-f]{32}$")
+_FailurePersistence = Callable[[], tuple[str, bool]]
+_FailureDiagnostic = Callable[[BaseException], _FailurePersistence]
+_INDEX_STATUSES = frozenset({
+    "cold", "warming", "updating", "failed", "unavailable", "closed",
+})
+
+
+class _RepoIntelligenceUnavailable(RuntimeError):
+    """Safe structural state from one failed bounded index read."""
+
+    def __init__(
+        self, status: str, generation: int, *, diagnostic_id: str = "",
+        diagnostic_evidence_saved: bool = False,
+    ) -> None:
+        self.status = status if status in _INDEX_STATUSES else "unavailable"
+        self.generation = max(0, int(generation))
+        self.diagnostic_id = (
+            diagnostic_id if _DIAGNOSTIC_ID.fullmatch(diagnostic_id) else ""
+        )
+        self.diagnostic_evidence_saved = bool(
+            self.diagnostic_id and diagnostic_evidence_saved
+        )
+        super().__init__("Repository intelligence is unavailable")
 
 
 @dataclass(frozen=True)
@@ -39,6 +70,8 @@ class RepoIntelligenceState:
     watcher_backend: str = "none"
     lsp_augmented_calls: int = 0
     languages: tuple[str, ...] = ()
+    diagnostic_id: str = ""
+    diagnostic_evidence_saved: bool = False
 
 
 class RepoIntelligenceService:
@@ -104,7 +137,10 @@ class RepoIntelligenceService:
         with self._lock:
             return self._state
 
-    def prewarm(self, *, max_files: int = 5000) -> Future:
+    def prewarm(
+        self, *, max_files: int = 5000,
+        failure_diagnostic: _FailureDiagnostic | None = None,
+    ) -> Future:
         """Schedule one non-blocking cold build for the workspace."""
         with self._lock:
             if self._closed:
@@ -112,8 +148,18 @@ class RepoIntelligenceService:
             if self._future is not None and not self._future.done():
                 return self._future
             previous = self._state
-            self._state = replace(previous, status="warming", error="", worker_queue=1)
-            self._future = self._executor.submit(self._on_worker, self._build, max(1, int(max_files)))
+            self._state = replace(
+                previous, status="warming", error="", worker_queue=1,
+                diagnostic_id="", diagnostic_evidence_saved=False,
+            )
+            build_args = (
+                (max(1, int(max_files)), failure_diagnostic)
+                if failure_diagnostic is not None
+                else (max(1, int(max_files)),)
+            )
+            self._future = self._executor.submit(
+                self._on_worker, self._build, *build_args,
+            )
             future = self._future
             future.add_done_callback(self._build_cancelled)
         self._emit("repo_intelligence_prewarm", max_files=max_files)
@@ -165,7 +211,10 @@ class RepoIntelligenceService:
             self._state = state
         return state
 
-    def _update(self, action, *, paths=(), cold=False, lsp=False):
+    def _update(
+        self, action, *, paths=(), cold=False, lsp=False,
+        failure_diagnostic: _FailureDiagnostic | None = None,
+    ):
         """Serialize all mutations through graph completion and cache publication.
 
         SQLite may already be committed if graph publication fails. We do not
@@ -173,6 +222,11 @@ class RepoIntelligenceService:
         then rebuild the complete graph on the next successful update.
         """
         started = time.perf_counter()
+        failure: BaseException | None = None
+        failure_traceback = None
+        failed_state: RepoIntelligenceState | None = None
+        persist_failure: _FailurePersistence | None = None
+        diagnostic_id = ""
         if getattr(self._worker, "reading", False) or getattr(self._worker, "updating", False):
             raise RuntimeError("Cannot refresh repository view from inside a query/update callback")
         try:
@@ -183,7 +237,11 @@ class RepoIntelligenceService:
                     previous = self._state
                     paths = tuple(dict.fromkeys((*self._pending_paths, *paths)))
                     self._pending_paths = paths
-                    self._state = replace(previous, status="warming" if cold else "updating", worker_queue=1, error="")
+                    self._state = replace(
+                        previous, status="warming" if cold else "updating",
+                        worker_queue=1, error="", diagnostic_id="",
+                        diagnostic_evidence_saved=False,
+                    )
                 self._worker.updating = True
                 try:
                     # Detect even standalone low-level writes before deciding
@@ -208,14 +266,69 @@ class RepoIntelligenceService:
                         self._pending_paths = ()
                         self._repair_scan = False
                 except Exception as exc:
+                    failure = exc
+                    failure_traceback = exc.__traceback__
+                    if failure_diagnostic is not None:
+                        try:
+                            persist_failure = failure_diagnostic(exc)
+                        except Exception:
+                            pass
+                    else:
+                        # Reserve a correlation root without touching storage.
+                        # The diagnostic object and traceback extraction are
+                        # deliberately deferred until all producer locks exit.
+                        diagnostic_id = f"diag-{uuid.uuid4().hex}"
+                    kind = type(exc)
+                    safe_type = (
+                        kind.__name__
+                        if getattr(builtins, kind.__name__, None) is kind
+                        else "Exception"
+                    )
                     with self._lock:
                         self._repair_scan = self._repair_scan or cold
                         self._clear_queries()
                         if not self._closed:
-                            self._state = replace(previous, status="failed", error=f"{type(exc).__name__}: {exc}", last_updated_paths=tuple(paths), worker_queue=0)
-                    raise
+                            failed_state = replace(
+                                previous, status="failed", error=safe_type,
+                                last_updated_paths=tuple(paths), worker_queue=0,
+                                diagnostic_id=diagnostic_id,
+                                diagnostic_evidence_saved=False,
+                            )
+                            self._state = failed_state
                 finally:
                     self._worker.updating = False
+            if failure is not None:
+                if persist_failure is None and diagnostic_id:
+                    root_diagnostic_id = diagnostic_id
+
+                    def persist_service_failure() -> tuple[str, bool]:
+                        return self._persist_failure_diagnostic(
+                            root_diagnostic_id, failure,
+                        )
+
+                    persist_failure = persist_service_failure
+                evidence_saved = False
+                if persist_failure is not None:
+                    try:
+                        candidate, evidence_saved = persist_failure()
+                        if (
+                            isinstance(candidate, str)
+                            and _DIAGNOSTIC_ID.fullmatch(candidate)
+                        ):
+                            diagnostic_id = candidate
+                        else:
+                            diagnostic_id = ""
+                    except Exception:
+                        pass
+                if diagnostic_id and failed_state is not None:
+                    with self._lock:
+                        if self._state is failed_state:
+                            self._state = replace(
+                                failed_state,
+                                diagnostic_id=diagnostic_id,
+                                diagnostic_evidence_saved=bool(evidence_saved),
+                            )
+                raise failure.with_traceback(failure_traceback)
             return value, stats
         finally:
             state = self.state
@@ -228,14 +341,37 @@ class RepoIntelligenceService:
                 call_edges=state.call_edges, files_omitted=state.files_omitted,
             )
 
-    def _build(self, max_files: int) -> RepoIntelligenceState:
+    def _persist_failure_diagnostic(
+        self, diagnostic_id: str, failure: BaseException,
+    ) -> tuple[str, bool]:
+        """Persist a service-owned first cause outside producer locks."""
+        diagnostic = OperationDiagnostic(
+            "repo_map", workspace=self.workspace, diagnostic_id=diagnostic_id,
+            identities={"workspace_id": str(self.workspace)},
+        )
+        diagnostic.advance("index_read")
+        public = diagnostic.persist(diagnostic.capture(failure))
+        return diagnostic.id, bool(
+            public.public_error.metadata.get("evidence_saved")
+        )
+
+    def _build(
+        self, max_files: int,
+        failure_diagnostic: _FailureDiagnostic | None = None,
+    ) -> RepoIntelligenceState:
         try:
-            self.scan(self.workspace, max_files=max_files)
+            self.scan(
+                self.workspace, max_files=max_files,
+                failure_diagnostic=failure_diagnostic,
+            )
         except Exception:
             pass  # _update records failure; Future consumers receive typed state.
         return self.state
 
-    def scan(self, base: Path, *, max_files: int, refresh: bool = False):
+    def scan(
+        self, base: Path, *, max_files: int, refresh: bool = False,
+        failure_diagnostic: _FailureDiagnostic | None = None,
+    ):
         """Explicit scans publish a complete graph, including partial map scopes."""
         def scan(pending):
             self._max_files = max_files
@@ -243,7 +379,9 @@ class RepoIntelligenceService:
                 self.index.update_paths(list(pending))
             return self.index.scan(base, max_files=max_files, refresh=refresh)
 
-        return self._update(scan, cold=True)
+        return self._update(
+            scan, cold=True, failure_diagnostic=failure_diagnostic,
+        )
 
     def refresh_paths(self, paths, *, max_files: int = 5000):
         """Synchronous product write/recovery hook; failure is NOT success."""
@@ -533,7 +671,11 @@ class RepoIntelligenceService:
         """Bounded index-only product reads obey the same published boundary."""
         with self._read_view(wait_budget_ms) as state:
             if state.status != "ready":
-                raise RuntimeError(f"Repository intelligence unavailable ({state.status})")
+                raise _RepoIntelligenceUnavailable(
+                    state.status, state.generation,
+                    diagnostic_id=state.diagnostic_id,
+                    diagnostic_evidence_saved=state.diagnostic_evidence_saved,
+                )
             return callback(self.index)
 
     def _cached_query(self, operation: str, args: tuple, compute, *, wait_budget_ms: float = 50.0) -> dict:
@@ -1067,6 +1209,7 @@ atexit.register(_close_all_repo_intelligence_services)
 def workspace_repo_intelligence(
     workspace: Path, *, create: bool = True, interval: float = 1.0,
     max_files: int = 5000, start_watcher: bool = False,
+    failure_diagnostic: _FailureDiagnostic | None = None,
 ) -> RepoIntelligenceService | None:
     """Return the process-wide workspace service without adding an owner lease."""
     key = Path(workspace).resolve()
@@ -1088,7 +1231,9 @@ def workspace_repo_intelligence(
         if start_watcher:
             service._deferred_watch = (interval, max(0.05, interval * 2), max_files)
         _REGISTRY[key] = (service, 0)
-    future = service.prewarm(max_files=max_files)
+    future = service.prewarm(
+        max_files=max_files, failure_diagnostic=failure_diagnostic,
+    )
     if start_watcher:
         future.add_done_callback(lambda completed: _start_watcher_after_prewarm(
             completed,
