@@ -1,0 +1,73 @@
+diff --git a/tests/test_project.py b/tests/test_project.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e282024549cc69887186889a32fad063a2070f72
+--- /dev/null
++++ b/tests/test_project.py
+@@ -0,0 +1,36 @@
++"""Target acceptance tests: project preserved through codec and CLI."""
++import io
++import json
++from decimal import Decimal
++from worklog.models import Entry
++from worklog.codec import dumps, loads
++from worklog.cli import main
++
++def test_roundtrip_preserves_project_unicode():
++    entries = [Entry("документ", Decimal("2.5"), project="Роскосмос/Проект-α")]
++    assert loads(dumps(entries)) == entries
++
++def test_dumps_includes_project_field():
++    raw = json.loads(dumps([Entry("t", Decimal("1"), project="acme")]))
++    assert raw == [{"title": "t", "hours": "1",
++                    "project": "acme", "archived": False}]
++
++def test_old_row_without_project_loads_as_empty():
++    (loaded,) = loads('[{"title":"legacy","hours":"1"}]')
++    assert loaded == Entry("legacy", Decimal("1"))
++    assert loaded.project == ""
++
++def test_cli_default_output_includes_project_unicode():
++    out = io.StringIO()
++    main([], io.StringIO('[{"title":"бета","hours":"3","project":"Гамма"}]'), out)
++    (row,) = json.loads(out.getvalue())
++    assert row == {"title": "бета", "hours": "3", "project": "Гамма"}
++
++def test_cli_default_keeps_title_hours_and_archive_filtering():
++    out = io.StringIO()
++    data = ('[{"title":"b","hours":"4","project":"p1"},'
++            '{"title":"x","hours":"9","project":"p2","archived":true}]')
++    main([], io.StringIO(data), out)
++    rows = json.loads(out.getvalue())
++    assert len(rows) == 1
++    assert rows[0] == {"title": "b", "hours": "4", "project": "p1"}
+diff --git a/worklog/cli.py b/worklog/cli.py
+index afeee28903236bfa6e91ef7cf65768d8db4754fd..9b26126157f2bb7a03924b1601005835e2ce1868 100644
+--- a/worklog/cli.py
++++ b/worklog/cli.py
+@@ -6,7 +6,8 @@ from .codec import loads
+ from .store import select
+ 
+ def render(entries):
+-    return [dict(title=e.title, hours=str(e.hours)) for e in entries]
++    return [dict(title=e.title, hours=str(e.hours), project=e.project)
++            for e in entries]
+ 
+ def main(argv=None, stdin=None, stdout=None):
+     parser = argparse.ArgumentParser()
+diff --git a/worklog/codec.py b/worklog/codec.py
+index 29c1ad60a57d706a3df99c3739dfe9eb8ae7c443..2edf2661a55798c0599dd9a071745934d74c35d9 100644
+--- a/worklog/codec.py
++++ b/worklog/codec.py
+@@ -4,9 +4,11 @@ from decimal import Decimal
+ from .models import Entry
+ 
+ def dumps(entries):
+-    return json.dumps([dict(title=e.title, hours=str(e.hours), archived=e.archived)
++    return json.dumps([dict(title=e.title, hours=str(e.hours),
++                            project=e.project, archived=e.archived)
+                        for e in entries])
+ 
+ def loads(text):
+     return [Entry(row["title"], Decimal(row["hours"]),
++                  project=row.get("project", ""),
+                   archived=row.get("archived", False)) for row in json.loads(text)]

@@ -1,0 +1,281 @@
+{
+  "evidence_kind": "live/P1-T04-safe-projection",
+  "experiment_id": "p1-t04-live-20260908-130239",
+  "delivery": "C: T04 first attempt finished, independent patch acceptance and usage complete",
+  "authorization": {
+    "confirmed": true,
+    "scope": "current session explicit T04 continuation authorization; one attempt then stop",
+    "allocation_from_original_balance": "5",
+    "currency": "CNY",
+    "allowed_tasks": [
+      "T04"
+    ],
+    "execution_order": [
+      "T04"
+    ],
+    "attempts_per_task": 1,
+    "auto_continue_remaining_tasks": false,
+    "credential_source": "previously approved project dotenv; necessary fields only"
+  },
+  "configuration": {
+    "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+    "harness_revision": "44378ce38e166b2df0616efd6f0a947115500dab",
+    "task_manifest_hash": "e6dbaf4407e96ec4c814951028d265588f027d796fe313b57adcae88a247ae89",
+    "versions": {
+      "python": "3.13.12",
+      "os": "Linux",
+      "packages": {
+        "pytest": "8.4.2",
+        "openai": "2.36.0",
+        "rich": "14.2.0",
+        "prompt_toolkit": "3.0.52",
+        "PyYAML": "6.0.3",
+        "tree-sitter": "0.26.0",
+        "watchfiles": "1.1.1",
+        "httpx": "0.28.1"
+      }
+    },
+    "provider": "openai-compatible",
+    "endpoint": "https://api.deepseek.com",
+    "model": "deepseek-v4-flash",
+    "request_modes": {
+      "main": {
+        "thinking": "enabled",
+        "effort": "high",
+        "output_limit": 8000
+      },
+      "auxiliary": {
+        "thinking": "disabled",
+        "effort": null,
+        "output_limit": 1024
+      },
+      "transport_purpose": "unknown; validates mode set, not message or tool labels",
+      "budget_scope": "shared task/experiment ledger; uncertainty stops all modes"
+    },
+    "profile": "main; restricted P1 tool allowlist; child_agents=false",
+    "tools": [
+      "list_directory",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "apply_patch",
+      "bash",
+      "glob_search",
+      "grep_search",
+      "repo_map",
+      "read_symbol",
+      "find_symbol_callers",
+      "update_scratchpad",
+      "read_scratchpad",
+      "todo",
+      "diff_status",
+      "verify_changed_files"
+    ],
+    "system_source": "nz_coder.runtime.conversation.prompt.build",
+    "system_source_blob": "d2a754f467fd39a86bcbbc88ed55c68bf93e172b",
+    "agent_tree": "3300e25b872336eefab34334aa18dc374d322973",
+    "planning": false,
+    "reflection": false,
+    "mcp": false,
+    "paid_embeddings": false,
+    "auto_mode_classifier": false,
+    "sdk_retries": 2,
+    "http_transport_retries": 0,
+    "input_reservation_tokens": 1048576,
+    "per_task_cumulative_token_budget": 2000000,
+    "max_main_turns": 30,
+    "worker_wall_seconds": 600,
+    "rates": {
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "retrieved_at": "2026-09-08T06:47:24Z",
+      "source_sha256": "899affbdbc33d0be620d8dea59e86f5036c11b5410b14d060b8d2874c74f38e5",
+      "effective_date": null,
+      "calculation_basis": "published peak-rate ceiling for all periods; not account invoice",
+      "peak_periods": "Mon-Fri 09:00-12:00 and 14:00-18:00 Asia/Shanghai",
+      "off_peak_multiplier": "0.5",
+      "currency": "CNY",
+      "unit": "per million tokens",
+      "hit": "0.10",
+      "miss": "3",
+      "output": "9"
+    },
+    "total_budget": "5",
+    "per_task_budget": "5",
+    "T04_acceptance_hash": "04a0c372b2d29a1921a3794324dfd045b2ff21f0952c49ca065e50c51c8823c9"
+  },
+  "tasks": {
+    "T04": {
+      "task_id": "T04",
+      "starts": 1,
+      "runtime_status": "completed",
+      "runtime_completed": true,
+      "patch_verified": true,
+      "usage_complete": true,
+      "within_budget": true,
+      "cleanup_ok": true,
+      "final_status": "success",
+      "execution": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 55.4179
+      },
+      "patch": {
+        "file": "T04.patch",
+        "sha256": "2643ad784a0a796cc3bbab92076d60b4bd04ec632ac24ab9addcef0a762d556b",
+        "bytes": 3075,
+        "changed_files": [
+          "tests/test_project.py",
+          "worklog/cli.py",
+          "worklog/codec.py"
+        ]
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.1138,
+          "collected": 3,
+          "passed": 3,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.1642,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "billing": {
+        "currency": "CNY",
+        "cost_basis": "configured token rates; not an independently verified account invoice",
+        "requests_sent": 17,
+        "send_count_semantics": "durable dispatch intent; crash before socket send can overcount",
+        "sdk_retry_sends": 0,
+        "sdk_retry_entries": 0,
+        "reserved_cost": "54.638592000",
+        "usage_derived_cost": "0.413724600",
+        "provider_reported_cost": null,
+        "unresolved_reservation": "0",
+        "remaining_total_budget": "4.586275400",
+        "remaining_task_budget": "4.586275400",
+        "remaining_tokens": 1804999,
+        "usage": {
+          "prompt_tokens": 189397,
+          "completion_tokens": 5604,
+          "total_tokens": 195001,
+          "prompt_cache_hit_tokens": 70656,
+          "prompt_cache_miss_tokens": 118741
+        },
+        "usage_complete": true,
+        "blocked": false,
+        "unknown_requests": 0,
+        "diagnostics_summary": {
+          "http_200_responses": 17,
+          "settled": 17,
+          "failure_stages": 0,
+          "secondary_failures": 0
+        }
+      },
+      "sidecar": {
+        "request_id": 17,
+        "verdict": "accept",
+        "trace": "verifier_ok",
+        "finished_event_line": 338,
+        "trace_file_sha256": "cb27b406dbd4e6732a4b450e7c117b9552262c014a45aa649ac1a479c173f086",
+        "request_facts": {
+          "purpose": "unknown",
+          "requested_thinking": "disabled",
+          "thinking": "disabled",
+          "effort": null,
+          "effort_applicable": false,
+          "tool_choice_type": "function",
+          "system_sha256": "76a949783fd789891aa5e39e792195b76799a7467f42656d5d7ccab94f68cbfb",
+          "tools_sha256": "6af3c3c155afe84cdf0fc0da1c3e1a3b2de8584a533698ee2943e3dcf16142b2",
+          "sdk_retry_index": 0,
+          "output_limit": 1024,
+          "model": "deepseek-v4-flash"
+        },
+        "forced_tool": "emit_sidecar_verdict",
+        "forced_tool_evidence": "frozen production call site + matching actual tools hash + function tool_choice type",
+        "usage": {
+          "prompt_tokens": 4845,
+          "completion_tokens": 186,
+          "total_tokens": 5031,
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 4845,
+          "reasoning_tokens": null
+        },
+        "usage_derived_cost": "0.016209000",
+        "settlement_state": "settled",
+        "http_status": 200,
+        "gateway_calls_by_purpose": {
+          "coding": 16,
+          "verifier": 1
+        }
+      }
+    }
+  },
+  "predecessor": {
+    "experiment_id": "p1-live-20260908-073600",
+    "harness_revision": "0e1560c3947941005e68d834f377d4468418c07a",
+    "result": "T01 stays infrastructure_blocked despite verified patch; not rerun",
+    "known_usage_derived_cost": "0.2115294",
+    "unresolved_reservation": "3.154944",
+    "balance_before_allocation": "6.6335266",
+    "historical_files_unchanged": true
+  },
+  "original_budget": {
+    "total": "10",
+    "old_and_new_known_cost": "0.625254000",
+    "unresolved_reservation": "3.154944",
+    "remaining": "6.219802000",
+    "unallocated_before_run": "1.6335266",
+    "new_allocation_remaining": "4.586275400",
+    "historical_usage_complete": false,
+    "account_invoice_independently_verified": false
+  },
+  "audit": {
+    "dispatch_intents": 17,
+    "confirmed_http_responses_with_usage": 17,
+    "all_dispatch_intents_had_prior_reservations": true,
+    "maximum_simultaneous_new_cost_and_hold": "3.580995000",
+    "budget_bypass_observed": false,
+    "new_main_request_count": 16,
+    "new_auxiliary_request_count": 1,
+    "active_baseline_processes_after_stop": 0,
+    "raw_experiment_credential_value_hits": 0,
+    "freeze_matches_preflight": true
+  },
+  "source_sha256": {
+    "frozen.json": "40520c3e040a016656fd31298900eead90069eb55ecf425a87110f60d5cc815d",
+    "summary.json": "47a5e0c98400f159eb079628d7caedecfffbac7e4b88305e207e2c7af0b4a8d1",
+    "T04/result.json": "5f83747e9d1fb3c97a3543fdfc906885317c65621fa0bb2e5aa567b6106b9c8b",
+    "T04/billing.jsonl": "92d73704fe9f818b175fc90e03cb6c661224b64d63a3031bdcf980d24e3832b1",
+    "T04/final.patch": "2643ad784a0a796cc3bbab92076d60b4bd04ec632ac24ab9addcef0a762d556b",
+    "T04/replay/evaluator/target.xml": "b04019e472bfac4e2251cc34529ede32d9f8b9d8a1a006f2eef932f3dd05ebea",
+    "T04/replay/evaluator/regression.xml": "843654d235fbfe3668e4314fdd697db823da02c75c39b363c5b294461de577e9"
+  },
+  "cli_exit_code": 0,
+  "stopped": true,
+  "new_T01_starts": 0,
+  "new_other_task_starts": 0,
+  "other_ten_tasks": "not_run",
+  "distinct_tasks_started_across_versions": 2,
+  "same_frozen_two_task_baseline": false,
+  "scope_limit": "Linux headless Native, restricted tools, local fixture; not TUI/Windows/multi-agent product/SWE-bench ranking"
+}

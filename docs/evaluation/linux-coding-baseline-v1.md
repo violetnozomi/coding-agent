@@ -890,3 +890,131 @@ sidecar 本轮真实调用未覆盖，不发额外付费请求补齐覆盖。
 不重跑 T01、不运行其他任务，结束即停。
 确认后才记录真实授权消息引用并创建新配置/实验，组织器 HOME 仍须在 workspace 外，
 通过现有 `--live --live-config --output` 入口执行；本轮没有执行真实 live 命令。
+
+## P1 T04 首次真实续接：独立验收与辅助计费均完成（2026-09-08）
+
+交付状态 **C：仅 T04 的首次正式 attempt 已结束并完成独立验收**。
+用户在本节对应执行会话明确确认“本次 T04 续接授权”，指定已审阅的
+`44378ce38e166b2df0616efd6f0a947115500dab`，仅 T04 一次，最多承接原余额中的 5 CNY。
+这不是追加预算。原请求14的未知预留保持不变；未重跑 T01、未运行其余任务、未发独立付费探针。
+
+### 冻结、入口与停止
+
+新实验 **`p1-t04-live-20260908-130239`** 关联原 `p1-live-20260908-073600`。
+harness revision 为 **`44378ce38e166b2df0616efd6f0a947115500dab`**，
+Agent revision 仍为 `7c308e3a75deae112e20c0de225113fda6ec9f9e`。
+manifest 哈希为 `e6dbaf4407e96ec4c814951028d265588f027d796fe313b57adcae88a247ae89`，
+T04 验收哈希为 `04a0c372b2d29a1921a3794324dfd045b2ff21f0952c49ca065e50c51c8823c9`。
+版本、任务、验收、费率和工具配置在任务期间没有修改；本轮只在运行停止后新增报告与安全产物。
+
+启动前只读核对通过：指定分支和 HEAD 正确、工作区干净、原证据哈希一致、旧进程已停止、
+无 T04 登记或后续实验支出记录，首请求 3.217728 CNY / 1,056,576 Token 能准入。
+读取此前明确允许的主项目 `.env` 中必要连接字段，通过正式产品解析确认原官方 DeepSeek
+`https://api.deepseek.com` / `deepseek-v4-flash`，没有复制完整开发者环境或历史记忆。
+组织器 HOME 使用 workspace 外的新隔离临时目录；凭据只进入必要进程环境，不写授权文件。
+未调用模型/账户探针作预检；只读 freeze 预览与最终 `frozen.json` 内容完全一致。
+
+模型设置为主请求 enabled/high/8000、辅助 disabled/无 effort/1024；两者共享预算。
+累计 2,000,000 Token、主循环 30 轮、整个 worker 600 秒、原受限工具白名单不变。
+依赖、系统指令来源、工具范围和 2026-09-08 官方峰值费率证据见
+[安全配置与结果](../../evaluation/linux_baseline/results/p1-t04-live-20260908-130239/result.json)。
+复用已通过 169 项离线契约的同一源码；本轮没有改驱动，也未重复运行全平台测试。
+
+由只注入必要字段的隔离启动器实际执行以下 CLI 参数：
+
+```bash
+.nz-coder-runs/p1-env/bin/python -m evaluation.linux_baseline.runner \
+  --live \
+  --live-config "$PWD/.nz-coder-runs/p1-t04-live-20260908-130239.config.json" \
+  --output "$PWD/.nz-coder-runs/p1-t04-live-20260908-130239"
+```
+
+没有使用 `--dry-run`、离线 `--publish`、daemon 或手工模型调用。
+固定前序/T04 的独占登记和 ready 标记已创建并保留，worker-started 仅一份；不删除登记重跑。
+组织器退出 **0**，`summary.stopped=true`；结束后活动 baseline runner/worker 为 **0**。
+
+### T04 首次结果
+
+| 任务 | 正式启动 | 模型请求 / SDK 重试发送 | Agent 终态 | 目标验收 | 冻结回归 | 补丁重放 | 最终分类 | worker / CLI 退出码 |
+| --- | ---: | --- | --- | --- | --- | --- | --- | --- |
+| T04 | 1 | 17 / 0 | completed，55.4179 秒 | 3/3 | 4/4 | 通过，修改范围合规 | success | 0 / 0 |
+
+`runtime_completed=true`、`patch_verified=true`、`usage_complete=true`、
+`within_budget=true`、`cleanup_ok=true`。目标与回归无失败、跳过、收集错误或超时。
+17 个持久化 dispatch intent 均关联 HTTP 200 和有效 usage，全部结算；SDK retry entries 同为 0。
+区分 dispatch intent 与账单请求：本次另有 17 个已收到响应的证据，不把意图记录单独当作发票。
+
+Agent 修改 `worklog/codec.py` 的 project 读写与旧数据缺省值，
+修改 `worklog/cli.py` 的 project 输出，新增 `tests/test_project.py`。
+新增文件虽自称“Target acceptance tests”，仍只是 Agent 的开发测试，不是本报告的独立验收。
+正式补丁由运行中的 NZ-Coder 产生；组织器没有帮助改题或提供隐藏反馈。
+独立验收仍在干净初始副本重放后使用原冻结目标 3 项及回归 4 项。
+
+[T04 最终补丁](../../evaluation/linux_baseline/results/p1-t04-live-20260908-130239/T04.patch)
+为原始导出的逐字副本，3075 字节，SHA-256
+`2643ad784a0a796cc3bbab92076d60b4bd04ec632ac24ab9addcef0a762d556b`。
+原始任务目录、Session、补丁及 replay/验收证据完整保留。
+
+### 实际辅助验证与计费
+
+正式 Gateway 记录 coding **16** 次、verifier **1** 次；transport 的 purpose 字段仍为 unknown，未回填用途。
+前16次实际请求为 enabled/high/8000。第17次实际请求保留 disabled、effort 不适用/省略、输出1024、
+`tool_choice_type=function`；实际 tools SHA-256 与正式 `emit_sidecar_verdict` schema 一致。
+强制工具目标通过冻结生产调用点、实际工具 schema 哈希及 function 类型交叉核对；
+没有保存或公开完整请求正文，不声称账本包含未记录的 tool_choice 目标字段。
+
+Native 私有运行 trace 的 `sidecar_finished` 为 **verdict=accept、trace=verifier_ok**，
+不是 provider_error/timeout 等错误降级。其调用17输入4845、输出186、总5031 Token，
+按费率折算 **0.016209 CNY**，已包含在下表新实验总费用内，不重复加算。
+第17次诊断记录 HTTP200、usage_present=true、settled，无 failure_stage 或次要失败。
+
+T04 总输入 **189397** Token，缓存命中 **70656**、未命中 **118741**；输出 **5604**，累计 **195001**。
+独立按冻结费率复算：
+`(70656×0.10 + 118741×3 + 5604×9) / 1000000 = 0.4137246 CNY`。
+没有把 prompt 与缓存子项、output 与 reasoning 子项重复相加。
+worker 最终摘要与账本重建一致，未知请求数为0；17次响应诊断无错误。
+
+| 账本层次 | 已知 usage 折算费用 | 未解决预留 | 余额 |
+| --- | --- | --- | --- |
+| 旧实验 | 0.2115294 CNY | 3.154944 CNY，保留 | 承接前 6.6335266 CNY |
+| 新 T04，分配 5 CNY | 0.4137246 CNY | 0 CNY | 本次额度剩余 4.5862754 CNY |
+| 原总额 10 CNY 视角 | 累计 0.625254 CNY | 3.154944 CNY | 6.219802 CNY |
+
+原未分配 1.6335266 CNY 加本次额度剩余 4.5862754 CNY，即原账本剩余6.219802 CNY。
+这些余额不授权自动继续运行。新旧累计已知费用与未解决预留合计3.780198 CNY，未超过原10 CNY。
+新实验已知费用加当时未结算预留的最高同时占用 **3.580995 CNY**，低于5 CNY。
+`reserved_cost=54.638592 CNY` 是17次预留的累计周转量，不是实际费用或同时占用。
+所有已记录 dispatch 前均有预算预留，未观察到绕过预算的请求。
+
+费用口径仍是**真实 usage 按冻结官方峰值上限折算**，不是独立核实的账户账单；
+`provider_reported_cost=null`，没有查询账户或按余额差值冒充逐请求账单。
+T04 usage 完整不等于整个历史完整：旧请求14的具体账单/HTTP原因仍未知，未知预留没有清零。
+
+### 留存、交付与范围
+
+私有原始目录为 `.nz-coder-runs/p1-t04-live-20260908-130239/`，
+同级 `.config.json`、`.freeze-preview.json`、`.cli.json` 保留授权/预检和准确入口退出证据。
+目标与回归 JUnit 分别位于 `T04/replay/evaluator/target.xml`、`regression.xml`。
+公开 result 仅投影必要字段并记录原始文件哈希，不导出模型正文、key、完整环境、授权正文或宿主绝对路径。
+对整个新实验原始目录扫描实际凭据值，命中数为0；公开产物另核对安全性及与原始补丁逐字一致。
+
+本轮结束后原授权、freeze、账本、补丁、结果、summary 及旧公开结果哈希与上节一致；
+原实验全文件哈希清单的摘要仍为
+`23fee9d87992cfa5010a7ee7e40ccaa3bd070b8dceb2b3c7815d13045afd1d67`。
+新关键证据 SHA-256：
+
+| 文件 | SHA-256 |
+| --- | --- |
+| frozen.json | `40520c3e040a016656fd31298900eead90069eb55ecf425a87110f60d5cc815d` |
+| T04/billing.jsonl | `92d73704fe9f818b175fc90e03cb6c661224b64d63a3031bdcf980d24e3832b1` |
+| T04/result.json | `5f83747e9d1fb3c97a3543fdfc906885317c65621fa0bb2e5aa567b6106b9c8b` |
+| summary.json | `47a5e0c98400f159eb079628d7caedecfffbac7e4b88305e207e2c7af0b4a8d1` |
+
+T01 本轮新增启动0，历史结果仍属于原 harness `0e1560c`，且仍为 infrastructure_blocked；
+T04 属于新 harness `44378ce`。跨版本共启动两个不同任务，不是同一冻结驱动下的2/2基线。
+另外10题继续 not_run，不是12题全部完成，也不是 SWE-bench 或通用编码能力排名。
+本次仅验证 Linux headless Native、受限工具及本地 worklog fixture，不外推 TUI、Windows 或完整多 Agent 产品。
+交付只读审计验证公开字段与原结果一致、17次结算及实际模式、JUnit计数、补丁逐字一致、
+预算独立复算、旧哈希、报告仅追加、凭据扫描和停止状态，全部通过，审计退出码0。
+报告/JSON差异空白检查通过；补丁保留标准diff空白上下文行前缀，不修改原始字节来消除格式提示。
+本轮到此停止，不自动重试或用余额继续；仅提交/推送这份追加报告、T04安全结果及原始补丁副本。
