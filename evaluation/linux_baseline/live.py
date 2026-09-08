@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal, InvalidOperation
+import importlib.metadata
 import json
 from pathlib import Path
 import re
@@ -13,7 +14,9 @@ from .billing import BillingStopped, Ledger, Policy, claim_attempt, summarize
 from .catalog import AGENT_REVISION, TASK_SPECS, digest, manifest
 
 RATE_SOURCE = "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/"
-RATE_DATE = "2026-09-07"
+# Public-page lookup, NOT an asserted tariff effective date or account contract.
+RATE_RETRIEVED_AT = "2026-09-08T06:47:24Z"
+RATE_SOURCE_SHA256 = "899affbdbc33d0be620d8dea59e86f5036c11b5410b14d060b8d2874c74f38e5"
 CONFIG_KEYS = frozenset(("authorized", "authorization_reference", "budget_currency", "total_budget",
     "per_task_budget", "allowed_tasks", "execution_order", "attempts_per_task", "auto_continue_remaining_tasks",
     "account_provider", "account_rates_confirmed", "endpoint", "model", "effort", "token_budget", "rate_date",
@@ -29,7 +32,8 @@ def authorized_policy(config: dict) -> Policy:
     required = dict(authorized=True, budget_currency="CNY", account_provider="DeepSeek",
                     account_rates_confirmed=True, allowed_tasks=["T01", "T04"],
                     execution_order=["T01", "T04"], attempts_per_task=1,
-                    auto_continue_remaining_tasks=False, rate_source=RATE_SOURCE, rate_date=RATE_DATE)
+                    auto_continue_remaining_tasks=False, rate_source=RATE_SOURCE,
+                    rate_date=RATE_RETRIEVED_AT[:10])  # Legacy config key means lookup date.
     if any(type(config.get(key)) is not type(value) or config.get(key) != value for key, value in required.items()):
         raise ValueError("Paid authorization or confirmed account/rates incomplete")
     if not isinstance(config.get("authorization_reference"), str) or not config["authorization_reference"].strip():
@@ -47,7 +51,7 @@ def authorized_policy(config: dict) -> Policy:
         raise ValueError("Explicit finite budget and frozen model configuration required") from None
     if (policy.total_budget <= 0 or policy.task_budget <= 0 or policy.hit_rate < Decimal("0.10")
             or policy.miss_rate < 3 or policy.output_rate < 9):
-        raise ValueError("Insufficient budget or rates below confirmed peak ceiling")
+        raise ValueError("Insufficient budget or rates below published peak ceiling")
     return policy
 
 
@@ -60,6 +64,7 @@ def freeze(config: dict, policy: Policy) -> dict:
     if runner.git(runner.ROOT, "diff", AGENT_REVISION, "--", "nz_coder"):
         raise ValueError("P0 Agent source has changed; do not mix experiments")
     versions = runner.environment_versions()
+    versions["packages"]["httpx"] = importlib.metadata.version("httpx")
     pytest_version = versions["packages"].get("pytest") or "0"
     if not 7 <= int(pytest_version.split(".")[0]) < 9:
         raise ValueError("Live requires project-supported pytest >=7,<9")
@@ -70,6 +75,8 @@ def freeze(config: dict, policy: Policy) -> dict:
                 versions=versions, provider="openai-compatible", endpoint=policy.endpoint,
                 account_provider="DeepSeek (user-confirmed, not independently queried)",
                 model=policy.model, effort=policy.effort, thinking="enabled", stream=False,
+                provider_model_version_at_lookup="DeepSeek-V4-Flash-0731",
+                published_context="1M shared input/output", published_max_output="384K",
                 profile="main; restricted P1 tool allowlist; child_agents=false", tools=list(TOOLS),
                 system_source="nz_coder.runtime.conversation.prompt.build",
                 system_source_blob=runner.git(runner.ROOT, "rev-parse", "HEAD:nz_coder/runtime/conversation/prompt.py").decode().strip(),
@@ -81,7 +88,11 @@ def freeze(config: dict, policy: Policy) -> dict:
                 input_reservation_tokens=policy.input_ceiling, max_output_tokens=policy.output_limit,
                 per_task_cumulative_token_budget=policy.token_budget, max_main_turns=30, worker_wall_seconds=600,
                 wall_scope="whole worker including auxiliaries; export/acceptance after worker termination",
-                rates=dict(source=RATE_SOURCE, date=RATE_DATE, currency="CNY", unit="per million tokens",
+                rates=dict(source=RATE_SOURCE, retrieved_at=RATE_RETRIEVED_AT,
+                           source_sha256=RATE_SOURCE_SHA256, effective_date=None,
+                           calculation_basis="published peak-rate ceiling for all periods; not account invoice",
+                           peak_periods="Mon-Fri 09:00-12:00 and 14:00-18:00 Asia/Shanghai",
+                           off_peak_multiplier="0.5", currency="CNY", unit="per million tokens",
                            hit=str(policy.hit_rate), miss=str(policy.miss_rate), output=str(policy.output_rate)),
                 total_budget=str(policy.total_budget), per_task_budget=str(policy.task_budget),
                 authorization_reference=config["authorization_reference"])

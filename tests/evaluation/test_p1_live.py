@@ -25,7 +25,7 @@ def authorization():
                 account_provider="DeepSeek", account_rates_confirmed=True,
                 endpoint="https://api.deepseek.com", model="deepseek-v4-flash",
                 effort="high", token_budget=2000000,
-                rate_date="2026-09-07", rate_source="https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+                rate_date="2026-09-08", rate_source="https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
                 hit_rate="0.10", miss_rate="3", output_rate="9",
                 experiment_id="offline-contract", harness_revision="a" * 40,
                 output_directory="/tmp/p1-offline-contract")
@@ -38,6 +38,30 @@ def authorization():
 def test_incomplete_authorization_is_fail_closed(changes):
     with pytest.raises(ValueError):
         live().authorized_policy({**authorization(), **changes})
+
+
+@pytest.mark.parametrize("changes", [dict(rate_date="2026-09-07"),
+    dict(hit_rate="0.05", miss_rate="1.5", output_rate="4.5"), dict(rate_source="https://example.invalid")])
+def test_stale_or_off_peak_only_grant_cannot_start_pilot(changes):
+    """The all-period ceiling cannot be replaced by a stale/off-peak-only grant."""
+    with pytest.raises(ValueError):
+        live().authorized_policy({**authorization(), **changes})
+
+
+def test_freeze_distinguishes_rate_lookup_from_effective_date(monkeypatch):
+    from evaluation.linux_baseline import runner
+    module = live()
+    config = {**authorization(), "harness_revision": runner.git(runner.ROOT, "rev-parse", "HEAD").decode().strip()}
+    original_git = runner.git
+    # Only suppress test-worktree dirtiness; source hashes and dependencies are real reads.
+    monkeypatch.setattr(runner, "git", lambda root, *args: b"" if args == ("status", "--porcelain")
+                        else original_git(root, *args))
+    frozen = module.freeze(config, module.authorized_policy(config))
+    assert frozen["rates"]["retrieved_at"] == "2026-09-08T06:47:24Z"
+    assert frozen["rates"]["effective_date"] is None
+    assert frozen["rates"]["calculation_basis"] == "published peak-rate ceiling for all periods; not account invoice"
+    assert frozen["provider_model_version_at_lookup"] == "DeepSeek-V4-Flash-0731"
+    assert frozen["versions"]["packages"]["httpx"]
 
 
 def test_missing_live_authorization_never_prepares_p0_or_starts_worker(tmp_path, monkeypatch):

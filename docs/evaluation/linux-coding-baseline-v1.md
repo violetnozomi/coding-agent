@@ -327,3 +327,126 @@ git diff --check
 下一步先补齐账户连接、适用费率证据、effort/Token 限制决定和明确授权，
 再冻结已提交 Agent/驱动、任务/验收哈希、依赖及功能配置，才能创建新的 live experiment_id。
 当前不运行剩余任务，不修改 main、不合并、不创建 PR、不 push。
+
+## P1 实跑前免费核验（2026-09-08，续接 24093d0）
+
+本节追加历史，不重做 P0。本轮交付为 **A：免费前置核验完成，缺明确授权和凭据，真实启动 0**。
+本轮只调整费率查阅元数据及对应校验测试，没有重写计费系统、Agent、任务或验收。
+保留原诊断压缩包及最终证据，不恢复旧测试展开目录，不继续磁盘清理。
+
+### A. 正式连接解析
+
+在目标 worktree 使用保留的 p1-env，经正式配置快照与 Provider 解析确认：
+Provider `openai-compatible`，endpoint **`https://api.deepseek.com`**，model ID
+`deepseek-v4-flash`，variant 为 None，**凭据缺失，来源类别 default**。
+没有从其他 worktree、账户或旧日志取凭据，没有输出完整配置或凭据。
+配置检查不是认证成功或服务可用证明，本轮没有做模型请求、账户查询或付费探针。
+
+### B. 官方资料、版本与费用口径
+
+通过不携带凭据的普通 HTTPS GET 阅读以下官方页面；查阅批次开始于
+**2026-09-08 06:47:24 UTC（北京时间 14:47:24）**。
+原始页面保存在私有 `.nz-coder-runs/p1-preflight-20260908/sources/`，本节保存可公开摘录及哈希。
+这不是 Parallel 搜索服务或其他付费模型调用。
+
+| 官方来源 | 支持本轮结论的内容 |
+| --- | --- |
+| [模型与价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) | `deepseek-v4-flash`；模型版本 `DeepSeek-V4-Flash-0731`；OpenAI 格式 base URL `https://api.deepseek.com`；上下文 `1M`，最大输出 `384K`。价格单位为百万 Token，金额为人民币元。 |
+| [思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode) | “思考模式默认打开，且 effort 默认为 high”；OpenAI 格式使用 `thinking: {type: enabled}` 与 `reasoning_effort: high`；携带 tools 的后续请求须回传 reasoning_content。 |
+| [Chat Completions API](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion) | “输入 token 和输出 token 的总长度受模型的上下文长度的限制”；`max_tokens` 限制生成量；prompt 等于 cache hit + cache miss，total 等于 prompt + completion；reasoning 为 completion 细项。 |
+
+页面内容 SHA-256：
+
+- pricing.html：`899affbdbc33d0be620d8dea59e86f5036c11b5410b14d060b8d2874c74f38e5`
+- thinking.html：`20e5a177c46617794a070a1c83aa5635bfc73e2d91c93a02f27ad0d5d0c8ce83`
+- chat-completion.html：`25c5aea0a51fc349804ab596a92c5e57afa7bccd5d2dab5d067d60d3805f62cb`
+
+官方 Flash 标准公开价：
+
+| 每百万 Token，CNY | 输入缓存命中 | 输入缓存未命中 | 输出（含 reasoning） |
+| --- | ---: | ---: | ---: |
+| 高峰时段 | 0.10 | 3.0 | 9.0 |
+| 空闲时段 | 0.05 | 1.5 | 4.5 |
+
+原文：“高峰时段为北京时间周一至周五 9:00 - 12:00、14:00 - 18:00（其余为空闲时段）”。
+充值余额和赠送余额同时存在时优先扣赠送余额；价格页保留调价权。
+本轮不根据本机时钟擅自套用半价：**预留和 usage 计算统一使用已核实的高峰价格上界**，
+因此空闲时段的计算值可能高于最终账单，但不会误用最低价放大可用预算。
+`usage_derived_cost` 是该明确口径下的费用上界；`provider_reported_cost` 仍为 null。
+不声称已核对任何账户内部合同、赠送额度或账单；当前未有用户说明特殊合同/转发计费，
+若账户实际不适用标准官方价格，则本次预览不能替代该账户费率。
+
+官方上述页面未提供这张价表的明确**生效日期**，保持 null；不能把查阅日期伪装成生效日期。
+配置兼容字段 `rate_date` 现在明确表示本次来源的查阅日期 `2026-09-08`，
+冻结元数据分别保存 `retrieved_at`、`effective_date`、来源哈希和高峰价计算口径。
+旧候选日期 `2026-09-07` 不再被误当成已核实来源，授权/官方 endpoint/价格下限检查仍保留。
+官方版本名称只记录查阅时信息，请求仍使用用户指定的 model ID，不静默换模型。
+
+### C. 待用户确认的最终候选与免费预览
+
+| 配置 | 候选值与含义 |
+| --- | --- |
+| 模型与思考 | 官方 `deepseek-v4-flash`，thinking enabled、high；与官方默认一致，但本轮仍待用户确认 |
+| 单请求输出 | `max_tokens <= 8000`，包括生成的 reasoning，低于官方最大输出，不等于 384K 模型上限 |
+| 输入保守预留 | 1,048,576 Token；以公开 1M 窗口作全输入上界，并取不小于十进制 1M 的二进制换算值；不是实际输入量 |
+| 共享窗口 | 输入输出共享官方 1M 上下文；各自最大预留相加只是保守矩形上界，不声称两者能同时达到该值 |
+| 单题累计 Token | 2,000,000，跨本题主/辅助请求累计；不是上下文窗口，也不是两题共同的 Token 上限 |
+| 主循环 | 最多 30 轮，不是最多 30 次 HTTP 请求 |
+| worker 墙钟 | 600 秒，涵盖主/辅助模型与 worker 内收尾；终止后的补丁导出和独立验收另计 |
+| 工具 | list_directory、read_file、write_file、edit_file、apply_patch、bash、glob_search、grep_search、repo_map、read_symbol、find_symbol_callers、update_scratchpad、read_scratchpad、todo、diff_status、verify_changed_files |
+| 辅助配置 | planning/reflection/MCP/child agents/handoffs/dynamic tools 关闭；保留的 sidecar 继承主客户端并共享 ledger；其他内置 Provider 创建被阻断 |
+| 重试 | SDK 最多 2 次自动重试、底层 transport 0 次重试；任何已发出请求用量不确定后禁止再次发送 |
+| 申请预算/范围 | 总额 10 CNY、每题 5 CNY；仅 T01 → T04 串行，每题一次；两题结束停止，不含付费探针及其余十题 |
+
+首请求免费算术预览（没有 reserve/live 调用，更没有写入真实授权配置）：
+
+`(1048576 × 3 + 8000 × 9) / 1000000 = 3.217728 CNY`；Token 预留为 **1,056,576**。
+建议总额/单题额在预留后分别余 **6.782272 / 1.782272 CNY**，单题 Token 余 **943,424**，
+因此首请求可以准入建议额度。但这些不是已授权余额，也不是已实际发生的预留或花费。
+完整合法 usage 持久化后，用 cache hit、cache miss、completion 各按对应高峰费率计算，
+金额按 1e-9 CNY 向上取整，释放预留与结算额之差及多余 Token；子项不重复加总。
+缺 usage、失联、取消或结算持久化失败保留不确定预留，停止后续请求。
+下一请求必须同时满足总金额、单题金额及单题累计 Token 余额足以预留，且仍在时限内、未阻断。
+固定全窗口预留可能在尚有余额时提前停止；不提高授权额、不改 tokenizer 来规避。
+
+### 最终离线验证与交付
+
+复用 p1-env：Python 3.13.12，pytest 8.4.2（符合 `>=7,<9`），openai 2.36.0，httpx 0.28.1，
+rich 14.2.0、prompt_toolkit 3.0.52、PyYAML 6.0.3、tree-sitter 0.26.0、watchfiles 1.1.1。
+本轮为 freeze 补录实际 HTTP 客户端版本，没有安装或替换环境。
+manifest 哈希仍为 `e6dbaf4407e96ec4c814951028d265588f027d796fe313b57adcae88a247ae89`。
+实际执行命令（JUnit 是本次免费核验输出，不是正式实验目录）：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .nz-coder-runs/p1-env/bin/python -m pytest -q \
+  tests/evaluation/test_p1_billing.py tests/evaluation/test_p1_live.py \
+  tests/test_headless_cli.py --tb=short \
+  --junitxml=.nz-coder-runs/p1-preflight-20260908/contracts.xml
+.nz-coder-runs/p1-env/bin/python -m evaluation.linux_baseline.runner --help
+.nz-coder-runs/p1-env/bin/python -m ruff check \
+  evaluation/linux_baseline/live.py tests/evaluation/test_p1_live.py --output-format concise
+.nz-coder-runs/p1-env/bin/python -m py_compile \
+  evaluation/linux_baseline/live.py tests/evaluation/test_p1_live.py
+git diff --check
+```
+
+本轮最终结果：**71 passed，56.47 秒，退出码 0**；帮助、Ruff、编译检查与 `git diff --check` 均通过。
+新增测试只覆盖查阅/生效日期区分、旧候选来源拒绝及全时段预留不能被半价配置替代，
+原有受控 transport、SDK 重试、辅助调用、重复 attempt 与两题停止契约继续通过。
+
+| 任务 | 正式启动 | 模型请求/SDK重试 | Agent终态 | 目标验收 | 原有回归 | 补丁重放 | 输入/输出/缓存Token | 计算费用 | 未知预留 | 预算状态 | 原因 |
+| --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| T01 | 0 | 0 / 0 | not_run | 未运行 | 未运行 | 无正式补丁 | null | 不适用 | 0 | 未授权 | 授权及凭据缺失 |
+| T04 | 0 | 0 / 0 | not_run | 未运行 | 未运行 | 无正式补丁 | null | 不适用 | 0 | 未授权 | 授权及凭据缺失 |
+
+本轮实际新增模型费用、实际预留和不确定在途费用均为 **0**，依据是没有发送真实模型请求，
+不是把合成 usage 当账单。两题的 runtime_completed、patch_verified、within_budget、usage_complete、cleanup_ok
+均未产生真实结果，保持 null；真实成功率为 null。其余十题仍为 not_run，十二题均未启动。
+离线通过不代表真实费用控制、TUI、Windows HTTP、多 Agent 产品或 SWE-bench 已验证。
+
+一次性待确认：上述官方模型、high 与运行限制、总额 10 CNY/每题 5 CNY、仅两题一次的付费范围；
+并在本机正式配置中提供可解析的官方账户凭据（不要发送到对话）。账户若有特殊计费约定需说明。
+取得明确消息授权后才能写 authorized=true 及真实 authorization_reference；
+本轮没有创建真实授权文件、experiment_id 或 live 输出目录，没有调用 live.run 作预览。
+本轮改动测试后提交，未来 harness_revision 使用该提交后的实际 HEAD，保持源码干净再运行；
+不修改 main、不创建 PR、不合并。沿用本会话已有 push 授权推送本轮相关提交后结束，不再追加准备工作。
