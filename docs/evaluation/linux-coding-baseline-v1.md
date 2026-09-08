@@ -450,3 +450,109 @@ git diff --check
 本轮没有创建真实授权文件、experiment_id 或 live 输出目录，没有调用 live.run 作预览。
 本轮改动测试后提交，未来 harness_revision 使用该提交后的实际 HEAD，保持源码干净再运行；
 不修改 main、不创建 PR、不合并。沿用本会话已有 push 授权推送本轮相关提交后结束，不再追加准备工作。
+
+## P1 首次真实运行：T01 补丁通过，辅助请求计费未知后停止（2026-09-08）
+
+本轮交付 **B：已运行 T01 首次 attempt，计费不确定触发停止，T04 未运行**。
+不是 2/2 完成，也不是十二题或 SWE-bench 成绩。以下是新的真实结果，不替换此前 offline/reference 记录。
+
+### 授权、冻结与实际启动
+
+用户于 2026-09-08 07:19:18.189 UTC 明确确认付费授权，07:30:07.808 UTC 确认读取主项目 `.env`。
+授权为官方 DeepSeek `deepseek-v4-flash`、thinking enabled/high，总额 10 CNY、每题 5 CNY，
+仅 T01 → T04 串行各一次，结束即停；没有独立付费探针。
+只读取已明确指定文件中的必要连接字段，核对 Provider/model/endpoint/effort 后注入隔离进程环境，
+没有复制整份 `.env`、凭据文件、历史记忆或开发者环境。
+
+正式实验为 **`p1-live-20260908-073600`**，Agent revision
+`7c308e3a75deae112e20c0de225113fda6ec9f9e`，harness revision
+**`0e1560c3947941005e68d834f377d4468418c07a`**。
+任务 manifest 哈希仍为 `e6dbaf4407e96ec4c814951028d265588f027d796fe313b57adcae88a247ae89`。
+运行期间没有修改 Agent、驱动、任务、验收或费率，仍使用本节之前已冻结的工具范围、依赖和限额。
+具体配置及各验收哈希见 [真实结果安全投影](../../evaluation/linux_baseline/results/p1-live-20260908-073600/result.json)。
+
+保留一次**出网前启动配置失败**：候选 `p1-live-20260908-073120` 的组织器 HOME 被放在驱动 workspace 内，
+触发 `ConfigValidationError: Workspace trust store must be outside the workspace`。
+它在 `credential()` 阶段退出，正式实验目录未创建、任务启动 0、模型请求 0、费用 0。
+修正仅为将组织器 HOME 放到 workspace 外的新隔离临时目录，未改源码；旧候选授权文件和失败记录保留，
+使用上面的新实验身份。它不是 T01 的第二次解题 attempt。
+
+启动前定向测试 **71 passed，55.28 秒，退出码 0**，JUnit 保存在
+`.nz-coder-runs/p1-preflight-20260908/pre-live-contracts.xml`。
+通过只保留必要环境变量的启动器，实际执行以下正式 CLI 参数（不是手工调用模型）：
+
+```bash
+.nz-coder-runs/p1-env/bin/python -m evaluation.linux_baseline.runner \
+  --live \
+  --live-config "$PWD/.nz-coder-runs/p1-live-20260908-073600.config.json" \
+  --output "$PWD/.nz-coder-runs/p1-live-20260908-073600"
+```
+
+其中授权文件不含 key；密钥只通过经核对的进程环境注入。未使用 `--dry-run` 或离线 `--publish`。
+原始私有现场为 `.nz-coder-runs/p1-live-20260908-073600/`，组织器最终退出码 **1**，`stopped=true`。
+
+### 两题结果与独立验收
+
+| 任务 | 正式启动 | 请求及 SDK 重试 | Agent 终态 | 目标验收 | 原有回归 | 最终补丁重放 | 输入/输出/缓存命中 Token | 按费率计算费用 | 未知预留 | 预算状态 | 最终状态/原因 |
+| --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| T01 | 1 | 13 个已结算响应 + 1 个未知 dispatch；SDK 重试发送 0 | completed，进程退出 0，37.9977 秒 | 3/3 通过 | 4/4 通过 | 通过，范围合规 | 已知部分 120446 / 2657 / 59904 | 0.211529400 CNY（已知部分） | 3.154944000 CNY | 账本 within_budget=true，用量不完整 | infrastructure_blocked：辅助验证器请求 14 计费未知 |
+| T04 | 0 | 0 / 0 | not_run | 未运行 | 未运行 | 无正式补丁 | null | 不适用 | 0 | 未消耗单题额度 | not_run：按停止规则未启动 |
+
+T01 分项：`runtime_completed=true`、`patch_verified=true`、`within_budget=true`、
+`usage_complete=false`、`cleanup_ok=true`、`final_status=infrastructure_blocked`。
+主运行完成和补丁通过均是真实事实，但不能据此覆盖计费未知并记作正常端到端成功。
+T04 对应运行/验收字段未产生结果，不用 false 或零用量冒充实跑。
+
+T01 最终修改 `textkit/parser.py`，补充空白输入处理，并在 `tests/test_public.py` 增加开发测试。
+组织器没有修改正式副本帮助解题。独立回归使用冻结的原始四个检查，不以 Agent 修改后的 public tests 替代。
+模型未收到独立隐藏验收反馈，也没有参考修复或 Fake 成绩填补。
+
+公开 [T01 最终补丁](../../evaluation/linux_baseline/results/p1-live-20260908-073600/T01.patch)
+为原始导出文件的逐字副本，1193 字节，SHA-256：
+`e4619db21366552daca85d888128a50de788e49d5d963d426655a65086eae0f3`。
+原始 `T01/replay/repo` 是由 P0 materialize 创建的干净初始副本，已应用该补丁；
+`T01/replay/evaluator/target.xml` 和 `regression.xml` 分别记录上述 3/3 与 4/4 通过，无跳过、收集错误或超时。
+失败现场、计费日志、原始 Session 和补丁均未清理或回退。
+报告与 JSON 投影通过差异空白检查；归档 patch 的两个空白上下文行保留标准 diff 前缀空格，
+不为消除补丁文件本身的 trailing-whitespace 提示而改变原始字节，已用哈希及逐字比较验证一致。
+
+### 费用、未知项与停止证据
+
+已知 13 个响应累计输入 **120,446** Token，其中缓存命中 **59,904**、未命中 **60,542**；
+输出 **2,657**（reasoning 包含在输出内），合计 **123,103** Token。
+按冻结高峰费率独立复算：
+`(59904 × 0.10 + 60542 × 3 + 2657 × 9) / 1000000 = 0.2115294 CNY`。
+这只是已知 usage 的计算值，不是完整实际账单；`provider_reported_cost=null`。
+
+请求 14 的输出预留为 1,024 Token，其金额预留为
+`(1048576 × 3 + 1024 × 9) / 1000000 = 3.154944 CNY`。
+该请求日志依次为 reserved → dispatching → uncertain，无有效结算记录；全额预留继续保留，
+没有视为免费或退款。当前总额账本可用 **6.633526600 CNY**、T01 可用 **1.633526600 CNY**；
+T01 剩余累计 Token **827,297**，已经扣除已知用量和未知 Token 预留。
+费用总额/完整用量依然 **unknown**，不能因已知费用小而宣称真实预算闭环完整验收。
+
+`reserved_cost=44.985408000 CNY` 是十四次请求预留的**累计周转量**，不是同时占用金额，更不是实际支出。
+按事件顺序复算，已知费用加当时未结算预留的最高占用为 **3.408343800 CNY**，低于单题 5 CNY。
+所有已记录 dispatch 前都有预留；账本未记录任何绕过预算的发送，未知后没有新的 dispatch，T04 目录未创建。
+SDK 重试**发送**计数为 0，不据此宣称 SDK 没有尝试过被预算边界拒绝的逻辑重试。
+14 是持久化 dispatch intent 计数，13 个已知响应可以确认完成，另 1 个不能当作已核实账单请求。
+
+请求 14 的 system/tools SHA-256 与代码中的 **sidecar verifier** 完全匹配，已确定这是保留的辅助验证调用，
+且它经过同一个预算 transport，不是遗漏的未计费路径。
+发现一个应优先离线核实的具体请求语义偏差：Agent 的 `_verifier_capability_options()` 对 DeepSeek V4
+显式设置 thinking disabled，而 P1 `BudgetTransport` 会统一改回 enabled/high；该调用同时使用强制 verdict tool。
+本轮日志未保存导致 uncertain 的具体 HTTP 状态、响应或异常类别，**不能据此断言服务端返回了哪一种错误**，
+也不能把上述语义偏差未经复现就写成已证实的唯一根因。
+
+账本 SHA-256：`c90dad4b6c3503d1aba3a08d4b883c48ced382ca4e22ba8985cdcc425f4c626a`；
+冻结文件 SHA-256：`43ffb167a0f9f7db3d4b666bbcaa0c8ba12b06a4dfef9532cdfa84cb93dd63f8`。
+运行目录扫描未发现实际凭据值，公开投影不含 key、授权正文、模型正文或宿主绝对路径。
+进程清理记录正常，结束后没有发现本次 runner/live_worker 进程遗留。
+
+### 本轮停止与后续边界
+
+本轮已停止，不自动重试 T01，不启动 T04 或其余十题。合计已启动 **1/12**，未运行 **11/12**。
+这一个本地 fixture 的补丁验收通过，不代表 Linux TUI、Windows HTTP、完整多 Agent 产品或 SWE-bench 得分。
+下一步应先离线修正/验证辅助验证器请求模式与计费错误诊断，而不是运行剩余题目；
+后续修改必须使用新的实验身份，保留本次首次结果及未知预留，不覆盖成绩或擅自再次花费。
+本报告及安全投影是在实验停止后追加，提交不改变本实验冻结的 harness revision。
