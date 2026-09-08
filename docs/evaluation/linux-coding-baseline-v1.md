@@ -556,3 +556,196 @@ SDK 重试**发送**计数为 0，不据此宣称 SDK 没有尝试过被预算�
 下一步应先离线修正/验证辅助验证器请求模式与计费错误诊断，而不是运行剩余题目；
 后续修改必须使用新的实验身份，保留本次首次结果及未知预留，不覆盖成绩或擅自再次花费。
 本报告及安全投影是在实验停止后追加，提交不改变本实验冻结的 harness revision。
+
+## 🔧 P1 辅助请求模式与失败诊断离线修复（2026-09-08）
+
+本节只记录 `c6108e6b33b729eb4a3137cd1b58b30fd5aab599` 之后的离线修复，不改写以上历史。
+本轮正式任务新增启动 **0**、真实模型新增调用 **0**、新增真实费用 **0 CNY**。
+没有读取真实凭据、调用账户接口、发付费探针、重跑 T01 或启动 T04；也没有创建新的真实授权文件。
+实现限定在 P1 harness 与测试，`git diff 7c308e3a75deae112e20c0de225113fda6ec9f9e -- nz_coder`
+无差异，Agent revision 仍为该 SHA，任务与独立验收未变。
+
+### 已证实的缺陷与参数责任
+
+修复前新增测试从真实 `invoke_sidecar_verifier()` 起，经正式 Gateway、Provider、OpenAI SDK
+到受控 inner transport，实际捕获 `thinking={"type":"enabled"}`，而产品显式要求 `disabled`。
+失败断言是请求模式不一致，不是导入、环境或认证错误。
+
+| 边界 | sidecar 的实际要求或行为 | 本轮处理 |
+| --- | --- | --- |
+| `sidecar_verifier._verifier_capability_options` | DeepSeek V4 显式 disabled | 产品源码保持不变 |
+| `invoke_sidecar_verifier` → `ModelCall` | VERIFIER、强制 `emit_sidecar_verdict`、1024 输出 | 产品源码保持不变 |
+| `ProductionModelGateway._request_kwargs` | 传递工具、输出限制及 capability options | 产品源码保持不变 |
+| `OpenAICompatibleProvider.create_completion` → SDK | capability 规范化、extra_body 序列化 | 仅 P1 进程内 seam 补缺省模式 |
+| `BudgetTransport` → inner transport | 旧版无条件覆盖 enabled/high | 改为验证允许模式集合，保留业务参数 |
+
+正式 Provider 使用 capability/variant request options；无 variant 时不会补 DeepSeek thinking。
+P1 的 `bounded_product` 在 Provider 构造边界把缺省主模式显式确定为 enabled/high，
+与官方文档的默认值一致[^p1-mode]。调用方已有字段不被这层替换；最终 Provider/SDK 请求仍由 transport 检查。
+sidecar 显式 disabled 保留且不注入 effort。`messages`、`tools`、`tool_choice`、`response_format`
+不因计费修改；输出上限允许在 transport 按冻结限额收紧，但不会将 sidecar 1024 抬到 8000。
+
+新增配置明确分开以下两种模式；`effort` 字段只描述主模式，不再代表所有请求：
+
+| 模式 | thinking / effort | 实际输出上限 | 预算边界 |
+| --- | --- | ---: | --- |
+| 主编码 | enabled / high | 8000 | 原任务与实验账本 |
+| 允许的辅助模式 | disabled / 不适用，省略 effort | 1024 | 同一账本、Token累计及未知停止规则 |
+
+新增 `main_thinking`、`main_output_limit`、`auxiliary_thinking`、`auxiliary_output_limit` 配置项，
+freeze 保存 `request_modes`。旧配置缺这些字段时不能作为新模式授权启动；旧授权文件不迁移、不改写。
+[未授权示例](../../evaluation/linux_baseline/p1-unauthorized.example.json) 明确 `authorized=false`、额度为 0、
+无授权引用且未冻结，不是可运行的真实 grant。
+
+计费边界没有跨 Gateway 工作线程可信地接收到 `ModelCallPurpose`，因此逐请求用途如实记为 `unknown`。
+它验证冻结的允许模式集合，而非按“主/辅助”文本标签授予权限；system/tools 哈希仅用于审计。
+任意提示词、工具名称都不能放行未授权模型、endpoint、effort 或其他模式。
+本轮 disabled 请求若仍携带 reasoning_effort，按受限配置冲突发送前拒绝，不静默删除或替换。
+这是本试运行的明确限制，**不是宣称官方接口一定拒绝 disabled 与 effort 同时出现**。
+
+官方资料仅使用无需凭据的公开 HTTPS GET，完成查阅时间为 `2026-09-08T08:34:40Z`：
+思考指南确认 enabled/disabled、默认 enabled/high；Chat API 文档确认强制函数工具语法、
+max_tokens 为 completion 上限且输入输出共享上下文[^p1-mode][^p1-chat]。
+公开页面未给出能证明历史请求 14 具体错误的证据，不把两份参数文档拼成“确定 HTTP 400”。
+原始页面保存在私有修复证据目录 `sources/`，SHA-256：
+
+- `thinking.html`：`20e5a177c46617794a070a1c83aa5635bfc73e2d91c93a02f27ad0d5d0c8ce83`
+- `chat.html`：`25c5aea0a51fc349804ab596a92c5e57afa7bccd5d2dab5d067d60d3805f62cb`
+
+查阅日期不是费率生效日；本轮没有改变原费率、输入预留 1,048,576、累计 Token 2,000,000、
+主循环 30 轮或 worker 600 秒。固定全窗口预留仍然保守，预留不是实际花费。
+
+### 安全诊断、结算与停止
+
+复用 `billing.jsonl`，每个 HTTP 边界入口使用既有 request_id 序列，新增安全事实和 diagnostic，
+没有另建事件数据库。request_facts 记录实际 requested/effective thinking、effort 及是否适用、
+tool_choice 类型、有效输出上限、SDK retry index 与审计哈希。
+diagnostic 记录阶段、确实收到的 HTTP status、固定异常类别、usage_present、结算状态、
+evidence_saved 和次要失败。没有保存原始异常字符串、动态类名、服务端 error.message/error.code、
+正文、凭据、Authorization 或带查询参数 URL。读取响应前 usage_present 为 null，不伪造 usage=0。
+
+| 故障阶段 | 诊断行为 | 费用与后续请求 |
+| --- | --- | --- |
+| 配置、authorization、admission、reservation | rejected，无 inner 发送，无 Provider usage | 未发生的预留为 0，拒绝原因留存 |
+| reservation/dispatch persistence | 区分预留写入和发送意图写入 | inner 未发送；已有保守预留不因写失败消失 |
+| transport_send / http_response | 区分发送异常与实际收到的 HTTP 状态 | 不确定请求保留预留，SDK逻辑重试不再发送 |
+| response_read / json_parse | 区分读取超时、丢失与 JSON 损坏 | 不确定、停止 |
+| response_identity / usage_validation | 区分身份与用量缺失、不一致、越界 | 不确定、停止 |
+| settlement_persistence | usage 读取成功仍须可靠落盘后才能释放 | 写失败保留未知预留 |
+| response_close / transport_close / diagnostic persistence | 不覆盖第一故障；次要错误也脱敏 | 阻断保持；取消继续传播，双重取消保留首次取消 |
+
+合法 usage 加无效 verdict 是两个维度：费用可以已知，`accept` 也可能是
+`no_tool_call`、`invalid_verdict_value`、`provider_error` 或 `timeout` 的产品降级结果。
+本轮不改变 verifier fail-open 策略；只有测试返回的合法精确工具判定才记为 `verifier_ok`。
+judge 超时后晚到的可靠 usage 可以结算，但不会把已经超时的语义判定改写成通过。
+
+追加诊断失败时，进程内仍保存第一阶段/类别、阻断状态与必要预留；取消不转为普通成功。
+还复现并修复了“settled 行已写出但 fsync 报错，后续 uncertain 写失败”的组织器边界：
+父进程现在要求 worker 最终摘要存在且与 journal 重建结果一致。
+缺失、损坏或不一致时保留原文件及 journal 视图，余额标为 unknown，仍导出/重放补丁，但不启动下一题。
+worker 最终摘要写入失败也不会覆盖已有的主错误或取消。
+旧日志缺少新 diagnostic 时返回 `historical_not_recorded` 与空状态，不推导旧 HTTP 原因。
+
+### 离线复现与回归证据
+
+复用 p1-env，Python 3.13.12、pytest 8.4.2、OpenAI SDK 2.36.0、httpx 0.28.1；未安装依赖。
+证据目录为 `.nz-coder-runs/p1-sidecar-repair-20260908/`，与真实实验分离，不使用 live publish。
+新增集成测试为 [test_p1_sidecar.py](../../tests/evaluation/test_p1_sidecar.py)，
+子进程复用 [p1_controlled_worker.py](../../tests/evaluation/p1_controlled_worker.py)。
+评测测试与受控子进程禁止外部 socket，使用虚假 key，不加载真实授权文件。
+
+修复前实际执行（当时为原 transport，仅新加 sidecar 复现测试）：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .nz-coder-runs/p1-env/bin/python -m pytest -q \
+  tests/evaluation/test_p1_sidecar.py --tb=short \
+  --junitxml=.nz-coder-runs/p1-sidecar-repair-20260908/red-mode.xml
+```
+
+结果：`1 failed in 1.34s`，明确断言 `{'type': 'enabled'} != {'type': 'disabled'}`。
+修复模式后的实际命令与结果：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .nz-coder-runs/p1-env/bin/python -m pytest -q \
+  tests/evaluation/test_p1_sidecar.py --tb=short \
+  --junitxml=.nz-coder-runs/p1-sidecar-repair-20260908/green-mode.xml
+```
+
+结果为 `7 passed in 10.56s`（此后继续添加了诊断及语义/费用分离测试）。
+后续诊断、冻结配置、落盘及取消的 red/green JUnit 也保存在该私有目录，
+其中 `red-review.xml` 为 5 个确实失败的边界测试，修复后 `green-review.xml` 为 12 项通过；
+`red-first-cancellation.xml` 为 2 个首次取消被覆盖的失败，`green-first-cancellation.xml` 为 6 项通过。
+
+最终完整定向命令：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .nz-coder-runs/p1-env/bin/python -m pytest -q \
+  tests/evaluation/test_p1_billing.py tests/evaluation/test_p1_live.py \
+  tests/evaluation/test_p1_sidecar.py tests/test_headless_cli.py --tb=short \
+  --junitxml=.nz-coder-runs/p1-sidecar-repair-20260908/contracts-verified.xml
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .nz-coder-runs/p1-env/bin/python -m pytest -q \
+  tests/test_sidecar_verifier.py tests/test_llm_judge.py \
+  tests/runtime/model_gateway/test_buffered_gateway.py tests/runtime/model_gateway/test_runtime.py \
+  tests/runtime/model_gateway/test_gateway_models.py tests/runtime/model_gateway/test_usage.py --tb=short \
+  --junitxml=.nz-coder-runs/p1-sidecar-repair-20260908/product-regressions.xml
+.nz-coder-runs/p1-env/bin/python -m evaluation.linux_baseline.runner --help
+.nz-coder-runs/p1-env/bin/python -m ruff check \
+  evaluation/linux_baseline/billing.py evaluation/linux_baseline/live.py evaluation/linux_baseline/live_worker.py \
+  tests/evaluation/test_p1_billing.py tests/evaluation/test_p1_live.py tests/evaluation/test_p1_sidecar.py \
+  tests/evaluation/p1_controlled_worker.py tests/evaluation/conftest.py --output-format concise
+.nz-coder-runs/p1-env/bin/python -m py_compile \
+  evaluation/linux_baseline/billing.py evaluation/linux_baseline/live.py evaluation/linux_baseline/live_worker.py \
+  tests/evaluation/test_p1_billing.py tests/evaluation/test_p1_live.py tests/evaluation/test_p1_sidecar.py \
+  tests/evaluation/p1_controlled_worker.py tests/evaluation/conftest.py
+git diff --check
+```
+
+最终主套件为 `115 passed in 129.31s`；相关产品回归为 `112 passed in 1.58s`，共 227 项通过。
+Ruff、编译、帮助及差异空白检查通过。
+项目没有配置独立类型检查器，本轮未引入新的类型工具或依赖。
+
+受控请求的可审查事实：主 Gateway 请求仍为 enabled/high/8000，消息、工具及 response_format 不变；
+真实 sidecar 链为 disabled/effort省略/1024，强制工具未变，合法 verdict 得到 `verifier_ok`。
+合成 usage 的独立预期费用为 `(40×0.10 + 60×3 + 20×9)/1000000 = 0.000364 CNY`，
+只用于契约验证，不是新增真实支出。主/辅助两次响应共用账本结算 `0.000728 CNY` 的合成值；
+辅助用量未知时只保留主请求已知部分，并持有 `3.154944 CNY` 合成预留，inner 总发送数保持 2。
+SDK retry entries 与实际进入 inner 的发送分别验证，未知后的重试发送为 0。
+
+组织器集成测试使用临时 fixture、真实 headless CLI/Native、真实工具修改及独立干净重放：
+主运行 completed、目标 3/3、冻结回归 4/4、patch_verified=true；
+随后真实 sidecar 调用链返回缺 usage 的受控响应，产品 verdict 为降级 `accept/provider_error`，
+最终仍为 infrastructure_blocked，T04 启动 0。不是手写未知账本来替代这条链，也不是新的模型成绩。
+另外覆盖未授权/额度不足零发送、别名输出限制拒绝、缓存/推理子项不重复、
+其他模型/Provider拒绝、重复attempt、非200、发送/读取超时、丢失响应、坏JSON、身份错误、
+缺失/矛盾/越界usage、记录失败、敏感哨兵与动态异常类名脱敏。
+只读代理独立复核了模式、共享账本、首因/取消、脱敏及组织器停止边界；代码仅由主代理修改。
+
+### 历史不变与下一次真实运行的边界
+
+本轮前后复核以下 SHA-256 一致：
+
+| 原实验文件 | SHA-256 |
+| --- | --- |
+| frozen.json | `43ffb167a0f9f7db3d4b666bbcaa0c8ba12b06a4dfef9532cdfa84cb93dd63f8` |
+| T01/billing.jsonl | `c90dad4b6c3503d1aba3a08d4b883c48ced382ca4e22ba8985cdcc425f4c626a` |
+| T01/final.patch（含公开副本） | `e4619db21366552daca85d888128a50de788e49d5d963d426655a65086eae0f3` |
+| T01/result.json | `0d3c6436feb0e31568a19cf265d64159a417e5f1951729f7cb9a47df0548e5e8` |
+| summary.json | `b67a7a99540c681197cc7efe5c85b119ebb2464385527ebd018acc11ea4c60a1` |
+| 公开 result.json | `04cca793c45f5e766477074e3a79b96e24bc6a251802e5a3b1a73e1cbcd1b6b1` |
+
+原授权配置未修改，交付核对 SHA-256 为
+`22806e70391f9304c4aa01cdafa0e455549bbc5d3365685f1541abfe224c7b93`。
+保留全部历史现场及压缩包，不解压、不清理。T01 历史正式启动仍为 1、T04 为 0；
+历史已知折算费用仍为 **0.2115294 CNY**、未知预留仍为 **3.154944 CNY**。
+历史账本总剩余 **6.6335266 CNY**，不是已核实账户余额；未知项未清零、未回填免费。
+第14次请求具体 HTTP 状态、原始异常类别、完整用量与真实账单依然未知。
+
+下一次真实运行前仍须明确主/辅助新配置及授权范围、使用新的冻结 harness/experiment 身份，
+并明确沿用扣除未知预留后的余额还是另获新授权，记录与旧实验的关联。
+新 experiment_id 不自动获得新的 10 CNY；不覆盖首次结果，不借本轮修复重跑 T01 或启动 T04。
+本轮到离线修复及证据交付即停止，不申请预算，不自动恢复实跑。
+结论是“请求模式改写缺陷已离线修复并验证”，不是“历史请求14的HTTP原因或账单已确认”，
+更不是“T04通过”或“真实P1完成”。
+
+[^p1-mode]: DeepSeek，思考模式指南，查阅于 2026-09-08T08:34:40Z。https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
+[^p1-chat]: DeepSeek，Chat Completion API 参数文档，查阅于 2026-09-08T08:34:40Z。https://api-docs.deepseek.com/zh-cn/api/create-chat-completion

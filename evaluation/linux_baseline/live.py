@@ -10,7 +10,7 @@ import re
 import sys
 
 from . import runner
-from .billing import BillingStopped, Ledger, Policy, claim_attempt, summarize
+from .billing import BillingStopped, Ledger, Policy, _exception_category, claim_attempt, summarize
 from .catalog import AGENT_REVISION, TASK_SPECS, digest, manifest
 
 RATE_SOURCE = "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/"
@@ -20,7 +20,8 @@ RATE_SOURCE_SHA256 = "899affbdbc33d0be620d8dea59e86f5036c11b5410b14d060b8d2874c7
 CONFIG_KEYS = frozenset(("authorized", "authorization_reference", "budget_currency", "total_budget",
     "per_task_budget", "allowed_tasks", "execution_order", "attempts_per_task", "auto_continue_remaining_tasks",
     "account_provider", "account_rates_confirmed", "endpoint", "model", "effort", "token_budget", "rate_date",
-    "rate_source", "hit_rate", "miss_rate", "output_rate", "experiment_id", "harness_revision", "output_directory"))
+    "rate_source", "hit_rate", "miss_rate", "output_rate", "experiment_id", "harness_revision", "output_directory",
+    "main_thinking", "main_output_limit", "auxiliary_thinking", "auxiliary_output_limit"))
 
 
 def authorized_policy(config: dict) -> Policy:
@@ -33,6 +34,8 @@ def authorized_policy(config: dict) -> Policy:
                     account_rates_confirmed=True, allowed_tasks=["T01", "T04"],
                     execution_order=["T01", "T04"], attempts_per_task=1,
                     auto_continue_remaining_tasks=False, rate_source=RATE_SOURCE,
+                    main_thinking="enabled", auxiliary_thinking="disabled",
+                    main_output_limit=8000, auxiliary_output_limit=1024,
                     rate_date=RATE_RETRIEVED_AT[:10])  # Legacy config key means lookup date.
     if any(type(config.get(key)) is not type(value) or config.get(key) != value for key, value in required.items()):
         raise ValueError("Paid authorization or confirmed account/rates incomplete")
@@ -45,6 +48,8 @@ def authorized_policy(config: dict) -> Policy:
         policy = Policy(authorized=True, total_budget=Decimal(config["total_budget"]),
                         task_budget=Decimal(config["per_task_budget"]), endpoint=config["endpoint"],
                         model=config["model"], effort=config["effort"], token_budget=config["token_budget"],
+                        main_thinking=config["main_thinking"], output_limit=config["main_output_limit"],
+                        auxiliary_thinking=config["auxiliary_thinking"], auxiliary_output_limit=config["auxiliary_output_limit"],
                         hit_rate=Decimal(config["hit_rate"]), miss_rate=Decimal(config["miss_rate"]),
                         output_rate=Decimal(config["output_rate"]))
     except (KeyError, TypeError, InvalidOperation):
@@ -75,6 +80,11 @@ def freeze(config: dict, policy: Policy) -> dict:
                 versions=versions, provider="openai-compatible", endpoint=policy.endpoint,
                 account_provider="DeepSeek (user-confirmed, not independently queried)",
                 model=policy.model, effort=policy.effort, thinking="enabled", stream=False,
+                request_modes=dict(
+                    main=dict(thinking=policy.main_thinking, effort=policy.effort, output_limit=policy.output_limit),
+                    auxiliary=dict(thinking=policy.auxiliary_thinking, effort=None, output_limit=policy.auxiliary_output_limit),
+                    transport_purpose="unknown; validates mode set, not message or tool labels",
+                    budget_scope="shared task/experiment ledger; uncertainty stops all modes"),
                 provider_model_version_at_lookup="DeepSeek-V4-Flash-0731",
                 published_context="1M shared input/output", published_max_output="384K",
                 profile="main; restricted P1 tool allowlist; child_agents=false", tools=list(TOOLS),
@@ -164,6 +174,18 @@ def run(output: Path, config: dict) -> dict:
             rows = [json.loads(line) for line in (directory / "billing.jsonl").read_text().splitlines()]
             billing = summarize(rows, task_policy)
             result["billing"] = billing
+            memory_summary = directory / "billing-summary.json"
+            if not memory_summary.exists():
+                result["billing_journal"] = result.pop("billing")
+                result["billing_consistency"] = "worker_summary_missing"
+                raise BillingStopped("Worker final evidence missing; remaining budget unknown")
+            if json.loads(memory_summary.read_text()) != billing:
+                # A settlement line may have reached disk before fsync failed,
+                # while the following uncertainty append also failed. Never
+                # discard the worker's in-memory stop/hold based on that line.
+                result["billing_journal"] = result.pop("billing")
+                result["billing_consistency"] = "journal_worker_summary_mismatch"
+                raise BillingStopped("Worker/journal evidence differs; remaining budget unknown")
             remaining = Decimal(billing["remaining_total_budget"])
             runtime_result, _events = runner.read_events(directory / "runtime.jsonl")
             status = (runtime_result or {}).get("status")
@@ -174,7 +196,7 @@ def run(output: Path, config: dict) -> dict:
                 ("remaining_total_budget", "remaining_task_budget", "remaining_tokens"))
         except Exception as error:
             remaining = None  # A torn/missing journal is NOT an unused full budget.
-            result.update(usage_complete=False, within_budget=None, billing_error=type(error).__name__)
+            result.update(usage_complete=False, within_budget=None, billing_error=_exception_category(error))
         # Independent export/acceptance still runs after lost accounting or crashed runtime.
         acceptance_reliable = False
         try:
@@ -191,9 +213,10 @@ def run(output: Path, config: dict) -> dict:
             result["patch_verified"] = (acceptance_reliable and not violations
                                         and all(v["accepted"] for v in result["acceptance"].values()))
         except Exception as error:
-            result.update(patch_verified=False, artifact_error=type(error).__name__)
+            result.update(patch_verified=False, artifact_error=_exception_category(error))
         result["acceptance_reliable"] = acceptance_reliable
-        reliable = (result.get("usage_complete") and acceptance_reliable and not result.get("artifact_error")
+        reliable = (result.get("usage_complete") and not result.get("billing", {}).get("blocked")
+                    and acceptance_reliable and not result.get("artifact_error")
                     and result.get("billing", {}).get("requests_sent", 0) > 0
                     and not execution["exception"] and not execution["cleanup_error"])
         result["final_status"] = runner.classify(execution=execution, runtime_status=result.get("runtime_status"),

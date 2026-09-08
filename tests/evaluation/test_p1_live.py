@@ -25,6 +25,8 @@ def authorization():
                 account_provider="DeepSeek", account_rates_confirmed=True,
                 endpoint="https://api.deepseek.com", model="deepseek-v4-flash",
                 effort="high", token_budget=2000000,
+                main_thinking="enabled", main_output_limit=8000,
+                auxiliary_thinking="disabled", auxiliary_output_limit=1024,
                 rate_date="2026-09-08", rate_source="https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
                 hit_rate="0.10", miss_rate="3", output_rate="9",
                 experiment_id="offline-contract", harness_revision="a" * 40,
@@ -62,6 +64,19 @@ def test_freeze_distinguishes_rate_lookup_from_effective_date(monkeypatch):
     assert frozen["rates"]["calculation_basis"] == "published peak-rate ceiling for all periods; not account invoice"
     assert frozen["provider_model_version_at_lookup"] == "DeepSeek-V4-Flash-0731"
     assert frozen["versions"]["packages"]["httpx"]
+    assert frozen["request_modes"] == {
+        "main": {"thinking": "enabled", "effort": "high", "output_limit": 8000},
+        "auxiliary": {"thinking": "disabled", "effort": None, "output_limit": 1024},
+        "transport_purpose": "unknown; validates mode set, not message or tool labels",
+        "budget_scope": "shared task/experiment ledger; uncertainty stops all modes",
+    }
+
+
+def test_legacy_grant_cannot_silently_authorize_new_auxiliary_mode():
+    legacy = {k: v for k, v in authorization().items() if k not in {
+        "main_thinking", "main_output_limit", "auxiliary_thinking", "auxiliary_output_limit"}}
+    with pytest.raises(ValueError):
+        live().authorized_policy(legacy)
 
 
 def test_missing_live_authorization_never_prepares_p0_or_starts_worker(tmp_path, monkeypatch):
@@ -175,7 +190,8 @@ def test_unsupported_secret_fields_not_copied_to_descriptor():
 
 
 @pytest.mark.parametrize("mode", ["ordinary_failure", "unknown_usage", "torn_journal",
-                                  "acceptance_infrastructure", "empty_acceptance", "cancelled"])
+                                  "acceptance_infrastructure", "empty_acceptance", "cancelled",
+                                  "partial_settlement_persistence", "missing_worker_summary"])
 def test_serial_organizer_retains_failures_and_stops_at_two_or_uncertainty(tmp_path, monkeypatch, mode):
     from evaluation.linux_baseline import runner
     from evaluation.linux_baseline.billing import Ledger, journal
@@ -193,6 +209,27 @@ def test_serial_organizer_retains_failures_and_stops_at_two_or_uncertainty(tmp_p
         assert "test-only-key" not in json.dumps(descriptor)
         policy = module.authorized_policy(descriptor["config"])
         ledger = Ledger(policy, journal(cwd.parent / "billing.jsonl"))
+        if mode == "partial_settlement_persistence":
+            from evaluation.linux_baseline.billing import make_client
+            append = ledger.record
+            def broken_record(row):
+                if row["event"] in {"uncertain", "rejected"}:
+                    raise OSError("offline-diagnostic-failure")
+                append(row)
+                if row["event"] == "settled":
+                    raise OSError("offline-fsync-failure-after-write")
+            ledger.record = broken_record
+            def reply(req):
+                return httpx.Response(200, json=dict(id="offline", model=policy.model, choices=[], usage=dict(
+                    prompt_tokens=100, completion_tokens=20, total_tokens=120,
+                    prompt_cache_hit_tokens=40, prompt_cache_miss_tokens=60)))
+            with make_client(policy, ledger, "fake", inner=httpx.MockTransport(reply)) as client:
+                with pytest.raises(Exception):
+                    client.chat.completions.create(model=policy.model, messages=[], max_tokens=8000,
+                        extra_body={"thinking": {"type": "enabled"}, "reasoning_effort": "high"})
+            runner.write_json(cwd.parent / "billing-summary.json", ledger.snapshot())
+            log.write_text(json.dumps({"type": "result", "status": "completed"}) + "\n")
+            return dict(exit_code=0, timed_out=False, exception=None, cleanup_error=None, elapsed_seconds=0)
         number = ledger.reserve("controlled", 8000)
         ledger.dispatching(number)
         if mode not in {"unknown_usage", "torn_journal"}:
@@ -202,6 +239,8 @@ def test_serial_organizer_retains_failures_and_stops_at_two_or_uncertainty(tmp_p
         elif mode == "torn_journal":
             with (cwd.parent / "billing.jsonl").open("a") as stream:
                 stream.write('{"unfinished":')
+        if mode != "missing_worker_summary":
+            runner.write_json(cwd.parent / "billing-summary.json", ledger.snapshot())
         log.write_text(json.dumps({"type": "result", "status": "completed"}) + "\n")
         if mode == "cancelled":
             (cwd / "tests/cancelled_probe.txt").write_text("offline cancellation evidence\n")
@@ -245,6 +284,9 @@ def test_serial_organizer_retains_failures_and_stops_at_two_or_uncertainty(tmp_p
             assert summary["remaining_total_budget"] is None
         elif mode == "unknown_usage":
             assert Decimal(summary["tasks"]["T01"]["billing"]["unresolved_reservation"]) > 0
+        elif mode == "partial_settlement_persistence":
+            assert summary["remaining_total_budget"] is None
+            assert summary["tasks"]["T01"]["usage_complete"] is False
     # Even failed attempts consume the experiment identity.
     with pytest.raises(FileExistsError):
         module.run(output, config)
@@ -256,6 +298,72 @@ def test_output_directory_binding_precedes_credentials(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "credential", lambda *a: pytest.fail("Different experiment accessed credentials"))
     with pytest.raises(ValueError, match="Output differs"):
         module.run(tmp_path / "other", authorization())
+
+
+@pytest.mark.parametrize("primary", [KeyboardInterrupt("offline-primary"), RuntimeError("offline-primary"), None])
+def test_worker_final_summary_failure_cannot_replace_primary(tmp_path, monkeypatch, primary):
+    from evaluation.linux_baseline import live_worker
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore
+    from nz_coder.interface import cli
+    evidence = tmp_path / "T01"
+    repo = evidence / "repo"
+    repo.mkdir(parents=True)
+    monkeypatch.setenv("API_KEY", "fake")
+    monkeypatch.setattr(WorkspaceTrustStore, "trust", lambda *args: None)
+    def main(*args):
+        if primary is not None:
+            raise primary
+        return 0
+    def fail_summary(*args):
+        raise OSError("private-summary-sentinel")
+    monkeypatch.setattr(cli, "main", main)
+    monkeypatch.setattr(live_worker, "write_json", fail_summary)
+    with pytest.raises(BaseException) as caught:
+        live_worker.run({**authorization(), "output_directory": str(tmp_path)}, repo, "offline", "offline", evidence)
+    if primary is not None:
+        assert caught.value is primary
+    else:
+        assert "private-summary-sentinel" not in str(caught.value)
+
+
+def test_organizer_real_native_sidecar_unknown_stops_after_verified_patch(tmp_path, monkeypatch):
+    """Catches treating fail-open completion/valid patch as complete billing."""
+    from evaluation.linux_baseline import runner
+    module = live()
+    output = tmp_path / "offline-sidecar-experiment"
+    config = {**authorization(), "output_directory": str(output)}
+    monkeypatch.setattr(module, "freeze", lambda *args: {"contract": "offline-only"})
+    monkeypatch.setattr(module, "credential", lambda *args: "test-only-key")
+    original_process = runner.process
+    starts = []
+    def controlled_process(command, cwd, env, log, timeout):
+        if command[1:3] != ["-m", "evaluation.linux_baseline.live_worker"]:
+            return original_process(command, cwd, env, log, timeout)
+        starts.append(cwd.parent.name)
+        descriptor = cwd.parent / "request.json"
+        request = json.loads(descriptor.read_text())
+        runner.write_json(descriptor, {**request, "scenario": "sidecar_unknown"})
+        return original_process([sys.executable, str(Path(__file__).with_name("p1_controlled_worker.py")),
+                                 str(descriptor)], cwd, env, log, 90)
+    monkeypatch.setattr(runner, "process", controlled_process)
+    summary = module.run(output, config)
+    result = summary["tasks"]["T01"]
+    assert starts == ["T01"]
+    assert result["runtime_completed"] and result["patch_verified"], result
+    assert result["acceptance"]["target"]["passed"] == 3
+    assert result["acceptance"]["regression"]["passed"] == 4
+    assert result["final_status"] == "infrastructure_blocked"
+    assert not result["usage_complete"] and result["cleanup_ok"]
+    assert summary["tasks"]["T04"]["starts"] == 0 and summary["stopped"]
+    observed = json.loads((output / "T01/controlled.json").read_text())
+    assert observed["network_attempts"] == 0 and observed["native_builds"] == 1
+    assert observed["verifier"] == {"verdict": "accept", "trace": "provider_error"}
+    assert observed["wire_requests"][-1]["thinking"] == {"type": "disabled"}
+    assert observed["wire_requests"][-1]["max_tokens"] == 1024
+    assert result["billing"]["unresolved_reservation"] == "3.154944000"
+    assert result["billing"]["sdk_retry_sends"] == 0
+    assert (output / "T01/final.patch").stat().st_size > 0
+    assert "test-only-key" not in json.dumps(result)
 
 
 @pytest.mark.parametrize("adapter", ["AnthropicProvider", "GeminiProvider", "OpenAIResponsesProvider"])

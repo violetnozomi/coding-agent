@@ -32,6 +32,7 @@ def bounded_product(policy, ledger, api_key: str, *, inner_factory=None):
     from nz_coder.providers import AnthropicProvider, GeminiProvider, OpenAIResponsesProvider
 
     original_client = OpenAICompatibleProvider.create_client
+    original_completion = OpenAICompatibleProvider.create_completion
     original_request = headless.RunRequest
     excluded_clients = {cls: cls.create_client for cls in
                         (AnthropicProvider, GeminiProvider, OpenAIResponsesProvider)}
@@ -53,7 +54,19 @@ def bounded_product(policy, ledger, api_key: str, *, inner_factory=None):
         kwargs["tool_names"] = TOOLS
         return original_request(**kwargs)
 
+    def create_completion(provider, client, **kwargs):
+        # Public DeepSeek defaults made explicit at the request construction
+        # boundary. Explicit caller fields are never replaced. Final Provider
+        # normalization/SDK extra_body merges are validated by BudgetTransport.
+        extra = dict(kwargs.get("extra_body") or {})
+        extra.setdefault("thinking", {"type": policy.main_thinking})
+        if extra["thinking"] == {"type": "enabled"}:
+            kwargs.setdefault("reasoning_effort", policy.effort)
+        kwargs["extra_body"] = extra
+        return original_completion(provider, client, **kwargs)
+
     OpenAICompatibleProvider.create_client = create_client
+    OpenAICompatibleProvider.create_completion = create_completion
     headless.RunRequest = request
     for cls in excluded_clients:
         cls.create_client = excluded_client
@@ -61,6 +74,7 @@ def bounded_product(policy, ledger, api_key: str, *, inner_factory=None):
         yield
     finally:
         OpenAICompatibleProvider.create_client = original_client
+        OpenAICompatibleProvider.create_completion = original_completion
         headless.RunRequest = original_request
         for cls, original in excluded_clients.items():
             cls.create_client = original
@@ -82,6 +96,7 @@ def run(config: dict, repo: Path, session: str, prompt: str, evidence: Path, *, 
 
     snapshot = load_config_snapshot(repo)
     WorkspaceTrustStore().trust(repo, "workspace-control", snapshot.control_fingerprint)
+    primary = None
     try:
         with bounded_product(policy, ledger, api_key, inner_factory=inner_factory):
             return product_main([
@@ -89,8 +104,20 @@ def run(config: dict, repo: Path, session: str, prompt: str, evidence: Path, *, 
                 "--permission-mode", "auto", "--session", session,
                 "--max-turns", "30", "--output", "jsonl", "--prompt", prompt,
             ])
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        write_json(evidence / "billing-summary.json", ledger.snapshot())
+        try:
+            write_json(evidence / "billing-summary.json", ledger.snapshot())
+        except BaseException as error:
+            ledger.blocked = True
+            # The parent requires this final evidence and stops if it is absent
+            # or torn. Do not obscure the request failure/cancellation here.
+            if not isinstance(error, Exception) and (primary is None or isinstance(primary, Exception)):
+                raise
+            if primary is None:
+                raise BillingStopped("Worker billing summary persistence failed") from None
 
 
 def main(argv=None) -> int:
