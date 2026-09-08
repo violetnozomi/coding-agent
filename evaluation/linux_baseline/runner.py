@@ -438,7 +438,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--dry-run", action="store_true", help="also exercise real native chain with Fake Provider")
-    parser.add_argument("--live", action="store_true", help="P1 only: explicit authorization, T01 then T04, one attempt each")
+    parser.add_argument("--live", action="store_true", help="P1 authorized plan: T01 then T04, or evidence-linked T04 only; one attempt each")
     parser.add_argument("--live-config", type=Path, help="user-confirmed P1 grant and frozen billing configuration; never implicit")
     parser.add_argument("--publish", type=Path, help="new durable directory for safe offline evidence")
     args = parser.parse_args(argv)
@@ -453,7 +453,9 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(f"P1 stopped ({type(exc).__name__}); inspect the authorization and private evidence")
         print(json.dumps({"stopped": summary["stopped"], "tasks": {
             key: value["final_status"] for key, value in summary["tasks"].items()}}, indent=2))
-        return 0 if all(summary["tasks"][key]["final_status"] == "success" for key in ("T01", "T04")) else 1
+        selected = summary.get("selected_tasks")
+        return 0 if (selected in (["T01", "T04"], ["T04"]) and summary.get("stopped") is True
+                     and all(summary["tasks"].get(key, {}).get("final_status") == "success" for key in selected)) else 1
     if args.live_config:
         parser.error("--live-config requires --live; refusing to rebuild P0")
     summary = prepare(args.output.resolve(), dry_run=args.dry_run)

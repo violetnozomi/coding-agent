@@ -1,4 +1,4 @@
-"""Explicit P1 paid gate and two-attempt organizer, reusing the frozen P0 driver."""
+"""Explicit P1 paid gate and bounded execution plans, reusing the frozen P0 driver."""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -12,6 +12,7 @@ import sys
 from . import runner
 from .billing import BillingStopped, Ledger, Policy, _exception_category, claim_attempt, summarize
 from .catalog import AGENT_REVISION, TASK_SPECS, digest, manifest
+from .continuation import PREDECESSOR_ID
 
 RATE_SOURCE = "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/"
 # Public-page lookup, NOT an asserted tariff effective date or account contract.
@@ -24,15 +25,27 @@ CONFIG_KEYS = frozenset(("authorized", "authorization_reference", "budget_curren
     "main_thinking", "main_output_limit", "auxiliary_thinking", "auxiliary_output_limit"))
 
 
+def execution_plan(config: dict) -> tuple[str, ...]:
+    """Only the original pair or the explicitly linked first T04 attempt."""
+    tasks = config.get("allowed_tasks")
+    if type(tasks) is not list or config.get("execution_order") != tasks:
+        raise ValueError("Execution order must equal the authorized task list")
+    if tasks == ["T01", "T04"] and "continuation" not in config:
+        return ("T01", "T04")
+    if tasks == ["T04"] and config.get("continuation") == {"predecessor_experiment_id": PREDECESSOR_ID}:
+        return ("T04",)
+    raise ValueError("Only the original pair or evidence-linked T04 continuation is supported")
+
+
 def authorized_policy(config: dict) -> Policy:
     """Parse a user-confirmed grant, never turn the example into authorization."""
-    if not isinstance(config, dict) or set(config) != CONFIG_KEYS:
+    if not isinstance(config, dict) or set(config) not in (CONFIG_KEYS, CONFIG_KEYS | {"continuation"}):
         raise ValueError("P1 config must contain exactly the documented fields; no secrets")
+    plan = execution_plan(config)
     if not isinstance(config["output_directory"], str) or not Path(config["output_directory"]).is_absolute():
         raise ValueError("Bind the grant to one absolute output directory")
     required = dict(authorized=True, budget_currency="CNY", account_provider="DeepSeek",
-                    account_rates_confirmed=True, allowed_tasks=["T01", "T04"],
-                    execution_order=["T01", "T04"], attempts_per_task=1,
+                    account_rates_confirmed=True, attempts_per_task=1,
                     auto_continue_remaining_tasks=False, rate_source=RATE_SOURCE,
                     main_thinking="enabled", auxiliary_thinking="disabled",
                     main_output_limit=8000, auxiliary_output_limit=1024,
@@ -44,6 +57,9 @@ def authorized_policy(config: dict) -> Policy:
     if (not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", str(config.get("experiment_id", ""))) or
             not re.fullmatch(r"[0-9a-f]{40}", str(config.get("harness_revision", "")))):
         raise ValueError("Frozen experiment identity and driver revision required")
+    if any(type(config[key]) is not str or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?", config[key])
+           for key in ("total_budget", "per_task_budget")):
+        raise ValueError("Budgets must be canonical nonnegative Decimal strings")
     try:
         policy = Policy(authorized=True, total_budget=Decimal(config["total_budget"]),
                         task_budget=Decimal(config["per_task_budget"]), endpoint=config["endpoint"],
@@ -57,6 +73,8 @@ def authorized_policy(config: dict) -> Policy:
     if (policy.total_budget <= 0 or policy.task_budget <= 0 or policy.hit_rate < Decimal("0.10")
             or policy.miss_rate < 3 or policy.output_rate < 9):
         raise ValueError("Insufficient budget or rates below published peak ceiling")
+    if plan == ("T04",) and not policy.task_budget <= policy.total_budget <= Decimal("5"):
+        raise ValueError("T04 continuation allocation cannot exceed 5 CNY")
     return policy
 
 
@@ -74,7 +92,11 @@ def freeze(config: dict, policy: Policy) -> dict:
     if not 7 <= int(pytest_version.split(".")[0]) < 9:
         raise ValueError("Live requires project-supported pytest >=7,<9")
     task_manifest = manifest()
+    from .continuation import carryover
     return dict(experiment_id=config["experiment_id"], agent_revision=AGENT_REVISION,
+                config_hash=digest(config),
+                carryover=carryover(config) if execution_plan(config) == ("T04",) else None,
+                selected_tasks=list(execution_plan(config)),
                 harness_revision=head, task_manifest_hash=digest(task_manifest),
                 acceptance_hashes={t["task_id"]: t["acceptance_revision"] for t in task_manifest["tasks"]},
                 versions=versions, provider="openai-compatible", endpoint=policy.endpoint,
@@ -126,19 +148,27 @@ def credential(policy: Policy) -> str:
 
 def run(output: Path, config: dict) -> dict:
     policy = authorized_policy(config)  # NO preparation, credentials or worker before authorization.
+    plan = execution_plan(config)
     if output.resolve() != Path(config["output_directory"]).resolve():
         raise ValueError("Output differs from the authorized single experiment directory")
     frozen = freeze(config, policy)
+    from .continuation import carryover, claim
+    carry = carryover(config) if plan == ("T04",) else None
+    if carry is not None and frozen.get("carryover") != carry:
+        raise BillingStopped("Frozen carryover differs from predecessor evidence")
     api_key = credential(policy)
     # Admission preview is memory-only, never a paid request or account probe.
     Ledger(policy, lambda _row: None).reserve("preflight", policy.output_limit)
+    if carry is not None:
+        claim(config, carry)
     output.mkdir(mode=0o700, parents=False)  # Existing experiment, even failed, is never resumed.
     runner.write_json(output / "frozen.json", frozen)
     results = {spec[0]: dict(task_id=spec[0], final_status="not_run", starts=0) for spec in TASK_SPECS}
-    summary = dict(evidence_kind="live/P1", experiment_id=config["experiment_id"], tasks=results)
+    summary = dict(evidence_kind="live/P1", experiment_id=config["experiment_id"],
+                   selected_tasks=list(plan), carryover=carry, tasks=results)
     runner.write_json(output / "summary.json", summary)
     remaining = policy.total_budget
-    for task in ("T01", "T04"):
+    for task in plan:
         if freeze(config, policy) != frozen:
             raise BillingStopped("Frozen configuration changed; experiment stopped")
         task_policy = replace(policy, total_budget=remaining)
@@ -154,7 +184,8 @@ def run(output: Path, config: dict) -> dict:
         session = f"p1-{config['experiment_id']}-{task}"
         child_config = {**config, "total_budget": str(remaining)}
         descriptor = directory / "request.json"
-        runner.write_json(descriptor, dict(config=child_config, session=session, prompt=spec[4]))
+        runner.write_json(descriptor, dict(config=child_config, session=session, prompt=spec[4],
+                                          task_id=task, selected_tasks=list(plan), frozen_hash=digest(frozen)))
         env = runner.isolated_environment(directory / "home", runner.ROOT)
         env.update(API_KEY=api_key, API_BASE_URL=policy.endpoint, MODEL_PROVIDER="openai-compatible",
                    MODEL_ID=policy.model, MODEL_VARIANT="", NZ_AUTO_MODE_CLASSIFIER_ENABLED="0")
@@ -227,6 +258,10 @@ def run(output: Path, config: dict) -> dict:
             summary["stopped_reason"] = "billing or infrastructure uncertainty; no automatic retry"
             break
     summary["remaining_total_budget"] = str(remaining) if remaining is not None else None
+    if carry is not None:
+        summary["original_budget_remaining"] = (str(Decimal(carry["unallocated_balance"]) + remaining)
+                                                 if remaining is not None else None)
+        summary["historical_usage_complete"] = False  # Old request 14 stays unresolved.
     summary["stopped"] = True
     runner.write_json(output / "summary.json", summary)
     return summary

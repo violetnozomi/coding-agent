@@ -33,6 +33,43 @@ def authorization():
                 output_directory="/tmp/p1-offline-contract")
 
 
+def continuation_authorization():
+    """Synthetic grant only; tests never load a user's authorization file."""
+    return {**authorization(), "allowed_tasks": ["T04"], "execution_order": ["T04"],
+            "total_budget": "5", "continuation": {"predecessor_experiment_id": "p1-live-20260908-073600"}}
+
+
+def test_single_t04_grant_does_not_require_t01():
+    policy = live().authorized_policy(continuation_authorization())
+    assert policy.total_budget == policy.task_budget == Decimal("5")
+
+
+@pytest.mark.parametrize("changes", [
+    {"allowed_tasks": [], "execution_order": []},
+    {"allowed_tasks": ["T04", "T04"], "execution_order": ["T04", "T04"]},
+    {"allowed_tasks": ["T02"], "execution_order": ["T02"]},
+    {"allowed_tasks": ["T01", "T04"], "execution_order": ["T01", "T04"]},
+    {"execution_order": ["T01", "T04"]}, {"allowed_tasks": "T04"},
+    {"continuation": None}, {"continuation": {"predecessor_experiment_id": "unproven"}},
+    {"total_budget": "10"}, {"per_task_budget": "6"},
+])
+def test_t04_plan_does_not_expand_or_reset_original_budget(changes):
+    with pytest.raises(ValueError):
+        live().authorized_policy({**continuation_authorization(), **changes})
+
+
+@pytest.mark.parametrize("status,code", [("success", 0), ("functional_failure", 1),
+    ("infrastructure_blocked", 1), ("not_run", 1)])
+def test_cli_exit_uses_only_nonempty_selected_plan(tmp_path, monkeypatch, status, code):
+    from evaluation.linux_baseline import runner
+    config = continuation_authorization()
+    path = tmp_path / "synthetic-grant.json"
+    runner.write_json(path, config)
+    monkeypatch.setattr(live(), "run", lambda *args: dict(stopped=True, selected_tasks=["T04"], tasks={
+        "T01": {"final_status": "not_run", "starts": 0}, "T04": {"final_status": status, "starts": int(status != "not_run")}}))
+    assert runner.main(["--live", "--live-config", str(path), "--output", str(tmp_path / "out")]) == code
+
+
 @pytest.mark.parametrize("changes", [dict(authorized=False), dict(authorization_reference=""),
     dict(account_rates_confirmed=False), dict(budget_currency="USD"),
     dict(allowed_tasks=["T01", "T02"]), dict(attempts_per_task=2), dict(effort="max"),
@@ -151,9 +188,11 @@ def test_journal_reconstruction_retains_killed_attempt_reservation(tmp_path):
 def test_actual_headless_native_provider_write_and_unknown_billing_stop(tmp_path):
     from evaluation.linux_baseline import runner
     from evaluation.linux_baseline.catalog import TASK_SPECS
+    tmp_path = tmp_path / "T01"
+    tmp_path.mkdir()
     runner.materialize(TASK_SPECS[0], tmp_path / "repo", tmp_path / "home")
     descriptor = tmp_path / "request.json"
-    runner.write_json(descriptor, dict(config=authorization(), prompt=
+    runner.write_json(descriptor, dict(config={**authorization(), "output_directory": str(tmp_path.parent)}, prompt=
         "Offline transport wiring only: write tests/p1_probe.txt with OFFLINE ONLY. Do not solve a task."))
     env = runner.isolated_environment(tmp_path / "home", runner.ROOT)
     env.update(API_KEY="test-only", API_BASE_URL="https://api.deepseek.com", MODEL_PROVIDER="openai-compatible",
@@ -319,7 +358,8 @@ def test_worker_final_summary_failure_cannot_replace_primary(tmp_path, monkeypat
     monkeypatch.setattr(cli, "main", main)
     monkeypatch.setattr(live_worker, "write_json", fail_summary)
     with pytest.raises(BaseException) as caught:
-        live_worker.run({**authorization(), "output_directory": str(tmp_path)}, repo, "offline", "offline", evidence)
+        live_worker.run({**authorization(), "output_directory": str(tmp_path)}, repo, "offline", "offline", evidence,
+                        inner_factory=lambda: pytest.fail("Mocked CLI must not create clients"))
     if primary is not None:
         assert caught.value is primary
     else:

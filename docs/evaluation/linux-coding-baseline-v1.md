@@ -749,3 +749,144 @@ SDK retry entries 与实际进入 inner 的发送分别验证，未知后的重�
 
 [^p1-mode]: DeepSeek，思考模式指南，查阅于 2026-09-08T08:34:40Z。https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
 [^p1-chat]: DeepSeek，Chat Completion API 参数文档，查阅于 2026-09-08T08:34:40Z。https://api-docs.deepseek.com/zh-cn/api/create-chat-completion
+
+## P1：仅 T04 续接准备（2026-09-08，未开启新付费运行）
+
+本节追加于修复基线 `ba1ab3960ea04e0f16761a94d3681082ee9c0521`，不改写历史实验。
+交付状态为 **A：单题接线、预算承接及离线验证；等待本次明确续接确认**。
+原 10 CNY 授权存在，但本次“只运行 T04、承接 5 CNY、明确辅助 disabled”方案仍待确认。
+本轮没有创建真实 authorized=true 文件、真实 experiment_id、输出目录或续接登记，
+没有真实模型调用、付费探针或账户查询，也没有读取/打印凭据。
+示例配置保持 `authorized=false`、金额为 0；示例不是授权。
+
+### 修改范围与执行边界
+
+`live.execution_plan()` 只支持原 `[T01,T04]`，或带固定前序实验引用的 `[T04]`；
+空列表、重复、额外任务、顺序不一致及混入 T01 的续接均拒绝。
+同一执行计划进入授权校验、freeze、组织器、descriptor、worker 和 CLI 汇总。
+worker 校验实验路径、任务身份、原始需求、Session、配置/冻结哈希及可用预算；
+单 T04 grant 下的 T01 descriptor 在创建账本/客户端前拒绝。
+CLI 只判断所选非空计划：T04 正常成功返回 0，失败、未运行、计费/基础设施阻断返回非零。
+未选 T01 保持本实验 not_run，不伪造成功；原 pair 的第二题仍须校验第一题账本、摘要与串行剩余额度。
+
+新增小型 `continuation.py`，仅处理原 `p1-live-20260908-073600` 的首次 T04 分配。
+它以封存 SHA-256 校验原授权、freeze、T01 账本/补丁/结果及 summary，
+重建账本金额，确认旧实验已停止、T04 未启动，沿用原 endpoint/model/effort/Token/费率。
+领取额度前检查活动 baseline 进程和私有根目录下其他实验/支出痕迹；缺失或不一致时停止。
+固定私有登记位置是 `.nz-coder-runs/p1-continuations/p1-live-20260908-073600/T04/`，
+与新 experiment_id 无关。独占目录与 receipt 绑定新 grant hash、输出目录和承接信息，
+并发/改名重启不能再次分配。
+
+receipt 及目录完成 fsync 后才创建 `ready`；写入/同步失败会留下不可自动释放的占位，
+没有 ready 的 receipt 不能启动 worker。ready 若在崩溃中丢失也按阻断处理，需人工核对。
+“分配登记”与任务目录中的 `worker-started` 分开，前者不等于正式模型请求或任务已经执行。
+失败后不删除登记、不自动换实验名重试。金额必须为规范 Decimal 字符串，
+数字/bool/带空白或符号等格式在 freeze/登记前拒绝，避免子进程规范化造成 grant hash 变化。
+
+生产 `nz_coder/`、`billing.py`、任务 catalogue/manifest、独立验收及旧公开结果均无改动。
+Agent revision 仍为 `7c308e3a75deae112e20c0de225113fda6ec9f9e`。
+本节所在提交是离线就绪版本；授权后使用当时干净 HEAD 作为新 harness_revision，
+再冻结任务/验收哈希、工具范围、依赖和唯一输出目录，不把旧 T01 与新 T04 混成同一驱动成绩。
+
+### 承接金额与待确认运行配置
+
+只读核算：`10 - 0.2115294 - 3.154944 = 6.6335266 CNY`。
+拟分配的 5 CNY 来自该余额，不是新增预算；未分配的 `1.6335266 CNY` 不授权继续使用。
+新 ledger 只统计本次 T04 请求；旧请求14不伪造成新请求，不释放、不回填免费。
+新 freeze 保存前序 ID/授权引用、证据哈希、旧 known/unknown、承接前余额、分配额及新授权/实验身份。
+总约束为 `旧 known + 旧 unknown + 新 known + 新 unknown ≤ 10 CNY`，新部分另受 5 CNY 上限。
+所有余额都是账本余额，不是已独立核实的账户余额；整个历史 usage 仍不完整。
+
+候选仍为官方 `https://api.deepseek.com` 的 `deepseek-v4-flash`。
+主编码 enabled/high/8000；辅助验证 disabled/effort 省略/1024，保留强制工具约束。
+二者走原共享 transport/ledger 和未知请求停止规则，不关闭 sidecar、不改变产品门控。
+单题累计请求 Token 2,000,000、主循环 30 轮、整个 worker 600 秒，均沿用原设置。
+工具白名单和辅助功能限制不变；这不是完整多 Agent 产品或 SWE-bench 验证。
+
+沿用上节 2026-09-08 查阅的官方峰值费率证据：每百万 Token，缓存命中 0.10、
+未命中 3、输出 9 CNY。查阅时间不代表费率生效日期；不查询账户合同/账单，也不声称认证已再次验证。
+本轮不修改已有保守预留：输入上界 1,048,576 Token，另预留相应输出上限；
+对共享窗口而言是有意偏保守的全窗口预留，不是声称实际输入达到整个窗口。
+主请求预留 1,056,576 Token / 3.217728 CNY；辅助预留 1,049,600 Token / 3.154944 CNY。
+5 CNY 和 2,000,000 累计 Token 能准入首请求。
+可靠 usage 结算后释放多余预留；下一请求必须同时满足新总额、单题额及累计 Token 的完整预留。
+未知响应保留预留并停止；余额虽非零也可能因不足全窗口预留而提前结束。
+预留不是实际消费，usage 折算费用也不是独立核实账单。
+
+### 离线证据
+
+复用 `p1-env`：Python 3.13.12、pytest 8.4.2、openai 2.36.0、httpx 0.28.1、Ruff 0.15.10。
+pytest 满足项目 `>=7,<9`；未重建环境、未运行整套 P0 或全平台回归。
+新增测试位于 `tests/evaluation/test_p1_continuation.py`，受控子进程仍复用 `p1_controlled_worker.py`。
+全部使用临时合成 grant/前序账本及假 key；测试进程和子进程禁止外部 socket，
+不加载真实授权文件、不把原 T01 现场作为可写测试目录。
+
+组合测试实际经过组织器 → worker descriptor/freeze 校验 → 正式 headless CLI/Native
+→ SDK/计费 transport → 受控响应。T01 materialize/worker 路径一旦出现即失败。
+脚本化工具在临时 T04 fixture 修改文件，最终补丁在干净副本重放，目标 3/3、原回归 4/4；
+这些是离线接线证据，不是模型成绩或 T04 真实验收。
+正常分支的 8 个主请求保持 enabled/high/8000，1 个真实 sidecar 调用链请求保持
+disabled/无 effort/1024/强制 emit_sidecar_verdict，得到 `accept/verifier_ok`，CLI 返回 0。
+辅助缺 usage 时只有 9 个 inner 发送、未知后的 SDK 重试发送为 0，保留 3.154944 CNY 合成预留，
+虽然运行 completed、补丁正确且产品降级 accept/provider_error，最终仍 infrastructure_blocked、CLI 返回 1。
+worker 摘要缺失/不一致两条组合测试同样停止，保留补丁、诊断并将剩余预算标为未知。
+账本 purpose 仍为 unknown，不用工具名/提示词授予权限。
+
+私有离线证据目录：`.nz-coder-runs/p1-t04-preparation-20260908/`。
+`red-plan.xml` 记录初始两个确定性失败（单题 grant 和 CLI）；
+`red-receipt.xml` 记录失败落盘 receipt 仍被认可的反例，修复后对应测试通过；
+`red-grant-format.xml` 记录预算格式问题，`green-grant-format.xml` 为 7 项通过。
+`red-carryover.xml` 含新增模块尚未存在时的 setup errors，不作为业务失败复现证据；
+早期 `contracts.xml` 的运行期间发生源码修改，出现 4 个组合测试失败，不作为最终结果。
+最终命令在源码修改停止后重新执行：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .nz-coder-runs/p1-env/bin/python -m pytest -q \
+  tests/evaluation/test_p1_live.py tests/evaluation/test_p1_billing.py \
+  tests/evaluation/test_p1_sidecar.py tests/evaluation/test_p1_continuation.py \
+  tests/test_headless_cli.py --tb=short \
+  --junitxml=.nz-coder-runs/p1-t04-preparation-20260908/contracts-final.xml
+.nz-coder-runs/p1-env/bin/python -m evaluation.linux_baseline.runner --help
+.nz-coder-runs/p1-env/bin/python -m ruff check \
+  evaluation/linux_baseline/continuation.py evaluation/linux_baseline/live.py \
+  evaluation/linux_baseline/live_worker.py evaluation/linux_baseline/runner.py \
+  tests/evaluation/test_p1_continuation.py tests/evaluation/test_p1_live.py \
+  tests/evaluation/p1_controlled_worker.py --output-format concise
+.nz-coder-runs/p1-env/bin/python -m py_compile \
+  evaluation/linux_baseline/continuation.py evaluation/linux_baseline/live.py \
+  evaluation/linux_baseline/live_worker.py evaluation/linux_baseline/runner.py \
+  tests/evaluation/test_p1_continuation.py tests/evaluation/test_p1_live.py \
+  tests/evaluation/p1_controlled_worker.py
+git diff --check
+```
+
+只读代理复核了越权、参数冻结、重复分配及持久化边界；修改仅由主代理实施。
+最终定向套件 **169 passed in 155.13s，退出码 0**；Ruff、编译、帮助及 `git diff --check` 均通过。
+复核发现的 receipt 和金额格式问题均先复现后修复；文件/四级目录 fsync 失败均补测 worker 拒绝。
+原 pair 的真实 freeze/descriptor 成功及预算重置拒绝另有回归。
+项目未配置独立类型检查器，本轮未增加类型工具或依赖。
+
+### 本轮真实任务与历史完整性
+
+| 任务 | 本轮正式启动 | 本轮真实请求/重试 | 本轮独立验收 | 新 known / unknown 预留 | 状态 |
+| --- | ---: | --- | --- | --- | --- |
+| T04 | 0 | 0 / 0 | 未运行 | 0 / 0 CNY | 等待本次续接确认 |
+| T01 | 0 | 0 / 0 | 未重跑，引用旧实验 | 0 / 0 CNY | 旧结果不变 |
+
+其余 10 题本轮均未启动，仍 not_run；T04 真实成功率为 null，没有新真实补丁/Session/判定。
+sidecar 本轮真实调用未覆盖，不发额外付费请求补齐覆盖。
+旧 T01 正式启动仍为 1，目标 3/3、回归 4/4、patch_verified=true，
+但旧最终分类仍 infrastructure_blocked；旧 known 0.2115294 CNY、unknown 3.154944 CNY 原样保留。
+本轮新费用与新预留均 0，原账本余额仍 6.6335266 CNY；没有发生真实额度分配。
+第14次的 HTTP 原因和实际账单仍未知。
+
+上节列出的原授权、freeze、账本、补丁、结果、summary 及公开 result 的 SHA-256 均复核一致。
+原文件未修改，现有 Session/诊断包/其他 worktree 未删除或重建。
+只读进程核对为 0 个活动 baseline runner/worker；私有根目录仅有原实验 freeze，
+未发现已有 T04 登记或后续真实实验支出证据。
+
+本轮在真实调用前结束。下一步不是运行其余题，而是一次性确认：
+只运行 T04 一次，最多使用原余额中的 5 CNY，保留旧未知预留；采用上述主/辅助模式和既有限制，
+不重跑 T01、不运行其他任务，结束即停。
+确认后才记录真实授权消息引用并创建新配置/实验，组织器 HOME 仍须在 workspace 外，
+通过现有 `--live --live-config --output` 入口执行；本轮没有执行真实 live 命令。

@@ -81,11 +81,18 @@ def bounded_product(policy, ledger, api_key: str, *, inner_factory=None):
 
 
 def run(config: dict, repo: Path, session: str, prompt: str, evidence: Path, *, inner_factory=None) -> int:
-    from .live import authorized_policy
+    from .live import authorized_policy, execution_plan
     policy = authorized_policy(config)
-    if inner_factory is None and (evidence.parent.resolve() != Path(config["output_directory"]).resolve()
-                                  or evidence.name not in {"T01", "T04"}):
+    if (evidence.parent.resolve() != Path(config["output_directory"]).resolve()
+            or evidence.name not in execution_plan(config)):
         raise BillingStopped("Worker is outside the authorized experiment")
+    if (evidence / "worker-started").exists():
+        raise FileExistsError("Formal worker has already started")
+    if inner_factory is None:
+        descriptor = validate_descriptor(evidence / "request.json")
+        if (descriptor["config"] != config or descriptor["session"] != session or descriptor["prompt"] != prompt
+                or repo.resolve() != (evidence / "repo").resolve()):
+            raise BillingStopped("Worker arguments differ from authorized descriptor")
     (evidence / "worker-started").mkdir(mode=0o700)  # Before creating a fresh ledger or client.
     api_key = os.environ.get("API_KEY", "")
     if not api_key:
@@ -120,19 +127,57 @@ def run(config: dict, repo: Path, session: str, prompt: str, evidence: Path, *, 
                 raise BillingStopped("Worker billing summary persistence failed") from None
 
 
-def main(argv=None) -> int:
-    # Only the serial organizer creates this descriptor, with no credentials.
-    path = Path((argv or sys.argv[1:])[0]).resolve()
+def validate_descriptor(path: Path) -> dict:
+    """Bind grant, task, session and frozen source before creating any client."""
+    from decimal import Decimal
+    from .live import authorized_policy, execution_plan, freeze
+    from .catalog import TASK_SPECS, digest
+    from .continuation import verify_claim
+    from .billing import summarize
+    path = path.resolve()
     descriptor = json.loads(path.read_text())
-    from .live import authorized_policy, freeze
-    from .catalog import TASK_SPECS
-    policy = authorized_policy(descriptor["config"])
-    freeze(descriptor["config"], policy)
-    expected = next((spec for spec in TASK_SPECS if spec[0] == path.parent.name), None)
-    if expected is None or descriptor["prompt"] != expected[4]:
-        raise BillingStopped("Worker descriptor differs from the frozen task")
+    config = descriptor["config"]
+    policy = authorized_policy(config)
+    plan = execution_plan(config)
+    task = descriptor.get("task_id")
+    output = Path(config["output_directory"]).resolve()
+    expected = next((spec for spec in TASK_SPECS if spec[0] == task), None)
+    if (task not in plan or path != output / task / "request.json" or descriptor.get("selected_tasks") != list(plan)
+            or expected is None or descriptor.get("prompt") != expected[4]
+            or descriptor.get("session") != f"p1-{config['experiment_id']}-{task}"):
+        raise BillingStopped("Worker descriptor differs from the authorized frozen task")
+    frozen = json.loads((output / "frozen.json").read_text())
+    # Original two-task plan passes the serial remainder to task two. Rebuild
+    # the original grant only for freeze comparison, never to reset its ledger.
+    original_config = {**config, "total_budget": frozen["total_budget"]}
+    original_policy = authorized_policy(original_config)
+    if (descriptor.get("frozen_hash") != digest(frozen)
+            or freeze(original_config, original_policy) != frozen):
+        raise BillingStopped("Worker freeze or grant differs from organizer")
+    remaining = original_policy.total_budget
+    if plan == ("T01", "T04") and task == "T04":
+        previous = output / "T01"
+        rows = [json.loads(line) for line in (previous / "billing.jsonl").read_text().splitlines()]
+        billing = summarize(rows, original_policy)
+        result = json.loads((previous / "result.json").read_text())
+        if (billing != json.loads((previous / "billing-summary.json").read_text()) or billing != result.get("billing")
+                or billing["blocked"] or not billing["usage_complete"]
+                or result.get("final_status") not in {"success", "functional_failure", "budget_exceeded"}):
+            raise BillingStopped("Prior task does not permit the next worker")
+        remaining = Decimal(billing["remaining_total_budget"])
+    if policy.total_budget != remaining:
+        raise BillingStopped("Worker budget differs from the serial remainder")
+    if plan == ("T04",):
+        verify_claim(config, frozen["carryover"])
+    return descriptor
+
+
+def main(argv=None, *, inner_factory=None) -> int:
+    # Test-only controlled HTTP seam; the CLI has no switch to bypass validation.
+    path = Path((argv or sys.argv[1:])[0]).resolve()
+    descriptor = validate_descriptor(path)
     return run(descriptor["config"], path.parent / "repo", descriptor["session"],
-               descriptor["prompt"], path.parent)
+               descriptor["prompt"], path.parent, inner_factory=inner_factory)
 
 
 if __name__ == "__main__":
