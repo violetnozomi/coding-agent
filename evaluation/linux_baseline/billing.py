@@ -1,4 +1,4 @@
-"""P1-only DeepSeek Chat HTTP budget boundary; no Agent loop or global billing service."""
+"""Fixed P1/P2 DeepSeek HTTP budget boundary; no Agent loop or global billing service."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -426,9 +426,10 @@ def journal(path: Path) -> Callable[[dict], None]:
     return append
 
 
-def claim_attempt(root: Path, task: str) -> Path:
-    if task not in {"T01", "T04"}:
-        raise ValueError("P1 allows T01 and T04 only")
+def claim_attempt(root: Path, task: str, *, allowed_tasks: tuple[str, ...] = ("T01", "T04")) -> Path:
+    from .live import P2_TASKS
+    if allowed_tasks not in (("T01", "T04"), ("T04",), P2_TASKS) or task not in allowed_tasks:
+        raise ValueError("Task is outside the validated live plan")
     path = root / task
     path.mkdir(mode=0o700)  # Atomic refusal; even failed attempts keep their identity.
     return path

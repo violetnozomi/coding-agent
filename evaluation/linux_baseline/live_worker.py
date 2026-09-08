@@ -129,11 +129,9 @@ def run(config: dict, repo: Path, session: str, prompt: str, evidence: Path, *, 
 
 def validate_descriptor(path: Path) -> dict:
     """Bind grant, task, session and frozen source before creating any client."""
-    from decimal import Decimal
-    from .live import authorized_policy, execution_plan, freeze
-    from .catalog import TASK_SPECS, digest
+    from .live import authorized_policy, execution_plan, freeze, serial_remainder, worker_request
+    from .catalog import TASK_SPECS, digest, task_files
     from .continuation import verify_claim
-    from .billing import summarize
     path = path.resolve()
     descriptor = json.loads(path.read_text())
     config = descriptor["config"]
@@ -144,7 +142,7 @@ def validate_descriptor(path: Path) -> dict:
     expected = next((spec for spec in TASK_SPECS if spec[0] == task), None)
     if (task not in plan or path != output / task / "request.json" or descriptor.get("selected_tasks") != list(plan)
             or expected is None or descriptor.get("prompt") != expected[4]
-            or descriptor.get("session") != f"p1-{config['experiment_id']}-{task}"):
+            or descriptor.get("session") != f"{config.get('stage', 'P1').lower()}-{config['experiment_id']}-{task}"):
         raise BillingStopped("Worker descriptor differs from the authorized frozen task")
     frozen = json.loads((output / "frozen.json").read_text())
     # Original two-task plan passes the serial remainder to task two. Rebuild
@@ -154,21 +152,22 @@ def validate_descriptor(path: Path) -> dict:
     if (descriptor.get("frozen_hash") != digest(frozen)
             or freeze(original_config, original_policy) != frozen):
         raise BillingStopped("Worker freeze or grant differs from organizer")
-    remaining = original_policy.total_budget
-    if plan == ("T01", "T04") and task == "T04":
-        previous = output / "T01"
-        rows = [json.loads(line) for line in (previous / "billing.jsonl").read_text().splitlines()]
-        billing = summarize(rows, original_policy)
-        result = json.loads((previous / "result.json").read_text())
-        if (billing != json.loads((previous / "billing-summary.json").read_text()) or billing != result.get("billing")
-                or billing["blocked"] or not billing["usage_complete"]
-                or result.get("final_status") not in {"success", "functional_failure", "budget_exceeded"}):
-            raise BillingStopped("Prior task does not permit the next worker")
-        remaining = Decimal(billing["remaining_total_budget"])
+    remaining = serial_remainder(original_config, frozen, task)
     if policy.total_budget != remaining:
         raise BillingStopped("Worker budget differs from the serial remainder")
-    if plan == ("T04",):
-        verify_claim(config, frozen["carryover"])
+    if "continuation" in original_config:
+        verify_claim(original_config, frozen["carryover"])
+    if config.get("stage") == "P2":
+        wanted = worker_request(original_config, frozen, task, remaining)
+        if any(descriptor.get(key) != value for key, value in wanted.items()):
+            raise BillingStopped("P2 descriptor differs from the verified execution plan")
+        repo = path.parent / "repo"
+        expected_files = task_files(expected)
+        if (repo.is_symlink() or any(not (repo / name).resolve().is_relative_to(repo.resolve())
+                                    for name in expected_files)
+                or digest({name: (repo / name).read_text(encoding="utf-8") for name in expected_files})
+                != wanted["task_tree_hash"]):
+            raise BillingStopped("P2 initial task tree differs from the frozen manifest")
     return descriptor
 
 

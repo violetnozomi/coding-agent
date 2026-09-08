@@ -1,7 +1,8 @@
-"""Explicit P1 paid gate and bounded execution plans, reusing the frozen P0 driver."""
+"""Explicit P1/P2 paid gates and fixed execution plans over the frozen P0 driver."""
 from __future__ import annotations
 
 from dataclasses import replace
+from collections import Counter
 from decimal import Decimal, InvalidOperation
 import importlib.metadata
 import json
@@ -11,8 +12,10 @@ import sys
 
 from . import runner
 from .billing import BillingStopped, Ledger, Policy, _exception_category, claim_attempt, summarize
-from .catalog import AGENT_REVISION, TASK_SPECS, digest, manifest
-from .continuation import PREDECESSOR_ID
+from .catalog import AGENT_REVISION, TASK_SPECS, digest, manifest, task_files
+from .continuation import PREDECESSOR_ID, T04_ID
+
+P2_TASKS = ("T02", "T03", "T05", "T06", "T07", "T08", "T09", "T10", "T11", "T12")
 
 RATE_SOURCE = "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/"
 # Public-page lookup, NOT an asserted tariff effective date or account contract.
@@ -26,10 +29,15 @@ CONFIG_KEYS = frozenset(("authorized", "authorization_reference", "budget_curren
 
 
 def execution_plan(config: dict) -> tuple[str, ...]:
-    """Only the original pair or the explicitly linked first T04 attempt."""
+    """P1 compatibility or the one fixed P2 batch; never arbitrary subsets."""
     tasks = config.get("allowed_tasks")
     if type(tasks) is not list or config.get("execution_order") != tasks:
         raise ValueError("Execution order must equal the authorized task list")
+    if "stage" in config:
+        if (config["stage"] == "P2" and tasks == list(P2_TASKS) and config.get("continuation") ==
+                {"predecessor_experiment_ids": [PREDECESSOR_ID, T04_ID]}):
+            return P2_TASKS
+        raise ValueError("P2 requires the fixed ten-task plan and both predecessors")
     if tasks == ["T01", "T04"] and "continuation" not in config:
         return ("T01", "T04")
     if tasks == ["T04"] and config.get("continuation") == {"predecessor_experiment_id": PREDECESSOR_ID}:
@@ -39,8 +47,9 @@ def execution_plan(config: dict) -> tuple[str, ...]:
 
 def authorized_policy(config: dict) -> Policy:
     """Parse a user-confirmed grant, never turn the example into authorization."""
-    if not isinstance(config, dict) or set(config) not in (CONFIG_KEYS, CONFIG_KEYS | {"continuation"}):
-        raise ValueError("P1 config must contain exactly the documented fields; no secrets")
+    if not isinstance(config, dict) or set(config) not in (
+            CONFIG_KEYS, CONFIG_KEYS | {"continuation"}, CONFIG_KEYS | {"continuation", "stage"}):
+        raise ValueError("Live config must contain exactly the documented fields; no secrets")
     plan = execution_plan(config)
     if not isinstance(config["output_directory"], str) or not Path(config["output_directory"]).is_absolute():
         raise ValueError("Bind the grant to one absolute output directory")
@@ -75,6 +84,9 @@ def authorized_policy(config: dict) -> Policy:
         raise ValueError("Insufficient budget or rates below published peak ceiling")
     if plan == ("T04",) and not policy.task_budget <= policy.total_budget <= Decimal("5"):
         raise ValueError("T04 continuation allocation cannot exceed 5 CNY")
+    if plan == P2_TASKS and (policy.total_budget > Decimal("6.219802") or policy.task_budget > 5
+                             or policy.token_budget != 2000000):
+        raise ValueError("P2 cannot reset the original balance, task ceiling or token limit")
     return policy
 
 
@@ -93,9 +105,9 @@ def freeze(config: dict, policy: Policy) -> dict:
         raise ValueError("Live requires project-supported pytest >=7,<9")
     task_manifest = manifest()
     from .continuation import carryover
-    return dict(experiment_id=config["experiment_id"], agent_revision=AGENT_REVISION,
+    frozen = dict(experiment_id=config["experiment_id"], agent_revision=AGENT_REVISION,
                 config_hash=digest(config),
-                carryover=carryover(config) if execution_plan(config) == ("T04",) else None,
+                carryover=carryover(config) if "continuation" in config else None,
                 selected_tasks=list(execution_plan(config)),
                 harness_revision=head, task_manifest_hash=digest(task_manifest),
                 acceptance_hashes={t["task_id"]: t["acceptance_revision"] for t in task_manifest["tasks"]},
@@ -128,6 +140,10 @@ def freeze(config: dict, policy: Policy) -> dict:
                            hit=str(policy.hit_rate), miss=str(policy.miss_rate), output=str(policy.output_rate)),
                 total_budget=str(policy.total_budget), per_task_budget=str(policy.task_budget),
                 authorization_reference=config["authorization_reference"])
+    if config.get("stage") == "P2":
+        frozen.update(stage="P2", task_tree_hashes={t["task_id"]: t["task_revision"]
+                                                   for t in task_manifest["tasks"] if t["task_id"] in P2_TASKS})
+    return frozen
 
 
 def credential(policy: Policy) -> str:
@@ -146,6 +162,76 @@ def credential(policy: Policy) -> str:
     return connection.api_key
 
 
+def worker_request(config: dict, frozen: dict, task: str, remaining: Decimal) -> dict:
+    """One descriptor contract for parent, current worker and preceding workers."""
+    plan = execution_plan(config)
+    if task not in plan:
+        raise BillingStopped("Task is outside the authorized plan")
+    spec = next(s for s in TASK_SPECS if s[0] == task)
+    value = dict(config={**config, "total_budget": str(remaining)}, task_id=task,
+        session=f"{config.get('stage', 'P1').lower()}-{config['experiment_id']}-{task}",
+        prompt=spec[4], selected_tasks=list(plan), frozen_hash=digest(frozen))
+    if config.get("stage") == "P2":
+        value["task_tree_hash"] = digest(task_files(spec))
+    return value
+
+
+def serial_remainder(config: dict, frozen: dict, task: str) -> Decimal:
+    """Rebuild the actual settled prefix; never reset money for a later worker."""
+    plan = execution_plan(config)
+    if task not in plan:
+        raise BillingStopped("Task is outside the authorized prefix")
+    policy = authorized_policy(config)
+    remaining = policy.total_budget
+    output = Path(config["output_directory"]).resolve()
+    strict = config.get("stage") == "P2"
+    for prior in plan[:plan.index(task)]:
+        directory = output / prior
+        if directory.is_symlink():
+            raise BillingStopped("Prior task directory must not be redirected")
+        rows = [json.loads(line) for line in (directory / "billing.jsonl").read_text().splitlines()]
+        billing = summarize(rows, replace(policy, total_budget=remaining))
+        result = json.loads((directory / "result.json").read_text())
+        if (billing != json.loads((directory / "billing-summary.json").read_text())
+                or billing != result.get("billing") or billing["blocked"] or not billing["usage_complete"]
+                or result.get("final_status") not in {"success", "functional_failure", "budget_exceeded"}):
+            raise BillingStopped("Prior task does not permit the next worker")
+        if strict:
+            descriptor = json.loads((directory / "request.json").read_text())
+            expected = worker_request(config, frozen, prior, remaining)
+            summary = json.loads((output / "summary.json").read_text())
+            if (result.get("final_status") == "budget_exceeded"
+                    or any(descriptor.get(k) != v for k, v in expected.items())
+                    or not (directory / "worker-started").is_dir()
+                    or result.get("task_id") != prior or result.get("starts") != 1
+                    or result.get("session") != expected["session"]
+                    or any(result.get(k) is not True for k in
+                           ("usage_complete", "within_budget", "cleanup_ok", "acceptance_reliable"))
+                    or result.get("execution", {}).get("exception")
+                    or result.get("execution", {}).get("cleanup_error")
+                    or billing["requests_sent"] < 1
+                    or any(Decimal(billing[k]) < 0 for k in ("remaining_total_budget", "remaining_task_budget", "remaining_tokens"))
+                    or summary.get("experiment_id") != config["experiment_id"]
+                    or summary.get("selected_tasks") != list(plan) or summary.get("tasks", {}).get(prior) != result):
+                raise BillingStopped("Prior descriptor, journal or result is not a reliable prefix")
+        remaining = Decimal(billing["remaining_total_budget"])
+    return remaining
+
+
+def measurement(summary: dict) -> dict:
+    """Report the selected plan and started denominator, including every failure."""
+    plan = summary["selected_tasks"]
+    started = [summary["tasks"][t] for t in plan if summary["tasks"][t]["starts"] == 1]
+    counts = Counter(t["final_status"] for t in started)
+    successes = counts.get("success", 0)
+    verified = sum(t.get("patch_verified") is True for t in started)
+    return dict(planned=len(plan), started=len(started), end_to_end_success=successes,
+                patch_verified=verified, failures=len(started) - successes, classifications=dict(counts),
+                not_run=len(plan) - len(started), success_rate=successes / len(started) if started else None,
+                patch_success_rate=verified / len(started) if started else None,
+                rate_denominator="all formally started tasks, including failures")
+
+
 def run(output: Path, config: dict) -> dict:
     policy = authorized_policy(config)  # NO preparation, credentials or worker before authorization.
     plan = execution_plan(config)
@@ -153,43 +239,60 @@ def run(output: Path, config: dict) -> dict:
         raise ValueError("Output differs from the authorized single experiment directory")
     frozen = freeze(config, policy)
     from .continuation import carryover, claim
-    carry = carryover(config) if plan == ("T04",) else None
+    carry = carryover(config) if "continuation" in config else None
     if carry is not None and frozen.get("carryover") != carry:
         raise BillingStopped("Frozen carryover differs from predecessor evidence")
     api_key = credential(policy)
     # Admission preview is memory-only, never a paid request or account probe.
-    Ledger(policy, lambda _row: None).reserve("preflight", policy.output_limit)
+    if config.get("stage") != "P2":
+        Ledger(policy, lambda _row: None).reserve("preflight", policy.output_limit)
     if carry is not None:
         claim(config, carry)
     output.mkdir(mode=0o700, parents=False)  # Existing experiment, even failed, is never resumed.
     runner.write_json(output / "frozen.json", frozen)
     results = {spec[0]: dict(task_id=spec[0], final_status="not_run", starts=0) for spec in TASK_SPECS}
-    summary = dict(evidence_kind="live/P1", experiment_id=config["experiment_id"],
+    summary = dict(evidence_kind=f"live/{config.get('stage', 'P1')}", experiment_id=config["experiment_id"],
                    selected_tasks=list(plan), carryover=carry, tasks=results)
     runner.write_json(output / "summary.json", summary)
     remaining = policy.total_budget
     for task in plan:
-        if freeze(config, policy) != frozen:
-            raise BillingStopped("Frozen configuration changed; experiment stopped")
+        try:
+            if freeze(config, policy) != frozen:
+                raise BillingStopped("Frozen configuration changed; experiment stopped")
+            if config.get("stage") == "P2" and serial_remainder(config, frozen, task) != remaining:
+                raise BillingStopped("Batch prefix no longer matches its balance")
+        except (Exception, KeyboardInterrupt) as error:
+            remaining = None  # Changed/torn predecessor evidence cannot certify the old balance.
+            summary.update(stopped_reason="frozen configuration or prior evidence changed",
+                           blocked_before_task=task, diagnostic=_exception_category(error))
+            break
         task_policy = replace(policy, total_budget=remaining)
         try:
             Ledger(task_policy, lambda _row: None).reserve("preflight", policy.output_limit)
         except BillingStopped:
             summary["stopped_reason"] = "next request cannot be reserved"
             break
-        directory = claim_attempt(output, task)
         spec = next(spec for spec in TASK_SPECS if spec[0] == task)
-        repo = directory / "repo"
-        runner.materialize(spec, repo, directory / "home")
-        session = f"p1-{config['experiment_id']}-{task}"
-        child_config = {**config, "total_budget": str(remaining)}
-        descriptor = directory / "request.json"
-        runner.write_json(descriptor, dict(config=child_config, session=session, prompt=spec[4],
-                                          task_id=task, selected_tasks=list(plan), frozen_hash=digest(frozen)))
-        env = runner.isolated_environment(directory / "home", runner.ROOT)
+        try:
+            directory = claim_attempt(output, task, allowed_tasks=plan)
+            repo = directory / "repo"
+            runner.materialize(spec, repo, directory / "home")
+            request = worker_request(config, frozen, task, remaining)
+            session = request["session"]
+            descriptor = directory / "request.json"
+            runner.write_json(descriptor, request)
+            env = runner.isolated_environment(directory / "home", runner.ROOT)
+        except (Exception, KeyboardInterrupt) as error:
+            summary.update(stopped_reason="task preparation failed before worker launch",
+                           blocked_before_task=task, diagnostic=_exception_category(error))
+            break
         env.update(API_KEY=api_key, API_BASE_URL=policy.endpoint, MODEL_PROVIDER="openai-compatible",
                    MODEL_ID=policy.model, MODEL_VARIANT="", NZ_AUTO_MODE_CLASSIFIER_ENABLED="0")
         result = dict(task_id=task, starts=1, final_status="in_progress", session=session)
+        if config.get("stage") == "P2":
+            result.update(attempt_id=session, agent_revision=frozen["agent_revision"],
+                          harness_revision=frozen["harness_revision"], task_tree_hash=request["task_tree_hash"],
+                          acceptance_hash=frozen["acceptance_hashes"][task])
         results[task] = result
         runner.write_json(output / "summary.json", summary)
         try:
@@ -257,11 +360,16 @@ def run(output: Path, config: dict) -> dict:
         if not reliable or result["final_status"] == "runtime_error":
             summary["stopped_reason"] = "billing or infrastructure uncertainty; no automatic retry"
             break
+        if config.get("stage") == "P2" and result["final_status"] == "budget_exceeded":
+            summary["stopped_reason"] = "task resource limit; no automatic continuation"
+            break
     summary["remaining_total_budget"] = str(remaining) if remaining is not None else None
     if carry is not None:
         summary["original_budget_remaining"] = (str(Decimal(carry["unallocated_balance"]) + remaining)
                                                  if remaining is not None else None)
         summary["historical_usage_complete"] = False  # Old request 14 stays unresolved.
     summary["stopped"] = True
+    if config.get("stage") == "P2":
+        summary["measurement"] = measurement(summary)
     runner.write_json(output / "summary.json", summary)
     return summary

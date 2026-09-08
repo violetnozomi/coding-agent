@@ -438,23 +438,25 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--dry-run", action="store_true", help="also exercise real native chain with Fake Provider")
-    parser.add_argument("--live", action="store_true", help="P1 authorized plan: T01 then T04, or evidence-linked T04 only; one attempt each")
-    parser.add_argument("--live-config", type=Path, help="user-confirmed P1 grant and frozen billing configuration; never implicit")
+    parser.add_argument("--live", action="store_true", help="authorized P1 pair/T04 or fixed P2 remaining ten-task batch; one attempt each")
+    parser.add_argument("--live-config", type=Path, help="explicit stage/task grant and frozen billing configuration; P1 never authorizes P2")
     parser.add_argument("--publish", type=Path, help="new durable directory for safe offline evidence")
     args = parser.parse_args(argv)
     if args.live:
         if args.live_config is None or args.dry_run or args.publish:
             parser.error("Paid execution disabled: require --live-config; cannot combine with offline options")
-        from .live import run
+        from .live import execution_plan, run
         try:
-            summary = run(args.output.resolve(), json.loads(args.live_config.read_text()))
+            config = json.loads(args.live_config.read_text())
+            plan = execution_plan(config)
+            summary = run(args.output.resolve(), config)
         except Exception as exc:
             # Config values and upstream exception strings may contain credentials.
-            parser.error(f"P1 stopped ({type(exc).__name__}); inspect the authorization and private evidence")
+            parser.error(f"Live stopped ({type(exc).__name__}); inspect the authorization and private evidence")
         print(json.dumps({"stopped": summary["stopped"], "tasks": {
             key: value["final_status"] for key, value in summary["tasks"].items()}}, indent=2))
         selected = summary.get("selected_tasks")
-        return 0 if (selected in (["T01", "T04"], ["T04"]) and summary.get("stopped") is True
+        return 0 if (selected == list(plan) and bool(plan) and summary.get("stopped") is True
                      and all(summary["tasks"].get(key, {}).get("final_status") == "success" for key in selected)) else 1
     if args.live_config:
         parser.error("--live-config requires --live; refusing to rebuild P0")

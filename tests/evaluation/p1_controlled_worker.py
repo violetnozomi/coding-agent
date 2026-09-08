@@ -51,6 +51,9 @@ def main():
             return sidecar_scenario(body, len(observed["wire_requests"]))
         if descriptor.get("scenario", "").startswith("t04_"):
             return t04_scenario(body, len(observed["wire_requests"]), descriptor["scenario"])
+        if descriptor.get("scenario", "").startswith("p2_"):
+            from tests.evaluation.p2_controlled_responses import response as p2_response
+            return p2_response(body, len(observed["wire_requests"]), descriptor)
         if len(observed["wire_requests"]) == 1:
             return httpx.Response(200, json={"id": "offline-one", "object": "chat.completion", "created": 1,
                 "model": body["model"], "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {
@@ -61,12 +64,14 @@ def main():
         # Lose billing on the second response: all later gateway/SDK retries must stop.
         return httpx.Response(200, json={"id": "offline-unknown", "choices": []})
     try:
-        if descriptor.get("scenario", "").startswith("t04_"):
+        if descriptor.get("scenario", "").startswith(("t04_", "p2_")):
             # Actual worker entry validation and real freeze. Only synthetic
             # predecessor anchors and test-worktree dirtiness are substituted.
             from evaluation.linux_baseline import continuation, live_worker, runner
             continuation.RUNS = path.parent.parent.parent
             continuation.ANCHORS = descriptor["offline_predecessor_anchors"]
+            if descriptor.get("scenario", "").startswith("p2_"):
+                continuation.P2_ANCHORS = descriptor["offline_t04_anchors"]
             original_git = runner.git
             runner.git = lambda root, *args, **kwargs: b"" if args == ("status", "--porcelain") else original_git(root, *args, **kwargs)
             return live_worker.main([str(path)], inner_factory=lambda: httpx.MockTransport(response))
