@@ -88,7 +88,12 @@ def aggregate_session_stats(days: int | None = None) -> dict[str, Any]:
 def render_session_stats(stats: dict[str, Any], *, model_limit: int = 10, tool_limit: int = 10) -> str:
     """Render one compact terminal-safe statistics report."""
     tokens = stats["total_tokens"]
-    cost_suffix = "" if stats.get("complete_cost") else " (known requests only)"
+    complete_cost = bool(stats.get("complete_cost"))
+    cost_text = (
+        f"${stats['total_cost']:.6f}" if complete_cost else
+        f"unknown (known requests only: ${stats['total_cost']:.6f})"
+    )
+    average_cost = f"${stats['cost_per_day']:.6f}" if complete_cost else "unknown"
     lines = [
         "Session statistics",
         (
@@ -96,8 +101,8 @@ def render_session_stats(stats: dict[str, Any], *, model_limit: int = 10, tool_l
             f"(top-level {stats['top_level_sessions']}, child {stats['child_sessions']})"
         ),
         f"Messages: {stats['total_messages']}",
-        f"Cost: ${stats['total_cost']:.6f}{cost_suffix}",
-        f"Average cost/day: ${stats['cost_per_day']:.6f}",
+        f"Cost: {cost_text}",
+        f"Average cost/day: {average_cost}",
         (
             "Tokens: "
             f"input {tokens['input']}, output {tokens['output']}, "
@@ -121,9 +126,13 @@ def render_session_stats(stats: dict[str, Any], *, model_limit: int = 10, tool_l
     if models:
         lines.append("Models:")
         for name, usage in models:
+            model_cost = (
+                f"${usage['cost']:.6f}" if complete_cost else
+                f"known cost subtotal ${usage['cost']:.6f} (overall total unknown)"
+            )
             lines.append(
                 f"- {name}: {usage['messages']} message(s), "
-                f"{sum(usage['tokens'].values())} tokens, ${usage['cost']:.6f}"
+                f"{sum(usage['tokens'].values())} tokens, {model_cost}"
             )
     tools = sorted(
         stats["tool_usage"].items(),

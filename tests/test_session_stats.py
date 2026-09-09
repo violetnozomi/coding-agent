@@ -139,6 +139,23 @@ def test_stats_command_is_registered_and_rejects_invalid_days(tmp_path):
     assert "stats" in {command.name for command in registry.visible_commands()}
 
 
+@pytest.mark.parametrize("priced", [False, True])
+def test_stats_unknown_cost_is_not_presented_as_zero_cost(tmp_path, priced):
+    message = _assistant("session-price", "msg-price", priced=priced)
+    with scoped_workdir(tmp_path):
+        save_session([message], session_id="session-price")
+        rendered = render_session_stats(aggregate_session_stats())
+    if priced:
+        assert "Cost: $0.350000" in rendered
+        assert "Average cost/day: $0.350000" in rendered
+    else:
+        assert "Cost: unknown" in rendered
+        assert "Average cost/day: unknown" in rendered
+        model_line = next(line for line in rendered.splitlines() if line.startswith("- openrouter"))
+        assert "known cost subtotal $0.000000" in model_line
+        assert "total unknown" in model_line
+
+
 def test_stats_date_range_prefers_message_times_over_file_mtime(tmp_path):
     messages = [
         {
