@@ -34,6 +34,7 @@ def test_current_snapshot_uses_disk_state_after_external_rollback(tmp_path):
         assert tracker.current_changed_paths() == ["app.py"]
         assert tracker.current_deleted_paths() == []
         assert "+after" in tracker.render_current_diff()
+        assert "not current disk" not in tracker.render_current_diff()
 
         target.write_text("before\n", encoding="utf-8")
 

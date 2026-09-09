@@ -187,7 +187,9 @@ def render_session_diff(workspace: Path, session_id: str, tracker: ChangeTracker
                         raise ValueError
                     if ((content is not None or exists is True) and not isinstance(content, str)):
                         raise ValueError
-            return f"Session: {session_id}\n" + render_change_diff(payload)
+            return (f"Session: {session_id}\n"
+                    "Recorded Agent changes (historical snapshots, including undone edits; not current disk).\n"
+                    + render_change_diff(payload))
     except (OSError, ValueError, TypeError):
         return "Cannot review recorded Agent changes: unreadable, invalid or mismatched change record."
 
@@ -274,8 +276,7 @@ def deleted_files_from_payload(payload: dict) -> list[str]:
 def render_change_diff(payload: dict) -> str:
     if not payload or not payload.get("changes"):
         return "No agent file changes recorded."
-    sections = ["Recorded Agent changes (historical snapshots, including undone edits; not current disk).",
-                f"Change set: {payload.get('run_id', '-')}", f"Workspace: {payload.get('workspace', '-')}", ""]
+    sections = [f"Change set: {payload.get('run_id', '-')}", f"Workspace: {payload.get('workspace', '-')}", ""]
     for change in payload["changes"]:
         sections.append(f"## {change['path']}")
         if (change.get("after_exists") is None or change.get("before_exists") is None
