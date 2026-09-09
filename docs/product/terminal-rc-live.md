@@ -1,5 +1,9 @@
 # Linux terminal — first real-model acceptance
 
+The later [repaired Pro recheck](terminal-stream-live-recheck.md) was blocked before
+model dispatch by a different input-path error. It does not overwrite this first
+attempt, its patch or its cost.
+
 Follow-up: [stream timeout repair](terminal-stream-timeout-fix.md) is verified on
 the repaired installed wheel with a controlled Provider/real PTY. No paid retry
 was performed; this original failure, patch and cost record remain unchanged.

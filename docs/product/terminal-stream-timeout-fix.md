@@ -1,5 +1,9 @@
 # Terminal stream timeout boundary repair
 
+Subsequent [authorized Pro recheck](terminal-stream-live-recheck.md) stopped on a
+new long-input path error before model dispatch. It did not exercise the repaired
+stream with a real Provider; the offline evidence below remains unchanged.
+
 Status: **FIXED_AND_INSTALLED_PTY_VERIFIED**. Real-model calls added: **0**.
 No `LIVE_TERMINAL_REVERIFIED` claim. This is a transport/terminal regression fix,
 not a coding-quality measurement or a new task evaluation.
