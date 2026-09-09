@@ -1,5 +1,9 @@
 # Linux terminal product candidate — 2026-09-09
 
+Subsequent real-model attempt: **BLOCKED**, after one Pro coding request with four
+model calls. See [real-model record](terminal-rc-live.md). The offline evidence
+below remains the original offline result, not a claim that live acceptance passed.
+
 Status: **TERMINAL_FLOW_OFFLINE_VERIFIED**. Installed-product keyboard/PTY and
 controlled-Provider paths were exercised. Real-model acceptance is **not run**
 (0 paid calls authorized or sent in this stage). This is not a release, benchmark,
