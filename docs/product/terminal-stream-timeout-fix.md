@@ -1,5 +1,9 @@
 # Terminal stream timeout boundary repair
 
+Later real evidence: the final section of the [Pro recheck report](terminal-stream-live-recheck.md)
+records a separately authorized completed coding run after a measured >60-second
+permission hold. No offline evidence or original failure below is rewritten.
+
 Subsequent [authorized Pro recheck](terminal-stream-live-recheck.md) stopped on a
 new long-input path error before model dispatch. It did not exercise the repaired
 stream with a real Provider; the offline evidence below remains unchanged.

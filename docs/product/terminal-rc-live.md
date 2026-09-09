@@ -1,5 +1,10 @@
 # Linux terminal — first real-model acceptance
 
+Later, a separately authorized real recheck completed the single coding request
+after a measured >60-second permission hold; see the final section of the
+[recheck report](terminal-stream-live-recheck.md). This original failure and its
+charges remain unchanged.
+
 The later [repaired Pro recheck](terminal-stream-live-recheck.md) was blocked before
 model dispatch by a different input-path error. It does not overwrite this first
 attempt, its patch or its cost.

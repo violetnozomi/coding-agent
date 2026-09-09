@@ -1,0 +1,31 @@
+diff --git a/duration.py b/duration.py
+index eadc2d2942635406f14a5465256e6eda63e456b3..81b0890ba36d0bf60b29c6ba4d25ef690cfcfda0 100644
+--- a/duration.py
++++ b/duration.py
+@@ -5,0 +6,3 @@ def format_duration(seconds):
++    hours, minutes = divmod(minutes, 60)
++    if hours:
++        return f"{hours}:{minutes:02d}:{seconds:02d}"
+diff --git a/tests/test_duration.py b/tests/test_duration.py
+index f96b0de7179e254f4eac08520256c64309cdb2d1..ab5940e5e94202676129c45f74e5e5c037dba839 100644
+--- a/tests/test_duration.py
++++ b/tests/test_duration.py
+@@ -1 +1 @@
+-"""Public tests for the timer's current short-duration format."""
++"""Public tests for the timer's short-duration format."""
+@@ -12,0 +13,15 @@ class DurationTests(unittest.TestCase):
++
++    def test_under_one_hour_boundary(self):
++        self.assertEqual(format_duration(3599), "59:59")
++
++    def test_exactly_one_hour(self):
++        self.assertEqual(format_duration(3600), "1:00:00")
++
++    def test_one_hour_plus(self):
++        self.assertEqual(format_duration(3661), "1:01:01")
++
++    def test_over_24_hours(self):
++        self.assertEqual(format_duration(90000), "25:00:00")
++
++    def test_large_hours_no_zero_pad(self):
++        self.assertEqual(format_duration(360000), "100:00:00")

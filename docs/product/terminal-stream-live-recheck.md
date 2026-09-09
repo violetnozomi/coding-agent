@@ -196,3 +196,160 @@ restored terminal modes. Persisted user text equals the original request;
 `denied.txt` does not exist. Private evidence is in the new input-check site's
 `pty.json`, Provider log and Session, not either original live site.
 This proves input-flow repair only; **real DeepSeek recheck remains unperformed**.
+
+## ✅ Subsequent authorized real Pro recheck — 2026-09-09
+
+Status: **LIVE_TERMINAL_REVERIFIED** for the single requested Linux coding flow.
+The Agent completed the edit, added and executed tests, and answered after a
+measured first-permission hold exceeding idle. This is a new attempt, not a change
+to either earlier failure. No product code changed in this stage (zero added
+product/test lines), no second task, automatic resubmission, probe or hotfix.
+One additional limitation was observed: restored-session `/diff` is empty despite
+retained files/history. Thus this is **not** full terminal-RC or release approval.
+
+### Frozen installation, scope and configuration
+
+Clean branch `codex/terminal-product-rc`, starting report HEAD
+`5458a8e18aa04dee8e9d11315941b5775e58149b`; product source
+`6c416c893c79d425dc997c16193b238de857a9c9`.
+No product/pyproject differences between them. Used the input-repaired wheel
+`.nz-coder-runs/terminal-input-fix/final/nz_coder-0.1.0-py3-none-any.whl`,
+SHA-256 `a9342669e4e191819c4b5df42c37e620ae9bca1203bdd4b6e82b2b99c0064a44`.
+All **392 installed package files** matched this wheel before launch.
+Reused the independent noneditable `$INPUT_FIX_ROOT/install/bin/nz-coder`;
+module `$INPUT_FIX_ROOT/install/lib/python3.13/site-packages/nz_coder/__init__.py`.
+Python 3.13.12; OpenAI 3.10.0; httpx2 2.12.0; prompt_toolkit 3.0.53; Rich 15.0.0.
+No rebuild or dependency changes for this report-only stage.
+
+The user's **“那就继续之前的工作”** resumed the previously specified one-task Pro
+recheck after the separate input repair. Spending target **4.824077 CNY** used
+the previously disclosed manual observation/stop arrangement, not monetary hard
+admission. Normal iterations and the naturally triggered verifier were included;
+no further inference was authorized after completion. Limits cannot guarantee
+absolute non-overspend. No P1/P2 budget or unknown reservation was used.
+
+The same credential-filtering launcher execve'd the normal installed CLI, outside
+source, in a new initial Git clone and isolated HOME. Only approved connection
+fields were read; no credential recording, full dotenv copy, PYTHONPATH or SDK
+replacement. The installed product's actual configuration snapshot asserted:
+
+| Setting | Value |
+| --- | --- |
+| Provider / endpoint | openai-compatible / official https://api.deepseek.com |
+| Model / variant | deepseek-v4-pro / null |
+| Turns / output / context | 10 / 4000 / 32000 |
+| Provider idle / absolute hard | 60 / 600 seconds |
+| Permissions / boundary selftest | default / false |
+
+Run-start/model-call events separately confirmed Pro/null, Native streaming,
+10 turns and 4000/32000 limits. Idle/hard were verified through installed
+`RunSettings` and the unchanged launch environment, not a captured wire request.
+Hard still includes local waiting; only idle excludes consumer processing.
+Default variant is not an explicit enabled/high setting.
+
+### Actual operation and evidence
+
+Session `session-20260909_233147-37629a24);
+run `20260909_233147_0189d7dd`. One real 120×40 PTY launch and exact original
+Chinese request (quoted above), entered once. Initial Git commit
+`c967eab9d81fbc21b474c4da19db27f7d07cfa13`: original 2 tests passed and
+`format_duration(3600) == "60:00"` demonstrated the feature was absent.
+No old Session, solution or organizer acceptance file entered the Agent workspace.
+
+| Observed step | Actual result / evidence |
+| --- | --- |
+| Investigate | list_directory, grep_search, three read_file calls |
+| First edit selector | Visible edit_file on duration.py; tracked diff empty before approval |
+| Monotonic permission hold | **83.032437 s**, from 1047946.180643 to 1048029.213079; planned ~70 s, longer due to operator/tool scheduling |
+| Allow once | edit_file call `call_00_Ty2KEepFQbY8sCzx4NdR4169` executed once |
+| Stream continuation | Edit-bearing model call completed with usage after 98.194 s; no idle error, well below hard |
+| Add tests | write_file call `call_00_ET_4wVcRycNtad67I3uCB8n2950`; 5 new tests, original 2 retained |
+| Run tests | bash call `call_00_ET_YC0FER2wyrXPcQUs7o418603`; `python -m unittest discover -s tests -v`, **7 passed** |
+| Final answer | Correctly describes hour format and actual 7-test result; persisted and displayed |
+| Sidecar | Real Pro, inherit-main; **accept / verifier_ok**, not fallback |
+| Run end | **completed**, 176.568717 s; 8 unique executed tool IDs, no tool failure |
+| Review / exit | `/diff` showed both files; normal `/exit`, measured CLI exit 0 |
+| No-inference restore | `/session` selected the same ID, 16 messages; `/status` showed correct workspace and two modified files |
+| Restore limitation | Additional `/diff` said “No agent file changes recorded.” Files/history/latest change-set remained; not repaired here |
+| Final exit / cleanup | Exit 0; pre/post termios equal in both PTYs; no remaining process with task-workspace cwd |
+
+Recorded total edit-tool duration was 92.063587 s including selector delivery and
+operator time; this is **not** the measured 83.032437 s hold or inference latency.
+Later write/test approvals had 25.210197 / 22.240320 s total tool durations, with
+no deliberate second long pause. The Provider stream was not wire-captured:
+successful continuation and complete usage are confirmed, not exact tail-chunk
+placement. Sidecar's selected frozen code path uses nonstreaming forced verdict,
+thinking disabled, no effort override, 1024 output limit; model/verdict are
+trace-confirmed, request-mode details are source-backed rather than wire evidence.
+
+Independent substates remain unaltered: `run_end.verification_state=verifying`,
+`verification_needed=true`, static stage pending; targeted unittest evidence
+is passed. We do not relabel all pipeline stages as complete. Restored diff's
+read-only localization is `SessionController.diff()`: an existing tracker takes
+precedence over persisted-diff fallback. This observation is not a new repair.
+
+### Patch, independent checks and accounting
+
+[Public replay patch](evidence/terminal-stream-live-final.patch): only duration.py
+and tests/test_duration.py, 19 insertions / 1 deletion, no binary or mode changes.
+Public zero-context patch SHA-256
+`8049308c061ea3e2adaf2264b4fe9dacde3d1be12352076dddeaddf0865cedbf`;
+apply with `git apply --unidiff-zero`. This avoids context-only whitespace in
+the committed artifact. The private ordinary-context patch SHA-256 remains
+`4815684f5b448cdb663c5dbefd2994ae622bb4b615d14837888938042b6f4da8`.
+Generated index and Python cache files remain privately preserved, not included
+as Agent source changes. Organizer never edited the formal task copy.
+
+On another initial clone: `git apply --check`, `git apply`, unittest discovery
+and the frozen acceptance script all exited **0**. Seven independent checks:
+0→00:00, 59→00:59, 60→01:00, 3599→59:59, 3600→1:00:00,
+3661→1:01:01, 90061→25:01:01. Original test_zero/test_short were also run separately,
+each exit 0. Replay files matched the live files. These organizer checks are
+separate from the Agent's actual 7-test command, not independent model samples.
+
+| Normalized usage / calls | Count |
+| --- | ---: |
+| Main / verifier calls | 6 / 1 |
+| Actual attempts / retries | 7 / 0 |
+| Uncached input | 27,574 |
+| Cache-read input / cache-write | 31,232 / 0 |
+| Output excluding reasoning | 1,293 |
+| Reasoning output | 291 |
+| Total tokens | 60,390 |
+
+Seven start/finish pairs, unique tool IDs and run totals reconcile; every call has
+usage, all completed on attempt 1. Restore generated **no** model call. No
+unknown usage was zero-filled. Frozen same-day official peak CNY/M rates[^1]:
+uncached 9, cache-hit 0.30, output 27. Estimate:
+`(27574×9 + 31232×0.30 + (1293+291)×27)/1000000 = 0.3003036 CNY`.
+Reasoning and verifier costs are included once. Product-native prices remain
+**unknown for all 7 calls**, not a zero-cost bill. This conservative estimate is
+not an account bill; off-peak pricing may be lower. Manual target remainder
+4.5237734 CNY confers no further permission. Original 0.175923 CNY remains separate;
+combined terminal estimates are 0.4762266 CNY, not a merged budget grant.
+
+### Preserved evidence and stopping point
+
+New private root alias `$PRO_FINAL_ROOT` contains `scope.json`,
+`config-snapshots.jsonl`, `permission-hold.json`, raw PTY transcripts,
+isolated HOME/Session/trace, project, replay, final.patch, `reconcile.py` and
+`result.json`. Exact private paths are in the local handoff, not the public
+configuration. Reconciliation exited 0: calls/usage/tool identities, final answer,
+Agent tests, replay checks, original request, exit modes and process cleanup.
+
+Before/after protected aggregates (including the reused install) stayed equal:
+
+| Protected site | Files | SHA-256 |
+| --- | ---: | --- |
+| Original real failure | 109 | f97650064efe92b697aedbdcf5d0f48f803578ca82eeec795e496fbe37378a63 |
+| Stream-fix site | 7107 | ff938abf6fec54848454ae69f3b6ec49539d69b13f2070b6c68c18d7e280e099 |
+| Pre-model blocked recheck | 54 | db041c24b339483896908653bfdaf76bf2266605555e4a3149699c65b1b36b57 |
+| Input-fix site/install | 7080 | 707ebcd71aef6975d3707cd93a816764688fc136f680664a721d4373e3f28b00 |
+
+The previous 349/7 stream and 103 input regressions are referenced, **not rerun**.
+Only reports and safe patch evidence are committed. Text PTY evidence does not
+establish full visual-layout coverage. No second task, cancel experiment,
+post-restart coding, Windows/HTTP, mouse/clipboard, model ranking, A/B or P2 work.
+Stop after this one real task; retain restored-diff and pipeline-display limitations.
+
+[^1]: DeepSeek. Pricing, preserved official source read 2026-09-09, DeepSeek-V4-Pro-0813. https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
