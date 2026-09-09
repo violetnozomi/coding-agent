@@ -500,22 +500,18 @@ class TerminalInput:
                 return None
         candidate = Path(raw)
         path = candidate if candidate.is_absolute() else self.workspace / candidate
-        if path.is_symlink():
-            if strict:
-                raise ValueError("Attachment symlinks are not allowed")
-            return None
         try:
+            if path.is_symlink():
+                raise ValueError("Attachment symlinks are not allowed")
             resolved = path.resolve(strict=True)
             relative = resolved.relative_to(self.workspace).as_posix()
+            if not resolved.is_file():
+                raise ValueError("Attachment must be a regular file")
+            return AttachedFile(relative, resolved.stat().st_size)
         except (OSError, ValueError) as exc:
             if strict:
                 raise ValueError("Attachment must be a file inside the workspace") from exc
             return None
-        if not resolved.is_file():
-            if strict:
-                raise ValueError("Attachment must be a regular file")
-            return None
-        return AttachedFile(relative, resolved.stat().st_size)
 
     def remove_attachment(self, value: str = "") -> int:
         """Remove one queued attachment, or all attachments when requested."""

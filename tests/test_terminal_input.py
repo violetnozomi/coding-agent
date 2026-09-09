@@ -494,24 +494,28 @@ def test_command_palette_returns_selected_registered_command(monkeypatch, tmp_pa
     assert asyncio.run(terminal.read_async()) == "/status"
 
 
-def test_attachment_is_workspace_bounded_and_consumed_once(tmp_path):
+@pytest.mark.parametrize("prompt", ["review it", "请描述需求边界。" * 80, "x" * 1024], ids=["short", "chinese", "english"])
+@pytest.mark.parametrize("invalid", ["../outside.py", "字" * 256, "x" * 1024, "link.py", "."], ids=["outside", "long-cn", "long-en", "symlink", "directory"])
+def test_attachment_is_workspace_bounded_and_consumed_once(tmp_path, prompt, invalid):
     source = tmp_path / "src.py"
     source.write_text("print('ok')\n", encoding="utf-8")
+    (tmp_path / "link.py").symlink_to(source)
     terminal = TerminalInput(
         console=object(), registry=build_default_registry(), workspace=tmp_path,
         interactive=False,
     )
 
     attachment = terminal.queue_attachment("@src.py")
-    content, consumed = terminal.prepare_submission("review it")
+    content, consumed = terminal.prepare_submission(prompt)
 
     assert attachment.path == "src.py"
     assert consumed == (attachment,)
     assert "<attached-files>" in content
     assert "src.py" in content
+    assert content.endswith(prompt)
     assert terminal.attachments() == ()
-    with pytest.raises(ValueError, match="inside the workspace"):
-        terminal.queue_attachment("../outside.py")
+    with pytest.raises(ValueError, match="inside the workspace" if invalid == "../outside.py" else "Attachment"):
+        terminal.queue_attachment(invalid)
 
 
 @pytest.mark.parametrize("reference", [
