@@ -1,0 +1,85 @@
+diff --git a/tests/test_slug.py b/tests/test_slug.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..033562be37123d6d552a2305abfe5e12e1cb501a
+--- /dev/null
++++ b/tests/test_slug.py
+@@ -0,0 +1,42 @@
++"""Tests for textkit.slug.slugify."""
++
++import pytest
++
++from textkit import slugify
++
++
++@pytest.mark.parametrize(
++    ("text", "expected"),
++    [
++        # Plain lowercasing.
++        ("Hello World", "hello-world"),
++        ("Hello, World!", "hello-world"),
++        # Unicode letters are lowercased and kept.
++        ("Héllo Wörld", "héllo-wörld"),
++        ("ÉLÉPHANT", "éléphant"),
++        # Punctuation is removed except hyphens.
++        ("Don't stop", "dont-stop"),
++        ("Hello (world) [again] {maybe}", "hello-world-again-maybe"),
++        ("price: $19.99", "price-1999"),
++        # Hyphen runs collapse like whitespace.
++        ("Hello--World", "hello-world"),
++        ("Hello - World", "hello-world"),
++        ("Hello -  - World", "hello-world"),
++        # Whitespace runs collapse into one hyphen.
++        ("a   b", "a-b"),
++        ("a\tb\nc", "a-b-c"),
++        # Leading/trailing hyphens and whitespace are stripped.
++        ("-hello-", "hello"),
++        ("  hello  ", "hello"),
++        (" --hello-- ", "hello"),
++        # Mixed case.
++        ("  Hello,  -Wörld!!  ", "hello-wörld"),
++        # Empty or punctuation-only input.
++        ("", ""),
++        ("!!!", ""),
++        ("---", ""),
++        ("  ,.;'\"  ", ""),
++    ],
++)
++def test_slugify(text, expected):
++    assert slugify(text) == expected
+diff --git a/textkit/__init__.py b/textkit/__init__.py
+index 001d9d025723c891155fecdbf5d5cfa656da0068..a40a2790e14a3e7dc102c34c6c58ce33e64de711 100644
+--- a/textkit/__init__.py
++++ b/textkit/__init__.py
+@@ -1 +1,5 @@
+-"""Small text processing library."""
++"""textkit — small text-processing helpers."""
++
++from textkit.slug import slugify
++
++__all__ = ["slugify"]
+diff --git a/textkit/slug.py b/textkit/slug.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb65d737efcba534606ce2136b2d7efb24f9c6e4
+--- /dev/null
++++ b/textkit/slug.py
+@@ -0,0 +1,20 @@
++"""Slug generation helpers."""
++
++import re
++
++_PUNCTUATION = re.compile(r"[^\w\s-]+")
++_SEPARATOR_RUN = re.compile(r"[\s-]+")
++
++
++def slugify(text: str) -> str:
++    """Turn *text* into a URL-friendly slug.
++
++    Unicode letters are lowercased, punctuation (other than hyphens) is
++    removed, and runs of whitespace or hyphens collapse into a single
++    hyphen. Leading and trailing hyphens are stripped. Empty or
++    punctuation-only input yields an empty string.
++    """
++    lowered = text.lower()
++    no_punctuation = _PUNCTUATION.sub("", lowered)
++    collapsed = _SEPARATOR_RUN.sub("-", no_punctuation)
++    return collapsed.strip("-")

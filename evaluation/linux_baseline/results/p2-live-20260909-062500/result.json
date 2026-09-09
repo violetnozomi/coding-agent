@@ -1,0 +1,1531 @@
+{
+  "evidence_kind": "live/P2",
+  "experiment_id": "p2-live-20260909-062500",
+  "delivery": "B",
+  "authorization": {
+    "confirmed": true,
+    "reference": "Current conversation, 2026-09-09: user message '可以' directly confirms the preceding P2 authorization request for b93b55816d2683269577cb72c26594a8962c3c25: fixed remaining ten tasks once each, 6.219802 CNY from original balance, 5 CNY per task, preserved historical unknown reservation and stated main/auxiliary modes and stop rules.",
+    "currency": "CNY",
+    "batch_limit": "6.219802",
+    "per_task_limit": "5",
+    "source": "remaining original 10 CNY grant, not additional funds",
+    "allowed_tasks": [
+      "T02",
+      "T03",
+      "T05",
+      "T06",
+      "T07",
+      "T08",
+      "T09",
+      "T10",
+      "T11",
+      "T12"
+    ],
+    "execution_order": [
+      "T02",
+      "T03",
+      "T05",
+      "T06",
+      "T07",
+      "T08",
+      "T09",
+      "T10",
+      "T11",
+      "T12"
+    ],
+    "attempts_per_task": 1,
+    "auto_continue_remaining_tasks": false,
+    "credential_source": "previously authorized dotenv connection fields only; resolved, no account probe"
+  },
+  "configuration": {
+    "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+    "harness_revision": "b93b55816d2683269577cb72c26594a8962c3c25",
+    "agent_tree": "3300e25b872336eefab34334aa18dc374d322973",
+    "task_manifest_hash": "e6dbaf4407e96ec4c814951028d265588f027d796fe313b57adcae88a247ae89",
+    "task_tree_hashes": {
+      "T02": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "T03": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "T05": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "T06": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "T07": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "T08": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "T09": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "T10": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "T11": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "T12": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e"
+    },
+    "acceptance_hashes": {
+      "T01": "14fa64af7a685d66daa0a5b49ad731a7b6592c70c83b2ce4ef4f2905f150cd54",
+      "T02": "784de13c01d116aabcb6d77bd9c9b902343f42450834b1b060cd40e6ee6ddaf4",
+      "T03": "b8a29806012db2e6bc4f985d29cd0ec62d88250843c03714c2617336f59de794",
+      "T04": "04a0c372b2d29a1921a3794324dfd045b2ff21f0952c49ca065e50c51c8823c9",
+      "T05": "b18ec4f05bba1ae55f119bcbc24d327fcd3d8553a7b0463939e856da6b666e2d",
+      "T06": "e90be14895f62501f4b2ac541a4654b2a04ae83f1c23ba241f72c04cd2e056d3",
+      "T07": "6a421489aeeedf2795a04e1dd44e8b2bf6a350358bd7eb95e46b85419d34e5d1",
+      "T08": "5ec66cddad7f1bb374aa6d61f4809ed9da8ddf48e534ae3e0e2e21f5e805521f",
+      "T09": "90abb0964686b7b27a878007782d6e0cf09f29b7c2957ac7bdabf619c13e7ef3",
+      "T10": "aa0790bbbdfcea5c36d86ad084f96aea0fb97fb43058fd81f060f030844e4fbc",
+      "T11": "9f91b9191d08dcaf78f947879f951c165774610b711b8d53eb09b876cc87bd9f",
+      "T12": "4e38163f58359f9a25af026de52560252abaaead31b3029a30a74dea79e1e6f3"
+    },
+    "versions": {
+      "python": "3.13.12",
+      "os": "Linux",
+      "packages": {
+        "pytest": "8.4.2",
+        "openai": "2.36.0",
+        "rich": "14.2.0",
+        "prompt_toolkit": "3.0.52",
+        "PyYAML": "6.0.3",
+        "tree-sitter": "0.26.0",
+        "watchfiles": "1.1.1",
+        "httpx": "0.28.1"
+      }
+    },
+    "provider": "openai-compatible",
+    "endpoint": "https://api.deepseek.com",
+    "model": "deepseek-v4-flash",
+    "request_modes": {
+      "main": {
+        "thinking": "enabled",
+        "effort": "high",
+        "output_limit": 8000
+      },
+      "auxiliary": {
+        "thinking": "disabled",
+        "effort": null,
+        "output_limit": 1024
+      },
+      "transport_purpose": "unknown; validates mode set, not message or tool labels",
+      "budget_scope": "shared task/experiment ledger; uncertainty stops all modes"
+    },
+    "profile": "main; restricted P1 tool allowlist; child_agents=false",
+    "tools": [
+      "list_directory",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "apply_patch",
+      "bash",
+      "glob_search",
+      "grep_search",
+      "repo_map",
+      "read_symbol",
+      "find_symbol_callers",
+      "update_scratchpad",
+      "read_scratchpad",
+      "todo",
+      "diff_status",
+      "verify_changed_files"
+    ],
+    "system_source": "nz_coder.runtime.conversation.prompt.build",
+    "system_source_blob": "d2a754f467fd39a86bcbbc88ed55c68bf93e172b",
+    "planning": false,
+    "reflection": false,
+    "mcp": false,
+    "paid_embeddings": false,
+    "auto_mode_classifier": false,
+    "sdk_retries": 2,
+    "http_transport_retries": 0,
+    "input_reservation_tokens": 1048576,
+    "per_task_cumulative_token_budget": 2000000,
+    "max_main_turns": 30,
+    "worker_wall_seconds": 600,
+    "rates": {
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "retrieved_at": "2026-09-08T06:47:24Z",
+      "source_sha256": "899affbdbc33d0be620d8dea59e86f5036c11b5410b14d060b8d2874c74f38e5",
+      "effective_date": null,
+      "calculation_basis": "published peak-rate ceiling for all periods; not account invoice",
+      "peak_periods": "Mon-Fri 09:00-12:00 and 14:00-18:00 Asia/Shanghai",
+      "off_peak_multiplier": "0.5",
+      "currency": "CNY",
+      "unit": "per million tokens",
+      "hit": "0.10",
+      "miss": "3",
+      "output": "9"
+    },
+    "total_budget": "6.219802",
+    "per_task_budget": "5"
+  },
+  "config_sha256": "f5c944eeabb6ca27720bbbe9b7912a070027454bf41146ac4f4472b3d07f8f47",
+  "tasks": {
+    "T02": {
+      "task_id": "T02",
+      "starts": 1,
+      "attempt_id": "p2-p2-live-20260909-062500-T02",
+      "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+      "harness_revision": "b93b55816d2683269577cb72c26594a8962c3c25",
+      "task_tree_hash": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "acceptance_hash": "784de13c01d116aabcb6d77bd9c9b902343f42450834b1b060cd40e6ee6ddaf4",
+      "runtime_status": "completed",
+      "runtime_completed": true,
+      "patch_verified": true,
+      "usage_complete": true,
+      "within_budget": true,
+      "cleanup_ok": true,
+      "final_status": "success",
+      "execution": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 43.3445
+      },
+      "patch": {
+        "file": "T02.patch",
+        "sha256": "ebe6a6b2077a23a76d0a678172e2b33c76c3c7f4fa828123a72198bcd200ed0c",
+        "bytes": 2174,
+        "changed_files": [
+          "tests/test_reports.py",
+          "worklog/reports.py"
+        ]
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2643,
+          "collected": 3,
+          "passed": 3,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2647,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "acceptance_reliable": true,
+      "patch_replayed": true,
+      "billing": {
+        "currency": "CNY",
+        "cost_basis": "configured token rates; not an independently verified account invoice",
+        "requests_sent": 14,
+        "send_count_semantics": "durable dispatch intent; crash before socket send can overcount",
+        "sdk_retry_sends": 0,
+        "sdk_retry_entries": 0,
+        "reserved_cost": "44.985408000",
+        "usage_derived_cost": "0.260965600",
+        "provider_reported_cost": null,
+        "unresolved_reservation": "0",
+        "remaining_total_budget": "5.958836400",
+        "remaining_task_budget": "4.739034400",
+        "remaining_tokens": 1864110,
+        "usage": {
+          "prompt_tokens": 131449,
+          "completion_tokens": 4441,
+          "total_tokens": 135890,
+          "prompt_cache_hit_tokens": 59776,
+          "prompt_cache_miss_tokens": 71673
+        },
+        "usage_complete": true,
+        "blocked": false,
+        "unknown_requests": 0,
+        "failure_diagnostics": []
+      },
+      "sidecar": {
+        "covered": true,
+        "calls": [
+          {
+            "request_id": 14,
+            "verdict": "accept",
+            "trace": "verifier_ok",
+            "finished_event_line": 267,
+            "trace_file_sha256": "4db4beda7ddc82d842367207cca37c22587064875ad2317ad339f161d230afdf",
+            "request_facts": {
+              "purpose": "unknown",
+              "requested_thinking": "disabled",
+              "thinking": "disabled",
+              "effort": null,
+              "effort_applicable": false,
+              "tool_choice_type": "function",
+              "system_sha256": "76a949783fd789891aa5e39e792195b76799a7467f42656d5d7ccab94f68cbfb",
+              "tools_sha256": "6af3c3c155afe84cdf0fc0da1c3e1a3b2de8584a533698ee2943e3dcf16142b2",
+              "sdk_retry_index": 0,
+              "output_limit": 1024,
+              "model": "deepseek-v4-flash"
+            },
+            "forced_tool": "emit_sidecar_verdict",
+            "forced_tool_evidence": "frozen product call site + matching actual tools hash + function tool_choice type; audit association, not transport authorization",
+            "usage": {
+              "prompt_tokens": 3563,
+              "completion_tokens": 123,
+              "total_tokens": 3686,
+              "prompt_cache_hit_tokens": 0,
+              "prompt_cache_miss_tokens": 3563,
+              "reasoning_tokens": null
+            },
+            "usage_derived_cost": "0.011796000",
+            "settlement_state": "settled",
+            "http_status": 200
+          }
+        ],
+        "gateway_starts_by_purpose": {
+          "coding": 13,
+          "verifier": 1
+        },
+        "gateway_completions_by_purpose": {
+          "coding": 13,
+          "verifier": 1
+        }
+      },
+      "audit": {
+        "dispatch_intents": 14,
+        "confirmed_http_200_responses_with_usage": 14,
+        "main_responses": 13,
+        "auxiliary_responses": 1,
+        "send_before_reservation_observed": false,
+        "rejected_before_transport": 0,
+        "task_peak_known_cost_plus_hold": "3.440143000",
+        "trace_file_sha256": "4db4beda7ddc82d842367207cca37c22587064875ad2317ad339f161d230afdf",
+        "usage_reasoning_subitem": {
+          "recorded_sum": 2700,
+          "missing_response_count": 1,
+          "included_in_completion_tokens": true
+        }
+      }
+    },
+    "T03": {
+      "task_id": "T03",
+      "starts": 1,
+      "attempt_id": "p2-p2-live-20260909-062500-T03",
+      "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+      "harness_revision": "b93b55816d2683269577cb72c26594a8962c3c25",
+      "task_tree_hash": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "acceptance_hash": "b8a29806012db2e6bc4f985d29cd0ec62d88250843c03714c2617336f59de794",
+      "runtime_status": "completed",
+      "runtime_completed": true,
+      "patch_verified": true,
+      "usage_complete": true,
+      "within_budget": true,
+      "cleanup_ok": true,
+      "final_status": "success",
+      "execution": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 74.5124
+      },
+      "patch": {
+        "file": "T03.patch",
+        "sha256": "a9e95cf1cb2a25dd54e615e5aef6f29bae3dfb5a9aca6fde91b27715c3b270e4",
+        "bytes": 1939,
+        "changed_files": [
+          "tests/test_top_words.py",
+          "textkit/stats.py"
+        ]
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2644,
+          "collected": 3,
+          "passed": 3,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2644,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "acceptance_reliable": true,
+      "patch_replayed": true,
+      "billing": {
+        "currency": "CNY",
+        "cost_basis": "configured token rates; not an independently verified account invoice",
+        "requests_sent": 30,
+        "send_count_semantics": "durable dispatch intent; crash before socket send can overcount",
+        "sdk_retry_sends": 0,
+        "sdk_retry_entries": 0,
+        "reserved_cost": "96.469056000",
+        "usage_derived_cost": "0.742327000",
+        "provider_reported_cost": null,
+        "unresolved_reservation": "0",
+        "remaining_total_budget": "5.216509400",
+        "remaining_task_budget": "4.257673000",
+        "remaining_tokens": 1623827,
+        "usage": {
+          "prompt_tokens": 369701,
+          "completion_tokens": 6472,
+          "total_tokens": 376173,
+          "prompt_cache_hit_tokens": 146560,
+          "prompt_cache_miss_tokens": 223141
+        },
+        "usage_complete": true,
+        "blocked": false,
+        "unknown_requests": 0,
+        "failure_diagnostics": []
+      },
+      "sidecar": {
+        "covered": true,
+        "calls": [
+          {
+            "request_id": 30,
+            "verdict": "accept",
+            "trace": "verifier_ok",
+            "finished_event_line": 645,
+            "trace_file_sha256": "bc782965961f73c043b385ae526fe642d9aeab2745d8283ff0237f54236877f3",
+            "request_facts": {
+              "purpose": "unknown",
+              "requested_thinking": "disabled",
+              "thinking": "disabled",
+              "effort": null,
+              "effort_applicable": false,
+              "tool_choice_type": "function",
+              "system_sha256": "76a949783fd789891aa5e39e792195b76799a7467f42656d5d7ccab94f68cbfb",
+              "tools_sha256": "6af3c3c155afe84cdf0fc0da1c3e1a3b2de8584a533698ee2943e3dcf16142b2",
+              "sdk_retry_index": 0,
+              "output_limit": 1024,
+              "model": "deepseek-v4-flash"
+            },
+            "forced_tool": "emit_sidecar_verdict",
+            "forced_tool_evidence": "frozen product call site + matching actual tools hash + function tool_choice type; audit association, not transport authorization",
+            "usage": {
+              "prompt_tokens": 5109,
+              "completion_tokens": 133,
+              "total_tokens": 5242,
+              "prompt_cache_hit_tokens": 1024,
+              "prompt_cache_miss_tokens": 4085,
+              "reasoning_tokens": null
+            },
+            "usage_derived_cost": "0.013554400",
+            "settlement_state": "settled",
+            "http_status": 200
+          }
+        ],
+        "gateway_starts_by_purpose": {
+          "coding": 29,
+          "verifier": 1
+        },
+        "gateway_completions_by_purpose": {
+          "coding": 29,
+          "verifier": 1
+        }
+      },
+      "audit": {
+        "dispatch_intents": 30,
+        "confirmed_http_200_responses_with_usage": 30,
+        "main_responses": 29,
+        "auxiliary_responses": 1,
+        "send_before_reservation_observed": false,
+        "rejected_before_transport": 0,
+        "task_peak_known_cost_plus_hold": "3.908847000",
+        "trace_file_sha256": "bc782965961f73c043b385ae526fe642d9aeab2745d8283ff0237f54236877f3",
+        "usage_reasoning_subitem": {
+          "recorded_sum": 2788,
+          "missing_response_count": 1,
+          "included_in_completion_tokens": true
+        }
+      }
+    },
+    "T05": {
+      "task_id": "T05",
+      "starts": 1,
+      "attempt_id": "p2-p2-live-20260909-062500-T05",
+      "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+      "harness_revision": "b93b55816d2683269577cb72c26594a8962c3c25",
+      "task_tree_hash": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "acceptance_hash": "b18ec4f05bba1ae55f119bcbc24d327fcd3d8553a7b0463939e856da6b666e2d",
+      "runtime_status": "completed",
+      "runtime_completed": true,
+      "patch_verified": true,
+      "usage_complete": true,
+      "within_budget": true,
+      "cleanup_ok": true,
+      "final_status": "success",
+      "execution": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 71.5242
+      },
+      "patch": {
+        "file": "T05.patch",
+        "sha256": "c89e3d8307b804c1322ac75480e84775615c5735495936d45210dc8a8c4dac58",
+        "bytes": 2024,
+        "changed_files": [
+          "tests/test_lower.py",
+          "textkit/cli.py",
+          "textkit/pipeline.py"
+        ]
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2649,
+          "collected": 3,
+          "passed": 3,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2644,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "acceptance_reliable": true,
+      "patch_replayed": true,
+      "billing": {
+        "currency": "CNY",
+        "cost_basis": "configured token rates; not an independently verified account invoice",
+        "requests_sent": 24,
+        "send_count_semantics": "durable dispatch intent; crash before socket send can overcount",
+        "sdk_retry_sends": 0,
+        "sdk_retry_entries": 0,
+        "reserved_cost": "77.162688000",
+        "usage_derived_cost": "0.597467800",
+        "provider_reported_cost": null,
+        "unresolved_reservation": "0",
+        "remaining_total_budget": "4.619041600",
+        "remaining_task_budget": "4.402532200",
+        "remaining_tokens": 1702875,
+        "usage": {
+          "prompt_tokens": 290677,
+          "completion_tokens": 6448,
+          "total_tokens": 297125,
+          "prompt_cache_hit_tokens": 114688,
+          "prompt_cache_miss_tokens": 175989
+        },
+        "usage_complete": true,
+        "blocked": false,
+        "unknown_requests": 0,
+        "failure_diagnostics": []
+      },
+      "sidecar": {
+        "covered": true,
+        "calls": [
+          {
+            "request_id": 24,
+            "verdict": "accept",
+            "trace": "verifier_ok",
+            "finished_event_line": 497,
+            "trace_file_sha256": "d7af38f5b98f18e21376d78152b266cee564750683ff43971c3247efe9559873",
+            "request_facts": {
+              "purpose": "unknown",
+              "requested_thinking": "disabled",
+              "thinking": "disabled",
+              "effort": null,
+              "effort_applicable": false,
+              "tool_choice_type": "function",
+              "system_sha256": "76a949783fd789891aa5e39e792195b76799a7467f42656d5d7ccab94f68cbfb",
+              "tools_sha256": "6af3c3c155afe84cdf0fc0da1c3e1a3b2de8584a533698ee2943e3dcf16142b2",
+              "sdk_retry_index": 0,
+              "output_limit": 1024,
+              "model": "deepseek-v4-flash"
+            },
+            "forced_tool": "emit_sidecar_verdict",
+            "forced_tool_evidence": "frozen product call site + matching actual tools hash + function tool_choice type; audit association, not transport authorization",
+            "usage": {
+              "prompt_tokens": 3883,
+              "completion_tokens": 119,
+              "total_tokens": 4002,
+              "prompt_cache_hit_tokens": 1024,
+              "prompt_cache_miss_tokens": 2859,
+              "reasoning_tokens": null
+            },
+            "usage_derived_cost": "0.009750400",
+            "settlement_state": "settled",
+            "http_status": 200
+          }
+        ],
+        "gateway_starts_by_purpose": {
+          "coding": 23,
+          "verifier": 1
+        },
+        "gateway_completions_by_purpose": {
+          "coding": 23,
+          "verifier": 1
+        }
+      },
+      "audit": {
+        "dispatch_intents": 24,
+        "confirmed_http_200_responses_with_usage": 24,
+        "main_responses": 23,
+        "auxiliary_responses": 1,
+        "send_before_reservation_observed": false,
+        "rejected_before_transport": 0,
+        "task_peak_known_cost_plus_hold": "3.765550800",
+        "trace_file_sha256": "d7af38f5b98f18e21376d78152b266cee564750683ff43971c3247efe9559873",
+        "usage_reasoning_subitem": {
+          "recorded_sum": 3859,
+          "missing_response_count": 1,
+          "included_in_completion_tokens": true
+        }
+      }
+    },
+    "T06": {
+      "task_id": "T06",
+      "starts": 1,
+      "attempt_id": "p2-p2-live-20260909-062500-T06",
+      "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+      "harness_revision": "b93b55816d2683269577cb72c26594a8962c3c25",
+      "task_tree_hash": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "acceptance_hash": "e90be14895f62501f4b2ac541a4654b2a04ae83f1c23ba241f72c04cd2e056d3",
+      "runtime_status": "completed",
+      "runtime_completed": true,
+      "patch_verified": true,
+      "usage_complete": true,
+      "within_budget": true,
+      "cleanup_ok": true,
+      "final_status": "success",
+      "execution": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 80.746
+      },
+      "patch": {
+        "file": "T06.patch",
+        "sha256": "9e10262c8e06c3b40beea67c843acd80030a45dd71e4b522424d3309b93c56d2",
+        "bytes": 4018,
+        "changed_files": [
+          "tests/test_archived.py",
+          "worklog/cli.py",
+          "worklog/store.py"
+        ]
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2649,
+          "collected": 3,
+          "passed": 3,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2644,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "acceptance_reliable": true,
+      "patch_replayed": true,
+      "billing": {
+        "currency": "CNY",
+        "cost_basis": "configured token rates; not an independently verified account invoice",
+        "requests_sent": 20,
+        "send_count_semantics": "durable dispatch intent; crash before socket send can overcount",
+        "sdk_retry_sends": 0,
+        "sdk_retry_entries": 0,
+        "reserved_cost": "64.291776000",
+        "usage_derived_cost": "0.613661600",
+        "provider_reported_cost": null,
+        "unresolved_reservation": "0",
+        "remaining_total_budget": "4.005380000",
+        "remaining_task_budget": "4.386338400",
+        "remaining_tokens": 1723472,
+        "usage": {
+          "prompt_tokens": 267538,
+          "completion_tokens": 8990,
+          "total_tokens": 276528,
+          "prompt_cache_hit_tokens": 93056,
+          "prompt_cache_miss_tokens": 174482
+        },
+        "usage_complete": true,
+        "blocked": false,
+        "unknown_requests": 0,
+        "failure_diagnostics": []
+      },
+      "sidecar": {
+        "covered": true,
+        "calls": [
+          {
+            "request_id": 20,
+            "verdict": "accept",
+            "trace": "verifier_ok",
+            "finished_event_line": 412,
+            "trace_file_sha256": "39d0cd2de89ae836622284c043b04c5623f6ec48db1cdca7e8e07a26c1a78785",
+            "request_facts": {
+              "purpose": "unknown",
+              "requested_thinking": "disabled",
+              "thinking": "disabled",
+              "effort": null,
+              "effort_applicable": false,
+              "tool_choice_type": "function",
+              "system_sha256": "76a949783fd789891aa5e39e792195b76799a7467f42656d5d7ccab94f68cbfb",
+              "tools_sha256": "6af3c3c155afe84cdf0fc0da1c3e1a3b2de8584a533698ee2943e3dcf16142b2",
+              "sdk_retry_index": 0,
+              "output_limit": 1024,
+              "model": "deepseek-v4-flash"
+            },
+            "forced_tool": "emit_sidecar_verdict",
+            "forced_tool_evidence": "frozen product call site + matching actual tools hash + function tool_choice type; audit association, not transport authorization",
+            "usage": {
+              "prompt_tokens": 5656,
+              "completion_tokens": 141,
+              "total_tokens": 5797,
+              "prompt_cache_hit_tokens": 1024,
+              "prompt_cache_miss_tokens": 4632,
+              "reasoning_tokens": null
+            },
+            "usage_derived_cost": "0.015267400",
+            "settlement_state": "settled",
+            "http_status": 200
+          }
+        ],
+        "gateway_starts_by_purpose": {
+          "coding": 19,
+          "verifier": 1
+        },
+        "gateway_completions_by_purpose": {
+          "coding": 19,
+          "verifier": 1
+        }
+      },
+      "audit": {
+        "dispatch_intents": 20,
+        "confirmed_http_200_responses_with_usage": 20,
+        "main_responses": 19,
+        "auxiliary_responses": 1,
+        "send_before_reservation_observed": false,
+        "rejected_before_transport": 0,
+        "task_peak_known_cost_plus_hold": "3.771049600",
+        "trace_file_sha256": "39d0cd2de89ae836622284c043b04c5623f6ec48db1cdca7e8e07a26c1a78785",
+        "usage_reasoning_subitem": {
+          "recorded_sum": 6051,
+          "missing_response_count": 1,
+          "included_in_completion_tokens": true
+        }
+      }
+    },
+    "T07": {
+      "task_id": "T07",
+      "starts": 1,
+      "attempt_id": "p2-p2-live-20260909-062500-T07",
+      "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+      "harness_revision": "b93b55816d2683269577cb72c26594a8962c3c25",
+      "task_tree_hash": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "acceptance_hash": "6a421489aeeedf2795a04e1dd44e8b2bf6a350358bd7eb95e46b85419d34e5d1",
+      "runtime_status": "completed",
+      "runtime_completed": true,
+      "patch_verified": false,
+      "usage_complete": true,
+      "within_budget": true,
+      "cleanup_ok": true,
+      "final_status": "functional_failure",
+      "execution": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 34.2564
+      },
+      "patch": {
+        "file": "T07.patch",
+        "sha256": "f0f149256f880216911f37c9a80123670c8eb7b3bd231c76a9815d6173e7714b",
+        "bytes": 2800,
+        "changed_files": [
+          "tests/test_slug.py",
+          "textkit/__init__.py",
+          "textkit/slug.py"
+        ]
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 1,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.3153,
+          "collected": 4,
+          "passed": 3,
+          "failed": 1,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": false
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2646,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "acceptance_reliable": true,
+      "patch_replayed": true,
+      "billing": {
+        "currency": "CNY",
+        "cost_basis": "configured token rates; not an independently verified account invoice",
+        "requests_sent": 10,
+        "send_count_semantics": "durable dispatch intent; crash before socket send can overcount",
+        "sdk_retry_sends": 0,
+        "sdk_retry_entries": 0,
+        "reserved_cost": "32.114496000",
+        "usage_derived_cost": "0.191611000",
+        "provider_reported_cost": null,
+        "unresolved_reservation": "0",
+        "remaining_total_budget": "3.813769000",
+        "remaining_task_budget": "4.808389000",
+        "remaining_tokens": 1906003,
+        "usage": {
+          "prompt_tokens": 90191,
+          "completion_tokens": 3806,
+          "total_tokens": 93997,
+          "prompt_cache_hit_tokens": 39040,
+          "prompt_cache_miss_tokens": 51151
+        },
+        "usage_complete": true,
+        "blocked": false,
+        "unknown_requests": 0,
+        "failure_diagnostics": []
+      },
+      "sidecar": {
+        "covered": true,
+        "calls": [
+          {
+            "request_id": 10,
+            "verdict": "accept",
+            "trace": "verifier_ok",
+            "finished_event_line": 196,
+            "trace_file_sha256": "5b1b907cb2190cf93e071339a2ce576b39bc62c95fd86ac817aa530cd44943fa",
+            "request_facts": {
+              "purpose": "unknown",
+              "requested_thinking": "disabled",
+              "thinking": "disabled",
+              "effort": null,
+              "effort_applicable": false,
+              "tool_choice_type": "function",
+              "system_sha256": "76a949783fd789891aa5e39e792195b76799a7467f42656d5d7ccab94f68cbfb",
+              "tools_sha256": "6af3c3c155afe84cdf0fc0da1c3e1a3b2de8584a533698ee2943e3dcf16142b2",
+              "sdk_retry_index": 0,
+              "output_limit": 1024,
+              "model": "deepseek-v4-flash"
+            },
+            "forced_tool": "emit_sidecar_verdict",
+            "forced_tool_evidence": "frozen product call site + matching actual tools hash + function tool_choice type; audit association, not transport authorization",
+            "usage": {
+              "prompt_tokens": 4954,
+              "completion_tokens": 131,
+              "total_tokens": 5085,
+              "prompt_cache_hit_tokens": 1024,
+              "prompt_cache_miss_tokens": 3930,
+              "reasoning_tokens": null
+            },
+            "usage_derived_cost": "0.013071400",
+            "settlement_state": "settled",
+            "http_status": 200
+          }
+        ],
+        "gateway_starts_by_purpose": {
+          "coding": 9,
+          "verifier": 1
+        },
+        "gateway_completions_by_purpose": {
+          "coding": 9,
+          "verifier": 1
+        }
+      },
+      "audit": {
+        "dispatch_intents": 10,
+        "confirmed_http_200_responses_with_usage": 10,
+        "main_responses": 9,
+        "auxiliary_responses": 1,
+        "send_before_reservation_observed": false,
+        "rejected_before_transport": 0,
+        "task_peak_known_cost_plus_hold": "3.371919000",
+        "trace_file_sha256": "5b1b907cb2190cf93e071339a2ce576b39bc62c95fd86ac817aa530cd44943fa",
+        "usage_reasoning_subitem": {
+          "recorded_sum": 2089,
+          "missing_response_count": 1,
+          "included_in_completion_tokens": true
+        }
+      }
+    },
+    "T08": {
+      "task_id": "T08",
+      "starts": 1,
+      "attempt_id": "p2-p2-live-20260909-062500-T08",
+      "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+      "harness_revision": "b93b55816d2683269577cb72c26594a8962c3c25",
+      "task_tree_hash": "6018be0e3e0a3e4300f179a50db6ee3677e14b906241936b19cb72c51eb8361e",
+      "acceptance_hash": "5ec66cddad7f1bb374aa6d61f4809ed9da8ddf48e534ae3e0e2e21f5e805521f",
+      "runtime_status": "completed",
+      "runtime_completed": true,
+      "patch_verified": true,
+      "usage_complete": true,
+      "within_budget": true,
+      "cleanup_ok": true,
+      "final_status": "success",
+      "execution": {
+        "exit_code": 0,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 72.7766
+      },
+      "patch": {
+        "file": "T08.patch",
+        "sha256": "f5a476635cdc9870afbe1471c9c317aab3d105ab79e6f8b985c984a11316c9c5",
+        "bytes": 5796,
+        "changed_files": [
+          "tests/test_project_summary.py",
+          "worklog/cli.py",
+          "worklog/codec.py",
+          "worklog/reports.py",
+          "worklog/store.py"
+        ]
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2641,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2661,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "acceptance_reliable": true,
+      "patch_replayed": true,
+      "billing": {
+        "currency": "CNY",
+        "cost_basis": "configured token rates; not an independently verified account invoice",
+        "requests_sent": 17,
+        "send_count_semantics": "durable dispatch intent; crash before socket send can overcount",
+        "sdk_retry_sends": 0,
+        "sdk_retry_entries": 0,
+        "reserved_cost": "54.638592000",
+        "usage_derived_cost": "0.539262800",
+        "provider_reported_cost": null,
+        "unresolved_reservation": "0",
+        "remaining_total_budget": "3.274506200",
+        "remaining_task_budget": "4.460737200",
+        "remaining_tokens": 1764906,
+        "usage": {
+          "prompt_tokens": 225582,
+          "completion_tokens": 9512,
+          "total_tokens": 235094,
+          "prompt_cache_hit_tokens": 76928,
+          "prompt_cache_miss_tokens": 148654
+        },
+        "usage_complete": true,
+        "blocked": false,
+        "unknown_requests": 0,
+        "failure_diagnostics": []
+      },
+      "sidecar": {
+        "covered": true,
+        "calls": [
+          {
+            "request_id": 17,
+            "verdict": "accept",
+            "trace": "verifier_ok",
+            "finished_event_line": 370,
+            "trace_file_sha256": "b2f75450ea7311585f332639f297d80cd288833d183fa9bfeb811ff4a84a19a3",
+            "request_facts": {
+              "purpose": "unknown",
+              "requested_thinking": "disabled",
+              "thinking": "disabled",
+              "effort": null,
+              "effort_applicable": false,
+              "tool_choice_type": "function",
+              "system_sha256": "76a949783fd789891aa5e39e792195b76799a7467f42656d5d7ccab94f68cbfb",
+              "tools_sha256": "6af3c3c155afe84cdf0fc0da1c3e1a3b2de8584a533698ee2943e3dcf16142b2",
+              "sdk_retry_index": 0,
+              "output_limit": 1024,
+              "model": "deepseek-v4-flash"
+            },
+            "forced_tool": "emit_sidecar_verdict",
+            "forced_tool_evidence": "frozen product call site + matching actual tools hash + function tool_choice type; audit association, not transport authorization",
+            "usage": {
+              "prompt_tokens": 6305,
+              "completion_tokens": 177,
+              "total_tokens": 6482,
+              "prompt_cache_hit_tokens": 1024,
+              "prompt_cache_miss_tokens": 5281,
+              "reasoning_tokens": null
+            },
+            "usage_derived_cost": "0.017538400",
+            "settlement_state": "settled",
+            "http_status": 200
+          }
+        ],
+        "gateway_starts_by_purpose": {
+          "coding": 16,
+          "verifier": 1
+        },
+        "gateway_completions_by_purpose": {
+          "coding": 16,
+          "verifier": 1
+        }
+      },
+      "audit": {
+        "dispatch_intents": 17,
+        "confirmed_http_200_responses_with_usage": 17,
+        "main_responses": 16,
+        "auxiliary_responses": 1,
+        "send_before_reservation_observed": false,
+        "rejected_before_transport": 0,
+        "task_peak_known_cost_plus_hold": "3.692072800",
+        "trace_file_sha256": "b2f75450ea7311585f332639f297d80cd288833d183fa9bfeb811ff4a84a19a3",
+        "usage_reasoning_subitem": {
+          "recorded_sum": 5871,
+          "missing_response_count": 1,
+          "included_in_completion_tokens": true
+        }
+      }
+    },
+    "T09": {
+      "task_id": "T09",
+      "starts": 1,
+      "attempt_id": "p2-p2-live-20260909-062500-T09",
+      "agent_revision": "7c308e3a75deae112e20c0de225113fda6ec9f9e",
+      "harness_revision": "b93b55816d2683269577cb72c26594a8962c3c25",
+      "task_tree_hash": "2b3d0385309b96ffda22b13978ce786ccc7ec0557bdf5501145c06fb6415942a",
+      "acceptance_hash": "90abb0964686b7b27a878007782d6e0cf09f29b7c2957ac7bdabf619c13e7ef3",
+      "runtime_status": "error",
+      "runtime_completed": false,
+      "patch_verified": false,
+      "usage_complete": true,
+      "within_budget": true,
+      "cleanup_ok": true,
+      "final_status": "infrastructure_blocked",
+      "execution": {
+        "exit_code": 1,
+        "timed_out": false,
+        "exception": null,
+        "cleanup_error": null,
+        "elapsed_seconds": 31.1404
+      },
+      "patch": {
+        "file": "T09.patch",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0,
+        "changed_files": []
+      },
+      "scope_violations": [],
+      "acceptance": {
+        "target": {
+          "exit_code": 1,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2644,
+          "collected": 4,
+          "passed": 0,
+          "failed": 4,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": false
+        },
+        "regression": {
+          "exit_code": 0,
+          "timed_out": false,
+          "exception": null,
+          "cleanup_error": null,
+          "elapsed_seconds": 0.2645,
+          "collected": 4,
+          "passed": 4,
+          "failed": 0,
+          "errors": 0,
+          "skipped": 0,
+          "accepted": true
+        }
+      },
+      "acceptance_reliable": true,
+      "patch_replayed": true,
+      "billing": {
+        "currency": "CNY",
+        "cost_basis": "configured token rates; not an independently verified account invoice",
+        "requests_sent": 5,
+        "send_count_semantics": "durable dispatch intent; crash before socket send can overcount",
+        "sdk_retry_sends": 0,
+        "sdk_retry_entries": 8,
+        "reserved_cost": "16.088640000",
+        "usage_derived_cost": "0.065608200",
+        "provider_reported_cost": null,
+        "unresolved_reservation": "0",
+        "remaining_total_budget": "3.208898000",
+        "remaining_task_budget": "4.934391800",
+        "remaining_tokens": 1963737,
+        "usage": {
+          "prompt_tokens": 35479,
+          "completion_tokens": 784,
+          "total_tokens": 36263,
+          "prompt_cache_hit_tokens": 16512,
+          "prompt_cache_miss_tokens": 18967
+        },
+        "usage_complete": true,
+        "blocked": true,
+        "unknown_requests": 0,
+        "failure_diagnostics": [
+          {
+            "request_id": 6,
+            "recording_status": "recorded",
+            "failure_stage": "reservation",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 7,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 8,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 9,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 10,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 11,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 12,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 13,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 14,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 15,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 16,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          },
+          {
+            "request_id": 17,
+            "recording_status": "recorded",
+            "failure_stage": "admission",
+            "exception_category": "billing_stopped",
+            "http_status": null,
+            "usage_present": null,
+            "settlement_state": "not_dispatched",
+            "evidence_saved": true,
+            "secondary_failures": []
+          }
+        ]
+      },
+      "sidecar": {
+        "covered": false,
+        "calls": [],
+        "gateway_starts_by_purpose": {
+          "coding": 9
+        },
+        "gateway_completions_by_purpose": {
+          "coding": 5
+        }
+      },
+      "audit": {
+        "dispatch_intents": 5,
+        "confirmed_http_200_responses_with_usage": 5,
+        "main_responses": 5,
+        "auxiliary_responses": 0,
+        "send_before_reservation_observed": false,
+        "rejected_before_transport": 12,
+        "task_peak_known_cost_plus_hold": "3.270240600",
+        "trace_file_sha256": "fb7bfc1b17fc9033ed006f44abe56af04b832dfdf133d55c5cbb9b272af0ca19",
+        "usage_reasoning_subitem": {
+          "recorded_sum": 418,
+          "missing_response_count": 0,
+          "included_in_completion_tokens": true
+        }
+      }
+    },
+    "T10": {
+      "task_id": "T10",
+      "starts": 0,
+      "final_status": "not_run",
+      "reason": "batch stopped after T09 budget admission refusal",
+      "runtime_completed": null,
+      "patch_verified": null,
+      "usage_complete": null,
+      "within_budget": null,
+      "cleanup_ok": null,
+      "billing": null
+    },
+    "T11": {
+      "task_id": "T11",
+      "starts": 0,
+      "final_status": "not_run",
+      "reason": "batch stopped after T09 budget admission refusal",
+      "runtime_completed": null,
+      "patch_verified": null,
+      "usage_complete": null,
+      "within_budget": null,
+      "cleanup_ok": null,
+      "billing": null
+    },
+    "T12": {
+      "task_id": "T12",
+      "starts": 0,
+      "final_status": "not_run",
+      "reason": "batch stopped after T09 budget admission refusal",
+      "runtime_completed": null,
+      "patch_verified": null,
+      "usage_complete": null,
+      "within_budget": null,
+      "cleanup_ok": null,
+      "billing": null
+    }
+  },
+  "measurement": {
+    "planned": 10,
+    "started": 7,
+    "end_to_end_success": 5,
+    "patch_verified": 5,
+    "failures": 2,
+    "classifications": {
+      "success": 5,
+      "functional_failure": 1,
+      "infrastructure_blocked": 1
+    },
+    "not_run": 3,
+    "success_rate": 0.7142857142857143,
+    "patch_success_rate": 0.7142857142857143,
+    "rate_denominator": "all formally started tasks, including failures"
+  },
+  "cli_exit_code": 1,
+  "started_at": "2026-09-09T06:26:16.704659+00:00",
+  "ended_at": "2026-09-09T06:33:09.984894+00:00",
+  "elapsed_seconds": 413.2803,
+  "stopped": true,
+  "stopped_reason": "billing or infrastructure uncertainty; no automatic retry",
+  "stop_interpretation": "T09 pre-send budget admission refusal, not a new HTTP or usage uncertainty; original organizer stopped_reason and final_status retained unchanged",
+  "new_T01_starts": 0,
+  "new_T04_starts": 0,
+  "source_sha256": {
+    "frozen.json": "ccd88811efb7872dc9d456c365948586154609b7385d08d4285a6149d3080aaf",
+    "summary.json": "e682d6381ec567742305f56fc5cf510aef5ef9dfd6d09d1c767e28039c5dcda0",
+    "T02/result.json": "66c62006d277043c6d02cb385d4587a90151278d4c92c18bcb7407e0fadccfe4",
+    "T02/billing.jsonl": "2a63a2eb8db61af09bb2431053aa05f4ab063bb45ba776d334a4244447ce2608",
+    "T02/billing-summary.json": "af7c0fa5d5fe9c5f7f2a1d3b6611e5298ba26d43ef61e3169b39ba1282172746",
+    "T02/request.json": "cd2f8de2796836768bdbaf316e2c7d7a158f47388545def611cfcb0bb5ffed14",
+    "T02/final.patch": "ebe6a6b2077a23a76d0a678172e2b33c76c3c7f4fa828123a72198bcd200ed0c",
+    "T02/runtime.jsonl": "279774088c77db08f0a226a5367fd3f45ce4852c0944da8e46de329e1769d1a3",
+    "T02/replay/evaluator/target.xml": "88f0d21e58ff15f9f260e22458da85828a5e1e7bc72aee82aa415003d2bb8d43",
+    "T02/replay/evaluator/regression.xml": "18552507e5868e11e753d7eb2e9d186c8ce436f85bfab7f97e24277b1a8eb2b3",
+    "T02/replay/evaluator/target.log": "5071dbc7e74233d4edaf2f7909fb09e924a6272d59edbe82a1c56900885d3f64",
+    "T03/result.json": "b570d7b1fdddffd8a565359c4b673374a31b7e090fa99929b1c9d033917c9548",
+    "T03/billing.jsonl": "fac94a69e0ebf6e5efbb14271376a8ac2171ce4288444dad3461a2f61ee77db8",
+    "T03/billing-summary.json": "16a86ffa737dce4a01501f80f4abd707255a0fbaf2f6f24865f05cdd949f65e0",
+    "T03/request.json": "2613b723def22c8e974d50bf6a2fb4a1c3870c7fca4b509568ecf843183974fc",
+    "T03/final.patch": "a9e95cf1cb2a25dd54e615e5aef6f29bae3dfb5a9aca6fde91b27715c3b270e4",
+    "T03/runtime.jsonl": "3f72077dc8848474843db35ddbd06aaaf487e1604d28423ea81b67fc364dbf1b",
+    "T03/replay/evaluator/target.xml": "0f09fb6c65e20a35b1526bd15412461a1d1aa82a220db798fddd43852d17bc0c",
+    "T03/replay/evaluator/regression.xml": "d8cfcaae24e14a0cc0f770a79a427a32bd60fd99a9ce687ec80418f14a531ecc",
+    "T03/replay/evaluator/target.log": "9e015d1219d80c46f247616f606e0759578859f125f7b13580f0b30d9cac3d92",
+    "T05/result.json": "2c440e6f9a19cf87c44bc3e23eda99eb1e5f8eff01d80e45c33f85653648116d",
+    "T05/billing.jsonl": "d3d363802a705972756c7a15283ce3d959c5a53465468d32b66bb4867e26d0c3",
+    "T05/billing-summary.json": "0c0c72dbc380ec19d78d3c523409b3c030d9427c6d5ac5256c48e1c9e46ef6fa",
+    "T05/request.json": "0608da7e45c1e1e0f70d1d377fa4b82d76466613aa4d497530ee4fdd60176a3f",
+    "T05/final.patch": "c89e3d8307b804c1322ac75480e84775615c5735495936d45210dc8a8c4dac58",
+    "T05/runtime.jsonl": "a93964c1753e243fddcb6b17f6708a2c1edb5b4326d5734461904c86f92cca39",
+    "T05/replay/evaluator/target.xml": "857f32af59bfa35cb81f760601ea533edcd46b46324976850d03328f81dfd77e",
+    "T05/replay/evaluator/regression.xml": "5668b9be8fe85745b3473e2e6c0fc99a9f3e3fd7e21e66d06735b837f9f2b0a7",
+    "T05/replay/evaluator/target.log": "1eadfc73cc2f3f7b7673c1ea08415ac9b763bdb28d0ae9cd7572796a7217a4b0",
+    "T06/result.json": "c8a0d36e48457d366c066762d8d351232454d80e85c23637102a1c209d048ced",
+    "T06/billing.jsonl": "8cbd078d5d3b679ab81444ae5dea2e621ffff57c3493d01297f8a5df2feacc8a",
+    "T06/billing-summary.json": "8cc33abe7648e1d988f7691f2d37d654b87d950ed0594c44250dd9bbb864a50e",
+    "T06/request.json": "fb5d334c3c082ff31b4cdcd75fd18bd229acd520e1401a919c81927befc945ab",
+    "T06/final.patch": "9e10262c8e06c3b40beea67c843acd80030a45dd71e4b522424d3309b93c56d2",
+    "T06/runtime.jsonl": "0080059eedccec7a9a2a3e58f2b494588b82221c7a6485cd513a5a10ac19762b",
+    "T06/replay/evaluator/target.xml": "88649273841532c8888155afd97cbc020a44142bd9a1eae05606e9efe7933951",
+    "T06/replay/evaluator/regression.xml": "1a3d435ade0d3a56c68a200f2f8421f8e82d871e11fbaff9082bdc183e338426",
+    "T06/replay/evaluator/target.log": "9f4f3fd7e4ba917557d7f679898f9906eadce832b27795bb626a9dce439afad5",
+    "T07/result.json": "4b87bc573dcac668d4c6b2e9da1875f6cd388dd6d3f35be04f975693f9f77431",
+    "T07/billing.jsonl": "73a44563514e504b376244b0ba74e177b3653c5daf879edeb33e3e1db869fb2f",
+    "T07/billing-summary.json": "38841440c3a375162781587de642d7c645335291455e079e9235ca692c302501",
+    "T07/request.json": "578cf37bbcfa40b2576aa3e1223e1d3c514a87984e0a1efc9d2494e8ce89122e",
+    "T07/final.patch": "f0f149256f880216911f37c9a80123670c8eb7b3bd231c76a9815d6173e7714b",
+    "T07/runtime.jsonl": "eb0277e9d510d803635bf0e6d5baccc39c1f4025a452143c0312b30f5bbbfbdf",
+    "T07/replay/evaluator/target.xml": "5f385946167b3579edea7fa7f55d1da3ebc9f3dc675616417e5133eba76eafd8",
+    "T07/replay/evaluator/regression.xml": "fd36d5635ae62fa7641b270d12b1a4b5c7d2492aadeaa5e20f1ac1c0c0920128",
+    "T07/replay/evaluator/target.log": "d71b787e8638fc6d9cba1b38981251a4fb5b4114f05ae6e8e0a0511063558261",
+    "T08/result.json": "84587062a948d6f977635224167293732982fb3fab9f0830b9de4cc88f445d1b",
+    "T08/billing.jsonl": "93b0593c00c8974e0ec2193f52e6960ce8beab31dad89f2223ff7c1021f37339",
+    "T08/billing-summary.json": "4809356bdf8fb87756349bafcea1a8093e86d5605c608820584346af5c22987d",
+    "T08/request.json": "2c81f430cb61e5ccebd992d941b785d9d07b666e337ae45fbf04f578d66c4d2d",
+    "T08/final.patch": "f5a476635cdc9870afbe1471c9c317aab3d105ab79e6f8b985c984a11316c9c5",
+    "T08/runtime.jsonl": "e827639cae520de8032a69e688a7870ed6a7b1ecbc7687b9bebe88dfab0bcf1c",
+    "T08/replay/evaluator/target.xml": "4ec0e9c56e9565fca278b21e62dcb35f04cbaf51ec4202d7baaef5c383bb89bf",
+    "T08/replay/evaluator/regression.xml": "b8d1cc692a50b378181b7f605bf0082ada2df4347bfb79952017bf9ed2bf94e7",
+    "T08/replay/evaluator/target.log": "ee3c15cc49ba738499cd5e2447fad525657ccd4393d4143a27ed87016fe93400",
+    "T09/result.json": "13ae85cfa0db9f5263aae54a48470e1ce110f29cb6d455200b2948ef0e61c713",
+    "T09/billing.jsonl": "d9fa65084c324648fe7f340848e4255c48f12f13a24caa9dec2658a4c1277fda",
+    "T09/billing-summary.json": "2de29b0e5581816fbcc90e552a06d83b19cf40e919b9f594e7981f83dcdafa23",
+    "T09/request.json": "4ecd1762b38d68c2e4383cc9d5bb7296aedea62f4a218373d916eb3a445d1c3a",
+    "T09/final.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "T09/runtime.jsonl": "12716af80cbf16e8e8a2f748e4445fc52dbfdea0d1068609c30add4cce45c062",
+    "T09/replay/evaluator/target.xml": "34230ccf06c806686ea7c565803ef959f64a6bb118e53a085be83347b8608f5c",
+    "T09/replay/evaluator/regression.xml": "707fff643dc804cd2f83a4ae0c3d9b623fcc7bd1c57b09d6019b3f8f344660a7",
+    "T09/replay/evaluator/target.log": "9bc906e5089ff322e4077131cbf3af9074f78fe1f3f6818b661b303e587cd846"
+  },
+  "scope_limit": "Linux headless Native, restricted tools, two local fixture repositories; not SWE-bench or a single-version 12-task baseline",
+  "accounting": {
+    "historical_known_cost": "0.625254",
+    "historical_unresolved_reservation": "3.154944",
+    "p2_known_cost": "3.010904000",
+    "p2_unresolved_reservation": "0",
+    "p2_usage_complete": true,
+    "p2_usage": {
+      "prompt_tokens": 1410617,
+      "completion_tokens": 40453,
+      "total_tokens": 1451070,
+      "prompt_cache_hit_tokens": 546560,
+      "prompt_cache_miss_tokens": 864057
+    },
+    "p2_remaining": "3.208898000",
+    "original_total_budget": "10",
+    "original_cumulative_known_cost": "3.636158000",
+    "original_unresolved_reservation": "3.154944",
+    "original_remaining": "3.208898000",
+    "historical_usage_complete": false,
+    "account_invoice_independently_verified": false,
+    "cost_basis": "frozen peak-ceiling usage calculation, not invoice; reservation turnover is not spending"
+  },
+  "audit": {
+    "dispatch_intents": 120,
+    "confirmed_http_200_responses_with_usage": 120,
+    "main_responses": 114,
+    "auxiliary_responses": 6,
+    "sdk_retry_entries": 8,
+    "sdk_retry_sends": 0,
+    "rejected_before_transport": 12,
+    "all_dispatches_had_prior_reservations": true,
+    "budget_bypass_observed": false,
+    "maximum_simultaneous_p2_known_cost_and_hold": "6.215536400",
+    "maximum_simultaneous_original_known_cost_and_hold": "9.995734400",
+    "active_baseline_processes_after_stop": 0,
+    "raw_experiment_credential_value_hits": 0,
+    "freeze_matches_preflight": true,
+    "worker_seconds_sum": 408.3005
+  },
+  "predecessors": [
+    {
+      "experiment_id": "p1-live-20260908-073600",
+      "known_cost": "0.2115294",
+      "unresolved_reservation": "3.154944",
+      "final_status": "infrastructure_blocked",
+      "task": "T01",
+      "tree_files": 156,
+      "tree_sha256": "8ff32fc2be25e3e4415777bd02f312140a0888a74ecf2496a7a4b2c665b983ef",
+      "unchanged": true
+    },
+    {
+      "experiment_id": "p1-t04-live-20260908-130239",
+      "known_cost": "0.4137246",
+      "unresolved_reservation": "0",
+      "final_status": "success",
+      "task": "T04",
+      "tree_files": 163,
+      "tree_sha256": "4cff62b36fbd87fa0c742ac84dd3c214e736614ad3c064601fe9af75873d0f18",
+      "unchanged": true
+    }
+  ],
+  "historical_registration": {
+    "tree_sha256": "3f73a3601886c9f6364035b27d696f1b195398d1c9db45f7e2ade1a658c72aec",
+    "unchanged": true
+  },
+  "failure_analysis": {
+    "T07": {
+      "category": "boundary_test_omission",
+      "evidence": "target test_unicode_empty: A_B produced a_b, expected ab; final.patch textkit/slug.py uses Unicode \\w, which retains underscore; generated tests omitted that case",
+      "sidecar": "accept/verifier_ok is not independent acceptance"
+    },
+    "T09": {
+      "category": "budget_admission_denied",
+      "first_rejected_request_id": 6,
+      "first_failure_stage": "reservation",
+      "remaining": "3.208898000",
+      "required_main_reservation": "3.217728000",
+      "shortfall": "0.008830000",
+      "further_rejected_request_ids": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "new_unknown_cost": false,
+      "classification_note": "retain frozen infrastructure_blocked label; this is a pre-send budget refusal, not evidence of HTTP/provider failure",
+      "runtime_note": "gateway final call has four upper-layer starts; SDK made 8 retry entries among 12 rejected transport entries; 0 retry sends",
+      "patch": "empty patch retained and replayed, target 0/4, original regression 4/4"
+    }
+  },
+  "priority_improvement": "Derive adversarial boundary self-tests from explicit requirement categories before completion (T07 punctuation/Unicode mismatch); no Agent change in this measurement."
+}

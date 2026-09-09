@@ -1,0 +1,150 @@
+diff --git a/tests/test_project_summary.py b/tests/test_project_summary.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f298d36ca5c619ad03baf9876546373db5882d92
+--- /dev/null
++++ b/tests/test_project_summary.py
+@@ -0,0 +1,70 @@
++"""Acceptance tests: project totals, --summary CLI, legacy project input."""
++import io
++import json
++from decimal import Decimal
++
++from worklog.cli import main
++from worklog.codec import dumps, loads
++from worklog.models import Entry
++from worklog.reports import project_totals
++
++
++def test_project_totals_groups_and_is_exact():
++    entries = [
++        Entry("a", Decimal("0.1"), project="alpha"),
++        Entry("b", Decimal("0.2"), project="alpha"),
++        Entry("c", Decimal("1.5"), project="beta"),
++    ]
++    totals = project_totals(entries)
++    assert totals == {"alpha": Decimal("0.3"), "beta": Decimal("1.5")}
++    assert totals["alpha"] == Decimal("0.3")  # exact; no binary float drift
++
++
++def test_project_totals_legacy_empty_project():
++    entries = [Entry("a", Decimal("1")), Entry("b", Decimal("2.5"))]
++    assert project_totals(entries) == {"": Decimal("3.5")}
++
++
++def test_codec_parses_project_and_defaults_legacy_missing():
++    assert loads('[{"title": "x", "hours": "1", "project": "p"}]') == [
++        Entry("x", Decimal("1"), project="p")
++    ]
++    assert loads('[{"title": "x", "hours": "1"}]') == [
++        Entry("x", Decimal("1"), project="")
++    ]
++    entry = Entry("x", Decimal("1.5"), project="p")
++    assert loads(dumps([entry])) == [entry]
++
++
++def test_summary_outputs_project_to_decimal_string():
++    data = json.dumps([
++        {"title": "a", "hours": "0.1", "project": "alpha"},
++        {"title": "b", "hours": "0.2", "project": "alpha"},
++        {"title": "c", "hours": "1.5"},
++    ])
++    out = io.StringIO()
++    main(["--summary"], io.StringIO(data), out)
++    assert json.loads(out.getvalue()) == {"alpha": "0.3", "": "1.5"}
++
++
++def test_summary_filters_archived_by_default_and_includes_with_flag():
++    data = json.dumps([
++        {"title": "a", "hours": "1", "project": "alpha"},
++        {"title": "b", "hours": "9", "project": "alpha", "archived": True},
++    ])
++    out = io.StringIO()
++    main(["--summary"], io.StringIO(data), out)
++    assert json.loads(out.getvalue()) == {"alpha": "1"}
++    out = io.StringIO()
++    main(["--summary", "--include-archived"], io.StringIO(data), out)
++    assert json.loads(out.getvalue()) == {"alpha": "10"}
++
++
++def test_default_list_output_preserved():
++    data = json.dumps([
++        {"title": "a", "hours": "2", "project": "alpha"},
++        {"title": "gone", "hours": "3", "project": "beta", "archived": True},
++    ])
++    out = io.StringIO()
++    main([], io.StringIO(data), out)
++    assert json.loads(out.getvalue()) == [{"title": "a", "hours": "2"}]
+diff --git a/worklog/cli.py b/worklog/cli.py
+index afeee28903236bfa6e91ef7cf65768d8db4754fd..7e9e0f8c22982f76751d9e845e14b963b61f53e5 100644
+--- a/worklog/cli.py
++++ b/worklog/cli.py
+@@ -3,17 +3,24 @@ import argparse
+ import json
+ import sys
+ from .codec import loads
++from .reports import project_totals
+ from .store import select
+ 
+ def render(entries):
+     return [dict(title=e.title, hours=str(e.hours)) for e in entries]
+ 
++def render_summary(entries):
++    return {project: str(total) for project, total in project_totals(entries).items()}
++
+ def main(argv=None, stdin=None, stdout=None):
+     parser = argparse.ArgumentParser()
+     parser.add_argument("--include-archived", action="store_true")
++    parser.add_argument("--summary", action="store_true")
+     args = parser.parse_args(argv)
+-    entries = select(loads((stdin or sys.stdin).read()))
+-    print(json.dumps(render(entries)), file=stdout or sys.stdout)
++    entries = select(loads((stdin or sys.stdin).read()),
++                     include_archived=args.include_archived)
++    output = render_summary(entries) if args.summary else render(entries)
++    print(json.dumps(output), file=stdout or sys.stdout)
+ 
+ if __name__ == "__main__":
+     main()
+diff --git a/worklog/codec.py b/worklog/codec.py
+index 29c1ad60a57d706a3df99c3739dfe9eb8ae7c443..2edf2661a55798c0599dd9a071745934d74c35d9 100644
+--- a/worklog/codec.py
++++ b/worklog/codec.py
+@@ -4,9 +4,11 @@ from decimal import Decimal
+ from .models import Entry
+ 
+ def dumps(entries):
+-    return json.dumps([dict(title=e.title, hours=str(e.hours), archived=e.archived)
++    return json.dumps([dict(title=e.title, hours=str(e.hours),
++                            project=e.project, archived=e.archived)
+                        for e in entries])
+ 
+ def loads(text):
+     return [Entry(row["title"], Decimal(row["hours"]),
++                  project=row.get("project", ""),
+                   archived=row.get("archived", False)) for row in json.loads(text)]
+diff --git a/worklog/reports.py b/worklog/reports.py
+index 694927f7fb7580fdd086759c695252851e9f309d..f87932f85989fe09cb6471fba96c1d735fdd407c 100644
+--- a/worklog/reports.py
++++ b/worklog/reports.py
+@@ -7,3 +7,9 @@ def total_hours(entries):
+ def average_hours(entries):
+     values = list(entries)
+     return total_hours(values) / len(values)
++
++def project_totals(entries):
++    totals = {}
++    for entry in entries:
++        totals[entry.project] = totals.get(entry.project, Decimal(0)) + entry.hours
++    return totals
+diff --git a/worklog/store.py b/worklog/store.py
+index 26d734c4c068af510205d12a9a354ed4272bb4df..a95e96ac62d6be1aa066cfa076afc387752d0138 100644
+--- a/worklog/store.py
++++ b/worklog/store.py
+@@ -1,5 +1,7 @@
+ """In-memory entry selection and batch additions."""
+ def select(entries, include_archived=False):
++    if include_archived:
++        return list(entries)
+     return [entry for entry in entries if not entry.archived]
+ 
+ def append_entries(existing, incoming):

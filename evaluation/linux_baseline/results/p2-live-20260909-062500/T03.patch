@@ -1,0 +1,50 @@
+diff --git a/tests/test_top_words.py b/tests/test_top_words.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..654f007ac9b6f0e1d646a0ddeb5ea30f59686a6f
+--- /dev/null
++++ b/tests/test_top_words.py
+@@ -0,0 +1,34 @@
++"""Deterministic top_words ordering tests."""
++from textkit.stats import top_words
++
++
++def test_frequency_descending():
++    result = top_words("b b b a a c")
++    assert [word for word, _ in result] == ["b", "a", "c"]
++    assert [count for _, count in result] == [3, 2, 1]
++
++
++def test_ties_broken_alphabetically():
++    # "zebra" and "apple" both occur twice: apple must come first.
++    assert top_words("zebra zebra apple apple")[0] == ("apple", 2)
++    words = [word for word, _ in top_words("dog cat bird dog cat", limit=2)]
++    assert words == ["cat", "dog"]
++
++
++def test_case_insensitive_and_deterministic():
++    # Mixed case collapses to the same tokens, so ties resolve on the
++    # lowercased word in alphabetical order.
++    result = top_words("Zebra APPLE apple zebra")
++    assert result == [("apple", 2), ("zebra", 2)]
++
++
++def test_limit_preserved():
++    assert len(top_words("x a x b x c", limit=2)) == 2
++    assert top_words("x a x b x c", limit=2) == [("x", 3), ("a", 1)]
++
++
++def test_default_limit_three():
++    result = top_words("one one two two three three four four five five")
++    assert len(result) == 3
++    counts = [count for _, count in result]
++    assert counts == sorted(counts, reverse=True)
+diff --git a/textkit/stats.py b/textkit/stats.py
+index 4cfbc35617407d35164230d95b0c700ad7a588a7..fce97c2ca76fbf05996099ef1e6152bf85033f91 100644
+--- a/textkit/stats.py
++++ b/textkit/stats.py
+@@ -3,4 +3,4 @@ from collections import Counter
+ 
+ def top_words(text, limit=3):
+     counts = Counter(text.lower().split())
+-    return sorted(counts.items(), key=lambda item: -item[1])[:limit]
++    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]

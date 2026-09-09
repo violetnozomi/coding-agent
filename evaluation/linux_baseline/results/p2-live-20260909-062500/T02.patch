@@ -1,0 +1,57 @@
+diff --git a/tests/test_reports.py b/tests/test_reports.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..41481365a5e94e6ecc46a7397379ccacadda5d88
+--- /dev/null
++++ b/tests/test_reports.py
+@@ -0,0 +1,35 @@
++"""Tests for exact Decimal reporting."""
++from decimal import Decimal
++from worklog.models import Entry
++from worklog.reports import total_hours, average_hours
++
++def test_total_hours_is_exact_decimal_sum():
++    entries = [Entry("a", Decimal("1.1")), Entry("b", Decimal("2.2"))]
++    # 1.1 + 2.2 as floats is 3.3000000000000003; Decimal math must be exact.
++    assert total_hours(entries) == Decimal("3.3")
++
++def test_total_hours_result_is_decimal():
++    entries = [Entry("a", Decimal("2")), Entry("b", Decimal("4"))]
++    result = total_hours(entries)
++    assert result == Decimal("6")
++    assert isinstance(result, Decimal)
++
++def test_total_hours_accepts_iterator():
++    def gen():
++        yield Entry("a", Decimal("0.1"))
++        yield Entry("b", Decimal("0.2"))
++        yield Entry("c", Decimal("0.3"))
++    assert total_hours(gen()) == Decimal("0.6")
++
++def test_total_hours_empty_input_returns_decimal_zero():
++    assert total_hours([]) == Decimal(0)
++    assert total_hours(iter(())) == Decimal(0)
++    assert isinstance(total_hours(iter(())), Decimal)
++
++def test_average_hours_preserved_for_nonempty():
++    entries = [Entry("a", Decimal("2")), Entry("b", Decimal("3"))]
++    assert average_hours(entries) == Decimal("2.5")
++
++def test_average_hours_accepts_iterator():
++    entries = [Entry("a", Decimal("1")), Entry("b", Decimal("2")), Entry("c", Decimal("3"))]
++    assert average_hours(iter(entries)) == Decimal("2")
+diff --git a/worklog/reports.py b/worklog/reports.py
+index 694927f7fb7580fdd086759c695252851e9f309d..b728d6e664d22803bc3d856bd22527135ff318ab 100644
+--- a/worklog/reports.py
++++ b/worklog/reports.py
+@@ -2,7 +2,10 @@
+ from decimal import Decimal
+ 
+ def total_hours(entries):
+-    return Decimal(str(sum(float(entry.hours) for entry in entries)))
++    total = Decimal(0)
++    for entry in entries:
++        total += entry.hours
++    return total
+ 
+ def average_hours(entries):
+     values = list(entries)

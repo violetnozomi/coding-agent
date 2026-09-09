@@ -1,0 +1,50 @@
+diff --git a/tests/test_lower.py b/tests/test_lower.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..761e96bcec266cdfd54a6ad8b964ff83edf79f1c
+--- /dev/null
++++ b/tests/test_lower.py
+@@ -0,0 +1,21 @@
++"""Acceptance tests: lower option through library and CLI."""
++import io
++from textkit.cli import main
++from textkit.pipeline import normalize_lines
++
++def test_normalize_lines_lower():
++    assert normalize_lines([" Hello   World "], lower=True) == ["hello world"]
++
++def test_normalize_lines_default_retains_case():
++    assert normalize_lines([" Hello   World "]) == ["Hello World"]
++
++def run_cli(argv, text):
++    stream = io.StringIO()
++    main(argv=argv, stdin=io.StringIO(text), stdout=stream)
++    return stream.getvalue()
++
++def test_cli_lower():
++    assert run_cli(["--lower"], "  Hello   World  \n") == "hello world\n"
++
++def test_cli_default_retains_case():
++    assert run_cli([], "  Hello   World  \n") == "Hello World\n"
+diff --git a/textkit/cli.py b/textkit/cli.py
+index d71312ee7364f8f66b34bfdba28ce9007a6904ff..805e1efe3fd79f370a6d3add59ecafd825a0a16d 100644
+--- a/textkit/cli.py
++++ b/textkit/cli.py
+@@ -7,7 +7,7 @@ def main(argv=None, stdin=None, stdout=None):
+     parser = argparse.ArgumentParser()
+     parser.add_argument("--lower", action="store_true")
+     args = parser.parse_args(argv)
+-    for line in normalize_lines((stdin or sys.stdin).readlines()):
++    for line in normalize_lines((stdin or sys.stdin).readlines(), lower=args.lower):
+         print(line, file=stdout or sys.stdout)
+ 
+ if __name__ == "__main__":
+diff --git a/textkit/pipeline.py b/textkit/pipeline.py
+index 678d29ae5bb947d66ea791cebcfd43b4f8125ca5..cb33b723f0c071c621afea9e2a39cd8232cdb7ba 100644
+--- a/textkit/pipeline.py
++++ b/textkit/pipeline.py
+@@ -4,4 +4,4 @@ def transform(text, lower=False):
+     return value.lower() if lower else value
+ 
+ def normalize_lines(lines, lower=False):
+-    return [transform(line) for line in lines]
++    return [transform(line, lower=lower) for line in lines]

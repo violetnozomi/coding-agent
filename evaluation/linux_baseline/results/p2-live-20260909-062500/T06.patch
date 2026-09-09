@@ -1,0 +1,111 @@
+diff --git a/tests/test_archived.py b/tests/test_archived.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..544bdc80012a0124e01441135f55fc64532959c3
+--- /dev/null
++++ b/tests/test_archived.py
+@@ -0,0 +1,69 @@
++"""Acceptance tests: archived-aware selection in store and CLI."""
++import io
++import json
++from decimal import Decimal
++
++from worklog.models import Entry
++from worklog.store import select
++from worklog.cli import main
++
++ACTIVE = Entry("a", Decimal("2"))
++ARCHIVED = Entry("z", Decimal("7"), archived=True)
++ACTIVE2 = Entry("b", Decimal("3"))
++
++
++def test_store_default_excludes_archived_preserving_order():
++    entries = [ACTIVE, ARCHIVED, ACTIVE2, Entry("c", Decimal("1"), archived=True)]
++    assert select(entries) == [ACTIVE, ACTIVE2]
++
++
++def test_store_include_archived_returns_all_in_order():
++    entries = [ACTIVE, ARCHIVED, ACTIVE2]
++    assert select(entries, include_archived=True) == entries
++
++
++def test_store_include_archived_is_not_mutating():
++    entries = [ACTIVE, ARCHIVED, ACTIVE2]
++    before = list(entries)
++    selected = select(entries, include_archived=True)
++    assert selected is not entries
++    assert selected == entries == before
++
++
++def test_store_default_does_not_mutate_input():
++    entries = [ACTIVE, ARCHIVED, ACTIVE2]
++    before = list(entries)
++    select(entries)
++    assert entries == before
++    assert [e.archived for e in entries] == [e.archived for e in before]
++
++
++def test_store_accepts_any_iterable_without_reordering():
++    selected = select((ACTIVE2, ARCHIVED, ACTIVE), include_archived=True)
++    assert selected == [ACTIVE2, ARCHIVED, ACTIVE]
++    selected_default = select((ARCHIVED, ACTIVE2, ARCHIVED))
++    assert selected_default == [ACTIVE2]
++
++
++def cli_run(argv, payload):
++    out = io.StringIO()
++    main(argv, io.StringIO(payload), out)
++    return json.loads(out.getvalue())
++
++
++PAYLOAD = json.dumps([
++    {"title": "a", "hours": "2"},
++    {"title": "z", "hours": "7", "archived": True},
++    {"title": "b", "hours": "3"},
++    {"title": "c", "hours": "1", "archived": True},
++])
++
++
++def test_cli_default_excludes_archived_in_order():
++    titles = [row["title"] for row in cli_run([], PAYLOAD)]
++    assert titles == ["a", "b"]
++
++
++def test_cli_include_archived_flag_lists_archived_in_order():
++    titles = [row["title"] for row in cli_run(["--include-archived"], PAYLOAD)]
++    assert titles == ["a", "z", "b", "c"]
+diff --git a/worklog/cli.py b/worklog/cli.py
+index afeee28903236bfa6e91ef7cf65768d8db4754fd..0eb880d21fc033e6151c45ab3841c30cc067d800 100644
+--- a/worklog/cli.py
++++ b/worklog/cli.py
+@@ -10,9 +10,11 @@ def render(entries):
+ 
+ def main(argv=None, stdin=None, stdout=None):
+     parser = argparse.ArgumentParser()
+-    parser.add_argument("--include-archived", action="store_true")
++    parser.add_argument("--include-archived", action="store_true",
++                        help="also list archived entries")
+     args = parser.parse_args(argv)
+-    entries = select(loads((stdin or sys.stdin).read()))
++    entries = select(loads((stdin or sys.stdin).read()),
++                     include_archived=args.include_archived)
+     print(json.dumps(render(entries)), file=stdout or sys.stdout)
+ 
+ if __name__ == "__main__":
+diff --git a/worklog/store.py b/worklog/store.py
+index 26d734c4c068af510205d12a9a354ed4272bb4df..5023a0f01a58ae79d42bc32905522cf355de888c 100644
+--- a/worklog/store.py
++++ b/worklog/store.py
+@@ -1,6 +1,12 @@
+ """In-memory entry selection and batch additions."""
+ def select(entries, include_archived=False):
+-    return [entry for entry in entries if not entry.archived]
++    """Return entries in input order, excluding archived ones by default.
++
++    Archived entries are kept only when ``include_archived`` is true.
++    The input collection is never mutated: a fresh list is returned.
++    """
++    return [entry for entry in entries
++            if include_archived or not entry.archived]
+ 
+ def append_entries(existing, incoming):
+     for entry in incoming:
