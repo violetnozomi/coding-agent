@@ -1,5 +1,9 @@
 # Linux terminal — first real-model acceptance
 
+Follow-up: [stream timeout repair](terminal-stream-timeout-fix.md) is verified on
+the repaired installed wheel with a controlled Provider/real PTY. No paid retry
+was performed; this original failure, patch and cost record remain unchanged.
+
 Status: **BLOCKED**. One ordinary coding task was submitted through the installed
 interactive terminal. The model changed the implementation correctly, but the
 run ended with an internal error before adding/running tests or producing a final
