@@ -75,10 +75,10 @@ class TerminalSessionController:
         return self.environment._compact_messages(history, focus=focus)
 
     def diff(self) -> str:
-        from nz_coder.state.changes import render_latest_diff
+        from nz_coder.state.changes import render_session_diff
 
         tracker = getattr(self.environment, "change_tracker", None)
-        return tracker.render_diff() if tracker is not None else render_latest_diff()
+        return render_session_diff(self.environment.workdir, self.session_id, tracker)
 
     def processes(self) -> list[dict]:
         from nz_coder.runtime.process.process_service import workspace_process_service

@@ -15,7 +15,7 @@ from rich.table import Table
 
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.changes import (
-    render_latest_diff,
+    render_session_diff,
 )
 from nz_coder.state.memory import memory_mgr
 from nz_coder.providers.models import (
@@ -1522,14 +1522,17 @@ def handle_trace(ctx: CommandContext) -> None:
 
 
 def handle_diff(ctx: CommandContext) -> None:
+    from rich.text import Text
+
     result = (
         ctx.controller.diff()
         if ctx.controller is not None
-        else ctx.agent.change_tracker.render_diff()
-        if ctx.agent.change_tracker
-        else render_latest_diff()
+        else render_session_diff(
+            getattr(ctx.agent, "workdir", current_workdir()), ctx.session_id,
+            getattr(ctx.agent, "change_tracker", None),
+        )
     )
-    ctx.console.print(result)
+    ctx.console.print(Text(result))
 
 
 def handle_undo(ctx: CommandContext) -> None:

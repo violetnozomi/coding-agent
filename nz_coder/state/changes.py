@@ -8,8 +8,8 @@ import uuid
 from pathlib import Path
 
 from nz_coder.protocol.message_schema import is_synthetic_user_message
-from nz_coder.state.workdir import current_derived_path, current_workdir
-from nz_coder.state.sessions import session_change_dir, write_session_runtime_json
+from nz_coder.state.workdir import current_derived_path, current_workdir, scoped_workdir
+from nz_coder.state.sessions import scoped_session, session_change_dir, session_dir, write_session_runtime_json
 
 
 class ChangeTracker:
@@ -126,18 +126,70 @@ def latest_change_file(change_dir: Path = None) -> Path | None:
     return files[0] if files else None
 
 
-def load_change_file(path: Path | None = None) -> dict:
+def load_change_file(path: Path | None = None, *, strict: bool = False) -> dict:
     target = path or latest_change_file()
-    if not target or not target.exists():
+    if not target or (not strict and not target.exists()):
         return {}
     try:
         return json.loads(target.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
+        if strict:
+            raise
         return {}
 
 
 def render_latest_diff() -> str:
     return render_change_diff(load_change_file())
+
+
+def render_session_diff(workspace: Path, session_id: str, tracker: ChangeTracker | None = None) -> str:
+    """Read this Session's recorded snapshots without changing tracker/Undo ownership."""
+    try:
+        with scoped_workdir(workspace), scoped_session(session_id):
+            base = session_change_dir(session_id)
+            # Artifact links must not redirect review into another Session.
+            if any(path.is_symlink() for path in (base, *base.parents)
+                   if path == session_dir() or session_dir() in path.parents):
+                raise ValueError
+            target = tracker.path if tracker is not None else None
+            if target is not None:
+                if tracker.change_dir != base or target.parent != base or target.name != f"{tracker.run_id}.json":
+                    raise ValueError
+                if target.is_symlink():
+                    raise ValueError
+                try:
+                    target.stat()
+                except FileNotFoundError:
+                    target = None
+            if target is None:
+                target = latest_change_file(base)
+            if target is None:
+                return "No agent file changes recorded."
+            if target.is_symlink():
+                raise ValueError
+            payload = load_change_file(target, strict=True)
+            if (not isinstance(payload, dict)
+                    or payload.get("workspace") != str(current_workdir())
+                    or payload.get("run_id") != target.stem
+                    or payload.get("session_id", session_id) != session_id
+                    or not isinstance(payload.get("changes"), list)):
+                raise ValueError
+            for item in payload["changes"]:
+                if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+                    raise ValueError
+                path = Path(item["path"])
+                if not item["path"] or path.is_absolute() or ".." in path.parts:
+                    raise ValueError
+                for stage in ("before", "after"):
+                    exists = item.get(f"{stage}_exists")
+                    content = item.get(stage)
+                    if exists is not None and type(exists) is not bool:
+                        raise ValueError
+                    if ((content is not None or exists is True) and not isinstance(content, str)):
+                        raise ValueError
+            return f"Session: {session_id}\n" + render_change_diff(payload)
+    except (OSError, ValueError, TypeError):
+        return "Cannot review recorded Agent changes: unreadable, invalid or mismatched change record."
 
 
 def current_change_payload(payload: dict | None = None) -> dict:
@@ -222,21 +274,30 @@ def deleted_files_from_payload(payload: dict) -> list[str]:
 def render_change_diff(payload: dict) -> str:
     if not payload or not payload.get("changes"):
         return "No agent file changes recorded."
-    sections = [f"Change set: {payload.get('run_id', '-')}", f"Workspace: {payload.get('workspace', '-')}", ""]
+    sections = ["Recorded Agent changes (historical snapshots, including undone edits; not current disk).",
+                f"Change set: {payload.get('run_id', '-')}", f"Workspace: {payload.get('workspace', '-')}", ""]
     for change in payload["changes"]:
+        sections.append(f"## {change['path']}")
+        if (change.get("after_exists") is None or change.get("before_exists") is None
+                or change.get("before_recorded") is False):
+            sections.append("(incomplete snapshot: before/after not confirmed; no deletion inferred)")
+            continue
         before = change.get("before", "") if change.get("before_exists") else ""
-        # after 为 None 表示工具中断、after 状态未记录，渲染为空字符串。
         after_exists = change.get("after_exists")
         after = (change.get("after") or "") if after_exists else ""
+        if not change.get("before_exists") and after_exists:
+            sections.append("(added file)")
+        elif change.get("before_exists") and not after_exists:
+            sections.append("(deleted file)")
         diff = "".join(difflib.unified_diff(
             before.splitlines(keepends=True),
             after.splitlines(keepends=True),
             fromfile=f"a/{change['path']}",
             tofile=f"b/{change['path']}",
         ))
-        sections.append(f"## {change['path']}")
         sections.append(diff or "(no changes)")
-    return "\n".join(sections).rstrip()
+    return "".join(char if char.isprintable() or char in "\n\t" else f"\\x{ord(char):02x}"
+                   for char in "\n".join(sections).rstrip())
 
 
 def revert_latest() -> str:
