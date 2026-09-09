@@ -353,3 +353,8 @@ post-restart coding, Windows/HTTP, mouse/clipboard, model ranking, A/B or P2 wor
 Stop after this one real task; retain restored-diff and pipeline-display limitations.
 
 [^1]: DeepSeek. Pricing, preserved official source read 2026-09-09, DeepSeek-V4-Pro-0813. https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
+
+The separately versioned [restored-diff repair](terminal-restored-diff-fix.md)
+subsequently fixed the empty review after Session restore using local tests and
+an installed loopback-Provider PTY only. It added no real model calls or charges
+and does not replace this live attempt's source version, result or evidence.

@@ -1,0 +1,25 @@
+{
+  "status": "RESTORED_DIFF_FIXED_AND_INSTALLED_PTY_VERIFIED",
+  "source": "4f4a5af5a035fa81554e0c836ebfb164087f318b",
+  "wheel_sha256": "4b35dbdaa1fb4f3ed269484afad38058d3b004f8ef19a38b2ebdc049f4a66d3a",
+  "session_id": "session-20260910_002935-b0441b3d",
+  "recorded_run": "20260910_002935_55fa9649",
+  "new_process_session": "session-20260910_003052-70d2cbc8",
+  "new_process_run": "20260910_003052_21d29175",
+  "restored_tracker_run": "20260910_003111_12d447f8",
+  "restored_tracker_record_exists": false,
+  "recorded_changes": 2,
+  "controlled_loopback_responses": 6,
+  "restore_requests": 0,
+  "real_model_requests": 0,
+  "new_cost_cny": 0,
+  "cli_exit_codes": [
+    0,
+    0
+  ],
+  "termios_restored": true,
+  "files_index_and_change_record_unchanged": true,
+  "original_files": 153,
+  "original_sha256": "fecf6a776007003649c9341a6d9887ca9a61bc471887eb37c67f3426b3c50bbf",
+  "fixture_stopped": true
+}
