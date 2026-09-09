@@ -136,6 +136,9 @@ class ProductionToolResultProjector:
                 "content": output,
             }
             tool_message.update(_semantic_evidence_metadata(context, result))
+            from nz_coder.runtime.verification.constraint_boundary import project_result
+
+            tool_message.update(project_result(context.runtime_state, result, messages))
             if result.attachments and not result.dispatch_failed and processor is None:
                 tool_message["_nz_attachments"] = list(result.attachments)
             messages.append(tool_message)

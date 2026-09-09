@@ -1573,6 +1573,11 @@ class SidecarVerifierHook:
             *(str(item) for item in state.get("acceptance_criteria") or []),
             *_render_contract_criteria(state),
         ]
+        from nz_coder.runtime.verification.constraint_boundary import render
+
+        boundary_context = render(state, context.transcript)
+        if boundary_context:
+            criteria.append(boundary_context)
         if blocked_environment:
             blocker = verification.get("environment_blocker") or {}
             criteria.append(
@@ -1661,6 +1666,11 @@ class SidecarVerifierHook:
     async def __call__(self, context) -> StopHookDecision:
         verifier_context, metrics, compatibility_risk = self._evidence(context)
         state = context.runtime_state if isinstance(context.runtime_state, dict) else {}
+        from nz_coder.runtime.verification.constraint_boundary import failure_feedback
+
+        boundary_decision = failure_feedback(getattr(self._loop, "runtime_state", None), context.transcript)
+        if boundary_decision is not None:
+            return boundary_decision
         accepted_cache_key = self._accepted_cache_key(
             verifier_context,
             metrics,

@@ -372,6 +372,8 @@ class RuntimeState:
     requirement_ledger: dict = field(default_factory=dict)
     completion_gate_prompts: int = 0
     completion_gate_signature: str = ""
+    constraint_boundary_feedback_count: int = 0
+    constraint_boundary_origin: str = ""
     initial_task_text: str = ""
     current_round_instruction_text: str = ""
     initial_plan_complexity: str = ""
@@ -480,6 +482,8 @@ class RuntimeState:
         self.requirement_ledger = {}
         self.completion_gate_prompts = 0
         self.completion_gate_signature = ""
+        self.constraint_boundary_feedback_count = 0
+        self.constraint_boundary_origin = ""
         self.initial_task_text = ""
         self.current_round_instruction_text = ""
         self.initial_plan_complexity = ""
@@ -1019,6 +1023,7 @@ class RuntimeState:
             "replan_count": 0,
             "open_todo_items": 0,
             "completion_gate_prompts": 0,
+            "constraint_boundary_feedback_count": 0,
             "verification_attempts": 0,
             "broad_test_attempts": 0,
             "exact_test_attempts": 0,
@@ -1146,6 +1151,7 @@ class RuntimeState:
             "task_mode",
             "plan_text",
             "completion_gate_signature",
+            "constraint_boundary_origin",
             "initial_task_text",
             "current_round_instruction_text",
             "initial_plan_complexity",

@@ -205,6 +205,7 @@ REFLECTION_MAX_ATTEMPTS = int(get("NZ_REFLECTION_MAX_ATTEMPTS", "2"))
 
 # Planning / Replanning. 默认关闭，避免改变现有测试和基准行为。
 PLANNING_ENABLED = get("NZ_PLANNING_ENABLED", "").lower() in ("1", "true", "yes", "on")
+CONSTRAINT_BOUNDARY_SELFTEST_ENABLED = get("NZ_CONSTRAINT_BOUNDARY_SELFTEST_ENABLED", "0").lower() in ("1", "true", "yes", "on")
 PLANNING_TASK_MODES = {"feature", "refactor", "test", "project_creation"}
 REPLAN_IDLE_TURNS = int(get("NZ_REPLAN_IDLE_TURNS", "5"))
 REPLAN_MAX_ATTEMPTS = int(get("NZ_REPLAN_MAX_ATTEMPTS", "2"))

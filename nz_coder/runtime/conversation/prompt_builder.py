@@ -42,6 +42,9 @@ class ProductionPromptBuilder:
             return [{"role": "system", "content": host.system_prompt}, *sanitized]
 
         task_query = _task_query(host, messages)
+        from nz_coder.runtime.verification.constraint_boundary import render
+
+        boundary_context = render(host.runtime_state, messages)
         scratch = host._sp.build_prompt_block()
         memory = host._memory_block(task_query)
         progress_nudges = host.runtime_state.strict_progress_nudges
@@ -54,6 +57,7 @@ class ProductionPromptBuilder:
             )
         dynamic_state = "\n".join(
             part for part in (
+                boundary_context,
                 host._project_profile_block(),
                 state,
                 host._hook_prompt_block(),

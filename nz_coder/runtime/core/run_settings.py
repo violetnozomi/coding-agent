@@ -139,6 +139,7 @@ class RunSettings:
     auto_mode_classifier_infra_failures: int
     auto_mode_classifier_infra_window: float
     snapshot: ConfigSnapshot | None = field(default=None, repr=False)
+    constraint_boundary_selftest_enabled: bool = False
 
     def __post_init__(self) -> None:
         """Keep credential text usable while making dataclass projections safe."""
@@ -161,6 +162,7 @@ class RunSettings:
         process_buffer = max(1, integer("NZ_PROCESS_BUFFER_BYTES", 2 * 1024 * 1024))
         max_turns = max(1, integer("MAX_AGENT_TURNS", 500))
         return cls(
+            constraint_boundary_selftest_enabled=boolean("NZ_CONSTRAINT_BOUNDARY_SELFTEST_ENABLED", False),
             max_agent_turns=max_turns,
             nominal_agent_turns=min(
                 max_turns, max(1, integer("NZ_NOMINAL_AGENT_TURNS", 200)),
