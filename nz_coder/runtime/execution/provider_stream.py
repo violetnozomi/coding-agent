@@ -5,6 +5,7 @@ import time
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.message_schema import assistant_error_from_exception
+from nz_coder.protocol.public_error import PublicError, public_error_from_wire, to_public_error
 from nz_coder.runtime.model_gateway import ModelCall, ModelCallPurpose, ModelCallStatus
 from nz_coder.runtime.conversation.model_result import LLMResult
 from nz_coder.runtime.execution.services import (
@@ -171,7 +172,9 @@ def project_streaming_turn(
     result = host._gateway_outcome_result(outcome)
     if not attempt.is_active():
         return result
-    if outcome.status is ModelCallStatus.COMPLETED:
+    if outcome.status is ModelCallStatus.COMPLETED or (
+        tools_executed and outcome.provider_metadata.get("stream_error")
+    ):
         flushed = (
             attempt.flush_text(force=True)
             + attempt.flush_reasoning(force=True)
@@ -179,7 +182,8 @@ def project_streaming_turn(
         if flushed:
             checkpoints.note(flushed)
         checkpoints.flush()
-        host.recovery.record_success()
+        if not outcome.provider_metadata.get("stream_error") and tool_error is None:
+            host.recovery.record_success()
         return _settle_stream_tools(
             host,
             result,
@@ -258,19 +262,23 @@ def _settle_stream_tools(
                     result.extra["provider_extra"] = provider_extra
                 else:
                     result.extra.pop("provider_extra", None)
-            result.post_tool_stream_error = str(
-                stream_error.get("message") or "provider stream failed"
+            public = public_error_from_wire(stream_error) or PublicError(
+                "stream_error", "Stream failed after tool handling. Review /diff before continuing."
             )
+            result.post_tool_stream_error = public.message
             result.assistant_error = assistant_error_from_exception(
-                RuntimeError(result.post_tool_stream_error),
+                public,
                 provider_id=host.provider_id,
                 is_retryable=False,
             )
         if tool_error is not None:
             if isinstance(tool_error, StreamToolExecutionCancelled):
                 raise tool_error
-            result.post_tool_stream_error = str(tool_error)
-            result.assistant_error = assistant_error_from_exception(tool_error)
+            # A tool callback failed before we resumed the stream. It is the
+            # first cause even if that subsequent read also failed.
+            public = _tool_public_error(tool_error)
+            result.post_tool_stream_error = public.message
+            result.assistant_error = assistant_error_from_exception(public, is_retryable=False)
         return result
     if handler is None or not result.tool_calls:
         return result
@@ -280,8 +288,9 @@ def _settle_stream_tools(
     except StreamToolExecutionCancelled:
         raise
     except StreamToolExecutionFailed as exc:
-        result.post_tool_stream_error = str(exc)
-        result.assistant_error = assistant_error_from_exception(exc)
+        public = _tool_public_error(exc)
+        result.post_tool_stream_error = public.message
+        result.assistant_error = assistant_error_from_exception(public, is_retryable=False)
     finally:
         result.stream_tool_wait_ms = round(
             (time.perf_counter() - started) * 1000,
@@ -289,3 +298,13 @@ def _settle_stream_tools(
         )
     result.tools_executed_in_stream = not bool(result.post_tool_stream_error)
     return result
+
+
+def _tool_public_error(error: BaseException) -> PublicError:
+    public = to_public_error(error)
+    return PublicError(
+        "tool_execution_error",
+        "Tool handling failed. No automatic retry; review tool results and /diff before continuing.",
+        False,
+        {**public.metadata, "origin": "tool_execution", "phase": "execute_tools"},
+    )

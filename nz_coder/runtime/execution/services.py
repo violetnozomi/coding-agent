@@ -12,6 +12,7 @@ import time
 from typing import Awaitable, Callable
 
 from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, SYNTHETIC_USER_KEY
+from nz_coder.protocol.public_error import PublicRuntimeError, to_public_error
 from nz_coder.foundation.async_utils import start_background_coro
 from nz_coder.runtime.conversation.context_manager import ProductionContextManager
 from nz_coder.runtime.core.contracts import RuntimeServices
@@ -34,7 +35,7 @@ class StreamToolExecutionCancelled(Exception):
     """Internal bridge signal after async tool execution has settled cancel."""
 
 
-class StreamToolExecutionFailed(Exception):
+class StreamToolExecutionFailed(PublicRuntimeError):
     """Internal bridge signal for a non-retryable local tool batch failure."""
 
 
@@ -68,7 +69,7 @@ class _StreamToolBridge:
         except concurrent.futures.CancelledError as error:
             raise StreamToolExecutionCancelled from error
         except Exception as error:
-            raise StreamToolExecutionFailed(str(error)) from error
+            raise StreamToolExecutionFailed(to_public_error(error)) from error
         finally:
             with self._lock:
                 if self._future is future:

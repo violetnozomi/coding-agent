@@ -7,6 +7,14 @@ import time
 from collections.abc import Callable, Iterator
 
 
+class ProviderStreamTimeout(TimeoutError):
+    """Local guard expiry, distinct from a transport/SDK timeout."""
+
+    def __init__(self, kind: str, seconds: float):
+        self.timeout_kind = kind
+        super().__init__(f"Provider {kind} timeout after {seconds:g}s")
+
+
 def close_stream(stream) -> None:
     """Best-effort close at the stream ownership boundary."""
     close = getattr(stream, "close", None)
@@ -24,7 +32,7 @@ def iter_stream_with_timeouts(
     hard_timeout_seconds: float,
     cancelled: Callable[[], bool] | None = None,
 ) -> Iterator[object]:
-    """Pull a blocking iterator behind idle, hard, and cancellation guards."""
+    """Guard active Provider waits; hard includes all elapsed consumer time."""
     events: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=256)
     stopped = threading.Event()
     consumed = threading.Event()
@@ -62,11 +70,9 @@ def iter_stream_with_timeouts(
             if cancelled is not None and cancelled():
                 return
             if now - started >= hard:
-                raise TimeoutError(f"Provider hard timeout after {hard:g}s")
+                raise ProviderStreamTimeout("hard", hard)
             if idle and now - last_activity >= idle:
-                raise TimeoutError(
-                    f"Stream stalled or delayed response ({idle:g}s idle)"
-                )
+                raise ProviderStreamTimeout("idle", idle)
             wait_for = min(0.05, max(0.001, hard - (now - started)))
             if idle:
                 wait_for = min(
@@ -82,6 +88,10 @@ def iter_stream_with_timeouts(
                 try:
                     yield value
                 finally:
+                    # The reader is waiting for consumed, not for the Provider.
+                    # Start the next idle window only when the consumer returns.
+                    # Do not move started: hard remains an absolute deadline.
+                    last_activity = time.monotonic()
                     consumed.set()
             elif kind == "error":
                 raise value

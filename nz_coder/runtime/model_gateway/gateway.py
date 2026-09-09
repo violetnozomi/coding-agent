@@ -12,6 +12,7 @@ from typing import Callable
 from nz_coder.runtime.agent.agent_resilience import ProviderAttemptController
 from nz_coder.runtime.model_gateway.errors import (
     classify_provider_error,
+    provider_status_code,
     should_fallback_for_forced_tool_choice,
 )
 from nz_coder.runtime.model_gateway.models import (
@@ -28,9 +29,9 @@ from nz_coder.runtime.model_gateway.usage import (
 )
 from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.conversation.think_tags import ThinkTagDemux, demux_think_tags
-from nz_coder.runtime.model_gateway.stream import iter_stream_with_timeouts
+from nz_coder.runtime.model_gateway.stream import ProviderStreamTimeout, iter_stream_with_timeouts
 from nz_coder.providers.capabilities import configured_model_capabilities
-from nz_coder.protocol.public_error import to_public_error
+from nz_coder.protocol.public_error import PublicError, to_public_error
 
 
 def _field(owner, name: str):
@@ -831,17 +832,47 @@ class ProductionModelGateway:
                     continue
                 classification = classify_provider_error(exc)
                 public_error = to_public_error(exc)
-                if classification == "context_overflow":
+                if classification == "context_overflow" and not side_effect_committed:
                     return terminal("context_overflow", public_error.message)
+                # Never forward private body/headers to the Session. Local
+                # timeout identity is supplied by our guard, not exception text.
+                local_timeout = isinstance(exc, ProviderStreamTimeout)
+                safe_metadata = {
+                    key: value for key, value in public_error.metadata.items()
+                    if key in {"error_type", "status_code"}
+                }
+                status_code = provider_status_code(exc)
+                if status_code is not None:
+                    safe_metadata["status_code"] = status_code
+                safe_metadata.update(
+                    origin="local_stream_guard" if local_timeout else "provider_transport",
+                    phase="post_tool_stream" if side_effect_committed else "read_stream",
+                    tool_dispatch_started=side_effect_committed,
+                )
+                if local_timeout:
+                    safe_metadata.update(error_type="TimeoutError", timeout_kind=exc.timeout_kind)
+                public_error = PublicError(
+                    "stream_error",
+                    (
+                        "Stream failed after tool handling. No automatic retry; "
+                        "review tool results and /diff before continuing."
+                        if side_effect_committed else "Failed while reading the provider stream."
+                    ) + (
+                        " Absolute hard deadline expired (including local waits)."
+                        if local_timeout and exc.timeout_kind == "hard"
+                        else " Provider idle deadline expired."
+                        if local_timeout else ""
+                    ),
+                    False if side_effect_committed else public_error.retryable,
+                    safe_metadata,
+                )
+                provider_metadata["public_error"] = public_error.to_dict()
+                if side_effect_committed:
+                    provider_metadata["stream_error"] = public_error.to_dict()
+                    return terminal("aborted", public_error.message, False)
                 if classification == "client_error":
                     return terminal("client_error", public_error.message)
                 retryable = classification == "retryable"
-                if side_effect_committed:
-                    provider_metadata["stream_error"] = {
-                        "message": public_error.message,
-                        **_error_metadata(exc)["error"],
-                    }
-                    return terminal("completed")
                 decision = controller.decide(
                     exc,
                     attempt=attempt,

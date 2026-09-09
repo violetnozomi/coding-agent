@@ -68,7 +68,7 @@ from nz_coder.runtime.model_gateway import (
     resolve_model_runtime,
 )
 from nz_coder.runtime.session.session_processor import SessionProcessor
-from nz_coder.protocol.public_error import TrustedPublicMessage
+from nz_coder.protocol.public_error import TrustedPublicMessage, public_error_from_wire
 from nz_coder.runtime.session.session_revert import SessionReverter
 from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
 from nz_coder.state.sessions import (
@@ -2430,7 +2430,9 @@ class ProductRunEnvironment:
                 outcome.cost if outcome.cost_source == "provider" else None
             ),
         }
-        if outcome.status is ModelCallStatus.COMPLETED:
+        if outcome.status is ModelCallStatus.COMPLETED or public_error_from_wire(
+            outcome.provider_metadata.get("stream_error")
+        ) is not None:
             extra = {}
             if outcome.reasoning:
                 extra["reasoning_content"] = outcome.reasoning
@@ -2446,6 +2448,19 @@ class ProductRunEnvironment:
             return LLMResult(
                 needs_compaction=True,
                 compaction_error=outcome.error,
+                **common,
+            )
+        public = public_error_from_wire(outcome.provider_metadata.get("public_error"))
+        if public is not None:
+            return LLMResult(
+                aborted=outcome.status is not ModelCallStatus.CLIENT_ERROR,
+                diagnostic=(
+                    self._make_client_error_diag(outcome.error)
+                    if outcome.status is ModelCallStatus.CLIENT_ERROR else None
+                ),
+                assistant_error=assistant_error_from_exception(
+                    public, provider_id=self.provider_id, is_retryable=outcome.retryable,
+                ),
                 **common,
             )
         details = outcome.provider_metadata.get("error", {})

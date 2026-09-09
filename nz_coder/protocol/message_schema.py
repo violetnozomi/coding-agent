@@ -671,7 +671,7 @@ def set_assistant_error(
 
 
 def assistant_error_from_exception(
-    error: Exception,
+    error: object,
     *,
     provider_id: str = "",
     is_retryable: bool | None = None,
@@ -683,6 +683,8 @@ def assistant_error_from_exception(
     status = getattr(error, "status_code", None)
     if status is None and response is not None:
         status = getattr(response, "status_code", None)
+    if status is None and isinstance(error, PublicError):
+        status = public.metadata.get("status_code")
     status = (
         status
         if isinstance(status, int) and not isinstance(status, bool) and status >= 0
