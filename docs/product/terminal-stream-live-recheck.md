@@ -168,3 +168,31 @@ Only reports and cross-references are committed. Previous 349/7 offline test
 results are referenced, **not rerun**. No build, hotfix, release, PR, merge, main
 change, second task, alternate-model attempt or automatic resubmission. This first
 blocked submission is the terminal result of the authorized recheck stage.
+
+## Subsequent minimal input repair (offline, separate from the attempt above)
+
+Source `6c416c893c79d425dc997c16193b238de857a9c9` moves existing attachment
+filesystem probes into the existing OSError/ValueError boundary and removes
+duplicate rejection branches. Long prose remains prose; invalid explicit
+attachments fail cleanly. Workspace and symlink restrictions remain enforced.
+One production function changed: **4 fewer lines**. Parameterizing the existing
+attachment test adds 4 lines; total Python line growth including tests is **0**.
+No new module, setting, length heuristic or model request.
+
+Old-source regression: `test_terminal_input.py -k attachment_is_workspace_bounded`
+returned exit 1, 12 failed / 3 passed (long Chinese/English input and explicit
+overlong paths). Repaired regression command returned exit 0, **103 passed**:
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .nz-coder-runs/p1-env/bin/python -m pytest -q tests/test_terminal_input.py tests/test_terminal_interactions.py tests/test_fullscreen.py tests/test_user_attachments.py tests/test_headless_cli.py --tb=short`.
+Ruff, py_compile and diff checks passed on the two changed Python files.
+
+Fresh wheel/sdist build and noneditable installation passed. Wheel:
+`.nz-coder-runs/terminal-input-fix/final/nz_coder-0.1.0-py3-none-any.whl`, SHA-256
+`a9342669e4e191819c4b5df42c37e620ae9bca1203bdd4b6e82b2b99c0064a44`.
+Installed module matched source; SDK remained OpenAI 3.10.0. A new isolated
+120×40 real PTY submitted the original Chinese requirement to the existing
+loopback fixture: reached the permission selector, rejected the proposed write,
+received its scripted final response, and exited normally with CLI exit 0 and
+restored terminal modes. Persisted user text equals the original request;
+`denied.txt` does not exist. Private evidence is in the new input-check site's
+`pty.json`, Provider log and Session, not either original live site.
+This proves input-flow repair only; **real DeepSeek recheck remains unperformed**.
