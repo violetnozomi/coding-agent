@@ -38,6 +38,42 @@ class FakeTerminalInput:
         return self.results.pop(0)
 
 
+def test_terminal_permission_binding_survives_run_control_replacement(tmp_path, monkeypatch):
+    """New native runs must ask the UI, never compete for raw terminal stdin."""
+    from nz_coder.runtime.execution.composition import build_product_environment
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    def unexpected_stdin(*_args, **_kwargs):
+        raise AssertionError("Permission escaped the terminal selector")
+
+    monkeypatch.setattr("builtins.input", unexpected_stdin)
+
+    async def scenario():
+        with scoped_workdir(tmp_path):
+            agent = build_product_environment(
+                "test", client=object(), permission_mode="default",
+                sidecar_verifier=False, trace_enabled=False,
+            )
+            terminal = FakeTerminalInput(["reject", "once"])
+            bind_terminal_interactions(agent, terminal, FakeRenderer())
+            try:
+                decisions = []
+                for _ in range(2):
+                    bundle = agent.prepare_run_control()
+                    try:
+                        decisions.append(await asyncio.to_thread(
+                            agent.permissions.ask_user, "bash", {"command": "python check.py"},
+                        ))
+                    finally:
+                        agent.retire_run_control(bundle)
+                assert decisions == [False, True]
+                assert len(terminal.requests) == 2
+            finally:
+                agent.close()
+
+    asyncio.run(scenario())
+
+
 def _question(*, multiple: bool = False) -> dict:
     return {
         "header": "Storage",

@@ -480,6 +480,10 @@ class TerminalInput:
     def _resolve_attachment(self, value: str, *, strict: bool) -> AttachedFile | None:
         """Resolve one workspace-bounded file reference without following symlinks."""
         raw = str(value).strip().lstrip("@")
+        # /attach takes one path, not a shell argument list. Preserve spaces
+        # and literal metacharacters while accepting a matching quote pair.
+        if len(raw) >= 2 and raw[0] in {"'", '"'} and raw[-1] == raw[0]:
+            raw = raw[1:-1]
         if not raw:
             if strict:
                 raise ValueError("Use /attach PATH")

@@ -4336,6 +4336,7 @@ class ProductRunEnvironment:
     ) -> None:
         """Bind UI interaction adapters after constructing an Agent instance."""
         self.question_asker = question_asker
+        self._permission_asker = permission_asker
         self.auto_permission_asker = auto_permission_asker
         self.workflow_approval_asker = workflow_approval_asker
         self.permissions.set_asker(permission_asker)

@@ -514,6 +514,21 @@ def test_attachment_is_workspace_bounded_and_consumed_once(tmp_path):
         terminal.queue_attachment("../outside.py")
 
 
+@pytest.mark.parametrize("reference", [
+    'notes with spaces.txt', '"notes with spaces.txt"', "'notes with spaces.txt'",
+    '@"notes with spaces.txt"',
+])
+def test_attachment_accepts_single_quoted_or_unquoted_path(tmp_path, reference):
+    (tmp_path / "notes with spaces.txt").write_text("hello", encoding="utf-8")
+    terminal = TerminalInput(
+        console=object(), registry=build_default_registry(), workspace=tmp_path,
+        interactive=False,
+    )
+    assert terminal.queue_attachment(reference).path == "notes with spaces.txt"
+    with pytest.raises(ValueError, match="inside the workspace"):
+        terminal.queue_attachment('"../outside.txt"')
+
+
 def test_remote_terminal_can_disable_client_path_attachments(tmp_path):
     source = tmp_path / "local-only.txt"
     source.write_text("client data", encoding="utf-8")
