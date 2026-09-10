@@ -6,6 +6,17 @@ import socket
 import pytest
 
 
+@pytest.fixture
+def synthetic_agent_revision(monkeypatch):
+    """Freeze synthetic contracts to this checkout, not a historical live run."""
+    from evaluation.linux_baseline import catalog, live, runner
+
+    revision = runner.git(runner.ROOT, "rev-parse", "HEAD").decode().strip()
+    for module in (catalog, live, runner):
+        monkeypatch.setattr(module, "AGENT_REVISION", revision)
+    return revision
+
+
 @pytest.fixture(autouse=True)
 def no_evaluation_network(monkeypatch):
     def forbidden(*args, **kwargs):

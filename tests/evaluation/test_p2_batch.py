@@ -14,6 +14,8 @@ from evaluation.linux_baseline import live, runner
 from tests.evaluation.test_p1_live import authorization
 from tests.evaluation.test_p1_continuation import predecessor  # noqa: F401
 
+pytestmark = pytest.mark.usefixtures("synthetic_agent_revision")
+
 PLAN = ["T02", "T03", "T05", "T06", "T07", "T08", "T09", "T10", "T11", "T12"]
 PREDECESSORS = ["p1-live-20260908-073600", "p1-t04-live-20260908-130239"]
 

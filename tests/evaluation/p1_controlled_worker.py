@@ -66,8 +66,10 @@ def main():
     try:
         if descriptor.get("scenario", "").startswith(("t04_", "p2_")):
             # Actual worker entry validation and real freeze. Only synthetic
-            # predecessor anchors and test-worktree dirtiness are substituted.
-            from evaluation.linux_baseline import continuation, live_worker, runner
+            # predecessor anchors, baseline revision and dirtiness are substituted.
+            from evaluation.linux_baseline import catalog, continuation, live, live_worker, runner
+            revision = runner.git(runner.ROOT, "rev-parse", "HEAD").decode().strip()
+            catalog.AGENT_REVISION = live.AGENT_REVISION = runner.AGENT_REVISION = revision
             continuation.RUNS = path.parent.parent.parent
             continuation.ANCHORS = descriptor["offline_predecessor_anchors"]
             if descriptor.get("scenario", "").startswith("p2_"):

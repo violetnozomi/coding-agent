@@ -13,6 +13,9 @@ from evaluation.linux_baseline import runner
 from tests.evaluation.test_p1_live import continuation_authorization
 
 
+pytestmark = pytest.mark.usefixtures("synthetic_agent_revision")
+
+
 @pytest.fixture
 def predecessor(tmp_path, monkeypatch):
     from evaluation.linux_baseline import continuation as module

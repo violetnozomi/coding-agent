@@ -26,6 +26,7 @@ dependencies = [
 dev = [
     "pytest>=7,<9",
     "ruff==0.15.10",
+    "httpx>=0.28.1,<1",  # Offline evaluation transports; not supplied by OpenAI 3.x.
 ]
 semantic-experiment = [
     "sentence-transformers>=3,<6",

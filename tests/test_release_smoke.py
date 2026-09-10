@@ -1,6 +1,7 @@
 """Release smoke isolation contracts."""
 from __future__ import annotations
 
+from importlib.util import find_spec
 from pathlib import Path
 import re
 
@@ -59,7 +60,9 @@ def test_declared_dev_dependencies_are_sufficient_for_full_suite():
 
     assert '"pytest>=7,<9"' in project
     assert '"ruff==0.15.10"' in project
-    assert not re.search(r'^\s*"httpx(?:[<>=;\[]|\")', project, re.MULTILINE)
+    assert find_spec("httpx") is not None, "Offline evaluation transports require HTTPX"
+    runtime = project.split("[project.optional-dependencies]", 1)[0]
+    assert not re.search(r'^\s*"httpx(?:[<>=;\[]|\")', runtime, re.MULTILINE)
 
 
 def test_openai_dependency_declares_supported_major_range():

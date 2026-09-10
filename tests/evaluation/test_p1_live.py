@@ -12,6 +12,9 @@ import httpx
 import pytest
 
 
+pytestmark = pytest.mark.usefixtures("synthetic_agent_revision")
+
+
 def live():
     assert importlib.util.find_spec("evaluation.linux_baseline.live") is not None, "Live gate missing"
     return importlib.import_module("evaluation.linux_baseline.live")
@@ -96,6 +99,7 @@ def test_freeze_distinguishes_rate_lookup_from_effective_date(monkeypatch):
     monkeypatch.setattr(runner, "git", lambda root, *args: b"" if args == ("status", "--porcelain")
                         else original_git(root, *args))
     frozen = module.freeze(config, module.authorized_policy(config))
+    assert frozen["agent_revision"] == config["harness_revision"]
     assert frozen["rates"]["retrieved_at"] == "2026-09-08T06:47:24Z"
     assert frozen["rates"]["effective_date"] is None
     assert frozen["rates"]["calculation_basis"] == "published peak-rate ceiling for all periods; not account invoice"
@@ -107,6 +111,31 @@ def test_freeze_distinguishes_rate_lookup_from_effective_date(monkeypatch):
         "transport_purpose": "unknown; validates mode set, not message or tool labels",
         "budget_scope": "shared task/experiment ledger; uncertainty stops all modes",
     }
+
+
+def test_freeze_rejects_committed_source_drift(tmp_path, monkeypatch):
+    """A synthetic revision must not bypass the real Git source comparison."""
+    from evaluation.linux_baseline import runner
+
+    module = live()
+    (tmp_path / "nz_coder").mkdir()
+    source = tmp_path / "nz_coder/probe.py"
+    source.write_text("value = 1\n")
+    runner.git(tmp_path, "init", "-q")
+    runner.git(tmp_path, "add", "nz_coder/probe.py")
+    commit = ("-c", "user.name=Offline", "-c", "user.email=offline@example.invalid",
+              "commit", "-qm")
+    runner.git(tmp_path, *commit, "Synthetic baseline")
+    monkeypatch.setattr(module, "AGENT_REVISION",
+                        runner.git(tmp_path, "rev-parse", "HEAD").decode().strip())
+    source.write_text("value = 2\n")
+    runner.git(tmp_path, "add", "nz_coder/probe.py")
+    runner.git(tmp_path, *commit, "Source drift")
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    config = {**authorization(),
+              "harness_revision": runner.git(tmp_path, "rev-parse", "HEAD").decode().strip()}
+    with pytest.raises(ValueError, match="Agent source has changed"):
+        module.freeze(config, module.authorized_policy(config))
 
 
 def test_legacy_grant_cannot_silently_authorize_new_auxiliary_mode():
