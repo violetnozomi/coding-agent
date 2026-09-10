@@ -41,15 +41,17 @@ def test_attempt_controller_uses_single_pre_boundary_fallback_then_retries():
 def test_stream_watchdog_detects_idle_and_observes_cancellation():
     import time
     from nz_coder.runtime.execution.loop import _iter_completion_with_timeouts
+    from nz_coder.runtime.model_gateway.stream import ProviderStreamTimeout
 
     def stalled():
         time.sleep(0.1)
         yield "late"
 
-    with pytest.raises(TimeoutError, match="Stream stalled"):
+    with pytest.raises(ProviderStreamTimeout) as error:
         list(_iter_completion_with_timeouts(
             stalled(), idle_timeout_seconds=0.01, hard_timeout_seconds=1
         ))
+    assert error.value.timeout_kind == "idle"
 
     assert list(_iter_completion_with_timeouts(
         stalled(),
@@ -62,6 +64,7 @@ def test_stream_watchdog_detects_idle_and_observes_cancellation():
 def test_legacy_stream_watchdog_delegates_close_to_canonical_boundary():
     import time
     from nz_coder.runtime.execution.loop import _iter_completion_with_timeouts
+    from nz_coder.runtime.model_gateway.stream import ProviderStreamTimeout
 
     class StalledStream:
         def __init__(self):
@@ -78,13 +81,14 @@ def test_legacy_stream_watchdog_delegates_close_to_canonical_boundary():
             self.closed = True
 
     stream = StalledStream()
-    with pytest.raises(TimeoutError, match="Stream stalled"):
+    with pytest.raises(ProviderStreamTimeout) as error:
         list(_iter_completion_with_timeouts(
             stream,
             idle_timeout_seconds=0.01,
             hard_timeout_seconds=1,
         ))
 
+    assert error.value.timeout_kind == "idle"
     assert stream.closed is True
 
 
