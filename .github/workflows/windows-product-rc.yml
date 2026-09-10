@@ -48,6 +48,13 @@ jobs:
           New-Item -ItemType Directory -Force artifacts | Out-Null
           nz-coder platform --json | Out-File artifacts/platform.json -Encoding utf8
           nz-coder doctor --json | Out-File artifacts/doctor.json -Encoding utf8
+      - name: Cancellation contract wait diagnostics
+        timeout-minutes: 3
+        # Only synthetic file data: expose blocked thread locations without
+        # publishing the full suite's potentially sensitive captured output.
+        run: >-
+          python -m pytest tests/runtime/tool_runtime/standalone/test_component_contract.py
+          -k real_cancel -q --tb=short -o faulthandler_timeout=10 --durations=2
       - name: Native Windows product acceptance
         shell: pwsh
         run: |
