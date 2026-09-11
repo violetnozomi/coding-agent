@@ -52,6 +52,7 @@ _EVENT_TYPES = {
 }
 _ANSI_ESCAPE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_SPINNER_FRAMES = "|/-\\"
 
 
 class TerminalRunRenderer:
@@ -475,7 +476,10 @@ class TerminalRunRenderer:
         if not callable(setter):
             return
         elapsed = max(0.0, time.monotonic() - self._started_at)
-        spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[int(elapsed * 10) % 10]
+        # Keep the transient marker ASCII-only.  Some Windows/ConPTY and
+        # narrow PTY implementations mishandle braille cell width during
+        # cursor redraw, leaving a trail of scattered glyphs on screen.
+        spinner = _SPINNER_FRAMES[int(elapsed * 10) % len(_SPINNER_FRAMES)]
         state = self._run_reducer.state
         retry_part = next(reversed(state.retries.values()), None)
         if retry_part is not None:

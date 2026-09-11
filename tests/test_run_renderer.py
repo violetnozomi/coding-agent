@@ -96,6 +96,18 @@ def test_run_renderer_single_line_sanitize_uses_terminal_columns():
     assert not value.endswith("\u200d")
 
 
+def test_run_renderer_status_uses_ascii_spinner_for_pty_compatibility():
+    """Status refreshes must not emit braille glyphs that some PTYs smear."""
+    view, _output, streaming = _view()
+    bus = SessionEventBus(session_id="session-spinner")
+
+    view.begin(SimpleNamespace(event_bus=bus, model_id="model-test"))
+
+    status = streaming.statuses[-1][0]
+    assert status[0] in "|/-\\"
+    assert not any("\u2800" <= character <= "\u28ff" for character in status)
+
+
 def test_run_renderer_projects_running_tool_metadata_without_scrollback_spam():
     view, output, streaming = _view()
     bus = SessionEventBus(session_id="session-1")
