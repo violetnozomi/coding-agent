@@ -1936,6 +1936,20 @@ class RuntimeState:
                 )
             elif self.turn_count >= 5 and no_edit_turns >= 5:
                 reminders.append(f"No source edit in {no_edit_turns} turns. {edit_hint}")
+            # Short hard caps need an explicit implementation/verification
+            # window.  A generic convergence hint at the final turn leaves
+            # no opportunity for the model to edit and test its fix.
+            if (
+                turns_remaining <= 3
+                and no_edit_turns > 0
+                and self.investigation_calls_since_edit > 0
+            ):
+                reminders.append(
+                    "CONVERGENCE DEADLINE: reserve the remaining turns for an "
+                    "implementation and verification window. Stop investigating; "
+                    "make the smallest relevant edit now, then run the narrowest "
+                    "test or verification before summarizing."
+                )
 
         # ── 5. Verification budget ────────────────────────────────────────────
         if self.broad_test_attempts >= 3:

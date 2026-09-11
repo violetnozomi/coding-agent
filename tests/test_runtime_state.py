@@ -1139,6 +1139,20 @@ def test_strict_progress_emits_one_nudge_after_twelve_investigations():
     assert "STRICT CONVERGENCE" not in second
 
 
+def test_low_turn_budget_without_edit_requests_implementation_window():
+    """A short run must reserve time for an edit and its verification."""
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    state.reset(max_turns=10)
+    state.turn_count = 7
+    state.investigation_calls_since_edit = 8
+
+    block = state.build_prompt_block()
+
+    assert "implementation and verification window" in block
+
+
 def test_strict_progress_keeps_investigation_available_after_twenty_calls():
     """A read-count threshold must never withdraw investigation tools."""
     from nz_coder.runtime.execution.runtime_state import RuntimeState
