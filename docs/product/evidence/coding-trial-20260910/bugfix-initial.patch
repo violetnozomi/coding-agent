@@ -1,0 +1,81 @@
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..74e1394
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,7 @@
++# Layered Settings
++
++Standard-library-only JSON configuration merge helper and CLI.
++
++`python -m layered_settings base.json override.json`
++
++`python -m unittest discover -s tests -v`
+diff --git a/layered_settings/__init__.py b/layered_settings/__init__.py
+new file mode 100644
+index 0000000..10b768c
+--- /dev/null
++++ b/layered_settings/__init__.py
+@@ -0,0 +1,4 @@
++"""Merge JSON configuration layers."""
++from .merge import merge_settings
++
++__all__ = ["merge_settings"]
+diff --git a/layered_settings/__main__.py b/layered_settings/__main__.py
+new file mode 100644
+index 0000000..c6ed0f2
+--- /dev/null
++++ b/layered_settings/__main__.py
+@@ -0,0 +1,21 @@
++"""Print the combined configuration as JSON."""
++from __future__ import annotations
++
++import argparse
++import json
++from pathlib import Path
++from .merge import merge_settings
++
++
++def main() -> None:
++    parser = argparse.ArgumentParser(description="Merge JSON configuration layers")
++    parser.add_argument("base")
++    parser.add_argument("override")
++    args = parser.parse_args()
++    base = json.loads(Path(args.base).read_text(encoding="utf-8"))
++    override = json.loads(Path(args.override).read_text(encoding="utf-8"))
++    print(json.dumps(merge_settings(base, override), ensure_ascii=False, sort_keys=True))
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/layered_settings/merge.py b/layered_settings/merge.py
+new file mode 100644
+index 0000000..b822c5a
+--- /dev/null
++++ b/layered_settings/merge.py
+@@ -0,0 +1,8 @@
++"""Combine a default configuration with user overrides."""
++from __future__ import annotations
++
++
++def merge_settings(base: dict, override: dict) -> dict:
++    result = dict(base)
++    result.update(override)
++    return result
+diff --git a/tests/test_merge.py b/tests/test_merge.py
+new file mode 100644
+index 0000000..158b02c
+--- /dev/null
++++ b/tests/test_merge.py
+@@ -0,0 +1,11 @@
++"""Existing configuration merge behavior."""
++import unittest
++from layered_settings import merge_settings
++
++
++class MergeTests(unittest.TestCase):
++    def test_scalar_override(self):
++        self.assertEqual(merge_settings({"port": 80}, {"port": 443}), {"port": 443})
++
++    def test_new_key(self):
++        self.assertEqual(merge_settings({"a": 1}, {"b": 2}), {"a": 1, "b": 2})

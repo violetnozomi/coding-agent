@@ -1,0 +1,82 @@
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..2c97eeb
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,8 @@
++# Expensebook
++
++Standard-library-only CSV expense totals. CSV columns: `category,amount`.
++Amounts are signed decimals with at most two decimal places.
++
++Run: `python -m expensebook "expenses.csv"`
++
++Tests: `python -m unittest discover -s tests -v`
+diff --git a/expensebook/__init__.py b/expensebook/__init__.py
+new file mode 100644
+index 0000000..af0453f
+--- /dev/null
++++ b/expensebook/__init__.py
+@@ -0,0 +1 @@
++"""Small CSV expense reporting utility."""
+diff --git a/expensebook/__main__.py b/expensebook/__main__.py
+new file mode 100644
+index 0000000..247e30f
+--- /dev/null
++++ b/expensebook/__main__.py
+@@ -0,0 +1,16 @@
++"""Command-line entry point for expense totals."""
++from __future__ import annotations
++
++import argparse
++from .report import read_expenses, total_amount
++
++
++def main() -> None:
++    parser = argparse.ArgumentParser(description="Report CSV expenses")
++    parser.add_argument("csv_path")
++    args = parser.parse_args()
++    print(f"{total_amount(read_expenses(args.csv_path)):.2f}")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/expensebook/report.py b/expensebook/report.py
+new file mode 100644
+index 0000000..ae0c6d1
+--- /dev/null
++++ b/expensebook/report.py
+@@ -0,0 +1,15 @@
++"""Read decimal expense amounts from CSV."""
++from __future__ import annotations
++
++import csv
++from decimal import Decimal
++from pathlib import Path
++
++
++def read_expenses(path: str | Path) -> list[dict[str, str]]:
++    with Path(path).open(encoding="utf-8", newline="") as stream:
++        return list(csv.DictReader(stream))
++
++
++def total_amount(rows: list[dict[str, str]]) -> Decimal:
++    return sum((Decimal(row["amount"]) for row in rows), Decimal("0"))
+diff --git a/tests/test_report.py b/tests/test_report.py
+new file mode 100644
+index 0000000..97c2123
+--- /dev/null
++++ b/tests/test_report.py
+@@ -0,0 +1,12 @@
++"""Existing total-report regression tests."""
++from decimal import Decimal
++import unittest
++from expensebook.report import total_amount
++
++
++class TotalTests(unittest.TestCase):
++    def test_empty(self):
++        self.assertEqual(total_amount([]), Decimal("0"))
++
++    def test_decimal_total(self):
++        self.assertEqual(total_amount([{"amount": "0.10"}, {"amount": "0.20"}]), Decimal("0.30"))

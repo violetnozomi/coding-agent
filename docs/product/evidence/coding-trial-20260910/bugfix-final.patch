@@ -1,0 +1,168 @@
+diff --git a/layered_settings/merge.py b/layered_settings/merge.py
+index b822c5a..a1902a5 100644
+--- a/layered_settings/merge.py
++++ b/layered_settings/merge.py
+@@ -4,0 +5,9 @@ from __future__ import annotations
++def _deep_copy(value):
++    """Deep-copy JSON-representable data (dicts, lists, scalars)."""
++    if isinstance(value, dict):
++        return {key: _deep_copy(item) for key, item in value.items()}
++    if isinstance(value, list):
++        return [_deep_copy(item) for item in value]
++    return value
++
++
+@@ -6,2 +15,19 @@ def merge_settings(base: dict, override: dict) -> dict:
+-    result = dict(base)
+-    result.update(override)
++    """Merge two JSON configuration layers.
++
++    Recursively merge only when both sides hold a dict for the same key;
++    otherwise the override value replaces the base value wholesale. Neither
++    input is modified, and the result shares no mutable objects with them.
++    """
++    result = {}
++    for key, base_value in base.items():
++        if key in override:
++            override_value = override[key]
++            if isinstance(base_value, dict) and isinstance(override_value, dict):
++                result[key] = merge_settings(base_value, override_value)
++            else:
++                result[key] = _deep_copy(override_value)
++        else:
++            result[key] = _deep_copy(base_value)
++    for key, override_value in override.items():
++        if key not in base:
++            result[key] = _deep_copy(override_value)
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+new file mode 100644
+index 0000000..a640dd5
+--- /dev/null
++++ b/tests/test_cli.py
+@@ -0,0 +1,55 @@
++"""Real CLI invocation tests for `python -m layered_settings`."""
++import json
++import os
++import subprocess
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parent.parent
++
++
++class CliTests(unittest.TestCase):
++    def _run_cli(self, base, override):
++        with tempfile.TemporaryDirectory() as tmp:
++            base_path = Path(tmp) / "base.json"
++            override_path = Path(tmp) / "override.json"
++            base_path.write_text(json.dumps(base), encoding="utf-8")
++            override_path.write_text(json.dumps(override), encoding="utf-8")
++            env = os.environ.copy()
++            env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
++            proc = subprocess.run(
++                [sys.executable, "-m", "layered_settings", str(base_path), str(override_path)],
++                cwd=str(REPO_ROOT),
++                env=env,
++                capture_output=True,
++                text=True,
++            )
++            return proc
++
++    def test_cli_merges_nested_dicts(self):
++        proc = self._run_cli(
++            {"database": {"host": "localhost", "port": 5432}},
++            {"database": {"port": 5433}},
++        )
++        self.assertEqual(proc.returncode, 0, proc.stderr)
++        self.assertEqual(
++            json.loads(proc.stdout),
++            {"database": {"host": "localhost", "port": 5433}},
++        )
++
++    def test_cli_preserves_override_replacement_and_new_keys(self):
++        proc = self._run_cli(
++            {"a": 1, "nested": {"x": 1}, "items": [1, 2]},
++            {"nested": {"y": 2}, "items": [3], "b": False},
++        )
++        self.assertEqual(proc.returncode, 0, proc.stderr)
++        self.assertEqual(
++            json.loads(proc.stdout),
++            {"a": 1, "b": False, "nested": {"x": 1, "y": 2}, "items": [3]},
++        )
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_merge.py b/tests/test_merge.py
+index 158b02c..fa26f8f 100644
+--- a/tests/test_merge.py
++++ b/tests/test_merge.py
+@@ -1 +1 @@
+-"""Existing configuration merge behavior."""
++"""Existing configuration merge behavior plus regression coverage."""
+@@ -11,0 +12,63 @@ class MergeTests(unittest.TestCase):
++
++    def test_nested_dict_recursive_merge(self):
++        base = {"database": {"host": "localhost", "port": 5432}}
++        override = {"database": {"port": 5433}}
++        self.assertEqual(
++            merge_settings(base, override),
++            {"database": {"host": "localhost", "port": 5433}},
++        )
++
++    def test_non_dict_override_replaces_wholesale(self):
++        base = {"database": {"host": "localhost", "port": 5432}}
++        cases = [
++            ({"database": {"host": "other", "port": 9999}}, {"database": {"host": "other", "port": 9999}}),
++            ({"database": None}, {"database": None}),
++            ({"database": False}, {"database": False}),
++            ({"database": 0}, {"database": 0}),
++            ({"database": ""}, {"database": ""}),
++            ({"database": [1, 2, 3]}, {"database": [1, 2, 3]}),
++        ]
++        for override, expected in cases:
++            self.assertEqual(merge_settings(base, override), expected)
++
++    def test_list_values_are_replaced_not_merged(self):
++        base = {"items": [1, 2, 3]}
++        override = {"items": [4]}
++        self.assertEqual(merge_settings(base, override), {"items": [4]})
++
++    def test_only_in_base_and_only_in_override_preserved(self):
++        base = {"a": 1, "nested": {"x": 1}}
++        override = {"b": 2, "nested": {"y": 2}}
++        self.assertEqual(
++            merge_settings(base, override),
++            {"a": 1, "b": 2, "nested": {"x": 1, "y": 2}},
++        )
++
++    def test_does_not_modify_inputs(self):
++        base = {"database": {"host": "localhost", "port": 5432}, "keep": [1, 2]}
++        override = {"database": {"port": 5433}}
++        merge_settings(base, override)
++        self.assertEqual(base, {"database": {"host": "localhost", "port": 5432}, "keep": [1, 2]})
++        self.assertEqual(override, {"database": {"port": 5433}})
++
++    def test_result_shares_no_mutable_objects_with_inputs(self):
++        base = {"database": {"host": "localhost"}, "items": [1, 2, 3]}
++        override = {"database": {"port": 5433}, "tags": ["a"]}
++        result = merge_settings(base, override)
++
++        self.assertIsNot(result, base)
++        self.assertIsNot(result["database"], base["database"])
++        self.assertIsNot(result["database"], override["database"])
++        self.assertIsNot(result["items"], base["items"])
++        self.assertIsNot(result["tags"], override["tags"])
++
++        result["database"]["host"] = "changed"
++        result["items"].append(99)
++        result["tags"].append("b")
++        self.assertEqual(base["database"]["host"], "localhost")
++        self.assertEqual(base["items"], [1, 2, 3])
++        self.assertEqual(override["tags"], ["a"])
++
++
++if __name__ == "__main__":
++    unittest.main()
