@@ -5,9 +5,14 @@ import asyncio
 from dataclasses import replace
 from types import SimpleNamespace
 
+import pytest
+
 from nz_coder.providers.capabilities import resolve_model_capabilities
 from nz_coder.runtime.core.model_context import ModelExecutionContext
-from nz_coder.runtime.conversation.model_result import LLMResult
+from nz_coder.runtime.conversation.model_result import (
+    LLMResult,
+    ModelCompletionError,
+)
 from nz_coder.runtime.execution.services import ProductionTurnModelRuntime
 from nz_coder.runtime.execution.loop import ProductRunEnvironment
 from nz_coder.runtime.model_gateway.models import ModelCallOutcome
@@ -174,3 +179,78 @@ def test_focused_turn_runtime_checks_legacy_override_before_provider_call() -> N
     assert result.needs_compaction is True
     assert calls == []
     assert events[-1][0] == "request_budget_overflow"
+
+
+def test_text_completion_preflights_before_provider_call() -> None:
+    calls = []
+    context, events = _context(streaming=False)
+    context = replace(
+        context,
+        prompt_budget=lambda: SimpleNamespace(
+            usable_input_tokens=100,
+            output_reserve_tokens=200,
+        ),
+        gateway=lambda **_kwargs: SimpleNamespace(
+            complete_sync=lambda _call: calls.append("provider")
+        ),
+        trace=lambda event, **payload: events.append((event, payload)),
+    )
+
+    with pytest.raises(ModelCompletionError) as raised:
+        ProductionTurnModelRuntime().complete_text(
+            context,
+            "system " + "x" * 500,
+            "prompt",
+        )
+
+    assert raised.value.result.failure_source == "local_request_budget"
+    assert raised.value.result.needs_compaction is True
+    assert calls == []
+    assert events[-1][0] == "request_budget_overflow"
+
+
+def test_text_completion_projects_provider_overflow_with_typed_source() -> None:
+    calls = []
+    context, _events = _context(streaming=False)
+    environment = ProductRunEnvironment.__new__(ProductRunEnvironment)
+    context = replace(
+        context,
+        prompt_budget=lambda: SimpleNamespace(
+            usable_input_tokens=10_000,
+            output_reserve_tokens=200,
+        ),
+        gateway=lambda **_kwargs: SimpleNamespace(
+            complete_sync=lambda _call: calls.append("provider")
+            or ModelCallOutcome.context_overflow("provider rejected request")
+        ),
+        project_outcome=environment._gateway_outcome_result,
+    )
+
+    with pytest.raises(ModelCompletionError) as raised:
+        ProductionTurnModelRuntime().complete_text(context, "system", "prompt")
+
+    assert raised.value.result.failure_source == "provider_context_overflow"
+    assert raised.value.result.needs_compaction is True
+    assert calls == ["provider"]
+
+
+def test_text_completion_returns_content_for_normal_provider_result() -> None:
+    context, _events = _context(streaming=False)
+    environment = ProductRunEnvironment.__new__(ProductRunEnvironment)
+    context = replace(
+        context,
+        prompt_budget=lambda: SimpleNamespace(
+            usable_input_tokens=10_000,
+            output_reserve_tokens=200,
+        ),
+        gateway=lambda **_kwargs: SimpleNamespace(
+            complete_sync=lambda _call: ModelCallOutcome.completed(
+                content='{"action":"decline","reason":"simple"}',
+            )
+        ),
+        project_outcome=environment._gateway_outcome_result,
+    )
+
+    result = ProductionTurnModelRuntime().complete_text(context, "system", "prompt")
+
+    assert result == '{"action":"decline","reason":"simple"}'

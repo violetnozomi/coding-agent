@@ -37,6 +37,21 @@ class LLMResult:
     stream_tool_wait_ms: float = 0.0
 
 
+class ModelCompletionError(RuntimeError):
+    """Expose a failed auxiliary completion with its typed model outcome."""
+
+    def __init__(self, result: LLMResult) -> None:
+        self.result = result
+        source = result.failure_source or "model_completion_failed"
+        detail = (
+            result.compaction_error
+            or result.diagnostic
+            or result.finish_reason
+            or "model completion did not complete"
+        )
+        super().__init__(f"{source}: {detail}")
+
+
 def _normalize_llm_result_metrics(result: LLMResult) -> tuple[str, ...]:
     """Repair untrusted ModelPort metrics without discarding valid content.
 

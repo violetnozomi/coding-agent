@@ -20,7 +20,10 @@ from nz_coder.runtime.core.execution_context import strict_local_tools
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.runtime.execution.host import ProductionRuntimeHost
 from nz_coder.runtime.model_gateway import ModelCall, ModelCallPurpose, ModelCallStatus
-from nz_coder.runtime.conversation.model_result import LLMResult
+from nz_coder.runtime.conversation.model_result import (
+    LLMResult,
+    ModelCompletionError,
+)
 from nz_coder.state.context import estimate_request_tokens
 from nz_coder.runtime.session.runtime import SessionRuntime
 from nz_coder.runtime.session.store import LegacyJsonSessionStore
@@ -121,14 +124,18 @@ class ProductionTurnModelRuntime:
         self,
         context: ModelExecutionContext,
         messages: list,
+        *,
+        tools: list | None = None,
     ) -> LLMResult | None:
         """Return a local typed outcome before any main Provider turn starts."""
-        return self._request_budget_overflow(context, messages)
+        return self._request_budget_overflow(context, messages, tools=tools)
 
     @staticmethod
     def _request_budget_overflow(
         context: ModelExecutionContext,
         messages: list,
+        *,
+        tools: list | None = None,
     ) -> LLMResult | None:
         """Stop an over-budget outbound request before the Provider call.
 
@@ -141,15 +148,19 @@ class ProductionTurnModelRuntime:
         limit = getattr(budget, "usable_input_tokens", 0) if budget is not None else 0
         if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
             return None
-        tools = ProductionTurnModelRuntime._tools(context)
-        estimated = estimate_request_tokens(messages, tools)
+        request_tools = (
+            ProductionTurnModelRuntime._tools(context)
+            if tools is None
+            else tools
+        )
+        estimated = estimate_request_tokens(messages, request_tools)
         if estimated <= limit:
             return None
         context.trace(
             "request_budget_overflow",
             estimated_tokens=estimated,
             usable_input_tokens=limit,
-            tool_count=len(tools),
+            tool_count=len(request_tools),
         )
         return LLMResult(
             needs_compaction=True,
@@ -198,12 +209,30 @@ class ProductionTurnModelRuntime:
     def complete_text(
         self, context: ModelExecutionContext, system: str, prompt: str,
     ) -> str:
+        result = self.complete_text_result(context, system, prompt)
+        if (
+            result.needs_compaction
+            or result.diagnostic
+            or result.aborted
+            or result.assistant_error is not None
+        ):
+            raise ModelCompletionError(result)
+        return str(result.content or "")
+
+    def complete_text_result(
+        self, context: ModelExecutionContext, system: str, prompt: str,
+    ) -> LLMResult:
+        """Complete a tools-disabled text call through the typed model boundary."""
+        messages = [
+            {"role": "system", "content": str(system)},
+            {"role": "user", "content": str(prompt)},
+        ]
+        overflow = self.preflight_request(context, messages, tools=[])
+        if overflow is not None:
+            return overflow
         outcome = context.gateway().complete_sync(ModelCall(
             purpose=ModelCallPurpose.CODING,
-            messages=[
-                {"role": "system", "content": str(system)},
-                {"role": "user", "content": str(prompt)},
-            ],
+            messages=messages,
             tools=[],
             max_output_tokens=min(
                 8000,
@@ -211,9 +240,7 @@ class ProductionTurnModelRuntime:
             ),
             timeout_seconds=current_run_settings().provider_hard_timeout,
         ))
-        if outcome.status is not ModelCallStatus.COMPLETED:
-            raise RuntimeError(outcome.error or outcome.status.value)
-        return outcome.content
+        return context.project_outcome(outcome)
 
     @staticmethod
     def _tools(context: ModelExecutionContext) -> list:
