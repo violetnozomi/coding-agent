@@ -121,6 +121,65 @@ def test_agent_builds_first_turn_implementation_bundle_from_planner_contract(
     agent.close()
 
 
+def test_repo_retrieval_refreshes_new_candidates_after_first_turn(monkeypatch):
+    """A warming index may reveal a concrete workset after the initial prompt."""
+    from types import SimpleNamespace
+
+    from nz_coder.runtime.execution.loop import AgentLoop
+
+    signal = SimpleNamespace(
+        candidate_files=("src/parser.py", "tests/test_parser.py"),
+        candidate_modules=(),
+        recommended_operation="lookup",
+        recommended_tools=("read_file",),
+        repo_size=2,
+        languages=("python",),
+        changed_file_count=0,
+        routing_confidence=0.9,
+        evidence_confidence=0.9,
+        candidate_count=2,
+        index_status="ready",
+        task_class="bugfix",
+    )
+    decision = SimpleNamespace(
+        signal=signal,
+        guidance="",
+        auto_context="candidate_files: src/parser.py, tests/test_parser.py",
+        fallback="",
+        elapsed_ms=1.0,
+        prompt_block=(
+            "<repo-routing>\n"
+            "candidate_files: src/parser.py, tests/test_parser.py\n"
+            "</repo-routing>"
+        ),
+    )
+    agent = AgentLoop.__new__(AgentLoop)
+    agent.repo_retrieval_strategy = "auto-context"
+    agent.repo_intelligence_mode = "lookup"
+    agent.repo_intelligence = SimpleNamespace(
+        semantic_available=False,
+        state=SimpleNamespace(generation=2),
+    )
+    agent.repo_retrieval_policy = SimpleNamespace(
+        decide=lambda *_args, **_kwargs: decision,
+    )
+    agent.change_tracker = SimpleNamespace(current_changed_paths=lambda: ())
+    agent.runtime_state = SimpleNamespace(turn_count=2, mutation_generation=0, task_contract={})
+    agent._repo_retrieval_trace_signature = ""
+    agent._repo_retrieval_visible_signature = ""
+    agent.tracer = SimpleNamespace(log=lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "nz_coder.tool_platform.exposure.current_exposure_state",
+        lambda: SimpleNamespace(unlock=lambda _tools: None),
+    )
+
+    first = agent._repo_retrieval_block("Fix parser regression")
+    second = agent._repo_retrieval_block("Fix parser regression")
+
+    assert "src/parser.py" in first
+    assert second == ""
+
+
 def test_task_contract_owns_progress_tool_unless_user_requests_todo(
     tmp_path,
     monkeypatch,

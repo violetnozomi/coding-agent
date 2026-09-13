@@ -102,6 +102,16 @@ context/recovery/hooks 定向测试共 109 项通过。该修复防止通过反�
 但不改变 hard context limit，也不声称已消除 Provider `finish_reason=length`；后者仍需
 独立的预算分配回归。
 
+### 第三项已落地（2026-09-13）
+
+仓库索引在首轮仍处于 warming 时，后续回合可能已经得到新的候选文件；此前
+`_repo_retrieval_block()` 在 turn>1 直接丢弃这些结果，模型只能重新 grep。现在按
+`generation + query + strategy + candidate_files` 做一次性可见签名：索引产生新的具体
+候选时只注入一次受限 routing block，随后不重复膨胀上下文；没有候选、不同会话或
+`tool-only` 行为保持不变。定向回归
+`test_repo_retrieval_refreshes_new_candidates_after_first_turn` 覆盖了“首轮无结果、
+第二轮索引就绪、第三次不重复注入”的链路，retrieval/service/prompt 共 83 项通过。
+
 ### 1. 调查→编辑收敛门（优先级 P0，已完成）
 
 已实现上述证据驱动门控。后续应在不改变门控边界的前提下，继续收集真实任务中首次

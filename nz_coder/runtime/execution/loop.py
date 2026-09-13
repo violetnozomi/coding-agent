@@ -687,6 +687,7 @@ class ProductRunEnvironment:
         self.repo_retrieval_policy = RepoRetrievalPolicy()
         self.repo_retrieval_strategy = "guidance"
         self._repo_retrieval_trace_signature = ""
+        self._repo_retrieval_visible_signature = ""
         self._followup_pending: Callable[[], bool] | None = None
 
     def prepare_run_control(
@@ -2043,10 +2044,27 @@ class ProductRunEnvironment:
                 elapsed_ms=decision.elapsed_ms,
             )
         turn = int(getattr(self.runtime_state, "turn_count", 0) or 0)
+        candidate_files = tuple(
+            str(path) for path in getattr(decision.signal, "candidate_files", ())
+            if str(path).strip()
+        )
+        candidate_signature = (
+            f"{self.repo_intelligence.state.generation}:{query}:{selected}:"
+            + ",".join(candidate_files)
+        )
         if turn > 1:
+            # The index may finish warming after turn one.  Surface each new
+            # concrete workset once, without replaying the same routing block
+            # on every subsequent Provider request.
+            visible_signature = getattr(self, "_repo_retrieval_visible_signature", "")
+            if candidate_files and decision.prompt_block and candidate_signature != visible_signature:
+                self._repo_retrieval_visible_signature = candidate_signature
+                return decision.prompt_block
             if selected == "policy" and decision.guidance:
                 return "<repo-routing>\n" + decision.guidance + "\n</repo-routing>"
             return ""
+        if decision.prompt_block:
+            self._repo_retrieval_visible_signature = candidate_signature
         return decision.prompt_block
 
     def _implementation_bundle_block(self, query: str) -> str:
