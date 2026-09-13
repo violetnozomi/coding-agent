@@ -16,6 +16,25 @@ Verified 数字不能作为 InfCodeX 的证据；`scaleapi/SWE-bench_Pro-os` 是
 公开分数差。NZ-Coder 的本地失败证据仍表明单 Agent 在仓库定位、上下文预算和验证
 收敛上存在问题，但不能由此推出 InfCodeX 的优越幅度。
 
+## 两个参考仓库的职责边界
+
+本项目后续对照采用明确分工，避免再次混淆：
+
+- **InfCodeX（KodaX CLI，源码 `d3a8123`）用于优化 Agent Core。** 重点看 Runner
+  tool-loop 的收敛与安全上限、托管任务预算、上下文压缩、结构化仓库理解、Sidecar
+  验证和工具结果协议。这些是模型完成 SWE 任务时的核心执行能力；对照时以具体源码
+  路径和行为测试为准，不把论文项目 InfCode 的编排数字迁移过来。
+- **InfCode-dev（本地源码 `infcode-dev/infcode-dev`，HEAD `5a3aced`）用于产品化
+  对齐。** 它是 Kilo Code 的 monorepo/fork，包含 `packages/opencode` CLI/serve、
+  `packages/sdk/js`、`kilo-indexing`、`gui-bridge`、VS Code/JetBrains 壳和打包脚本。
+  这里借鉴的是终端/IDE 入口、会话与事件展示、索引服务、跨端打包和发布形态，不把
+  它的产品层代码当成 InfCodeX 的 Core 算法证据。该本地副本落后其远端 84 个提交，
+  因此每次引用必须同时记录 commit，不能笼统写成“InfCode-dev 最新实现”。
+
+换句话说：**InfCodeX 解决“Agent 怎么更可靠地完成任务”，InfCode-dev 解决“能力
+怎么成为可安装、可操作、可维护的产品”。** NZ-Coder 的 Core 改进和终端产品改进应
+分别建立测试、指标和版本记录；一次对照不能同时证明两者。
+
 本地证据也显示，NZ-Coder 的失败不是“模型完全不会修”：16 次历史轨迹中，4 次
 完成运行都在 7–17 turns 内完成单文件修改；失败组平均 26.7 turns、16.5 次
 compaction，且有 86 个 failure-repair turns。最近的 Ansible Pro 试跑在 20 轮时
@@ -199,7 +218,10 @@ A/B/C 必须先使用受控或单题授权；不应同时改变模型、提示�
 - [InfCodeX README](https://raw.githubusercontent.com/Tokfinity/InfCodeX/main/README.md)
 - [InfCodeX Runner](https://github.com/Tokfinity/InfCodeX/blob/main/packages/agent/src/primitives/runner.ts)
 - [InfCodeX loop limit](https://github.com/Tokfinity/InfCodeX/blob/main/packages/agent/src/primitives/runner-tool-loop.ts)
-- [InfCodeX Pro evaluation repository](https://github.com/scaleapi/SWE-bench_Pro-os)
+- InfCode-dev 产品化参考：本地 `infcode-dev/infcode-dev`（Kilo Code monorepo，README 的
+  `packages/opencode`、`packages/sdk/js`、`kilo-indexing`、`gui-bridge` 与打包章节）；
+  该副本当前 HEAD 为 `5a3aced263e8eabf6e1b9c6f96878d34f82896ea`。
+- [Scale SWE-bench Pro evaluation harness](https://github.com/scaleapi/SWE-bench_Pro-os)
 - [Scale SWE-bench Pro dataset](https://huggingface.co/datasets/ScaleAI/SWE-bench_Pro)
 
 [^1]: Scale AI, “SWE-bench Pro” dataset documentation: https://huggingface.co/datasets/ScaleAI/SWE-bench_Pro
