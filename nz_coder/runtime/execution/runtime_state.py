@@ -1837,17 +1837,26 @@ class RuntimeState:
                 acceptance_is_terminal_evidence = False
 
         if (
-            strict
-            and self.investigation_calls_since_edit >= STRICT_INVESTIGATION_SOFT_LIMIT
+            self.investigation_calls_since_edit >= STRICT_INVESTIGATION_SOFT_LIMIT
             and self.strict_progress_nudges == 0
         ):
-            reminders.append(
-                "STRICT CONVERGENCE: "
-                f"{self.investigation_calls_since_edit} investigation calls have completed "
-                "since the last source edit. Synthesize the evidence now. Make the smallest "
-                "plausible source edit, call diff_status, or finish with a concrete blocker; "
-                "do not broaden the search."
-            )
+            if strict:
+                reminders.append(
+                    "STRICT CONVERGENCE: "
+                    f"{self.investigation_calls_since_edit} investigation calls have completed "
+                    "since the last source edit. Synthesize the evidence now. Make the smallest "
+                    "plausible source edit, call diff_status, or finish with a concrete blocker; "
+                    "do not broaden the search."
+                )
+            else:
+                reminders.append(
+                    "CONVERGENCE NUDGE: "
+                    f"{self.investigation_calls_since_edit} investigation calls have completed "
+                    "since the last source edit. Summarize the evidence, state the current "
+                    "hypothesis, and identify the next precise read or smallest safe change. "
+                    "Continue legitimate investigation when evidence is incomplete; do not "
+                    "make speculative edits or broaden the search."
+                )
             self.strict_progress_nudges += 1
 
         # ── 1. Turn / Time budget ────────────────────────────────────────────

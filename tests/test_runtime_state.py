@@ -1139,6 +1139,23 @@ def test_strict_progress_emits_one_nudge_after_twelve_investigations():
     assert "STRICT CONVERGENCE" not in second
 
 
+def test_terminal_progress_emits_advisory_convergence_nudge():
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    state.reset(max_turns=80)
+    for index in range(12):
+        state.observe_tool("grep_search", {"pattern": f"token-{index}"}, "match")
+
+    first = state.build_prompt_block(strict=False)
+    second = state.build_prompt_block(strict=False)
+
+    assert "CONVERGENCE NUDGE" in first
+    assert "12 investigation calls" in first
+    assert "do not make speculative edits" in first
+    assert "CONVERGENCE NUDGE" not in second
+
+
 def test_strict_progress_keeps_investigation_available_after_twenty_calls():
     """A read-count threshold must never withdraw investigation tools."""
     from nz_coder.runtime.execution.runtime_state import RuntimeState

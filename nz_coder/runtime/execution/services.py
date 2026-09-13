@@ -20,6 +20,8 @@ from nz_coder.runtime.core.model_context import ModelExecutionContext
 from nz_coder.runtime.core.execution_context import strict_local_tools
 from nz_coder.runtime.execution.host import ProductionRuntimeHost
 from nz_coder.runtime.model_gateway import ModelCall, ModelCallPurpose, ModelCallStatus
+from nz_coder.runtime.conversation.model_result import LLMResult
+from nz_coder.state.context import estimate_request_tokens
 from nz_coder.runtime.session.runtime import SessionRuntime
 from nz_coder.runtime.session.store import LegacyJsonSessionStore
 from nz_coder.runtime.execution.run_lifecycle import ProductionRunLifecycle
@@ -95,6 +97,9 @@ class ProductionTurnModelRuntime:
         message_part: dict | None,
         stream_tool_handler,
     ):
+        overflow = self._request_budget_overflow(context, messages)
+        if overflow is not None:
+            return overflow
         capabilities = context.capabilities()
         if stream and (capabilities is None or capabilities.supports_streaming):
             return context.call_streaming(
@@ -111,6 +116,40 @@ class ProductionTurnModelRuntime:
                 provider=capabilities.provider,
             )
         return context.call_non_streaming(messages)
+
+    @staticmethod
+    def _request_budget_overflow(
+        context: ModelExecutionContext,
+        messages: list,
+    ) -> LLMResult | None:
+        """Stop an over-budget outbound request before the Provider call.
+
+        Context preparation estimates history and tool schemas before the prompt
+        builder adds dynamic state. This final boundary sees the exact assembled
+        messages and tool schemas, so an overflow can take the existing bounded
+        compaction recovery path instead of becoming an opaque Provider error.
+        """
+        budget = context.prompt_budget()
+        limit = getattr(budget, "usable_input_tokens", 0) if budget is not None else 0
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            return None
+        tools = ProductionTurnModelRuntime._tools(context)
+        estimated = estimate_request_tokens(messages, tools)
+        if estimated <= limit:
+            return None
+        context.trace(
+            "request_budget_overflow",
+            estimated_tokens=estimated,
+            usable_input_tokens=limit,
+            tool_count=len(tools),
+        )
+        return LLMResult(
+            needs_compaction=True,
+            compaction_error=(
+                "The assembled model request exceeds the usable input budget "
+                f"({estimated} > {limit} tokens)."
+            ),
+        )
 
     def complete_buffered(
         self,
@@ -192,6 +231,9 @@ class ProductionTurnModelRuntime:
         execution_context = copy_context()
         compatibility_override = context.complete_override
         if callable(compatibility_override):
+            overflow = self._request_budget_overflow(context, messages)
+            if overflow is not None:
+                return overflow
             operation = partial(
                 compatibility_override,
                 messages,
