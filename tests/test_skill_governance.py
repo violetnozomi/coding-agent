@@ -188,3 +188,47 @@ def test_skill_diagnostics_is_stable_and_does_not_load_bodies(tmp_path, monkeypa
     loader.reload()
     second = loader.diagnostics()
     assert first == second
+
+
+def test_skill_without_frontmatter_remains_legacy_compatible(tmp_path) -> None:
+    project = tmp_path / "project"
+    directory = project / "legacy"
+    directory.mkdir(parents=True)
+    (directory / "SKILL.md").write_text("Legacy instructions", encoding="utf-8")
+    loader = SkillLoader(
+        project_dir=project, user_dir=tmp_path / "user", bundled_dir=tmp_path / "bundled"
+    )
+
+    assert loader.get_skill_info("legacy") is not None
+    assert loader.load("legacy")
+    assert loader.get_skill_info("legacy").get_body() == "Legacy instructions"
+    assert loader.list_skills() == [
+        {
+            "name": "legacy",
+            "description": "",
+            "source": "project",
+            "allowed_tools": [],
+            "paths": [],
+            "model": "",
+            "status": "available",
+        }
+    ]
+    assert loader.diagnostics()["parse_errors"] == []
+
+
+def test_skill_frontmatter_line_without_separator_is_invalid_metadata(tmp_path) -> None:
+    project = tmp_path / "project"
+    directory = project / "malformed"
+    directory.mkdir(parents=True)
+    (directory / "SKILL.md").write_text(
+        "---\nname: malformed\nthis line has no separator\n---\nbody",
+        encoding="utf-8",
+    )
+    loader = SkillLoader(
+        project_dir=project, user_dir=tmp_path / "user", bundled_dir=tmp_path / "bundled"
+    )
+
+    assert loader.get_skill_info("malformed") is None
+    assert loader.diagnostics()["parse_errors"] == [
+        {"source": "project", "directory": "malformed", "reason": "invalid_metadata"}
+    ]

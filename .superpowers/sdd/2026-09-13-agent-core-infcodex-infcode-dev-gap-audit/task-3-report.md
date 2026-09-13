@@ -21,4 +21,10 @@
 
 ## Concerns
 
-The parser now treats a `SKILL.md` without YAML-style frontmatter as malformed metadata, which is required for diagnostics but is stricter than the previous fallback behavior.
+No known concerns remain after restoring the legacy no-frontmatter behavior.
+
+## Follow-up review fix
+
+Restored legacy compatibility for plain-text `SKILL.md` files: they use the directory name, remain available to `load()`, and load the complete file body without a diagnostics parse error. Frontmatter blocks now reject non-empty lines without a `:` separator as `invalid_metadata`, with focused regression coverage.
+
+Follow-up verification: 29 tests passed across governance, extensions, and skill loading; compileall and `git diff --check` passed.
