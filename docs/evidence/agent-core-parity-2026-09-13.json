@@ -133,7 +133,7 @@
         "nz_coder/tool_platform/catalog.py",
         "nz_coder/tool_platform/exposure.py"
       ],
-      "acceptance_test_path": "pytest tests/tool_platform/test_exposure.py tests/test_permissions.py tests/test_mcp_catalog.py",
+      "acceptance_test_path": "pytest tests/tool_platform/test_exposure.py tests/test_permissions.py tests/test_mcp_catalog.py tests/runtime/test_product_capability_snapshot.py",
       "reason": "Local tool exposure and the capability snapshot are tested; InfCodeX and infcode-dev tool sources are present, but authoritative cross-product parity is not yet established for comparison."
     },
     {
