@@ -2568,21 +2568,20 @@ class ProductRunEnvironment:
         self._on_context_compacted()
 
     def _on_context_compacted(self) -> None:
-        """Reset observers whose evidence was replaced by a summary."""
+        """Keep safety observers across compaction of the visible transcript.
+
+        Compaction removes rendered history, but it does not change the
+        workspace or the calls already executed.  Clearing the repeat/stall
+        windows here lets a model evade the existing doom-loop guard simply by
+        filling the context until a summary is requested.
+        """
         executor = getattr(self, "executor", None)
         clear_read_cache = getattr(executor, "clear_read_cache", None)
         if callable(clear_read_cache):
             clear_read_cache()
-        recovery = getattr(self, "recovery", None)
-        if recovery is not None:
-            recovery.reset_tool_call_history(reason="context_compacted")
-            self._trace_tool_streak_reset()
-        stall_orchestrator = getattr(self, "stall_orchestrator", None)
-        if stall_orchestrator is not None:
-            stall_orchestrator.reset()
         tracer = getattr(self, "tracer", None)
         if tracer is not None:
-            tracer.log("stall_history_reset", reason="context_compacted")
+            tracer.log("stall_history_preserved", reason="context_compacted")
 
     def _projected_request_tokens(self, messages: list) -> int:
         """Estimate next request before dynamic context is assembled."""

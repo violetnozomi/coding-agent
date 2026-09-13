@@ -91,6 +91,17 @@ python3 -m pytest -q tests/runtime/tool_runtime tests/test_loop_fake.py tests/te
 多候选编排或 SWE-bench Pro 的整体通过率；下一项仍应先为 Provider length/compaction
 建立确定性回归。
 
+### 第二项已落地（2026-09-13）
+
+压缩只替换对模型可见的 transcript，不改变已经执行的工具事实或工作区。因此
+`AgentLoop._on_context_compacted()` 现在保留 RecoveryState 的重复调用窗口和 stall
+sidecar 窗口，不再把 compaction 当成全新任务而清空 doom-loop 证据。工作区发生真实变化
+时仍由既有 `workspace_changed` 边界清理；用户明确批准重复调用时仍走原有 reset。
+回归 `test_context_compaction_preserves_tool_stall_history` 在旧实现上失败，修复后与
+context/recovery/hooks 定向测试共 109 项通过。该修复防止通过反复触发压缩绕过防循环保护，
+但不改变 hard context limit，也不声称已消除 Provider `finish_reason=length`；后者仍需
+独立的预算分配回归。
+
 ### 1. 调查→编辑收敛门（优先级 P0，已完成）
 
 已实现上述证据驱动门控。后续应在不改变门控边界的前提下，继续收集真实任务中首次

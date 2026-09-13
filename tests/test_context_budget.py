@@ -277,6 +277,31 @@ def test_agent_soft_preflight_does_not_call_summary_model(monkeypatch):
     assert any(event == "context_preflight_over_soft" for event, _ in agent.tracer.events)
 
 
+def test_context_compaction_preserves_tool_stall_history() -> None:
+    """Compaction must not make a repeated investigation look like a fresh call."""
+    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.runtime.verification.recovery import RecoveryState
+    from nz_coder.runtime.verification.stall_detector import StallDetector
+
+    agent = AgentLoop.__new__(AgentLoop)
+    agent.recovery = RecoveryState()
+    agent.stall_orchestrator = StallDetector(window_size=20, disabled=False)
+    agent.tracer = type("Tracer", (), {"log": lambda *_args, **_kwargs: None})()
+    signature = {"path": "src/parser.py"}
+    for _ in range(2):
+        agent.recovery.observe_tool_call("read_file", signature, threshold=3)
+        agent.stall_orchestrator.record_tool_use("read_file", signature)
+
+    agent._on_context_compacted()
+
+    assert agent.recovery.observe_tool_call(
+        "read_file", signature, threshold=3,
+    )["should_block"] is True
+    assert agent.stall_orchestrator.record_tool_use(
+        "read_file", signature,
+    ).kind == "stall"
+
+
 def test_compaction_tail_can_split_oversized_recent_turn_at_assistant_boundary():
     from nz_coder.state.context import _select_compaction_parts
 
