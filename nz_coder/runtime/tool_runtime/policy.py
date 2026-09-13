@@ -187,6 +187,12 @@ class ProductionToolPolicy:
             function = tool_call.get("function", {})
             name = str(function.get("name") or "")
             tool_input = context.parse_input(function.get("arguments", {}))
+            # A convergence hint may steer broad exploration toward an edit,
+            # but it must not make the agent blind to exact source evidence.
+            # Re-reading a file (or following a newly identified file path)
+            # remains subject to the normal path and permission checks.
+            if name in {"read_file", "read_symbol"}:
+                continue
             if not classify(name, tool_input):
                 continue
             rejected[index] = ToolExecutionResult(

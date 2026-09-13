@@ -6,39 +6,42 @@ _基于 2026-09-13 公开代码和本地 SWE 运行证据的阶段性分析_
 
 ## 📋 结论先行
 
-20 轮不是根因。InfCodeX 的独立 `Runner` 默认同样是 20 次 tool-loop；它在
-SWE-bench 场景使用的是多候选托管流程（5 个 Generator，每个最多 140 轮，随后
-Selector 最多 200 轮）。NZ-Coder 这次 Pro 试跑则是单一 Agent、单一工作区、单一
-20/80 轮预算。因此真正差距是**任务编排和收敛机制**，而不是把一个常数从 20 改成
-80。
+此前版本把两个不同项目混为一谈：InfCodeX（KodaX CLI）与 Tokfinity/InfCode
+论文/评测实现不是同一个代码库。5 个 Generator、Selector、140/200 轮以及论文中的
+Verified 数字不能作为 InfCodeX 的证据；`scaleapi/SWE-bench_Pro-os` 是评测 harness，
+也不是 InfCodeX 的成绩报告。
+
+本次固定核对的 InfCodeX 源码是 `d3a812379b589597347f5be12d5b68477e577f02`。
+没有找到该项目针对 SWE-bench Pro 的公开可核验成绩，因此不能计算与 NZ-Coder 的
+公开分数差。NZ-Coder 的本地失败证据仍表明单 Agent 在仓库定位、上下文预算和验证
+收敛上存在问题，但不能由此推出 InfCodeX 的优越幅度。
 
 本地证据也显示，NZ-Coder 的失败不是“模型完全不会修”：16 次历史轨迹中，4 次
 完成运行都在 7–17 turns 内完成单文件修改；失败组平均 26.7 turns、16.5 次
 compaction，且有 86 个 failure-repair turns。最近的 Ansible Pro 试跑在 20 轮时
 没有编辑，提到 80 轮后在第 28 次调用被停止时仍没有编辑。
 
-当前候选分支已将前三项低风险控制改进落地并通过定向回归；最新提交为
-`a457e51ae422212515f69985798caab4872b0321`（strict/SWE profile 也纳入收敛门）。
-受影响测试集合最后一次复跑为 `491 passed`；该数字是本地回归通过数，不是
-SWE-bench Pro 的通过率。
+历史 Lite 聚合为 16 次内部运行（completed 4、risky 6、agent_failed 6），不是
+官方 pass@1。Ansible Pro 两次受限运行在编辑前耗尽/停止；原始临时目录目前已不存在，
+缺失字段不应被补写成推测。最近完整回归的提交和测试范围见 Git 历史，不将测试通过数
+当作 SWE-bench Pro 通过率。
 
 ## 🔍 可核查的对照
 
 | 能力 | NZ-Coder 当前证据 | InfCodeX 公开实现 | 对结果的影响 |
 | --- | --- | --- | --- |
 | 独立循环上限 | 配置默认 500；本次命令强制 20，后续试跑 80 | `MAX_TOOL_LOOP_ITERATIONS=20` | 单纯提高上限不能保证收敛 |
-| SWE 任务编排 | 当前直接单 Agent Core | 5 个独立 Generator + 1 个 Selector；Generator 140、Selector 200 | 为长任务提供额外候选和失败隔离 |
-| 并发 | 工具读操作可并行，但本次模型只发单个搜索/读取批次 | Generator 任务并发 5；批处理 `--parallel=20` 是跨题并发 | InfCodeX 的并发主要扩大候选，不是同一工作区并发写入 |
-| 仓库浏览 | 已有 repo graph/code index 和 `repo_map` 工具，但模型本次主要使用 `grep_search`、`read_file`、`list_directory` | 主要是 `rg` 搜索和行号编辑，无 AST map | NZ 有能力但没有稳定地在首轮使用，模型搜索成本高 |
-| 上下文 | 32k 配置、约 28k usable；本次出现 token estimate 31,366，Provider `finish_reason=length` | 无摘要/滑窗；工具结果截断约 16k，但默认模型/配置上下文更大 | NZ 在尚未编辑前就因上下文压力丢失有效轮次 |
-| 压缩 | NZ 有 `context_evidence_projected`/micro-compaction，但历史失败组平均 16.5 次 | InfCodeX 没有摘要，依赖较大上下文和缓存 | NZ 压缩发生得频繁，却没有把任务推进到编辑阶段 |
-| 验证 | 有静态、targeted、regression 规划和 sidecar；失败时可能进入重复 repair | Prompt 要求复现/回归/submit；Selector 选择候选 | NZ 的验证机制强，但需要“编辑后立即验证”的停机策略 |
-| 预算/停止 | 以 turn、context、tool policy 控制；Pro 试跑权限确认也占用墙钟时间 | 生成器有 cost limit/retry 配置；托管链共享更高工作预算 | 当前主要浪费在编辑前调查和失败修复循环 |
+| SWE 任务编排 | 当前直接单 Agent Core | 当前 README 描述 V2 Worker single-loop + out-of-band Sidecar；旧 V1 chain 已退役 | 没有 5-generator 证据，不能据此比较 |
+| 并发 | 工具读操作可并行，但本次模型只发单个搜索/读取批次 | README 的 Worker/子任务隔离与批处理并不等于同一工作区并发写入 | 不能用批处理并发推断单题质量 |
+| 仓库浏览 | 已有 repo graph/code index 和 `repo_map` 工具，但模型本次主要使用 `grep_search`、`read_file`、`list_directory` | `builtin-agents.ts:21-75` 提供 `repo_overview`、`module_context`、`symbol_context`、`process_context`、`impact_estimate`、relationship/LSP 工具，明确结构化工具优先 | NZ 的缺口是实际使用率/提示编排，不是没有结构化工具 |
+| 上下文 | 32k 配置、约 28k usable；本次出现 token estimate 31,366，Provider `finish_reason=length` | 有摘要压缩、物理容量和结果截断规则 | NZ 在尚未编辑前承受上下文压力，但两者策略不能简单归因 |
+| 压缩 | NZ 有 `context_evidence_projected`/micro-compaction，但历史失败组平均 16.5 次 | `packages/agent/src/primitives/compaction.ts:87-190` 默认 80% 阈值、保留最近 10 条并生成摘要 | 两者都有压缩，不能写成 InfCodeX 没有摘要 |
+| 验证 | 有静态、targeted、regression 规划和 sidecar；失败时可能进入重复 repair | 当前默认 Sidecar Verifier 返回 accept/revise/blocked | 两者都有验证闭环；需要比较实际终止轨迹 |
+| 预算/停止 | 以 turn、context、tool policy 控制；Pro 试跑权限确认也占用墙钟时间 | standalone Runner 20；托管安全上限 500，另有 budget controller | 当前主要浪费在编辑前调查和失败修复循环；上限不是质量保证 |
 
-InfCodeX 的公开资料只声明 SWE-bench Lite/Verified；没有证据证明它支持
-Scale SWE-bench Pro，因此不能把其 Lite 分数直接与本项目 Pro 试跑比较。其公开代码
-和 README 也存在叙述与实现不完全一致之处（例如论文称双 Generator，代码实际是
-5 个并发的单一 `PatchGenerator` 加 Selector）；这里以代码为准。
+InfCodeX 的公开代码和 README 描述的是 KodaX 的通用 Agent/托管路径；本文没有发现
+可核验的 InfCodeX SWE-bench Pro 成绩。论文/评测仓库中属于 InfCode 的数字必须单独
+标注项目名，不能转写到 InfCodeX。
 
 ## 📊 NZ-Coder 失败为何反复出现
 
@@ -77,16 +80,17 @@ Ansible 试跑的 29 个工具调用中有 15 次 `read_file`、6 次 `grep_sear
 
 ## 🎯 按顺序完善，而不是继续盲调轮数
 
-### 第一项已落地（2026-09-13）
+### 收敛门：已接入，但收益尚未证实（2026-09-13）
 
-已在正常交互式运行的工具策略边界加入一个证据驱动的实现收敛门：当任务被识别为
+已在正常交互式运行的工具策略边界加入一个收敛门：当任务被识别为
 `bugfix`/`feature`/`refactor`/`test`，尚未发生变更，且已经成功读取至少一个源码文件和
 一个测试文件时，调查调用达到动态阈值（短运行 12 次，长运行最多 20 次）后，后续
 只读调查会被明确拒绝，并返回“先编辑或运行最窄验证”的可操作工具结果。编辑、diff、
 验证和安全策略不受阻断；未定位到具体文件和非编码任务保持原有行为，SWE/strict
 profile 也使用同一证据门。该门由 `RuntimeState.implementation_gate_active()` 和
-`ProductionToolPolicy.strict_progress_rejections()` 共同实现，避免把全局轮数或超时阈值
-当成质量策略。
+`ProductionToolPolicy.strict_progress_rejections()` 共同实现。但“读过一个源码和一个测试”
+不能证明根因已定位：精确重读或读取新关联文件也会被拒绝，可能迫使模型盲改。现有测试
+只证明门控连线，不证明 SWE 质量提升，必须先补反例再决定是否收窄。
 
 回归先在旧实现上得到预期失败，再在修复后通过：
 
@@ -97,9 +101,8 @@ python3 -m pytest -q tests/runtime/tool_runtime tests/test_loop_fake.py tests/te
 299 passed in 150.75s
 ```
 
-这项改动只解决“已经定位后仍无止境只读调查”的控制缺口，不宣称已经解决上下文压缩、
-多候选编排或 SWE-bench Pro 的整体通过率；下一项仍应先为 Provider length/compaction
-建立确定性回归。
+因此不能把该项写成已完成的质量改进，也不能宣称解决了上下文压缩、多候选编排或
+SWE-bench Pro 通过率。
 
 ### 第二项已落地（2026-09-13）
 
@@ -112,7 +115,7 @@ context/recovery/hooks 定向测试共 109 项通过。该修复防止通过反�
 但不改变 hard context limit，也不声称已消除 Provider `finish_reason=length`；后者仍需
 独立的预算分配回归。
 
-### 第三项已落地（2026-09-13）
+### 仓库检索刷新：行为范围有限（2026-09-13）
 
 仓库索引在首轮仍处于 warming 时，后续回合可能已经得到新的候选文件；此前
 `_repo_retrieval_block()` 在 turn>1 直接丢弃这些结果，模型只能重新 grep。现在按
@@ -121,11 +124,20 @@ context/recovery/hooks 定向测试共 109 项通过。该修复防止通过反�
 `tool-only` 行为保持不变。定向回归
 `test_repo_retrieval_refreshes_new_candidates_after_first_turn` 覆盖了“首轮无结果、
 第二轮索引就绪、第三次不重复注入”的链路，retrieval/service/prompt 共 83 项通过。
+该测试使用 fake ready 结果，且默认 `repo_retrieval_strategy="guidance"` 不会主动查询
+候选索引；它不能证明真实 warming 或跨 Session 持久可见性。
 
-### 1. 调查→编辑收敛门（优先级 P0，已完成）
+### 上下文截断：已确认并修复一项确定性缺陷（2026-09-13）
 
-已实现上述证据驱动门控。后续应在不改变门控边界的前提下，继续收集真实任务中首次
-编辑回合和被拒调查次数，确认它确实减少了编辑前空转，而不是把模型推入无信息的盲改。
+旧 `truncate_text_tokens()` 用 `payload_tokens * 4` 估算字符数，但估算器对中文按字符
+计 token。给定 100-token 预算的中文块，旧实现实际估算为 373 tokens；新增回归先在旧
+实现失败，修复后改为按同一估算器二分选择前缀/后缀，并验证 marker 也在预算内。该修复
+只保证本地动态块不超过声明预算，不等同于 Provider 端到端上下文通过。
+
+### 1. 调查→编辑收敛门（优先级 P0，待反例审计）
+
+先新增确定性反例：已读源码/测试后仍需要精确重读或新关联文件时，调用不应被静默拒绝。
+在此之前不扩大门控，也不把拒绝次数下降当作成功指标。
 
 ### 2. 修正上下文预算的分配（P0）
 
@@ -144,7 +156,7 @@ context/recovery/hooks 定向测试共 109 项通过。该修复防止通过反�
 ### 4. 再评估是否需要托管多候选（P1）
 
 只有单 Agent 收敛门和上下文修复有离线证据后，才考虑实现受控的多候选/Selector。
-不能直接复制 InfCodeX 的 5 倍并发：它会放大费用、工作区隔离和结果选择复杂度，且
+不能直接复制未经证实的 5 倍并发：它会放大费用、工作区隔离和结果选择复杂度，且
 InfCodeX 自身没有公开 Pro 证据。候选实验应使用同一题、同一模型、固定费用目标，并
 单独记录每个候选。
 

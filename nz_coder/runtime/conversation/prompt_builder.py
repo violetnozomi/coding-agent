@@ -245,11 +245,23 @@ def truncate_text_tokens(text: str, max_tokens: int, keep_tail: bool = False) ->
     if estimate_text_tokens(text) <= max_tokens:
         return text
     marker = "\n[... truncated by context budget ...]\n"
-    payload_tokens = max(0, max_tokens - estimate_text_tokens(marker))
-    if payload_tokens <= 0:
+    marker_tokens = estimate_text_tokens(marker)
+    if max_tokens <= marker_tokens:
         return marker if max_tokens >= estimate_text_tokens(marker) else ""
-    max_chars = max(1, payload_tokens * 4)
-    return marker + text[-max_chars:] if keep_tail else text[:max_chars] + marker
+    # Character-to-token ratios vary substantially for non-ASCII text.  Find
+    # the largest prefix/suffix that fits the estimator instead of assuming
+    # four characters per token (which overran the budget for CJK text).
+    low, high = 0, len(text)
+    while low < high:
+        candidate = (low + high + 1) // 2
+        fragment = text[-candidate:] if keep_tail else text[:candidate]
+        candidate_text = marker + fragment if keep_tail else fragment + marker
+        if estimate_text_tokens(candidate_text) <= max_tokens:
+            low = candidate
+        else:
+            high = candidate - 1
+    fragment = text[-low:] if keep_tail else text[:low]
+    return marker + fragment if keep_tail else fragment + marker
 
 
 def _task_query(host, messages: list) -> str:

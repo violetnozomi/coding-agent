@@ -458,6 +458,30 @@ def test_convergence_gate_blocks_more_investigation_after_localization() -> None
     assert "edit" in rejected[0].output.lower()
 
 
+def test_convergence_gate_allows_exact_source_reread_after_localization() -> None:
+    """A convergence hint must not prevent checking already-read source text."""
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    state.reset(max_turns=20)
+    state.task_mode = "bugfix"
+    state.read_files = ["src/parser.py", "tests/test_parser.py"]
+    state.investigation_calls_since_edit = 12
+    context = _context()
+    context.runtime_state = state
+    call = {
+        "id": "exact-reread",
+        "function": {
+            "name": "read_file",
+            "arguments": {"path": "src/parser.py"},
+        },
+    }
+
+    rejected = ProductionToolPolicy().strict_progress_rejections(context, [call])
+
+    assert rejected == {}
+
+
 def test_task_constraint_gate_blocks_explicitly_forbidden_test_mutation() -> None:
     context = _context()
     context.runtime_state.task_constraint_action = (

@@ -2526,6 +2526,16 @@ def test_context_layer_budget_truncates_memory_and_scratch():
     assert "truncated by context budget" in stable or "truncated by context budget" in dynamic
 
 
+def test_context_layer_cjk_truncation_respects_token_budget():
+    """Mixed-language truncation must not exceed its advertised budget."""
+    from nz_coder.loop import _truncate_text_tokens, _estimate_text_tokens
+
+    text = "中文内容" * 500
+    result = _truncate_text_tokens(text, 100)
+
+    assert _estimate_text_tokens(result) <= 100
+
+
 def _set_planning_config(config, enabled=True, max_replans=2, idle_turns=5):
     env_keys = (
         "NZ_PLANNING_ENABLED", "NZ_REPLAN_MAX_ATTEMPTS",
