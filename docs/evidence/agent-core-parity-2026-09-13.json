@@ -24,6 +24,24 @@
     "P2",
     "P3"
   ],
+  "implemented_in_this_slice": [
+    {
+      "symbol": "nz_coder/runtime/execution/product_surfaces.py:capability_snapshot",
+      "tests": [
+        "tests/runtime/test_product_capability_snapshot.py"
+      ],
+      "scope": "deterministic host-neutral capability evidence for declared product surfaces"
+    },
+    {
+      "symbol": "nz_coder/state/skills.py:SkillLoader.diagnostics",
+      "tests": [
+        "tests/test_skill_governance.py",
+        "tests/test_extensions.py",
+        "tests/test_skill_loading.py"
+      ],
+      "scope": "local skill governance diagnostics; external marketplace and host installation remain deferred"
+    }
+  ],
   "benchmark_snapshots": [
     {
       "subject": "InfCodeX",
@@ -99,10 +117,12 @@
       "references": [
         "nz_coder/tool_platform/catalog.py:ToolCatalog",
         "nz_coder/tool_platform/exposure.py",
+        "nz_coder/runtime/execution/product_surfaces.py:capability_snapshot",
         "nz_coder/permissions.py",
         "tests/tool_platform/test_exposure.py",
         "tests/test_permissions.py",
         "tests/test_mcp_catalog.py",
+        "tests/runtime/test_product_capability_snapshot.py",
         "references/InfCodeX/packages/coding/src/tools/",
         "references/InfCodeX/config-templates/integrations/mcp.example.jsonc",
         "infcode-dev/infcode-dev/packages/opencode/src/tool/",
@@ -114,7 +134,7 @@
         "nz_coder/tool_platform/exposure.py"
       ],
       "acceptance_test_path": "pytest tests/tool_platform/test_exposure.py tests/test_permissions.py tests/test_mcp_catalog.py",
-      "reason": "InfCodeX and infcode-dev tool sources are present; authoritative cross-product parity is not yet established for comparison."
+      "reason": "Local tool exposure and the capability snapshot are tested; InfCodeX and infcode-dev tool sources are present, but authoritative cross-product parity is not yet established for comparison."
     },
     {
       "area": "coding/repository intelligence/indexing",
@@ -231,6 +251,7 @@
         "nz_coder/extensions/registry.py:ExtensionRegistry",
         "nz_coder/mcp/runtime.py",
         "nz_coder/mcp/config.py",
+        "nz_coder/state/skills.py:SkillLoader.diagnostics",
         "tests/test_extensions.py",
         "tests/test_mcp.py",
         "tests/test_skill_loading.py",
@@ -246,7 +267,7 @@
         "nz_coder/mcp/"
       ],
       "acceptance_test_path": "pytest tests/test_extensions.py tests/test_mcp.py tests/test_skill_loading.py tests/test_skill_governance.py",
-      "reason": "Local registry, MCP, and skills are tested; no reference marketplace or host install semantics are present."
+      "reason": "Local registry, MCP, and skill governance diagnostics are tested; external marketplace and host installation semantics remain deferred and are not claimed by this audit."
     },
     {
       "area": "workflows",
