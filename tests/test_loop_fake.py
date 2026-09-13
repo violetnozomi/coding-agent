@@ -3795,8 +3795,8 @@ def test_agent_run_preserves_session_scratchpad():
         _restore_workdir(old, tmp)
 
 
-def test_auto_compaction_resets_stall_sidecar_history():
-    """Catches carrying pre-compaction repeats into the summarized context."""
+def test_auto_compaction_preserves_stall_sidecar_history():
+    """Compaction must not clear repeat evidence for already executed calls."""
     from nz_coder.loop import AgentLoop
 
     class Sidecar:
@@ -3812,7 +3812,7 @@ def test_auto_compaction_resets_stall_sidecar_history():
 
     agent._stamp_auto_compaction(messages)
 
-    assert agent.stall_orchestrator.reset_count == 1
+    assert agent.stall_orchestrator.reset_count == 0
 
 
 def test_approved_plan_exit_is_terminal_without_another_model_call(tmp_path):
