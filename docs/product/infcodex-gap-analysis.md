@@ -78,8 +78,8 @@ Ansible 试跑的 29 个工具调用中有 15 次 `read_file`、6 次 `grep_sear
 `bugfix`/`feature`/`refactor`/`test`，尚未发生变更，且已经成功读取至少一个源码文件和
 一个测试文件时，调查调用达到动态阈值（短运行 12 次，长运行最多 20 次）后，后续
 只读调查会被明确拒绝，并返回“先编辑或运行最窄验证”的可操作工具结果。编辑、diff、
-验证和安全策略不受阻断；未定位到具体文件、非编码任务以及 strict local/SWE 推理
-profile 保持原有行为。该门由 `RuntimeState.implementation_gate_active()` 和
+验证和安全策略不受阻断；未定位到具体文件和非编码任务保持原有行为，SWE/strict
+profile 也使用同一证据门。该门由 `RuntimeState.implementation_gate_active()` 和
 `ProductionToolPolicy.strict_progress_rejections()` 共同实现，避免把全局轮数或超时阈值
 当成质量策略。
 

@@ -419,8 +419,8 @@ def test_strict_progress_gate_never_turns_repeated_reads_into_terminal_blocker()
         _restore_workdir(old, tmp)
 
 
-def test_strict_progress_soft_boundary_allows_reads_beyond_retired_hard_limit():
-    """The real strict loop keeps executing reads after the advisory nudge."""
+def test_strict_progress_gate_stops_reads_after_localization():
+    """The strict loop reserves the localized run for implementation."""
     from nz_coder.loop import AgentLoop
     from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 
@@ -487,7 +487,12 @@ def test_strict_progress_soft_boundary_allows_reads_beyond_retired_hard_limit():
 
         assert status["status"] == "completed"
         assert fake.chat.completions.calls == 5
-        assert agent.runtime_state.investigation_calls_since_edit == 22
+        assert agent.runtime_state.investigation_calls_since_edit == 20
+        assert any(
+            "investigation is converged" in str(message.get("content") or "")
+            for message in messages
+            if message.get("role") == "tool"
+        )
         assert "Final blocker" not in next(
             message["content"]
             for message in messages

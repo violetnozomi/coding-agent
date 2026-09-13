@@ -180,9 +180,7 @@ class ProductionToolPolicy:
         state = context.runtime_state
         gate = getattr(state, "implementation_gate_active", None)
         classify = getattr(state, "is_investigation_call", None)
-        # Strict local/SWE inference keeps its historical read surface; this
-        # product convergence gate applies to the normal interactive profile.
-        if strict_local_tools() or not callable(gate) or not gate() or not callable(classify):
+        if not callable(gate) or not gate() or not callable(classify):
             return {}
         rejected: dict[int, ToolExecutionResult] = {}
         for index, tool_call in enumerate(tool_calls):
