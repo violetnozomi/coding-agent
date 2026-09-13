@@ -1253,7 +1253,12 @@ class AgentRunner:
                         # A local preflight did not consume a main-model turn;
                         # retry the same logical slot after bounded compaction.
                         retry_same_turn = True
-                        continue
+                    # Both local preflight failures and real Provider overflows
+                    # have been settled and compacted.  Do not submit the failed
+                    # result to approval/empty-response handling.  A Provider
+                    # overflow advances to the next logical slot; only the local
+                    # preflight branch above reuses this slot.
+                    continue
                 if result.diagnostic is not None:
                     record_provider_turn(finish_reason="error")
                     structured = result.assistant_error or {

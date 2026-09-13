@@ -254,3 +254,33 @@ def test_text_completion_returns_content_for_normal_provider_result() -> None:
     result = ProductionTurnModelRuntime().complete_text(context, "system", "prompt")
 
     assert result == '{"action":"decline","reason":"simple"}'
+
+
+def test_text_completion_budget_ignores_registered_tools_when_disabled() -> None:
+    calls = []
+    context, _events = _context(streaming=False)
+    environment = ProductRunEnvironment.__new__(ProductRunEnvironment)
+    context = replace(
+        context,
+        active_tool_specs=lambda: [{
+            "type": "function",
+            "function": {
+                "name": "large_registered_tool",
+                "description": "x" * 6_000,
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }],
+        prompt_budget=lambda: SimpleNamespace(
+            usable_input_tokens=100,
+            output_reserve_tokens=200,
+        ),
+        gateway=lambda **_kwargs: SimpleNamespace(
+            complete_sync=lambda call: calls.append(call)
+            or ModelCallOutcome.completed(content="ok")
+        ),
+        project_outcome=environment._gateway_outcome_result,
+    )
+
+    assert ProductionTurnModelRuntime().complete_text(context, "s", "p") == "ok"
+    assert len(calls) == 1
+    assert calls[0].tools == ()

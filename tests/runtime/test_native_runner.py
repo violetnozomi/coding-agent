@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
+import threading
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -1372,14 +1374,33 @@ def _production_budget_context(
 
 def _run_production_budget_case(
     tmp_path: Path,
+    **kwargs,
+):
+    return asyncio.run(_run_production_budget_case_async(tmp_path, **kwargs))
+
+
+async def _run_production_budget_case_async(
+    tmp_path: Path,
     *,
     provider_call,
     compact_messages,
     max_turns: int = 1,
     usable_input_tokens: int = 500,
+    cancel_compaction=None,
+    tools=None,
 ):
     events: list[tuple[str, dict]] = []
     sessions = _Sessions()
+
+    async def checkpoint(context, status):
+        events.append(("checkpoint", {
+            "status": status,
+            "messages": copy.deepcopy(context.transcript),
+        }))
+
+    sessions.checkpoint = checkpoint
+    lifecycle = _Lifecycle()
+    lifecycle.initialize = lambda _context, _messages, _stream: (max_turns, 0)
     budget = PromptBudget(
         context_tokens=128,
         output_reserve_tokens=28,
@@ -1398,14 +1419,14 @@ def _run_production_budget_case(
     )
     services = RuntimeServices(
         model=ProductionTurnModelRuntime(),
-        tools=_BudgetTools(),
+        tools=tools or _BudgetTools(),
         context=_ProductionContext(),
         session_runtime=sessions,
         events=_Events(),
         host=_UnusedHost(),
         memory=_Memory(),
         verifier=_Verifier(),
-        lifecycle=(_OneTurnLifecycle() if max_turns == 1 else _FourTurnLifecycle()),
+        lifecycle=lifecycle,
         guardrails=_Guardrails(),
         inputs=_Inputs(),
         transitions=_Transitions(),
@@ -1429,17 +1450,33 @@ def _run_production_budget_case(
             compact=lambda messages: compact_messages(messages),
             stamp_auto_compaction=lambda _messages: None,
             trace=lambda name, **payload: events.append((name, payload)),
+            cancel_compaction=cancel_compaction,
         )
         base.execution.context = lambda: context_runtime
         base.hooks.trace = lambda name, **payload: events.append((name, payload))
+        materialize = base.messages.materialize_llm_result
+
+        def record_materialized(result, **kwargs):
+            events.append(("model_result_materialized", {
+                "needs_compaction": result.needs_compaction,
+                "content": result.content,
+            }))
+            return materialize(result, **kwargs)
+
+        base.messages.materialize_llm_result = record_materialized
+        base.messages.observe_llm_result = lambda result, **kwargs: events.append((
+            "model_result_observed", {
+                "turn": kwargs["turn"],
+                "needs_compaction": result.needs_compaction,
+                "content": result.content,
+            },
+        ))
         return base
 
-    result = asyncio.run(
-        AgentRunner(
-            services,
-            execution_context_factory=execution_context,
-        ).run_result(request, options=request_contracts.RunOptions(stream=False))
-    )
+    result = await AgentRunner(
+        services,
+        execution_context_factory=execution_context,
+    ).run_result(request, options=request_contracts.RunOptions(stream=False))
     return result, sessions, events
 
 
@@ -1470,6 +1507,12 @@ def test_native_runner_recovers_local_budget_without_consuming_model_turn(tmp_pa
         name == "compact" and payload["trigger"] == "local_request_budget"
         for name, payload in events
     )
+    _assert_no_empty_recovery(events)
+    assert [
+        payload["content"]
+        for name, payload in events
+        if name == "model_result_materialized"
+    ] == ["finished"]
 
 
 def test_native_runner_bounds_unrecoverable_local_budget(tmp_path: Path):
@@ -1496,12 +1539,15 @@ def test_native_runner_bounds_unrecoverable_local_budget(tmp_path: Path):
     assert len(local_overflows) == 4
 
 
-def test_native_runner_distinguishes_provider_context_overflow(tmp_path: Path):
+@pytest.mark.parametrize("overflow_count", [1, 2])
+def test_native_runner_distinguishes_provider_context_overflow(
+    tmp_path: Path, overflow_count: int,
+):
     calls: list[list[dict]] = []
 
     def provider_call(messages):
-        calls.append(messages)
-        if len(calls) == 1:
+        calls.append(copy.deepcopy(messages))
+        if len(calls) <= overflow_count:
             return LLMResult(
                 needs_compaction=True,
                 compaction_error="provider rejected the received request",
@@ -1509,24 +1555,155 @@ def test_native_runner_distinguishes_provider_context_overflow(tmp_path: Path):
             )
         return LLMResult(content="finished", finish_reason="stop")
 
-    result, _sessions, events = _run_production_budget_case(
+    result, sessions, events = _run_production_budget_case(
         tmp_path,
         provider_call=provider_call,
         compact_messages=lambda _messages, **_kwargs: [
             {"role": "user", "content": "compact"}
         ],
-        max_turns=4,
+        max_turns=overflow_count + 1,
         usable_input_tokens=1_000,
     )
 
     assert result.status is RunStatus.COMPLETED
-    assert len(calls) == 2
-    assert [payload["turn"] for name, payload in events if name == "provider_turn_started"] == [1, 2]
+    assert len(calls) == overflow_count + 1
+    assert sessions.context.turn_count == overflow_count + 1
+    assert [payload["turn"] for name, payload in events if name == "provider_turn_started"] == list(range(1, overflow_count + 2))
     assert any(
         name == "context_overflow"
         and payload["source"] == "provider_context_overflow"
         for name, payload in events
     )
+    _assert_no_empty_recovery(events)
+    assert [payload["content"] for name, payload in events if name == "model_result_materialized"] == ["finished"]
+    assert [payload["turn"] for name, payload in events if name == "model_result_observed"] == [overflow_count + 1]
+    assert [name for name, _payload in events if name in {
+        "provider_turn_started", "provider_turn_settled", "context_overflow",
+        "compact", "model_result_materialized",
+    }] == [
+        "provider_turn_started", "provider_turn_settled", "context_overflow", "compact",
+    ] * overflow_count + [
+        "provider_turn_started", "model_result_materialized", "provider_turn_settled",
+    ]
+
+
+def _assert_no_empty_recovery(events):
+    assert not any(name.startswith("empty_assistant_completion_") for name, _ in events)
+    assert not any(
+        message.get("_nz_empty_completion_retry")
+        for name, payload in events if name == "checkpoint"
+        for message in payload["messages"]
+    )
+
+
+def test_native_runner_empty_recovery_only_follows_genuine_empty_result(tmp_path):
+    calls = []
+
+    def provider_call(messages):
+        calls.append(copy.deepcopy(messages))
+        if len(calls) == 1:
+            return LLMResult(
+                needs_compaction=True,
+                compaction_error="provider rejected the received request",
+                failure_source="provider_context_overflow",
+            )
+        return LLMResult(content="" if len(calls) == 2 else "finished", finish_reason="stop")
+
+    result, sessions, events = _run_production_budget_case(
+        tmp_path,
+        provider_call=provider_call,
+        compact_messages=lambda messages: list(messages),
+        max_turns=3,
+        usable_input_tokens=10_000,
+    )
+
+    assert result.status is RunStatus.COMPLETED
+    assert sessions.context.turn_count == 3
+    assert len(calls) == 3
+    assert not any(message.get("_nz_empty_completion_retry") for message in calls[1])
+    assert sum(bool(message.get("_nz_empty_completion_retry")) for message in calls[2]) == 1
+    assert [payload["count"] for name, payload in events if name == "empty_assistant_completion_retry"] == [1]
+    assert [payload["turn"] for name, payload in events if name == "model_result_observed"] == [2, 3]
+    assert [name for name, _payload in events if name in {
+        "provider_turn_started", "compact", "empty_assistant_completion_retry",
+    }] == [
+        "provider_turn_started", "compact", "provider_turn_started",
+        "empty_assistant_completion_retry", "provider_turn_started",
+    ]
+
+
+def test_native_runner_provider_overflow_cancellation_is_bounded(tmp_path: Path):
+    calls = []
+    compact_started = threading.Event()
+    release_compaction = threading.Event()
+    cancel_calls = []
+
+    def provider_call(messages):
+        calls.append(copy.deepcopy(messages))
+        return LLMResult(
+            needs_compaction=True,
+            compaction_error="provider rejected the received request",
+            failure_source="provider_context_overflow",
+        )
+
+    def compact_messages(messages):
+        compact_started.set()
+        release_compaction.wait(2)
+        return list(messages)
+
+    def cancel_compaction():
+        cancel_calls.append(True)
+        release_compaction.set()
+
+    async def exercise():
+        task = asyncio.create_task(_run_production_budget_case_async(
+            tmp_path,
+            provider_call=provider_call,
+            compact_messages=compact_messages,
+            max_turns=4,
+            usable_input_tokens=10_000,
+            cancel_compaction=cancel_compaction,
+        ))
+        assert await asyncio.to_thread(compact_started.wait, 2)
+        task.cancel()
+        return await task
+
+    result, sessions, events = asyncio.run(exercise())
+
+    assert result.status is RunStatus.CANCELLED
+    assert sessions.final_statuses == [RunStatus.CANCELLED]
+    assert len(calls) == 1
+    assert cancel_calls == [True]
+    assert not any(
+        name == "provider_turn_started" and payload["turn"] > 1
+        for name, payload in events
+    )
+
+
+def test_native_runner_provider_overflow_exhaustion_is_bounded(tmp_path: Path):
+    calls = []
+
+    def provider_call(messages):
+        calls.append(copy.deepcopy(messages))
+        return LLMResult(
+            needs_compaction=True,
+            compaction_error="provider rejected the received request",
+            failure_source="provider_context_overflow",
+        )
+
+    result, sessions, events = _run_production_budget_case(
+        tmp_path,
+        provider_call=provider_call,
+        compact_messages=lambda messages: list(messages),
+        max_turns=6,
+        usable_input_tokens=10_000,
+    )
+
+    assert result.status is RunStatus.ERROR
+    assert sessions.final_statuses == [RunStatus.ERROR]
+    assert len(calls) == 4
+    assert sum(name == "compact" for name, _payload in events) == 3
+    assert not any(name.startswith("empty_assistant_completion_") for name, _ in events)
 
 
 def test_native_runner_preserves_tool_pairing_across_local_budget_recovery(
@@ -1579,6 +1756,65 @@ def test_native_runner_preserves_tool_pairing_across_local_budget_recovery(
     assert len(tool_messages) == 1
     assert tool_messages[0]["tool_call_id"] == "budget-read"
     assert sum(name == "provider_turn_started" for name, _payload in events) == 2
+
+
+def test_native_runner_provider_overflow_does_not_replay_completed_tool(
+    tmp_path: Path,
+):
+    calls = []
+    side_effects = tmp_path / "side-effects.log"
+    tool_calls = [{
+        "id": "provider-overflow-tool",
+        "type": "function",
+        "function": {"name": "write_once", "arguments": "{}"},
+    }]
+
+    class WritingTools:
+        async def execute_batch_async(
+            self, _context, calls_, messages, _on_tool=None, _on_text=None, **kwargs,
+        ):
+            processor = kwargs["processor"]
+            processor.start_tools(calls_)
+            for call in calls_:
+                side_effects.write_text(
+                    side_effects.read_text(encoding="utf-8") + "write\n"
+                    if side_effects.exists() else "write\n",
+                    encoding="utf-8",
+                )
+                processor.complete_tool(call["id"], "written")
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "content": "written",
+                })
+            processor.finish_step("tool-calls")
+            return "continue"
+
+    def provider_call(messages):
+        calls.append(copy.deepcopy(messages))
+        if len(calls) == 1:
+            return LLMResult(tool_calls=tool_calls, finish_reason="tool_calls")
+        if len(calls) == 2:
+            return LLMResult(
+                needs_compaction=True,
+                compaction_error="provider rejected the received request",
+                failure_source="provider_context_overflow",
+            )
+        return LLMResult(content="finished", finish_reason="stop")
+
+    result, _sessions, events = _run_production_budget_case(
+        tmp_path,
+        provider_call=provider_call,
+        compact_messages=lambda messages: list(messages),
+        max_turns=3,
+        usable_input_tokens=10_000,
+        tools=WritingTools(),
+    )
+
+    assert result.status is RunStatus.COMPLETED
+    assert len(calls) == 3
+    assert side_effects.read_text(encoding="utf-8") == "write\n"
+    _assert_no_empty_recovery(events)
 
 
 def test_native_runner_finalizes_session_once_when_execution_raises(tmp_path: Path):
