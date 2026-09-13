@@ -99,20 +99,21 @@ class Skill:
         return [(directory / path).absolute() for path in result.files]
 
 
-def _parse_skill_file(fp: Path, source: str) -> Optional[Skill]:
-    """Parse a SKILL.md file and return a Skill object (body loaded lazily)."""
+def _parse_skill_file_with_reason(fp: Path, source: str) -> tuple[Optional[Skill], str | None]:
+    """Parse a skill header and return a safe diagnostic reason on failure."""
     try:
         text = fp.read_text(encoding="utf-8")
-    except OSError:
-        return None
+    except (OSError, UnicodeError):
+        return None, "unreadable"
 
     meta: dict = {}
     m = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
-    if m:
-        for line in m.group(1).strip().splitlines():
-            if ":" in line:
-                k, _, v = line.partition(":")
-                meta[k.strip()] = v.strip()
+    if not m:
+        return None, "invalid_metadata"
+    for line in m.group(1).strip().splitlines():
+        if ":" in line:
+            k, _, v = line.partition(":")
+            meta[k.strip()] = v.strip()
 
     name = meta.get("name", fp.parent.name)
     description = meta.get("description", "")
@@ -122,14 +123,14 @@ def _parse_skill_file(fp: Path, source: str) -> Optional[Skill]:
     raw_tools = meta.get("allowed_tools", meta.get("allowed-tools", ""))
     allowed_tools = [t.strip() for t in raw_tools.split(",") if t.strip()] if raw_tools else []
     if any(not re.fullmatch(r"[A-Za-z0-9_.:-]+", item) for item in allowed_tools):
-        return None
+        return None, "invalid_metadata"
 
     # paths: comma-separated glob patterns for conditional activation
     raw_paths = meta.get("paths", "")
     paths = [p.strip() for p in raw_paths.split(",") if p.strip()] if raw_paths else []
     model = str(meta.get("model") or "").strip()
     if model and not re.fullmatch(r"[A-Za-z0-9_./:-]+", model):
-        return None
+        return None, "invalid_metadata"
 
     return Skill(
         name=name,
@@ -140,10 +141,20 @@ def _parse_skill_file(fp: Path, source: str) -> Optional[Skill]:
         source=source,
         file_path=fp,
         model=model,
-    )
+    ), None
 
 
-def _scan_skills_dir(skills_dir: Path, source: str) -> list[Skill]:
+def _parse_skill_file(fp: Path, source: str) -> Optional[Skill]:
+    """Parse a SKILL.md file and return a Skill object (body loaded lazily)."""
+    skill, _reason = _parse_skill_file_with_reason(fp, source)
+    return skill
+
+
+def _scan_skills_dir(
+    skills_dir: Path,
+    source: str,
+    parse_errors: list[dict] | None = None,
+) -> list[Skill]:
     """Scan a skills directory and return all valid skills (header-only, lazy body)."""
     if not skills_dir.exists():
         return []
@@ -152,9 +163,15 @@ def _scan_skills_dir(skills_dir: Path, source: str) -> list[Skill]:
         if entry.is_dir():
             skill_file = entry / "SKILL.md"
             if skill_file.exists():
-                skill = _parse_skill_file(skill_file, source)
+                skill, reason = _parse_skill_file_with_reason(skill_file, source)
                 if skill:
                     skills.append(skill)
+                elif parse_errors is not None and reason and len(parse_errors) < 100:
+                    parse_errors.append({
+                        "source": source,
+                        "directory": entry.name,
+                        "reason": reason,
+                    })
     return skills
 
 
@@ -182,6 +199,8 @@ class SkillLoader:
         # file paths already matched (to avoid re-scanning)
         self._activated: set[str] = set()
         self._disabled: dict[str, Skill] = {}
+        self._shadowed: list[dict] = []
+        self._parse_errors: list[dict] = []
         self._settings_path = self._project_dir.parent / "settings.json"
         self._disabled_names = self._read_disabled_names()
 
@@ -189,6 +208,8 @@ class SkillLoader:
 
     def _load(self) -> None:
         """Load skills from all tiers, project > user > bundled priority."""
+        self._shadowed.clear()
+        self._parse_errors.clear()
         # Collect from all tiers (higher priority first)
         all_skills: list[Skill] = []
         for skills_dir, source in [
@@ -196,13 +217,19 @@ class SkillLoader:
             (self._user_dir, "user"),
             (self._bundled_dir, "bundled"),
         ]:
-            for skill in _scan_skills_dir(skills_dir, source):
+            for skill in _scan_skills_dir(skills_dir, source, self._parse_errors):
                 all_skills.append(skill)
 
         # Deduplicate: first occurrence wins (project > user > bundled)
         seen: set[str] = set()
         for skill in all_skills:
             if skill.name in seen:
+                selected = next(item for item in all_skills if item.name == skill.name)
+                self._shadowed.append({
+                    "name": skill.name,
+                    "selected_source": selected.source,
+                    "shadowed_source": skill.source,
+                })
                 continue
             seen.add(skill.name)
             if skill.name in self._disabled_names:
@@ -212,6 +239,38 @@ class SkillLoader:
                 self._conditional[skill.name] = skill
             else:
                 self._skills[skill.name] = skill
+
+    def diagnostics(self) -> dict:
+        """Return stable, secret-free discovery diagnostics without loading bodies."""
+        return {
+            "schema": "skill-loader-diagnostics.v1",
+            "sources": [
+                {"source": source} for source in ("project", "user", "bundled")
+            ],
+            "available": [
+                {"name": skill.name, "source": skill.source}
+                for skill in sorted(self._skills.values(), key=lambda item: item.name)
+            ],
+            "conditional": [
+                {"name": skill.name, "source": skill.source}
+                for skill in sorted(self._conditional.values(), key=lambda item: item.name)
+            ],
+            "disabled": [
+                {"name": skill.name, "source": skill.source}
+                for skill in sorted(self._disabled.values(), key=lambda item: item.name)
+            ],
+            "shadowed": sorted(
+                self._shadowed,
+                key=lambda item: (
+                    item["name"],
+                    ("project", "user", "bundled").index(item["shadowed_source"]),
+                ),
+            ),
+            "parse_errors": sorted(
+                self._parse_errors,
+                key=lambda item: (item["source"], item["directory"], item["reason"]),
+            ),
+        }
 
     def activate_for_paths(self, file_paths: list[str]) -> list[str]:
         """Check conditional skills against file_paths and activate matches.

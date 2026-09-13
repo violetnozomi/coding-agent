@@ -107,3 +107,84 @@ def test_invalid_skill_metadata_is_excluded(tmp_path) -> None:
     )
 
     assert loader.get_skill_info("invalid") is None
+
+
+def test_skill_diagnostics_reports_sources_and_empty_roots(tmp_path) -> None:
+    loader = SkillLoader(
+        project_dir=tmp_path / "project", user_dir=tmp_path / "user",
+        bundled_dir=tmp_path / "bundled",
+    )
+
+    assert loader.diagnostics() == {
+        "schema": "skill-loader-diagnostics.v1",
+        "sources": [
+            {"source": "project"}, {"source": "user"}, {"source": "bundled"},
+        ],
+        "available": [], "conditional": [], "disabled": [],
+        "shadowed": [], "parse_errors": [],
+    }
+
+
+def test_skill_diagnostics_preserves_precedence_and_disabled_selection(tmp_path) -> None:
+    project = tmp_path / "project"
+    user = tmp_path / "user"
+    bundled = tmp_path / "bundled"
+    _write_skill(project, "review", allowed="read_file")
+    _write_skill(user, "review", allowed="grep_search")
+    _write_skill(bundled, "review", allowed="write_file")
+    _write_skill(user, "conditional", allowed="read_file")
+    (user / "conditional" / "SKILL.md").write_text(
+        "---\nname: conditional\npaths: src/**\n---\nbody", encoding="utf-8"
+    )
+    settings = project.parent / "settings.json"
+    settings.write_text('{"disabled_skills": ["review"]}', encoding="utf-8")
+    loader = SkillLoader(project_dir=project, user_dir=user, bundled_dir=bundled)
+
+    report = loader.diagnostics()
+    assert report["available"] == []
+    assert report["conditional"] == [{"name": "conditional", "source": "user"}]
+    assert report["disabled"] == [{"name": "review", "source": "project"}]
+    assert report["shadowed"] == [
+        {"name": "review", "selected_source": "project", "shadowed_source": "user"},
+        {"name": "review", "selected_source": "project", "shadowed_source": "bundled"},
+    ]
+
+
+def test_skill_diagnostics_records_malformed_metadata_without_aborting(tmp_path) -> None:
+    project = tmp_path / "project"
+    _write_skill(project, "valid")
+    malformed = project / "malformed"
+    malformed.mkdir(parents=True)
+    (malformed / "SKILL.md").write_text(
+        "---\nname: malformed\nallowed_tools: read file\n---\nbody", encoding="utf-8"
+    )
+    missing = project / "unreadable"
+    missing.mkdir()
+    (missing / "SKILL.md").write_bytes(b"\xff")
+    loader = SkillLoader(
+        project_dir=project, user_dir=tmp_path / "user", bundled_dir=tmp_path / "bundled"
+    )
+
+    report = loader.diagnostics()
+    assert report["available"] == [{"name": "valid", "source": "project"}]
+    assert report["parse_errors"] == [
+        {"source": "project", "directory": "malformed", "reason": "invalid_metadata"},
+        {"source": "project", "directory": "unreadable", "reason": "unreadable"},
+    ]
+
+
+def test_skill_diagnostics_is_stable_and_does_not_load_bodies(tmp_path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    _write_skill(project, "review")
+    loader = SkillLoader(
+        project_dir=project, user_dir=tmp_path / "user", bundled_dir=tmp_path / "bundled"
+    )
+    monkeypatch.setattr(
+        "nz_coder.state.skills.Skill.get_body",
+        lambda _self: (_ for _ in ()).throw(AssertionError("body")),
+    )
+
+    first = loader.diagnostics()
+    loader.reload()
+    second = loader.diagnostics()
+    assert first == second
