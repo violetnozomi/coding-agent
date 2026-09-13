@@ -1,29 +1,347 @@
 {
   "schema": "nz-coder.agent-core-parity.v1",
   "date": "2026-09-13",
-  "subjects": ["NZ-Coder Agent Core", "InfCodeX", "infcode-dev"],
+  "subjects": [
+    "NZ-Coder Agent Core",
+    "InfCodeX",
+    "infcode-dev"
+  ],
   "scope": {
     "runtime_parity": "NZ-Coder runtime compared with InfCodeX runtime",
     "product_host_parity": "NZ-Coder host surfaces compared with infcode-dev product surfaces",
-    "external_source_availability": "InfCodeX and infcode-dev source trees are unavailable in this worktree"
+    "external_source_availability": "Both ignored reference source trees are present at references/InfCodeX and infcode-dev/infcode-dev; runtime probes are tracked separately."
   },
-  "status_vocabulary": ["implemented", "partial", "planned", "different-by-design", "unavailable"],
-  "priority_vocabulary": ["P0", "P1", "P2", "P3"],
+  "status_vocabulary": [
+    "implemented",
+    "partial",
+    "planned",
+    "different-by-design",
+    "unavailable"
+  ],
+  "priority_vocabulary": [
+    "P0",
+    "P1",
+    "P2",
+    "P3"
+  ],
   "benchmark_snapshots": [
-    {"subject": "InfCodeX", "label": "v2 recorded snapshot", "success_rate": 0.8666666666666667, "current_nz_coder_score": false},
-    {"subject": "InfCodeX", "label": "older legacy snapshot", "success_rate": 0.0, "current_nz_coder_score": false}
+    {
+      "subject": "InfCodeX",
+      "label": "v2 recorded snapshot",
+      "success_rate": 0.8666666666666667,
+      "current_nz_coder_score": false
+    },
+    {
+      "subject": "InfCodeX",
+      "label": "older legacy snapshot",
+      "success_rate": 0.0,
+      "current_nz_coder_score": false
+    }
   ],
   "rows": [
-    {"area": "core runner/session/events", "nz_coder_status": "implemented", "infcodex_status": "unavailable", "infcode_dev_status": "partial", "priority": "P0", "references": ["nz_coder/runtime/execution/runner.py", "nz_coder/runtime/core/state.py:RunState", "nz_coder/protocol/session_events.py", "tests/test_session_lifecycle.py", "tests/test_session_events.py", "tests/test_http_service.py"], "target_files": ["nz_coder/runtime/execution/runner.py", "nz_coder/http_service/manager.py"], "acceptance_test_path": "pytest tests/test_session_lifecycle.py tests/test_session_events.py tests/test_http_service.py", "reason": "External runtime and product protocol sources are absent; local runner and host contracts are covered."},
-    {"area": "providers", "nz_coder_status": "implemented", "infcodex_status": "unavailable", "infcode_dev_status": "partial", "priority": "P0", "references": ["nz_coder/providers/registry.py", "nz_coder/providers/models.py", "nz_coder/providers/capabilities.py", "tests/test_providers.py", "tests/test_provider_connect.py", "tests/test_model_capabilities.py"], "target_files": ["nz_coder/providers/"], "acceptance_test_path": "pytest tests/test_providers.py tests/test_provider_connect.py tests/test_model_capabilities.py", "reason": "Local provider registry is tested; no external provider capability matrix or live reference is available."},
-    {"area": "tool registry/exposure/permissions", "nz_coder_status": "implemented", "infcodex_status": "unavailable", "infcode_dev_status": "partial", "priority": "P0", "references": ["nz_coder/tool_platform/catalog.py:ToolCatalog", "nz_coder/tool_platform/exposure.py", "nz_coder/permissions.py", "tests/tool_platform/test_exposure.py", "tests/test_permissions.py", "tests/test_mcp_catalog.py"], "target_files": ["nz_coder/tool_platform/catalog.py", "nz_coder/tool_platform/exposure.py"], "acceptance_test_path": "pytest tests/tool_platform/test_exposure.py tests/test_permissions.py tests/test_mcp_catalog.py", "reason": "No authoritative InfCodeX or infcode-dev tool catalog is checked out for comparison."},
-    {"area": "coding/repository intelligence/indexing", "nz_coder_status": "implemented", "infcodex_status": "unavailable", "infcode_dev_status": "partial", "priority": "P0", "references": ["nz_coder/intelligence/code_index.py", "nz_coder/intelligence/repository_graph.py:RepositoryGraph", "nz_coder/intelligence/service.py", "tests/test_repo_map.py", "tests/test_repository_graph.py", "tests/test_repo_intelligence_closure.py", "tests/test_lsp.py"], "target_files": ["nz_coder/intelligence/", "nz_coder/lsp/"], "acceptance_test_path": "pytest tests/test_repo_map.py tests/test_repository_graph.py tests/test_repo_intelligence_closure.py tests/test_lsp.py", "reason": "Local indexing is covered; external language/index protocol and IDE transport are not available."},
-    {"area": "child/background/handoff/worktree", "nz_coder_status": "implemented", "infcodex_status": "unavailable", "infcode_dev_status": "partial", "priority": "P0", "references": ["nz_coder/runtime/agent/subagent.py", "nz_coder/runtime/agent/handoffs.py", "nz_coder/runtime/agent/child_result.py:ChildAgentResult", "nz_coder/runtime/worktree/", "tests/test_subagent.py", "tests/test_handoffs.py", "tests/test_child_result.py", "tests/test_agent_manager.py"], "target_files": ["nz_coder/runtime/agent/", "nz_coder/runtime/worktree/"], "acceptance_test_path": "pytest tests/test_subagent.py tests/test_handoffs.py tests/test_child_result.py tests/test_agent_manager.py", "reason": "Child lifecycle is locally tested; reference scheduler and product handoff UX are unavailable."},
-    {"area": "planning/verification/recovery", "nz_coder_status": "implemented", "infcodex_status": "partial", "infcode_dev_status": "partial", "priority": "P0", "references": ["nz_coder/runtime/agent/planning_runtime.py", "nz_coder/runtime/verification/", "nz_coder/runtime/agent/agent_resilience.py", "tests/test_plan_mode.py", "tests/test_verification.py", "tests/test_recovery.py", "tests/test_stall_detector.py", "tests/test_sidecar_verifier.py"], "target_files": ["nz_coder/runtime/verification/", "nz_coder/runtime/agent/agent_resilience.py"], "acceptance_test_path": "pytest tests/test_plan_mode.py tests/test_verification.py tests/test_recovery.py tests/test_stall_detector.py tests/test_sidecar_verifier.py", "reason": "Translated contracts cover intended InfCodeX semantics, but upstream and editor repair execution cannot be run."},
-    {"area": "memory", "nz_coder_status": "implemented", "infcodex_status": "unavailable", "infcode_dev_status": "partial", "priority": "P1", "references": ["nz_coder/runtime/adapters/memory.py", "nz_coder/runtime/conversation/context_manager.py", "tests/test_memory.py", "tests/test_memory_control.py", "tests/test_scratchpad.py", "tests/test_session_revert.py"], "target_files": ["nz_coder/runtime/adapters/memory.py", "nz_coder/runtime/conversation/context_manager.py"], "acceptance_test_path": "pytest tests/test_memory.py tests/test_memory_control.py tests/test_scratchpad.py tests/test_session_revert.py", "reason": "Local session memory is covered; external retention and product migration contracts are absent."},
-    {"area": "skills/MCP/extensions", "nz_coder_status": "implemented", "infcodex_status": "unavailable", "infcode_dev_status": "partial", "priority": "P1", "references": ["nz_coder/extensions/registry.py:ExtensionRegistry", "nz_coder/mcp/runtime.py", "nz_coder/mcp/config.py", "tests/test_extensions.py", "tests/test_mcp.py", "tests/test_skill_loading.py", "tests/test_skill_governance.py"], "target_files": ["nz_coder/extensions/registry.py", "nz_coder/mcp/"], "acceptance_test_path": "pytest tests/test_extensions.py tests/test_mcp.py tests/test_skill_loading.py tests/test_skill_governance.py", "reason": "Local registry, MCP, and skills are tested; no reference marketplace or host install semantics are present."},
-    {"area": "workflows", "nz_coder_status": "implemented", "infcodex_status": "partial", "infcode_dev_status": "partial", "priority": "P1", "references": ["nz_coder/runtime/workflows/workflow_runtime.py", "tests/test_workflow_runtime.py", "tests/test_workflow_advanced.py", "tests/test_workflow_parity_contracts.py", "tests/test_workflow_capsules.py"], "target_files": ["nz_coder/runtime/workflows/workflow_runtime.py", "nz_coder/interface/commands/handlers/workflow.py"], "acceptance_test_path": "pytest tests/test_workflow_runtime.py tests/test_workflow_advanced.py tests/test_workflow_parity_contracts.py tests/test_workflow_capsules.py", "reason": "Local workflow runtime and translated contracts exist; upstream and product visual workflow hosts are unavailable."},
-    {"area": "SDK/HTTP/events", "nz_coder_status": "implemented", "infcodex_status": "unavailable", "infcode_dev_status": "partial", "priority": "P1", "references": ["nz_coder/runtime/execution/native_sdk.py", "nz_coder/http_service/server.py", "nz_coder/protocol/session_events.py", "tests/test_http_service.py", "tests/test_openai_responses.py", "tests/test_message_schema.py", "tests/test_event_publisher_identity_phase3.py"], "target_files": ["nz_coder/http_service/", "nz_coder/runtime/execution/native_sdk.py", "nz_coder/protocol/"], "acceptance_test_path": "pytest tests/test_http_service.py tests/test_openai_responses.py tests/test_message_schema.py tests/test_event_publisher_identity_phase3.py", "reason": "Local HTTP/SDK contracts are tested; official InfCodeX or infcode-dev client compatibility is not observable."},
-    {"area": "CLI/TUI/VS Code/JetBrains host surfaces", "nz_coder_status": "implemented", "infcodex_status": "unavailable", "infcode_dev_status": "partial", "priority": "P1", "references": ["nz_coder/interface/cli.py", "nz_coder/interface/fullscreen.py", "nz_coder/interface/run_renderer.py", "nz_coder/interface/remote.py", "tests/test_terminal_interactions.py", "tests/test_tui_product_frames.py", "tests/test_headless_cli.py", "README.md:Limitations"], "target_files": ["nz_coder/interface/", "nz_coder/runtime/execution/product_surfaces.py"], "acceptance_test_path": "pytest tests/test_terminal_interactions.py tests/test_tui_product_frames.py tests/test_headless_cli.py", "reason": "CLI/TUI are covered; README records no official GUI/VS Code/JetBrains consumer and no external host checkout is available."}
-  ]
+    {
+      "area": "core runner/session/events",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P0",
+      "references": [
+        "nz_coder/runtime/execution/runner.py",
+        "nz_coder/runtime/core/state.py:RunState",
+        "nz_coder/protocol/session_events.py",
+        "tests/test_session_lifecycle.py",
+        "tests/test_session_events.py",
+        "tests/test_http_service.py",
+        "references/InfCodeX/packages/coding/src/session.ts",
+        "references/InfCodeX/packages/coding/src/managed-protocol.ts",
+        "references/InfCodeX/src/runtime-daemon/",
+        "infcode-dev/infcode-dev/packages/opencode/src/session/",
+        "infcode-dev/infcode-dev/packages/opencode/src/server/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/runtime/execution/runner.py",
+        "nz_coder/http_service/manager.py"
+      ],
+      "acceptance_test_path": "pytest tests/test_session_lifecycle.py tests/test_session_events.py tests/test_http_service.py",
+      "reason": "External runtime and product protocol sources are present; local runner and host contracts are covered."
+    },
+    {
+      "area": "providers",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P0",
+      "references": [
+        "nz_coder/providers/registry.py",
+        "nz_coder/providers/models.py",
+        "nz_coder/providers/capabilities.py",
+        "tests/test_providers.py",
+        "tests/test_provider_connect.py",
+        "tests/test_model_capabilities.py",
+        "references/InfCodeX/packages/llm/src/",
+        "references/InfCodeX/packages/coding/src/provider-policy.ts",
+        "infcode-dev/infcode-dev/packages/opencode/src/provider/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/providers/"
+      ],
+      "acceptance_test_path": "pytest tests/test_providers.py tests/test_provider_connect.py tests/test_model_capabilities.py",
+      "reason": "Local provider registry is tested; no external provider capability matrix or live reference is available."
+    },
+    {
+      "area": "tool registry/exposure/permissions",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P0",
+      "references": [
+        "nz_coder/tool_platform/catalog.py:ToolCatalog",
+        "nz_coder/tool_platform/exposure.py",
+        "nz_coder/permissions.py",
+        "tests/tool_platform/test_exposure.py",
+        "tests/test_permissions.py",
+        "tests/test_mcp_catalog.py",
+        "references/InfCodeX/packages/coding/src/tools/",
+        "references/InfCodeX/config-templates/integrations/mcp.example.jsonc",
+        "infcode-dev/infcode-dev/packages/opencode/src/tool/",
+        "infcode-dev/infcode-dev/packages/opencode/src/mcp/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/tool_platform/catalog.py",
+        "nz_coder/tool_platform/exposure.py"
+      ],
+      "acceptance_test_path": "pytest tests/tool_platform/test_exposure.py tests/test_permissions.py tests/test_mcp_catalog.py",
+      "reason": "InfCodeX and infcode-dev tool sources are present; authoritative cross-product parity is not yet established for comparison."
+    },
+    {
+      "area": "coding/repository intelligence/indexing",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P0",
+      "references": [
+        "nz_coder/intelligence/code_index.py",
+        "nz_coder/intelligence/repository_graph.py:RepositoryGraph",
+        "nz_coder/intelligence/service.py",
+        "tests/test_repo_map.py",
+        "tests/test_repository_graph.py",
+        "tests/test_repo_intelligence_closure.py",
+        "tests/test_lsp.py",
+        "references/InfCodeX/packages/coding/src/repo-intelligence/index.ts",
+        "references/InfCodeX/packages/coding/src/repo-intelligence/protocol.ts",
+        "infcode-dev/infcode-dev/packages/kilo-indexing/src/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/intelligence/",
+        "nz_coder/lsp/"
+      ],
+      "acceptance_test_path": "pytest tests/test_repo_map.py tests/test_repository_graph.py tests/test_repo_intelligence_closure.py tests/test_lsp.py",
+      "reason": "Local indexing is covered; external language/index protocol is present; IDE transport parity is not yet established."
+    },
+    {
+      "area": "child/background/handoff/worktree",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P0",
+      "references": [
+        "nz_coder/runtime/agent/subagent.py",
+        "nz_coder/runtime/agent/handoffs.py",
+        "nz_coder/runtime/agent/child_result.py:ChildAgentResult",
+        "nz_coder/runtime/worktree/",
+        "tests/test_subagent.py",
+        "tests/test_handoffs.py",
+        "tests/test_child_result.py",
+        "tests/test_agent_manager.py",
+        "references/InfCodeX/packages/coding/src/agents/",
+        "references/InfCodeX/packages/coding/src/child-fallback.ts",
+        "infcode-dev/infcode-dev/packages/opencode/src/agent/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/runtime/agent/",
+        "nz_coder/runtime/worktree/"
+      ],
+      "acceptance_test_path": "pytest tests/test_subagent.py tests/test_handoffs.py tests/test_child_result.py tests/test_agent_manager.py",
+      "reason": "Child lifecycle is locally tested; reference scheduler sources are present; product handoff UX parity is not yet established."
+    },
+    {
+      "area": "planning/verification/recovery",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P0",
+      "references": [
+        "nz_coder/runtime/agent/planning_runtime.py",
+        "nz_coder/runtime/verification/",
+        "nz_coder/runtime/agent/agent_resilience.py",
+        "tests/test_plan_mode.py",
+        "tests/test_verification.py",
+        "tests/test_recovery.py",
+        "tests/test_stall_detector.py",
+        "tests/test_sidecar_verifier.py",
+        "references/InfCodeX/packages/coding/src/multi-instance/stall-detector.ts",
+        "references/InfCodeX/packages/coding/src/agent.recovery.test.ts",
+        "infcode-dev/infcode-dev/packages/opencode/src/session/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/runtime/verification/",
+        "nz_coder/runtime/agent/agent_resilience.py"
+      ],
+      "acceptance_test_path": "pytest tests/test_plan_mode.py tests/test_verification.py tests/test_recovery.py tests/test_stall_detector.py tests/test_sidecar_verifier.py",
+      "reason": "Translated contracts cover intended InfCodeX semantics, but upstream and editor repair execution cannot be run."
+    },
+    {
+      "area": "memory",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P1",
+      "references": [
+        "nz_coder/runtime/adapters/memory.py",
+        "nz_coder/runtime/conversation/context_manager.py",
+        "tests/test_memory.py",
+        "tests/test_memory_control.py",
+        "tests/test_scratchpad.py",
+        "tests/test_session_revert.py",
+        "references/InfCodeX/packages/coding/src/memory/",
+        "references/InfCodeX/packages/coding/src/session.ts",
+        "infcode-dev/infcode-dev/packages/opencode/src/session/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/runtime/adapters/memory.py",
+        "nz_coder/runtime/conversation/context_manager.py"
+      ],
+      "acceptance_test_path": "pytest tests/test_memory.py tests/test_memory_control.py tests/test_scratchpad.py tests/test_session_revert.py",
+      "reason": "Local session memory is covered; external retention and product migration contracts are absent."
+    },
+    {
+      "area": "skills/MCP/extensions",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P1",
+      "references": [
+        "nz_coder/extensions/registry.py:ExtensionRegistry",
+        "nz_coder/mcp/runtime.py",
+        "nz_coder/mcp/config.py",
+        "tests/test_extensions.py",
+        "tests/test_mcp.py",
+        "tests/test_skill_loading.py",
+        "tests/test_skill_governance.py",
+        "references/InfCodeX/config-templates/integrations/extensions.example.jsonc",
+        "references/InfCodeX/config-templates/integrations/mcp.example.jsonc",
+        "infcode-dev/infcode-dev/packages/plugin/src/",
+        "infcode-dev/infcode-dev/packages/opencode/src/mcp/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/extensions/registry.py",
+        "nz_coder/mcp/"
+      ],
+      "acceptance_test_path": "pytest tests/test_extensions.py tests/test_mcp.py tests/test_skill_loading.py tests/test_skill_governance.py",
+      "reason": "Local registry, MCP, and skills are tested; no reference marketplace or host install semantics are present."
+    },
+    {
+      "area": "workflows",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P1",
+      "references": [
+        "nz_coder/runtime/workflows/workflow_runtime.py",
+        "tests/test_workflow_runtime.py",
+        "tests/test_workflow_advanced.py",
+        "tests/test_workflow_parity_contracts.py",
+        "tests/test_workflow_capsules.py",
+        "references/InfCodeX/packages/coding/src/workflows/",
+        "references/InfCodeX/packages/coding/src/workflows/builtin/registry.ts",
+        "infcode-dev/infcode-dev/packages/opencode/src/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/runtime/workflows/workflow_runtime.py",
+        "nz_coder/interface/commands/handlers/workflow.py"
+      ],
+      "acceptance_test_path": "pytest tests/test_workflow_runtime.py tests/test_workflow_advanced.py tests/test_workflow_parity_contracts.py tests/test_workflow_capsules.py",
+      "reason": "Local workflow runtime and translated contracts exist; upstream and product visual workflow hosts are unavailable."
+    },
+    {
+      "area": "SDK/HTTP/events",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P1",
+      "references": [
+        "nz_coder/runtime/execution/native_sdk.py",
+        "nz_coder/http_service/server.py",
+        "nz_coder/protocol/session_events.py",
+        "tests/test_http_service.py",
+        "tests/test_openai_responses.py",
+        "tests/test_message_schema.py",
+        "tests/test_event_publisher_identity_phase3.py",
+        "references/InfCodeX/packages/coding/src/client.ts",
+        "references/InfCodeX/src/runtime-daemon/",
+        "infcode-dev/infcode-dev/packages/opencode/src/server/",
+        "infcode-dev/infcode-dev/packages/sdk/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/http_service/",
+        "nz_coder/runtime/execution/native_sdk.py",
+        "nz_coder/protocol/"
+      ],
+      "acceptance_test_path": "pytest tests/test_http_service.py tests/test_openai_responses.py tests/test_message_schema.py tests/test_event_publisher_identity_phase3.py",
+      "reason": "Local HTTP/SDK contracts are tested; official InfCodeX or infcode-dev client compatibility is not observable."
+    },
+    {
+      "area": "CLI/TUI/VS Code/JetBrains host surfaces",
+      "nz_coder_status": "implemented",
+      "infcodex_status": "partial",
+      "infcode_dev_status": "partial",
+      "priority": "P1",
+      "references": [
+        "nz_coder/interface/cli.py",
+        "nz_coder/interface/fullscreen.py",
+        "nz_coder/interface/run_renderer.py",
+        "nz_coder/interface/remote.py",
+        "tests/test_terminal_interactions.py",
+        "tests/test_tui_product_frames.py",
+        "tests/test_headless_cli.py",
+        "README.md:Limitations",
+        "references/InfCodeX/packages/repl/src/",
+        "references/InfCodeX/clients/",
+        "infcode-dev/infcode-dev/apps/vscode/",
+        "infcode-dev/infcode-dev/apps/jetbrains/",
+        "infcode-dev/infcode-dev/packages/gui/",
+        "infcode-dev/infcode-dev/packages/kilo-indexing/",
+        "infcode-dev/infcode-dev/docs/"
+      ],
+      "target_files": [
+        "nz_coder/interface/",
+        "nz_coder/runtime/execution/product_surfaces.py"
+      ],
+      "acceptance_test_path": "pytest tests/test_terminal_interactions.py tests/test_tui_product_frames.py tests/test_headless_cli.py",
+      "reason": "CLI/TUI are covered; README records no official GUI/VS Code/JetBrains consumer and no external host checkout is available."
+    }
+  ],
+  "runtime_probes": {
+    "InfCodeX": {
+      "available": true,
+      "source_root": "references/InfCodeX",
+      "probe": "nz_coder/evaluation/reference_adapter.py:InfCodeXReferenceAdapter.probe"
+    },
+    "infcode-dev": {
+      "available": false,
+      "source_root": "infcode-dev/infcode-dev",
+      "reason": "Bun 1.3.13 is required but not installed",
+      "probe": "nz_coder/evaluation/reference_adapter.py:OpenCodeReferenceAdapter.probe"
+    }
+  }
 }
