@@ -24,9 +24,13 @@ def mcp_main(argv: list[str] | None = None) -> int:
     logout = subparsers.add_parser("logout", help="Remove stored OAuth credentials")
     logout.add_argument("server")
     subparsers.add_parser("list", help="Show merged MCP servers and trust state")
-    trust = subparsers.add_parser("trust", help="Trust one project-local command fingerprint")
+    trust = subparsers.add_parser(
+        "trust", help="Trust one project MCP capability fingerprint"
+    )
     trust.add_argument("server")
-    untrust = subparsers.add_parser("untrust", help="Remove trust for one project-local command")
+    untrust = subparsers.add_parser(
+        "untrust", help="Remove trust for one project MCP capability"
+    )
     untrust.add_argument("server")
     smoke = subparsers.add_parser("smoke", help="Run an opt-in live MCP interoperability check")
     smoke.add_argument("server")
@@ -86,7 +90,7 @@ def mcp_main(argv: list[str] | None = None) -> int:
             finally:
                 runtime.close()
         if args.command == "list":
-            servers = load_mcp_server_configs(workspace=Path.cwd())
+            servers = _server_configs(Path.cwd())
             if not servers:
                 print("No configured MCP servers.")
             for server in servers:
@@ -94,14 +98,25 @@ def mcp_main(argv: list[str] | None = None) -> int:
                 print(
                     f"{server.name}: {server.transport}, source={server.source}, "
                     f"enabled={str(server.enabled).lower()}, {trust_state}"
+                    + (
+                        f", fingerprint={server.fingerprint[:12]}"
+                        if server.fingerprint else ""
+                    )
                 )
             return 0
         if args.command in {"trust", "untrust"}:
             workspace = Path.cwd().resolve()
             server = _named_config(args.server, workspace)
-            if server.transport != "stdio" or server.source != "project":
-                raise ValueError("Only project-local stdio servers require command trust")
-            store = MCPTrustStore(Path(config.MCP_TRUST_STORE))
+            if server.source not in {"project", "trusted-workspace"}:
+                raise ValueError(
+                    "Only workspace-controlled MCP servers require explicit trust"
+                )
+            from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+            snapshot = current_config_snapshot(workspace)
+            store = MCPTrustStore(Path(snapshot.get(
+                "NZ_MCP_TRUST_STORE", config.MCP_TRUST_STORE,
+            )))
             if args.command == "trust":
                 store.trust(workspace, server.name, server.fingerprint)
                 print(f"{server.name}: trusted {server.fingerprint[:12]}")
@@ -109,7 +124,10 @@ def mcp_main(argv: list[str] | None = None) -> int:
                 removed = store.remove(workspace, server.name)
                 print(f"{server.name}: {'untrusted' if removed else 'not_trusted'}")
             return 0
-        server = _server_config(args.server)
+        server = _server_config(
+            args.server,
+            allow_legacy_status_fallback=args.command in {"status", "logout"},
+        )
         manager = MCPOAuthManager()
         if args.command == "status":
             print(f"{server.name}: {manager.status(server)}")
@@ -131,8 +149,23 @@ def mcp_main(argv: list[str] | None = None) -> int:
         return 1
 
 
-def _server_config(name: str) -> MCPServerConfig:
-    server = _named_config(name, Path.cwd())
+def _server_config(
+    name: str,
+    *,
+    allow_legacy_status_fallback: bool = False,
+) -> MCPServerConfig:
+    try:
+        server = _named_config(name, Path.cwd())
+    except ValueError:
+        if not allow_legacy_status_fallback or not config.MCP_SERVERS_JSON.strip():
+            raise
+        servers = load_mcp_server_configs(
+            config.MCP_SERVERS_JSON,
+            workspace=Path.cwd(),
+        )
+        server = next((item for item in servers if item.name == name), None)
+        if server is None:
+            raise ValueError(f"Unknown MCP server '{name}'")
     if server.transport != "streamable_http":
         raise ValueError(f"MCP server '{name}' is not remote")
     if server.oauth is None:
@@ -141,7 +174,19 @@ def _server_config(name: str) -> MCPServerConfig:
 
 
 def _named_config(name: str, workspace: Path) -> MCPServerConfig:
-    for server in load_mcp_server_configs(workspace=workspace):
+    for server in _server_configs(workspace):
         if server.name == name:
             return server
     raise ValueError(f"Unknown MCP server '{name}'")
+
+
+def _server_configs(workspace: Path) -> list[MCPServerConfig]:
+    """Capture one current CLI snapshot instead of consulting import globals."""
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+    root = workspace.resolve()
+    snapshot = load_config_snapshot(root)
+    return load_mcp_server_configs(
+        workspace=root,
+        config_snapshot=snapshot,
+    )

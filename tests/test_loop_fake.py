@@ -3,12 +3,16 @@
 import asyncio
 
 import json
+import os
 import shutil
 import tempfile
 import time
 from pathlib import Path
 
 import pytest
+
+
+_trust_env_stack: dict[str, str | None] = {}
 
 
 class FakeFunction:
@@ -153,11 +157,38 @@ def _run_agent(agent, *args, **kwargs):
 
 def _tmp_workdir():
     from nz_coder.foundation import config
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
 
     old = config.WORKDIR
     tmp = Path(tempfile.mkdtemp())
+    trust_path = tmp.parent / f".{tmp.name}-nz-trust.json"
+    _trust_env_stack[str(tmp)] = os.environ.get("NZ_CODER_WORKSPACE_TRUST_STORE")
+    os.environ["NZ_CODER_WORKSPACE_TRUST_STORE"] = str(trust_path)
+    snapshot = load_config_snapshot(tmp)
+    WorkspaceTrustStore(trust_path).trust(
+        tmp,
+        "workspace-config",
+        snapshot.workspace_fingerprint,
+    )
     config.WORKDIR = tmp
     return old, tmp
+
+
+def _trust_project_control(tmp: Path) -> None:
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    snapshot = load_config_snapshot(tmp)
+    WorkspaceTrustStore().trust(
+        tmp,
+        "workspace-control",
+        snapshot.control_fingerprint,
+    )
 
 
 def _restore_workdir(old, tmp):
@@ -165,6 +196,13 @@ def _restore_workdir(old, tmp):
 
     config.WORKDIR = old
     shutil.rmtree(str(tmp), ignore_errors=True)
+    trust_path = tmp.parent / f".{tmp.name}-nz-trust.json"
+    trust_path.unlink(missing_ok=True)
+    previous = _trust_env_stack.pop(str(tmp), None)
+    if previous is None:
+        os.environ.pop("NZ_CODER_WORKSPACE_TRUST_STORE", None)
+    else:
+        os.environ["NZ_CODER_WORKSPACE_TRUST_STORE"] = previous
 
 
 def test_loop_executes_tool_then_final_response():
@@ -1290,7 +1328,6 @@ def test_loop_runs_required_static_and_targeted_stages_before_completion():
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
-    old_reflection = config.REFLECTION_ENABLED
     config.REFLECTION_ENABLED = False
     try:
         fake = FakeClient([
@@ -1372,7 +1409,6 @@ def test_loop_runs_required_static_and_targeted_stages_before_completion():
         evidence = agent.run_evidence.verification_results
         assert [item["stage"] for item in evidence] == ["static", "targeted"]
     finally:
-        config.REFLECTION_ENABLED = old_reflection
         _restore_workdir(old, tmp)
 
 
@@ -1381,7 +1417,10 @@ def test_loop_reflection_reopens_incomplete_completion(monkeypatch):
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
+    old_reflection = config.REFLECTION_ENABLED
     config.REFLECTION_ENABLED = True
+    old_reflection_env = os.environ.get("NZ_REFLECTION_ENABLED")
+    os.environ["NZ_REFLECTION_ENABLED"] = "1"
     try:
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[
@@ -1426,6 +1465,11 @@ def test_loop_reflection_reopens_incomplete_completion(monkeypatch):
             for m in messages
         )
     finally:
+        config.REFLECTION_ENABLED = old_reflection
+        if old_reflection_env is None:
+            os.environ.pop("NZ_REFLECTION_ENABLED", None)
+        else:
+            os.environ["NZ_REFLECTION_ENABLED"] = old_reflection_env
         _restore_workdir(old, tmp)
 
 
@@ -1523,6 +1567,7 @@ def test_loop_injects_prompt_hook_guidance_from_settings():
             ),
             encoding="utf-8",
         )
+        _trust_project_control(tmp)
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
         messages = [{"role": "user", "content": "fix the bug"}]
@@ -1565,6 +1610,7 @@ def test_loop_pre_tool_hook_rejects_write_file_from_settings():
             ),
             encoding="utf-8",
         )
+        _trust_project_control(tmp)
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall("write_file", {"path": "hello.txt", "content": "hello"}),
@@ -1613,6 +1659,7 @@ def test_loop_no_tool_hook_reopens_for_missing_requested_tests():
             ),
             encoding="utf-8",
         )
+        _trust_project_control(tmp)
         fake = FakeClient([
             FakeResponse(FakeMessage("done too early")),
             FakeResponse(FakeMessage("done after hook reminder")),
@@ -1675,7 +1722,10 @@ def test_loop_preserves_reasoning_content_between_tool_turns():
 
         assistant_messages = [m for m in messages if m.get("role") == "assistant"]
         private_state = assistant_messages[0]["_nz_provider_reasoning_content"]
-        assert private_state["schema"] == "nz.provider_private_state.v1"
+        assert private_state["schema"] == "nz.provider_private_state.v2"
+        assert private_state["provider_instance_id"].startswith(
+            "provider-instance-"
+        )
         assert private_state["provider_id"] == "openai-compatible"
         assert private_state["payload"] == "private provider reasoning token"
         second_request_messages = fake.chat.completions.requests[1]["messages"]
@@ -1743,6 +1793,7 @@ def test_loop_writes_trace_events():
             ),
             encoding="utf-8",
         )
+        _trust_project_control(tmp)
         fake = FakeClient([
             FakeResponse(FakeMessage("done")),
         ])
@@ -1943,6 +1994,8 @@ def test_tool_call_limit_read_only_dispatches_only_prefix():
     old, tmp = _tmp_workdir()
     old_limit = config.MAX_TOOL_CALLS_PER_RESPONSE
     config.MAX_TOOL_CALLS_PER_RESPONSE = 2
+    old_limit_env = os.environ.get("MAX_TOOL_CALLS_PER_RESPONSE")
+    os.environ["MAX_TOOL_CALLS_PER_RESPONSE"] = "2"
     try:
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[
@@ -1961,6 +2014,10 @@ def test_tool_call_limit_read_only_dispatches_only_prefix():
         assert all("Too many tool calls" not in m["content"] for m in tool_msgs)
         assert agent.tool_calls_this_run == 2
     finally:
+        if old_limit_env is None:
+            os.environ.pop("MAX_TOOL_CALLS_PER_RESPONSE", None)
+        else:
+            os.environ["MAX_TOOL_CALLS_PER_RESPONSE"] = old_limit_env
         config.MAX_TOOL_CALLS_PER_RESPONSE = old_limit
         _restore_workdir(old, tmp)
 
@@ -1973,6 +2030,8 @@ def test_tool_call_limit_write_dispatches_only_prefix():
     old, tmp = _tmp_workdir()
     old_limit = config.MAX_TOOL_CALLS_PER_RESPONSE
     config.MAX_TOOL_CALLS_PER_RESPONSE = 2
+    old_limit_env = os.environ.get("MAX_TOOL_CALLS_PER_RESPONSE")
+    os.environ["MAX_TOOL_CALLS_PER_RESPONSE"] = "2"
     try:
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[
@@ -1993,6 +2052,10 @@ def test_tool_call_limit_write_dispatches_only_prefix():
         assert [m["tool_call_id"] for m in tool_msgs] == ["c1", "c2"]
         assert agent.tool_calls_this_run == 2
     finally:
+        if old_limit_env is None:
+            os.environ.pop("MAX_TOOL_CALLS_PER_RESPONSE", None)
+        else:
+            os.environ["MAX_TOOL_CALLS_PER_RESPONSE"] = old_limit_env
         config.MAX_TOOL_CALLS_PER_RESPONSE = old_limit
         _restore_workdir(old, tmp)
 
@@ -2346,15 +2409,19 @@ def test_instruction_reminder_precedes_dynamic_context_on_first_user():
 
 def test_instruction_reminder_falls_back_to_system_without_user_message():
     from nz_coder.loop import AgentLoop
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
 
     old, tmp = _tmp_workdir()
     try:
         (tmp / "AGENTS.md").write_text("SYSTEM-FALLBACK-RULE", encoding="utf-8")
+        _trust_project_control(tmp)
+        snapshot = load_config_snapshot(tmp)
         agent = AgentLoop(
             "test",
             permission_mode="auto",
             client=FakeClient([]),
             trace_enabled=False,
+            config_snapshot=snapshot,
         )
 
         request = agent._build_api_messages([
@@ -2388,6 +2455,11 @@ def test_context_layer_budget_truncates_memory_and_scratch():
 
 
 def _set_planning_config(config, enabled=True, max_replans=2, idle_turns=5):
+    env_keys = (
+        "NZ_PLANNING_ENABLED", "NZ_REPLAN_MAX_ATTEMPTS",
+        "NZ_REPLAN_IDLE_TURNS", "NZ_PLANNING_MAX_TOKENS",
+    )
+    old_env = {key: os.environ.get(key) for key in env_keys}
     old = (
         config.PLANNING_ENABLED,
         config.REPLAN_MAX_ATTEMPTS,
@@ -2398,7 +2470,13 @@ def _set_planning_config(config, enabled=True, max_replans=2, idle_turns=5):
     config.REPLAN_MAX_ATTEMPTS = max_replans
     config.REPLAN_IDLE_TURNS = idle_turns
     config.PLANNING_MAX_TOKENS = 200
-    return old
+    os.environ.update({
+        "NZ_PLANNING_ENABLED": "1" if enabled else "0",
+        "NZ_REPLAN_MAX_ATTEMPTS": str(max_replans),
+        "NZ_REPLAN_IDLE_TURNS": str(idle_turns),
+        "NZ_PLANNING_MAX_TOKENS": "200",
+    })
+    return (*old, old_env)
 
 
 def _restore_planning_config(config, old):
@@ -2407,7 +2485,12 @@ def _restore_planning_config(config, old):
         config.REPLAN_MAX_ATTEMPTS,
         config.REPLAN_IDLE_TURNS,
         config.PLANNING_MAX_TOKENS,
-    ) = old
+    ) = old[:4]
+    for key, value in old[4].items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
 
 
 def test_planning_disabled_keeps_llm_call_count_unchanged():
@@ -2954,15 +3037,17 @@ def test_planning_restore_hydrates_plan_without_new_planning_call():
 
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
+    from nz_coder.state.sessions import session_runtime_state_path
     from nz_coder.tools.scratchpad import scratchpad
 
     old, tmp = _tmp_workdir()
     old_planning = _set_planning_config(config, enabled=True)
     scratchpad.clear()
     try:
-        state_dir = tmp / ".nz-coder"
-        state_dir.mkdir(exist_ok=True)
-        (state_dir / "runtime_state.json").write_text(
+        session_id = "planning-restore"
+        state_path = session_runtime_state_path(session_id)
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(
             json.dumps({
                 "active": True,
                 "turn_count": 0,
@@ -2977,7 +3062,13 @@ def test_planning_restore_hydrates_plan_without_new_planning_call():
         )
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         messages = [{"role": "user", "content": "Add a REST endpoint"}]
-        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
+        agent = AgentLoop(
+            "test",
+            permission_mode="auto",
+            client=fake,
+            trace_enabled=False,
+            session_id=session_id,
+        )
         _run_agent(agent, messages, stream=False)
 
         assert fake.chat.completions.calls == 1
@@ -2994,6 +3085,7 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.state.sessions import session_runtime_state_path
 
     old, tmp = _tmp_workdir()
     old_planning = _set_planning_config(config, enabled=False)
@@ -3009,9 +3101,10 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
         state.set_acceptance_criteria_from_text(original_task)
         state.turn_count = 200
         state.read_files = ["parser.py", "tests/test_parser.py"]
-        state_dir = tmp / ".nz-coder"
-        state_dir.mkdir(exist_ok=True)
-        state.save(state_dir / "runtime_state.json", active=False)
+        session_id = "resume-max-turns-go-on"
+        state_path = session_runtime_state_path(session_id)
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state.save(state_path, active=False)
 
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         messages = [
@@ -3031,7 +3124,7 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
             permission_mode="auto",
             client=fake,
             trace_enabled=False,
-            session_id="resume-max-turns-go-on",
+            session_id=session_id,
         )
 
         _run_agent(agent, messages, stream=False)
@@ -3056,6 +3149,7 @@ def test_substantive_continuation_overlays_current_round_constraints(monkeypatch
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.state.sessions import session_runtime_state_path
 
     old, tmp = _tmp_workdir()
     monkeypatch.setattr(config, "RUNTIME_STATE_PERSIST", True)
@@ -3070,9 +3164,10 @@ def test_substantive_continuation_overlays_current_round_constraints(monkeypatch
         state.initial_task_text = original_task
         state.set_acceptance_criteria_from_text(original_task)
         state.read_files = ["parser.py", "tests/test_parser.py"]
-        state_dir = tmp / ".nz-coder"
-        state_dir.mkdir(exist_ok=True)
-        state.save(state_dir / "runtime_state.json", active=False)
+        session_id = "resume-with-current-round-constraints"
+        state_path = session_runtime_state_path(session_id)
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state.save(state_path, active=False)
 
         current_instruction = (
             "Continue the parser fix in parser_v2.py. The fallback must reject "
@@ -3096,7 +3191,7 @@ def test_substantive_continuation_overlays_current_round_constraints(monkeypatch
             permission_mode="auto",
             client=FakeClient([]),
             trace_enabled=False,
-            session_id="resume-with-current-round-constraints",
+            session_id=session_id,
         )
 
         agent._init_run(messages, stream=False)
@@ -3442,7 +3537,8 @@ def test_streaming_context_overflow_returns_typed_compaction_outcome():
 
         assert result.needs_compaction is True
         assert result.diagnostic is None
-        assert "context_length_exceeded" in result.compaction_error
+        assert result.compaction_error == "An internal error occurred."
+        assert "8192" not in result.compaction_error
         assert fake.chat.completions.calls == 1
     finally:
         _restore_workdir(old, tmp)

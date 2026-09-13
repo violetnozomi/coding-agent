@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,6 +16,7 @@ from nz_coder.providers import (
 )
 from nz_coder.runtime.execution.loop import AgentLoop, LLMResult
 from nz_coder.runtime.conversation.prompt import build
+from nz_coder.protocol.message_schema import provider_private_state
 
 
 class _FakeCompletions:
@@ -577,11 +579,21 @@ def test_agent_falls_back_to_non_streaming_when_model_declares_no_stream():
 
 def test_reasoning_history_policy_is_model_aware():
     qwen_agent = AgentLoop.__new__(AgentLoop)
+    qwen_agent.provider_id = "openai-compatible"
+    qwen_agent.model_id = "qwen-plus"
+    qwen_agent.model_runtime = SimpleNamespace(
+        provider_instance_id="provider-instance-model-aware",
+    )
     qwen_agent.model_capabilities = resolve_model_capabilities(
         "openai-compatible",
         "qwen-plus",
     )
     gpt_agent = AgentLoop.__new__(AgentLoop)
+    gpt_agent.provider_id = "openai-compatible"
+    gpt_agent.model_id = "gpt-4o"
+    gpt_agent.model_runtime = SimpleNamespace(
+        provider_instance_id="provider-instance-model-aware",
+    )
     gpt_agent.model_capabilities = resolve_model_capabilities(
         "openai-compatible",
         "gpt-4o",
@@ -591,8 +603,13 @@ def test_reasoning_history_policy_is_model_aware():
         "content": "tooling",
         "_nz_provider_id": "openai-compatible",
         "_nz_model_id": "qwen-plus",
-        "reasoning_content": "provider-state",
     }
+    message.update(provider_private_state(
+        {"reasoning_content": "provider-state"},
+        provider_id="openai-compatible",
+        provider_instance_id="provider-instance-model-aware",
+        model_id="qwen-plus",
+    ))
 
     assert qwen_agent._sanitize_messages([message])[0]["reasoning_content"] == (
         "provider-state"

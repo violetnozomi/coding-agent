@@ -88,7 +88,8 @@ def test_read_description_failure_is_one_completed_error_hint():
         [{"role": "user", "content": "inspect"}],
     ))
 
-    assert "Image describe failed: vision endpoint offline" in result.output
+    assert "Image describe failed: An internal error occurred." in result.output
+    assert "vision endpoint offline" not in result.output
     item = result.metadata["imageDescribe"]["data"]["items"][0]
     assert item["status"] == "error"
 

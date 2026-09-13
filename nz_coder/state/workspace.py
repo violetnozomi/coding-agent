@@ -6,7 +6,11 @@ from nz_coder import __version__
 from nz_coder.foundation import config
 from nz_coder.state.workdir import current_workdir
 from nz_coder.state.changes import latest_change_file
-from nz_coder.state.sessions import active_session_id, session_runtime_state_path
+from nz_coder.state.sessions import (
+    active_session_id,
+    session_runtime_dir,
+    session_runtime_state_path,
+)
 from nz_coder.state.trace import latest_trace
 
 
@@ -65,7 +69,7 @@ def status_report(agent=None, history: list = None) -> str:
     runtime_state = (
         session_runtime_state_path(session_id)
         if session_id
-        else current_workdir() / ".nz-coder" / "runtime_state.json"
+        else session_runtime_dir() / "runtime_state.json"
     )
     lines = [
         "# NZ-Coder Status",

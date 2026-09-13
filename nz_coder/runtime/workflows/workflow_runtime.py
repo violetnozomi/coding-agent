@@ -29,6 +29,11 @@ from nz_coder.runtime.workflows.workflow_run_store import (
     build_workflow_cost_report,
 )
 from nz_coder.tools import ToolOutput, register
+from nz_coder.protocol.public_error import (
+    PublicInputError,
+    format_public_error,
+    to_public_error,
+)
 
 
 _SUCCESS = frozenset({"completed", "completed_unverified"})
@@ -38,7 +43,7 @@ _MAX_ITEMS = 256
 _MAX_PROMPT_CHARS = 60_000
 
 
-class WorkflowControlError(RuntimeError):
+class WorkflowControlError(PublicInputError):
     """Base class for structural failures that must stop the whole workflow."""
 
 
@@ -207,8 +212,10 @@ def lint_workflow_plan(
     if plan.get("manifest") is not None:
         try:
             manifest = validate_workflow_manifest(plan["manifest"])
-        except ValueError as exc:
-            findings.append(WorkflowFinding("invalid-manifest", str(exc)))
+        except ValueError:
+            findings.append(WorkflowFinding(
+                "invalid-manifest", "workflow manifest is invalid",
+            ))
     phases = plan.get("phases")
     token_budget = plan.get("token_budget")
     if token_budget is not None and (
@@ -689,7 +696,7 @@ class WorkflowRuntime:
                 {"capsule_ref": copy.deepcopy(self._capsule_ref)}
                 if self._capsule_ref is not None else {}
             ),
-            **({"error": str(error)[:4000]} if error else {}),
+            **({"error": to_public_error(error).message} if error else {}),
         }
         self._run_store.write_terminal(record)
         return report
@@ -1221,20 +1228,20 @@ class WorkflowRuntime:
             self._write_terminal_record(
                 terminal_status,
                 outputs=outputs,
-                error=str(exc),
+                error=to_public_error(exc).message,
             )
             self.manager.record_workflow_event(
                 event_type,
                 data={
                     "run_id": self.run_id,
-                    "error": str(exc)[:4000],
+                    "error": to_public_error(exc).to_dict(),
                     "stopped_task_ids": stopped,
                 },
             )
             self.manager.finish_workflow_run(
                 self.run_id,
                 terminal_status,
-                str(exc),
+                to_public_error(exc).message,
             )
             raise
 
@@ -1396,9 +1403,9 @@ def workflow_run(
             metadata={"workflow_result": outcome},
         )
     except WorkflowControlError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: workflow failed: {exc}"
+        return format_public_error(exc, context="workflow failed: ")
 
 
 register(

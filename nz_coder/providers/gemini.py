@@ -6,7 +6,7 @@ import math
 from typing import Any, Iterable, Iterator
 from urllib.parse import quote
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.attachments import attachment_base64, normalize_attachments
 from nz_coder.providers.http import NativeClient, UrllibTransport
 from nz_coder.providers.capabilities import (
@@ -204,7 +204,7 @@ class GeminiProvider:
         self.api_key = api_key
         self.base_url = base_url
         self._transport = transport or UrllibTransport(
-            timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS
+            timeout_seconds=current_run_settings().provider_hard_timeout
         )
 
     def create_client(self) -> NativeClient:

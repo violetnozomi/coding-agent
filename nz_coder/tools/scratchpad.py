@@ -13,6 +13,7 @@ import json
 import time
 
 from nz_coder.tools import register
+from nz_coder.protocol.public_error import to_public_error
 
 CATEGORIES = ("plan", "failure")
 LEGACY_CATEGORY_ALIASES = {
@@ -91,7 +92,7 @@ class Scratchpad:
         try:
             write_session_runtime_json(path, {"version": 1, "entries": entries})
         except Exception as exc:
-            return str(exc)
+            return to_public_error(exc).message
         return None
 
     def update(self, category: str, content: str) -> str:

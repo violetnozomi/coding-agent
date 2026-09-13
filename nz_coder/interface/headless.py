@@ -17,7 +17,6 @@ from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.core.result import RunResult, RunStatus
 from nz_coder.sdk import AgentClient
-from nz_coder.state.skills import skill_loader
 from nz_coder.state.sessions import create_session_id, load_session
 from nz_coder.state.workdir import scoped_workdir
 
@@ -197,8 +196,16 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
 
     with scoped_workdir(workspace):
         from nz_coder.interface.custom_commands import default_command_catalog
+        from nz_coder.foundation.workspace_trust import (
+            load_config_snapshot,
+            scoped_config_snapshot,
+        )
 
-        expanded_command = default_command_catalog(workspace).expand_invocation(user_text)
+        workspace_snapshot = load_config_snapshot(workspace)
+        expanded_command = default_command_catalog(
+            workspace,
+            config_snapshot=workspace_snapshot,
+        ).expand_invocation(user_text)
         command_tools: tuple[str, ...] = ()
         command_model: str | None = None
         if expanded_command is not None:
@@ -206,7 +213,9 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
             command_tools = expanded_command.allowed_tools
             command_model = expanded_command.model
         session_id = _session_id(args)
-        selected = active_model_selection(workspace)
+        selected = active_model_selection(
+            workspace, config_snapshot=workspace_snapshot,
+        )
         provider = args.provider or selected.provider
         model = args.model or command_model or selected.model_id
         if "/" in model and args.provider is None and command_model == model:
@@ -228,7 +237,7 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
             agent=AgentDefinition(
                 name="headless",
                 instructions=prompt.build(
-                    memory_block="", skill_descriptions=skill_loader.descriptions(),
+                    memory_block="", skill_descriptions="",
                 ),
                 allowed_tools=command_tools or None,
             ),
@@ -253,7 +262,12 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
                 stdout.write(_json_record(_event_record(event)) + "\n")
                 stdout.flush()
 
-        result = await client_factory().run(request, on_event=on_event)
+        with scoped_config_snapshot(workspace_snapshot):
+            client = client_factory()
+            run_kwargs = {"on_event": on_event}
+            if isinstance(client, AgentClient):
+                run_kwargs["config_snapshot"] = workspace_snapshot
+            result = await client.run(request, **run_kwargs)
     record = _result_record(result)
     if args.output == "text":
         if result.final_text:

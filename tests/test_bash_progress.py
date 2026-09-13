@@ -4,6 +4,7 @@ from __future__ import annotations
 import shlex
 import sys
 import json
+import threading
 
 from nz_coder.permissions import PermissionManager
 from nz_coder.runtime.execution.tool_executor import ToolExecutor
@@ -183,3 +184,48 @@ def test_tool_executor_marks_real_failed_pipelines_as_command_failed(tmp_path):
 
     assert [result.command_failed for result in results] == [True, True]
     assert [result.metadata["exit"] != 0 for result in results] == [True, True]
+
+
+def test_bash_large_output_retains_head_tail_with_bounded_progress(
+    tmp_path,
+    monkeypatch,
+):
+    from nz_coder.foundation import config
+
+    script = "import sys; sys.stdout.write('HEAD-' + 'x' * 200000 + '-TAIL')"
+    command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
+    updates = []
+    monkeypatch.setattr(config, "PROCESS_BUFFER_BYTES", 4096)
+    monkeypatch.setattr(config, "BASH_OUTPUT_HARD_LIMIT_BYTES", 400000)
+
+    with scoped_workdir(tmp_path), scoped_tool_metadata_reporter(
+        lambda _title, metadata: updates.append(metadata),
+    ):
+        result = run_bash(command, timeout=5)
+
+    assert str(result).startswith("HEAD-")
+    assert str(result).endswith("-TAIL")
+    assert "bytes omitted" in str(result)
+    assert result.metadata["total_output_bytes"] > 200000
+    assert result.metadata["retained_output_bytes"] <= 5000
+    assert max(len(item.get("output", "")) for item in updates) <= 5000
+
+
+def test_bash_output_hard_limit_terminates_producer_without_deadlock(
+    tmp_path,
+    monkeypatch,
+):
+    from nz_coder.foundation import config
+
+    script = "import os\nwhile True: os.write(1, b'z' * 8192)"
+    command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
+    monkeypatch.setattr(config, "PROCESS_BUFFER_BYTES", 2048)
+    monkeypatch.setattr(config, "BASH_OUTPUT_HARD_LIMIT_BYTES", 32768)
+
+    with scoped_workdir(tmp_path):
+        result = run_bash(command, timeout=5)
+
+    assert "output limit exceeded" in str(result).lower()
+    assert result.metadata["output_limit_exceeded"] is True
+    assert result.metadata["total_output_bytes"] <= 65536
+    assert not any(thread.name == "nz-bash-output" for thread in threading.enumerate())

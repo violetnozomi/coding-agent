@@ -135,7 +135,7 @@ def test_lsp_warm_is_background_best_effort_and_deduplicated(tmp_path, monkeypat
     calls = []
 
     class Client:
-        def open_document(self, path):
+        def open_document(self, path, text, source_identity):
             calls.append(("open", path))
             completed.set()
 

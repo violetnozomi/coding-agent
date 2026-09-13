@@ -12,19 +12,20 @@ from __future__ import annotations
 
 import html
 import json
-import os
 import re
-import tempfile
 from dataclasses import dataclass, field
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from nz_coder.foundation import config
 from nz_coder.capabilities.ripgrep import RipgrepFilesCancelled, list_ripgrep_files
 from nz_coder.state.workdir import current_workdir
 from nz_coder.tools import ToolOutput, current_tool_cancel_event, register
+
+if TYPE_CHECKING:
+    from nz_coder.foundation.project_control import ProjectControlSnapshot
 
 
 class _SkillInterrupted(Exception):
@@ -54,7 +55,7 @@ class Skill:
         source: str,
         file_path: Path,
         model: str = "",
-        body: str = "",
+        body: str | None = None,
     ):
         self.name = name
         self.description = description
@@ -64,17 +65,17 @@ class Skill:
         self.source = source        # "project" | "user" | "bundled"
         self.file_path = file_path
         self.model = model
-        self._body = body           # empty until load() is called (lazy)
+        self._body = body
 
     def get_body(self) -> str:
         """Load body lazily on first access."""
         _check_skill_cancelled()
-        if not self._body and self.file_path.exists():
+        if self._body is None and self.file_path.exists():
             text = self.file_path.read_text(encoding="utf-8")
             _check_skill_cancelled()
             m = re.match(r"^---\s*\n.*?\n---\s*\n(.*)", text, re.DOTALL)
             self._body = m.group(1).strip() if m else text.strip()
-        return self._body
+        return self._body or ""
 
     @property
     def base_directory(self) -> Path:
@@ -99,20 +100,39 @@ class Skill:
         return [(directory / path).absolute() for path in result.files]
 
 
-def _parse_skill_file_with_reason(fp: Path, source: str) -> tuple[Optional[Skill], str | None]:
+def _parse_skill_file_with_reason(
+    fp: Path,
+    source: str,
+) -> tuple[Optional[Skill], str | None]:
     """Parse a skill header and return a safe diagnostic reason on failure."""
     try:
         text = fp.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
         return None, "unreadable"
 
+    skill = _parse_skill_text(text, fp, source, pin_body=False)
+    return skill, None if skill is not None else "invalid_metadata"
+
+
+def _parse_skill_file(fp: Path, source: str) -> Optional[Skill]:
+    """Parse a SKILL.md file and return a Skill object (body loaded lazily)."""
+    skill, _reason = _parse_skill_file_with_reason(fp, source)
+    return skill
+
+
+def _parse_skill_text(
+    text: str,
+    fp: Path,
+    source: str,
+    *,
+    pin_body: bool,
+) -> Optional[Skill]:
+    """Parse metadata and optionally pin the body to already captured text."""
     meta: dict = {}
     m = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
     if not m:
         if re.match(r"^---\s*(?:\n|$)", text):
-            return None, "invalid_metadata"
-        # Preserve the original loader contract: a plain SKILL.md uses its
-        # directory name and the complete file as its lazily loaded body.
+            return None
         return Skill(
             name=fp.parent.name,
             description="",
@@ -121,13 +141,13 @@ def _parse_skill_file_with_reason(fp: Path, source: str) -> tuple[Optional[Skill
             paths=[],
             source=source,
             file_path=fp,
-        ), None
+        )
     header = m.group(1).strip()
     if not header:
-        return None, "invalid_metadata"
+        return None
     for line in header.splitlines():
         if line.strip() and ":" not in line:
-            return None, "invalid_metadata"
+            return None
         if ":" in line:
             k, _, v = line.partition(":")
             meta[k.strip()] = v.strip()
@@ -140,15 +160,19 @@ def _parse_skill_file_with_reason(fp: Path, source: str) -> tuple[Optional[Skill
     raw_tools = meta.get("allowed_tools", meta.get("allowed-tools", ""))
     allowed_tools = [t.strip() for t in raw_tools.split(",") if t.strip()] if raw_tools else []
     if any(not re.fullmatch(r"[A-Za-z0-9_.:-]+", item) for item in allowed_tools):
-        return None, "invalid_metadata"
+        return None
 
     # paths: comma-separated glob patterns for conditional activation
     raw_paths = meta.get("paths", "")
     paths = [p.strip() for p in raw_paths.split(",") if p.strip()] if raw_paths else []
     model = str(meta.get("model") or "").strip()
     if model and not re.fullmatch(r"[A-Za-z0-9_./:-]+", model):
-        return None, "invalid_metadata"
+        return None
 
+    body: str | None = None
+    if pin_body:
+        body_match = re.match(r"^---\s*\n.*?\n---\s*\n(.*)", text, re.DOTALL)
+        body = body_match.group(1).strip() if body_match else text.strip()
     return Skill(
         name=name,
         description=description,
@@ -158,13 +182,8 @@ def _parse_skill_file_with_reason(fp: Path, source: str) -> tuple[Optional[Skill
         source=source,
         file_path=fp,
         model=model,
-    ), None
-
-
-def _parse_skill_file(fp: Path, source: str) -> Optional[Skill]:
-    """Parse a SKILL.md file and return a Skill object (body loaded lazily)."""
-    skill, _reason = _parse_skill_file_with_reason(fp, source)
-    return skill
+        body=body,
+    )
 
 
 def _scan_skills_dir(
@@ -177,9 +196,11 @@ def _scan_skills_dir(
         return []
     skills = []
     for entry in sorted(skills_dir.iterdir()):
+        if entry.is_symlink():
+            continue
         if entry.is_dir():
             skill_file = entry / "SKILL.md"
-            if skill_file.exists():
+            if skill_file.exists() and not skill_file.is_symlink():
                 skill, reason = _parse_skill_file_with_reason(skill_file, source)
                 if skill:
                     skills.append(skill)
@@ -189,6 +210,44 @@ def _scan_skills_dir(
                         "directory": entry.name,
                         "reason": reason,
                     })
+    return skills
+
+
+def _scan_project_snapshot(
+    snapshot: ProjectControlSnapshot,
+    project_dir: Path,
+    parse_errors: list[dict] | None = None,
+) -> list[Skill]:
+    """Build Project Skills only from immutable snapshot bytes."""
+    skills: list[Skill] = []
+    for item in snapshot.files_for_kind("skill"):
+        parts = Path(item.relative_path).parts
+        if len(parts) != 4 or parts[:2] != (".nz-coder", "skills"):
+            continue
+        try:
+            text = item.content.decode("utf-8")
+        except UnicodeDecodeError:
+            if parse_errors is not None and len(parse_errors) < 100:
+                parse_errors.append({
+                    "source": "project",
+                    "directory": parts[2],
+                    "reason": "unreadable",
+                })
+            continue
+        skill = _parse_skill_text(
+            text,
+            project_dir / parts[2] / "SKILL.md",
+            "project",
+            pin_body=True,
+        )
+        if skill is not None:
+            skills.append(skill)
+        elif parse_errors is not None and len(parse_errors) < 100:
+            parse_errors.append({
+                "source": "project",
+                "directory": parts[2],
+                "reason": "invalid_metadata",
+            })
     return skills
 
 
@@ -204,10 +263,17 @@ class SkillLoader:
         bundled_dir: Path = None,
         user_dir: Path = None,
         project_dir: Path = None,
+        workspace_trusted: bool = True,
+        project_control_snapshot: ProjectControlSnapshot | None = None,
     ):
         self._bundled_dir = bundled_dir or config.SKILLS_DIR
         self._user_dir = user_dir or (Path.home() / ".nz-coder" / "skills")
         self._project_dir = project_dir or (current_workdir() / ".nz-coder" / "skills")
+        self._project_control_snapshot = project_control_snapshot
+        self._workspace_trusted = bool(
+            project_control_snapshot is not None
+            and project_control_snapshot.trusted
+        )
 
         # name → Skill (unconditional, immediately available)
         self._skills: dict[str, Skill] = {}
@@ -229,12 +295,22 @@ class SkillLoader:
         self._parse_errors.clear()
         # Collect from all tiers (higher priority first)
         all_skills: list[Skill] = []
-        for skills_dir, source in [
-            (self._project_dir, "project"),
-            (self._user_dir, "user"),
-            (self._bundled_dir, "bundled"),
-        ]:
-            for skill in _scan_skills_dir(skills_dir, source, self._parse_errors):
+        project_skills = (
+            _scan_project_snapshot(
+                self._project_control_snapshot,
+                self._project_dir,
+                self._parse_errors,
+            )
+            if self._workspace_trusted and self._project_control_snapshot is not None
+            else []
+        )
+        sources = [
+            (project_skills, "project"),
+            (_scan_skills_dir(self._user_dir, "user", self._parse_errors), "user"),
+            (_scan_skills_dir(self._bundled_dir, "bundled", self._parse_errors), "bundled"),
+        ]
+        for source_skills, source in sources:
+            for skill in source_skills:
                 all_skills.append(skill)
 
         # Deduplicate: first occurrence wins (project > user > bundled)
@@ -419,25 +495,37 @@ class SkillLoader:
         return sorted(items, key=lambda item: item["name"])
 
     def set_enabled(self, name: str, enabled: bool) -> str:
-        """Persist one skill's enabled state in the project owner config."""
+        """Persist one Skill preference in user-owned workspace state."""
         selected = str(name).strip()
         known = set(self._skills) | set(self._conditional) | set(self._disabled)
         if selected not in known:
             raise ValueError(f"Unknown skill '{selected}'")
-        disabled = set(self._disabled_names)
-        if enabled:
-            disabled.discard(selected)
-        else:
-            disabled.add(selected)
-        payload = self._read_settings()
-        payload["disabled_skills"] = sorted(disabled)
-        self._write_settings(payload)
-        self.reload()
+        from nz_coder.tool_platform.permissioning.grants import UserGrantStore
+
+        UserGrantStore().set_skill_enabled(
+            self._project_dir.parent.parent,
+            selected,
+            enabled,
+        )
+        # Enabling is user-owned state; it must not implicitly re-read Project
+        # Control or exchange this run's immutable authority snapshot.
+        self.reload(self._project_control_snapshot)
         item = next(entry for entry in self.list_skills() if entry["name"] == selected)
         return str(item["status"])
 
-    def reload(self) -> None:
-        """Reload all skills (e.g. after file changes)."""
+    def reload(
+        self,
+        project_control_snapshot: ProjectControlSnapshot | None = None,
+    ) -> None:
+        """Reload with a new snapshot or recapture and re-check Project Trust."""
+        if project_control_snapshot is None:
+            from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+            project_control_snapshot = load_config_snapshot(
+                self._project_dir.parent.parent
+            ).project_control
+        self._project_control_snapshot = project_control_snapshot
+        self._workspace_trusted = bool(project_control_snapshot.trusted)
         self._skills.clear()
         self._conditional.clear()
         self._activated.clear()
@@ -446,43 +534,38 @@ class SkillLoader:
         self._load()
 
     def _read_settings(self) -> dict:
-        if not self._settings_path.exists():
+        item = (
+            self._project_control_snapshot.get(".nz-coder/settings.json")
+            if self._project_control_snapshot is not None
+            else None
+        )
+        if item is None:
             return {}
         try:
-            value = json.loads(self._settings_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise ValueError(f"Invalid skill settings: {exc}") from exc
+            value = json.loads(item.content.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Invalid skill settings") from exc
         if not isinstance(value, dict):
             raise ValueError("Skill settings must be a JSON object")
         return value
 
     def _read_disabled_names(self) -> set[str]:
-        values = self._read_settings().get("disabled_skills", [])
+        values = (
+            self._read_settings().get("disabled_skills", [])
+            if self._workspace_trusted else []
+        )
         if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
             raise ValueError("disabled_skills must be a list of names")
-        return {item.strip() for item in values if item.strip()}
-
-    def _write_settings(self, payload: dict) -> None:
-        self._settings_path.parent.mkdir(parents=True, exist_ok=True)
-        handle, temporary = tempfile.mkstemp(
-            prefix=f".{self._settings_path.name}.",
-            dir=str(self._settings_path.parent),
-            text=True,
-        )
+        project_disabled = {item.strip() for item in values if item.strip()}
         try:
-            with os.fdopen(handle, "w", encoding="utf-8") as stream:
-                json.dump(payload, stream, ensure_ascii=False, indent=2, sort_keys=True)
-                stream.write("\n")
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.chmod(temporary, 0o600)
-            os.replace(temporary, self._settings_path)
-        finally:
-            try:
-                os.unlink(temporary)
-            except FileNotFoundError:
-                pass
+            from nz_coder.tool_platform.permissioning.grants import UserGrantStore
 
+            user_disabled = UserGrantStore().load_disabled_skills(
+                self._project_dir.parent.parent
+            )
+        except (OSError, PermissionError, ValueError):
+            user_disabled = set()
+        return project_disabled | user_disabled
 
 def _matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
     """Check if rel_path matches any gitignore-style pattern.
@@ -507,7 +590,10 @@ def _matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
 
 # ── Global instance ───────────────────────────────────────────────────────────
 
-skill_loader = SkillLoader()
+skill_loader = SkillLoader(
+    workspace_trusted=getattr(config.CONFIG_SNAPSHOT, "control_plane_trusted", False),
+    project_control_snapshot=getattr(config.CONFIG_SNAPSHOT, "project_control", None),
+)
 _SKILL_LOADER: ContextVar[SkillLoader | None] = ContextVar(
     "nz_coder_skill_loader",
     default=None,

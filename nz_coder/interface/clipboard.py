@@ -13,6 +13,10 @@ import tempfile
 
 from nz_coder.protocol.attachments import MAX_IMAGE_BYTES, sniff_image_mime
 from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.foundation.user_paths import (
+    prepare_user_storage,
+    private_attachment_reference,
+)
 
 
 _MAX_CLIPBOARD_BYTES = 1_000_000
@@ -73,14 +77,14 @@ def read_image(
 
 
 def persist_image(workspace: str | Path, image: ClipboardImage) -> str:
-    """Persist a clipboard image privately inside the workspace attachment cache."""
+    """Persist an image in user state and return an opaque attachment reference."""
     if not isinstance(image, ClipboardImage):
         raise TypeError("image must be ClipboardImage")
     mime = sniff_image_mime(image.data[:16])
     if not mime or mime != image.mime or len(image.data) >= MAX_IMAGE_BYTES:
         raise ValueError("Clipboard image is invalid or exceeds the image limit")
     root = Path(workspace).resolve(strict=True)
-    directory = root / ".nz-coder" / "attachments"
+    directory = prepare_user_storage(root).workspace_state / "attachments"
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(directory, 0o700)
     harden_private_path(directory)
@@ -102,7 +106,7 @@ def persist_image(workspace: str | Path, image: ClipboardImage) -> str:
             os.unlink(temporary)
         except FileNotFoundError:
             pass
-    return target.relative_to(root).as_posix()
+    return private_attachment_reference(target.name)
 
 
 def copy_text(text: str) -> bool:

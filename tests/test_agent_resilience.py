@@ -147,7 +147,8 @@ def test_tool_executor_returns_implementation_exception_as_repair_evidence(monke
     assert result.dispatch_failed is True
     assert result.is_write is True
     assert result.metadata["error_type"] == "RuntimeError"
-    assert "fixture tool failed" in result.output
+    assert result.output == "Error: write_file failed: An internal error occurred."
+    assert "fixture tool failed" not in result.output
 
 
 def test_tool_executor_returns_unrenderable_result_as_repair_evidence(monkeypatch):
@@ -166,7 +167,10 @@ def test_tool_executor_returns_unrenderable_result_as_repair_evidence(monkeypatc
 
     assert result.dispatch_failed is True
     assert result.metadata["malformed_result"] is True
-    assert "broken result" in result.output
+    assert result.output == (
+        "Error: read_file returned an invalid result: An internal error occurred."
+    )
+    assert "broken result" not in result.output
 
 
 @pytest.mark.parametrize("arguments", ["[]", '"scalar"', "null", [], 7])

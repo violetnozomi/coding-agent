@@ -5,12 +5,17 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   windows-product:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -59,7 +64,12 @@ jobs:
             tests/test_terminal_backend.py `
             tests/test_tui_product_frames.py `
             tests/test_fullscreen.py `
+            tests/security/test_project_control_snapshot.py `
+            tests/security/test_transaction_recovery.py `
+            tests/security/test_transaction_track.py `
+            tests/security/test_pr2_remaining_regressions.py `
             tests/test_lsp.py `
+            tests/test_lsp_workspace_config.py `
             tests/test_mcp.py 2>&1 | Tee-Object artifacts/windows-product-tests.txt
           if ($LASTEXITCODE -ne 0) { throw "Windows product acceptance failed." }
       - name: Wheel sdist and fresh-install smoke
@@ -87,6 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"

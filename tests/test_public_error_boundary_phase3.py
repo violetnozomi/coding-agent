@@ -272,23 +272,43 @@ def test_provider_secret_not_present_in_http_snapshot(tmp_path):
 
 
 def _provider_private_assistant() -> dict:
+    from nz_coder.protocol.message_schema import (
+        provider_private_envelope,
+        provider_private_state,
+    )
+
+    provider_instance_id = "provider-instance-private-endpoint"
     assistant = {
         "role": "assistant",
         "content": "safe answer",
         "_nz_provider_id": "openai-compatible",
+        "_nz_provider_instance_id": provider_instance_id,
         "_nz_model_id": "private-model",
-        "reasoning_content": _SECRET,
-        "provider_extra": {
-            "authorization": "Bearer SECRET-123",
-            "raw_prompt": "PRIVATE-PROMPT",
-        },
         "tool_calls": [{
             "id": "call-private",
             "type": "function",
             "function": {"name": "read_file", "arguments": "{}"},
-            "provider_extra": {"thoughtSignature": _SECRET},
+            "provider_extra": provider_private_envelope(
+                {"thoughtSignature": _SECRET},
+                provider_id="openai-compatible",
+                provider_instance_id=provider_instance_id,
+                model_id="private-model",
+                payload_schema="tool_call_provider_extra.v1",
+            ),
         }],
     }
+    assistant.update(provider_private_state(
+        {
+            "reasoning_content": _SECRET,
+            "provider_extra": {
+                "authorization": "Bearer SECRET-123",
+                "raw_prompt": "PRIVATE-PROMPT",
+            },
+        },
+        provider_id="openai-compatible",
+        provider_instance_id=provider_instance_id,
+        model_id="private-model",
+    ))
     attach_message_identity(assistant, session_id="session-secret")
     return assistant
 
@@ -390,7 +410,7 @@ def test_tool_provider_metadata_is_not_exposed_publicly():
     public = message_records([assistant], "session-secret")[0]
     projected = next(part for part in public["parts"] if part["type"] == "tool")
 
-    assert durable["_nz_provider_metadata"]["thoughtSignature"] == _SECRET
+    assert durable["_nz_provider_metadata"]["payload"]["thoughtSignature"] == _SECRET
     assert "_nz_provider_metadata" not in projected
     assert "metadata" not in projected
     _assert_private_diagnostic_absent(public)
@@ -417,6 +437,7 @@ def test_private_provider_metadata_survives_provider_round_trip():
             preserve_reasoning_content=True,
             supports_image_input=False,
         ),
+        target_provider_instance_id="provider-instance-private-endpoint",
     )[0]
 
     assert projected["reasoning_content"] == _SECRET

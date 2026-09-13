@@ -174,6 +174,8 @@ def start_daemon(
         str(port),
         "--interaction-timeout",
         str(interaction),
+        "--handoff-timeout",
+        str(ready_timeout),
     ]
     for root in roots:
         command.extend(("--workspace", root))
@@ -304,6 +306,7 @@ def daemon_main(argv: list[str] | None = None, *, output: TextIO | None = None) 
     worker.add_argument("--port", type=int, default=_DEFAULT_PORT)
     worker.add_argument("--workspace", action="append", default=[])
     worker.add_argument("--interaction-timeout", type=float, default=300.0)
+    worker.add_argument("--handoff-timeout", type=float, default=15.0)
     args = parser.parse_args(argv)
     try:
         if args.command == "_serve":
@@ -371,15 +374,8 @@ def _add_profile(parser: argparse.ArgumentParser) -> None:
 
 def _serve_worker(args: argparse.Namespace) -> int:
     paths = daemon_paths(args.profile, args.state_root)
-    state = {}
-    # The parent writes the hand-off state immediately after spawning.  A
-    # detached child may win that race, so wait briefly for the nonce rather
-    # than exiting and making a valid start flaky under load.
-    for _ in range(100):
-        state = _load_state(paths.state)
-        if state.get("nonce") == args.nonce:
-            break
-        time.sleep(0.01)
+    handoff_timeout = _validated_timeout(args.handoff_timeout, "handoff", 300.0)
+    state = _wait_for_handoff(paths.state, args.nonce, handoff_timeout)
     if not state or state.get("nonce") != args.nonce:
         return 3
     token = _read_private_token(paths.token)
@@ -422,6 +418,18 @@ def _serve_worker(args: argparse.Namespace) -> int:
         current = _load_state(paths.state)
         if current.get("nonce") == args.nonce:
             _remove_runtime_files(paths, keep_log=True)
+
+
+def _wait_for_handoff(path: Path, nonce: str, timeout: float) -> dict[str, Any]:
+    """Wait within the caller's startup budget for the parent's nonce state."""
+    deadline = time.monotonic() + timeout
+    while True:
+        state = _load_state(path)
+        if state.get("nonce") == nonce:
+            return state
+        if time.monotonic() >= deadline:
+            return {}
+        time.sleep(0.01)
 
 
 def _logs(args: argparse.Namespace, stream: TextIO) -> int:

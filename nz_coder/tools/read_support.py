@@ -62,32 +62,19 @@ def read_text_lines(path: Path, *, offset: int, limit: int) -> TextReadResult:
         return _read_stream(text.splitlines(), offset=offset, limit=limit, encoding=detected)
 
 
-def directory_entries(path: Path) -> list[str]:
-    """Return locale-sorted direct children with directory suffixes."""
-    entries = []
-    for item in path.iterdir():
-        entries.append(item.name + "/" if item.is_dir() else item.name)
-    return sorted(entries, key=locale.strxfrm)
-
-
-def missing_path_message(path: Path, requested: str) -> str:
-    """Return a missing-file error with at most three nearby sibling names."""
-    base = path.name.lower()
-    suggestions = []
+def read_text_lines_bytes(
+    data: bytes, *, offset: int, limit: int,
+) -> TextReadResult:
+    """Apply the bounded line policy to bytes captured by WorkspaceFileAccess."""
+    encoding = _bom_encoding(data[:SAMPLE_BYTES]) or "utf-8"
     try:
-        children = list(path.parent.iterdir())
-    except OSError:
-        children = ()
-    for child in children:
-        name = child.name.lower()
-        if base in name or name in base:
-            suggestions.append(str(Path(requested).parent / child.name))
-            if len(suggestions) == 3:
-                break
-    message = f"File not found: {requested}"
-    if suggestions:
-        message += "\n\nDid you mean one of these?\n" + "\n".join(suggestions)
-    return message
+        text = data.decode(encoding, errors="strict")
+        detected = encoding
+    except UnicodeDecodeError:
+        text, detected = _decode_legacy(data)
+    return _read_stream(
+        text.splitlines(), offset=offset, limit=limit, encoding=detected,
+    )
 
 
 _WARM_LOCK = threading.Lock()
@@ -97,6 +84,9 @@ _WARM_PENDING: set[tuple[Path, Path]] = set()
 
 def warm_lsp(path: Path, workspace: Path) -> None:
     """Best-effort asynchronous equivalent of InfCode's forked LSP touch."""
+    from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+    config_snapshot = current_config_snapshot(workspace)
     key = (path.resolve(), workspace.resolve())
     with _WARM_LOCK:
         if key in _WARM_PENDING:
@@ -111,9 +101,22 @@ def warm_lsp(path: Path, workspace: Path) -> None:
         try:
             from nz_coder.lsp import get_client_for_file
 
-            client = get_client_for_file(key[0], key[1])
+            try:
+                client = get_client_for_file(
+                    key[0], key[1], config_snapshot=config_snapshot,
+                )
+            except TypeError as exc:
+                if "config_snapshot" not in str(exc):
+                    raise
+                client = get_client_for_file(key[0], key[1])
             if client is not None:
-                client.open_document(key[0])
+                from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
+                relative = key[0].relative_to(key[1]).as_posix()
+                text, identity = WorkspaceFileAccess(key[1]).read_text_with_identity(
+                    relative, errors="replace",
+                )
+                client.open_document(key[0], text, identity)
         except Exception:
             pass
         finally:

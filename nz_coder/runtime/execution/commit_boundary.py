@@ -14,6 +14,7 @@ from nz_coder.protocol.message_schema import (
     ASSISTANT_FINISH_KEY,
     ASSISTANT_MODEL_KEY,
     ASSISTANT_PROVIDER_KEY,
+    ASSISTANT_PROVIDER_INSTANCE_KEY,
     AUTHORITATIVE_KEY,
     INTERNAL_KEY,
     PARTS_KEY,
@@ -187,6 +188,7 @@ def commit_approved_model_result(
     messages: list[dict],
     reconcile: bool = False,
     source_provider_id: str = "",
+    source_provider_instance_id: str = "",
     source_model_id: str = "",
 ) -> None:
     """Cross the sole model-to-Message/Part publication boundary.
@@ -216,10 +218,15 @@ def commit_approved_model_result(
         assistant_message.update(provider_private_state(
             result.extra,
             provider_id=provider_id,
+            provider_instance_id=source_provider_instance_id,
             model_id=model_id,
         ))
         if provider_id:
             assistant_message[ASSISTANT_PROVIDER_KEY] = provider_id
+        if source_provider_instance_id:
+            assistant_message[ASSISTANT_PROVIDER_INSTANCE_KEY] = (
+                source_provider_instance_id
+            )
         if model_id:
             assistant_message[ASSISTANT_MODEL_KEY] = model_id
         assistant_message["role"] = "assistant"

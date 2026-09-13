@@ -136,7 +136,9 @@ def test_shared_fallback_honors_hidden_depth_and_follow_false(tmp_path, monkeypa
         limit=20,
     )
 
-    assert result.files == ("root.txt", "outside.txt")
+    # os.walk() does not guarantee sibling ordering across filesystems. This
+    # test covers filtering semantics; producer ordering is not its contract.
+    assert set(result.files) == {"root.txt", "outside.txt"}
     assert result.used_ripgrep is False
     assert ".hidden/secret.txt" not in result.files
     assert "nested/deep.txt" not in result.files

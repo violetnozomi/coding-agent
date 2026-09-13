@@ -169,7 +169,13 @@ def collect_workspace_symbols(
                 symbols=(),
                 notice="LSP semantic enrichment unavailable",
             )
-        _ = client.open_document(probe)
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
+        relative = probe.resolve().relative_to(workspace.resolve()).as_posix()
+        text, identity = WorkspaceFileAccess(workspace).read_text_with_identity(
+            relative, errors="replace",
+        )
+        _ = client.open_document(probe, text, identity)
         response = cast(
             object,
             client.request("workspace/symbol", {"query": query.strip()}),

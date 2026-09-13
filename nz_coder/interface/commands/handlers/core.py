@@ -702,7 +702,7 @@ async def handle_connect(ctx: CommandContext) -> None:
     selected = await ctx.terminal_input.select_async(
         title="Connect provider",
         values=[(spec.provider, f"{spec.label:<22} {spec.credential_name}") for spec in specs],
-        text="Credentials are written only to workspace .env with mode 0600.",
+        text="Credentials are written only to the user-private NZ-Coder config.",
     )
     if selected is None:
         return
@@ -723,7 +723,7 @@ async def handle_connect(ctx: CommandContext) -> None:
         ctx.console.print(f"[error]Connection was not saved: {exc}[/error]")
         return
     ctx.console.print(
-        f"[success]Connected {spec.label}; credential saved privately in workspace .env.[/success]"
+        f"[success]Connected {spec.label}; credential saved in the user-private config.[/success]"
     )
     ctx.console.print(f"[info]Discovering models from {spec.label}...[/info]")
     try:

@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from nz_coder.foundation import config
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.lsp import (
     LSPError,
     available_server_summary,
@@ -13,7 +14,9 @@ from nz_coder.lsp import (
     get_client_for_file,
 )
 from nz_coder.lsp.client import path_to_uri, uri_to_path
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.tools import register
 
 _OPERATIONS = {
@@ -31,14 +34,7 @@ _OPERATIONS = {
 
 
 def _safe_path(file_path: str) -> Path:
-    workspace = current_workdir().resolve()
-    target = Path(file_path)
-    target = target.resolve() if target.is_absolute() else (workspace / target).resolve()
-    try:
-        target.relative_to(workspace)
-    except ValueError as exc:
-        raise ValueError(f"Path escapes workspace: {file_path}") from exc
-    return target
+    return WorkspacePathPolicy(current_workdir()).validate_model_read(file_path)
 
 
 def _position(line: int, character: int) -> dict:
@@ -61,18 +57,28 @@ def _normalize_result(value: Any, workspace: Path) -> Any:
         path = uri_to_path(uri)
         if path is not None:
             try:
-                normalized["path"] = str(path.resolve().relative_to(workspace))
+                relative = path.resolve().relative_to(workspace)
+                normalized["path"] = (
+                    relative.as_posix()
+                    if WorkspacePathPolicy(workspace).is_model_visible(path)
+                    else "private-workspace"
+                )
             except ValueError:
-                normalized["path"] = str(path.resolve())
+                normalized["path"] = "outside-workspace"
             normalized.pop("uri", None)
     target_uri = normalized.get("targetUri")
     if isinstance(target_uri, str):
         path = uri_to_path(target_uri)
         if path is not None:
             try:
-                normalized["targetPath"] = str(path.resolve().relative_to(workspace))
+                relative = path.resolve().relative_to(workspace)
+                normalized["targetPath"] = (
+                    relative.as_posix()
+                    if WorkspacePathPolicy(workspace).is_model_visible(path)
+                    else "private-workspace"
+                )
             except ValueError:
-                normalized["targetPath"] = str(path.resolve())
+                normalized["targetPath"] = "outside-workspace"
             normalized.pop("targetUri", None)
     return normalized
 
@@ -84,6 +90,8 @@ def _request_for_operation(
     line: int,
     character: int,
     query: str,
+    source_text: str,
+    source_identity,
 ) -> Any:
     uri = path_to_uri(target)
     position = _position(line, character)
@@ -135,7 +143,7 @@ def _request_for_operation(
         )
         return client.request(method, {"item": items[0]})
     if operation == "diagnostics":
-        return client.diagnostics(target)
+        return client.diagnostics(target, source_text, source_identity)
     raise ValueError(f"Unsupported LSP operation: {operation}")
 
 
@@ -155,16 +163,37 @@ def lsp(
         if not target.is_file():
             return f"Error: File not found: {file_path}"
         workspace = current_workdir().resolve()
-        if not config.LSP_ENABLED:
+        relative = target.relative_to(workspace).as_posix()
+        source_text, source_identity = WorkspaceFileAccess(
+            workspace,
+        ).read_text_with_identity(relative, errors="replace")
+        from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
+            current_config_snapshot,
+        )
+
+        config_snapshot = active_config_snapshot(workspace)
+        settings = current_run_settings()
+        enabled = (
+            config_snapshot.get_bool("NZ_LSP_ENABLED", True)
+            if config_snapshot is not None
+            else settings.lsp_enabled
+        )
+        if not enabled:
             return "Error: LSP support is disabled by NZ_LSP_ENABLED."
-        client = get_client_for_file(target, workspace)
+        config_snapshot = config_snapshot or current_config_snapshot(workspace)
+        client = get_client_for_file(
+            target, workspace, config_snapshot=config_snapshot,
+        )
         if client is None:
-            startup_error = client_startup_error(target, workspace)
+            startup_error = client_startup_error(
+                target, workspace, config_snapshot=config_snapshot,
+            )
             if startup_error:
                 return f"Error: LSP server failed to initialize: {startup_error}"
             return "Error: " + available_server_summary(target)
         if operation != "diagnostics":
-            client.open_document(target)
+            client.open_document(target, source_text, source_identity)
         result = _request_for_operation(
             client,
             operation,
@@ -172,21 +201,23 @@ def lsp(
             line,
             character,
             query,
+            source_text,
+            source_identity,
         )
         normalized = _normalize_result(result, workspace)
         if normalized in (None, [], {}):
             return f"No results found for {operation}"
         output = json.dumps(normalized, indent=2, ensure_ascii=False)
-        if len(output) > config.LSP_MAX_OUTPUT_CHARS:
+        if len(output) > settings.lsp_max_output_chars:
             output = (
-                output[:config.LSP_MAX_OUTPUT_CHARS]
+                output[:settings.lsp_max_output_chars]
                 + "\n... [LSP result truncated]"
             )
         return output
     except (LSPError, OSError, ValueError) as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: Unexpected LSP failure: {exc}"
+        return format_public_error(exc, context="Unexpected LSP failure: ")
 
 
 register(

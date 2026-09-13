@@ -23,6 +23,7 @@ class ModelExecutionContext:
     record_success: ModelCallback
     trace: ModelCallback
     retire_message_part: ModelCallback
+    provider_instance_id: ModelCallback | None = None
     complete_override: ModelCallback | None = None
 
     def __post_init__(self) -> None:
@@ -41,6 +42,12 @@ class ModelExecutionContext:
         ):
             if not callable(getattr(self, name)):
                 raise TypeError(f"ModelExecutionContext {name} must be callable")
+        if self.provider_instance_id is not None and not callable(
+            self.provider_instance_id
+        ):
+            raise TypeError(
+                "ModelExecutionContext provider_instance_id must be callable or None"
+            )
         if self.complete_override is not None and not callable(self.complete_override):
             raise TypeError(
                 "ModelExecutionContext complete_override must be callable or None"

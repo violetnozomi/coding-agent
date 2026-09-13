@@ -18,6 +18,7 @@ from typing import Any
 from openai import OpenAI
 
 from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.state.changes import ChangeTracker
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.protocol.message_schema import (
@@ -42,6 +43,7 @@ from nz_coder.providers import (
     create_provider,
     prompt_family_guidance,
 )
+from nz_coder.protocol.public_error import format_public_error, to_public_error
 from nz_coder.runtime.core.execution_context import (
     scoped_broad_test_guard,
     scoped_runtime_overrides,
@@ -235,6 +237,7 @@ _PARENT_CONTEXT_DEFAULT: dict[str, Any] = {
     "agent_id": None,
     "trace_id": None,
     "model_id": None,
+    "config_snapshot": None,
 }
 _PARENT_CONTEXT: ContextVar[dict[str, Any]] = ContextVar(
     "nz_coder_parent_context",
@@ -307,8 +310,12 @@ def bind_parent_context(
     agent_id: str | None = None,
     trace_id: str | None = None,
     model_id: str | None = None,
+    config_snapshot: Any = None,
 ) -> None:
-    if session_id is None and tracer is None and agent_id is None and trace_id is None and model_id is None:
+    if (
+        session_id is None and tracer is None and agent_id is None
+        and trace_id is None and model_id is None and config_snapshot is None
+    ):
         _PARENT_CONTEXT.set(dict(_PARENT_CONTEXT_DEFAULT))
         return
     context = dict(_PARENT_CONTEXT.get())
@@ -322,6 +329,8 @@ def bind_parent_context(
         context["trace_id"] = trace_id
     if model_id is not None:
         context["model_id"] = model_id
+    if config_snapshot is not None:
+        context["config_snapshot"] = config_snapshot
     _PARENT_CONTEXT.set(context)
 
 
@@ -375,13 +384,43 @@ def _completion_with_timeout(
 _ORIGINAL_COMPLETION_WITH_TIMEOUT = _completion_with_timeout
 
 
-@contextmanager
-def _closing_model_runtime(runtime):
-    """Close a child-owned model client across every terminal return path."""
+def _cleanup_subagent_resources(agent, model_runtime, tracer) -> None:
+    """Retire the single active owner without changing the business result."""
     try:
-        yield runtime
+        if agent is not None:
+            agent.close()
+        else:
+            model_runtime.close()
+        return
+    except BaseException as cleanup_exc:
+        try:
+            tracer.log(
+                "subagent_cleanup_failed",
+                resource="environment" if agent is not None else "provider-runtime",
+                failure_type=type(cleanup_exc).__name__,
+            )
+        except BaseException:
+            pass
+    if agent is not None:
+        # Ownership had transferred to the Environment.  If its exhaustive
+        # close itself failed, retain one final attempt at the child runtime.
+        try:
+            model_runtime.close()
+        except BaseException:
+            pass
+
+
+def _cleanup_subagent_scope(
+    agent,
+    model_runtime,
+    tracer,
+    parent_context_token,
+) -> None:
+    """Always restore parent authority even if a cleanup implementation regresses."""
+    try:
+        _cleanup_subagent_resources(agent, model_runtime, tracer)
     finally:
-        runtime.close()
+        _PARENT_CONTEXT.reset(parent_context_token)
 
 
 def _ensure_subagent_tool_registry() -> None:
@@ -418,23 +457,56 @@ def _normalize_agent_type(agent_type: str | None) -> str:
     return normalized
 
 
-def _subagent_model(agent_type: str) -> str:
-    parent_model = str(_PARENT_CONTEXT.get().get("model_id") or config.MODEL_ID)
+def _parent_config_snapshot(workspace: Path | None = None):  # noqa: ANN202
+    """Return the private parent epoch without consulting mutable disk state."""
+    snapshot = _PARENT_CONTEXT.get().get("config_snapshot")
+    if snapshot is None:
+        from nz_coder.foundation.workspace_trust import active_config_snapshot
+
+        snapshot = active_config_snapshot(workspace)
+    if snapshot is not None and workspace is not None:
+        if snapshot.workspace.resolve() != Path(workspace).resolve():
+            raise ValueError("Parent ConfigSnapshot belongs to a different workspace")
+    return snapshot
+
+
+def _subagent_model(agent_type: str, config_snapshot=None) -> str:
+    snapshot = config_snapshot or _parent_config_snapshot()
+    parent_model = str(
+        _PARENT_CONTEXT.get().get("model_id")
+        or (snapshot.get("MODEL_ID", config.MODEL_ID) if snapshot is not None else config.MODEL_ID)
+    )
     if agent_type == "explore":
-        return config.SUBAGENT_EXPLORE_MODEL or parent_model
+        return (
+            snapshot.get("SUBAGENT_EXPLORE_MODEL", "")
+            if snapshot is not None else current_run_settings().subagent_explore_model
+        ) or parent_model
     return parent_model
 
 
 def _resolve_subagent_route(
     agent_type: str,
     model_hint: str | None,
+    config_snapshot=None,
 ) -> tuple[str, dict]:
     """Resolve an InfCodeX-style semantic model tier without hidden fallback."""
     hint = str(model_hint or "").strip().lower()
     if hint and hint not in {"fast", "balanced", "deep"}:
         raise ValueError("model_hint must be one of: fast, balanced, deep")
-    parent_model = str(_PARENT_CONTEXT.get().get("model_id") or config.MODEL_ID)
-    selected = _subagent_model(agent_type)
+    snapshot = config_snapshot or _parent_config_snapshot()
+    parent_model = str(
+        _PARENT_CONTEXT.get().get("model_id")
+        or (snapshot.get("MODEL_ID", config.MODEL_ID) if snapshot is not None else config.MODEL_ID)
+    )
+    explore_model = (
+        snapshot.get("SUBAGENT_EXPLORE_MODEL", "")
+        if snapshot is not None else current_run_settings().subagent_explore_model
+    )
+    deep_model = (
+        snapshot.get("SUBAGENT_DEEP_MODEL", "")
+        if snapshot is not None else current_run_settings().subagent_deep_model
+    )
+    selected = _subagent_model(agent_type, snapshot)
     outcome = "inherited"
     model_source = "parent"
     fallback_reason = ""
@@ -443,8 +515,8 @@ def _resolve_subagent_route(
             selected = parent_model
             outcome = "fast-write-ineligible"
             fallback_reason = "fast tier is read-only; inherited parent model"
-        elif config.SUBAGENT_EXPLORE_MODEL:
-            selected = config.SUBAGENT_EXPLORE_MODEL
+        elif explore_model:
+            selected = explore_model
             outcome = "applied"
             model_source = "tier"
         else:
@@ -452,8 +524,8 @@ def _resolve_subagent_route(
             outcome = "unconfigured"
             fallback_reason = "fast tier is not configured"
     elif hint == "deep":
-        if config.SUBAGENT_DEEP_MODEL:
-            selected = config.SUBAGENT_DEEP_MODEL
+        if deep_model:
+            selected = deep_model
             outcome = "applied"
             model_source = "tier"
         else:
@@ -550,8 +622,7 @@ def _drain_peer_messages(parent_session_id: str, child_session_id: str) -> list[
 def _parent_context_block(parent_session_id: str | None = None) -> str:
     parts: list[str] = []
     state_path = session_runtime_state_path(parent_session_id) if parent_session_id else None
-    legacy_path = current_workdir() / ".nz-coder" / "runtime_state.json"
-    for candidate in (state_path, legacy_path):
+    for candidate in (state_path,):
         if not candidate or not candidate.exists():
             continue
         try:
@@ -787,23 +858,18 @@ def _workspace_root(path: str | Path | None = None) -> Path:
 
 
 def _subagent_root(parent_session_id: str, workspace_root: str | Path | None = None) -> Path:
+    from nz_coder.foundation.user_paths import prepare_user_storage
+
     root = _workspace_root(workspace_root)
-    root.mkdir(parents=True, exist_ok=True)
-    current = root
+    current = prepare_user_storage(root).workspace_state
     for part in (
-        ".nz-coder",
         "sessions",
         "_artifacts",
         _safe_session_id(parent_session_id) or "main-session",
         "subagents",
     ):
         candidate = current / part
-        if candidate.exists():
-            try:
-                candidate.resolve().relative_to(root)
-            except ValueError as exc:
-                raise ValueError("Subagent state path escapes workspace") from exc
-        candidate.mkdir(exist_ok=True)
+        candidate.mkdir(mode=0o700, exist_ok=True)
         current = candidate.resolve()
     return current
 
@@ -1077,11 +1143,11 @@ def _clone_child_worktree(workspace: Path, source: dict, target: dict) -> None:
             else:
                 raise ValueError(f"unsupported changed child path: {relative}")
     if old_worktree is not None:
-        old_scratch = (
-            Path(old_worktree.path).resolve()
-            / ".nz-coder" / "subagents"
-            / str(source.get("session_id") or "") / "scratch.md"
-        )
+        old_scratch = _subagent_artifact_dir(
+            str(source.get("parent_session_id") or "main-session"),
+            str(source.get("session_id") or ""),
+            workspace,
+        ) / "scratch.md"
         if old_scratch.is_file() and not old_scratch.is_symlink():
             scratch_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(old_scratch, scratch_path)
@@ -1358,11 +1424,20 @@ def _direct_worktree(parent_workspace: Path, state: dict) -> Worktree:
     )
 
 
-def _ensure_subagent_worktree(parent_workspace: Path, state: dict) -> Worktree:
+def _ensure_subagent_worktree(
+    parent_workspace: Path,
+    state: dict,
+    *,
+    config_snapshot=None,
+) -> Worktree:
     existing = _validated_persisted_worktree(parent_workspace, state)
     if existing is not None and Path(existing.path).exists():
         return existing
-    if not config.SUBAGENT_WORKTREE_ENABLED:
+    worktree_enabled = (
+        config_snapshot.get_bool("SUBAGENT_WORKTREE_ENABLED", True)
+        if config_snapshot is not None else current_run_settings().subagent_worktree_enabled
+    )
+    if not worktree_enabled:
         return _direct_worktree(parent_workspace, state)
     manager = WorktreeManager(repo_root=parent_workspace)
     worktree = manager.create(state["session_id"], "HEAD")
@@ -1379,8 +1454,11 @@ def _relative_to_parent(path: Path, parent_workspace: Path) -> str:
 
 
 def _prepare_subagent_workspace(parent_workspace: Path, state: dict, worktree: Worktree) -> Path:
-    worktree_path = Path(worktree.path).resolve()
-    scratch_path = worktree_path / ".nz-coder" / "subagents" / state["session_id"] / "scratch.md"
+    scratch_path = _subagent_artifact_dir(
+        str(state.get("parent_session_id") or "main-session"),
+        str(state["session_id"]),
+        parent_workspace,
+    ) / "scratch.md"
     scratch_path.parent.mkdir(parents=True, exist_ok=True)
     state["worktree"] = {
         "id": worktree.id,
@@ -1391,8 +1469,12 @@ def _prepare_subagent_workspace(parent_workspace: Path, state: dict, worktree: W
         "mode": worktree.mode,
         "created_at": worktree.created_at,
     }
-    state["worktree_rel"] = _relative_to_parent(worktree_path, parent_workspace)
-    state["scratch_rel"] = _relative_to_parent(scratch_path, parent_workspace)
+    state["worktree_rel"] = (
+        "."
+        if worktree.mode == "direct"
+        else f"user-cache://worktrees/{worktree.id}"
+    )
+    state["scratch_rel"] = f"user-state://subagents/{state['session_id']}/scratch.md"
     return scratch_path
 
 
@@ -1400,7 +1482,7 @@ def _trace_enabled() -> bool:
     tracer = _PARENT_CONTEXT.get().get("tracer")
     if tracer is not None and hasattr(tracer, "enabled"):
         return bool(getattr(tracer, "enabled"))
-    return bool(config.TRACE_ENABLED)
+    return current_run_settings().trace_enabled
 
 
 def _build_subagent_tracer(parent_workspace: Path, parent_session_id: str, state: dict) -> TraceRecorder:
@@ -1483,6 +1565,7 @@ def run_subagent(
     cancel_event = cancel_event or current_tool_cancel_event()
 
     parent_workspace = _workspace_root()
+    parent_snapshot = _parent_config_snapshot(parent_workspace)
     parent_session_id = _parent_session_id()
     state = _load_subagent_state(parent_session_id, session_id, parent_workspace) if session_id else {}
     if session_id and not state:
@@ -1494,7 +1577,7 @@ def run_subagent(
         else:
             normalized_type = _normalize_agent_type(state.get("agent_type") or agent_type or "explore")
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     state["workspace_root"] = str(parent_workspace)
 
     if allowed_tools is None:
@@ -1515,9 +1598,10 @@ def run_subagent(
         state["model_id"], state["route_facts"] = _resolve_subagent_route(
             normalized_type,
             declared_hint,
+            parent_snapshot,
         )
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if declared_hint:
         state["model_hint"] = declared_hint
     declared_refs = evidence_refs
@@ -1526,7 +1610,7 @@ def run_subagent(
     try:
         normalized_refs = normalize_evidence_refs(declared_refs)
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if state.get("evidence_refs") and normalized_refs != state.get("evidence_refs"):
         return "Error: evidence_refs cannot change when resuming a child session"
     state["evidence_refs"] = normalized_refs
@@ -1540,7 +1624,7 @@ def run_subagent(
             declared_verification
         )
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if (
         isinstance(state.get("verification_contract"), dict)
         and verification_contract != state["verification_contract"]
@@ -1550,7 +1634,10 @@ def run_subagent(
         state["verification_contract"] = verification_contract
     from nz_coder.providers.models import active_model_selection
 
-    state["provider_id"] = active_model_selection(parent_workspace).provider
+    state["provider_id"] = active_model_selection(
+        parent_workspace,
+        config_snapshot=parent_snapshot,
+    ).provider
     state["route_facts"]["initial_provider"] = state["provider_id"]
     state["route_facts"]["final_provider"] = state["provider_id"]
     state["_invocation_started_at"] = time.time()
@@ -1561,7 +1648,7 @@ def run_subagent(
         try:
             assert_supported_output_schema(declared_schema)
         except ValueError as exc:
-            return f"Error: {exc}"
+            return format_public_error(exc)
         if (
             isinstance(state.get("output_schema"), dict)
             and state["output_schema"] != declared_schema
@@ -1579,7 +1666,7 @@ def run_subagent(
     try:
         state["claimed_paths"] = _resolve_claimed_paths(state, prompt, target_paths, parent_workspace)
     except ValueError as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     if normalized_type == "general-purpose":
         scope_conflicts = _active_scope_conflicts(
             parent_session_id,
@@ -1597,7 +1684,9 @@ def run_subagent(
             )
             return _format_scope_conflict_block(list(state.get("claimed_paths") or []), scope_conflicts)
 
-    worktree = _ensure_subagent_worktree(parent_workspace, state)
+    worktree = _ensure_subagent_worktree(
+        parent_workspace, state, config_snapshot=parent_snapshot,
+    )
     scratch_path = _prepare_subagent_workspace(parent_workspace, state, worktree)
     child_tracer = _build_subagent_tracer(parent_workspace, parent_session_id, state)
     state["status"] = "running"
@@ -1635,13 +1724,18 @@ def run_subagent(
     if not native_session_active:
         ensure_message_identities(messages, state["session_id"])
 
-    provider = create_provider(client_factory=OpenAI)
+    provider = create_provider(
+        name=state["provider_id"],
+        client_factory=OpenAI,
+        config_snapshot=parent_snapshot,
+    )
     model_runtime = resolve_model_runtime(
         ModelSelectionRequest(
             provider_name=str(state.get("provider_id") or getattr(provider, "name", "")),
             model_id=str(state["model_id"]),
             workspace=parent_workspace,
             provider=provider,
+            config_snapshot=parent_snapshot,
         )
     )
     client = model_runtime.client
@@ -1774,19 +1868,26 @@ def run_subagent(
             error,
             name="MessageAbortedError" if cancelled else "APIError",
             data={
-                "message": str(error)[:4000],
+                "message": to_public_error(error).message,
                 **({"isRetryable": False} if not cancelled else {}),
             },
         )
 
-    max_turns = max(1, config.SUBAGENT_MAX_TURNS)
+    max_turns = max(1, (
+        parent_snapshot.get_int("SUBAGENT_MAX_TURNS", 200, minimum=1)
+        if parent_snapshot is not None else current_run_settings().subagent_max_turns
+    ))
     verification_repair_budget = (
         1
         if verification_contract is not None
         and verification_contract.get("enforcement") == "hard"
         else 0
     )
-    deadline = time.monotonic() + max(1, config.SUBAGENT_TIMEOUT_SECONDS)
+    subagent_timeout = max(1, (
+        parent_snapshot.get_int("SUBAGENT_TIMEOUT_SECONDS", 180, minimum=1)
+        if parent_snapshot is not None else current_run_settings().subagent_timeout_seconds
+    ))
+    deadline = time.monotonic() + subagent_timeout
     parent_context = _parent_context_block(parent_session_id)
     tool_scope = ", ".join(sorted(allowed_tools)) if allowed_tools else "default tools for this mode"
     system = f"""You are an isolated child coding agent working in: {worktree.path}
@@ -1831,7 +1932,9 @@ Only use it when you need to leave detailed notes for the parent and your curren
         except ValueError as exc:
             _persist_state("error")
             return _finalize_subagent_result(
-                f"Evidence briefing failed: {exc}",
+                format_public_error(
+                    exc, prefix="", context="Evidence briefing failed: ",
+                ),
                 scratch_path,
                 "error",
                 state,
@@ -1907,9 +2010,9 @@ NEXT:
             raw = tool_call.get("function", {}).get("arguments", {})
             try:
                 args = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
-            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 return ToolExecutionResult(
-                    name, {}, f"Error: Invalid JSON arguments for {name}: {exc}",
+                    name, {}, f"Error: Invalid JSON arguments for {name}",
                     False, True, False, is_transactional_write_tool(name),
                 )
             raw_output = _run_allowed_tool(
@@ -2031,17 +2134,27 @@ NEXT:
     run_status: dict = {"status": "error"}
     automatic_verification = ""
     parent_context_token = _PARENT_CONTEXT.set(dict(_PARENT_CONTEXT.get()))
+    from nz_coder.foundation.workspace_trust import (
+        inherited_config_snapshot,
+        scoped_config_snapshot,
+    )
+
+    child_snapshot = (
+        inherited_config_snapshot(parent_snapshot, worktree.path)
+        if parent_snapshot is not None else None
+    )
     try:
         with (
             scoped_workdir(worktree.path),
-            _closing_model_runtime(model_runtime),
+            scoped_config_snapshot(child_snapshot)
+            if child_snapshot is not None else nullcontext(),
             scoped_runtime_overrides(
                 max_agent_turns=(
                     max_turns
                     + (1 if declared_schema is not None else 0)
                     + (1 if verification_repair_budget else 0)
                 ),
-                agent_timeout_seconds=config.SUBAGENT_TIMEOUT_SECONDS,
+                agent_timeout_seconds=subagent_timeout,
                 strict_local_tools=False,
             ),
             scoped_broad_test_guard(),
@@ -2056,6 +2169,8 @@ NEXT:
                 change_tracker=change_tracker,
                 session_id=state["session_id"],
                 model_runtime=effective_runtime,
+                config_snapshot=child_snapshot,
+                tool_allowlist=tuple(sorted(all_tool_names)),
                 sidecar_verifier=False,
                 stall_sidecar=lambda _signal: {"is_stuck": False, "trace": "child"},
             )
@@ -2118,12 +2233,18 @@ NEXT:
     except (asyncio.CancelledError, KeyboardInterrupt):
         run_status = {"status": "cancelled"}
     except Exception as exc:
-        child_tracer.log("run_error", error=str(exc))
-        run_status = {"status": "error", "last_error": str(exc)}
+        public = to_public_error(exc)
+        child_tracer.log("run_error", public_error=public.to_dict())
+        run_status = {
+            "status": "error",
+            "last_error": public.message,
+            "public_error": public.to_dict(),
+        }
+        state["public_error"] = public.to_dict()
     finally:
-        if agent is not None:
-            agent.close()
-        _PARENT_CONTEXT.reset(parent_context_token)
+        _cleanup_subagent_scope(
+            agent, model_runtime, child_tracer, parent_context_token,
+        )
 
     _record_usage_from_messages()
     if "structured" in run_status:
@@ -2149,7 +2270,11 @@ NEXT:
         if failed_assistant is not None:
             error_payload = failed_assistant["_nz_assistant_error"]
             data = error_payload.get("data") if isinstance(error_payload, dict) else {}
-            message = str((data or {}).get("message") or "Provider request failed")
+            raw_message = str(
+                (data or {}).get("message") or "Provider request failed"
+            )
+            public = to_public_error(RuntimeError(raw_message))
+            message = public.message
             failed_assistant["_nz_assistant_error"] = {
                 "name": "APIError",
                 "data": {"message": message, "isRetryable": False},
@@ -2158,6 +2283,8 @@ NEXT:
             failed_assistant["_nz_end_state"] = {"reason": "errored"}
             raw_status = "error"
             run_status["last_error"] = message
+            run_status["public_error"] = public.to_dict()
+            state["public_error"] = public.to_dict()
     status_map = {
         "completed": "completed",
         "completed_unverified": "completed_unverified",

@@ -57,6 +57,7 @@ class AgentClient:
         question_asker=None,
         workflow_approval_asker=None,
         event_bus=None,
+        config_snapshot=None,
     ) -> RunResult:
         """Execute one immutable request through the production Agent runtime."""
         if not isinstance(request, RunRequest):
@@ -89,6 +90,7 @@ class AgentClient:
                 question_asker=question_asker,
                 workflow_approval_asker=workflow_approval_asker,
                 event_bus=event_bus,
+                config_snapshot=config_snapshot,
             ))
 
         messages = copy.deepcopy(list(request.messages))
@@ -121,6 +123,7 @@ class AgentClient:
         profile: RunProfile = READ_CHILD_PROFILE,
         stream: bool = False,
         cancel_event=None,
+        config_snapshot=None,
     ) -> RunResult:
         """Run or resume one Session-owned child through the same native Runner."""
         if not isinstance(parent, RunRequest):
@@ -145,7 +148,15 @@ class AgentClient:
                 "parent_session_id": parent.session_id,
             },
         )
-        return await self.run(child, cancel_event=cancel_event)
+        if config_snapshot is None:
+            from nz_coder.foundation.workspace_trust import active_config_snapshot
+
+            config_snapshot = active_config_snapshot(parent.workspace)
+        return await self.run(
+            child,
+            cancel_event=cancel_event,
+            config_snapshot=config_snapshot,
+        )
 
 
 async def run_agent(

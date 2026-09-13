@@ -1,7 +1,7 @@
 """Model-facing prompt layer assembly for the coding runtime."""
 from __future__ import annotations
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.state.context import estimate_tokens
 from nz_coder.runtime.conversation.continuation_context import continuation_task_text
 from nz_coder.runtime.core.execution_context import strict_local_tools
@@ -71,9 +71,16 @@ class ProductionPromptBuilder:
             memory,
             dynamic_state,
             scratch,
-            max_tokens=config.SYSTEM_CONTEXT_BUDGET_TOKENS,
+            max_tokens=current_run_settings().system_context_budget_tokens,
         )
-        instructions = load_instruction_context(current_workdir())
+        run_snapshot = getattr(host, "config_snapshot", None)
+        instructions = (
+            load_instruction_context(
+                current_workdir(), config_snapshot=run_snapshot,
+            )
+            if run_snapshot is not None
+            else load_instruction_context(current_workdir())
+        )
         sanitized = host._sanitize_messages(messages)
         has_user = any(
             message.get("role") == "user"

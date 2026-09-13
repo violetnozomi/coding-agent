@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hmac
 import math
 import re
 import threading
@@ -112,23 +113,33 @@ def build_http_agent(session_id: str, permission_mode: str):
     from nz_coder.runtime.execution.composition import build_coding_agent
     from nz_coder.runtime.process.workdir import current_derived_path, current_workdir
     from nz_coder.state.skills import SkillLoader, bind_skill_loader, current_skill_loader
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
 
     memory_dir = current_derived_path("MEMORY_DIR")
     memory_manager = workspace_memory_manager(memory_dir)
+    workspace_snapshot = load_config_snapshot(current_workdir())
     project_skills = current_workdir() / ".nz-coder" / "skills"
     default_skills = current_skill_loader()
     skill_manager = (
         default_skills
-        if default_skills._project_dir.resolve() == project_skills.resolve()
-        else SkillLoader(project_dir=project_skills)
+        if (
+            default_skills._project_dir.resolve() == project_skills.resolve()
+            and default_skills._workspace_trusted
+            == workspace_snapshot.control_plane_trusted
+        )
+        else SkillLoader(
+            project_dir=project_skills,
+            workspace_trusted=workspace_snapshot.control_plane_trusted,
+            project_control_snapshot=workspace_snapshot.project_control,
+        )
     )
     memory_manager.load_all()
-    system_prompt = build(
-        memory_block="",
-        skill_descriptions=skill_manager.descriptions(),
-    )
+    # Project skill authority belongs to a top-level Run, not this long-lived
+    # HTTP Session.  AgentLoop.prepare_run_control() appends the descriptions
+    # captured from the same snapshot used by every other run control.
+    system_prompt = build(memory_block="", skill_descriptions="")
     with bind_memory_manager(memory_manager), bind_skill_loader(skill_manager):
-        return build_coding_agent(
+        agent = build_coding_agent(
             system_prompt,
             permission_mode=permission_mode,
             session_id=session_id,
@@ -137,7 +148,11 @@ def build_http_agent(session_id: str, permission_mode: str):
                 session_id=session_id,
                 journal_path=session_runtime_dir(session_id) / "events.jsonl",
             ),
+            config_snapshot=workspace_snapshot,
         )
+    if not hasattr(agent, "config_snapshot"):
+        agent.config_snapshot = workspace_snapshot
+    return agent
 
 
 class ManagedSession:
@@ -172,6 +187,11 @@ class ManagedSession:
         self.client = client
         self.workspace_id = workspace_id
         self.workspace = workspace
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        self.config_snapshot = getattr(agent, "config_snapshot", None)
+        if self.config_snapshot is None:
+            self.config_snapshot = load_config_snapshot(workspace)
         self.history = copy.deepcopy(history or [])
         ensure_message_identities(self.history, session_id)
         self.created_at = created_at if created_at is not None else now
@@ -212,7 +232,14 @@ class ManagedSession:
     def event_bus(self):
         return self._event_bus
 
-    def _model_identity(self) -> tuple[str, str, str | None]:
+    def _model_identity(self, config_snapshot=None) -> tuple[str, str, str | None]:
+        if config_snapshot is not None:
+            from nz_coder.providers.models import active_model_selection
+
+            selected = active_model_selection(
+                self.workspace, config_snapshot=config_snapshot,
+            )
+            return selected.provider, selected.model_id, selected.variant
         if self.agent is not None:
             return (
                 str(getattr(self.agent, "provider_id", "unknown")),
@@ -229,10 +256,11 @@ class ManagedSession:
         messages: list[dict],
         allowed_tools: tuple[str, ...] = (),
         model_override: str | None = None,
+        config_snapshot=None,
     ) -> RunRequest:
         from nz_coder.runtime.conversation.prompt import build
 
-        provider, model, variant = self._model_identity()
+        provider, model, variant = self._model_identity(config_snapshot)
         if model_override:
             value = str(model_override).strip()
             if "/" in value:
@@ -488,6 +516,9 @@ class ManagedSession:
         """Project runtime-workspace commands without caching client truth."""
         from nz_coder.interface.custom_commands import default_command_catalog
 
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        snapshot = load_config_snapshot(self.workspace)
         return [
             {
                 "name": item.name,
@@ -496,7 +527,10 @@ class ManagedSession:
                 "allowed_tools": list(item.allowed_tools),
                 "model": item.model,
             }
-            for item in default_command_catalog(self.workspace).list()
+            for item in default_command_catalog(
+                self.workspace,
+                config_snapshot=snapshot,
+            ).list()
         ]
 
     def extensions(self) -> list[dict]:
@@ -504,7 +538,14 @@ class ManagedSession:
         from nz_coder.extensions.registry import ExtensionRegistry
         from nz_coder.state.skills import SkillLoader
 
-        loader = SkillLoader(project_dir=self.workspace / ".nz-coder" / "skills")
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        snapshot = load_config_snapshot(self.workspace)
+        loader = SkillLoader(
+            project_dir=self.workspace / ".nz-coder" / "skills",
+            workspace_trusted=snapshot.control_plane_trusted,
+            project_control_snapshot=snapshot.project_control,
+        )
         return [
             item.to_dict()
             for item in ExtensionRegistry(
@@ -582,10 +623,17 @@ class ManagedSession:
 
         if not isinstance(arguments, dict):
             raise ValueError("workflow arguments must be an object")
-        manager = self._workflow_manager()
-        resolved = resolve_workflow_capsule(
-            str(name), arguments, workspace=manager.workspace
+        from nz_coder.foundation.workspace_trust import (
+            load_config_snapshot,
+            scoped_config_snapshot,
         )
+
+        manager = self._workflow_manager()
+        snapshot = load_config_snapshot(self.workspace)
+        with scoped_config_snapshot(snapshot):
+            resolved = resolve_workflow_capsule(
+                str(name), arguments, workspace=manager.workspace
+            )
         manifest = resolved["capsule"]["plan"].get("manifest") or {}
         summary = build_workflow_approval_summary(
             manifest,
@@ -599,11 +647,11 @@ class ManagedSession:
             separators=(",", ":"),
             default=str,
         ).encode("utf-8")).hexdigest()
-        return manager, resolved, summary, workflow_approval_digest(summary)
+        return manager, resolved, summary, workflow_approval_digest(summary), snapshot
 
     def prepare_workflow(self, name: str, arguments: dict) -> dict:
         """Resolve and fingerprint one exact data-only Workflow plan."""
-        _manager, resolved, summary, approval_digest = (
+        _manager, resolved, summary, approval_digest, _snapshot = (
             self._resolve_workflow_for_approval(name, arguments)
         )
         return {
@@ -624,18 +672,26 @@ class ManagedSession:
 
         from nz_coder.runtime.workflows.workflow_sdk import WorkflowHostSDK
 
-        manager, resolved, _summary, expected = self._resolve_workflow_for_approval(
+        manager, resolved, _summary, expected, snapshot = self._resolve_workflow_for_approval(
             name, arguments
         )
         provided = str(approval_digest or "")
         if not provided or not hmac.compare_digest(provided, expected):
             raise ValueError("workflow approval is stale or does not match this plan")
-        handle = WorkflowHostSDK(manager).start(
-            plan=resolved["capsule"]["plan"],
-            display_name=str(resolved["capsule"]["manifest"].get("name") or name),
-            approval_decision="approve",
-            approval_digest=provided,
-        )
+        # WorkflowHostSDK copies the current context into its background
+        # thread. Bind the exact snapshot that produced the approved plan so
+        # nested workflow resolution cannot observe a later disk generation.
+        from nz_coder.foundation.workspace_trust import scoped_config_snapshot
+
+        with scoped_config_snapshot(snapshot):
+            handle = WorkflowHostSDK(manager).start(
+                plan=resolved["capsule"]["plan"],
+                display_name=str(
+                    resolved["capsule"]["manifest"].get("name") or name
+                ),
+                approval_decision="approve",
+                approval_digest=provided,
+            )
         return handle.wait_started(10.0)
 
     def memory_control(self):  # noqa: ANN202
@@ -686,17 +742,46 @@ class ManagedSession:
 
         if not isinstance(arguments, str):
             raise ValueError("command arguments must be a string")
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        snapshot = load_config_snapshot(self.workspace)
         try:
-            expanded = default_command_catalog(self.workspace).expand(name, arguments)
+            expanded = default_command_catalog(
+                self.workspace,
+                config_snapshot=snapshot,
+            ).expand(name, arguments)
         except KeyError as exc:
             raise ValueError(f"custom command was not found: {name}") from exc
-        return {
+        result = {
             "name": expanded.name,
             "prompt": expanded.prompt,
             "source": expanded.source,
             "allowed_tools": list(expanded.allowed_tools),
             "model": expanded.model,
         }
+        result["command_digest"] = self._command_execution_digest(
+            snapshot,
+            result["prompt"],
+            result["allowed_tools"],
+            result["model"],
+        )
+        return result
+
+    @staticmethod
+    def _command_execution_digest(
+        snapshot, prompt: str, allowed_tools, model: str | None,
+    ) -> str:
+        """Bind a remote command expansion to one control fingerprint."""
+        import hashlib
+        import json
+
+        payload = json.dumps({
+            "control_fingerprint": snapshot.control_fingerprint,
+            "prompt": str(prompt),
+            "allowed_tools": [str(name) for name in allowed_tools],
+            "model": str(model) if model is not None else None,
+        }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def start_run(
         self,
@@ -705,6 +790,7 @@ class ManagedSession:
         attachments=(),
         allowed_tools=(),
         model: str | None = None,
+        command_digest: str | None = None,
     ) -> dict:
         if not isinstance(message, str) or not message.strip():
             raise ValueError("message must be a non-empty string")
@@ -722,6 +808,25 @@ class ManagedSession:
         model_override = str(model or "").strip() or None
         if model_override is not None and len(model_override) > 240:
             raise ValueError("model override is too long")
+        provided_command_digest = str(command_digest or "").strip()
+        if command_digest is not None and len(provided_command_digest) != 64:
+            raise ValueError("command digest is invalid")
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        run_snapshot = load_config_snapshot(self.workspace)
+        if provided_command_digest:
+            expected_command_digest = self._command_execution_digest(
+                run_snapshot,
+                message,
+                selected_tools,
+                model_override,
+            )
+            if not hmac.compare_digest(
+                provided_command_digest, expected_command_digest,
+            ):
+                raise ValueError(
+                    "custom command expansion is stale; expand it again"
+                )
         with self._lock:
             if self._disposed:
                 raise SessionNotFoundError(self.session_id)
@@ -734,6 +839,7 @@ class ManagedSession:
             self._gate_acquired = True
             previous_history = copy.deepcopy(self.history)
             try:
+                self.config_snapshot = run_snapshot
                 self._active_interaction_run_id = (
                     f"interaction-{uuid.uuid4().hex}"
                 )
@@ -746,7 +852,7 @@ class ManagedSession:
                 self.interactions.begin_run(self._active_event_publisher)
                 recent = self.event_bus.recent(1)
                 self._run_event_floor = recent[-1].sequence if recent else 0
-                provider_id, model_id, variant = self._model_identity()
+                provider_id, model_id, variant = self._model_identity(run_snapshot)
                 if model_override:
                     if "/" in model_override:
                         provider_id, model_id = model_override.split("/", 1)
@@ -794,9 +900,18 @@ class ManagedSession:
                 self.updated_at = time.time()
                 self._cancel_requested = False
                 self._run_phase = "starting"
+                run_request = (
+                    self._run_request(
+                        run_messages, selected_tools, model_override, run_snapshot,
+                    )
+                    if self.client is not None else None
+                )
                 thread = threading.Thread(
                     target=self._run_agent,
-                    args=(run_messages, selected_tools, model_override),
+                    args=(
+                        run_messages, selected_tools, model_override,
+                        run_snapshot, run_request,
+                    ),
                     name=f"nz-http-{self.session_id}",
                     daemon=True,
                 )
@@ -908,25 +1023,37 @@ class ManagedSession:
         run_messages: list[dict],
         allowed_tools: tuple[str, ...] = (),
         model_override: str | None = None,
+        run_snapshot=None,
+        run_request: RunRequest | None = None,
     ) -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        if self.client is None:
-            # The legacy Agent adapter must not infer an interaction identity
-            # from the session-long EventBus. Bind the request-scoped identity
-            # explicitly for this invocation only.
-            self.agent._requested_interaction_run_id = (
-                self._active_interaction_run_id
-            )
-            task = loop.create_task(self.agent.run(run_messages, stream=True))
-        else:
-            task = loop.create_task(self.client.run(
-                self._run_request(run_messages, allowed_tools, model_override),
-                permission_asker=self.interactions.ask_permission,
-                question_asker=self.interactions.ask_question,
-                workflow_approval_asker=lambda _summary: "reject",
-                event_bus=self.event_bus,
-            ))
+        from nz_coder.foundation.workspace_trust import scoped_config_snapshot
+
+        snapshot = run_snapshot or self.config_snapshot
+        with scoped_workdir(self.workspace), scoped_config_snapshot(snapshot):
+            if self.client is None:
+                # The legacy Agent adapter must not infer an interaction identity
+                # from the session-long EventBus. Bind the request-scoped identity
+                # explicitly for this invocation only.
+                self.agent._requested_interaction_run_id = (
+                    self._active_interaction_run_id
+                )
+                run_kwargs = {"stream": True}
+                if callable(getattr(self.agent, "prepare_run_control", None)):
+                    run_kwargs["config_snapshot"] = snapshot
+                task = loop.create_task(self.agent.run(run_messages, **run_kwargs))
+            else:
+                task = loop.create_task(self.client.run(
+                    run_request or self._run_request(
+                        run_messages, allowed_tools, model_override, snapshot,
+                    ),
+                    permission_asker=self.interactions.ask_permission,
+                    question_asker=self.interactions.ask_question,
+                    workflow_approval_asker=lambda _summary: "reject",
+                    event_bus=self.event_bus,
+                    config_snapshot=snapshot,
+                ))
         with self._lock:
             self._run_loop = loop
             self._run_task = task
@@ -1199,12 +1326,14 @@ class SessionManager:
         attachments=(),
         allowed_tools=(),
         model: str | None = None,
+        command_digest: str | None = None,
     ) -> dict:
         return self.get(session_id).start_run(
             message,
             attachments=attachments,
             allowed_tools=allowed_tools,
             model=model,
+            command_digest=command_digest,
         )
 
     def info(self, session_id: str) -> dict:

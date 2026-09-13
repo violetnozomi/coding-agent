@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.intelligence.analyzers import (
     AnalysisResult,
     AnalyzerRegistry,
@@ -466,6 +467,7 @@ class PersistentCodeIndex:
 
     def _source_files(self, base: Path, max_files: int) -> tuple[list[Path], int]:
         candidates: list[Path] = []
+        path_policy = WorkspacePathPolicy(self.workspace)
         if base.is_file():
             candidates.append(base)
         else:
@@ -488,6 +490,7 @@ class PersistentCodeIndex:
                 not resolved.is_file()
                 or not _is_supported_source(resolved)
                 or any(part in EXCLUDED_DIRS for part in relative.parts)
+                or not path_policy.is_model_visible(resolved)
             ):
                 continue
             if len(files) >= max_files:

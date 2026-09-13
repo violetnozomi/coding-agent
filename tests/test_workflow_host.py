@@ -5,6 +5,20 @@ import json
 import threading
 import time
 
+
+def _trust_project_control(workspace, monkeypatch):
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
+    trust_path = workspace.parent / f"{workspace.name}-host-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore(trust_path).trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
+
 def _record(runs, run_id, **extra):
     from nz_coder.runtime.workflows.workflow_run_store import WorkflowRunStore
 
@@ -83,12 +97,13 @@ def test_identity_fails_closed_for_duplicate_alias(tmp_path):
     assert result == {"kind": "ambiguous", "target": "Same", "matches": ["run"]}
 
 
-def test_identity_fails_closed_for_run_saved_or_builtin_collision(tmp_path):
+def test_identity_fails_closed_for_run_saved_or_builtin_collision(tmp_path, monkeypatch):
     from nz_coder.runtime.workflows.workflow_host import resolve_workflow_identity
 
     runs = tmp_path / "runs"
     _record(runs, "saved-audit")
     _saved(tmp_path, "saved-audit")
+    _trust_project_control(tmp_path, monkeypatch)
 
     collision = resolve_workflow_identity(
         "saved-audit", workspace=tmp_path, runs_root=runs
@@ -288,6 +303,7 @@ def test_resume_target_rejects_saved_or_ambiguous_identity(tmp_path, monkeypatch
     from tests.test_workflow_runtime import _manager
 
     _saved(tmp_path, "saved-audit")
+    _trust_project_control(tmp_path, monkeypatch)
     manager = _manager(tmp_path, monkeypatch, max_tasks=1)
     plan = {
         "require_synthesis": False,

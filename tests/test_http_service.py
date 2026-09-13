@@ -28,6 +28,7 @@ from nz_coder.state.memory_control import MemoryControlPlane
 from nz_coder.runtime.process.workdir import current_workdir, scoped_workdir
 from nz_coder.runtime.process.process_service import workspace_process_service
 from nz_coder.state.sessions import load_session, save_session, session_runtime_dir
+from nz_coder.foundation.user_paths import user_storage_layout
 from nz_coder.protocol.session_events import SessionEventBus, encode_sse
 from nz_coder.state.skills import current_skill_loader
 
@@ -173,8 +174,11 @@ def test_http_session_run_messages_and_sse_replay(local_service):
     session_id = created["id"]
     assert created["status"] == "idle"
     assert created["permission_mode"] == "auto"
-    persisted = Path(created["workspace"]) / ".nz-coder" / "sessions" / f"{session_id}.json"
-    artifacts = Path(created["workspace"]) / ".nz-coder" / "sessions" / "_artifacts" / session_id
+    private_sessions = user_storage_layout(
+        Path(created["workspace"])
+    ).workspace_state / "sessions"
+    persisted = private_sessions / f"{session_id}.json"
+    artifacts = private_sessions / "_artifacts" / session_id
     assert persisted.exists()
     assert artifacts.exists()
 
@@ -264,7 +268,12 @@ def test_http_remote_workflow_prepare_and_start_require_exact_approval(
             assert manager is runtime_owner
 
         def start(self, **kwargs):
+            from nz_coder.foundation.workspace_trust import current_config_snapshot
+
             captured.update(kwargs)
+            captured["control_fingerprint"] = current_config_snapshot(
+                session.workspace
+            ).control_fingerprint
             return Handle()
 
     resolution_calls = 0
@@ -295,6 +304,7 @@ def test_http_remote_workflow_prepare_and_start_require_exact_approval(
         assert resolution_calls == 2
         assert captured["approval_decision"] == "approve"
         assert captured["approval_digest"] == prepared["approval_digest"]
+        assert captured["control_fingerprint"] == session.config_snapshot.control_fingerprint
 
         with pytest.raises(NZCoderHTTPError) as stale:
             client.start_workflow(
@@ -374,38 +384,89 @@ def test_http_run_rejects_attachment_escape_and_symlink(local_service, tmp_path)
     assert client.messages(session_id) == []
 
 
-def test_http_resolves_project_custom_commands_in_daemon_workspace(local_service):
+def test_project_command_catalog_rotates_on_next_submission(local_service):
+    from nz_coder.foundation.workspace_trust import (
+        WorkspaceTrustStore,
+        load_config_snapshot,
+    )
+
     client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
     created = client.create_session("auto")
     session_id = created["id"]
-    commands = Path(created["workspace"]) / ".nz-coder" / "commands"
+    workspace = Path(created["workspace"])
+    commands = workspace / ".nz-coder" / "commands"
     commands.mkdir(parents=True)
-    (commands / "review.md").write_text(
+    (commands / "repo-review.md").write_text(
         "---\ndescription: Review a path\nallowed_tools:\n  - read_file\n"
         "---\nReview $ARGUMENTS",
         encoding="utf-8",
     )
 
-    listed = client.list_commands(session_id)
-    expanded = client.expand_command(session_id, "review", "src/app.py")
+    assert all(item["name"] != "repo-review" for item in client.list_commands(session_id))
+    with pytest.raises(NZCoderHTTPError) as exc_info:
+        client.expand_command(session_id, "repo-review", "src/app.py")
+    assert exc_info.value.code == "invalid_request"
+
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore().trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
+    listed = [
+        item for item in client.list_commands(session_id)
+        if item["name"] == "repo-review"
+    ]
+    expanded = client.expand_command(session_id, "repo-review", "src/app.py")
 
     assert listed == [{
-        "name": "review",
+        "name": "repo-review",
         "description": "Review a path",
         "source": "project",
         "allowed_tools": ["read_file"],
         "model": None,
     }]
     assert expanded == {
-        "name": "review",
+        "name": "repo-review",
         "prompt": "Review src/app.py",
         "source": "project",
         "allowed_tools": ["read_file"],
         "model": None,
+        "command_digest": expanded["command_digest"],
     }
+    assert len(expanded["command_digest"]) == 64
+
+    (commands / "repo-review.md").write_text(
+        "---\ndescription: Changed\nallowed_tools:\n  - bash\n"
+        "---\nChanged $ARGUMENTS",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="command expansion is stale"):
+        local_service.manager.start_run(
+            session_id,
+            expanded["prompt"],
+            allowed_tools=expanded["allowed_tools"],
+            model=expanded["model"],
+            command_digest=expanded["command_digest"],
+        )
+    assert client.get_session(session_id)["status"] == "idle"
+    assert local_service.manager.get(session_id).history == []
+
+    with pytest.raises(NZCoderHTTPError) as stale:
+        client.run(
+            session_id,
+            expanded["prompt"],
+            allowed_tools=expanded["allowed_tools"],
+            model=expanded["model"],
+            command_digest=expanded["command_digest"],
+        )
+    assert stale.value.status == 400
+    assert stale.value.code == "invalid_request"
+    assert client.get_session(session_id)["status"] == "idle"
+    assert local_service.manager.get(session_id).history == []
 
 
 def test_http_projects_remote_extension_skill_and_mcp_status(local_service):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
     client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
     created = client.create_session("auto")
     session_id = created["id"]
@@ -416,6 +477,11 @@ def test_http_projects_remote_extension_skill_and_mcp_status(local_service):
         "---\nname: review\ndescription: Review changes\n---\nReview.",
         encoding="utf-8",
     )
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore().trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
+    session_id = client.create_session("auto")["id"]
 
     extensions = client.list_extensions(session_id)
     skills = client.list_skills(session_id)
@@ -910,8 +976,7 @@ def test_http_session_busy_abort_and_delete_boundary(local_service):
     created = client.create_session("default")
     session_id = created["id"]
     persisted = (
-        Path(created["workspace"])
-        / ".nz-coder"
+        user_storage_layout(Path(created["workspace"])).workspace_state
         / "sessions"
         / f"{session_id}.json"
     )
@@ -2065,6 +2130,36 @@ def test_http_instruction_file_control_plane_closes_runtime_loop(tmp_path):
         thread.join(timeout=2)
 
 
+def test_http_instruction_delete_keeps_symlink_target_unchanged(tmp_path):
+    project = tmp_path / "instructions-project"
+    outside = tmp_path / "outside.md"
+    project.mkdir()
+    outside.write_text("SENTINEL-INSTRUCTION\n", encoding="utf-8")
+    (project / "AGENTS.md").symlink_to(outside)
+    manager = SessionManager(
+        agent_factory=_fake_factory,
+        workspace_roots=[project],
+        restore_saved=False,
+    )
+    service = SessionHTTPService(
+        port=0,
+        token="test-token-1234567890",
+        manager=manager,
+    )
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = NZCoderClient(service.base_url, service.token, timeout=2)
+        workspace_id = manager.workspaces.id_for(project)
+        with pytest.raises(NZCoderHTTPError):
+            client.delete_instruction_file("project", "AGENTS.md", workspace_id)
+    finally:
+        service.shutdown()
+        thread.join(timeout=2)
+
+    assert outside.read_text(encoding="utf-8") == "SENTINEL-INSTRUCTION\n"
+
+
 def test_http_different_workspaces_run_concurrently(tmp_path):
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -2126,7 +2221,11 @@ def test_http_restart_discovers_and_lazily_restores_session(tmp_path):
     assert first_manager.get(session_id).wait(timeout=3)
     first_snapshot = first_manager.get(session_id).snapshot()
     first_ids = [item["info"]["id"] for item in first_snapshot["messages"]]
-    session_path = workspace / ".nz-coder" / "sessions" / f"{session_id}.json"
+    session_path = (
+        user_storage_layout(workspace).workspace_state
+        / "sessions"
+        / f"{session_id}.json"
+    )
     persisted = json.loads(session_path.read_text(encoding="utf-8"))
     assert persisted["message_schema_version"] == 1
     assert all("_nz_message_id" in item for item in persisted["messages"])
@@ -2520,6 +2619,14 @@ def test_http_agent_prompt_uses_the_selected_workspace_state(tmp_path, monkeypat
         "---\nname: project-skill\ndescription: Selected workspace skill\n---\nBody\n",
         encoding="utf-8",
     )
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
+    trust_path = tmp_path / "trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore(trust_path).trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
     captured = {}
 
     monkeypatch.setattr(MemoryManager, "load_all", lambda self: None)
@@ -2548,14 +2655,16 @@ def test_http_agent_prompt_uses_the_selected_workspace_state(tmp_path, monkeypat
         build_http_agent("http-workspace-prompt", "default")
 
     assert captured["memory_block"] == ""
-    assert "project-skill" in captured["skill_descriptions"]
-    assert captured["memory_manager"].memory_dir == workspace / ".nz-coder" / "memory"
+    # Session construction does not freeze project skill descriptions. They
+    # are appended from the fresh per-run snapshot by AgentLoop.
+    assert captured["skill_descriptions"] == ""
+    private_state = user_storage_layout(workspace).workspace_state
+    assert captured["memory_manager"].memory_dir == private_state / "memory"
     assert captured["skill_loader"]._project_dir == workspace / ".nz-coder" / "skills"
     assert captured["system_prompt"] == "workspace prompt"
     assert not captured["kwargs"].get("auto_mode_classifier_enabled", False)
     assert captured["kwargs"]["event_bus"]._journal.path == (
-        workspace
-        / ".nz-coder"
+        private_state
         / "sessions"
         / "_artifacts"
         / "http-workspace-prompt"

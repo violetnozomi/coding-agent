@@ -6,6 +6,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 
 from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import active_run_settings
 
 
 @dataclass(frozen=True)
@@ -38,14 +39,20 @@ _DECLARED_TEST_SCOPES: ContextVar[tuple[str, ...]] = ContextVar(
 def max_agent_turns() -> int:
     """Return the current execution's agent-turn limit."""
     value = _RUNTIME_OVERRIDES.get().max_agent_turns
-    return max(1, int(config.MAX_AGENT_TURNS if value is None else value))
+    settings = active_run_settings()
+    default = settings.max_agent_turns if settings is not None else config.MAX_AGENT_TURNS
+    return max(1, int(default if value is None else value))
 
 
 def nominal_agent_turns() -> int:
     """Return the convergence SLA without exceeding the execution hard cap."""
     value = _RUNTIME_OVERRIDES.get().nominal_agent_turns
     if value is None:
-        value = getattr(config, "NOMINAL_AGENT_TURNS", 15)
+        settings = active_run_settings()
+        value = (
+            settings.nominal_agent_turns
+            if settings is not None else getattr(config, "NOMINAL_AGENT_TURNS", 15)
+        )
     return min(max_agent_turns(), max(1, int(value)))
 
 
@@ -60,7 +67,9 @@ def agent_timeout_seconds() -> float:
 def max_parallel_tasks() -> int:
     """Return the current execution's scheduler concurrency limit."""
     value = _RUNTIME_OVERRIDES.get().max_parallel_tasks
-    return max(1, int(config.MAX_PARALLEL_TASKS if value is None else value))
+    settings = active_run_settings()
+    default = settings.max_parallel_tasks if settings is not None else config.MAX_PARALLEL_TASKS
+    return max(1, int(default if value is None else value))
 
 
 def strict_local_tools() -> bool:

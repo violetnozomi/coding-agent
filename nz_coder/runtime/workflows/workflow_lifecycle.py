@@ -13,6 +13,7 @@ from nz_coder.runtime.workflows.workflow_run_store import (
     WorkflowRunStore,
 )
 from nz_coder.runtime.workflows.workflow_host import validate_workflow_display_name
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.tools import ToolOutput, register
 
 
@@ -90,7 +91,7 @@ def workflow_runs(
             )
         return "Error: action must be list, read, artifact, or result"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_run_archive(
@@ -156,7 +157,7 @@ def workflow_run_archive(
             metadata={"archived_workflow_runs": archived, "recoverable": True},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_run_rename(run_id: str, display_name: str) -> str:
@@ -179,7 +180,7 @@ def workflow_run_rename(run_id: str, display_name: str) -> str:
             metadata={"run_id": run_id, "display_name": name},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

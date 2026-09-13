@@ -6,14 +6,25 @@ import json
 import math
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from nz_coder.foundation import config
+from nz_coder.foundation.execution_identity import (
+    ExecutionIdentity,
+    resolve_execution_identity,
+)
+from nz_coder.foundation.secret_values import secret_str
+from nz_coder.foundation.workspace_trust import default_user_config_path
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.mcp.trust import MCPTrustStore
 from nz_coder.runtime.process.workdir import current_workdir
+
+if TYPE_CHECKING:
+    from nz_coder.foundation.project_control import ProjectControlSnapshot
+    from nz_coder.foundation.workspace_trust import ConfigSnapshot
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 _ENV_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -51,6 +62,14 @@ class MCPOAuthConfig:
     redirect_uri: str = "http://127.0.0.1:19876/mcp/oauth/callback"
     authorization_server: str = ""
 
+    def __repr__(self) -> str:
+        return (
+            "MCPOAuthConfig("
+            f"configured={bool(self.client_id)!r}, "
+            f"client_secret_env_configured={bool(self.client_secret_env)!r}, "
+            f"authorization_server={self.authorization_server!r})"
+        )
+
     def resolved_client_secret(self) -> str:
         if not self.client_secret_env:
             return ""
@@ -71,20 +90,30 @@ class MCPServerConfig:
     name: str
     command: tuple[str, ...] = ()
     cwd: Path = Path(".")
-    environment: tuple[tuple[str, str], ...] = ()
+    environment: tuple[tuple[str, str], ...] = field(default=(), repr=False)
     enabled: bool = True
     startup_timeout_seconds: float = 30.0
     tool_timeout_seconds: float = 30.0
     tool_effects: tuple[tuple[str, str], ...] = ()
     transport: str = "stdio"
     url: str = ""
-    headers: tuple[tuple[str, str], ...] = ()
+    headers: tuple[tuple[str, str], ...] = field(default=(), repr=False)
     header_env: tuple[tuple[str, str], ...] = ()
     allow_insecure_http: bool = False
     oauth: MCPOAuthConfig | None = None
     source: str = "explicit"
     trusted: bool = True
     fingerprint: str = ""
+    execution_identity: ExecutionIdentity | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        """Protect inline credential values in generic dataclass diagnostics."""
+        object.__setattr__(self, "environment", tuple(
+            (str(name), secret_str(value)) for name, value in self.environment
+        ))
+        object.__setattr__(self, "headers", tuple(
+            (str(name), secret_str(value)) for name, value in self.headers
+        ))
 
     def environment_dict(self) -> dict[str, str]:
         return dict(self.environment)
@@ -111,12 +140,33 @@ def load_mcp_server_configs(
     raw: str | dict[str, Any] | None = None,
     *,
     workspace: Path | None = None,
+    project_control_snapshot: ProjectControlSnapshot | None = None,
+    config_snapshot: ConfigSnapshot | None = None,
+    compatibility_mode: bool = False,
 ) -> list[MCPServerConfig]:
     """Load merged user/project/environment config without executing commands."""
     root = (workspace or current_workdir()).resolve()
+    legacy_globals = bool(compatibility_mode)
+    if config_snapshot is None:
+        from nz_coder.foundation.workspace_trust import (
+            active_config_snapshot,
+            current_config_snapshot,
+        )
+
+        config_snapshot = active_config_snapshot(root) or current_config_snapshot(root)
+    if config_snapshot.workspace.resolve() != root:
+        raise ValueError("ConfigSnapshot belongs to a different workspace")
+    if project_control_snapshot is None:
+        project_control_snapshot = config_snapshot.project_control
     origins: dict[str, str]
+    project_control_trusted = True
     if raw is None:
-        payload, origins = _load_merged_payload(root)
+        payload, origins, project_control_trusted = _load_merged_payload(
+            root,
+            project_control_snapshot,
+            config_snapshot,
+            legacy_globals=legacy_globals,
+        )
         source: str | dict[str, Any] = payload
     else:
         source = raw
@@ -280,28 +330,84 @@ def load_mcp_server_configs(
         if not isinstance(enabled, bool):
             raise ValueError(f"MCP server '{name}' enabled must be boolean")
         startup_timeout = _positive_timeout(
-            item.get("startup_timeout_seconds", config.MCP_STARTUP_TIMEOUT_SECONDS),
+            item.get(
+                "startup_timeout_seconds",
+                (
+                    current_run_settings().mcp_startup_timeout
+                    if legacy_globals
+                    else config_snapshot.get_float(
+                    "NZ_MCP_STARTUP_TIMEOUT_SECONDS", 30.0, minimum=0.001,
+                    )
+                ),
+            ),
             server=name,
             field="startup_timeout_seconds",
         )
         tool_timeout = _positive_timeout(
-            item.get("tool_timeout_seconds", config.MCP_TOOL_TIMEOUT_SECONDS),
+            item.get(
+                "tool_timeout_seconds",
+                (
+                    current_run_settings().mcp_tool_timeout
+                    if legacy_globals
+                    else config_snapshot.get_float(
+                    "NZ_MCP_TOOL_TIMEOUT_SECONDS", 30.0, minimum=0.001,
+                    )
+                ),
+            ),
             server=name,
             field="tool_timeout_seconds",
         )
+        execution_identity = (
+            resolve_execution_identity(
+                command,
+                cwd=cwd,
+                workspace=root,
+                config_source=origin,
+                environment_profile="strict-service",
+            )
+            if command else None
+        )
         fingerprint = ""
         trusted = True
-        if server_type == "local" and origin == "project":
-            fingerprint = _command_fingerprint(
+        requires_execution_trust = bool(
+            origin in {"project", "trusted-workspace"}
+            or (
+                execution_identity is not None
+                and execution_identity.workspace_controlled
+            )
+        )
+        if requires_execution_trust:
+            fingerprint = _server_fingerprint(
                 name=name,
+                server_type=server_type,
                 command=command,
                 cwd=cwd,
                 environment=environment,
+                url=str(url or ""),
+                headers=headers,
+                header_env=header_env,
+                oauth=oauth,
+                effects=tool_effects,
+                execution_identity=execution_identity,
             )
-            trusted = MCPTrustStore(Path(config.MCP_TRUST_STORE)).is_trusted(
-                root,
-                name,
-                fingerprint,
+            trusted = bool(
+                (
+                    project_control_trusted
+                    if origin in {"project", "trusted-workspace"}
+                    else True
+                )
+                and MCPTrustStore(Path(
+                    config.MCP_TRUST_STORE
+                    if legacy_globals
+                    else config_snapshot.get(
+                        "NZ_MCP_TRUST_STORE",
+                        str(Path.home() / ".config" / "nz-coder" / "mcp-trust.json"),
+                    )
+                ).expanduser()).is_trusted(
+                    root,
+                    name,
+                    fingerprint,
+                )
             )
         servers.append(
             MCPServerConfig(
@@ -322,16 +428,36 @@ def load_mcp_server_configs(
                 source=origin,
                 trusted=trusted,
                 fingerprint=fingerprint,
+                execution_identity=execution_identity,
             )
         )
     return servers
 
 
-def mcp_config_paths(workspace: Path) -> tuple[Path, Path, Path]:
+def mcp_config_paths(
+    workspace: Path,
+    *,
+    config_snapshot: ConfigSnapshot | None = None,
+    compatibility_mode: bool = False,
+) -> tuple[Path, Path, Path]:
     """Return resolved user, project, and trust paths with project confinement."""
     root = workspace.resolve()
-    user_path = Path(config.MCP_USER_CONFIG).expanduser().resolve()
-    project_value = Path(config.MCP_PROJECT_CONFIG)
+    legacy_globals = bool(compatibility_mode)
+    if config_snapshot is None:
+        from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+        config_snapshot = current_config_snapshot(root)
+    user_path = _user_owned_config_path(
+        config.MCP_USER_CONFIG if legacy_globals else config_snapshot.get(
+            "NZ_MCP_USER_CONFIG",
+            str(Path.home() / ".config" / "nz-coder" / "mcp.json"),
+        ), root, label="MCP user config",
+    )
+    project_value = Path(
+        config.MCP_PROJECT_CONFIG if legacy_globals else config_snapshot.get(
+            "NZ_MCP_PROJECT_CONFIG", ".nz-coder/mcp.json",
+        )
+    )
     if project_value.is_absolute():
         raise ValueError("NZ_MCP_PROJECT_CONFIG must be workspace-relative")
     project_path = (root / project_value).resolve()
@@ -339,13 +465,34 @@ def mcp_config_paths(workspace: Path) -> tuple[Path, Path, Path]:
         project_path.relative_to(root)
     except ValueError as exc:
         raise ValueError("NZ_MCP_PROJECT_CONFIG escapes workspace") from exc
-    trust_path = Path(config.MCP_TRUST_STORE).expanduser().resolve()
+    trust_path = _user_owned_config_path(
+        config.MCP_TRUST_STORE if legacy_globals else config_snapshot.get(
+            "NZ_MCP_TRUST_STORE",
+            str(Path.home() / ".config" / "nz-coder" / "mcp-trust.json"),
+        ), root, label="MCP trust store",
+    )
     return user_path, project_path, trust_path
 
 
-def mcp_config_revision(workspace: Path) -> str:
+def mcp_config_revision(
+    workspace: Path,
+    *,
+    project_control_snapshot: ProjectControlSnapshot | None = None,
+    config_snapshot: ConfigSnapshot | None = None,
+    compatibility_mode: bool = False,
+) -> str:
     """Return a cheap revision for config/trust polling without reading secrets."""
-    paths = mcp_config_paths(workspace)
+    from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+    legacy_globals = bool(compatibility_mode)
+    run_snapshot = config_snapshot or current_config_snapshot(workspace)
+    snapshot = project_control_snapshot or run_snapshot.project_control
+    user_path, _project_path, trust_path = mcp_config_paths(
+        workspace,
+        config_snapshot=run_snapshot,
+        compatibility_mode=legacy_globals,
+    )
+    paths = (user_path, trust_path)
     records: list[tuple[str, int, int]] = []
     for path in paths:
         try:
@@ -354,30 +501,67 @@ def mcp_config_revision(workspace: Path) -> str:
         except OSError:
             records.append((str(path), -1, -1))
     payload = json.dumps(
-        {"paths": records, "environment": config.MCP_SERVERS_JSON},
+        {
+            "paths": records,
+            "environment": (
+                config.MCP_SERVERS_JSON
+                if legacy_globals
+                else run_snapshot.get("NZ_MCP_SERVERS_JSON", "")
+            ),
+            "project_control": snapshot.fingerprint,
+        },
         sort_keys=True,
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _load_merged_payload(workspace: Path) -> tuple[dict[str, Any], dict[str, str]]:
-    user_path, project_path, _ = mcp_config_paths(workspace)
+def _load_merged_payload(
+    workspace: Path,
+    project_control_snapshot: ProjectControlSnapshot | None,
+    config_snapshot: ConfigSnapshot,
+    *,
+    legacy_globals: bool = False,
+) -> tuple[dict[str, Any], dict[str, str], bool]:
+    snapshot = project_control_snapshot or config_snapshot.project_control
+    user_path = _user_owned_config_path(
+        config.MCP_USER_CONFIG if legacy_globals else config_snapshot.get(
+            "NZ_MCP_USER_CONFIG",
+            str(Path.home() / ".config" / "nz-coder" / "mcp.json"),
+        ),
+        workspace,
+        label="MCP user config",
+    )
     merged: dict[str, Any] = {}
     origins: dict[str, str] = {}
-    for origin, path in (("user", user_path), ("project", project_path)):
-        if not path.exists():
-            continue
-        payload = _read_payload_file(path, origin)
+    if user_path.exists():
+        payload = _read_payload_file(user_path, "user")
+        for name, item in payload.items():
+            merged[name] = item
+            origins[name] = "user"
+    project = snapshot.get(".nz-coder/mcp.json")
+    if project is not None:
+        payload = _decode_server_payload(project.content, "MCP project config")
+        for name, item in payload.items():
+            merged[name] = item
+            origins[name] = "project"
+    inline = (
+        config.MCP_SERVERS_JSON
+        if legacy_globals
+        else config_snapshot.get("NZ_MCP_SERVERS_JSON", "")
+    )
+    if inline.strip():
+        payload = _decode_server_payload(inline, "NZ_MCP_SERVERS_JSON")
+        source = (
+            "environment"
+            if legacy_globals
+            else config_snapshot.value("NZ_MCP_SERVERS_JSON").source.value
+        )
+        origin = "environment" if source == "environment" else source
         for name, item in payload.items():
             merged[name] = item
             origins[name] = origin
-    if config.MCP_SERVERS_JSON.strip():
-        payload = _decode_server_payload(config.MCP_SERVERS_JSON, "NZ_MCP_SERVERS_JSON")
-        for name, item in payload.items():
-            merged[name] = item
-            origins[name] = "environment"
-    return merged, origins
+    return merged, origins, snapshot.trusted
 
 
 def _read_payload_file(path: Path, origin: str) -> dict[str, Any]:
@@ -390,11 +574,11 @@ def _read_payload_file(path: Path, origin: str) -> dict[str, Any]:
     return _decode_server_payload(raw, f"MCP {origin} config {path}")
 
 
-def _decode_server_payload(raw: str, label: str) -> dict[str, Any]:
+def _decode_server_payload(raw: str | bytes, label: str) -> dict[str, Any]:
     try:
         payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid {label}: {exc}") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Invalid {label}") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"{label} must decode to an object")
     if "servers" in payload:
@@ -407,24 +591,77 @@ def _decode_server_payload(raw: str, label: str) -> dict[str, Any]:
     return dict(payload)
 
 
-def _command_fingerprint(
+def _server_fingerprint(
     *,
     name: str,
+    server_type: str,
     command: list[str],
     cwd: Path,
     environment: list[tuple[str, str]],
+    url: str,
+    headers: list[tuple[str, str]],
+    header_env: list[tuple[str, str]],
+    oauth: MCPOAuthConfig | None,
+    effects: list[tuple[str, str]],
+    execution_identity: ExecutionIdentity | None = None,
 ) -> str:
     payload = json.dumps(
         {
             "name": name,
+            "type": server_type,
             "command": command,
             "cwd": str(cwd),
             "environment": sorted(environment),
+            "url": _normalized_remote_url(url),
+            "header_value_hashes": sorted(
+                (header.lower(), hashlib.sha256(value.encode("utf-8")).hexdigest())
+                for header, value in headers
+            ),
+            "header_env": sorted(header_env),
+            "oauth": {
+                "client_id": oauth.client_id,
+                "client_secret_env": oauth.client_secret_env,
+                "scope": oauth.scope,
+                "redirect_uri": oauth.redirect_uri,
+                "authorization_server": _normalized_remote_url(
+                    oauth.authorization_server
+                ),
+            } if oauth else None,
+            "effects": sorted(effects),
+            "execution_identity": (
+                execution_identity.fingerprint if execution_identity else ""
+            ),
         },
         sort_keys=True,
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _normalized_remote_url(value: str) -> str:
+    if not value:
+        return ""
+    parsed = urlsplit(value)
+    host = (parsed.hostname or "").lower()
+    default_port = 443 if parsed.scheme.lower() == "https" else 80
+    authority = host if parsed.port in {None, default_port} else f"{host}:{parsed.port}"
+    query = f"?{parsed.query}" if parsed.query else ""
+    return f"{parsed.scheme.lower()}://{authority}{parsed.path or '/'}{query}"
+
+
+def _user_owned_config_path(value: str, workspace: Path, *, label: str) -> Path:
+    """Resolve a user control path and reject workspace-owned destinations."""
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        # User-owned path settings deliberately never inherit process cwd.
+        candidate = default_user_config_path().parent / candidate
+    resolved = candidate.resolve()
+    root = Path(workspace).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        return resolved
+    raise ValueError(f"{label} must be outside the workspace")
 
 
 def _positive_timeout(value: Any, *, server: str, field: str) -> float:
@@ -560,7 +797,7 @@ def _validate_oauth(
         "http://127.0.0.1:19876/mcp/oauth/callback",
     )
     authorization_server = value.get("authorization_server", "")
-    for field, field_value in {
+    for field_name, field_value in {
         "client_id": client_id,
         "client_secret_env": client_secret_env,
         "scope": scope,
@@ -568,9 +805,13 @@ def _validate_oauth(
         "authorization_server": authorization_server,
     }.items():
         if not isinstance(field_value, str):
-            raise ValueError(f"MCP server '{server}' oauth {field} must be a string")
+            raise ValueError(
+                f"MCP server '{server}' oauth {field_name} must be a string"
+            )
         if any(ord(character) < 32 or ord(character) == 127 for character in field_value):
-            raise ValueError(f"MCP server '{server}' oauth {field} is invalid")
+            raise ValueError(
+                f"MCP server '{server}' oauth {field_name} is invalid"
+            )
     if client_secret_env and not _ENV_RE.fullmatch(client_secret_env):
         raise ValueError(
             f"MCP server '{server}' oauth client_secret_env is invalid"

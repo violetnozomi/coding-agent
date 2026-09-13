@@ -87,20 +87,22 @@ def test_clipboard_image_missing_helper_bad_mime_and_oversize_fail_soft():
         ) is None
 
 
-def test_clipboard_image_persistence_is_private_and_workspace_local(tmp_path):
+def test_clipboard_image_persistence_is_private_and_outside_workspace(tmp_path):
     from nz_coder.interface.clipboard import ClipboardImage, persist_image
     from nz_coder.foundation.private_paths import inspect_private_path
+    from nz_coder.foundation.user_paths import resolve_private_attachment
 
-    relative = persist_image(tmp_path, ClipboardImage(PNG, "image/png", "test"))
-    path = tmp_path / relative
+    reference = persist_image(tmp_path, ClipboardImage(PNG, "image/png", "test"))
+    path = resolve_private_attachment(tmp_path, reference)
     assert path.read_bytes() == PNG
-    assert path.resolve().is_relative_to(tmp_path.resolve())
+    assert not path.resolve().is_relative_to(tmp_path.resolve())
     assert inspect_private_path(path).hardened is True
     assert inspect_private_path(path.parent).hardened is True
 
 
 def test_clipboard_image_hardens_cache_and_final_attachment(tmp_path, monkeypatch):
     import nz_coder.interface.clipboard as clipboard
+    from nz_coder.foundation.user_paths import resolve_private_attachment
 
     hardened = []
     monkeypatch.setattr(
@@ -108,13 +110,14 @@ def test_clipboard_image_hardens_cache_and_final_attachment(tmp_path, monkeypatc
         "harden_private_path",
         lambda path: hardened.append(os.fspath(path)),
     )
-    relative = clipboard.persist_image(
+    reference = clipboard.persist_image(
         tmp_path,
         clipboard.ClipboardImage(PNG, "image/png", "test"),
     )
 
-    assert os.fspath(tmp_path / ".nz-coder" / "attachments") in hardened
-    assert os.fspath(tmp_path / relative) in hardened
+    target = resolve_private_attachment(tmp_path, reference)
+    assert os.fspath(target.parent) in hardened
+    assert os.fspath(target) in hardened
 
 
 def test_ctrl_v_falls_back_to_image_callback_when_text_clipboards_are_empty(monkeypatch):

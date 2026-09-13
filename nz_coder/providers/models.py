@@ -16,6 +16,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 from nz_coder.foundation import config
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+from nz_coder.foundation.user_paths import prepare_user_storage
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
     configured_model_capabilities,
@@ -28,8 +29,8 @@ _MAX_STATE_BYTES = 2_000_000
 _MAX_DISCOVERY_PAGES = 20
 _MAX_DISCOVERED_MODELS = 10_000
 _MAX_DISCOVERY_TIMEOUT_SECONDS = 300.0
-_CACHE_RELATIVE_PATH = Path(".nz-coder/models/catalog.json")
-_SELECTION_RELATIVE_PATH = Path(".nz-coder/models/selection.json")
+_CACHE_RELATIVE_PATH = Path("models/catalog.json")
+_SELECTION_RELATIVE_PATH = Path("models/selection.json")
 _OPENAI_NAMES = {
     "alibaba-cn", "cerebras", "codex", "dashscope", "deepseek", "groq",
     "kimi", "mistral", "moonshot", "openai", "openai-compatible",
@@ -64,10 +65,15 @@ class _NoRedirect(HTTPRedirectHandler):
         raise RuntimeError("Model discovery redirects are disabled")
 
 
-def active_model_selection(workspace: Path | None = None) -> ModelSelection:
+def active_model_selection(
+    workspace: Path | None = None,
+    *,
+    config_snapshot=None,
+) -> ModelSelection:
     """Return the workspace selection, falling back to environment config."""
     root = (workspace or current_workdir()).resolve()
-    data = _read_state(root / _SELECTION_RELATIVE_PATH, required=False)
+    selection_path, state_root = _selection_path(root)
+    data = _read_state(selection_path, state_root, required=False)
     if data is not None:
         provider = _nonempty_string(data.get("provider"), "selection provider")
         model_id = _nonempty_string(data.get("model_id"), "selection model_id")
@@ -75,10 +81,20 @@ def active_model_selection(workspace: Path | None = None) -> ModelSelection:
         if variant is not None and (not isinstance(variant, str) or not variant.strip()):
             raise ValueError("Model selection variant must be a non-empty string")
         return ModelSelection(provider, model_id, variant, "workspace")
+    if config_snapshot is not None:
+        if config_snapshot.workspace.resolve() != root:
+            raise ValueError("ConfigSnapshot belongs to a different workspace")
+        provider = config_snapshot.get("MODEL_PROVIDER", "openai-compatible")
+        model_id = config_snapshot.get("MODEL_ID", "deepseek-v4-flash")
+        variant = config_snapshot.get("MODEL_VARIANT", "")
+    else:
+        provider = config.MODEL_PROVIDER
+        model_id = config.MODEL_ID
+        variant = config.MODEL_VARIANT
     return ModelSelection(
-        str(config.MODEL_PROVIDER).strip().lower(),
-        str(config.MODEL_ID).strip(),
-        str(config.MODEL_VARIANT).strip() or None,
+        str(provider).strip().lower(),
+        str(model_id).strip(),
+        str(variant).strip() or None,
     )
 
 
@@ -114,19 +130,24 @@ def save_model_selection(
         "model_id": normalized_model,
         "variant": normalized_variant,
     }
-    _write_state(root / _SELECTION_RELATIVE_PATH, payload)
+    selection_path, state_root = _selection_path(root)
+    _write_state(selection_path, state_root, payload)
     return ModelSelection(normalized_provider, normalized_model, normalized_variant, "workspace")
 
 
 def clear_model_selection(workspace: Path | None = None) -> bool:
     """Remove the workspace selection and restore environment-backed defaults."""
     root = (workspace or current_workdir()).resolve()
-    target = _safe_state_path(root, root / _SELECTION_RELATIVE_PATH)
+    target, state_root = _selection_path(root)
+    target = _safe_state_path(state_root, target)
+    removed = False
     try:
         target.unlink()
     except FileNotFoundError:
-        return False
-    return True
+        pass
+    else:
+        removed = True
+    return removed
 
 
 def discover_models(
@@ -168,7 +189,8 @@ def cached_models(
 ) -> list[DiscoveredModel]:
     """Read cached discovery results without network access."""
     root = (workspace or current_workdir()).resolve()
-    data = _read_state(root / _CACHE_RELATIVE_PATH, required=False) or {}
+    target, cache_root = _catalog_path(root)
+    data = _read_state(target, cache_root, required=False) or {}
     providers = data.get("providers", {})
     if not isinstance(providers, dict):
         return []
@@ -229,7 +251,8 @@ def model_details(model: DiscoveredModel) -> ModelCapabilities:
 def cache_status(workspace: Path | None = None) -> dict[str, str]:
     """Return provider discovery timestamps without exposing credentials."""
     root = (workspace or current_workdir()).resolve()
-    data = _read_state(root / _CACHE_RELATIVE_PATH, required=False) or {}
+    target, cache_root = _catalog_path(root)
+    data = _read_state(target, cache_root, required=False) or {}
     providers = data.get("providers", {})
     if not isinstance(providers, dict):
         return {}
@@ -390,8 +413,8 @@ def _update_cache(
     workspace: Path | None,
 ) -> None:
     root = (workspace or current_workdir()).resolve()
-    target = root / _CACHE_RELATIVE_PATH
-    data = _read_state(target, required=False) or {"version": 1, "providers": {}}
+    target, cache_root = _catalog_path(root)
+    data = _read_state(target, cache_root, required=False) or {"version": 1, "providers": {}}
     providers = data.get("providers")
     if not isinstance(providers, dict):
         providers = {}
@@ -399,7 +422,17 @@ def _update_cache(
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "models": [asdict(item) for item in models],
     }
-    _write_state(target, {"version": 1, "providers": providers})
+    _write_state(target, cache_root, {"version": 1, "providers": providers})
+
+
+def _selection_path(workspace: Path) -> tuple[Path, Path]:
+    layout = prepare_user_storage(workspace)
+    return layout.workspace_state / _SELECTION_RELATIVE_PATH, layout.workspace_state
+
+
+def _catalog_path(workspace: Path) -> tuple[Path, Path]:
+    layout = prepare_user_storage(workspace)
+    return layout.workspace_cache / _CACHE_RELATIVE_PATH, layout.workspace_cache
 
 
 def _safe_state_path(root: Path, target: Path) -> Path:
@@ -414,14 +447,8 @@ def _safe_state_path(root: Path, target: Path) -> Path:
     return resolved
 
 
-def _read_state(target: Path, *, required: bool) -> dict | None:
-    root = current_workdir().resolve() if not target.is_absolute() else None
-    if root is not None:
-        target = root / target
-    workspace = target
-    for _ in _CACHE_RELATIVE_PATH.parts:
-        workspace = workspace.parent
-    target = _safe_state_path(workspace, target)
+def _read_state(target: Path, storage_root: Path, *, required: bool) -> dict | None:
+    target = _safe_state_path(storage_root, target)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
         descriptor = os.open(target, flags)
@@ -449,11 +476,8 @@ def _read_state(target: Path, *, required: bool) -> dict | None:
     return data
 
 
-def _write_state(target: Path, payload: dict) -> None:
-    workspace = target
-    for _ in _CACHE_RELATIVE_PATH.parts:
-        workspace = workspace.parent
-    target = _safe_state_path(workspace, target)
+def _write_state(target: Path, storage_root: Path, payload: dict) -> None:
+    target = _safe_state_path(storage_root, target)
     target.parent.mkdir(parents=True, exist_ok=True)
     encoded = json.dumps(
         payload,
@@ -485,6 +509,20 @@ def _nonempty_string(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"Model {name} must be a non-empty string")
     return value.strip()
+
+
+def _state_fingerprint(payload: dict) -> str:
+    """Return a content identity without exposing provider configuration."""
+    import hashlib
+
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _validated_timeout(value: Any) -> float:

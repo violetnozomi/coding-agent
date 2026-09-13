@@ -297,6 +297,7 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                         attachments=[item.path for item in attachments],
                         allowed_tools=list(expanded.get("allowed_tools") or []),
                         model=expanded.get("model"),
+                        command_digest=expanded.get("command_digest"),
                     )
                     await _follow_run(backend, console)
                     continue

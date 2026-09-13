@@ -9,16 +9,21 @@ import shutil
 import time
 import uuid
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from nz_coder import __version__
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.workflows.workflow_capsule import (
     preflight_workflow_capsule,
     validate_workflow_capsule,
 )
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import TOOL_HANDLERS, ToolOutput, register
+
+if TYPE_CHECKING:
+    from nz_coder.foundation.project_control import ProjectControlSnapshot
 
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
@@ -65,12 +70,32 @@ def _project_library_dir(root: Path) -> Path:
 def discover_workflow_capsules(
     workspace: Path | None = None,
     personal_dir: Path | None = None,
+    *,
+    project_control_snapshot: ProjectControlSnapshot | None = None,
 ) -> list[dict]:
     """Discover without parsing; project names override personal names."""
     directories = workflow_library_dirs(workspace, personal_dir)
+    root = (workspace or current_workdir()).resolve()
+    control_snapshot = project_control_snapshot or _project_control_snapshot(root)
+    project_trusted = control_snapshot.trusted
     found: dict[str, dict] = {}
     for source in ("personal", "project"):
+        if source == "project" and not project_trusted:
+            continue
         directory = directories[source]
+        if source == "project":
+            entries = control_snapshot.files_for_kind("workflow")
+            for item in entries:
+                name = Path(item.relative_path).name[:-len(".workflow.json")]
+                if not name:
+                    continue
+                found[name] = {
+                    "name": name,
+                    "path": str(root / item.relative_path),
+                    "source": source,
+                    "execution": "capability-generated",
+                }
+            continue
         try:
             entries = sorted(
                 islice(directory.iterdir(), _MAX_LIBRARY_ENTRIES),
@@ -113,20 +138,59 @@ def _read_capsule(path: Path) -> dict:
     return validate_workflow_capsule(value)
 
 
+def _read_capsule_bytes(payload: bytes) -> dict:
+    if len(payload) > _MAX_CAPSULE_BYTES:
+        raise ValueError("workflow capsule exceeds 1 MiB")
+    try:
+        value = json.loads(
+            payload.decode("utf-8"),
+            parse_constant=reject_nonstandard_json_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("invalid project workflow capsule") from exc
+    return validate_workflow_capsule(value)
+
+
 def load_workflow_capsule(
     name: str,
     *,
     workspace: Path | None = None,
     personal_dir: Path | None = None,
     source: str = "",
+    project_control_snapshot: ProjectControlSnapshot | None = None,
 ) -> tuple[dict, dict]:
     safe = safe_workflow_name(name)
     if source and source not in {"project", "personal"}:
         raise ValueError("workflow source must be project or personal")
+    root = (workspace or current_workdir()).resolve()
+    try:
+        control_snapshot = project_control_snapshot or _project_control_snapshot(root)
+        project_trusted = control_snapshot.trusted
+    except (OSError, ValueError):
+        control_snapshot = None
+        project_trusted = False
+    if source == "project" and not project_trusted:
+        raise ValueError("project workflow is not trusted for this workspace")
     directories = workflow_library_dirs(workspace, personal_dir)
-    sources = (source,) if source else ("project", "personal")
+    sources = (
+        (source,) if source
+        else (("project", "personal") if project_trusted else ("personal",))
+    )
     for candidate_source in sources:
         path = directories[candidate_source] / f"{safe}.workflow.json"
+        if candidate_source == "project":
+            item = control_snapshot.get(
+                f".nz-coder/workflows/{safe}.workflow.json"
+            ) if control_snapshot is not None else None
+            if item is None:
+                continue
+            ref = {
+                "name": safe,
+                "path": str(path),
+                "source": candidate_source,
+                "execution": "capability-generated",
+            }
+            return _read_capsule_bytes(item.content), ref
         if path.is_symlink() or not path.is_file():
             continue
         ref = {
@@ -135,8 +199,23 @@ def load_workflow_capsule(
             "source": candidate_source,
             "execution": "capability-generated",
         }
-        return _read_capsule(path), ref
+        capsule = _read_capsule(path)
+        return capsule, ref
     raise ValueError(f"saved workflow not found: {safe}")
+
+
+def _project_control_snapshot(workspace: Path):  # noqa: ANN202
+    """Resolve a new immutable Project Control snapshot outside a pinned run."""
+    from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+    return current_config_snapshot(workspace).project_control
+
+
+def _project_control_trusted(workspace: Path) -> bool:
+    try:
+        return _project_control_snapshot(workspace).trusted
+    except (OSError, ValueError):
+        return False
 
 
 def save_workflow_capsule(
@@ -307,7 +386,7 @@ def capsule_environment(workspace: Path | None = None) -> dict:
         "nzcoder_version": __version__,
         "is_git_repo": (root / ".git").exists(),
         "worktree_capable": bool(
-            config.SUBAGENT_WORKTREE_ENABLED
+            current_run_settings().subagent_worktree_enabled
             and shutil.which("git")
             and (root / ".git").exists()
         ),
@@ -347,7 +426,7 @@ def workflow_library(action: str, name: str = "", source: str = "") -> str:
             )
         return "Error: action must be list, show, or preflight"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_save(
@@ -370,7 +449,7 @@ def workflow_save(
             metadata={"workflow_ref": ref},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_library_mutate(
@@ -402,7 +481,7 @@ def workflow_library_mutate(
             metadata={"workflow_ref": ref, "action": normalized},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

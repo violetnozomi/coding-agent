@@ -12,12 +12,14 @@ import time
 import uuid
 import weakref
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.runtime.process.platform_runtime import decode_process_output, is_within_workspace
 from nz_coder.runtime.process.process_backends import (
     ProcessBackendSession,
     create_process_backend,
 )
+from nz_coder.foundation.capability_lease import capability_leases
+from nz_coder.protocol.public_error import to_public_error
 
 
 class ProcessStatus(str, Enum):
@@ -92,10 +94,12 @@ class _ManagedProcess:
         backend: ProcessBackendSession | None,
         event_bus=None,
         buffer_limit: int,
+        kill_grace_seconds: float,
     ) -> None:
         self.handle = handle
         self.backend = backend
         self.buffer_limit = max(1024, int(buffer_limit))
+        self.kill_grace_seconds = max(0.0, float(kill_grace_seconds))
         self.buffer = bytearray()
         self.buffer_start_cursor = 0
         self.cursor = 0
@@ -105,6 +109,7 @@ class _ManagedProcess:
         self.last_output_event_at = 0.0
         self.last_output_at = 0.0
         self.event_bus_ref = weakref.ref(event_bus) if event_bus is not None else None
+        self.capability_lease_id = ""
 
     def bind_event_bus(self, event_bus) -> None:
         if event_bus is None:
@@ -140,25 +145,26 @@ class ProcessService:
         kill_grace_seconds: float | None = None,
     ) -> None:
         self.workspace = Path(workspace).resolve()
-        self.buffer_bytes = max(
-            1024,
-            int(buffer_bytes or config.PROCESS_BUFFER_BYTES),
-        )
-        self.max_processes = max(
-            1,
-            int(max_processes or config.PROCESS_MAX_PER_WORKSPACE),
-        )
-        self.kill_grace_seconds = max(
-            0.0,
-            float(
-                config.PROCESS_KILL_GRACE_SECONDS
-                if kill_grace_seconds is None
-                else kill_grace_seconds
-            ),
-        )
+        self._buffer_bytes_override = buffer_bytes
+        self._max_processes_override = max_processes
+        self._kill_grace_override = kill_grace_seconds
         self._lock = threading.RLock()
         self._records: dict[str, _ManagedProcess] = {}
         self._closed = False
+
+    def _effective_max_processes(self) -> int:
+        return max(1, int(
+            self._max_processes_override
+            or current_run_settings().process_max_per_workspace
+        ))
+
+    def _effective_kill_grace(self) -> float:
+        selected = (
+            current_run_settings().process_kill_grace
+            if self._kill_grace_override is None
+            else self._kill_grace_override
+        )
+        return max(0.0, float(selected))
 
     def start(
         self,
@@ -172,6 +178,14 @@ class ProcessService:
         cols: int = 80,
         event_bus=None,
     ) -> ProcessHandle:
+        settings = current_run_settings()
+        buffer_bytes = max(1024, int(
+            self._buffer_bytes_override or settings.process_buffer_bytes
+        ))
+        max_processes = max(1, int(
+            self._max_processes_override or settings.process_max_per_workspace
+        ))
+        kill_grace_seconds = self._effective_kill_grace()
         command = str(command or "").strip()
         if not command:
             raise ValueError("command cannot be empty")
@@ -189,9 +203,9 @@ class ProcessService:
                 record.handle.status not in {item.value for item in _TERMINAL_STATUSES}
                 for record in self._records.values()
             )
-            if active >= self.max_processes:
+            if active >= max_processes:
                 raise ProcessStateError(
-                    f"workspace process limit reached ({self.max_processes})"
+                    f"workspace process limit reached ({max_processes})"
                 )
 
             process_id = f"proc_{uuid.uuid4().hex[:12]}"
@@ -212,7 +226,8 @@ class ProcessService:
                 starting,
                 backend=None,
                 event_bus=event_bus,
-                buffer_limit=self.buffer_bytes,
+                buffer_limit=buffer_bytes,
+                kill_grace_seconds=kill_grace_seconds,
             )
             self._records[process_id] = record
             try:
@@ -231,10 +246,11 @@ class ProcessService:
                         "exit_code": None,
                     }
                 )
-                self._append_output(record, f"Process failed to start: {exc}\n".encode())
+                public = to_public_error(exc)
+                self._append_output(record, f"Process failed to start: {public.message}\n".encode())
                 record.publish("process.failed", {
                     "process_id": process_id,
-                    "error": str(exc),
+                    "error": public.to_dict(),
                 })
                 return record.handle
 
@@ -247,6 +263,32 @@ class ProcessService:
                     "tty": backend.tty,
                 }
             )
+            settings_snapshot = settings.snapshot
+            service_ref = weakref.ref(self)
+
+            def revoke_process() -> None:
+                service = service_ref()
+                if service is not None:
+                    service.kill(
+                        process_id,
+                        owner_session_id=str(owner_session_id or ""),
+                        reason=ProcessStatus.CANCELLED,
+                    )
+
+            lease = capability_leases().create(
+                kind="persistent-process",
+                resource_id=process_id,
+                workspace=self.workspace,
+                control_fingerprint=(
+                    settings_snapshot.control_fingerprint
+                    if settings_snapshot is not None else "legacy"
+                ),
+                run_id=str(owner_session_id or ""),
+                interaction_id=str(owner_agent_id or owner_session_id or ""),
+                owner_session=str(owner_session_id or ""),
+                revoke=revoke_process,
+            )
+            record.capability_lease_id = lease.lease_id
             if (
                 tty
                 and not backend.tty
@@ -328,9 +370,10 @@ class ProcessService:
             owner_session_id=owner_session_id,
             event_bus=event_bus,
         )
+        settings = current_run_settings()
         limit = max(1, min(
-            int(max_bytes or config.PROCESS_READ_MAX_BYTES),
-            int(config.PROCESS_READ_MAX_BYTES),
+            int(max_bytes or settings.process_read_max_bytes),
+            settings.process_read_max_bytes,
         ))
         wait_budget = max(0.0, min(float(wait_seconds), 30.0))
         deadline = time.monotonic() + wait_budget
@@ -384,7 +427,7 @@ class ProcessService:
                 process_id=process_id,
                 output=decode_process_output(
                     raw,
-                    preferred_encoding=config.PROCESS_OUTPUT_ENCODING,
+                    preferred_encoding=settings.process_output_encoding,
                 ),
                 cursor=selected,
                 next_cursor=next_cursor,
@@ -411,9 +454,10 @@ class ProcessService:
             event_bus=event_bus,
         )
         payload = str(data).encode("utf-8")
-        if len(payload) > int(config.PROCESS_WRITE_MAX_BYTES):
+        write_limit = current_run_settings().process_write_max_bytes
+        if len(payload) > write_limit:
             raise ValueError(
-                f"process write exceeds {config.PROCESS_WRITE_MAX_BYTES} bytes"
+                f"process write exceeds {write_limit} bytes"
             )
         with record.condition:
             if record.handle.status != ProcessStatus.RUNNING.value:
@@ -480,7 +524,7 @@ class ProcessService:
             record.requested_terminal = reason
             backend = record.backend
         if backend is not None:
-            backend.terminate_tree(grace_seconds=self.kill_grace_seconds)
+            backend.terminate_tree(grace_seconds=record.kill_grace_seconds)
             try:
                 backend.wait(timeout=1.0)
             except subprocess.TimeoutExpired:
@@ -551,7 +595,7 @@ class ProcessService:
             ),
             key=lambda item: item.handle.started_at,
         )
-        while len(self._records) >= self.max_processes * 2 and terminal:
+        while len(self._records) >= self._effective_max_processes() * 2 and terminal:
             record = terminal.pop(0)
             self._records.pop(record.handle.process_id, None)
             self._close_record_streams(record)
@@ -605,7 +649,7 @@ class ProcessService:
         if record.requested_terminal is None:
             # A shell leader can exit after daemonizing a child. The backend
             # still owns the group/job and sweeps it before status publication.
-            backend.terminate_tree(grace_seconds=self.kill_grace_seconds)
+            backend.terminate_tree(grace_seconds=record.kill_grace_seconds)
         self._mark_exit(record, exit_code)
 
     def _mark_exit(self, record: _ManagedProcess, exit_code: int | None) -> None:
@@ -630,6 +674,9 @@ class ProcessService:
                 "status": status.value,
                 "exit_code": exit_code,
             })
+        if record.capability_lease_id:
+            capability_leases().release(record.capability_lease_id)
+            record.capability_lease_id = ""
     @staticmethod
     def _close_record_streams(record: _ManagedProcess) -> None:
         with record.condition:

@@ -97,10 +97,9 @@ def test_pdf_page_ranges_have_independent_sidecars(tmp_path, monkeypatch):
     assert first.text == cached_first.text == "pages 1-20"
     assert second.text == "pages 21-40"
     assert calls == [(1, 20), (21, 40)]
-    cache = (
-        tmp_path / ".nz-coder" / "sessions" / "session-read"
-        / "documents" / ".cache"
-    )
+    from nz_coder.foundation.user_paths import user_storage_layout
+
+    cache = user_storage_layout(tmp_path).workspace_cache / "documents" / "session-read"
     assert len(list(cache.glob("*.md"))) == 2
 
 

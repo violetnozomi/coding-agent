@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import time
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.tool_platform.command_policy import is_known_read_only_command
 from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.agent.admission import resolve_tool_capability
@@ -31,7 +31,7 @@ class ProductionToolPolicy:
 
     def tool_batch_has_write(self, context: ToolPolicyContext, tool_calls_raw: list) -> bool:
         """只按实际会执行的调用判断是否需要开启事务。"""
-        will_execute = tool_calls_raw[:config.MAX_TOOL_CALLS_PER_RESPONSE]
+        will_execute = tool_calls_raw[:current_run_settings().max_tool_calls]
         return any(
             is_transactional_write_tool(tc["function"]["name"])
             for tc in will_execute
@@ -438,7 +438,7 @@ class ProductionToolPolicy:
         if recovery is None:
             recovery = RecoveryState()
             context.recovery = recovery
-        threshold = config.DOOM_LOOP_THRESHOLD
+        threshold = current_run_settings().doom_loop_threshold
         for index, tool_call in enumerate(tool_calls):
             fn_name = tool_call["function"]["name"]
             raw_arguments = tool_call["function"].get("arguments", {})

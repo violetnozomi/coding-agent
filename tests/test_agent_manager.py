@@ -42,6 +42,12 @@ def _wait_for_status(manager, session_id: str, expected: str, timeout: float = 2
     raise AssertionError(f"{session_id} did not reach {expected}: {manager._load(session_id)}")
 
 
+def _worktree_root(workspace: Path) -> Path:
+    from nz_coder.runtime.worktree import WorktreeManager
+
+    return WorktreeManager(workspace).worktree_dir
+
+
 def test_background_manager_starts_parallel_non_overlapping_tasks(tmp_path, monkeypatch):
     from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
     import nz_coder.runtime.agent.subagent as subagent
@@ -678,8 +684,8 @@ def test_agent_loop_close_cleans_background_before_other_resources():
     ]
 
 
-def test_agent_loop_close_preserves_resources_when_background_cannot_settle():
-    """A retryable child timeout must not tear down resources it still uses."""
+def test_agent_loop_close_records_child_failure_and_continues_cleanup():
+    """One failing cleanup stage cannot mask or prevent later cleanup stages."""
     from nz_coder.runtime.execution.loop import AgentLoop
 
     order = []
@@ -700,10 +706,9 @@ def test_agent_loop_close_preserves_resources_when_background_cannot_settle():
         "Tracer", (), {"close": lambda self: order.append("tracer")}
     )()
 
-    with pytest.raises(RuntimeError, match="child still running"):
-        loop.close()
+    loop.close()
 
-    assert order == []
+    assert order == ["repo", "events", "tracer"]
 
 
 def test_dispose_keeps_manager_reachable_when_children_do_not_settle(
@@ -741,6 +746,8 @@ def test_dispose_does_not_block_unrelated_workspace_registry(tmp_path, monkeypat
         dispose_background_agent_manager,
     )
 
+    (tmp_path / "first").mkdir()
+    (tmp_path / "second").mkdir()
     first = background_agent_manager(tmp_path / "first", "parent")
     close_entered = threading.Event()
     close_release = threading.Event()
@@ -851,9 +858,9 @@ def test_copy_worktree_snapshots_dirty_workspace_without_git(tmp_path, monkeypat
     assert not (Path(worktree.path) / ".nz-coder" / "secret.txt").exists()
 
 
-def test_worktree_manager_rejects_state_symlink_escape(tmp_path):
+def test_worktree_manager_ignores_repository_state_symlink(tmp_path):
     from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
-    from nz_coder.runtime.worktree import WorktreeError, WorktreeManager
+    from nz_coder.runtime.worktree import WorktreeManager
 
     workspace = tmp_path / "workspace"
     outside = tmp_path / "outside"
@@ -861,18 +868,10 @@ def test_worktree_manager_rejects_state_symlink_escape(tmp_path):
     outside.mkdir()
     (workspace / ".nz-coder").symlink_to(outside, target_is_directory=True)
 
-    try:
-        WorktreeManager(workspace)
-    except WorktreeError as exc:
-        assert "escapes repository root" in str(exc)
-    else:
-        raise AssertionError("worktree state symlink escape was not rejected")
-    try:
-        BackgroundAgentManager(workspace, "parent")
-    except ValueError as exc:
-        assert "state path escapes workspace" in str(exc)
-    else:
-        raise AssertionError("subagent state symlink escape was not rejected")
+    manager = WorktreeManager(workspace)
+    background = BackgroundAgentManager(workspace, "parent")
+    assert not manager.worktree_dir.is_relative_to(workspace)
+    assert not background._workflow.root.is_relative_to(workspace)
     assert not (outside / "sessions").exists()
 
 
@@ -894,7 +893,7 @@ def test_apply_agent_changes_requires_exact_review_and_preserves_transaction(tmp
     manager = BackgroundAgentManager(tmp_path, "parent")
     baseline = manager._baseline(["a.py", "gone.py", "new.py"])
     state = subagent._new_subagent_state("parent", "general-purpose", None)
-    child = tmp_path / ".nz-coder" / "worktrees" / state["session_id"]
+    child = _worktree_root(tmp_path) / state["session_id"]
     child.mkdir(parents=True)
     (child / "a.py").write_text("new\n", encoding="utf-8")
     (child / "new.py").write_text("created\n", encoding="utf-8")
@@ -944,7 +943,7 @@ def test_apply_agent_changes_rejects_parent_baseline_conflict(tmp_path):
     manager = BackgroundAgentManager(tmp_path, "parent")
     baseline = manager._baseline(["app.py"])
     state = subagent._new_subagent_state("parent", "general-purpose", None)
-    child = tmp_path / ".nz-coder" / "worktrees" / state["session_id"]
+    child = _worktree_root(tmp_path) / state["session_id"]
     child.mkdir(parents=True)
     (child / "app.py").write_text("child\n", encoding="utf-8")
     target.write_text("parent changed\n", encoding="utf-8")
@@ -1020,7 +1019,7 @@ def test_applied_child_changes_follow_parent_transaction_rollback(tmp_path):
     manager = BackgroundAgentManager(tmp_path, "parent")
     baseline = manager._baseline(["app.py"])
     state = subagent._new_subagent_state("parent", "general-purpose", None)
-    child = tmp_path / ".nz-coder" / "worktrees" / state["session_id"]
+    child = _worktree_root(tmp_path) / state["session_id"]
     child.mkdir(parents=True)
     (child / "app.py").write_text("child\n", encoding="utf-8")
     state.update({

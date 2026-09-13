@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
 import os
@@ -17,14 +18,15 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 from nz_coder.foundation import config
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
+from nz_coder.foundation.user_paths import prepare_user_storage
 from nz_coder.runtime.process.workdir import current_workdir
 
 _MAX_REGISTRY_BYTES = 10_000_000
 _MAX_PROVIDERS = 500
 _MAX_MODELS = 50_000
 _MAX_REGISTRY_TIMEOUT_SECONDS = 300.0
-_REGISTRY_RELATIVE_PATH = Path(".nz-coder/models/registry.json")
-_LOCK_RELATIVE_PATH = Path(".nz-coder/models/registry.lock")
+_REGISTRY_RELATIVE_PATH = Path("models/registry.json")
+_LOCK_RELATIVE_PATH = Path("models/registry.lock")
 _PROVIDER_ALIASES = {
     "alibaba": "dashscope",
     "anthropic": "anthropic",
@@ -100,7 +102,8 @@ def sync_model_registry(
     if not force and _is_fresh(target, source):
         return _result(load_registry_snapshot(root, strict=True), False)
     target.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = _safe_child(root, root / _LOCK_RELATIVE_PATH)
+    cache_root = prepare_user_storage(root).workspace_cache
+    lock_path = _safe_child(cache_root, cache_root / _LOCK_RELATIVE_PATH)
     flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(lock_path, flags, 0o600)
     try:
@@ -286,10 +289,19 @@ def _normalize_registry(raw: dict[str, Any], source: str) -> dict[str, Any]:
             }
     if not providers:
         raise ValueError("Model registry contains no supported provider models")
+    content_digest = hashlib.sha256(json.dumps(
+        providers,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")).hexdigest()
     return {
         "version": 1,
+        "schema": "models.dev.normalized/v1",
         "source": source,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "content_digest": content_digest,
         "providers": providers,
     }
 
@@ -429,8 +441,23 @@ def _bounded_string(value: Any, limit: int) -> str:
 def _validate_snapshot(data: Any) -> None:
     if not isinstance(data, dict) or data.get("version") != 1:
         raise ValueError("Invalid model registry snapshot version")
-    if not isinstance(data.get("source"), str) or not isinstance(data.get("providers"), dict):
+    if (
+        data.get("schema") != "models.dev.normalized/v1"
+        or not isinstance(data.get("source"), str)
+        or not isinstance(data.get("fetched_at"), str)
+        or not isinstance(data.get("providers"), dict)
+        or not isinstance(data.get("content_digest"), str)
+    ):
         raise ValueError("Invalid model registry snapshot")
+    expected = hashlib.sha256(json.dumps(
+        data["providers"],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")).hexdigest()
+    if data["content_digest"] != expected:
+        raise ValueError("Invalid model registry content digest")
 
 
 def _result(snapshot: dict[str, Any], refreshed: bool) -> RegistrySyncResult:
@@ -501,10 +528,18 @@ def _validate_url(url: str) -> None:
 
 
 def _registry_path(root: Path) -> Path:
-    configured = Path(getattr(config, "MODEL_REGISTRY_PATH", str(_REGISTRY_RELATIVE_PATH)))
+    layout = prepare_user_storage(root)
+    configured_value = str(getattr(config, "MODEL_REGISTRY_PATH", "")).strip()
+    if configured_value in {"", ".nz-coder/models/registry.json"}:
+        configured = _REGISTRY_RELATIVE_PATH
+    else:
+        configured = Path(configured_value)
     if configured.is_absolute():
-        raise ValueError("MODEL_REGISTRY_PATH must be workspace-relative")
-    return _safe_child(root, root / configured)
+        raise ValueError("MODEL_REGISTRY_PATH must be user-cache-relative")
+    return _safe_child(
+        layout.workspace_cache,
+        layout.workspace_cache / configured,
+    )
 
 
 def _safe_child(root: Path, target: Path) -> Path:
@@ -513,7 +548,7 @@ def _safe_child(root: Path, target: Path) -> Path:
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise ValueError(f"Model registry path escapes workspace: {target}") from exc
+        raise ValueError(f"Model registry path escapes user cache: {target}") from exc
     if resolved.is_symlink():
         raise ValueError(f"Model registry file must not be a symbolic link: {target}")
     return resolved

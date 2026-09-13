@@ -11,10 +11,14 @@ import json
 import os
 import re
 import subprocess
-import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+
+from nz_coder.foundation.workspace_file_access import (
+    FixedFileAccess,
+    WorkspaceFileIdentity,
+)
 
 
 PER_SOURCE_MAX_BYTES = 20 * 1024
@@ -147,9 +151,7 @@ def _instruction_file_path(
     selected_filename = _validate_filename(filename)
     project, global_root = _roots(workspace, home)
     root = global_root if selected_scope == "global" else project
-    path = (root / selected_filename).resolve()
-    path.relative_to(root.resolve())
-    return path
+    return root / selected_filename
 
 
 def _instruction_state_path(
@@ -161,17 +163,115 @@ def _instruction_state_path(
     selected_scope = _validate_scope(scope)
     project, global_root = _roots(workspace, home)
     root = global_root if selected_scope == "global" else project / ".nz-coder"
-    path = (root / _STATE_FILENAME).resolve()
-    path.relative_to(root.resolve())
-    return path
+    return root / _STATE_FILENAME
 
 
-def _read_enabled_state(path: Path) -> tuple[dict[str, bool], str | None]:
+def _instruction_access(
+    workspace: str | Path,
+    scope: str,
+    *,
+    home: str | Path | None,
+    create_root: bool = False,
+) -> tuple[FixedFileAccess | None, str, str, Path]:
+    selected_scope = _validate_scope(scope)
+    project, global_root = _roots(workspace, home)
+    root = global_root if selected_scope == "global" else project
+    is_junction = getattr(root, "is_junction", lambda: False)
+    if root.is_symlink() or is_junction():
+        raise ValueError("Instruction control root is unsafe")
+    if selected_scope == "global":
+        available = _ensure_global_instruction_root(
+            root.parents[1], create=create_root,
+        )
+        if not available:
+            return None, "", "", root
+    elif create_root:
+        root.mkdir(parents=True, exist_ok=True)
+    if not root.is_dir():
+        return None, "", "", root
+    state = _STATE_FILENAME if selected_scope == "global" else f".nz-coder/{_STATE_FILENAME}"
+    allowed = (*INSTRUCTION_FILENAMES, state)
+    return FixedFileAccess(root, allowed), state, selected_scope, root
+
+
+def _ensure_global_instruction_root(home: Path, *, create: bool) -> bool:
+    """Reach ``~/.config/nz-coder`` without following redirected components."""
+    parts = (".config", "nz-coder")
+    if not home.exists():
+        if not create:
+            return False
+        home.mkdir(parents=True, mode=0o700)
+    if home.is_symlink() or not home.is_dir():
+        raise ValueError("Instruction control root is unsafe")
+    if os.name == "nt":
+        from nz_coder.foundation.project_control import (
+            UnsafeProjectControl,
+            _windows_close,
+            _windows_open,
+        )
+
+        handles: list[int] = []
+        try:
+            parent = _windows_open(home, directory=True)
+            assert parent is not None
+            handles.append(parent)
+            cursor = home
+            for part in parts:
+                cursor /= part
+                try:
+                        child = _windows_open(
+                            cursor, directory=True, missing_ok=True, parent=parent,
+                        )
+                except FileNotFoundError:
+                    child = None
+                if child is None:
+                    if not create:
+                        return False
+                    cursor.mkdir(mode=0o700)
+                    child = _windows_open(cursor, directory=True, parent=parent)
+                assert child is not None
+                handles.append(child)
+                parent = child
+            return True
+        except (OSError, UnsafeProjectControl) as exc:
+            raise ValueError("Instruction control root is unsafe") from exc
+        finally:
+            for handle in reversed(handles):
+                _windows_close(handle)
+
+    flags = (
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    )
+    descriptor = os.open(home, flags)
     try:
-        size = path.stat().st_size
-        if size > _STATE_MAX_BYTES:
-            raise ValueError(f"state exceeds {_STATE_MAX_BYTES} bytes")
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        for part in parts:
+            try:
+                child = os.open(part, flags, dir_fd=descriptor)
+            except FileNotFoundError:
+                if not create:
+                    return False
+                os.mkdir(part, 0o700, dir_fd=descriptor)
+                child = os.open(part, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        return True
+    except OSError as exc:
+        raise ValueError("Instruction control root is unsafe") from exc
+    finally:
+        os.close(descriptor)
+
+
+def _read_enabled_state(
+    access: FixedFileAccess | None, relative: str,
+) -> tuple[dict[str, bool], str | None, WorkspaceFileIdentity]:
+    if access is None:
+        return {}, None, WorkspaceFileIdentity.missing()
+    try:
+        raw, identity = access.read_text_with_identity(
+            relative, maximum=_STATE_MAX_BYTES,
+        )
+        payload = json.loads(raw)
         if not isinstance(payload, dict) or payload.get("version") != 1:
             raise ValueError("state must be a version 1 object")
         raw_enabled = payload.get("enabled", {})
@@ -182,61 +282,46 @@ def _read_enabled_state(path: Path) -> tuple[dict[str, bool], str | None]:
             if filename not in INSTRUCTION_FILENAMES or not isinstance(value, bool):
                 raise ValueError("enabled state contains an invalid entry")
             enabled[filename] = value
-        return enabled, None
+        return enabled, None, identity
     except FileNotFoundError:
-        return {}, None
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
-        return {}, f"Failed to load instruction file enabled state: {error}"
+        return {}, None, WorkspaceFileIdentity.missing()
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return (
+            {}, "Failed to load instruction file enabled state safely",
+            WorkspaceFileIdentity.missing(),
+        )
 
 
-def _write_enabled_state(path: Path, enabled: dict[str, bool]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        path.parent.chmod(0o700)
-    except OSError:
-        pass
-    descriptor, temp_name = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
-    temp_path = Path(temp_name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(
-                {"version": 1, "enabled": enabled},
-                handle,
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        temp_path.chmod(0o600)
-        temp_path.replace(path)
-        path.chmod(0o600)
-    except Exception:
-        try:
-            os.close(descriptor)
-        except OSError:
-            pass
-        temp_path.unlink(missing_ok=True)
-        raise
+def _write_enabled_state(
+    access: FixedFileAccess,
+    relative: str,
+    enabled: dict[str, bool],
+    expected: WorkspaceFileIdentity,
+) -> None:
+    payload = json.dumps(
+        {"version": 1, "enabled": enabled},
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
+    access.write_text(relative, payload, expected=expected)
 
 
-def _delete_enabled_row(path: Path, filename: str) -> None:
+def _delete_enabled_row(
+    access: FixedFileAccess, state_relative: str, filename: str,
+) -> None:
     with _STATE_LOCK:
-        enabled, warning = _read_enabled_state(path)
+        enabled, warning, identity = _read_enabled_state(access, state_relative)
         if warning:
             # A corrupt two-key state file is recoverable. Replacing it avoids
             # making create/delete permanently unusable.
             enabled = {}
         enabled.pop(filename, None)
         if not enabled:
-            path.unlink(missing_ok=True)
+            if identity.expected_exists:
+                access.delete(state_relative, expected=identity)
             return
-        _write_enabled_state(path, enabled)
+        _write_enabled_state(access, state_relative, enabled, identity)
 
 
 def list_instruction_files(
@@ -247,12 +332,16 @@ def list_instruction_files(
 ) -> InstructionFileListResult:
     """List existing root AGENTS.md/CLAUDE.md files and enabled state."""
     selected_scope = _validate_scope(scope)
+    access, state_relative, _scope, root = _instruction_access(
+        workspace, selected_scope, home=home,
+    )
     state_path = _instruction_state_path(workspace, selected_scope, home=home)
     with _STATE_LOCK:
-        enabled, warning = _read_enabled_state(state_path)
+        enabled, warning, _identity = _read_enabled_state(access, state_relative)
     files: list[InstructionFileInfo] = []
     warnings: list[InstructionFileWarning] = []
-    state_warning_added = False
+    if warning:
+        warnings.append(InstructionFileWarning(str(state_path), warning))
     for filename in INSTRUCTION_FILENAMES:
         path = _instruction_file_path(
             workspace,
@@ -261,14 +350,16 @@ def list_instruction_files(
             home=home,
         )
         try:
-            if not path.is_file():
+            if access is None:
                 continue
-        except OSError as error:
-            warnings.append(InstructionFileWarning(str(path), str(error)))
+            access.stat(filename)
+        except FileNotFoundError:
             continue
-        if warning and not state_warning_added:
-            warnings.append(InstructionFileWarning(str(state_path), warning))
-            state_warning_added = True
+        except (OSError, ValueError):
+            warnings.append(InstructionFileWarning(
+                str(root / filename), "Instruction file is not a safe regular file",
+            ))
+            continue
         files.append(InstructionFileInfo(
             id=f"{selected_scope}:{filename}",
             scope=selected_scope,
@@ -292,13 +383,20 @@ def set_instruction_file_enabled(
     selected_filename = _validate_filename(filename)
     if not isinstance(enabled, bool):
         raise ValueError("enabled must be a boolean")
-    state_path = _instruction_state_path(workspace, selected_scope, home=home)
+    access, state_relative, _scope, _root = _instruction_access(
+        workspace, selected_scope, home=home, create_root=True,
+    )
+    assert access is not None
     with _STATE_LOCK:
-        state, warning = _read_enabled_state(state_path)
+        state, warning, identity = _read_enabled_state(access, state_relative)
         if warning:
             raise ValueError(warning)
+        try:
+            access.stat(selected_filename)
+        except FileNotFoundError:
+            pass
         state[selected_filename] = enabled
-        _write_enabled_state(state_path, state)
+        _write_enabled_state(access, state_relative, state, identity)
     path = _instruction_file_path(
         workspace,
         selected_scope,
@@ -329,16 +427,21 @@ def create_instruction_file(
         filename,
         home=home,
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("x", encoding="utf-8"):
-        pass
+    access, state_relative, _scope, _root = _instruction_access(
+        workspace, selected_scope, home=home, create_root=True,
+    )
+    assert access is not None
+    access.write_text(
+        filename, "", expected=WorkspaceFileIdentity.missing(), overwrite=False,
+    )
     try:
-        _delete_enabled_row(
-            _instruction_state_path(workspace, selected_scope, home=home),
-            filename,
-        )
+        _delete_enabled_row(access, state_relative, filename)
     except Exception:
-        path.unlink(missing_ok=True)
+        try:
+            _text, identity = access.read_text_with_identity(filename)
+            access.delete(filename, expected=identity)
+        except Exception:
+            pass
         raise
     return InstructionFileInfo(
         id=f"{selected_scope}:{filename}",
@@ -359,17 +462,18 @@ def delete_instruction_file(
     """Delete one supported root instruction file and its enabled row."""
     selected_scope = _validate_scope(scope)
     selected_filename = _validate_filename(filename)
-    path = _instruction_file_path(
-        workspace,
-        selected_scope,
-        selected_filename,
-        home=home,
+    access, state_relative, _scope, _root = _instruction_access(
+        workspace, selected_scope, home=home,
     )
-    path.unlink(missing_ok=True)
-    _delete_enabled_row(
-        _instruction_state_path(workspace, selected_scope, home=home),
-        selected_filename,
-    )
+    if access is None:
+        return
+    try:
+        _text, identity = access.read_text_with_identity(selected_filename)
+    except FileNotFoundError:
+        identity = WorkspaceFileIdentity.missing()
+    if identity.expected_exists:
+        access.delete(selected_filename, expected=identity)
+    _delete_enabled_row(access, state_relative, selected_filename)
 
 
 def _rule_files(root: Path) -> list[Path]:
@@ -476,6 +580,117 @@ def _read_source(source: InstructionSource) -> bytes:
     return text.encode("utf-8")
 
 
+def _enabled_from_snapshot(
+    data: bytes | None,
+) -> tuple[dict[str, bool], str | None]:
+    if data is None:
+        return {}, None
+    if len(data) > _STATE_MAX_BYTES:
+        return {}, "Failed to load instruction file enabled state: state exceeds limit"
+    try:
+        payload = json.loads(data.decode("utf-8"))
+        if not isinstance(payload, dict) or payload.get("version") != 1:
+            raise ValueError("state must be a version 1 object")
+        raw_enabled = payload.get("enabled", {})
+        if not isinstance(raw_enabled, dict):
+            raise ValueError("enabled state must be an object")
+        enabled: dict[str, bool] = {}
+        for filename, value in raw_enabled.items():
+            if filename not in INSTRUCTION_FILENAMES or not isinstance(value, bool):
+                raise ValueError("enabled state contains an invalid entry")
+            enabled[filename] = value
+        return enabled, None
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return {}, "Failed to load instruction file enabled state: invalid state"
+
+
+def _snapshot_instruction_sources(
+    config_snapshot,
+) -> tuple[list[InstructionSource], dict[Path, bytes], tuple[str, ...], int]:
+    """Project immutable instructions plus a separately pinned user snapshot."""
+    sources: list[InstructionSource] = []
+    payloads: dict[Path, bytes] = {}
+    warnings: list[str] = []
+    disabled_count = 0
+
+    def collect(snapshot, *, root: Path, scope: str, project_layout: bool) -> None:
+        nonlocal disabled_count
+        if snapshot is None or (scope == "project" and not snapshot.trusted):
+            return
+        state_name = (
+            ".nz-coder/instruction-file-state.json"
+            if project_layout else "instruction-file-state.json"
+        )
+        state_file = snapshot.get(state_name)
+        enabled, warning = _enabled_from_snapshot(
+            state_file.content if state_file is not None else None
+        )
+        if warning:
+            warnings.append(warning)
+        rule_prefix = ".nz-coder/rules/" if project_layout else "rules/"
+        rules = sorted(
+            item for item in snapshot.files.values()
+            if item.kind == "rule" and item.relative_path.startswith(rule_prefix)
+        )
+        for index, item in enumerate(rules):
+            path = root / item.relative_path
+            text = _strip_rule_frontmatter(
+                item.content.decode("utf-8", errors="replace")
+            )
+            payloads[path] = text.encode("utf-8")
+            sources.append(InstructionSource(
+                path,
+                scope,
+                "rule",
+                (3.0 if scope == "project" else 0.0) + index / 1000,
+                40 if scope == "project" else 10,
+            ))
+        for filename in INSTRUCTION_FILENAMES:
+            item = snapshot.get(filename)
+            if item is None:
+                continue
+            if not enabled.get(filename, True):
+                disabled_count += 1
+                continue
+            path = root / filename
+            payloads[path] = item.content
+            if scope == "global":
+                order, priority = (
+                    (1.0, 20) if filename == "CLAUDE.md" else (2.0, 30)
+                )
+            else:
+                order, priority = (
+                    (4.0, 50) if filename == "CLAUDE.md" else (5.0, 60)
+                )
+            kind = "claude" if filename == "CLAUDE.md" else "agents"
+            sources.append(InstructionSource(path, scope, kind, order, priority))
+
+    user_snapshot = getattr(config_snapshot, "user_instructions", None)
+    user_root_text = (
+        str(user_snapshot.workspace_identity.get("lexical") or "")
+        if user_snapshot is not None else ""
+    )
+    if user_root_text:
+        collect(
+            user_snapshot,
+            root=Path(user_root_text),
+            scope="global",
+            project_layout=False,
+        )
+    collect(
+        config_snapshot.project_control,
+        root=Path(config_snapshot.workspace),
+        scope="project",
+        project_layout=True,
+    )
+    return (
+        sorted(sources, key=lambda item: (item.order, str(item.path))),
+        payloads,
+        tuple(warnings),
+        disabled_count,
+    )
+
+
 def _escape_reminder(text: str) -> str:
     return re.sub(
         r"</?\s*system-reminder\b",
@@ -557,13 +772,20 @@ def load_instruction_context(
     workspace: str | Path,
     *,
     home: str | Path | None = None,
+    config_snapshot=None,
 ) -> InstructionBundle:
     """Read, prioritize, budget, and render durable instruction files."""
     project = Path(workspace).resolve()
-    sources, warnings, disabled_count = _discover_instruction_sources_result(
-        workspace,
-        home=home,
-    )
+    snapshot_payloads: dict[Path, bytes] | None = None
+    if config_snapshot is None:
+        sources, warnings, disabled_count = _discover_instruction_sources_result(
+            workspace,
+            home=home,
+        )
+    else:
+        sources, snapshot_payloads, warnings, disabled_count = (
+            _snapshot_instruction_sources(config_snapshot)
+        )
     prepared: dict[Path, tuple[str, int, bool, bool, bool]] = {}
     remaining = TOTAL_MAX_BYTES
     per_file_truncated_count = 0
@@ -573,7 +795,11 @@ def load_instruction_context(
     # Higher-priority project sources win cumulative budget, while final
     # rendering still follows global-to-project order.
     for source in sorted(sources, key=lambda item: (-item.priority, item.order, str(item.path))):
-        data = _read_source(source)
+        data = (
+            snapshot_payloads.get(source.path, b"")
+            if snapshot_payloads is not None
+            else _read_source(source)
+        )
         file_content, file_used, decode_truncated = _decode_prefix(
             data,
             min(PER_SOURCE_MAX_BYTES, len(data)),

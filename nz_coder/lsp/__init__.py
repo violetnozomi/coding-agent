@@ -13,6 +13,8 @@ from .servers import (
     ResolvedServer,
     available_server_summary,
     resolve_server,
+    trust_server,
+    untrust_server,
 )
 
 __all__ = [
@@ -28,4 +30,6 @@ __all__ = [
     "close_workspace_clients",
     "get_client_for_file",
     "resolve_server",
+    "trust_server",
+    "untrust_server",
 ]

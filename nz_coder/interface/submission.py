@@ -7,6 +7,7 @@ from typing import Iterable
 
 from nz_coder.protocol.message_schema import bind_user_context
 from nz_coder.state.input_expansion import tag_file_attachments
+from nz_coder.foundation.user_paths import resolve_private_attachment
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,7 @@ class SubmissionFile:
 
     path: str
     size: int
+    host_path: str = ""
 
 
 def resolve_submission_files(
@@ -24,6 +26,15 @@ def resolve_submission_files(
     root = Path(workspace).resolve(strict=True)
     resolved: list[SubmissionFile] = []
     for raw in paths:
+        if str(raw).startswith("user-state://attachments/"):
+            try:
+                actual = resolve_private_attachment(root, str(raw))
+                if actual.is_symlink() or not actual.is_file():
+                    raise ValueError
+            except (OSError, ValueError) as exc:
+                raise ValueError(f"Private attachment is missing or unsafe: {raw}") from exc
+            resolved.append(SubmissionFile(str(raw), actual.stat().st_size, str(actual)))
+            continue
         candidate = Path(str(raw).strip())
         target = candidate if candidate.is_absolute() else root / candidate
         if target.is_symlink():

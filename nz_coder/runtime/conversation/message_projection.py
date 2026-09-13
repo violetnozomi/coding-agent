@@ -29,6 +29,7 @@ def project_provider_messages(
     include_attachments: bool = True,
     projection_stats: dict | None = None,
     target_provider_id: str = "",
+    target_provider_instance_id: str = "",
     target_model_id: str = "",
 ) -> list:
     """Normalize Session history without exposing durable NZ-only fields."""
@@ -186,6 +187,7 @@ def project_provider_messages(
             source_provider_id=source_provider_id,
             source_model_id=source_model_id,
             target_provider_id=target_provider_id,
+            target_provider_instance_id=target_provider_instance_id,
             target_model_id=target_model_id,
         )
         if isinstance(restored_extra, dict) and restored_extra:
@@ -201,6 +203,7 @@ def project_provider_messages(
                     source_provider_id=source_provider_id,
                     source_model_id=source_model_id,
                     target_provider_id=target_provider_id,
+                    target_provider_instance_id=target_provider_instance_id,
                     target_model_id=target_model_id,
                 )
                 if isinstance(restored_tool_extra, dict) and restored_tool_extra:
@@ -289,6 +292,7 @@ def project_provider_messages(
                 source_provider_id=source_provider_id,
                 source_model_id=source_model_id,
                 target_provider_id=target_provider_id,
+                target_provider_instance_id=target_provider_instance_id,
                 target_model_id=target_model_id,
             )
             if preserve_reasoning:

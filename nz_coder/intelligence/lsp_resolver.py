@@ -6,6 +6,7 @@ from pathlib import Path
 from nz_coder.intelligence.code_index import CallResolutionRequest, ResolvedCallLocation
 from nz_coder.lsp.client import _validated_timeout, path_to_uri, uri_to_path
 from nz_coder.lsp.manager import get_client_for_file
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 
 
 class LspCallTargetResolver:
@@ -27,10 +28,13 @@ class LspCallTargetResolver:
         client = get_client_for_file(source, self.workspace)
         if client is None:
             return None
-        lines = source.read_text(encoding="utf-8", errors="replace").splitlines()
+        content, identity = WorkspaceFileAccess(
+            self.workspace,
+        ).read_text_with_identity(request.file_path, errors="replace")
+        lines = content.splitlines()
         raw_line = lines[request.line - 1] if 0 < request.line <= len(lines) else ""
         column = raw_line.find(request.raw_name)
-        client.open_document(source)
+        client.open_document(source, content, identity)
         value = client.request(
             "textDocument/definition",
             {

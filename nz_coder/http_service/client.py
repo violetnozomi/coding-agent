@@ -187,6 +187,7 @@ class NZCoderClient:
         attachments=(),
         allowed_tools=(),
         model: str | None = None,
+        command_digest: str | None = None,
     ) -> dict:
         """Start a run and let the daemon resolve workspace-owned attachments."""
         body = {"message": message}
@@ -198,6 +199,8 @@ class NZCoderClient:
             body["allowed_tools"] = tools
         if model:
             body["model"] = str(model)
+        if command_digest:
+            body["command_digest"] = str(command_digest)
         return self._request("POST", f"/session/{session_id}/run", body)
 
     def list_commands(self, session_id: str) -> list[dict]:

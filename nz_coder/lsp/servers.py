@@ -7,7 +7,17 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from nz_coder.foundation import config
+from nz_coder.foundation.languages import LSP_LANGUAGES, lsp_command_config_key
+from nz_coder.foundation.execution_identity import (
+    ExecutionIdentity,
+    resolve_execution_identity,
+)
+from nz_coder.foundation.workspace_trust import (
+    ConfigSnapshot,
+    ConfigSource,
+    WorkspaceTrustStore,
+    current_config_snapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -30,6 +40,11 @@ class ResolvedServer:
     command: tuple[str, ...]
     root: Path
     analysis_paths: tuple[Path, ...] = ()
+    source: str = "system"
+    config_source: str = "system-path"
+    trusted: bool = True
+    fingerprint: str = ""
+    execution_identity: ExecutionIdentity | None = None
 
 
 _SPECS = (
@@ -141,6 +156,14 @@ _SPECS = (
     ),
 )
 
+if tuple(spec.language for spec in _SPECS) != LSP_LANGUAGES:
+    raise RuntimeError("LSP server specifications and config languages diverged")
+
+
+def language_server_specs() -> tuple[LanguageServerSpec, ...]:
+    """Expose immutable server metadata for schema parity verification."""
+    return _SPECS
+
 
 def _spec_for_path(path: Path) -> LanguageServerSpec | None:
     suffix = path.suffix.lower()
@@ -195,7 +218,12 @@ def _split_override(value: str, *, os_name: str | None = None) -> tuple[str, ...
     return tuple(parts)
 
 
-def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
+def resolve_server(
+    path: Path,
+    workspace: Path,
+    *,
+    config_snapshot: ConfigSnapshot | None = None,
+) -> ResolvedServer | None:
     """Resolve the first installed server matching ``path``."""
     spec = _spec_for_path(path)
     if spec is None:
@@ -213,21 +241,95 @@ def resolve_server(path: Path, workspace: Path) -> ResolvedServer | None:
     ):
         root = root.parent.resolve()
     analysis_paths: tuple[Path, ...] = ()
-    override = config.get(f"NZ_LSP_{spec.language.upper()}_COMMAND", "").strip()
+    snapshot = config_snapshot or current_config_snapshot(workspace)
+    setting = snapshot.value(lsp_command_config_key(spec.language))
+    override = setting.value.strip()
     commands = (_split_override(override),) if override else spec.commands
     for command in commands:
         if not command:
             continue
         resolved = _resolve_executable(command, root)
         if resolved:
+            executable = Path(resolved[0]).resolve(strict=False)
+            if override:
+                config_source = {
+                    ConfigSource.USER: "user-config",
+                    ConfigSource.ENVIRONMENT: "environment-config",
+                    ConfigSource.TRUSTED_WORKSPACE: "trusted-workspace-config",
+                    ConfigSource.WORKSPACE: "workspace-config",
+                    ConfigSource.DEFAULT: "default-config",
+                }[setting.source]
+            elif "{root}" in command[0]:
+                config_source = "workspace-local-default"
+            else:
+                config_source = "system-path"
+            execution_identity = resolve_execution_identity(
+                resolved,
+                cwd=root,
+                workspace=workspace,
+                config_source=config_source,
+                environment_profile="strict-service",
+            )
+            fingerprint = execution_identity.fingerprint
+            workspace_controlled = execution_identity.workspace_controlled
+            trusted = not workspace_controlled or WorkspaceTrustStore().is_trusted(
+                workspace,
+                f"lsp:{spec.language}",
+                fingerprint,
+                executable=str(executable),
+            )
             return ResolvedServer(
                 server_id=Path(resolved[0]).name,
                 language_id=spec.language_id,
                 command=resolved,
                 root=root,
                 analysis_paths=analysis_paths,
+                source="workspace" if workspace_controlled else "system",
+                config_source=config_source,
+                trusted=trusted,
+                fingerprint=fingerprint,
+                execution_identity=execution_identity,
             )
     return None
+
+
+def trust_server(path: Path, workspace: Path) -> ResolvedServer:
+    """Trust the currently resolved workspace executable for one source file."""
+    server = resolve_server(path, workspace)
+    if server is None:
+        raise ValueError("No installed LSP server was found for this file")
+    if server.source != "workspace":
+        return server
+    WorkspaceTrustStore().trust(
+        workspace,
+        f"lsp:{server.language_id}",
+        server.fingerprint,
+        executable=str(Path(server.command[0]).resolve(strict=False)),
+    )
+    refreshed = resolve_server(path, workspace)
+    if refreshed is None or not refreshed.trusted:
+        raise ValueError("LSP workspace trust could not be established")
+    return refreshed
+
+
+def untrust_server(path: Path, workspace: Path) -> bool:
+    """Remove trust for the currently resolved workspace LSP executable."""
+    server = resolve_server(path, workspace)
+    if server is None or server.source != "workspace":
+        return False
+    return WorkspaceTrustStore().remove(
+        workspace,
+        f"lsp:{server.language_id}",
+        executable=str(Path(server.command[0]).resolve(strict=False)),
+    )
+
+
+def _inside_workspace(path: Path, workspace: Path) -> bool:
+    try:
+        path.relative_to(Path(workspace).resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def available_server_summary(path: Path) -> str:
@@ -236,7 +338,7 @@ def available_server_summary(path: Path) -> str:
     if spec is None:
         return f"No LSP server is configured for extension '{path.suffix or path.name}'."
     candidates = ", ".join(Path(command[0]).name for command in spec.commands)
-    override = f"NZ_LSP_{spec.language.upper()}_COMMAND"
+    override = lsp_command_config_key(spec.language)
     return (
         f"No installed LSP server found for {spec.language}. "
         f"Install one of: {candidates}; or set {override}."

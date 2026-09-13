@@ -31,9 +31,9 @@ from nz_coder.interface.terminal_input import TerminalInput
 from nz_coder.interface.submission import build_user_submission
 from nz_coder.protocol.message_schema import bind_user_context
 from nz_coder.state.memory import memory_mgr
+from nz_coder.state.skills import skill_loader  # noqa: F401  compatibility alias
 from nz_coder.runtime.conversation.prompt import build
 from nz_coder.state.sessions import activate_session, create_session_id, save_session
-from nz_coder.state.skills import skill_loader
 
 theme = Theme({
     "tool": "bold yellow",
@@ -399,12 +399,23 @@ class StreamingRenderer:
 
 
 def _build_agent(system_prompt: str, renderer: StreamingRenderer, session_id: str,
-                 permission_mode: str = None):
+                 permission_mode: str = None, config_snapshot=None):
     from nz_coder.providers.configuration import provider_connection
     from nz_coder.providers.models import active_model_selection
     from nz_coder.runtime.execution.composition import build_product_environment
 
-    connection = provider_connection(active_model_selection().provider)
+    selection = (
+        active_model_selection(
+            current_workdir(), config_snapshot=config_snapshot,
+        )
+        if config_snapshot is not None
+        else active_model_selection()
+    )
+    connection = (
+        provider_connection(selection.provider, config_snapshot=config_snapshot)
+        if config_snapshot is not None
+        else provider_connection(selection.provider)
+    )
     return build_product_environment(
         system_prompt,
         renderer=renderer,
@@ -412,6 +423,7 @@ def _build_agent(system_prompt: str, renderer: StreamingRenderer, session_id: st
         session_id=session_id,
         client=None if connection.configured else _UnavailableModelClient(connection.provider),
         auto_mode_classifier_enabled=config.AUTO_MODE_CLASSIFIER_ENABLED,
+        config_snapshot=config_snapshot,
     )
 
 
@@ -469,34 +481,57 @@ async def handle_command_async(
     return await (registry or default_command_registry).dispatch_async(cmd, context)
 
 
+def _resolve_submission_command(raw, registry, catalog):  # noqa: ANN001, ANN202
+    """Resolve dynamic prompt commands from the current submission catalog."""
+    text = str(raw).strip()
+    if not text.startswith("/"):
+        return None, False
+    registered = registry.get(text.split(maxsplit=1)[0])
+    if registered is not None and registered.category != "Custom":
+        return None, False
+    expanded = catalog.expand_invocation(text)
+    return expanded, expanded is None
+
+
 async def _run_cli_impl(owner_state: list[dict]) -> None:
     from nz_coder.providers.configuration import provider_connection
     from nz_coder.providers.models import active_model_selection
 
-    selection = active_model_selection()
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+    workspace_snapshot = load_config_snapshot(current_workdir())
+    selection = active_model_selection(
+        current_workdir(), config_snapshot=workspace_snapshot,
+    )
     record_recent_model(f"{selection.provider}/{selection.model_id}")
     # Rich and prompt_toolkit consume the same persisted semantic theme.
     from nz_coder.interface.preferences import load_terminal_preferences
     push_theme = getattr(console, "push_theme", None)
     if callable(push_theme):
         push_theme(rich_theme(load_terminal_preferences().theme))
-    connection = provider_connection(selection.provider)
+    connection = provider_connection(
+        selection.provider, config_snapshot=workspace_snapshot,
+    )
     credential_warning = ""
     if not connection.configured:
         credential_warning = (
             f"[error]Credential missing for provider '{selection.provider}'. "
-            f"Use /connect or set {connection.credential_name} in workspace .env; "
+            f"Use /connect or set {connection.credential_name} in the shell/user config; "
             "Agent requests will fail until a provider is connected.[/error]"
         )
 
     memory_mgr.load_all()
-    system_prompt = build(
-        memory_block="",
-        skill_descriptions=skill_loader.descriptions(),
-    )
+    # Project skill descriptions are attached by the per-submission Run
+    # Control. Keeping them out of this Session base avoids stale authority.
+    system_prompt = build(memory_block="", skill_descriptions="")
     renderer = StreamingRenderer()
     initial_session_id = activate_session(create_session_id())
-    initial_environment = _build_agent(system_prompt, renderer, initial_session_id)
+    initial_environment = _build_agent(
+        system_prompt,
+        renderer,
+        initial_session_id,
+        config_snapshot=workspace_snapshot,
+    )
     from nz_coder.interface.session_controller import TerminalSessionController
     session_state = {
         "id": initial_session_id,
@@ -512,7 +547,10 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
         register_command_completion,
     )
 
-    command_catalog = default_command_catalog(current_workdir())
+    command_catalog = default_command_catalog(
+        current_workdir(),
+        config_snapshot=workspace_snapshot,
+    )
     command_registry = build_default_registry()
     register_command_completion(command_registry, command_catalog)
     input_ui = TerminalInput(
@@ -586,15 +624,31 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
                 break
             continue
 
+        # Command expansion and Agent execution must share one submission
+        # snapshot. Completion UI may remain one frame behind, but authority
+        # never comes from the startup catalog.
+        from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+        submission_snapshot = load_config_snapshot(current_workdir())
+
         if stripped.startswith("!"):
             from nz_coder.interface.direct_shell import execute_direct_shell
+            from nz_coder.tool_platform.permissioning import PermissionManager
 
             command = stripped[1:].strip()
+            agent = session_state["agent"]
+            shell_permissions = PermissionManager(
+                agent.permissions.mode,
+                renderer=getattr(agent, "renderer", None),
+                asker=getattr(agent, "_permission_asker", None),
+                workspace_trusted=submission_snapshot.control_plane_trusted,
+                project_control_snapshot=submission_snapshot.project_control,
+            )
             try:
                 result = await asyncio.to_thread(
                     execute_direct_shell,
                     command,
-                    permissions=session_state["agent"].permissions,
+                    permissions=shell_permissions,
                 )
             except (asyncio.CancelledError, KeyboardInterrupt):
                 _consume_current_task_cancellation()
@@ -611,11 +665,13 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             continue
 
         if stripped.startswith("/"):
-            registered = command_registry.get(stripped.split(maxsplit=1)[0])
-            expanded_command = (
-                command_catalog.expand_invocation(stripped)
-                if registered is not None and registered.category == "Custom"
-                else None
+            command_catalog = default_command_catalog(
+                current_workdir(), config_snapshot=submission_snapshot,
+            )
+            expanded_command, dynamic_command_unknown = (
+                _resolve_submission_command(
+                    stripped, command_registry, command_catalog,
+                )
             )
             if expanded_command is not None:
                 stripped = expanded_command.prompt
@@ -627,8 +683,16 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
         else:
             command_allowed_tools = None
             command_model = None
+            dynamic_command_unknown = False
 
         if stripped.startswith("/"):
+            if dynamic_command_unknown:
+                active_console.print(
+                    f"[error]Unknown command: {stripped.split()[0]} — "
+                    "type /help for commands[/error]"
+                )
+                input_ui.refresh_view()
+                continue
             try:
                 handled = await handle_command_async(
                     stripped,
@@ -663,6 +727,13 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
 
         agent = session_state["agent"]
         controller = session_state["controller"]
+        submission_selection = active_model_selection(
+            current_workdir(), config_snapshot=submission_snapshot,
+        )
+        submission_provider = submission_selection.provider
+        submission_model = command_model or submission_selection.model_id
+        if command_model and "/" in command_model:
+            submission_provider, submission_model = command_model.split("/", 1)
         submission, attachments = input_ui.prepare_submission(stripped)
         _render_submission_metadata(
             stripped, attachments, input_ui.preferences.paste_summary, active_console
@@ -673,9 +744,9 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             workspace=current_workdir(),
             session_id=agent.session_id,
             agent="plan" if agent.permissions.mode == "plan" else "build",
-            provider_id=str(getattr(agent, "provider_id", "unknown")),
-            model_id=str(getattr(agent, "model_id", "unknown")),
-            variant=getattr(agent, "model_variant", None),
+            provider_id=submission_provider,
+            model_id=submission_model,
+            variant=submission_selection.variant,
             natural_text=stripped,
         )
         history.append(user_message)
@@ -698,6 +769,7 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
                 stream=True,
                 allowed_tools=command_allowed_tools,
                 model=command_model,
+                config_snapshot=submission_snapshot,
             ))
             if input_ui.fullscreen is not None:
                 input_ui.fullscreen.set_cancel_run(controller.cancel)
@@ -979,6 +1051,10 @@ def main(argv: list[str] | None = None) -> int:
         from nz_coder.mcp.cli import mcp_main
 
         return mcp_main(args[1:])
+    if args and args[0] == "lsp":
+        from nz_coder.lsp.cli import lsp_main
+
+        return lsp_main(args[1:])
     if args and args[0] == "provider-smoke":
         from nz_coder.evaluation.provider_smoke import main as provider_smoke_main
 
@@ -995,6 +1071,10 @@ def main(argv: list[str] | None = None) -> int:
         from nz_coder.state.memory_cli import memory_main
 
         return memory_main(args[1:])
+    if args and args[0] == "migrate-state":
+        from nz_coder.state.migration import migration_main
+
+        return migration_main(args[1:])
     if args and args[0] in ("extension", "extensions"):
         from nz_coder.extensions.cli import extensions_main
 
@@ -1035,6 +1115,7 @@ def main(argv: list[str] | None = None) -> int:
             "  nz-coder config show             Show effective configuration\n"
             "  nz-coder models list             List available models\n"
             "  nz-coder models select PROVIDER/MODEL  Select a model\n\n"
+            "  nz-coder migrate-state            Inspect/migrate legacy runtime state\n\n"
             "More: nz-coder mcp --help | swebench --help | extensions --help\n"
             "Inside the terminal use /help, /model, /mode, or Ctrl+K.",
             markup=False,

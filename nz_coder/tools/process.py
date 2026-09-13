@@ -4,6 +4,9 @@ from __future__ import annotations
 import json
 
 from nz_coder.foundation import config
+from nz_coder.protocol.public_error import format_public_error
+from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.foundation.workspace_paths import model_command_private_path
 from nz_coder.tool_platform.command_policy import classify_bash
 from nz_coder.runtime.core.execution_context import strict_local_tools
 from nz_coder.runtime.process.process_service import (
@@ -69,6 +72,9 @@ def run_process(
             selected_command = str(command or "").strip()
             if not selected_command:
                 return "Error: command is required for process start"
+            private_path = model_command_private_path(selected_command, workspace)
+            if private_path is not None:
+                return f"Error: Model access blocked for process path: {private_path}"
             if strict_local_tools():
                 from nz_coder.swebench.policy import (
                     strict_bash_guidance,
@@ -86,7 +92,7 @@ def run_process(
                 return f"Error: Dangerous command blocked ({classification['reason']})"
             if (
                 classification["reason"] in {"package install", "package manager write"}
-                and not config.ALLOW_BASH_PACKAGE_INSTALLS
+                and not current_run_settings().allow_package_installs
             ):
                 return "Error: Package install blocked for persistent processes"
             resolved, error = _resolve_bash_workdir(workdir)
@@ -227,7 +233,7 @@ def run_process(
             metadata={"process_id": selected_id, "status": handle.status},
         )
     except (ValueError, ProcessNotFoundError, ProcessOwnershipError, ProcessStateError) as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

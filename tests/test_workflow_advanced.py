@@ -7,6 +7,17 @@ from pathlib import Path
 import pytest
 
 
+def _trust_project_control(workspace, monkeypatch):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
+    trust_path = workspace.parent / f"{workspace.name}-advanced-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore(trust_path).trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
+
+
 def test_builtin_resolver_precedes_shadowing_saved_capsule(tmp_path):
     from nz_coder.runtime.workflows.workflow_capsule import create_workflow_capsule
     from nz_coder.runtime.workflows.workflow_library import save_workflow_capsule
@@ -133,6 +144,7 @@ def test_nested_workflow_depth_is_rejected_before_spawn(tmp_path, monkeypatch):
         },
     )
     save_workflow_capsule("outer", capsule, workspace=tmp_path)
+    _trust_project_control(tmp_path, monkeypatch)
     manager = _manager(tmp_path, monkeypatch, max_tasks=4)
     plan = {"phases": [{
         "name": "outer", "mode": "workflow", "workflow": "outer",
@@ -272,7 +284,9 @@ def test_scoped_review_builtin_runs_review_gate_artifact_and_synthesis(
 def test_worktree_sweep_removes_clean_read_only_and_retains_changed(tmp_path):
     from nz_coder.runtime.workflows.workflow_sweep import sweep_workflow_worktrees
 
-    worktrees = tmp_path / ".nz-coder" / "worktrees"
+    from nz_coder.runtime.worktree import WorktreeManager
+
+    worktrees = WorktreeManager(tmp_path).worktree_dir
     clean = worktrees / "clean"
     changed = worktrees / "changed"
     clean.mkdir(parents=True)

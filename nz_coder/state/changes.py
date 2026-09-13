@@ -7,9 +7,8 @@ import time
 import uuid
 from pathlib import Path
 
-from nz_coder.foundation import config
 from nz_coder.protocol.message_schema import is_synthetic_user_message
-from nz_coder.state.workdir import current_workdir
+from nz_coder.state.workdir import current_derived_path, current_workdir
 from nz_coder.state.sessions import session_change_dir, write_session_runtime_json
 
 
@@ -18,7 +17,7 @@ class ChangeTracker:
 
     def __init__(self, run_id: str = None, change_dir: Path = None, enabled: bool = True):
         self.run_id = run_id or time.strftime("%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:8]
-        self.change_dir = change_dir or config.CHANGE_DIR
+        self.change_dir = change_dir or current_derived_path("CHANGE_DIR")
         self.enabled = enabled
         self.path = self.change_dir / f"{self.run_id}.json"
         self.history_start: int | None = None

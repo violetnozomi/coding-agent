@@ -16,7 +16,7 @@ from nz_coder.protocol.message_schema import (
     project_public_tool_part,
 )
 from nz_coder.protocol.public_error import public_error_from_wire, to_public_error
-from nz_coder.state.workdir import current_workdir
+from nz_coder.state.workdir import current_derived_path
 from nz_coder.state.sessions import active_session_id, session_trace_dir
 
 MAX_FIELD_CHARS = 4000
@@ -31,7 +31,7 @@ def trace_dir(trace_dir: Path = None) -> Path:
     configured = Path(getattr(config, "TRACE_DIR", _DEFAULT_TRACE_DIR))
     if configured != _DEFAULT_TRACE_DIR:
         return configured
-    return current_workdir() / ".nz-coder" / "runs"
+    return current_derived_path("TRACE_DIR")
 
 
 class TraceRecorder:

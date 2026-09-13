@@ -14,6 +14,9 @@ def model_context_from_legacy_host(host) -> ModelExecutionContext:
     return ModelExecutionContext(
         capabilities=lambda: getattr(host, "model_capabilities", None),
         active_model_id=getattr(host, "_active_model_id"),
+        provider_instance_id=lambda: str(
+            getattr(getattr(host, "model_runtime", None), "provider_instance_id", "")
+        ),
         active_tool_specs=lambda: expose_specs(host._active_tool_specs()),
         prompt_budget=getattr(host, "_prompt_budget"),
         call_streaming=getattr(host, "_call_streaming"),

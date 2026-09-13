@@ -14,9 +14,10 @@ from rich.theme import Theme
 
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.foundation.user_paths import prepare_user_storage
 
 
-_STATE_PATH = Path(".nz-coder/terminal/preferences.json")
+_STATE_PATH = Path("terminal/preferences.json")
 _MAX_STATE_BYTES = 64_000
 _MAX_RECENT_MODELS = 20
 _MAX_FAVORITE_MODELS = 100
@@ -389,9 +390,7 @@ def _palette(theme_name: str) -> dict[str, str]:
 
 def _preference_path(workspace: Path | None) -> Path:
     root = (workspace or current_workdir()).resolve()
-    path = (root / _STATE_PATH).resolve()
-    path.relative_to(root)
-    return path
+    return prepare_user_storage(root).workspace_state / _STATE_PATH
 
 
 def _write_preferences(path: Path, state: TerminalPreferences) -> None:

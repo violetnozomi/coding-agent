@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from nz_coder.runtime.core.request import RunRequest
 from nz_coder.runtime.core.result import RunStatus, TokenUsage
+from nz_coder.protocol.public_error import public_error_message
 
 
 @dataclass
@@ -70,4 +71,4 @@ class RunState:
             raise TypeError("RunState terminal status must be a RunStatus")
         self.status = status
         self.final_text = str(final_text)
-        self.error = str(error)
+        self.error = public_error_message(error) if error else ""

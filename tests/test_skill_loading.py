@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import shutil
 import threading
+from dataclasses import replace
 
+from nz_coder.foundation.project_control import capture_project_control_snapshot
 from nz_coder.state.skills import SkillLoader
 from nz_coder.tools import ToolOutput, scoped_tool_cancellation
 
 
 def _loader(tmp_path, *, resources: int = 0):
-    project = tmp_path / "project"
+    project = tmp_path / ".nz-coder" / "skills"
     directory = project / "review"
     directory.mkdir(parents=True)
     (directory / "SKILL.md").write_text(
@@ -23,10 +25,12 @@ def _loader(tmp_path, *, resources: int = 0):
             str(index),
             encoding="utf-8",
         )
+    snapshot = replace(capture_project_control_snapshot(tmp_path), trusted=True)
     return SkillLoader(
         bundled_dir=tmp_path / "missing-bundled",
         user_dir=tmp_path / "missing-user",
         project_dir=project,
+        project_control_snapshot=snapshot,
     ), directory
 
 

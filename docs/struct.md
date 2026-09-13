@@ -1305,3 +1305,97 @@ text, raw tool envelopes, internal agent-as-tool answers, and retired attempt
 deltas are excluded from Session events and the event journal. The legacy SDK
 `on_token` callback is final-text-only and deprecated in favor of
 `on_final_text` or structured `on_event` consumption.
+
+## 22. Workspace Trust 安全复核收口（2026-09-03）
+
+这一轮不是新增 Agent 功能，而是根据独立 PR 复核把“仓库内容”和“宿主权限”之间的边界补完整。
+
+- 配置加载改为显式 `CONFIG_SCHEMA`。只有产品已声明的键会进入 `ConfigSnapshot`；未知宿主环境不会出现在 `config show`，未知工作区键会被忽略并产生安全诊断。新配置项默认要求 workspace trust，secret、类型和范围由 schema 声明。
+- Project Control Plane 由一套共享发现器定义，准确范围是 `.env` 中已注册的治理配置、`.nz-coder/settings.json`、`.nz-coder/mcp.json`、实际可加载的 `.nz-coder/skills/*/SKILL.md`、`.nz-coder/commands/*.md` 和 `.nz-coder/workflows/*.workflow.json`。`.history`、`.trash`、Session、Artifact、trace、cache、plan 和 runtime 派生状态不参与指纹。活动控制文件必须是普通文件且不能是 symlink；文件数量和总字节仍受预算限制。
+- Project Command 和 Project Workflow 只有在当前精确 `workspace-control` fingerprint 被信任后才会发现。未信任项目的命令不会进入列表、补全、HTTP 扩展或 Headless 执行，也不能覆盖 bundled/user command、改变 prompt、model 或 allowed tools；未信任项目的 Workflow 不可发现、不可显式加载，也不能覆盖 Personal Workflow。控制内容变化后旧信任立即失效，project-scope Workflow 的主动保存、替换或删除要求重新显式信任。
+- Workspace Control Trust 管理仓库提供的 Project Authority；用户点击“始终允许”产生的精确 scoped grant 和 Skill 启停偏好保存在平台用户配置目录旁的 `workspace-grants.json`。Grant Store 位于 Workspace 外，使用 canonical Workspace identity、跨进程锁、原子写入、配额和 owner-private 权限。Project deny 优先于 User Grant，未信任 Project allow 仍被忽略。
+- 工作区模型选择不参与 Project Control fingerprint，只使用 `workspace-model-selection` 专用信任。正式选择会登记 selection 内容指纹；外部修改或 reset 会使旧选择失效。选择模型不会刷新、撤销或扩大 Project Control Trust，仓库不能仅靠预置 `selection.json` 切换 Provider 或昂贵模型。
+- 未信任项目 Skill 不会被加载、展示或注入 Prompt，也不能覆盖 user/bundled Skill；普通源码仍可按正常文件读取规则作为仓库上下文使用。
+- Transaction rollback 记录父目录链的设备/文件身份。POSIX 从已验证 Workspace root fd 开始逐级以 `O_DIRECTORY | O_NOFOLLOW` 打开，并把最终父目录 fd 持有到临时文件写入、rename/unlink 和 fsync 完成；验证后的路径交换只能作用于已经打开的原目录。Windows 在恢复关键区间持有不共享 delete 的目录 handle、拒绝 reparse point，并通过 `NtSetInformationFile(FileRenameInformation)` 相对最终父目录 handle 原子恢复备份；新文件删除先验证目标 handle 的最终父目录，再通过 handle disposition 删除。即使 runner 允许已打开目录被 rename/junction 替换，恢复仍锚定原目录或 fail closed。无法安全证明的新目录删除会保持 `rollback_partial`、保留 backup/metadata，路径修复后可以 retry。
+- Provider credential scope 使用不公开的随机 generation；凭据轮换会得到新的 Provider instance，旧 thought signature/private continuation 不会跨账号转发。Provider worker 在 `thread.start()` 失败时也会释放 inflight 槽。
+- MCP/LSP 使用 `strict-service` 子进程环境，不继承 `PYTHONPATH`、`NODE_PATH`、`PSMODULEPATH`、`PYTHONHOME`、虚拟环境路径等代码加载变量；普通 build/test 命令仍使用兼容的 workspace-command profile。
+- ArtifactStore 使用统一 Session 目录、真实文件 `stat` 计算配额、跨进程文件锁和 durable reference set。仍被历史 Session transcript 引用的 `[full:artifact-id]` 不会被 TTL/LRU 清理。
+- 目录型 `read_file` 会过滤 `.env`、`.git`、`.nz-coder` 等私有名称；GitHub Actions checkout 禁止持久化仓库凭据。
+
+仍需明确保留的边界：Shell、路径策略和环境清洗不是 OS sandbox；Webfetch 的代理语义和 DNS TOCTOU 没有被宣称彻底消除；临时 shell API Key 的 Provider continuation 仍只保证 process-scoped generation；Artifact 历史引用扫描仍是有界扫描，不能宣称严格永久保留；Windows junction 行为仍应持续以 Windows CI/实机结果为准（本轮 GitHub-hosted Windows 回归已执行通过）；Actions 尚未固定完整 SHA，应由可验证的依赖更新流程完成，不能离线编造。
+
+### 22.1 不可变 Project Control 与句柄锚定边界
+
+[`nz_coder/foundation/project_control.py`](../nz_coder/foundation/project_control.py) 定义 `ProjectControlSnapshot`。一次捕获只包含 `.nz-coder/settings.json`、`.nz-coder/mcp.json`、`.nz-coder/skills/*/SKILL.md`、`.nz-coder/commands/*.md` 和 `.nz-coder/workflows/*.workflow.json`；模型选择、Workflow 历史/回收站及 Session、run、artifact、trace、cache、runtime、plan 等派生目录均不属于 Project Authority。每个文件保存相对路径、类型、内容哈希、文件身份、大小和不可变 bytes；整个映射只读，并受单文件 1 MiB、总计 4 MiB、1024 文件和单目录 4096 entry 的 fail-closed 预算约束。
+
+Control fingerprint 直接由 Workspace 配置指纹、快照内相对路径和同一份 bytes 计算。Trust Store 只会把这份不可变快照标记为 trusted，不会产生可与未来磁盘路径组合的长期布尔授权。一次产品运行固定同一 `ConfigSnapshot`/`ProjectControlSnapshot`，Permission、Skill（包括 body）、Command、configured Hook、Workflow 和 MCP 都解析该快照的 bytes；TUI、Headless、HTTP 及 Runtime Host 传播同一对象。控制文件在捕获后改变不会改变当前运行；下一次捕获得到新 fingerprint，未明确建立的新信任不会获得 Project Authority。实现入口和消费关系可分别从 [`workspace_trust.py`](../nz_coder/foundation/workspace_trust.py)、[`skills.py`](../nz_coder/state/skills.py)、[`custom_commands.py`](../nz_coder/interface/custom_commands.py) 与 [`mcp/config.py`](../nz_coder/mcp/config.py) 追踪。
+
+POSIX 捕获从已验证 Workspace root descriptor 出发，对每级目录使用 `openat`、`O_DIRECTORY` 和 `O_NOFOLLOW`，从最终文件 descriptor 流式读取；父目录 symlink 和捕获期路径交换不能把 I/O 改向 Workspace 外。Windows 使用 `CreateFileW` 打开并保留父目录 handle，拒绝 reparse point，不共享 delete，并校验 handle 的最终父路径与 File ID/Volume identity；无法证明安全时整个 Project Authority fail closed。两端都不会在验证后回到普通 `Path.read_bytes()`。
+
+[`TransactionManager`](../nz_coder/state/transaction.py) 的 `track()` 与 rollback 现在都句柄锚定。Track 从 root handle 逐级打开父目录和最终 regular-file handle，备份直接复制该 handle 的内容，并记录 device/inode（Windows 为等价 File ID/Volume）、mode、atime/mtime 和 size；不再执行“Path 检查后 `shutil.copy2`”。POSIX rollback 在原子 replace 前通过临时文件 descriptor 恢复正文、permission mode 与 mtime，再 fsync 文件和父目录。元数据恢复失败会保留 backup 并进入 `rollback_partial`，修复环境后可重试。
+
+[`lsp/servers.py`](../nz_coder/lsp/servers.py) 不再读取进程启动目录的全局配置。Resolver 使用显式传入的目标 Workspace `ConfigSnapshot`，未传入时也按 `workspace` 参数捕获，并记录 `system-path`、`user-config`、`environment-config`、`trusted-workspace-config` 或 `workspace-local-default` 来源。位于目标 Workspace 内的 executable 无论配置来自哪里都继续要求内容 fingerprint trust。LSP client cache 同时绑定 Workspace、server/root、resolved command、配置来源和 executable fingerprint；任一项变化都会关闭旧 client 并重新执行信任判断。
+
+### 22.2 顶层 Run Control 生命周期与配置作用域（2026-09-04）
+
+长期 Session 现在只保留消息、Session ID 与交互状态，不再永久持有 Project Authority。Terminal 每次提交在自定义命令展开前捕获一次目标 Workspace 快照；HTTP `start_run()`、SDK `run_result()` 和 Headless 入口也分别在本次顶层 Run 开始时捕获。`RunControlBundle` 从这一份快照原子构造 Permission、Plan mode、Skill、configured Hook、MCP 与 Provider/Model 控制面，Host 在 Run 内通过 ContextVar 固定同一对象，并在完成、取消或异常后关闭本次 MCP、自动创建的 Sidecar 与 Provider runtime。下一次提交重新捕获 fingerprint，因此 `untrust`、branch checkout 或控制文件变化只影响下一 Run，不会改变正在执行的 Run。
+
+Terminal 的直接 Shell 与 Project Command 同样在提交边界重建权限/命令视图；Remote Terminal 会把 HTTP command expansion 的 prompt/tool/model 与 control fingerprint 绑定成 digest，`start_run()` 在接受前以新捕获快照复核，变化后要求重新展开。Project Skill 描述不再固化进 Session 基础 prompt，而是由本次 Run 的 SkillLoader 注入。HTTP Workflow 的 prepare 与 start 各自重新捕获并以 approval digest 拒绝变更后的对象，start 选中的同一快照会通过 ContextVar 复制到后台线程，使 nested workflow resolve 保持固定。工作区模型选择继续使用独立的 `workspace-model-selection` trust，但一旦在提交边界解析为 Provider/Model/Variant，本次 Run 不会在线程内再次读取 selection 文件。
+
+正式执行路径中的 MCP enabled/servers/user/project/trust path 与 timeout、Provider key/endpoint/credential generation、Model fallback，以及 LSP enabled/initialize timeout/request timeout 都从目标 Workspace 的本次 `ConfigSnapshot` 解析。MCP 内联配置保留 `environment`、`user` 或 `trusted-workspace` 来源，不会把启动 Workspace 的 `.env` 降格成另一个 Workspace 的宿主环境；Provider endpoint 与 credential 来自同一 epoch；LSP cache key 包含 timeout 语义，变化时关闭旧 client。模块级常量仅保留给旧的直接调用兼容层，不再决定 Terminal、HTTP、SDK、Headless 对其他 Workspace 的安全语义。
+
+数值配置解析失败只记录固定诊断文本，并立即用安全默认值替换快照中的非法原文；因此类似凭据的错误数值不会进入 issue、`public_json()`、doctor 或 status 输出。仍保留上一节列出的边界：这些控制措施不是 OS sandbox，也不宣称解决 Webfetch DNS TOCTOU、Artifact 无限历史保留或 Actions SHA 固定。
+
+### 22.3 Nested Run、资源退休与产品入口收口（2026-09-04）
+
+顶层 Run 的 `ConfigSnapshot` 现在通过 Host 的父上下文显式传给同步 child、task/subagent、background child 和 Workflow thread。SDK `run_child()` 会优先继承当前父 epoch；subagent 的 Provider、endpoint、credential scope、模型 tier/fallback、turn/time budget 与 worktree switch 都从该快照解析。独立 child worktree 只重绑定执行根目录，配置值和已批准的 Project Control bytes 不重新读盘；child 自己创建 Provider runtime，但不会继承父 Run 的动态 MCP tool overlay。进程隔离 child 通过私有 spawn IPC 传递同一对象，Snapshot 不进入 Session、metadata、trace 或 digest，且公开 `repr` 不包含配置值。下一次独立顶层提交仍重新捕获磁盘状态。
+
+`RunControlBundle` 使用 sidecar、MCP 和逐个 Provider runtime 的完成 ledger。关闭失败只保留资源标签与异常类型，已成功阶段不会重复关闭，未完成阶段可在 retire、下一次 prepare 或 environment close 时重试。新 Bundle 完成安装即为 commit point；commit 前失败恢复旧绑定并把 candidate 资源交给同一 cleanup ledger，commit 后旧资源关闭失败不会撤销或遗失新 Bundle。Host 先解除 active ownership 再退休资源，所以 cleanup failure 不覆盖 Provider 主异常，也不会把已经完成的业务结果改成失败或让下一 Run 永久 busy。
+
+Workspace 配置信任与 MCP capability 信任保持两层授权：`environment` 和 `user` 来源沿用宿主/用户信任；`project` 与 `.env` 产生的 `trusted-workspace` 都必须计算完整 Server fingerprint，并由 `MCPTrustStore` 精确信任后才能启动。command、cwd、executable 内容、URL、headers/header_env、OAuth 或 tool effects 改变都会使旧信任失效；CLI 的 list/trust/untrust 使用当前 Workspace Snapshot，并只公开安全截断 fingerprint。
+
+Terminal 的 Built-in Command 继续由稳定 Registry 拥有；Custom Command 的 dispatch authority 每次提交从同一 `submission_snapshot` 的 Catalog 解析，因此新增、删除、修改或撤销信任无需重启，且 Built-in 同名时始终优先。Headless 基础 `AgentDefinition` 不再预嵌入 Skill 描述，统一由 RunControl 的 `SkillLoader` 在最终 prompt 中注入一次，与 Terminal、HTTP 和 SDK 使用同一所有权边界。
+
+### 22.4 Security Boundary Closure（2026-09-04）
+
+本轮把前述实现从“逐点加固”收口成可机器验证的不变量。运行配置统一进入不可变 `RunSettings`，正式执行路径没有剩余的 run-scoped 全局配置读取；MCP/LSP 的信任绑定解释器、脚本/模块、cwd、argv、配置来源和内容 fingerprint，并在 spawn 前复核；Provider 额外区分 credential 与 endpoint 来源，用户凭据发送给工作区自定义 endpoint 必须执行独立的 `config delegate-provider-endpoint`。
+
+模型可达的源码读写、目录枚举、删除和 patch 通过 `WorkspaceFileAccess` 锚定已打开的 Workspace/parent handle。POSIX 使用 `openat/O_NOFOLLOW/dirfd` 完成读写、递归枚举与 replace/unlink；目录遍历期间持续持有每一级 dirfd，避免 `read_file(directory)` / `list_directory` 在校验后被 parent swap 重定向。`TransactionManager.track_anchored()` 直接复用 mutation 已持有的 parent descriptor 来备份目标，同一事务后续写入还必须匹配首次记录的 device/inode，不能在备份后换到另一个同名目录。Windows 目录枚举持有拒绝 rename/delete sharing 的 handle，并逐项验证 child 与复核 final path；事务也复用 parent handle 并核对 volume/file identity。但受 Python API 限制，最终 replace 和 executable launch 的最后一跳仍保留明确的 TOCTOU 边界，不能宣称彻底消除。
+
+持久进程、background/workflow child 与缓存 LSP client 现在登记 `CapabilityLease`。普通 `config untrust` 只影响下一 Run 并报告仍活动的租约；显式 `--revoke-active` 才同步停止当前进程拥有的资源，并分别报告成功与失败。跨 daemon 撤销仍需要未来的控制面协议，当前实现不会虚假声称已撤销另一个进程中的资源。
+
+公共异常只能通过 `PublicError`、`TrustedPublicMessage` 或 `PublicInputError`；架构测试中 public/model-visible 的原始 `str(exception)` 数量为零，并额外拒绝 `return f"...{exc}"` 这类此前可能漏过清单的直接格式化返回。LSP/MCP 对 header、frame、diagnostic、stderr、SSE line/event 和 HTTP response 设置硬上限，超限关闭对应本地服务。用户状态锁在 POSIX 使用安全 parent fd 与 `O_NOFOLLOW`，在 Windows 拒绝 symlink/reparse point/non-regular file。
+
+完整的分类清单、实现细节、cleanup ownership 和仍保留的真实边界记录在 [`security-boundaries.md`](security-boundaries.md)。这些改动依然不把 Shell 变成 OS sandbox，也不宣称解决 Webfetch DNS/connection TOCTOU、跨 daemon 主动撤销或 GitHub 仓库管理设置。
+
+### 22.5 PR #2 冻结范围最终收口（2026-09-05）
+
+Image preflight 现在从同一 Run 的 `ConfigSnapshot` 构造 source-aware `ProviderConnection`。专用 image key/endpoint 保留各自配置来源；缺省时继承 image provider family 的本 Run credential/endpoint。`environment`/`user` credential 与 `trusted-workspace` endpoint 的组合复用主 Provider 的精确 delegation，runtime identity 绑定 provider、model、credential generation、规范化 endpoint、max tokens 和 timeout。
+
+Instruction 管理只允许 `AGENTS.md`、`CLAUDE.md` 与 `.nz-coder/instruction-file-state.json` 三类词法固定路径，并通过 `FixedFileAccess` 在 root/parent handle 下执行 regular-file 检查、`O_NOFOLLOW` 读取及相对 replace/unlink。symlink、junction、reparse point 和非普通文件会被安全拒绝，返回信息不包含链接目标；Prompt 使用的不可变 Instruction Snapshot 未被改写。
+
+`ExecutionIdentity` 分别解析 Python、Node、POSIX shell、PowerShell、Java jar 和 dotnet assembly 的 option arity。显式主入口、Python module、Node preload/loader/import、jar/dll 都参与 fingerprint；inline 或无法稳定解释的形式 fail closed。单文件、文件数、总字节和遍历深度均有硬预算，payload symlink/reparse 不被跟随。该身份只绑定显式代码负载，不声称覆盖动态 import 的传递依赖闭包。
+
+LSP 的 Workspace 读取权限已收回到 Tool/Intelligence 边界：`WorkspaceFileAccess` 一次提供相对路径、固定文本与 `WorkspaceFileIdentity`，`LSPClient` 只同步这份内容，diagnostics 不重新读盘。Workspace 外 URI 投影为 `outside-workspace`，私有 URI 投影为 `private-workspace`。
+
+Workspace mutation 会保留既有 POSIX permission bits，新文件使用安全默认 mode；edit/replace-lines/apply-patch/batch 在同一 parent handle 下复核 device/inode/size/mtime，冲突要求重新读取，多文件失败回滚已写成员。`overwrite=false` 使用 exclusive/no-replace 创建。目录枚举只保留最多 `maximum_entries + 1` 个候选后立即停止，Windows stat 不再读取完整文件。
+
+Credential-bearing dataclass 对 key、environment、headers、command argv 和嵌套 runtime 对象使用 `repr=False` 或安全 `__repr__`。安全门禁扫描整个 `nz_coder/**/*.py`，识别 config alias、from-import、`getattr`、同数量位置交换、LSP direct I/O、间接 exception formatting 与 secret-like dataclass 字段。MCP 默认按 explicit snapshot、active snapshot、current workspace snapshot 选择配置，只有明确 `compatibility_mode=True` 的宿主兼容调用能读取 legacy globals。
+
+本轮继续保留的真实边界：Shell 不是 OS sandbox；Webfetch DNS rebinding、跨 daemon revoke IPC、Artifact 永久保留、GitHub Action 完整 SHA 固定不在冻结范围；Windows replace 与 executable launch 的最终一步仍依赖平台 handle/share 语义。
+
+### 22.6 PR #2：创建回滚所有权与整次解析预算（2026-09-05）
+
+在 `24424788` 上用真实生产模块重建复核中的三条测试，首次运行得到 3 failed：两个 Node 多 payload 累计预算没有拒绝超限，exclusive create 在最终发布点遭遇竞争创建后，rollback 删除了竞争文件。审查提及的 zip 未出现在执行环境，因此 `tests/security/test_pr2_remaining_regressions.py` 明确标为依据文字时序重建，不能把此前隔离实验当作产品验证。
+
+Transaction 的备份记录现在包含同一事务内的 `MutationReceipt`。`track()` / `track_anchored()` 只准备恢复信息，未应用记录不获得恢复或删除权。POSIX 从临时文件 fd 捕获 identity，在 link/replace 成功后标记 applied；Windows 在 O_EXCL 得到有效 fd 后立即标记，再从该 fd 对应 handle 捕获 File ID/Volume，因此 fdopen、写入、flush/fsync 随后失败也不会丢失创建副作用。delete 在 unlink/handle disposition 成功后标记。重复修改同一路径保留首次 backup，只有下一次发布成功才更新已应用 identity。rollback 只处理 applied 项，删除新文件必须匹配已捕获 identity；外部替换会保留文件并进入 `rollback_partial`，恢复原对象后可以 retry。已恢复项从清单移除，重复 rollback 不触碰后续外部文件。
+
+调用点盘点：四个正式 `track_anchored()` 配对都位于 WorkspaceFileAccess 的 POSIX/Windows write/delete；batch、direct apply_patch 和 Agent tool transaction 共用这些入口。评测 recovery probe 是唯一另一个生产 Transaction `track()` 调用点，其写入已改用 WorkspaceFileAccess 产生 receipt。旧测试中手写的 track + Path.write_text 也改为生产 mutation 路径，保留原有 metadata、parent swap、取消和 partial retry 断言。Session snapshot store 的 `track()` 属于不同 API，不涉及文件事务。单独调用 Transaction `track()` 后绕过 WorkspaceFileAccess 的写入不会自动取得 rollback 所有权。
+
+每次 `resolve_execution_identity()` 创建独立 `_ExecutionPayloadBudget`，显式 main/preload/loader/import、jar/dll 及 Python package 遍历都使用该对象。文件数在打开前计费，stat 只做预检，读取过程中按实际 bytes 计费；最多读取剩余预算加一字节以检测增长，超限立即停止后续打开和哈希。重复引用按引用次数计费，每次读取都消耗配额，不使用去重缓存；argv 的顺序和重复继续影响 fingerprint。解释器二进制沿用独立政策，不套用 payload 单文件限制。计数不跨调用或线程共享，动态 import 传递依赖的既有声明不扩大。
+
+边界测试覆盖最终 syscall 前竞争、前序成员恢复、新建成功后异常、fdopen/写入失败、替换后的拒删和 retry、重复 rollback、hook/main 整体上限、package、独立/并发预算、重复引用、超限早停和读取中增长。该测试文件同时进入 Windows Product RC，Windows 结论以实际 runner 结果为准。POSIX 最终名称检查至 unlink 的竞态、系统崩溃后的持久恢复，以及文件原地改写的所有权区分未被宣称由这次内存 receipt 全面解决。
+
+范围外既有问题：`TransactionManager._track_windows()` 捕获原文件 metadata，但 `_restore_backup_windows()` 仅将私有 backup 通过句柄 rename 回目标，没有应用原时间戳/属性；因此 Windows 现有内容恢复不等于 metadata 恢复。本轮保留 POSIX metadata 回归断言、Windows 内容恢复断言，不声称修复这项既有 Windows 差距，也不扩展本轮冻结的两个修复目标。
+
+本地验收：原始三条重建测试修复前 3 failed（exit 1），修复后 3 passed；新增文件完整运行 25 passed / 2 Windows-only skipped。`python -m pytest -q` 得到 3751 passed / 35 skipped（280.62s，exit 0）。`git diff --check`、`python -m compileall -q nz_coder tests`、`ruff check nz_coder tests`、`python -m build --wheel --sdist` 均 exit 0。源码外 `/tmp/pr2-remaining-wheel.HzOo3j/venv` 安装 wheel，移除 PYTHONPATH 后 help 与完整新增测试 exit 0（25 passed / 2 skipped）；transaction、workspace_file_access、execution_identity 的 `__file__` 均位于该 venv 的 `lib/python3.13/site-packages`。这些 Linux 结果不替代最终提交的 Windows CI；远端结果记录在 PR #2。

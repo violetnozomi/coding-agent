@@ -20,7 +20,7 @@ from nz_coder.protocol.message_schema import (
     session_diffs,
     session_summary,
 )
-from nz_coder.state.workdir import current_workdir
+from nz_coder.state.workdir import current_derived_path, current_workdir
 from nz_coder.foundation.private_paths import harden_private_path
 
 _DEFAULT_SESSION_DIR = Path(config.SESSION_DIR)
@@ -54,7 +54,7 @@ def _active_model_id() -> str:
 
 def session_dir() -> Path:
     configured = Path(getattr(config, "SESSION_DIR", _DEFAULT_SESSION_DIR))
-    default_current = current_workdir() / ".nz-coder" / "sessions"
+    default_current = current_derived_path("SESSION_DIR")
     if configured == _DEFAULT_SESSION_DIR:
         return default_current
     # Treat a default-shaped path from another workspace as stale and re-root it.
@@ -364,7 +364,7 @@ def session_artifact_dir(session_id: str) -> Path:
 def session_runtime_dir(session_id: str | None = None) -> Path:
     current = session_id or active_session_id()
     if not current:
-        return current_workdir() / ".nz-coder"
+        return current_derived_path("SESSION_DIR") / "_runtime"
     return session_artifact_dir(current) / "runtime"
 
 
@@ -423,9 +423,9 @@ def session_todo_path(session_id: str | None = None) -> Path:
 
 
 def session_plan_path(session_id: str | None = None) -> Path:
-    """Return the project-local, user-reviewable plan path for one session."""
+    """Return the private user-owned plan path for one session."""
     current = _safe_session_id(session_id or active_session_id() or "session")
-    return current_workdir() / ".nz-coder" / "plans" / f"{current}.md"
+    return current_derived_path("SESSION_DIR") / "_plans" / f"{current}.md"
 
 
 def write_session_runtime_json(path: Path, payload: dict) -> None:
@@ -467,7 +467,7 @@ def write_session_runtime_json(path: Path, payload: dict) -> None:
 
 def _harden_session_directory(path: Path) -> None:
     """Protect the state root and one created Session-owned directory."""
-    state_root = current_workdir() / ".nz-coder"
+    state_root = session_dir().parent
     try:
         path.resolve().relative_to(state_root.resolve())
     except (OSError, ValueError):

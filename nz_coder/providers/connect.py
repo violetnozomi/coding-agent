@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from nz_coder.providers.configuration import set_provider_connection_override
 from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.foundation.workspace_trust import default_user_config_path
 from nz_coder.runtime.process.workdir import current_workdir
 
 
@@ -116,8 +117,9 @@ def save_provider_connection(
     base_url: str,
     *,
     workspace: Path | None = None,
+    user_config_path: Path | None = None,
 ) -> ProviderConnectSpec:
-    """Atomically save one provider credential and apply it to this process."""
+    """Save one provider credential outside the workspace and apply it live."""
     spec = provider_connect_spec(provider)
     key = str(api_key).strip()
     endpoint = str(base_url).strip().rstrip("/")
@@ -125,11 +127,18 @@ def save_provider_connection(
         raise ValueError("API key must be non-empty and single-line")
     _validate_endpoint(endpoint)
     root = (workspace or current_workdir()).resolve()
-    target = root / ".env"
+    target = Path(user_config_path or default_user_config_path()).expanduser().absolute()
+    try:
+        target.resolve(strict=False).relative_to(root)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Provider credentials must be stored outside the workspace")
     if target.is_symlink():
-        raise ValueError("Workspace .env must not be a symbolic link")
+        raise ValueError("User configuration must not be a symbolic link")
+    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    harden_private_path(target.parent)
     resolved_parent = target.parent.resolve(strict=True)
-    resolved_parent.relative_to(root)
     target = resolved_parent / target.name
     lines = _read_env_lines(target)
     replacements = {

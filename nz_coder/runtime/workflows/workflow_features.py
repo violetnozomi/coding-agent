@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.workflows.workflow_builtins import (
     generate_pattern_workflow,
     get_builtin_workflow,
@@ -51,7 +52,7 @@ def workflow_review_packet(
             metadata={"review_packets": packets},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_generate(
@@ -68,7 +69,7 @@ def workflow_generate(
             metadata={"workflow_capsule": capsule},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_builtin(
@@ -97,7 +98,7 @@ def workflow_builtin(
             )
         return "Error: action must be list or show"
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_host(
@@ -154,7 +155,7 @@ def workflow_host(
             metadata={"workflow_host": value},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 def workflow_generation(
@@ -185,7 +186,7 @@ def workflow_generation(
             metadata={"workflow_generation": value},
         )
     except Exception as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
 
 
 register(

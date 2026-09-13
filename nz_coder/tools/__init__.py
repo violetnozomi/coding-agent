@@ -12,6 +12,7 @@ from contextvars import ContextVar
 from typing import Callable, get_type_hints
 
 from nz_coder.protocol.attachments import normalize_attachments
+from nz_coder.protocol.public_error import format_public_error
 
 
 class ToolOutput(str):
@@ -813,10 +814,10 @@ def dispatch(name: str, arguments) -> str:
         if isinstance(result, str):
             return result
         return str(result) if result is not None else "(no output)"
-    except TypeError as e:
-        return f"Error: Bad arguments for {name}: {e}"
+    except TypeError:
+        return f"Error: Bad arguments for {name}"
     except Exception as e:
-        return f"Error: {e}"
+        return format_public_error(e)
 
 
 def get_specs() -> list[dict]:

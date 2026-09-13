@@ -150,6 +150,32 @@ def test_daemon_private_writer_hardens_directory_and_final_file(tmp_path, monkey
     assert target in hardened
 
 
+def test_daemon_handoff_uses_the_startup_budget(tmp_path, monkeypatch):
+    import nz_coder.http_service.daemon as daemon
+
+    attempts = 0
+    clock = 0.0
+
+    def delayed_state(_path):
+        nonlocal attempts
+        attempts += 1
+        return {"nonce": "expected"} if attempts == 150 else {}
+
+    def monotonic():
+        nonlocal clock
+        clock += 0.001
+        return clock
+
+    monkeypatch.setattr(daemon, "_load_state", delayed_state)
+    monkeypatch.setattr(daemon.time, "monotonic", monotonic)
+    monkeypatch.setattr(daemon.time, "sleep", lambda _seconds: None)
+
+    state = daemon._wait_for_handoff(tmp_path / "state.json", "expected", 2.0)
+
+    assert state == {"nonce": "expected"}
+    assert attempts == 150
+
+
 @pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
 def test_daemon_status_rejects_invalid_timeout_before_state_access(tmp_path, timeout):
     with pytest.raises(ValueError, match="status timeout"):

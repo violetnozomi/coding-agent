@@ -1,107 +1,1089 @@
-"""Transaction manager: atomic multi-file edits with backup and rollback.
+"""Recoverable, workspace-confined multi-file edit transactions."""
+from __future__ import annotations
 
-Design:
-  txn.begin()        — start a new transaction, clear backup state
-  (file writes/edits happen via normal tool dispatch)
-  txn.track(path)    — called by write_file/edit_file before mutating; snapshots original
-  txn.commit()       — discard backups, transaction succeeded
-  txn.rollback()     — restore all files to pre-transaction state
-
-This gives the agent a safety net: if a multi-file edit partially fails,
-all changes revert to the state before the transaction began.
-"""
-
+from dataclasses import dataclass, field
 import hashlib
-import shutil
-import tempfile
+import os
 from pathlib import Path
+import shutil
+import stat
+import tempfile
+import uuid
 
 from nz_coder.state.workdir import current_workdir
 
 
+@dataclass(frozen=True)
+class _PathIdentity:
+    """Identity of one directory in the recovery path."""
+
+    path: Path
+    device: int
+    inode: int
+
+
+@dataclass(frozen=True)
+class _Backup:
+    """Immutable recovery information for one canonical workspace target."""
+
+    target: Path
+    relative: str
+    backup: Path | None
+    parent_chain: tuple[_PathIdentity, ...]
+    target_device: int | None = None
+    target_inode: int | None = None
+    original_mode: int | None = None
+    original_atime_ns: int | None = None
+    original_mtime_ns: int | None = None
+    original_size: int | None = None
+    mutation: MutationReceipt = field(default_factory=lambda: MutationReceipt())
+
+
+@dataclass
+class MutationReceipt:
+    """Prepared recovery data gains ownership only at a successful syscall."""
+
+    applied: bool = False
+    identity: tuple[int, int] | None = None
+
+    def capture(self, descriptor: int) -> None:
+        """Capture the opened object's identity without reopening its path."""
+        if os.name == "nt":
+            import msvcrt
+            from nz_coder.foundation.project_control import _windows_handle_info
+
+            self.identity = _windows_handle_info(msvcrt.get_osfhandle(descriptor))
+        else:
+            info = os.fstat(descriptor)
+            self.identity = (int(info.st_dev), int(info.st_ino))
+
+
+@dataclass
+class _RecoveryParent:
+    """Stable parent authority held across validation and recovery I/O."""
+
+    fd: int | None = None
+    windows_handles: tuple[int, ...] = ()
+
+    @property
+    def windows_parent_handle(self) -> int | None:
+        """Return the final opened directory handle on Windows."""
+        return self.windows_handles[-1] if self.windows_handles else None
+
+    def close(self) -> None:
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+        if self.windows_handles:
+            import ctypes
+            from ctypes import wintypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            close_handle = kernel32.CloseHandle
+            close_handle.argtypes = (wintypes.HANDLE,)
+            close_handle.restype = wintypes.BOOL
+            for handle in reversed(self.windows_handles):
+                close_handle(wintypes.HANDLE(handle))
+            self.windows_handles = ()
+
+
 class TransactionManager:
+    """Track edits and retain failed rollback entries for a later retry."""
+
     def __init__(self):
         self._active = False
-        self._backups = {}   # str(abs_path) -> backup_path or None (if file didn't exist)
-        self._backup_dir = None
+        self._state = "inactive"
+        self._backups: dict[str, _Backup] = {}
+        self._backup_dir: Path | None = None
 
     @property
     def active(self) -> bool:
         return self._active
 
-    def begin(self):
-        """Start a new transaction. Any file tracked after this will be backed up."""
+    @property
+    def state(self) -> str:
+        return self._state
+
+    def begin(self) -> None:
+        """Start a transaction; nested callers share the active transaction."""
         if self._active:
-            return  # nested — keep outer transaction
+            return
         self._active = True
+        self._state = "active"
         self._backups = {}
         self._backup_dir = Path(tempfile.mkdtemp(prefix="nzcoder_txn_"))
 
-    def track(self, file_path: str):
-        """Snapshot a file before it gets modified.
-
-        Call this BEFORE writing/editing. If the file doesn't exist yet,
-        we record that so rollback can delete it.
-        """
+    def track(self, file_path: str | os.PathLike[str]) -> MutationReceipt | None:
+        """Snapshot a target through handles anchored at the workspace root."""
         if not self._active:
             return
-        abs_path = str((current_workdir() / file_path).resolve())
-        if abs_path in self._backups:
-            return  # already tracked in this transaction
-
-        source = Path(abs_path)
-        if source.exists():
-            # FIXED: 用绝对路径的 MD5 hash 前缀 + 文件名组合生成备份名，
-            # 替代手动 counter 逻辑，彻底避免 src/utils.py 与 tests/utils.py
-            # 同名文件在同一备份目录中产生命名冲突。
-            path_hash = hashlib.md5(abs_path.encode()).hexdigest()[:12]
-            backup = self._backup_dir / f"{path_hash}_{source.name}"
-            shutil.copy2(str(source), str(backup))
-            self._backups[abs_path] = str(backup)
+        root = current_workdir().resolve(strict=True)
+        raw = Path(file_path)
+        lexical = raw if raw.is_absolute() else root / raw
+        target = Path(os.path.normpath(str(lexical)))
+        try:
+            relative = target.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise ValueError("Transaction target escapes workspace") from exc
+        key = str(target)
+        if key in self._backups:
+            return self._backups[key].mutation
+        if self._backup_dir is None:
+            raise RuntimeError("Transaction backup directory is unavailable")
+        if os.name == "nt":
+            record = self._track_windows(root, target, relative)
         else:
-            self._backups[abs_path] = None  # file was new
+            record = self._track_posix(root, target, relative)
+        self._backups[key] = record
+        return record.mutation
 
-    def commit(self):
-        """Transaction succeeded — discard backups."""
+    @staticmethod
+    def _verify_anchored_parent(
+        record: _Backup,
+        *,
+        parent_fd: int | None,
+        windows_parent_handle: int | None,
+    ) -> None:
+        """Reject a later mutation that resolves to a different parent object."""
+        expected = record.parent_chain[-1]
+        if os.name == "nt":
+            if windows_parent_handle is None:
+                raise ValueError("Transaction parent handle is unavailable")
+            from nz_coder.foundation.project_control import _windows_handle_info
+
+            _attributes, device, inode, _size = _windows_handle_info(
+                windows_parent_handle, full=True,
+            )
+        else:
+            if parent_fd is None:
+                raise ValueError("Transaction parent descriptor is unavailable")
+            info = os.fstat(parent_fd)
+            device, inode = int(info.st_dev), int(info.st_ino)
+        if (device, inode) != (expected.device, expected.inode):
+            raise ValueError("Transaction parent identity changed")
+
+    def track_anchored(
+        self,
+        file_path: str | os.PathLike[str],
+        *,
+        parent_fd: int | None = None,
+        windows_parent_handle: int | None = None,
+    ) -> MutationReceipt | None:
+        """Snapshot through the same held parent used by the pending mutation."""
+        if not self._active:
+            return None
+        root = current_workdir().resolve(strict=True)
+        raw = Path(file_path)
+        lexical = raw if raw.is_absolute() else root / raw
+        target = Path(os.path.normpath(str(lexical)))
+        try:
+            relative = target.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise ValueError("Transaction target escapes workspace") from exc
+        key = str(target)
+        existing = self._backups.get(key)
+        if existing is not None:
+            self._verify_anchored_parent(
+                existing,
+                parent_fd=parent_fd,
+                windows_parent_handle=windows_parent_handle,
+            )
+            return existing.mutation
+        if self._backup_dir is None:
+            raise RuntimeError("Transaction backup directory is unavailable")
+        if os.name == "nt":
+            if windows_parent_handle is None:
+                raise ValueError("Transaction parent handle is unavailable")
+            record = self._track_windows_anchored(
+                root, target, relative, windows_parent_handle,
+            )
+        else:
+            if parent_fd is None:
+                raise ValueError("Transaction parent descriptor is unavailable")
+            record = self._track_posix_anchored(
+                root, target, relative, parent_fd,
+            )
+        self._backups[key] = record
+        return record.mutation
+
+    def _track_posix_anchored(
+        self,
+        root: Path,
+        target: Path,
+        relative: str,
+        parent_fd: int,
+    ) -> _Backup:
+        """Back up the target relative to the mutation's already-open parent."""
+        chain = self._capture_parent_chain_from_handle(
+            root, target.parent, parent_fd,
+        )
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        try:
+            source = os.open(target.name, flags, dir_fd=parent_fd)
+        except FileNotFoundError:
+            return _Backup(target, relative, None, chain)
+        except OSError as exc:
+            raise ValueError("Transaction target is an unsafe workspace file") from exc
+        backup = self._backup_path(target)
+        try:
+            before = os.fstat(source)
+            if not stat.S_ISREG(before.st_mode):
+                raise ValueError("Transaction can only track regular workspace files")
+            self._copy_open_file_to_backup(source, backup)
+            after = os.fstat(source)
+            if (
+                before.st_dev,
+                before.st_ino,
+                before.st_size,
+                before.st_mtime_ns,
+            ) != (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+            ):
+                backup.unlink(missing_ok=True)
+                raise ValueError("Transaction target changed during backup")
+            return _Backup(
+                target,
+                relative,
+                backup,
+                chain,
+                target_device=int(before.st_dev),
+                target_inode=int(before.st_ino),
+                original_mode=int(before.st_mode),
+                original_atime_ns=int(before.st_atime_ns),
+                original_mtime_ns=int(before.st_mtime_ns),
+                original_size=int(before.st_size),
+            )
+        except Exception:
+            backup.unlink(missing_ok=True)
+            raise
+        finally:
+            os.close(source)
+
+    def _track_windows_anchored(
+        self,
+        root: Path,
+        target: Path,
+        relative: str,
+        parent_handle: int,
+    ) -> _Backup:
+        """Keep the mutation parent locked while using Windows backup handles."""
+        from nz_coder.foundation.project_control import (
+            _windows_final_path,
+            _windows_handle_info,
+        )
+
+        expected_parent = target.parent.resolve(strict=True)
+        if Path(_windows_final_path(parent_handle)) != expected_parent:
+            raise ValueError("Transaction parent identity changed")
+        before = _windows_handle_info(parent_handle, full=True)
+        record = self._track_windows(root, target, relative)
+        after = _windows_handle_info(parent_handle, full=True)
+        if before != after or Path(_windows_final_path(parent_handle)) != expected_parent:
+            if record.backup is not None:
+                record.backup.unlink(missing_ok=True)
+            raise ValueError("Transaction parent identity changed")
+        return record
+
+    @classmethod
+    def _capture_parent_chain_from_handle(
+        cls,
+        root: Path,
+        parent: Path,
+        held_parent_fd: int,
+    ) -> tuple[_PathIdentity, ...]:
+        """Capture every parent with openat and match the final held descriptor."""
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        descriptor = os.open(root, flags)
+        chain: list[_PathIdentity] = []
+        cursor = root
+        try:
+            info = os.fstat(descriptor)
+            chain.append(_PathIdentity(cursor, int(info.st_dev), int(info.st_ino)))
+            for part in parent.relative_to(root).parts:
+                child = os.open(part, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+                cursor = cursor / part
+                info = os.fstat(descriptor)
+                if not stat.S_ISDIR(info.st_mode):
+                    raise ValueError("Transaction target parent is unsafe")
+                chain.append(
+                    _PathIdentity(cursor, int(info.st_dev), int(info.st_ino))
+                )
+            opened = os.fstat(descriptor)
+            held = os.fstat(held_parent_fd)
+            if (opened.st_dev, opened.st_ino) != (held.st_dev, held.st_ino):
+                raise ValueError("Transaction parent identity changed")
+            return tuple(chain)
+        finally:
+            os.close(descriptor)
+
+    def _backup_path(self, target: Path) -> Path:
+        if self._backup_dir is None:
+            raise RuntimeError("Transaction backup directory is unavailable")
+        key = os.path.normcase(os.path.normpath(str(target)))
+        path_hash = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+        return self._backup_dir / f"{path_hash}_{target.name}"
+
+    @staticmethod
+    def _copy_open_file_to_backup(source_fd: int, backup: Path) -> None:
+        """Copy one already-opened target to an exclusive private backup."""
+        destination = os.open(
+            backup,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        try:
+            while True:
+                chunk = os.read(source_fd, 1024 * 1024)
+                if not chunk:
+                    break
+                view = memoryview(chunk)
+                while view:
+                    written = os.write(destination, view)
+                    if written <= 0:
+                        raise OSError("transaction backup write made no progress")
+                    view = view[written:]
+            os.fsync(destination)
+        except Exception:
+            os.close(destination)
+            destination = -1
+            try:
+                backup.unlink()
+            except FileNotFoundError:
+                pass
+            raise
+        finally:
+            if destination >= 0:
+                os.close(destination)
+
+    def _track_posix(self, root: Path, target: Path, relative: str) -> _Backup:
+        """Open every component with openat and retain the captured identities."""
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        descriptor = os.open(root, flags)
+        chain: list[_PathIdentity] = []
+        cursor = root
+        try:
+            root_info = os.fstat(descriptor)
+            if not stat.S_ISDIR(root_info.st_mode):
+                raise ValueError("Transaction workspace identity is unavailable")
+            chain.append(
+                _PathIdentity(root, int(root_info.st_dev), int(root_info.st_ino))
+            )
+            for part in target.parent.relative_to(root).parts:
+                try:
+                    child = os.open(part, flags, dir_fd=descriptor)
+                except FileNotFoundError:
+                    return _Backup(target, relative, None, tuple(chain))
+                os.close(descriptor)
+                descriptor = child
+                info = os.fstat(descriptor)
+                if not stat.S_ISDIR(info.st_mode):
+                    raise ValueError("Transaction target parent is unsafe")
+                cursor = cursor / part
+                chain.append(
+                    _PathIdentity(cursor, int(info.st_dev), int(info.st_ino))
+                )
+
+            file_flags = (
+                os.O_RDONLY
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_CLOEXEC", 0)
+            )
+            try:
+                source = os.open(target.name, file_flags, dir_fd=descriptor)
+            except FileNotFoundError:
+                return _Backup(target, relative, None, tuple(chain))
+            except OSError as exc:
+                raise ValueError("Transaction target is an unsafe workspace file") from exc
+            backup = self._backup_path(target)
+            try:
+                before = os.fstat(source)
+                if not stat.S_ISREG(before.st_mode):
+                    raise ValueError("Transaction can only track regular workspace files")
+                self._copy_open_file_to_backup(source, backup)
+                after = os.fstat(source)
+                if (
+                    (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+                    != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+                ):
+                    try:
+                        backup.unlink()
+                    except FileNotFoundError:
+                        pass
+                    raise ValueError("Transaction target changed during backup")
+                return _Backup(
+                    target,
+                    relative,
+                    backup,
+                    tuple(chain),
+                    target_device=int(before.st_dev),
+                    target_inode=int(before.st_ino),
+                    original_mode=int(before.st_mode),
+                    original_atime_ns=int(before.st_atime_ns),
+                    original_mtime_ns=int(before.st_mtime_ns),
+                    original_size=int(before.st_size),
+                )
+            except Exception:
+                try:
+                    backup.unlink()
+                except FileNotFoundError:
+                    pass
+                raise
+            finally:
+                os.close(source)
+        finally:
+            os.close(descriptor)
+
+    def _track_windows(self, root: Path, target: Path, relative: str) -> _Backup:
+        """Capture through non-reparse handles held against rename/delete."""
+        import ctypes
+        from ctypes import wintypes
+
+        from nz_coder.foundation.project_control import (
+            UnsafeProjectControl,
+            _windows_close,
+            _windows_final_path,
+            _windows_handle_info,
+            _windows_open,
+        )
+
+        handles: list[int] = []
+        chain: list[_PathIdentity] = []
+        cursor = root
+        try:
+            root_handle = _windows_open(root, directory=True)
+            assert root_handle is not None
+            handles.append(root_handle)
+            _attrs, device, inode, _size = _windows_handle_info(
+                root_handle, full=True
+            )
+            chain.append(_PathIdentity(root, device, inode))
+            parent_handle = root_handle
+            for part in target.parent.relative_to(root).parts:
+                cursor = cursor / part
+                child = _windows_open(
+                    cursor,
+                    directory=True,
+                    missing_ok=True,
+                    parent=parent_handle,
+                )
+                if child is None:
+                    return _Backup(target, relative, None, tuple(chain))
+                handles.append(child)
+                parent_handle = child
+                _attrs, device, inode, _size = _windows_handle_info(
+                    child, full=True
+                )
+                chain.append(_PathIdentity(cursor, device, inode))
+
+            source = _windows_open(
+                target,
+                directory=False,
+                missing_ok=True,
+                parent=parent_handle,
+            )
+            if source is None:
+                return _Backup(target, relative, None, tuple(chain))
+            handles.append(source)
+            attributes, device, inode, size = _windows_handle_info(source, full=True)
+            original_mode, original_atime_ns, original_mtime_ns = (
+                self._windows_handle_metadata(source, attributes)
+            )
+            backup = self._backup_path(target)
+            destination = os.open(
+                backup,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+            try:
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                read_file = kernel32.ReadFile
+                read_file.argtypes = (
+                    wintypes.HANDLE,
+                    wintypes.LPVOID,
+                    wintypes.DWORD,
+                    ctypes.POINTER(wintypes.DWORD),
+                    wintypes.LPVOID,
+                )
+                read_file.restype = wintypes.BOOL
+                copied = 0
+                while copied < size:
+                    count = min(1024 * 1024, size - copied)
+                    buffer = ctypes.create_string_buffer(count)
+                    read = wintypes.DWORD()
+                    if not read_file(
+                        wintypes.HANDLE(source),
+                        buffer,
+                        count,
+                        ctypes.byref(read),
+                        None,
+                    ):
+                        raise OSError(
+                            ctypes.get_last_error(),
+                            "cannot read transaction target",
+                        )
+                    if not read.value:
+                        break
+                    chunk = memoryview(buffer.raw)[: int(read.value)]
+                    while chunk:
+                        written = os.write(destination, chunk)
+                        if written <= 0:
+                            raise OSError("transaction backup write made no progress")
+                        chunk = chunk[written:]
+                    copied += int(read.value)
+                if copied != size:
+                    raise ValueError("Transaction target changed during backup")
+                os.fsync(destination)
+            except Exception:
+                os.close(destination)
+                destination = -1
+                try:
+                    backup.unlink()
+                except FileNotFoundError:
+                    pass
+                raise
+            finally:
+                if destination >= 0:
+                    os.close(destination)
+            after = _windows_handle_info(source, full=True)
+            after_mode, _after_atime_ns, after_mtime_ns = (
+                self._windows_handle_metadata(source, after[0])
+            )
+            if (
+                after != (attributes, device, inode, size)
+                or after_mode != original_mode
+                or after_mtime_ns != original_mtime_ns
+            ):
+                backup.unlink(missing_ok=True)
+                raise ValueError("Transaction target changed during backup")
+            if os.path.normcase(os.path.dirname(_windows_final_path(source))) != os.path.normcase(
+                _windows_final_path(parent_handle)
+            ):
+                backup.unlink(missing_ok=True)
+                raise ValueError("Transaction target parent identity changed")
+            return _Backup(
+                target,
+                relative,
+                backup,
+                tuple(chain),
+                target_device=device,
+                target_inode=inode,
+                original_mode=original_mode,
+                original_atime_ns=original_atime_ns,
+                original_mtime_ns=original_mtime_ns,
+                original_size=size,
+            )
+        except UnsafeProjectControl as exc:
+            raise ValueError(
+                "Transaction target is outside the safe workspace boundary"
+            ) from exc
+        except Exception:
+            raise
+        finally:
+            for handle in reversed(handles):
+                _windows_close(handle)
+
+    @staticmethod
+    def _windows_handle_metadata(
+        handle: int,
+        attributes: int,
+    ) -> tuple[int, int, int]:
+        """Return mode and Unix nanosecond times from an already-open handle."""
+        import ctypes
+        from ctypes import wintypes
+
+        class _ByHandleFileInformation(ctypes.Structure):
+            _fields_ = (
+                ("file_attributes", wintypes.DWORD),
+                ("creation_time", wintypes.FILETIME),
+                ("last_access_time", wintypes.FILETIME),
+                ("last_write_time", wintypes.FILETIME),
+                ("volume_serial_number", wintypes.DWORD),
+                ("file_size_high", wintypes.DWORD),
+                ("file_size_low", wintypes.DWORD),
+                ("number_of_links", wintypes.DWORD),
+                ("file_index_high", wintypes.DWORD),
+                ("file_index_low", wintypes.DWORD),
+            )
+
+        info = _ByHandleFileInformation()
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        query = kernel32.GetFileInformationByHandle
+        query.argtypes = (wintypes.HANDLE, ctypes.POINTER(_ByHandleFileInformation))
+        query.restype = wintypes.BOOL
+        if not query(wintypes.HANDLE(handle), ctypes.byref(info)):
+            raise OSError(ctypes.get_last_error(), "cannot inspect transaction target")
+
+        def _unix_ns(value: wintypes.FILETIME) -> int:
+            ticks = (int(value.dwHighDateTime) << 32) | int(value.dwLowDateTime)
+            return max(0, ticks - 116_444_736_000_000_000) * 100
+
+        write_bits = 0 if attributes & 0x00000001 else 0o222
+        mode = stat.S_IFREG | 0o444 | write_bits
+        return mode, _unix_ns(info.last_access_time), _unix_ns(info.last_write_time)
+
+    def commit(self) -> None:
+        """Commit and discard every recovery snapshot."""
         if not self._active:
             return
         self._cleanup_backup_dir()
         self._active = False
+        self._state = "committed"
         self._backups = {}
 
     def rollback(self) -> str:
-        """Transaction failed — restore all files to pre-transaction state.
-
-        Returns a human-readable report of what was rolled back.
-        """
+        """Attempt every recovery operation and retain only failures for retry."""
         if not self._active:
             return ""
-        report_lines = []
-        for abs_path, backup_path in self._backups.items():
-            target = Path(abs_path)
+        restored: list[str] = []
+        deleted: list[str] = []
+        failed: dict[str, _Backup] = {}
+        for key, record in tuple(self._backups.items()):
+            if not record.mutation.applied:
+                continue
+            parent: _RecoveryParent | None = None
             try:
-                rel = target.relative_to(current_workdir())
-            except ValueError:
-                rel = target
-            if backup_path is None:
-                # File didn't exist before — delete it
-                if target.exists():
-                    target.unlink()
-                    report_lines.append(f"  Deleted (new file reverted): {rel}")
-            else:
-                # Restore from backup
-                shutil.copy2(backup_path, abs_path)
-                report_lines.append(f"  Restored: {rel}")
+                parent = self._validate_recovery_target(record)
+                if record.backup is None:
+                    self._delete_new_target(record, parent)
+                    deleted.append(record.relative)
+                else:
+                    self._restore_backup(record, record.backup, parent)
+                    restored.append(record.relative)
+            except (OSError, ValueError, RuntimeError):
+                failed[key] = record
+            finally:
+                if parent is not None:
+                    parent.close()
+        self._backups = failed
+        lines = [f"  Restored: {path}" for path in restored]
+        lines.extend(f"  Deleted (new target reverted): {path}" for path in deleted)
+        if failed:
+            self._state = "rollback_partial"
+            self._active = True
+            lines.append(
+                f"  Warning: {len(failed)} rollback operation(s) failed; retry is available."
+            )
+        else:
+            self._cleanup_backup_dir()
+            self._state = "rolled_back"
+            self._active = False
+        return "Rolled back changes:\n" + "\n".join(lines) if lines else ""
 
-        self._cleanup_backup_dir()
-        self._active = False
-        self._backups = {}
+    def _validate_recovery_target(self, record: _Backup) -> _RecoveryParent:
+        root = current_workdir().resolve(strict=True)
+        try:
+            record.target.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("Transaction recovery target escapes workspace") from exc
+        if os.name != "nt":
+            return self._open_recovery_parent_posix(root, record)
+        return self._open_recovery_parent_windows(record)
 
-        if report_lines:
-            return "Rolled back changes:\n" + "\n".join(report_lines)
-        return ""
+    def _open_recovery_parent_posix(
+        self,
+        root: Path,
+        record: _Backup,
+    ) -> _RecoveryParent:
+        """Traverse from the verified root and retain the final parent fd."""
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        descriptor = os.open(root, flags)
+        try:
+            self._verify_opened_directory(descriptor, record.parent_chain[0])
+            relative = record.target.parent.relative_to(root)
+            for index, part in enumerate(relative.parts, start=1):
+                child = os.open(part, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+                if index < len(record.parent_chain):
+                    self._verify_opened_directory(
+                        descriptor, record.parent_chain[index]
+                    )
+                else:
+                    info = os.fstat(descriptor)
+                    if self._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                        raise ValueError("Transaction recovery parent is unsafe")
+            return _RecoveryParent(fd=descriptor)
+        except Exception:
+            os.close(descriptor)
+            raise
 
-    def _cleanup_backup_dir(self):
+    def _open_recovery_parent_windows(self, record: _Backup) -> _RecoveryParent:
+        """Lock each existing parent against rename/delete for the I/O window."""
+        from nz_coder.foundation.project_control import (
+            UnsafeProjectControl,
+            _windows_close,
+            _windows_handle_info,
+            _windows_open,
+        )
+
+        handles: list[int] = []
+        paths = [identity.path for identity in record.parent_chain]
+        last = record.parent_chain[-1].path
+        cursor = last
+        for part in record.target.parent.relative_to(last).parts:
+            cursor = cursor / part
+            paths.append(cursor)
+        try:
+            for index, path in enumerate(paths):
+                handle = _windows_open(
+                    path,
+                    directory=True,
+                    parent=handles[-1] if handles else None,
+                )
+                assert handle is not None
+                handles.append(handle)
+                if index < len(record.parent_chain):
+                    expected = record.parent_chain[index]
+                    _attributes, device, inode, _size = _windows_handle_info(
+                        handle,
+                        full=True,
+                    )
+                    if (device, inode) != (expected.device, expected.inode):
+                        raise ValueError("Transaction recovery parent identity changed")
+            return _RecoveryParent(windows_handles=tuple(handles))
+        except UnsafeProjectControl as exc:
+            for handle in reversed(handles):
+                _windows_close(handle)
+            raise ValueError("Transaction recovery parent is unsafe") from exc
+        except Exception:
+            for handle in reversed(handles):
+                _windows_close(handle)
+            raise
+
+    @classmethod
+    def _verify_opened_directory(cls, descriptor: int, expected: _PathIdentity) -> None:
+        info = os.fstat(descriptor)
+        if cls._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+            raise ValueError("Transaction recovery parent is unsafe")
+        if (int(info.st_dev), int(info.st_ino)) != (expected.device, expected.inode):
+            raise ValueError("Transaction recovery parent identity changed")
+
+    @classmethod
+    def _capture_parent_chain(
+        cls,
+        root: Path,
+        parent: Path,
+    ) -> tuple[_PathIdentity, ...]:
+        chain: list[_PathIdentity] = []
+        cursor = root
+        candidates = [root]
+        try:
+            relative = parent.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("Transaction target escapes workspace") from exc
+        for part in relative.parts:
+            cursor = cursor / part
+            candidates.append(cursor)
+        for candidate in candidates:
+            try:
+                info = candidate.lstat()
+            except FileNotFoundError:
+                break
+            if cls._is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                raise ValueError("Transaction target parent is unsafe")
+            chain.append(_PathIdentity(candidate, int(info.st_dev), int(info.st_ino)))
+        if not chain:
+            raise ValueError("Transaction workspace identity is unavailable")
+        return tuple(chain)
+
+    @staticmethod
+    def _is_link_or_reparse(info: os.stat_result) -> bool:
+        attributes = int(getattr(info, "st_file_attributes", 0))
+        reparse = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+        return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse)
+
+    def _restore_backup(
+        self,
+        record: _Backup,
+        backup: Path,
+        parent: _RecoveryParent,
+    ) -> None:
+        """Restore through a same-directory fsynced temporary and atomic replace."""
+        if os.name != "nt":
+            self._restore_backup_posix(record, backup, parent)
+            return
+        self._restore_backup_windows(record, backup, parent)
+
+    @staticmethod
+    def _restore_backup_windows(
+        record: _Backup,
+        backup: Path,
+        parent: _RecoveryParent,
+    ) -> None:
+        """Atomically move the backup relative to the verified parent handle."""
+        import ctypes
+        from ctypes import wintypes
+
+        parent_handle = parent.windows_parent_handle
+        if parent_handle is None:
+            raise RuntimeError("Transaction recovery parent handle is unavailable")
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
+        create_file.argtypes = (
+            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+            wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+        )
+        create_file.restype = wintypes.HANDLE
+        desired_access = 0x80000000 | 0x00010000
+        flags = 0x00000080 | 0x00200000
+        handle = create_file(str(backup), desired_access, 0x00000001, None, 3, flags, None)
+        value = int(getattr(handle, "value", handle)) if handle is not None else -1
+        if value == ctypes.c_void_p(-1).value:
+            raise OSError(ctypes.get_last_error(), "cannot open transaction backup")
+
+        class _FileRenameInfoHeader(ctypes.Structure):
+            _fields_ = (
+                ("replace_if_exists", wintypes.BOOLEAN),
+                ("root_directory", wintypes.HANDLE),
+                ("file_name_length", wintypes.DWORD),
+                ("file_name", wintypes.WCHAR * 1),
+            )
+
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = (wintypes.HANDLE,)
+        close_handle.restype = wintypes.BOOL
+        try:
+            file_name = record.target.name.encode("utf-16-le")
+            buffer_size = ctypes.sizeof(_FileRenameInfoHeader) + len(file_name)
+            buffer = ctypes.create_string_buffer(buffer_size)
+            info = _FileRenameInfoHeader.from_buffer(buffer)
+            info.replace_if_exists = True
+            info.root_directory = wintypes.HANDLE(parent_handle)
+            info.file_name_length = len(file_name)
+            ctypes.memmove(
+                ctypes.addressof(buffer) + _FileRenameInfoHeader.file_name.offset,
+                file_name,
+                len(file_name),
+            )
+            class _IoStatusBlock(ctypes.Structure):
+                _fields_ = (
+                    ("status", ctypes.c_void_p),
+                    ("information", ctypes.c_size_t),
+                )
+
+            ntdll = ctypes.WinDLL("ntdll")
+            rename = ntdll.NtSetInformationFile
+            rename.argtypes = (
+                wintypes.HANDLE,
+                ctypes.POINTER(_IoStatusBlock),
+                wintypes.LPVOID,
+                wintypes.ULONG,
+                ctypes.c_int,
+            )
+            rename.restype = ctypes.c_long
+            io_status = _IoStatusBlock()
+            status = rename(
+                wintypes.HANDLE(value), ctypes.byref(io_status), buffer,
+                buffer_size, 10,
+            )
+            if status != 0:
+                convert_error = ntdll.RtlNtStatusToDosError
+                convert_error.argtypes = (ctypes.c_long,)
+                convert_error.restype = wintypes.ULONG
+                error = int(convert_error(status))
+                raise OSError(error, "cannot restore transaction backup")
+        finally:
+            close_handle(wintypes.HANDLE(value))
+
+    def _restore_backup_posix(
+        self,
+        record: _Backup,
+        backup: Path,
+        parent: _RecoveryParent,
+    ) -> None:
+        """Restore relative to a verified directory descriptor on POSIX."""
+        parent_fd = parent.fd
+        if parent_fd is None:
+            raise RuntimeError("Transaction recovery parent handle is unavailable")
+        temporary_name = f".{record.target.name}.{uuid.uuid4().hex}.rollback"
+        descriptor = -1
+        try:
+            descriptor = os.open(
+                temporary_name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=parent_fd,
+            )
+            with os.fdopen(descriptor, "wb") as output, backup.open("rb") as source:
+                descriptor = -1
+                shutil.copyfileobj(source, output)
+                output.flush()
+                if record.original_mode is None or record.original_mtime_ns is None:
+                    raise RuntimeError("Transaction backup metadata is unavailable")
+                os.fchmod(output.fileno(), record.original_mode & 0o7777)
+                atime_ns = (
+                    record.original_atime_ns
+                    if record.original_atime_ns is not None
+                    else record.original_mtime_ns
+                )
+                os.utime(
+                    output.fileno(),
+                    ns=(atime_ns, record.original_mtime_ns),
+                )
+                os.fsync(output.fileno())
+            os.replace(
+                temporary_name,
+                record.target.name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=parent_fd,
+            )
+            os.fsync(parent_fd)
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            try:
+                os.unlink(temporary_name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+
+    def _delete_new_target(
+        self,
+        record: _Backup,
+        parent: _RecoveryParent,
+    ) -> None:
+        target = record.target
+        if os.name != "nt":
+            if parent.fd is None:
+                raise RuntimeError("Transaction recovery parent handle is unavailable")
+            try:
+                info = os.stat(target.name, dir_fd=parent.fd, follow_symlinks=False)
+            except FileNotFoundError:
+                return
+            if stat.S_ISDIR(info.st_mode):
+                raise ValueError("Transaction cannot safely remove a new directory")
+            if record.mutation.identity != (int(info.st_dev), int(info.st_ino)):
+                raise ValueError("Transaction created target identity changed")
+            os.unlink(target.name, dir_fd=parent.fd)
+            os.fsync(parent.fd)
+            return
+        self._delete_new_target_windows(record, parent)
+
+    @classmethod
+    def _delete_new_target_windows(
+        cls,
+        record: _Backup,
+        parent: _RecoveryParent,
+    ) -> None:
+        """Delete a regular file by handle after binding it to the opened parent."""
+        import ctypes
+        from ctypes import wintypes
+        import ntpath
+
+        parent_handle = parent.windows_parent_handle
+        if parent_handle is None:
+            raise RuntimeError("Transaction recovery parent handle is unavailable")
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
+        create_file.argtypes = (
+            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+            wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+        )
+        create_file.restype = wintypes.HANDLE
+        desired_access = 0x00010000 | 0x00000080
+        flags = 0x00000080 | 0x00200000
+        handle = create_file(
+            str(record.target), desired_access, 0x00000001 | 0x00000002,
+            None, 3, flags, None,
+        )
+        value = int(getattr(handle, "value", handle)) if handle is not None else -1
+        invalid = ctypes.c_void_p(-1).value
+        if value == invalid:
+            error = ctypes.get_last_error()
+            if error in {2, 3}:
+                return
+            raise OSError(error, "cannot open transaction target")
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = (wintypes.HANDLE,)
+        close_handle.restype = wintypes.BOOL
+        try:
+            target_path = cls._windows_final_path(value)
+            parent_path = cls._windows_final_path(parent_handle)
+            if ntpath.normcase(ntpath.dirname(target_path)) != ntpath.normcase(parent_path):
+                raise ValueError("Transaction recovery parent identity changed")
+
+            from nz_coder.foundation.project_control import _windows_handle_info
+
+            attributes, device, inode, _size = _windows_handle_info(value, full=True)
+            if attributes & (0x400 | 0x10) or record.mutation.identity != (device, inode):
+                raise ValueError("Transaction created target identity changed")
+
+            class _FileDispositionInfo(ctypes.Structure):
+                _fields_ = (("delete_file", wintypes.BOOLEAN),)
+
+            disposition = _FileDispositionInfo(True)
+            delete = kernel32.SetFileInformationByHandle
+            delete.argtypes = (
+                wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+            )
+            delete.restype = wintypes.BOOL
+            if not delete(
+                wintypes.HANDLE(value), 4, ctypes.byref(disposition),
+                ctypes.sizeof(disposition),
+            ):
+                raise OSError(ctypes.get_last_error(), "cannot remove transaction target")
+        finally:
+            close_handle(wintypes.HANDLE(value))
+
+    @staticmethod
+    def _windows_final_path(handle: int) -> str:
+        """Return the normalized DOS path represented by one Windows handle."""
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        final_path = kernel32.GetFinalPathNameByHandleW
+        final_path.argtypes = (
+            wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD,
+        )
+        final_path.restype = wintypes.DWORD
+        required = final_path(wintypes.HANDLE(handle), None, 0, 0)
+        if not required:
+            raise OSError(ctypes.get_last_error(), "cannot resolve recovery handle")
+        buffer = ctypes.create_unicode_buffer(required + 1)
+        written = final_path(wintypes.HANDLE(handle), buffer, len(buffer), 0)
+        if not written or written >= len(buffer):
+            raise OSError(ctypes.get_last_error(), "cannot resolve recovery handle")
+        value = buffer.value
+        return value[4:] if value.startswith("\\\\?\\") else value
+
+    @staticmethod
+    def _fsync_directory(path: Path) -> None:
+        if os.name == "nt":
+            return
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def _cleanup_backup_dir(self) -> None:
         if self._backup_dir and self._backup_dir.exists():
-            shutil.rmtree(str(self._backup_dir), ignore_errors=True)
+            shutil.rmtree(self._backup_dir, ignore_errors=True)
         self._backup_dir = None
+
+
+__all__ = ["TransactionManager"]

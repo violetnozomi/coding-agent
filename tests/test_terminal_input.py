@@ -11,6 +11,7 @@ from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 
 from nz_coder.interface.commands import build_default_registry
+from nz_coder.foundation.user_paths import user_storage_layout
 from nz_coder.interface.terminal_input import (
     TerminalInputAction,
     TerminalCompleter,
@@ -106,7 +107,7 @@ def test_workspace_scan_ignores_runtime_bulk_and_symlink_files(tmp_path):
         outside.unlink(missing_ok=True)
 
 
-def test_history_file_is_workspace_owned_and_private(tmp_path, monkeypatch):
+def test_history_file_is_user_owned_and_private(tmp_path, monkeypatch):
     import nz_coder.interface.terminal_input as terminal_input
 
     hardened = []
@@ -117,7 +118,12 @@ def test_history_file_is_workspace_owned_and_private(tmp_path, monkeypatch):
     )
     history = _prepare_history_path(tmp_path)
 
-    assert history == tmp_path / ".nz-coder" / "prompt-history"
+    assert history == (
+        user_storage_layout(tmp_path).workspace_state
+        / "terminal"
+        / "prompt-history"
+    )
+    assert tmp_path not in history.parents
     assert history.exists()
     assert os.stat(history).st_mode & 0o777 == 0o600
     assert history.parent in hardened

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 
+from nz_coder.protocol.public_error import PublicInputError, format_public_error
 from nz_coder.tools import ToolOutput, current_tool_cancel_event, register
 from nz_coder.capabilities.web_search import search_web
 
@@ -15,10 +16,10 @@ def web_search(query: str, limit: int = 8, timeout: float = 20.0) -> str:
     try:
         bounded_limit = max(1, min(int(limit), 20))
         if isinstance(timeout, bool):
-            raise ValueError("timeout must be a positive finite number")
+            raise PublicInputError("timeout must be a positive finite number")
         bounded_timeout = float(timeout)
         if not math.isfinite(bounded_timeout) or bounded_timeout <= 0:
-            raise ValueError("timeout must be a positive finite number")
+            raise PublicInputError("timeout must be a positive finite number")
         bounded_timeout = min(bounded_timeout, 60.0)
         provider, results = search_web(
             query,
@@ -43,9 +44,9 @@ def web_search(query: str, limit: int = 8, timeout: float = 20.0) -> str:
             metadata={"provider": provider, "result_count": len(results)},
         )
     except (RuntimeError, TypeError, ValueError) as exc:
-        return f"Error: {exc}"
+        return format_public_error(exc)
     except Exception as exc:
-        return f"Error: {type(exc).__name__}: {exc}"
+        return format_public_error(exc)
 
 
 register(

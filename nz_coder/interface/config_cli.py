@@ -11,6 +11,11 @@ from rich.console import Console
 from rich.table import Table
 
 from nz_coder.foundation import config
+from nz_coder.foundation.workspace_trust import (
+    WorkspaceTrustStore,
+    default_trust_store_path,
+    load_config_snapshot,
+)
 from nz_coder.mcp.config import load_mcp_server_configs
 from nz_coder.providers.models import active_model_selection
 from nz_coder.runtime.process.workdir import current_workdir
@@ -19,6 +24,7 @@ from nz_coder.runtime.process.workdir import current_workdir
 def collect_effective_config(workspace: Path | None = None) -> dict[str, dict]:
     """Collect documented product controls without exposing credential values."""
     root = (workspace or current_workdir()).resolve()
+    snapshot = load_config_snapshot(root)
     selection = active_model_selection(root)
     model_source = "environment" if "MODEL_ID" in os.environ else selection.source
     effort_source = "environment" if "MODEL_VARIANT" in os.environ else selection.source
@@ -74,6 +80,17 @@ def collect_effective_config(workspace: Path | None = None) -> dict[str, dict]:
             "source": "platform",
         },
         "daemon_endpoint": {"value": daemon_endpoint, "source": "daemon state"},
+        "config_provenance": {
+            "value": snapshot.public(),
+            "source": "typed-snapshot",
+        },
+        "config_issues": {
+            "value": [
+                {"key": item.key, "message": item.message, "source": item.source.value}
+                for item in snapshot.issues
+            ],
+            "source": "typed-snapshot",
+        },
     }
 
 
@@ -84,7 +101,88 @@ def config_main(argv: list[str] | None = None) -> int:
     show = commands.add_parser("show", help="Show effective product configuration")
     show.add_argument("--sources", action="store_true")
     show.add_argument("--json", action="store_true")
+    trust = commands.add_parser(
+        "trust",
+        help="Trust the current security-sensitive workspace configuration",
+    )
+    trust.add_argument("--workspace", type=Path, default=Path.cwd())
+    untrust = commands.add_parser(
+        "untrust",
+        help="Revoke trust for the current workspace configuration",
+    )
+    untrust.add_argument("--workspace", type=Path, default=Path.cwd())
+    untrust.add_argument(
+        "--revoke-active",
+        action="store_true",
+        help="Also stop process-local capabilities already running for this workspace",
+    )
+    delegate = commands.add_parser(
+        "delegate-provider-endpoint",
+        help="Allow the exact trusted workspace endpoint to receive owner credentials",
+    )
+    delegate.add_argument("--workspace", type=Path, default=Path.cwd())
+    delegate.add_argument("--provider", required=True)
     args = parser.parse_args(argv)
+    if args.command in {"trust", "untrust", "delegate-provider-endpoint"}:
+        root = args.workspace.expanduser().resolve(strict=True)
+        if not root.is_dir():
+            raise ValueError("Workspace must be a directory")
+        store = WorkspaceTrustStore(default_trust_store_path())
+        if args.command == "trust":
+            snapshot = load_config_snapshot(root, trust_store=store)
+            store.trust(
+                root,
+                "workspace-config",
+                snapshot.workspace_fingerprint,
+            )
+            store.trust(
+                root,
+                "workspace-control",
+                snapshot.control_fingerprint,
+            )
+            Console().print(
+                "Trusted the exact current workspace configuration fingerprint."
+            )
+        elif args.command == "untrust":
+            removed = store.remove(root, "workspace-config")
+            removed = store.remove(root, "workspace-control") or removed
+            for family in (
+                "anthropic", "gemini", "openai-responses", "openai-compatible",
+            ):
+                removed = store.remove(root, f"provider-endpoint:{family}") or removed
+            from nz_coder.foundation.capability_lease import capability_leases
+
+            leases = capability_leases()
+            active = leases.list_workspace(root)
+            if args.revoke_active:
+                outcome = leases.revoke_workspace(root)
+                Console().print(
+                    f"Revoked workspace configuration trust; revoked "
+                    f"{outcome.revoked} active capability lease(s), "
+                    f"{outcome.failed} failed."
+                )
+            else:
+                prefix = (
+                    "Revoked workspace configuration trust."
+                    if removed else "Workspace configuration was not trusted."
+                )
+                Console().print(
+                    f"{prefix} This affects the next Run only; "
+                    f"{len(active)} active capability lease(s) remain. "
+                    "Use --revoke-active to stop process-local owned resources."
+                )
+        else:
+            from nz_coder.providers.configuration import trust_provider_endpoint
+
+            snapshot = load_config_snapshot(root, trust_store=store)
+            trust_provider_endpoint(
+                args.provider, config_snapshot=snapshot, trust_store=store,
+            )
+            Console().print(
+                "Delegated owner credentials to the exact current workspace "
+                f"endpoint for provider '{args.provider}'."
+            )
+        return 0
     values = collect_effective_config()
     projected = values if args.sources else {
         key: record["value"] for key, record in values.items()

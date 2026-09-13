@@ -7,6 +7,17 @@ from pathlib import Path
 import pytest
 
 
+def _trust_project_control(workspace, monkeypatch):
+    from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+
+    trust_path = workspace.parent / f"{workspace.name}-lifecycle-trust.json"
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+    snapshot = load_config_snapshot(workspace)
+    WorkspaceTrustStore(trust_path).trust(
+        workspace, "workspace-control", snapshot.control_fingerprint
+    )
+
+
 def _capsule(name: str, description: str = "saved") -> dict:
     from nz_coder.runtime.workflows.workflow_capsule import create_workflow_capsule
 
@@ -72,7 +83,7 @@ def test_saved_capsule_delete_is_recoverable_private_trash(tmp_path):
     assert (path.parent.stat().st_mode & 0o777) == 0o700
 
 
-def test_saved_capsule_replace_preserves_prior_revision(tmp_path):
+def test_saved_capsule_replace_preserves_prior_revision(tmp_path, monkeypatch):
     from nz_coder.runtime.workflows.workflow_library import (
         load_workflow_capsule,
         replace_workflow_capsule,
@@ -83,6 +94,7 @@ def test_saved_capsule_replace_preserves_prior_revision(tmp_path):
     result = replace_workflow_capsule(
         "audit", _capsule("audit", "new"), workspace=tmp_path
     )
+    _trust_project_control(tmp_path, monkeypatch)
     current, _ref = load_workflow_capsule("audit", workspace=tmp_path)
     prior = json.loads(Path(result["previous_revision"]).read_text(encoding="utf-8"))
 

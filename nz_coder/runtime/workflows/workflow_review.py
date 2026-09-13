@@ -9,6 +9,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from nz_coder.foundation.user_paths import prepare_user_storage
+
 
 _DIFF_HEADER = re.compile(r"^diff --git a/(.+?) b/(.+?)$", re.MULTILINE)
 _MAX_DIFF_BYTES = 4 * 1024 * 1024
@@ -93,7 +95,12 @@ def write_review_packets(
     budget = max(4096, min(int(chunk_bytes), 256 * 1024))
     range_id = _sha256(diff)
     root = workspace.resolve()
-    packet_dir = root / ".nz-coder" / "review-packets" / _safe(session_id) / range_id
+    packet_dir = (
+        prepare_user_storage(root).workspace_state
+        / "review-packets"
+        / _safe(session_id)
+        / range_id
+    )
     packet_dir.mkdir(parents=True, exist_ok=True)
     for directory in (packet_dir.parent.parent, packet_dir.parent, packet_dir):
         os.chmod(directory, 0o700)

@@ -14,8 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.attachments import SUPPORTED_IMAGE_MIMES, make_image_attachment
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.mcp.client import MCPClient, MCPError, MCPRequestError
 from nz_coder.mcp.config import (
     MCPServerConfig,
@@ -75,6 +76,7 @@ class MCPRuntime:
         workspace: Path | None = None,
         config_loader=None,
         config_revision=None,
+        config_refresh_loader=None,
     ):
         self.configs = list(configs)
         self._client_factory = client_factory
@@ -98,6 +100,7 @@ class MCPRuntime:
         self._workspace = (workspace or current_workdir()).resolve()
         self._config_loader = config_loader
         self._config_revision_loader = config_revision
+        self._config_refresh_loader = config_refresh_loader
         self._loaded_config_revision = (
             config_revision() if callable(config_revision) else ""
         )
@@ -105,23 +108,68 @@ class MCPRuntime:
         self._reconcile_lock = threading.RLock()
 
     @classmethod
-    def configured(cls, *, workspace: Path | None = None) -> "MCPRuntime":
+    def configured(
+        cls,
+        *,
+        workspace: Path | None = None,
+        config_snapshot=None,
+        compatibility_mode: bool = False,
+    ) -> "MCPRuntime":
         """Build the explicitly enabled runtime without starting subprocesses."""
-        if not config.MCP_ENABLED:
-            return cls([], workspace=workspace or current_workdir())
         root = (workspace or current_workdir()).resolve()
+        legacy_globals = bool(compatibility_mode)
+        if config_snapshot is None:
+            from nz_coder.foundation.workspace_trust import (
+                active_config_snapshot,
+                current_config_snapshot,
+            )
+
+            config_snapshot = active_config_snapshot(root) or current_config_snapshot(root)
+        enabled = (
+            current_run_settings().mcp_enabled
+            if legacy_globals
+            else config_snapshot.get_bool("NZ_MCP_ENABLED", False)
+        )
+        if not enabled:
+            return cls([], workspace=root)
+
+        selected_snapshot = [config_snapshot]
 
         def loader():
-            return load_mcp_server_configs(workspace=root)
+            return load_mcp_server_configs(
+                workspace=root,
+                project_control_snapshot=selected_snapshot[0].project_control,
+                config_snapshot=selected_snapshot[0],
+                compatibility_mode=legacy_globals,
+            )
 
         def revision():
-            return mcp_config_revision(root)
+            return mcp_config_revision(
+                root,
+                project_control_snapshot=selected_snapshot[0].project_control,
+                config_snapshot=selected_snapshot[0],
+                compatibility_mode=legacy_globals,
+            )
+
+        def refresh_loader():
+            from nz_coder.foundation.workspace_trust import load_config_snapshot
+
+            selected_snapshot[0] = load_config_snapshot(root)
+            return load_mcp_server_configs(
+                workspace=root,
+                project_control_snapshot=selected_snapshot[0].project_control,
+                config_snapshot=selected_snapshot[0],
+                compatibility_mode=legacy_globals,
+            )
 
         return cls(
             loader(),
             workspace=root,
-            config_loader=loader,
-            config_revision=revision,
+            # A top-level Run owns one immutable config epoch. Changes are
+            # observed only when the next Run creates its own runtime.
+            config_loader=loader if legacy_globals else None,
+            config_revision=revision if legacy_globals else None,
+            config_refresh_loader=refresh_loader if legacy_globals else None,
         )
 
     def start(self) -> "MCPRuntime":
@@ -436,10 +484,18 @@ class MCPRuntime:
         if not callable(self._config_loader):
             return False
         with self._reconcile_lock:
-            if revision is None and callable(self._config_revision_loader):
-                revision = self._config_revision_loader()
             try:
-                configs = self._config_loader()
+                if revision is None and callable(self._config_refresh_loader):
+                    configs = self._config_refresh_loader()
+                    revision = (
+                        self._config_revision_loader()
+                        if callable(self._config_revision_loader)
+                        else None
+                    )
+                else:
+                    if revision is None and callable(self._config_revision_loader):
+                        revision = self._config_revision_loader()
+                    configs = self._config_loader()
             except Exception as exc:
                 with self._state_lock:
                     self._loaded_config_revision = revision or self._loaded_config_revision
@@ -571,6 +627,7 @@ class MCPRuntime:
                 environment=server.environment_dict(),
                 startup_timeout_seconds=server.startup_timeout_seconds,
                 tool_timeout_seconds=server.tool_timeout_seconds,
+                execution_identity=server.execution_identity,
             )
         with self._state_lock:
             if self._closing:
@@ -906,7 +963,10 @@ def _tool_handler(
                 public_name=public_name,
             )
         except Exception as exc:
-            return f"Error: MCP server '{server_name}' tool '{original_name}' failed: {exc}"
+            return format_public_error(
+                exc,
+                context=f"MCP server '{server_name}' tool '{original_name}' failed: ",
+            )
 
     return handler
 

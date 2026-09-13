@@ -16,6 +16,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+from nz_coder.protocol.public_error import PublicInputError
+
 
 class RipgrepCancelled(Exception):
     """Raised after a ripgrep producer has settled cooperative cancellation."""
@@ -127,13 +130,13 @@ def decode_ripgrep_event(line: str) -> RipgrepSearchMatch | None:
     try:
         payload = json.loads(line)
     except json.JSONDecodeError as error:
-        raise ValueError("invalid ripgrep JSON output") from error
+        raise PublicInputError("invalid ripgrep JSON output") from error
     if not isinstance(payload, dict):
-        raise ValueError("invalid ripgrep JSON event")
+        raise PublicInputError("invalid ripgrep JSON event")
     event_type = payload.get("type")
     data = payload.get("data")
     if not isinstance(data, dict):
-        raise ValueError("invalid ripgrep JSON event data")
+        raise PublicInputError("invalid ripgrep JSON event data")
     if event_type == "begin":
         _path_text(data.get("path"), "begin path")
         return None
@@ -149,7 +152,7 @@ def decode_ripgrep_event(line: str) -> RipgrepSearchMatch | None:
         _validate_stats(data.get("stats"), "summary stats")
         return None
     if event_type != "match":
-        raise ValueError("invalid ripgrep JSON event type")
+        raise PublicInputError("invalid ripgrep JSON event type")
     path = _path_text(data.get("path"), "match path")
     text = _path_text(data.get("lines"), "match lines")
     raw_submatches = data.get("submatches")
@@ -190,7 +193,7 @@ def _run_ripgrep_lines(
     duration = float(timeout)
     if not math.isfinite(duration) or duration <= 0:
         raise ValueError("ripgrep timeout must be a positive finite number")
-    environment = dict(os.environ)
+    environment = build_sanitized_subprocess_env()
     environment.pop("RIPGREP_CONFIG_PATH", None)
     _raise_if_cancelled(cancel_event)
     lines: queue.Queue[str] = queue.Queue(maxsize=128)

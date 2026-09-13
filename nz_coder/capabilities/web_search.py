@@ -14,6 +14,11 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote_plus, unquote, urlencode, urlsplit
 from urllib.request import Request, build_opener
 
+from nz_coder.protocol.public_error import (
+    PublicError,
+    PublicInputError,
+    PublicRuntimeError,
+)
 
 @dataclass(frozen=True)
 class SearchResult:
@@ -120,7 +125,7 @@ class DuckDuckGoWebSearchProvider:
     ) -> list[SearchResult]:
         normalized = _clean_text(query)
         if not normalized:
-            raise ValueError("query must not be empty")
+            raise PublicInputError("query must not be empty")
         request = Request(
             f"{self.endpoint}?q={quote_plus(normalized)}",
             headers={
@@ -133,7 +138,7 @@ class DuckDuckGoWebSearchProvider:
         with build_opener().open(request, timeout=max(1.0, min(float(timeout), 60.0))) as response:
             data = response.read(2 * 1024 * 1024 + 1)
         if len(data) > 2 * 1024 * 1024:
-            raise ValueError("search response exceeds 2MB")
+            raise PublicInputError("search response exceeds 2MB")
         parser = _DuckDuckGoParser()
         parser.feed(data.decode("utf-8", errors="replace"))
         results: list[SearchResult] = []
@@ -170,7 +175,7 @@ class BingRssWebSearchProvider:
     ) -> list[SearchResult]:
         normalized = _clean_text(query)
         if not normalized:
-            raise ValueError("query must not be empty")
+            raise PublicInputError("query must not be empty")
         request = Request(
             f"{self.endpoint}?{urlencode({'format': 'rss', 'q': normalized, 'mkt': 'en-US', 'setlang': 'en-US', 'cc': 'US'})}",
             headers={
@@ -183,7 +188,7 @@ class BingRssWebSearchProvider:
         with build_opener().open(request, timeout=max(1.0, min(float(timeout), 60.0))) as response:
             data = response.read(2 * 1024 * 1024 + 1)
         if len(data) > 2 * 1024 * 1024:
-            raise ValueError("search response exceeds 2MB")
+            raise PublicInputError("search response exceeds 2MB")
         root = ET.fromstring(data)
         results: list[SearchResult] = []
         seen: set[str] = set()
@@ -220,7 +225,7 @@ class GitHubIssueSearchProvider:
     ) -> list[SearchResult]:
         normalized = _clean_text(query)
         if not normalized:
-            raise ValueError("query must not be empty")
+            raise PublicInputError("query must not be empty")
         # Provider routing words add no relevance inside GitHub's own corpus.
         github_query = re.sub(r"\b(?:github|issue|issues)\b", " ", normalized, flags=re.I)
         github_query = _clean_text(github_query) or normalized
@@ -236,11 +241,11 @@ class GitHubIssueSearchProvider:
         with build_opener().open(request, timeout=max(1.0, min(float(timeout), 60.0))) as response:
             data = response.read(2 * 1024 * 1024 + 1)
         if len(data) > 2 * 1024 * 1024:
-            raise ValueError("search response exceeds 2MB")
+            raise PublicInputError("search response exceeds 2MB")
         payload = json.loads(data)
         items = payload.get("items") if isinstance(payload, dict) else None
         if not isinstance(items, list):
-            raise ValueError("GitHub issue search returned an invalid response")
+            raise PublicInputError("GitHub issue search returned an invalid response")
         results: list[SearchResult] = []
         for item in items:
             if not isinstance(item, dict):
@@ -331,7 +336,7 @@ def default_web_search_provider() -> WebSearchProvider | None:
         return BingRssWebSearchProvider()
     if selected in {"github", "github-issues"}:
         return GitHubIssueSearchProvider()
-    raise ValueError(f"Unsupported web search provider: {selected}")
+    raise PublicInputError(f"Unsupported web search provider: {selected}")
 
 
 def current_web_search_provider() -> WebSearchProvider | None:
@@ -350,13 +355,23 @@ def scoped_web_search_provider(provider: WebSearchProvider | None):
 def search_web(query: str, *, limit: int = 8, timeout: float = 20.0) -> tuple[str, list[SearchResult]]:
     provider = current_web_search_provider()
     if provider is None:
-        raise RuntimeError("Web search is disabled; set NZ_CODER_WEB_SEARCH_PROVIDER")
+        raise PublicInputError(
+            "Web search is disabled; set NZ_CODER_WEB_SEARCH_PROVIDER"
+        )
     try:
         return provider.name, provider.search(query, limit=limit, timeout=timeout)
     except HTTPError as exc:
-        raise RuntimeError(f"Web search HTTP {exc.code}") from exc
+        raise PublicRuntimeError(PublicError(
+            "web_search_http",
+            f"Web search HTTP {exc.code}",
+            retryable=exc.code in {408, 425, 429} or exc.code >= 500,
+        )) from exc
     except URLError as exc:
-        raise RuntimeError(f"Web search request failed: {exc.reason}") from exc
+        raise PublicRuntimeError(PublicError(
+            "web_search_unavailable",
+            "Web search request failed.",
+            retryable=True,
+        )) from exc
 
 
 __all__ = [

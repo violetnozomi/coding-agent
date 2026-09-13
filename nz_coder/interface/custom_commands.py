@@ -4,11 +4,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
-from typing import Iterable
+from typing import Iterable, TYPE_CHECKING
 
 import yaml
 
 from nz_coder.interface.commands.registry import Command, CommandRegistry
+
+if TYPE_CHECKING:
+    from nz_coder.foundation.project_control import ProjectControlSnapshot
+    from nz_coder.foundation.workspace_trust import ConfigSnapshot
 
 
 _NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
@@ -66,6 +70,9 @@ class CommandCatalog:
         project_dir: Path | str | None = None,
         user_dir: Path | str | None = None,
         bundled_dir: Path | str | None = None,
+        project_files: Iterable[Path] | None = None,
+        project_trusted: bool = False,
+        project_control_snapshot: ProjectControlSnapshot | None = None,
     ) -> "CommandCatalog":
         """Load bundled < user < project, so later scopes replace by name."""
         commands: dict[str, PromptCommand] = {}
@@ -73,7 +80,6 @@ class CommandCatalog:
         for source, directory in (
             ("bundled", bundled_dir),
             ("user", user_dir),
-            ("project", project_dir),
         ):
             if directory is None:
                 continue
@@ -83,6 +89,23 @@ class CommandCatalog:
             for path in sorted(root.glob("*.md")):
                 try:
                     command = _parse_command(path, source)
+                except CommandParseError as exc:
+                    errors.append(exc)
+                    continue
+                commands[command.name] = command
+        if (
+            project_control_snapshot is not None
+            and project_control_snapshot.trusted
+        ):
+            root = Path(project_dir).expanduser() if project_dir is not None else None
+            for item in project_control_snapshot.files_for_kind("command"):
+                path = (
+                    root / Path(item.relative_path).name
+                    if root is not None
+                    else Path(item.relative_path)
+                )
+                try:
+                    command = _parse_command_bytes(path, "project", item.content)
                 except CommandParseError as exc:
                     errors.append(exc)
                     continue
@@ -122,11 +145,20 @@ class CommandCatalog:
         return self.expand(command.name, args if separator else "") if command else None
 
 
-def default_command_catalog(workspace: Path | str) -> CommandCatalog:
+def default_command_catalog(
+    workspace: Path | str,
+    *,
+    config_snapshot: ConfigSnapshot | None = None,
+) -> CommandCatalog:
     """Resolve the standard runtime-owned command scopes."""
+    from nz_coder.foundation.workspace_trust import load_config_snapshot
+
     root = Path(workspace).resolve()
+    snapshot = config_snapshot or load_config_snapshot(root)
     return CommandCatalog.discover(
         project_dir=root / ".nz-coder" / "commands",
+        project_trusted=snapshot.control_plane_trusted,
+        project_control_snapshot=snapshot.project_control,
         user_dir=Path.home() / ".nz-coder" / "commands",
         bundled_dir=Path(__file__).resolve().parent.parent / "bundled_commands",
     )
@@ -168,6 +200,26 @@ def _parse_command(path: Path, source: str) -> PromptCommand:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise CommandParseError(path, str(exc)) from exc
+    return _parse_command_text(path, source, raw)
+
+
+def _parse_command_bytes(path: Path, source: str, payload: bytes) -> PromptCommand:
+    if len(payload) > _MAX_COMMAND_BYTES:
+        raise CommandParseError(path, "command exceeds 256 KiB")
+    try:
+        raw = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CommandParseError(path, "command is not valid UTF-8") from exc
+    return _parse_command_text(path, source, raw)
+
+
+def _parse_command_text(path: Path, source: str, raw: str) -> PromptCommand:
+    # Snapshot bytes preserve the on-disk newline convention.  Normalize it so
+    # immutable project commands parse identically on Windows and POSIX.
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+    name = path.stem.lower()
+    if not _NAME.fullmatch(name):
+        raise CommandParseError(path, "filename must match [a-z0-9][a-z0-9_-]*.md")
     metadata, template = _frontmatter(path, raw)
     unknown = sorted(set(metadata) - _ALLOWED_FRONTMATTER)
     if unknown:
@@ -192,7 +244,7 @@ def _parse_command(path: Path, source: str) -> PromptCommand:
         allowed_tools=tuple(dict.fromkeys(item.strip() for item in allowed)),
         model=model.strip() if isinstance(model, str) else None,
         source=source,
-        path=path.resolve(),
+        path=path.absolute(),
     )
 
 
@@ -205,7 +257,7 @@ def _frontmatter(path: Path, raw: str) -> tuple[dict, str]:
     try:
         parsed = yaml.safe_load(raw[4:marker]) or {}
     except yaml.YAMLError as exc:
-        raise CommandParseError(path, f"invalid YAML frontmatter: {exc}") from exc
+        raise CommandParseError(path, "invalid YAML frontmatter") from exc
     if not isinstance(parsed, dict):
         raise CommandParseError(path, "frontmatter must be a mapping")
     return parsed, raw[marker + 5:]

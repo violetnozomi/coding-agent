@@ -12,9 +12,14 @@ import threading
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from nz_coder.foundation import config
+from nz_coder.runtime.core.run_settings import RunSettings, current_run_settings
 from nz_coder.protocol.attachments import normalize_attachments
 from nz_coder.providers import create_provider
+from nz_coder.providers.configuration import (
+    ProviderConnection,
+    image_provider_connection,
+    provider_connection,
+)
 from nz_coder.runtime.model_gateway import (
     ModelCall,
     ModelCallPurpose,
@@ -24,6 +29,7 @@ from nz_coder.runtime.model_gateway import (
     resolve_model_runtime,
 )
 from nz_coder.foundation.async_utils import to_thread_settled
+from nz_coder.protocol.public_error import to_public_error
 
 
 DescribeCallable = Callable[[dict, str], Awaitable[str]]
@@ -42,34 +48,66 @@ class ProviderImageDescriber:
         *,
         provider: Any = None,
         client: Any = None,
-        api_key: str = "",
-        base_url: str = "",
+        connection: ProviderConnection | None = None,
         max_tokens: int = 1200,
+        timeout_seconds: float = 600.0,
         observer: Callable[[str, dict], None] | None = None,
     ) -> None:
         self.provider_name = str(provider_name or "").strip().lower()
         self.model_id = str(model_id or "").strip()
         self.provider = provider
         self.client = client
-        self.api_key = str(api_key or "")
-        self.base_url = str(base_url or "")
+        self.connection = connection
         self.max_tokens = max(64, int(max_tokens))
+        self.timeout_seconds = max(1.0, float(timeout_seconds))
         self.observer = observer
         self._model_runtime = None
+
+    @property
+    def runtime_identity(self) -> tuple[object, ...]:
+        connection = self.connection
+        return (
+            self.provider_name,
+            self.model_id,
+            connection.credential_scope_id if connection else "injected-provider",
+            (connection.base_url.rstrip("/") if connection else ""),
+            self.max_tokens,
+            self.timeout_seconds,
+        )
+
+    @property
+    def api_key(self) -> str:
+        """Compatibility view backed by the source-aware connection."""
+        return self.connection.api_key if self.connection is not None else ""
+
+    @property
+    def base_url(self) -> str:
+        """Compatibility view backed by the source-aware connection."""
+        return self.connection.base_url if self.connection is not None else ""
 
     @classmethod
     def configured(
         cls,
         *,
         observer: Callable[[str, dict], None] | None = None,
+        run_settings: RunSettings | None = None,
     ) -> "ProviderImageDescriber":
         """Build the lazy descriptor selected by environment configuration."""
+        settings = run_settings or current_run_settings()
+        snapshot = settings.snapshot
+        connection = (
+            image_provider_connection(
+                settings.image_provider, config_snapshot=snapshot,
+            )
+            if snapshot is not None
+            else provider_connection(settings.image_provider)
+        )
         return cls(
-            config.IMAGE_DESCRIBE_PROVIDER,
-            config.IMAGE_DESCRIBE_MODEL,
-            api_key=config.IMAGE_DESCRIBE_API_KEY,
-            base_url=config.IMAGE_DESCRIBE_BASE_URL,
-            max_tokens=config.IMAGE_DESCRIBE_MAX_TOKENS,
+            settings.image_provider,
+            settings.image_model,
+            connection=connection,
+            max_tokens=settings.image_max_tokens,
+            timeout_seconds=settings.provider_hard_timeout,
             observer=observer,
         )
 
@@ -95,21 +133,32 @@ class ProviderImageDescriber:
         prompt: str,
         cancel_event: threading.Event | None = None,
     ) -> str:
-        if self.provider is None:
+        created_provider = self.provider is None
+        if created_provider:
             self.provider = create_provider(
                 self.provider_name,
-                api_key=self.api_key or None,
-                base_url=self.base_url or None,
+                connection=self.connection,
             )
         if self._model_runtime is None:
-            self._model_runtime = resolve_model_runtime(
-                ModelSelectionRequest(
-                    provider_name=self.provider_name,
-                    model_id=self.model_id,
-                    provider=self.provider,
-                    client=self.client,
+            try:
+                self._model_runtime = resolve_model_runtime(
+                    ModelSelectionRequest(
+                        provider_name=self.provider_name,
+                        model_id=self.model_id,
+                        provider=self.provider,
+                        client=self.client,
+                    )
                 )
-            )
+            except BaseException:
+                if created_provider:
+                    close = getattr(self.provider, "close", None)
+                    if callable(close):
+                        try:
+                            close()
+                        except BaseException:
+                            pass
+                    self.provider = None
+                raise
             self.client = self._model_runtime.client
         capabilities = self._model_runtime.capabilities
         if not capabilities.supports_image_input:
@@ -130,7 +179,7 @@ class ProviderImageDescriber:
                     "_nz_user_attachments": [normalized],
                 }],
                 max_output_tokens=self.max_tokens,
-                timeout_seconds=config.PROVIDER_HARD_TIMEOUT_SECONDS,
+                timeout_seconds=self.timeout_seconds,
                 capability_options={"stream": False},
             ),
             cancel_event=cancel_event,
@@ -181,7 +230,7 @@ async def describe_images(
                 items[index] = {
                     **items[index],
                     "status": "error",
-                    "error": str(exc)[:4000] or type(exc).__name__,
+                    "error": to_public_error(exc).message,
                 }
             else:
                 items[index] = {

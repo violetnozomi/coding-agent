@@ -2,18 +2,33 @@
 from __future__ import annotations
 
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import hashlib
+import hmac
+import os
+import threading
+import uuid
 
 from nz_coder.foundation import config
+from nz_coder.foundation.secret_values import secret_str
+from nz_coder.foundation.workspace_trust import (
+    ConfigSource,
+    ConfigValidationError,
+    WorkspaceTrustStore,
+    default_trust_store_path,
+)
 
 
 _ANTHROPIC_NAMES = {"anthropic", "claude"}
 _GEMINI_NAMES = {"gemini", "google"}
 _OPENAI_RESPONSES_NAMES = {"codex", "openai-responses", "openai_responses"}
-_CONNECTION_OVERRIDES: ContextVar[dict[str, tuple[str, str]]] = ContextVar(
+_CONNECTION_OVERRIDES: ContextVar[dict[str, tuple[str, str, str]]] = ContextVar(
     "nz_coder_provider_connection_overrides",
     default={},
 )
+_GENERATION_LOCK = threading.RLock()
+_GENERATION_SALT = os.urandom(32)
+_ENVIRONMENT_GENERATIONS: dict[str, tuple[bytes, str]] = {}
 
 
 @dataclass(frozen=True)
@@ -22,15 +37,31 @@ class ProviderConnection:
 
     provider: str
     credential_name: str
-    api_key: str
+    api_key: str = field(repr=False)
     base_url: str
+    credential_scope_id: str
+    credential_source: str
+    endpoint_source: str
+
+    def __post_init__(self) -> None:
+        """Redact the credential in generic dataclass diagnostic projections."""
+        object.__setattr__(self, "api_key", secret_str(self.api_key))
 
     @property
     def configured(self) -> bool:
         return bool(self.api_key.strip())
 
+    def __repr__(self) -> str:
+        return (
+            "ProviderConnection("
+            f"provider={self.provider!r}, configured={self.configured!r}, "
+            f"credential_source={self.credential_source!r}, "
+            f"endpoint={self.base_url!r}, endpoint_source={self.endpoint_source!r}, "
+            f"generation={self.credential_scope_id[-12:]!r})"
+        )
 
-def provider_connection(provider: str) -> ProviderConnection:
+
+def provider_connection(provider: str, *, config_snapshot=None) -> ProviderConnection:
     """Return the same credential/base selection used by Provider adapters."""
     normalized = str(provider or "").strip().lower()
     family = _provider_family(normalized)
@@ -47,33 +78,182 @@ def provider_connection(provider: str) -> ProviderConnection:
             credential_names[family],
             override[0],
             override[1],
+            f"user-connect:{family}:{override[2]}",
+            "user",
+            "user",
         )
+    def selected(key: str, default: str = "") -> str:
+        if config_snapshot is not None:
+            return config_snapshot.get(key, default)
+        return str(getattr(config, key, default))
+
+    def source(key: str) -> str:
+        if config_snapshot is None:
+            return "environment" if key in os.environ else "host-process"
+        return config_snapshot.value(key).source.value
+
+    shared_key = selected("API_KEY", "")
+    shared_source = source("API_KEY")
     if normalized in _ANTHROPIC_NAMES:
-        return ProviderConnection(
+        specific = selected("ANTHROPIC_API_KEY", shared_key)
+        api_key = specific or shared_key
+        connection = ProviderConnection(
             normalized,
             "ANTHROPIC_API_KEY (or API_KEY)",
-            config.ANTHROPIC_API_KEY,
-            config.ANTHROPIC_API_BASE_URL,
+            api_key,
+            selected("ANTHROPIC_API_BASE_URL", "https://api.anthropic.com"),
+            _environment_credential_scope("anthropic", api_key),
+            source("ANTHROPIC_API_KEY") if specific else shared_source,
+            source("ANTHROPIC_API_BASE_URL"),
         )
+        return _enforce_endpoint_delegation(connection, "anthropic", config_snapshot)
     if normalized in _GEMINI_NAMES:
-        return ProviderConnection(
+        specific = selected("GEMINI_API_KEY", shared_key)
+        api_key = specific or shared_key
+        connection = ProviderConnection(
             normalized,
             "GEMINI_API_KEY (or API_KEY)",
-            config.GEMINI_API_KEY,
-            config.GEMINI_API_BASE_URL,
+            api_key,
+            selected(
+                "GEMINI_API_BASE_URL",
+                "https://generativelanguage.googleapis.com/v1beta",
+            ),
+            _environment_credential_scope("gemini", api_key),
+            source("GEMINI_API_KEY") if specific else shared_source,
+            source("GEMINI_API_BASE_URL"),
         )
+        return _enforce_endpoint_delegation(connection, "gemini", config_snapshot)
     if normalized in _OPENAI_RESPONSES_NAMES:
-        return ProviderConnection(
+        specific = selected("OPENAI_API_KEY", shared_key)
+        api_key = specific or shared_key
+        connection = ProviderConnection(
             normalized,
             "OPENAI_API_KEY (or API_KEY)",
-            config.OPENAI_API_KEY,
-            config.OPENAI_API_BASE_URL,
+            api_key,
+            selected("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
+            _environment_credential_scope("openai-responses", api_key),
+            source("OPENAI_API_KEY") if specific else shared_source,
+            source("OPENAI_API_BASE_URL"),
         )
-    return ProviderConnection(
+        return _enforce_endpoint_delegation(
+            connection, "openai-responses", config_snapshot,
+        )
+    connection = ProviderConnection(
         normalized,
         "API_KEY",
-        config.API_KEY,
-        config.API_BASE_URL,
+        shared_key,
+        selected("API_BASE_URL", "https://api.deepseek.com"),
+        _environment_credential_scope("openai-compatible", shared_key),
+        shared_source,
+        source("API_BASE_URL"),
+    )
+    return _enforce_endpoint_delegation(
+        connection, "openai-compatible", config_snapshot,
+    )
+
+
+def image_provider_connection(
+    provider: str,
+    *,
+    config_snapshot,
+) -> ProviderConnection:
+    """Build the image sidecar connection without discarding source provenance."""
+    base = provider_connection(provider, config_snapshot=config_snapshot)
+    key_record = config_snapshot.value("NZ_IMAGE_DESCRIBE_API_KEY")
+    endpoint_record = config_snapshot.value("NZ_IMAGE_DESCRIBE_BASE_URL")
+    api_key = key_record.value if key_record.value.strip() else base.api_key
+    base_url = (
+        endpoint_record.value if endpoint_record.value.strip() else base.base_url
+    )
+    credential_source = (
+        key_record.source.value if key_record.value.strip()
+        else base.credential_source
+    )
+    endpoint_source = (
+        endpoint_record.source.value if endpoint_record.value.strip()
+        else base.endpoint_source
+    )
+    family = _provider_family(str(provider or "").strip().lower())
+    connection = ProviderConnection(
+        provider=str(provider or "").strip().lower(),
+        credential_name=(
+            "NZ_IMAGE_DESCRIBE_API_KEY"
+            if key_record.value.strip() else base.credential_name
+        ),
+        api_key=api_key,
+        base_url=base_url,
+        credential_scope_id=_environment_credential_scope(f"image:{family}", api_key),
+        credential_source=credential_source,
+        endpoint_source=endpoint_source,
+    )
+    return _enforce_endpoint_delegation(connection, family, config_snapshot)
+
+
+_OFFICIAL_ENDPOINTS = {
+    "anthropic": "https://api.anthropic.com",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta",
+    "openai-responses": "https://api.openai.com/v1",
+    "openai-compatible": "https://api.deepseek.com",
+}
+
+
+def _endpoint_fingerprint(family: str, endpoint: str) -> str:
+    payload = f"{family}\0{str(endpoint).strip().rstrip('/')}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _enforce_endpoint_delegation(
+    connection: ProviderConnection,
+    family: str,
+    config_snapshot,
+) -> ProviderConnection:
+    if config_snapshot is None:
+        return connection
+    if (
+        connection.endpoint_source != ConfigSource.TRUSTED_WORKSPACE.value
+        or connection.credential_source not in {
+            ConfigSource.ENVIRONMENT.value, ConfigSource.USER.value,
+        }
+        or connection.base_url.rstrip("/") == _OFFICIAL_ENDPOINTS[family].rstrip("/")
+    ):
+        return connection
+    store = WorkspaceTrustStore(default_trust_store_path())
+    trusted = store.is_trusted(
+        config_snapshot.workspace,
+        f"provider-endpoint:{family}",
+        _endpoint_fingerprint(family, connection.base_url),
+    )
+    if not trusted:
+        raise ConfigValidationError(
+            "Workspace Provider endpoint requires explicit credential delegation"
+        )
+    return connection
+
+
+def trust_provider_endpoint(
+    provider: str,
+    *,
+    config_snapshot,
+    trust_store: WorkspaceTrustStore | None = None,
+) -> None:
+    """Delegate owner credentials to the exact current workspace endpoint."""
+    normalized = str(provider or "").strip().lower()
+    family = _provider_family(normalized)
+    endpoint_keys = {
+        "anthropic": "ANTHROPIC_API_BASE_URL",
+        "gemini": "GEMINI_API_BASE_URL",
+        "openai-responses": "OPENAI_API_BASE_URL",
+        "openai-compatible": "API_BASE_URL",
+    }
+    record = config_snapshot.value(endpoint_keys[family])
+    if record.source is not ConfigSource.TRUSTED_WORKSPACE:
+        raise ConfigValidationError(
+            "Provider endpoint delegation requires a trusted-workspace endpoint"
+        )
+    (trust_store or WorkspaceTrustStore(default_trust_store_path())).trust(
+        config_snapshot.workspace,
+        f"provider-endpoint:{family}",
+        _endpoint_fingerprint(family, record.value),
     )
 
 
@@ -81,13 +261,38 @@ def set_provider_connection_override(provider: str, api_key: str, base_url: str)
     """Set one context-local live connection after an explicit terminal login."""
     family = _provider_family(str(provider or "").strip().lower())
     current = dict(_CONNECTION_OVERRIDES.get())
-    current[family] = (str(api_key), str(base_url))
+    key = str(api_key)
+    endpoint = str(base_url)
+    previous = current.get(family)
+    generation = (
+        previous[2]
+        if previous is not None and previous[:2] == (key, endpoint)
+        else uuid.uuid4().hex
+    )
+    current[family] = (key, endpoint, generation)
     _CONNECTION_OVERRIDES.set(current)
 
 
 def clear_provider_connection_overrides() -> None:
     """Clear live connection overrides in the current execution context."""
     _CONNECTION_OVERRIDES.set({})
+
+
+def _environment_credential_scope(family: str, api_key: str) -> str:
+    """Return a random generation that rotates when credential material does."""
+    fingerprint = hmac.new(
+        _GENERATION_SALT,
+        str(api_key).encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    with _GENERATION_LOCK:
+        previous = _ENVIRONMENT_GENERATIONS.get(family)
+        if previous is not None and hmac.compare_digest(previous[0], fingerprint):
+            generation = previous[1]
+        else:
+            generation = uuid.uuid4().hex
+            _ENVIRONMENT_GENERATIONS[family] = (fingerprint, generation)
+    return f"environment:{family}:{generation}"
 
 
 def _provider_family(provider: str) -> str:
