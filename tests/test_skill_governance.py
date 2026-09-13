@@ -232,3 +232,33 @@ def test_skill_frontmatter_line_without_separator_is_invalid_metadata(tmp_path) 
     assert loader.diagnostics()["parse_errors"] == [
         {"source": "project", "directory": "malformed", "reason": "invalid_metadata"}
     ]
+
+
+def test_skill_missing_frontmatter_closing_delimiter_is_invalid(tmp_path) -> None:
+    project = tmp_path / "project"
+    directory = project / "missing-close"
+    directory.mkdir(parents=True)
+    (directory / "SKILL.md").write_text("---\nname: missing-close\nbody", encoding="utf-8")
+    loader = SkillLoader(
+        project_dir=project, user_dir=tmp_path / "user", bundled_dir=tmp_path / "bundled"
+    )
+
+    assert loader.get_skill_info("missing-close") is None
+    assert loader.diagnostics()["parse_errors"] == [
+        {"source": "project", "directory": "missing-close", "reason": "invalid_metadata"}
+    ]
+
+
+def test_skill_empty_frontmatter_is_invalid(tmp_path) -> None:
+    project = tmp_path / "project"
+    directory = project / "empty"
+    directory.mkdir(parents=True)
+    (directory / "SKILL.md").write_text("---\n---\nbody", encoding="utf-8")
+    loader = SkillLoader(
+        project_dir=project, user_dir=tmp_path / "user", bundled_dir=tmp_path / "bundled"
+    )
+
+    assert loader.get_skill_info("empty") is None
+    assert loader.diagnostics()["parse_errors"] == [
+        {"source": "project", "directory": "empty", "reason": "invalid_metadata"}
+    ]

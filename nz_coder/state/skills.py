@@ -109,6 +109,8 @@ def _parse_skill_file_with_reason(fp: Path, source: str) -> tuple[Optional[Skill
     meta: dict = {}
     m = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
     if not m:
+        if re.match(r"^---\s*(?:\n|$)", text):
+            return None, "invalid_metadata"
         # Preserve the original loader contract: a plain SKILL.md uses its
         # directory name and the complete file as its lazily loaded body.
         return Skill(
@@ -120,7 +122,10 @@ def _parse_skill_file_with_reason(fp: Path, source: str) -> tuple[Optional[Skill
             source=source,
             file_path=fp,
         ), None
-    for line in m.group(1).strip().splitlines():
+    header = m.group(1).strip()
+    if not header:
+        return None, "invalid_metadata"
+    for line in header.splitlines():
         if line.strip() and ":" not in line:
             return None, "invalid_metadata"
         if ":" in line:

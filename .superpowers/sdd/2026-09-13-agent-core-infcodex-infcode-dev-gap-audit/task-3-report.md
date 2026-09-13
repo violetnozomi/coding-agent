@@ -23,6 +23,12 @@
 
 No known concerns remain after restoring the legacy no-frontmatter behavior.
 
+## Follow-up delimiter fix
+
+Delimiter-prefixed files with a missing closing `---` and files containing an empty frontmatter block are now diagnosed as `invalid_metadata`. Legacy fallback remains limited to files that do not begin with a frontmatter delimiter. Added focused regression tests for both cases.
+
+Follow-up verification: 31 tests passed across governance, extensions, and skill loading; compileall and `git diff --check` passed.
+
 ## Follow-up review fix
 
 Restored legacy compatibility for plain-text `SKILL.md` files: they use the directory name, remain available to `load()`, and load the complete file body without a diagnostics parse error. Frontmatter blocks now reject non-empty lines without a `:` separator as `invalid_metadata`, with focused regression coverage.
