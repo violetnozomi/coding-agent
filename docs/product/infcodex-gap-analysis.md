@@ -17,6 +17,11 @@ Selector 最多 200 轮）。NZ-Coder 这次 Pro 试跑则是单一 Agent、单�
 compaction，且有 86 个 failure-repair turns。最近的 Ansible Pro 试跑在 20 轮时
 没有编辑，提到 80 轮后在第 28 次调用被停止时仍没有编辑。
 
+当前候选分支已将前三项低风险控制改进落地并通过定向回归；最新提交为
+`a457e51ae422212515f69985798caab4872b0321`（strict/SWE profile 也纳入收敛门）。
+受影响测试集合最后一次复跑为 `491 passed`；该数字是本地回归通过数，不是
+SWE-bench Pro 的通过率。
+
 ## 🔍 可核查的对照
 
 | 能力 | NZ-Coder 当前证据 | InfCodeX 公开实现 | 对结果的影响 |
