@@ -14,7 +14,9 @@ def test_snapshot_covers_every_product_surface_with_same_contract():
     snapshots = [capability_snapshot(surface) for surface in ProductSurface]
 
     assert all(snapshot == snapshots[0] for snapshot in snapshots)
-    assert [row["name"] for row in snapshots[0]] == sorted(PRODUCT_CAPABILITY_FINGERPRINT)
+    names = [row["name"] for row in snapshots[0]]
+    assert names == sorted(PRODUCT_CAPABILITY_FINGERPRINT)
+    assert names == [row["name"] for row in capability_snapshot("sdk")]
 
 
 def test_snapshot_has_exact_unique_names_and_allowed_statuses():
@@ -48,4 +50,3 @@ def test_snapshot_results_are_mutation_isolated():
 
     assert second[0]["name"] != "changed"
     assert second[0]["parity_note"] != "changed"
-

@@ -34,3 +34,10 @@ The snapshot is a host-neutral declaration. It does not claim that InfCodeX or i
 implementations are behaviorally equivalent; that remains an integration/conformance task.
 Two capabilities (`media_preflight` and `web_search`) are marked `partial` because their
 runtime support depends on optional/provider-specific paths.
+
+## Review follow-up
+
+The snapshot now sorts rows explicitly by capability name instead of relying on manifest
+declaration order. Evidence references for memory, repository intelligence, tool exposure,
+and web search now point to their direct owner modules. The ordering test also compares
+multiple surface calls to guard deterministic output.
