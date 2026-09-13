@@ -73,4 +73,3 @@ Each deferred row has a concrete discovery path and a reason it is not safe to m
 - Run Ruff on changed Python files if available.
 - Run the focused test files, then the repository's standard test command relevant to the changed modules.
 - A fresh review agent inspects the final diff, the audit matrix, and the test evidence after implementation. Any critical or important finding is fixed before the work is reported complete.
-

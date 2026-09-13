@@ -124,4 +124,3 @@ pytest -q tests/runtime/test_product_capability_snapshot.py tests/test_skill_gov
 python -m compileall -q nz_coder/runtime/execution/product_surfaces.py nz_coder/state/skills.py
 git diff --check
 ```
-
