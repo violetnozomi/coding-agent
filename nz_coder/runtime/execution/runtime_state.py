@@ -1575,6 +1575,30 @@ class RuntimeState:
         """Keep the legacy policy hook advisory-only for API compatibility."""
         return "allow"
 
+    def implementation_gate_active(self) -> bool:
+        """Return whether localized read-only work must yield to implementation.
+
+        The gate is deliberately evidence based: it only applies to coding tasks
+        with at least a source and test file successfully read, and it never
+        activates after a mutation.  Short runs get an earlier boundary while
+        the normal long-run profile retains a larger investigation window.
+        """
+        if self.mutation_generation > 0 or self.has_diff:
+            return False
+        if self.task_mode not in {"bugfix", "feature", "refactor", "test"}:
+            return False
+        if len(self.read_files) < 2:
+            return False
+        # Require both sides of the task boundary: a concrete source file and
+        # a concrete test file.  Reading two arbitrary source files is not
+        # enough evidence to force an implementation decision.
+        if not any(is_test_file(path) for path in self.read_files):
+            return False
+        if not any(not is_test_file(path) for path in self.read_files):
+            return False
+        threshold = max(12, min(20, self.max_turns // 4))
+        return self.investigation_calls_since_edit >= threshold
+
     def task_constraint_action(
         self,
         tool_name: str,

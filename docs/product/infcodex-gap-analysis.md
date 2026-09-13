@@ -67,6 +67,30 @@ Ansible 试跑的 29 个工具调用中有 15 次 `read_file`、6 次 `grep_sear
 
 ## 🎯 按顺序完善，而不是继续盲调轮数
 
+### 第一项已落地（2026-09-13）
+
+已在正常交互式运行的工具策略边界加入一个证据驱动的实现收敛门：当任务被识别为
+`bugfix`/`feature`/`refactor`/`test`，尚未发生变更，且已经成功读取至少一个源码文件和
+一个测试文件时，调查调用达到动态阈值（短运行 12 次，长运行最多 20 次）后，后续
+只读调查会被明确拒绝，并返回“先编辑或运行最窄验证”的可操作工具结果。编辑、diff、
+验证和安全策略不受阻断；未定位到具体文件、非编码任务以及 strict local/SWE 推理
+profile 保持原有行为。该门由 `RuntimeState.implementation_gate_active()` 和
+`ProductionToolPolicy.strict_progress_rejections()` 共同实现，避免把全局轮数或超时阈值
+当成质量策略。
+
+回归先在旧实现上得到预期失败，再在修复后通过：
+
+```text
+python3 -m pytest -q \
+  tests/runtime/tool_runtime/test_focused_policy.py::test_convergence_gate_blocks_more_investigation_after_localization
+python3 -m pytest -q tests/runtime/tool_runtime tests/test_loop_fake.py tests/test_runtime_state.py
+299 passed in 150.75s
+```
+
+这项改动只解决“已经定位后仍无止境只读调查”的控制缺口，不宣称已经解决上下文压缩、
+多候选编排或 SWE-bench Pro 的整体通过率；下一项仍应先为 Provider length/compaction
+建立确定性回归。
+
 ### 1. 先做调查→编辑收敛门（优先级 P0）
 
 在不改变权限和文件安全的前提下，为每次运行记录只读调查次数、是否已发现目标

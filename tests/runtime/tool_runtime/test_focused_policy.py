@@ -419,6 +419,45 @@ def test_product_phase_policy_allows_new_read_after_localization() -> None:
     assert rejected == {}
 
 
+def test_convergence_gate_blocks_more_investigation_after_localization() -> None:
+    """Once source and test evidence are known, reserve the next call for mutation."""
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    state.reset(max_turns=20)
+    state.task_mode = "bugfix"
+    state.read_files = ["src/parser.py", "tests/test_parser.py"]
+    state.investigation_calls_since_edit = 12
+    context = _context()
+    context.runtime_state = state
+    calls = [
+        {
+            "id": "late-search",
+            "function": {
+                "name": "grep_search",
+                "arguments": {"pattern": "same-clue"},
+            },
+        },
+        {
+            "id": "edit",
+            "function": {
+                "name": "edit_file",
+                "arguments": {
+                    "path": "src/parser.py",
+                    "old_text": "old",
+                    "new_text": "new",
+                },
+            },
+        },
+    ]
+
+    rejected = ProductionToolPolicy().strict_progress_rejections(context, calls)
+
+    assert list(rejected) == [0]
+    assert rejected[0].metadata["guardrail"] == "implementation_convergence"
+    assert "edit" in rejected[0].output.lower()
+
+
 def test_task_constraint_gate_blocks_explicitly_forbidden_test_mutation() -> None:
     context = _context()
     context.runtime_state.task_constraint_action = (

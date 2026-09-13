@@ -170,8 +170,58 @@ class ProductionToolPolicy:
         context: ToolPolicyContext,
         tool_calls: list[dict],
     ) -> dict[int, ToolExecutionResult]:
-        """Keep the legacy hook as an advisory-only compatibility no-op."""
-        return {}
+        """Reserve the next step for implementation after localized evidence.
+
+        This is intentionally narrower than a global read limit.  RuntimeState
+        enables it only when a coding task has read concrete source/test files
+        and has not mutated anything yet; unrelated or unlocalized exploration
+        remains available.
+        """
+        state = context.runtime_state
+        gate = getattr(state, "implementation_gate_active", None)
+        classify = getattr(state, "is_investigation_call", None)
+        # Strict local/SWE inference keeps its historical read surface; this
+        # product convergence gate applies to the normal interactive profile.
+        if strict_local_tools() or not callable(gate) or not gate() or not callable(classify):
+            return {}
+        rejected: dict[int, ToolExecutionResult] = {}
+        for index, tool_call in enumerate(tool_calls):
+            function = tool_call.get("function", {})
+            name = str(function.get("name") or "")
+            tool_input = context.parse_input(function.get("arguments", {}))
+            if not classify(name, tool_input):
+                continue
+            rejected[index] = ToolExecutionResult(
+                name=name,
+                tool_input=tool_input,
+                output=(
+                    "Denied: investigation is converged on concrete source and test files. "
+                    "Make the smallest relevant edit (or run the narrowest verification) "
+                    "before doing more read-only exploration."
+                ),
+                executed=False,
+                dispatch_failed=True,
+                command_failed=False,
+                is_write=False,
+                permission_denied=False,
+                title="Implementation convergence gate",
+                metadata={
+                    "guardrail": "implementation_convergence",
+                    "investigation_calls": int(
+                        getattr(state, "investigation_calls_since_edit", 0)
+                    ),
+                    "read_files": list(getattr(state, "read_files", ()))[:8],
+                },
+            )
+            state.strict_progress_blocks = int(
+                getattr(state, "strict_progress_blocks", 0)
+            ) + 1
+            context.trace(
+                "implementation_convergence_blocked",
+                name=name,
+                investigation_calls=state.investigation_calls_since_edit,
+            )
+        return rejected
 
 
     def strict_private_path_rejections(

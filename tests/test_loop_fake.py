@@ -294,6 +294,73 @@ def test_strict_progress_gate_does_not_block_investigation_calls_at_limit():
         _restore_workdir(old, tmp)
 
 
+def test_convergence_gate_is_connected_to_agent_loop_before_late_search():
+    """A localized short run rejects the next search and still permits editing."""
+    from nz_coder.loop import AgentLoop
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+
+    old, tmp = _tmp_workdir()
+    try:
+        (tmp / "app.py").write_text("def value():\n    return 1\n", encoding="utf-8")
+        (tmp / "tests").mkdir()
+        (tmp / "tests" / "test_app.py").write_text(
+            "def test_value():\n    assert True\n", encoding="utf-8"
+        )
+        first_batch = [
+            FakeToolCall("read_file", {"path": "app.py"}, call_id="source"),
+            FakeToolCall("read_file", {"path": "tests/test_app.py"}, call_id="tests"),
+            *[
+                FakeToolCall(
+                    "grep_search",
+                    {"pattern": f"clue-{index}", "path": "app.py"},
+                    call_id=f"grep-{index}",
+                )
+                for index in range(10)
+            ],
+        ]
+        fake = FakeClient([
+            FakeResponse(FakeMessage(tool_calls=first_batch)),
+            FakeResponse(FakeMessage(tool_calls=[
+                FakeToolCall(
+                    "grep_search",
+                    {"pattern": "late-clue", "path": "app.py"},
+                    call_id="late-search",
+                ),
+            ])),
+            FakeResponse(FakeMessage(tool_calls=[
+                FakeToolCall(
+                    "edit_file",
+                    {
+                        "path": "app.py",
+                        "old_text": "return 1",
+                        "new_text": "return 2",
+                    },
+                    call_id="edit",
+                ),
+            ])),
+            FakeResponse(FakeMessage("done")),
+        ])
+        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
+        messages = [{"role": "user", "content": "Fix the bug in app.py and add tests."}]
+
+        with scoped_runtime_overrides(max_agent_turns=20, strict_local_tools=False):
+            result = _run_agent(
+                agent,
+                messages,
+                stream=False,
+            )
+
+        assert result["status"] == "completed"
+        assert (tmp / "app.py").read_text(encoding="utf-8").endswith("return 2\n")
+        assert any(
+            "investigation is converged" in str(message.get("content") or "")
+            for message in messages
+            if message.get("role") == "tool"
+        )
+    finally:
+        _restore_workdir(old, tmp)
+
+
 def test_strict_progress_gate_allows_reads_crossing_limit_in_same_batch():
     from nz_coder.loop import AgentLoop
     from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
