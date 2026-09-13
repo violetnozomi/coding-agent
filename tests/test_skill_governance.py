@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
+
 from nz_coder.foundation.project_control import capture_project_control_snapshot
 from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.core.tool_context import ToolPolicyContext
@@ -108,13 +110,69 @@ def test_skill_enforcement_is_isolated_between_bound_sessions(tmp_path) -> None:
 
 
 def test_invalid_skill_metadata_is_excluded(tmp_path) -> None:
-    _write_skill(tmp_path / "project", "invalid", allowed="read file")
-    loader = SkillLoader(
-        project_dir=tmp_path / "project", user_dir=tmp_path / "user",
-        bundled_dir=tmp_path / "bundled",
-    )
+    project = tmp_path / ".nz-coder" / "skills"
+    _write_skill(project, "invalid", allowed="read file")
+    _write_skill(project, "valid")
+    loader = _trusted_loader(tmp_path)
 
     assert loader.get_skill_info("invalid") is None
+    assert loader.get_skill_info("valid") is not None
+    assert loader.diagnostics()["parse_errors"] == [
+        {"source": "project", "directory": "invalid", "reason": "invalid_metadata"}
+    ]
+
+
+@pytest.mark.parametrize("frontmatter", [False, True])
+@pytest.mark.parametrize("body", ["Snapshot instructions", ""])
+@pytest.mark.parametrize("change", ["rewrite", "delete"])
+def test_project_skill_body_is_pinned_before_first_load(
+    tmp_path, frontmatter, body, change,
+) -> None:
+    path = tmp_path / ".nz-coder" / "skills" / "snapshot" / "SKILL.md"
+    path.parent.mkdir(parents=True)
+    header = "---\nname: snapshot\n---\n" if frontmatter else ""
+    path.write_text(header + body, encoding="utf-8")
+    loader = _trusted_loader(tmp_path)
+
+    if change == "rewrite":
+        path.write_text("Changed after snapshot", encoding="utf-8")
+    else:
+        path.unlink()
+
+    skill = loader.get_skill_info("snapshot")
+    assert skill is not None
+    if not frontmatter and body == "":
+        assert skill._body == ""
+    assert skill.get_body() == body
+    loaded = loader.load("snapshot")
+    assert "<skill_content" in loaded
+    assert "Changed after snapshot" not in loaded
+
+
+def test_untrusted_legacy_project_skill_is_not_loaded(tmp_path) -> None:
+    path = tmp_path / ".nz-coder" / "skills" / "legacy" / "SKILL.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("Untrusted instructions", encoding="utf-8")
+    snapshot = replace(capture_project_control_snapshot(tmp_path), trusted=False)
+    loader = SkillLoader(
+        project_dir=path.parent.parent, user_dir=tmp_path / "user",
+        bundled_dir=tmp_path / "bundled", project_control_snapshot=snapshot,
+    )
+    assert loader.get_skill_info("legacy") is None
+    assert loader.load("legacy").startswith("Error:")
+
+
+@pytest.mark.parametrize("source", ["user", "bundled"])
+def test_legacy_nonproject_skill_retains_lazy_body_loading(tmp_path, source) -> None:
+    path = tmp_path / source / "legacy" / "SKILL.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("Original instructions", encoding="utf-8")
+    loader = _trusted_loader(tmp_path)
+    path.write_text("Current instructions", encoding="utf-8")
+    skill = loader.get_skill_info("legacy")
+    assert skill.source == source
+    assert skill._body is None
+    assert skill.get_body() == "Current instructions"
 
 
 def test_untrusted_project_skill_cannot_override_bundled_governance(tmp_path) -> None:

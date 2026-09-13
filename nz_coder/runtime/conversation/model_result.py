@@ -15,6 +15,7 @@ class LLMResult:
     diagnostic: str | None = None
     needs_compaction: bool = False
     compaction_error: str = ""
+    failure_source: str = ""
     aborted: bool = False
     duration_ms: float = 0.0
     first_token_ms: float | None = None

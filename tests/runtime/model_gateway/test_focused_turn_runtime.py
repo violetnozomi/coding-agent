@@ -9,6 +9,8 @@ from nz_coder.providers.capabilities import resolve_model_capabilities
 from nz_coder.runtime.core.model_context import ModelExecutionContext
 from nz_coder.runtime.conversation.model_result import LLMResult
 from nz_coder.runtime.execution.services import ProductionTurnModelRuntime
+from nz_coder.runtime.execution.loop import ProductRunEnvironment
+from nz_coder.runtime.model_gateway.models import ModelCallOutcome
 
 
 def _context(*, streaming: bool) -> tuple[ModelExecutionContext, list]:
@@ -66,6 +68,18 @@ def test_focused_turn_runtime_uses_streaming_capability() -> None:
 
     assert result.content == "stream"
     assert events == []
+
+
+def test_provider_context_overflow_projection_is_typed_and_distinct() -> None:
+    environment = ProductRunEnvironment.__new__(ProductRunEnvironment)
+    result = environment._gateway_outcome_result(
+        ModelCallOutcome.context_overflow("provider rejected received request")
+    )
+
+    assert result.needs_compaction is True
+    assert result.failure_source == "provider_context_overflow"
+    assert result.input_tokens == 0
+    assert result.cost == 0.0
 
 
 def test_focused_turn_runtime_compacts_before_over_budget_provider_call() -> None:

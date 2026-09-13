@@ -24,6 +24,12 @@ from nz_coder.runtime.agent.task_contract import derive_task_contract
 from nz_coder.runtime.core.run_context import RunContext
 from nz_coder.runtime.verification.verification_contract import VerificationContract
 from nz_coder.runtime.execution.work_budget import WorkBudgetController
+from nz_coder.runtime.core.model_context import ModelExecutionContext
+from nz_coder.runtime.execution.services import ProductionTurnModelRuntime
+from nz_coder.runtime.conversation.context_manager import ProductionContextManager
+from nz_coder.runtime.core.context import ContextExecutionContext
+from nz_coder.state.context import PromptBudget
+from nz_coder.providers.capabilities import resolve_model_capabilities
 
 
 class _Model:
@@ -309,6 +315,15 @@ class _VerificationTools:
 class _Context:
     async def prepare_async(self, _context, _messages, **_kwargs) -> bool:
         return False
+
+
+class _ProductionContext:
+    async def prepare_async(self, context, messages, **kwargs) -> bool:
+        return await ProductionContextManager().prepare_async(
+            context,
+            messages,
+            **kwargs,
+        )
 
 
 class _Sessions:
@@ -1331,6 +1346,239 @@ def test_native_runner_attributes_each_main_provider_turn(tmp_path: Path):
         "other_tool_batch": 1,
         "final_answer": 1,
     }
+
+
+def _production_budget_context(
+    *,
+    budget: PromptBudget,
+    provider_call,
+    events: list[tuple[str, dict]],
+) -> ModelExecutionContext:
+    capability = resolve_model_capabilities("test", "focused-model")
+    return ModelExecutionContext(
+        capabilities=lambda: capability,
+        active_model_id=lambda: "focused-model",
+        active_tool_specs=lambda: [],
+        prompt_budget=lambda: budget,
+        call_streaming=lambda messages, *_args, **_kwargs: provider_call(messages),
+        call_non_streaming=lambda messages: provider_call(messages),
+        gateway=lambda **_kwargs: None,
+        project_outcome=lambda outcome: outcome,
+        record_success=lambda: None,
+        trace=lambda event, **payload: events.append((event, payload)),
+        retire_message_part=lambda *_args: None,
+    )
+
+
+def _run_production_budget_case(
+    tmp_path: Path,
+    *,
+    provider_call,
+    compact_messages,
+    max_turns: int = 1,
+    usable_input_tokens: int = 500,
+):
+    events: list[tuple[str, dict]] = []
+    sessions = _Sessions()
+    budget = PromptBudget(
+        context_tokens=128,
+        output_reserve_tokens=28,
+        usable_input_tokens=usable_input_tokens,
+        soft_preflight_tokens=max(1, usable_input_tokens - 100),
+        expansion_budget_tokens=32,
+        tool_prune_protect_tokens=16,
+        tool_prune_minimum_tokens=4,
+        context_metadata_missing=False,
+        replay_compaction_tokens=0,
+    )
+    model_context = _production_budget_context(
+        budget=budget,
+        provider_call=provider_call,
+        events=events,
+    )
+    services = RuntimeServices(
+        model=ProductionTurnModelRuntime(),
+        tools=_BudgetTools(),
+        context=_ProductionContext(),
+        session_runtime=sessions,
+        events=_Events(),
+        host=_UnusedHost(),
+        memory=_Memory(),
+        verifier=_Verifier(),
+        lifecycle=(_OneTurnLifecycle() if max_turns == 1 else _FourTurnLifecycle()),
+        guardrails=_Guardrails(),
+        inputs=_Inputs(),
+        transitions=_Transitions(),
+    )
+    request = RunRequest(
+        agent=AgentDefinition(name="native", instructions="finish"),
+        profile=MAIN_PROFILE,
+        messages=({"role": "user", "content": "x" * 500},),
+        workspace=tmp_path,
+        session_id="native-budget-recovery-session",
+        stream=False,
+    )
+
+    def execution_context(run_context, runtime_services):
+        base = _execution_context(run_context, runtime_services)
+        base.execution.model = lambda: model_context
+        context_runtime = ContextExecutionContext(
+            workspace=tmp_path,
+            budget=budget,
+            projected_tokens=lambda _messages: 0,
+            compact=lambda messages: compact_messages(messages),
+            stamp_auto_compaction=lambda _messages: None,
+            trace=lambda name, **payload: events.append((name, payload)),
+        )
+        base.execution.context = lambda: context_runtime
+        base.hooks.trace = lambda name, **payload: events.append((name, payload))
+        return base
+
+    result = asyncio.run(
+        AgentRunner(
+            services,
+            execution_context_factory=execution_context,
+        ).run_result(request, options=request_contracts.RunOptions(stream=False))
+    )
+    return result, sessions, events
+
+
+def test_native_runner_recovers_local_budget_without_consuming_model_turn(tmp_path: Path):
+    calls: list[list[dict]] = []
+
+    def provider_call(messages):
+        calls.append(messages)
+        return LLMResult(content="finished", finish_reason="stop")
+
+    result, _sessions, events = _run_production_budget_case(
+        tmp_path,
+        provider_call=provider_call,
+        compact_messages=lambda _messages, **_kwargs: [
+            {"role": "user", "content": "compact"}
+        ],
+    )
+
+    assert result.status is RunStatus.COMPLETED
+    assert len(calls) == 1
+    assert [payload["turn"] for name, payload in events if name == "provider_turn_started"] == [1]
+    assert not any(name == "provider_turn_started" and payload.get("source") == "local" for name, payload in events)
+    assert any(
+        name == "context_overflow" and payload["source"] == "local_request_budget"
+        for name, payload in events
+    )
+    assert any(
+        name == "compact" and payload["trigger"] == "local_request_budget"
+        for name, payload in events
+    )
+
+
+def test_native_runner_bounds_unrecoverable_local_budget(tmp_path: Path):
+    calls: list[list[dict]] = []
+
+    def provider_call(messages):
+        calls.append(messages)
+        return LLMResult(content="should not run", finish_reason="stop")
+
+    result, sessions, events = _run_production_budget_case(
+        tmp_path,
+        provider_call=provider_call,
+        compact_messages=lambda messages, **_kwargs: list(messages),
+    )
+
+    assert result.status is RunStatus.ERROR
+    assert calls == []
+    assert sessions.final_statuses == [RunStatus.ERROR]
+    local_overflows = [
+        payload for name, payload in events
+        if name == "context_overflow"
+        and payload["source"] == "local_request_budget"
+    ]
+    assert len(local_overflows) == 4
+
+
+def test_native_runner_distinguishes_provider_context_overflow(tmp_path: Path):
+    calls: list[list[dict]] = []
+
+    def provider_call(messages):
+        calls.append(messages)
+        if len(calls) == 1:
+            return LLMResult(
+                needs_compaction=True,
+                compaction_error="provider rejected the received request",
+                failure_source="provider_context_overflow",
+            )
+        return LLMResult(content="finished", finish_reason="stop")
+
+    result, _sessions, events = _run_production_budget_case(
+        tmp_path,
+        provider_call=provider_call,
+        compact_messages=lambda _messages, **_kwargs: [
+            {"role": "user", "content": "compact"}
+        ],
+        max_turns=4,
+        usable_input_tokens=1_000,
+    )
+
+    assert result.status is RunStatus.COMPLETED
+    assert len(calls) == 2
+    assert [payload["turn"] for name, payload in events if name == "provider_turn_started"] == [1, 2]
+    assert any(
+        name == "context_overflow"
+        and payload["source"] == "provider_context_overflow"
+        for name, payload in events
+    )
+
+
+def test_native_runner_preserves_tool_pairing_across_local_budget_recovery(
+    tmp_path: Path,
+):
+    calls: list[list[dict]] = []
+    tool_calls = [{
+        "id": "budget-read",
+        "type": "function",
+        "function": {"name": "read_value", "arguments": "{}"},
+    }]
+
+    def provider_call(messages):
+        calls.append(messages)
+        if len(calls) == 1:
+            return LLMResult(
+                tool_calls=tool_calls,
+                finish_reason="tool_calls",
+            )
+        return LLMResult(content="finished", finish_reason="stop")
+
+    def preserve_tool_turn(messages, **_kwargs):
+        assistant = next(
+            message for message in messages
+            if message.get("role") == "assistant" and message.get("tool_calls")
+        )
+        tool = next(message for message in messages if message.get("role") == "tool")
+        return [
+            {"role": "user", "content": "compact"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": assistant["tool_calls"],
+            },
+            {"role": "tool", "tool_call_id": tool["tool_call_id"], "content": tool["content"]},
+        ]
+
+    result, sessions, events = _run_production_budget_case(
+        tmp_path,
+        provider_call=provider_call,
+        compact_messages=preserve_tool_turn,
+        max_turns=4,
+    )
+
+    assert result.status is RunStatus.COMPLETED
+    assert len(calls) == 2
+    assert sessions.context is not None
+    transcript = sessions.context.transcript
+    tool_messages = [item for item in transcript if item.get("role") == "tool"]
+    assert len(tool_messages) == 1
+    assert tool_messages[0]["tool_call_id"] == "budget-read"
+    assert sum(name == "provider_turn_started" for name, _payload in events) == 2
 
 
 def test_native_runner_finalizes_session_once_when_execution_raises(tmp_path: Path):

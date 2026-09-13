@@ -97,7 +97,7 @@ class ProductionTurnModelRuntime:
         message_part: dict | None,
         stream_tool_handler,
     ):
-        overflow = self._request_budget_overflow(context, messages)
+        overflow = self.preflight_request(context, messages)
         if overflow is not None:
             return overflow
         capabilities = context.capabilities()
@@ -116,6 +116,14 @@ class ProductionTurnModelRuntime:
                 provider=capabilities.provider,
             )
         return context.call_non_streaming(messages)
+
+    def preflight_request(
+        self,
+        context: ModelExecutionContext,
+        messages: list,
+    ) -> LLMResult | None:
+        """Return a local typed outcome before any main Provider turn starts."""
+        return self._request_budget_overflow(context, messages)
 
     @staticmethod
     def _request_budget_overflow(
@@ -149,6 +157,7 @@ class ProductionTurnModelRuntime:
                 "The assembled model request exceeds the usable input budget "
                 f"({estimated} > {limit} tokens)."
             ),
+            failure_source="local_request_budget",
         )
 
     def complete_buffered(
@@ -161,6 +170,9 @@ class ProductionTurnModelRuntime:
         attempts: int = 1,
         observe_status: bool = False,
     ):
+        overflow = self.preflight_request(context, messages)
+        if overflow is not None:
+            return overflow
         outcome = context.gateway(max_retries=max_retries).complete_sync(ModelCall(
             purpose=ModelCallPurpose.CODING,
             messages=messages,
@@ -231,7 +243,7 @@ class ProductionTurnModelRuntime:
         execution_context = copy_context()
         compatibility_override = context.complete_override
         if callable(compatibility_override):
-            overflow = self._request_budget_overflow(context, messages)
+            overflow = self.preflight_request(context, messages)
             if overflow is not None:
                 return overflow
             operation = partial(

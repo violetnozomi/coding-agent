@@ -518,7 +518,20 @@ class AgentRunner:
         try:
             await context.planning.generate(messages)
             context_runtime = None
-            for turn_index in range(start_turn, max_turns):
+            retry_same_turn = False
+
+            def logical_turns():
+                """Yield logical turns, repeating only local budget recovery."""
+                nonlocal retry_same_turn
+                current = start_turn
+                while current < max_turns:
+                    yield current
+                    if retry_same_turn:
+                        retry_same_turn = False
+                    else:
+                        current += 1
+
+            for turn_index in logical_turns():
                 # Match InfCode's queued-followup boundary: the previous model
                 # step (including inline/local tools) is fully settled, but a
                 # superseded turn must not start another Provider round-trip.
@@ -864,15 +877,23 @@ class AgentRunner:
                             {"role": "assistant", "content": _MAX_STEPS_PROMPT},
                         ]
                         context.hooks.trace("max_steps_prompt_injected", step=turn_index + 1)
-                    provider_turn = begin_provider_turn(
-                        context.runtime_state,
-                        messages,
-                        turn_index + 1,
+                    preflight = getattr(services.model, "preflight_request", None)
+                    preflight_result = (
+                        preflight(resolve_model_runtime_context(), api_messages)
+                        if callable(preflight)
+                        else None
                     )
-                    context.hooks.trace(
-                        "provider_turn_started",
-                        **provider_turn.to_dict(),
-                    )
+                    provider_turn = None
+                    if preflight_result is None:
+                        provider_turn = begin_provider_turn(
+                            context.runtime_state,
+                            messages,
+                            turn_index + 1,
+                        )
+                        context.hooks.trace(
+                            "provider_turn_started",
+                            **provider_turn.to_dict(),
+                        )
                     provider_turn_recorded = False
 
                     def record_provider_turn(
@@ -881,7 +902,7 @@ class AgentRunner:
                         finish_reason: str = "",
                     ) -> None:
                         nonlocal provider_turn_recorded
-                        if provider_turn_recorded:
+                        if provider_turn_recorded or provider_turn is None:
                             return
                         observation = settle_provider_turn(
                             provider_turn,
@@ -908,8 +929,12 @@ class AgentRunner:
                             message_part=message_part,
                             stream_tool_handler=execute_stream_tools,
                         )
-                    result = await self._middleware.run(
-                        "model", run_context, execute_model,
+                    result = (
+                        preflight_result
+                        if preflight_result is not None
+                        else await self._middleware.run(
+                            "model", run_context, execute_model,
+                        )
                     )
                     if output_guarded:
                         result.extra = dict(result.extra or {})
@@ -1115,6 +1140,11 @@ class AgentRunner:
                     return await context.lifecycle.finalize(messages, "aborted", on_text, on_token, stream)
                 if result.needs_compaction:
                     record_provider_turn(finish_reason="error")
+                    context.hooks.trace(
+                        "context_overflow",
+                        source=result.failure_source or "provider_context_overflow",
+                        error=result.compaction_error,
+                    )
                     error = PublicError(
                         "context_overflow",
                         "The request exceeded the model context window.",
@@ -1169,10 +1199,19 @@ class AgentRunner:
                     if on_text:
                         on_text("[context overflow: compacting]")
                     try:
+                        compactor = getattr(context_runtime, "compact", None)
+                        using_context_compactor = callable(compactor)
+                        if not using_context_compactor:
+                            compactor = context.messages.compact_messages
                         compacted = await _to_thread_settled(
-                            context.messages.compact_messages,
+                            compactor,
                             messages,
-                            overflow=True,
+                            **({"overflow": True} if not using_context_compactor else {}),
+                            cancel_callback=getattr(
+                                context_runtime,
+                                "cancel_compaction",
+                                None,
+                            ),
                         )
                     except Exception as exc:
                         set_assistant_error(
@@ -1201,12 +1240,20 @@ class AgentRunner:
                     await services.session_runtime.checkpoint(run_context, "running")
                     context.hooks.trace(
                         "compact",
-                        trigger="provider_context_overflow",
+                        trigger=(
+                            "local_request_budget"
+                            if result.failure_source == "local_request_budget"
+                            else "provider_context_overflow"
+                        ),
                         attempts=attempt,
                         degraded_input_expansions=degraded,
                     )
                     context.hooks.on_turn_end(messages, "compact")
-                    continue
+                    if result.failure_source == "local_request_budget":
+                        # A local preflight did not consume a main-model turn;
+                        # retry the same logical slot after bounded compaction.
+                        retry_same_turn = True
+                        continue
                 if result.diagnostic is not None:
                     record_provider_turn(finish_reason="error")
                     structured = result.assistant_error or {

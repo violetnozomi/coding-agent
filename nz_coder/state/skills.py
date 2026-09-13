@@ -141,6 +141,7 @@ def _parse_skill_text(
             paths=[],
             source=source,
             file_path=fp,
+            body=text.strip() if pin_body else None,
         )
     header = m.group(1).strip()
     if not header:

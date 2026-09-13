@@ -2499,6 +2499,7 @@ class ProductRunEnvironment:
             return LLMResult(
                 needs_compaction=True,
                 compaction_error=outcome.error,
+                failure_source="provider_context_overflow",
                 **common,
             )
         details = outcome.provider_metadata.get("error", {})
