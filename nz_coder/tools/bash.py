@@ -6,6 +6,7 @@ import os
 import queue
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from itertools import islice
@@ -31,11 +32,13 @@ from nz_coder.runtime.process.platform_runtime import (
     terminate_process_tree,
 )
 from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.state.sessions import active_session_id
 from nz_coder.tool_platform.command_policy import (
     classify_bash,
     external_workspace_path,
     is_known_read_only_command,
 )
+from nz_coder.tool_platform.artifacts import ArtifactError, ArtifactStore
 from nz_coder.runtime.execution.runtime_state import _is_broad_test_command
 from nz_coder.runtime.agent.task_policy import test_command_within_scopes
 from nz_coder.tools import (
@@ -134,6 +137,50 @@ class _BoundedCommandOutput:
                 self._tail[0] = first[excess:]
                 self._tail_chars -= excess
                 break
+
+
+class _RecoverableCommandOutput:
+    """Spool a bounded continuous prefix before model-visible projection."""
+
+    MAX_BYTES = 4 * 1024 * 1024
+
+    def __init__(self, limit: int = MAX_BYTES, encoding: str = "") -> None:
+        self.limit = max(1, min(self.MAX_BYTES, int(limit)))
+        self._file = tempfile.TemporaryFile(mode="w+b")
+        self._encoding = encoding or "utf-8"
+        self.total_bytes = 0
+        self.truncated = False
+        self._closed = False
+
+    def feed(self, payload: bytes) -> None:
+        if self._closed:
+            return
+        data = bytes(payload)
+        self.total_bytes += len(data)
+        remaining = self.limit - self._file.tell()
+        if remaining > 0:
+            self._file.write(data[:remaining])
+        if len(data) > max(0, remaining):
+            self.truncated = True
+
+    def finish(self, *, stream_complete: bool) -> tuple[str, bool]:
+        if self._closed:
+            return "", False
+        self._file.flush()
+        self._file.seek(0)
+        payload = self._file.read()
+        self._file.close()
+        self._closed = True
+        try:
+            text = payload.decode(self._encoding, errors="replace")
+        except LookupError:
+            text = payload.decode("utf-8", errors="replace")
+        return text, bool(stream_complete and not self.truncated)
+
+    def close(self) -> None:
+        if not self._closed:
+            self._file.close()
+            self._closed = True
 
 
 def _truncate_output(text: str, limit: int) -> str:
@@ -476,10 +523,14 @@ def run_bash(
         settings.bash_output_hard_limit_bytes,
         settings.process_output_encoding,
     )
+    recoverable_output = _RecoverableCommandOutput(
+        encoding=settings.process_output_encoding or "utf-8",
+    )
     deadline = time.monotonic() + timeout_seconds
     last_report = 0.0
     timed_out = False
     cancelled = False
+    stream_complete = False
     cancel_event = current_tool_cancel_event()
     while True:
         if cancel_event is not None and cancel_event.is_set():
@@ -498,11 +549,13 @@ def run_bash(
                 break
             continue
         if item is finished:
+            stream_complete = True
             break
         # Production ``Popen`` is binary.  Keep compatibility with lightweight
         # embedders/tests that inject a text stream without weakening the real
         # raw-byte decoding contract.
         chunk = item if isinstance(item, bytes) else str(item).encode("utf-8")
+        recoverable_output.feed(chunk)
         output_buffer.feed(chunk)
         if output_buffer.limit_exceeded:
             _stop_process(process)
@@ -544,20 +597,75 @@ def run_bash(
             item = output_queue.get_nowait()
         except queue.Empty:
             break
-        if item is not finished and not output_buffer.limit_exceeded:
-            output_buffer.feed(
-                item if isinstance(item, bytes) else str(item).encode("utf-8")
-            )
+        if item is finished:
+            stream_complete = True
+            continue
+        chunk = item if isinstance(item, bytes) else str(item).encode("utf-8")
+        recoverable_output.feed(chunk)
+        if not output_buffer.limit_exceeded:
+            output_buffer.feed(chunk)
     output_buffer.finish()
+
+    recoverable_text, recoverable_complete = recoverable_output.finish(
+        stream_complete=stream_complete and not (timed_out or cancelled),
+    )
+    recovery_metadata: dict[str, object] = {}
+    if recoverable_text and (
+        output_buffer.truncated
+        or output_buffer.limit_exceeded
+        or not recoverable_complete
+    ):
+        try:
+            artifact_id = ArtifactStore(
+                current_workdir(),
+                active_session_id() or "direct-tool",
+            ).put(recoverable_text, kind="tool-result")
+            recovery_metadata = {
+                "raw_artifact_id": artifact_id,
+                "raw_artifact_complete": recoverable_complete,
+                "raw_artifact_bytes": len(recoverable_text.encode("utf-8")),
+            }
+        except (ArtifactError, OSError):
+            recovery_metadata = {
+                "raw_artifact_complete": False,
+                "raw_artifact_error": "Artifact persistence failed",
+            }
+    elif output_buffer.truncated or output_buffer.limit_exceeded or not recoverable_complete:
+        recovery_metadata = {
+            "raw_artifact_complete": False,
+            "raw_artifact_error": "No recoverable output was captured",
+        }
 
     if timed_out:
         evidence = output_buffer.render(progress_limit).strip()
         suffix = f"\n{evidence}" if evidence else ""
-        return f"Error: Command timed out ({timeout_seconds}s){suffix}"
+        return ToolOutput(
+            f"Error: Command timed out ({timeout_seconds}s){suffix}",
+            title=title,
+            metadata={
+                "exit": None,
+                "cancelled": False,
+                "timed_out": True,
+                "truncated": bool(output_buffer.truncated),
+                "output_incomplete": True,
+                **recovery_metadata,
+            },
+        )
     if cancelled:
         evidence = output_buffer.render(progress_limit).strip()
         suffix = f"\n{evidence}" if evidence else ""
-        return f"Error: Command cancelled{suffix}"
+        return ToolOutput(
+            f"Error: Command cancelled{suffix}",
+            title=title,
+            metadata={
+                "exit": None,
+                "cancelled": True,
+                "timed_out": False,
+                "truncated": bool(output_buffer.truncated),
+                "output_incomplete": True,
+                **recovery_metadata,
+            },
+        )
 
     output = output_buffer.render().strip()
     if output_buffer.limit_exceeded:
@@ -584,11 +692,18 @@ def run_bash(
             "total_output_bytes": output_buffer.total_bytes,
             "retained_output_bytes": output_buffer.retained_chars,
             "output_limit_exceeded": output_buffer.limit_exceeded,
+            "output_incomplete": bool(
+                output_buffer.limit_exceeded
+                or not stream_complete
+                or not recoverable_complete
+                or recovery_metadata.get("raw_artifact_complete") is False
+            ),
             "executed_command": command,
             "requested_command": requested_command,
             "strict_output_filter_removed": strict_output_filter_removed,
             "strict_pythonpath_injected": strict_pythonpath_injected,
             "pythonpath_root": str(pythonpath_root or ""),
+            **recovery_metadata,
         },
     )
 

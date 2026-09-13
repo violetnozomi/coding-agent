@@ -5,12 +5,19 @@ import shlex
 import sys
 import json
 import threading
+from dataclasses import replace
 
+from nz_coder.runtime.core.run_settings import RunSettings, scoped_run_settings
+from nz_coder.runtime.core.tool_context import ToolProjectionContext
 from nz_coder.permissions import PermissionManager
 from nz_coder.runtime.execution.tool_executor import ToolExecutor
+from nz_coder.runtime.tool_runtime.result_projection import ProductionToolResultProjector
 from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.state.sessions import scoped_session
 from nz_coder.tools import ToolOutput, scoped_tool_metadata_reporter
 from nz_coder.tools.bash import run_bash
+from nz_coder.tool_platform.artifacts import ArtifactStore
+from nz_coder.tool_platform.results import ToolResultBudget, ToolResultProjector
 
 
 def test_bash_rejects_nonfinite_timeout_without_raising(tmp_path):
@@ -76,6 +83,119 @@ def test_tool_executor_keeps_full_bash_output_for_unified_projection(
     assert result.metadata["output"] != payload
     assert "characters omitted" in result.metadata["output"]
     assert all(update[1]["output"] != payload for update in updates)
+
+
+def test_long_failed_bash_preserves_middle_diagnostic_for_artifact_recovery(tmp_path):
+    """A child failure keeps middle diagnostics in a recoverable artifact."""
+    marker = "PYTEST_FAILURE_MIDDLE::test_unique_case::assert 7 == 9"
+    script = (
+        "print('START-OUTPUT'); "
+        "print('x' * 2500); "
+        f"print({marker!r}); "
+        "print('x' * 2500); "
+        "print('END-OUTPUT'); raise SystemExit(1)"
+    )
+    command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
+    baseline = RunSettings.from_legacy_globals()
+    small = replace(
+        baseline,
+        process_buffer_bytes=1024,
+        bash_output_hard_limit_bytes=64 * 1024,
+    )
+    saved: list[str] = []
+    with scoped_workdir(tmp_path), scoped_session("long-failed-evidence"), scoped_run_settings(baseline):
+        complete = run_bash(command, timeout=2)
+    assert marker in str(complete)
+
+    with scoped_workdir(tmp_path), scoped_session("long-failed-evidence"), scoped_run_settings(small):
+        bounded = ToolExecutor(PermissionManager("auto")).execute_one({
+            "id": "failed-test",
+            "function": {
+                "name": "bash",
+                "arguments": json.dumps({"command": command, "timeout": 2}),
+            },
+        }, 0)
+        projected = ToolResultProjector(
+            budget=ToolResultBudget(max_tokens=120),
+            artifact_writer=lambda _call_id, output: (
+                saved.append(output) or ".nz-coder/artifacts/failed-test.txt"
+            ),
+        ).project_batch([(
+            "failed-test",
+            bounded.name,
+            bounded.output,
+            bounded.metadata.get("raw_artifact_id"),
+            bounded.metadata.get("raw_artifact_complete", True),
+        )], max_tokens=120)[0]
+
+    assert bounded.metadata["truncated"] is True
+    assert marker not in bounded.output
+    assert projected.metadata["truncated"] is True
+    artifact_id = bounded.metadata["raw_artifact_id"]
+    assert projected.artifact_path == artifact_id
+    assert marker in ArtifactStore(tmp_path, "long-failed-evidence").read(artifact_id)
+    from nz_coder.tools import artifacts as _artifact_registration  # noqa: F401
+
+    with scoped_workdir(tmp_path), scoped_session("long-failed-evidence"):
+        recovered = ToolExecutor(PermissionManager("auto")).execute_one({
+            "id": "read-failed-evidence",
+            "function": {
+                "name": "read_tool_result",
+                "arguments": json.dumps({"artifact_id": artifact_id, "max_bytes": 64 * 1024}),
+            },
+        }, 1)
+    assert recovered.executed is True
+    assert recovered.dispatch_failed is False
+    assert marker in recovered.output
+    assert saved == []
+
+    messages: list[dict] = []
+    ProductionToolResultProjector(projector=ToolResultProjector(
+        budget=ToolResultBudget(max_tokens=120),
+    )).consume(
+        ToolProjectionContext(
+            signal_from_metadata=lambda _metadata: None,
+            record_result=lambda _result: False,
+            trace_result=lambda *_args, **_kwargs: None,
+            stall_orchestrator=None,
+            after_result=lambda _messages, _result, _output: None,
+        ),
+        [(0, {
+            "id": "failed-test",
+            "function": {"name": "bash", "arguments": {}},
+        }, bounded)],
+        messages,
+    )
+    assert artifact_id in messages[0]["content"]
+
+
+def test_long_bash_marks_recovery_incomplete_when_artifact_save_fails(tmp_path, monkeypatch):
+    from nz_coder.tools import bash as bash_module
+
+    class FailingArtifactStore:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def put(self, _output, *, kind):
+            assert kind == "tool-result"
+            raise OSError("artifact quota exhausted")
+
+    script = "print('x' * 5000); raise SystemExit(1)"
+    command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
+    baseline = RunSettings.from_legacy_globals()
+    small = replace(
+        baseline,
+        process_buffer_bytes=1024,
+        bash_output_hard_limit_bytes=64 * 1024,
+    )
+    monkeypatch.setattr(bash_module, "ArtifactStore", FailingArtifactStore)
+
+    with scoped_workdir(tmp_path), scoped_run_settings(small):
+        result = run_bash(command, timeout=2)
+
+    assert result.metadata["output_incomplete"] is True
+    assert result.metadata["raw_artifact_complete"] is False
+    assert result.metadata["raw_artifact_error"] == "Artifact persistence failed"
 
 
 def test_bash_timeout_keeps_error_contract_and_reports_initial_state(tmp_path):

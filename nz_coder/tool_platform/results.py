@@ -66,6 +66,8 @@ class ToolResultProjector:
         output: str,
         *,
         tool_name: str = "",
+        artifact_path: str | None = None,
+        artifact_complete: bool = True,
     ) -> ProjectedToolResult:
         """Return unchanged small output or bounded head/tail evidence."""
         original = str(output)
@@ -78,7 +80,7 @@ class ToolResultProjector:
             "budget_tokens": self._budget.max_tokens,
             "policy": policy,
         }
-        if original_tokens <= self._budget.max_tokens:
+        if original_tokens <= self._budget.max_tokens and artifact_path is None:
             return ProjectedToolResult(
                 original,
                 {
@@ -89,43 +91,74 @@ class ToolResultProjector:
                 },
             )
 
-        artifact_path = None
         artifact_error = ""
-        try:
-            artifact_path = self._artifact_writer(str(tool_call_id), original)
-        except OSError as error:
-            artifact_error = str(error)[:500]
+        if artifact_path is None:
+            try:
+                artifact_path = self._artifact_writer(str(tool_call_id), original)
+            except OSError as error:
+                artifact_error = str(error)[:500]
 
-        text = self._bounded_text(original, artifact_path, head_fraction=head_fraction)
+        text = self._bounded_text(
+            original,
+            artifact_path,
+            head_fraction=head_fraction,
+            artifact_complete=artifact_complete,
+        )
         metadata = {
             **common,
             "projected_chars": len(text),
             "projected_tokens": estimate_tokens(text),
             "truncated": True,
             "artifact_path": artifact_path,
+            "artifact_complete": bool(artifact_complete),
         }
         if artifact_error:
             metadata["artifact_error"] = artifact_error
         return ProjectedToolResult(text, metadata, artifact_path)
 
     def project_batch(
-        self, items: list[tuple[str, str, str]], *, max_tokens: int,
+        self, items: list[tuple], *, max_tokens: int,
     ) -> list[ProjectedToolResult]:
         """Project one contiguous call batch under an aggregate visible budget."""
         if not items:
             return []
         total = max(1, int(max_tokens))
-        needs = [max(1, estimate_tokens(str(output))) for _call_id, _name, output in items]
-        allocations = list(needs)
-        current_tokens = list(needs)
+        normalized = [
+            (
+                item[0],
+                item[1],
+                item[2],
+                item[3] if len(item) > 3 else None,
+                item[4] if len(item) > 4 else True,
+            )
+            for item in items
+        ]
+        needs = [max(1, estimate_tokens(str(output))) for _call_id, _name, output, _artifact, _complete in normalized]
+        allocations: list[int] = []
+        current_tokens: list[int] = []
         projected = []
-        for (call_id, tool_name, output), need in zip(items, needs):
+        for (call_id, tool_name, output, artifact_path, artifact_complete), need in zip(normalized, needs):
             policy, _fraction = _projection_policy(tool_name, self._budget.head_fraction)
-            projected.append(ProjectedToolResult(str(output), {
-                "tool_name": tool_name, "policy": policy,
-                "original_tokens": need,
-                "projected_tokens": need, "truncated": False,
-            }))
+            if artifact_path:
+                projected.append(ToolResultProjector(
+                    budget=self._budget,
+                    artifact_writer=self._artifact_writer,
+                ).project(
+                    call_id,
+                    output,
+                    tool_name=tool_name,
+                    artifact_path=artifact_path,
+                    artifact_complete=artifact_complete,
+                ))
+            else:
+                projected.append(ProjectedToolResult(str(output), {
+                    "tool_name": tool_name, "policy": policy,
+                    "original_tokens": need,
+                    "projected_tokens": need, "truncated": False,
+                    "artifact_complete": bool(artifact_complete),
+                }))
+            current_tokens.append(projected[-1].metadata["projected_tokens"])
+        allocations = list(current_tokens)
 
         for item_index in sorted(
             range(len(items)), key=lambda index: (-needs[index], index),
@@ -133,20 +166,27 @@ class ToolResultProjector:
             used = sum(current_tokens)
             if used <= total:
                 break
-            call_id, tool_name, output = items[item_index]
+            call_id, tool_name, output, artifact_path, artifact_complete = normalized[item_index]
             other_tokens = used - current_tokens[item_index]
             share = max(0, total - other_tokens)
             allocations[item_index] = share
             if share >= 32:
                 child = ToolResultProjector(
                     budget=ToolResultBudget(share), artifact_writer=self._artifact_writer,
-                ).project(call_id, output, tool_name=tool_name)
+                ).project(
+                    call_id,
+                    output,
+                    tool_name=tool_name,
+                    artifact_path=artifact_path,
+                    artifact_complete=artifact_complete,
+                )
             else:
-                artifact = None
-                try:
-                    artifact = self._artifact_writer(call_id, str(output))
-                except OSError:
-                    pass
+                artifact = artifact_path
+                if artifact is None:
+                    try:
+                        artifact = self._artifact_writer(call_id, str(output))
+                    except OSError:
+                        pass
                 policy, _fraction = _projection_policy(tool_name, self._budget.head_fraction)
                 signal = str(output).splitlines()[-1] if policy == "tail" else str(output).splitlines()[0]
                 text = _tiny_projection_text(signal, artifact, share)
@@ -155,13 +195,14 @@ class ToolResultProjector:
                     "original_tokens": estimate_tokens(str(output)),
                     "projected_tokens": estimate_tokens(text),
                     "truncated": True, "artifact_path": artifact,
+                    "artifact_complete": bool(artifact_complete),
                 }, artifact)
             projected[item_index] = child
             current_tokens[item_index] = child.metadata["projected_tokens"]
 
         result: list[ProjectedToolResult] = []
-        for item_index, ((call_id, _tool_name, _output), child) in enumerate(
-            zip(items, projected)
+        for item_index, ((call_id, _tool_name, _output, _artifact, _complete), child) in enumerate(
+            zip(normalized, projected)
         ):
             metadata = {
                 **child.metadata, "tool_call_id": call_id,
@@ -173,10 +214,15 @@ class ToolResultProjector:
         return result
 
     def _bounded_text(
-        self, output: str, artifact_path: str | None, *, head_fraction: float,
+        self,
+        output: str,
+        artifact_path: str | None,
+        *,
+        head_fraction: float,
+        artifact_complete: bool,
     ) -> str:
         path_note = (
-            f" Full output: {artifact_path}."
+            f" Full output{' (incomplete)' if not artifact_complete else ''}: {artifact_path}."
             if artifact_path
             else " Full output persistence failed."
         )

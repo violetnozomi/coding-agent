@@ -28,10 +28,20 @@ from nz_coder.runtime.verification.verification_contract import VerificationCont
 from nz_coder.runtime.execution.work_budget import WorkBudgetController
 from nz_coder.runtime.core.model_context import ModelExecutionContext
 from nz_coder.runtime.execution.services import ProductionTurnModelRuntime
+from nz_coder.runtime.execution.tool_executor import ToolExecutor
 from nz_coder.runtime.conversation.context_manager import ProductionContextManager
 from nz_coder.runtime.core.context import ContextExecutionContext
+from nz_coder.runtime.core.tool_context import ToolProjectionContext
+from nz_coder.runtime.tool_runtime.result_projection import ProductionToolResultProjector
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.runtime.verification.recovery import RecoveryState
+from nz_coder.intelligence.verification import VerificationManager
+from nz_coder.state.trace import TraceRecorder
+from nz_coder.permissions import PermissionManager
 from nz_coder.state.context import PromptBudget
 from nz_coder.providers.capabilities import resolve_model_capabilities
+from nz_coder.tools import bash as _bash_registration  # noqa: F401
+from nz_coder.tools import files as _file_registration  # noqa: F401
 
 
 class _Model:
@@ -290,6 +300,62 @@ class _BudgetTools:
         return "continue"
 
 
+class _RealWorkspaceTools:
+    """Use the real dispatch/execution/projector path for one offline run."""
+
+    def __init__(self, workspace: Path, verification=None) -> None:
+        self.workspace = workspace
+        self.verification = verification
+        self.executor = ToolExecutor(PermissionManager("auto"))
+        self.projector = ProductionToolResultProjector()
+
+    async def execute_batch_async(
+        self, _context, calls, messages, on_tool=None, _on_text=None, **kwargs,
+    ):
+        processor = kwargs["processor"]
+        processor.start_tools(calls)
+        dispatched = []
+        with scoped_workdir(self.workspace):
+            for index, call in enumerate(calls):
+                result = self.executor.execute_one(call, index)
+                if self.verification is not None:
+                    if result.name == "bash":
+                        self.verification.observe_bash(
+                            result.tool_input,
+                            result.output,
+                            result.dispatch_failed,
+                            result.command_failed,
+                            exit_code=(result.metadata or {}).get("exit"),
+                        )
+                    elif result.is_write and result.executed and not result.dispatch_failed:
+                        self.verification.mark_write(
+                            result.name,
+                            result.tool_input,
+                            output=result.output,
+                        )
+                dispatched.append((
+                    index,
+                    call,
+                    result,
+                ))
+            projection = ToolProjectionContext(
+                signal_from_metadata=lambda _metadata: None,
+                record_result=lambda _result: False,
+                trace_result=lambda *_args, **_kwargs: None,
+                stall_orchestrator=None,
+                after_result=lambda _messages, _result, _output: None,
+            )
+            self.projector.consume(
+                projection,
+                dispatched,
+                messages,
+                on_tool=on_tool,
+                processor=processor,
+            )
+        processor.finish_step("tool-calls")
+        return "continue"
+
+
 class _VerificationTools:
     def __init__(self) -> None:
         self.names: list[str] = []
@@ -435,6 +501,16 @@ class _BlockedLifecycle(_Lifecycle):
 class _FourTurnLifecycle(_Lifecycle):
     def initialize(self, _context, _messages, _stream):
         return 4, 0
+
+
+class _EightTurnLifecycle(_Lifecycle):
+    def initialize(self, _context, _messages, _stream):
+        return 8, 0
+
+
+class _NineTurnLifecycle(_Lifecycle):
+    def initialize(self, _context, _messages, _stream):
+        return 9, 0
 
 
 class _ConfiguredTurnLifecycle(_Lifecycle):
@@ -732,6 +808,133 @@ def test_native_runner_completes_model_tool_model_without_agent_loop(tmp_path: P
     assert sessions.context.usage.input_tokens == 13
     assert sessions.context.usage.output_tokens == 4
     assert sessions.final_statuses == [RunStatus.COMPLETED]
+
+
+def test_native_runner_uses_real_failure_evidence_to_fix_and_retest(tmp_path: Path):
+    """A failed test must be read before edit, and a fresh pass must end the run."""
+    (tmp_path / "app.py").write_text("def value():\n    return 1\n", encoding="utf-8")
+    (tmp_path / "test_app.py").write_text(
+        "from app import value\n\n"
+        "def test_value_is_two():\n"
+        "    assert value() == 2\n",
+        encoding="utf-8",
+    )
+
+    class RepairModel:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.seen_messages: list[list[dict]] = []
+
+        async def complete_turn(self, _context, messages, **_kwargs):
+            self.calls += 1
+            self.seen_messages.append(copy.deepcopy(messages))
+            if self.calls in {1, 3, 5, 7, 8}:
+                return LLMResult(
+                    tool_calls=[{
+                        "id": f"bash-{self.calls}",
+                        "type": "function",
+                        "function": {
+                            "name": "bash",
+                            "arguments": json.dumps({
+                                "command": (
+                                    "python -m py_compile app.py"
+                                    if self.calls == 8
+                                    else "python -m pytest -q test_app.py::test_value_is_two"
+                                ),
+                                "timeout": 10,
+                            }),
+                        },
+                    }],
+                    finish_reason="tool_calls",
+                )
+            if self.calls == 2:
+                old_text, new_text = "return 1", "return 30"
+            elif self.calls == 4:
+                old_text, new_text = "return 30", "return 2"
+            elif self.calls == 6:
+                old_text, new_text = "return 2", "return 2 # touched"
+            else:
+                old_text = new_text = ""
+            if self.calls in {2, 4, 6}:
+                return LLMResult(
+                    tool_calls=[{
+                        "id": "edit-app",
+                        "type": "function",
+                        "function": {
+                            "name": "edit_file",
+                            "arguments": json.dumps({
+                                "path": "app.py",
+                                "old_text": old_text,
+                                "new_text": new_text,
+                            }),
+                        },
+                    }],
+                    finish_reason="tool_calls",
+                )
+            return LLMResult(content="Tests pass after fresh verification.", finish_reason="stop")
+
+    model = RepairModel()
+    sessions = _Sessions()
+    verification = VerificationManager(RecoveryState(), TraceRecorder())
+    verification.reset()
+    services = RuntimeServices(
+        model=model,
+        tools=_RealWorkspaceTools(tmp_path, verification),
+        context=_Context(),
+        session_runtime=sessions,
+        events=_Events(),
+        host=_UnusedHost(),
+        memory=_Memory(),
+        verifier=_Verifier(),
+        lifecycle=_NineTurnLifecycle(),
+        guardrails=_Guardrails(),
+        inputs=_Inputs(),
+        transitions=_Transitions(),
+    )
+    request = RunRequest(
+        agent=AgentDefinition(name="native", instructions="repair and verify"),
+        profile=MAIN_PROFILE,
+        messages=({"role": "user", "content": "Fix the failing test."},),
+        workspace=tmp_path,
+        session_id="native-real-tool-repair",
+        stream=False,
+    )
+
+    with scoped_workdir(tmp_path):
+        result = asyncio.run(AgentRunner(
+            services,
+            execution_context_factory=_execution_context,
+        ).run_result(request, options=request_contracts.RunOptions(stream=False)))
+
+    assert result.status is RunStatus.COMPLETED
+    assert model.calls == 9
+    first_tool = next(
+        message for message in model.seen_messages[1]
+        if message.get("role") == "tool"
+    )
+    assert "FAILED" in first_tool["content"]
+    assert "test_value_is_two" in first_tool["content"]
+    assert "assert 1 == 2" in first_tool["content"]
+    assert model.seen_messages[2], model.seen_messages[2]
+    assert "Edited app.py" in str(model.seen_messages[2]), model.seen_messages[2]
+    second_failure = [
+        message for message in model.seen_messages[3]
+        if message.get("role") == "tool"
+    ]
+    assert any("assert 30 == 2" in message["content"] for message in second_failure), second_failure
+    first_pass = [
+        message for message in model.seen_messages[5]
+        if message.get("role") == "tool"
+    ]
+    assert any("1 passed" in message["content"] for message in first_pass)
+    second_pass = [
+        message for message in model.seen_messages[7]
+        if message.get("role") == "tool"
+    ]
+    assert any("1 passed" in message["content"] for message in second_pass)
+    assert (tmp_path / "app.py").read_text(encoding="utf-8").endswith("return 2 # touched\n")
+    assert result.final_text == "Tests pass after fresh verification."
+    assert verification.status()["verification_state"] == "passed"
 
 
 def test_native_runner_sanitizes_invalid_model_metrics_without_losing_answer(

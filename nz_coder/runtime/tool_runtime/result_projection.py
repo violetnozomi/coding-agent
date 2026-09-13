@@ -39,7 +39,13 @@ class ProductionToolResultProjector:
         }
         post_result_hooks: list[tuple[object, str]] = []
         batch_items = [
-            (str(tool_call["id"]), result.name, result.output)
+            (
+                str(tool_call["id"]),
+                result.name,
+                result.output,
+                (result.metadata or {}).get("raw_artifact_id"),
+                (result.metadata or {}).get("raw_artifact_complete", True),
+            )
             for _index, tool_call, result in dispatched
         ]
         batch_budget = self._projector.batch_max_tokens
