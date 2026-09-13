@@ -23,7 +23,8 @@ compaction，且有 86 个 failure-repair turns。最近的 Ansible Pro 试跑�
 
 历史 Lite 聚合为 16 次内部运行（completed 4、risky 6、agent_failed 6），不是
 官方 pass@1。Ansible Pro 两次受限运行在编辑前耗尽/停止；原始临时目录目前已不存在，
-缺失字段不应被补写成推测。最近完整回归的提交和测试范围见 Git 历史，不将测试通过数
+缺失字段不应被补写成推测。本轮修正提交为
+`7972538c9381666413dcef809f1d3696fc3398f0`，定向回归为 493 项；不将测试通过数
 当作 SWE-bench Pro 通过率。
 
 ## 🔍 可核查的对照
