@@ -1156,6 +1156,42 @@ def tool_failure_diagnostic_hook(ctx: ToolResultContext) -> None:
     runtime_state = getattr(ctx.loop, "runtime_state", None)
     tool_input = getattr(ctx.result, "tool_input", None)
     diagnostic_output = str(ctx.output or "")
+    recovery_state = getattr(ctx.loop, "recovery", None)
+    edit_metadata = (
+        (getattr(ctx.result, "metadata", None) or {}).get("edit_recovery")
+        if isinstance(getattr(ctx.result, "metadata", None), dict)
+        else None
+    )
+    if ctx.result.name in {"edit_file", "apply_patch"}:
+        if not ctx.result.dispatch_failed:
+            clear = getattr(recovery_state, "clear_edit_recovery", None)
+            if callable(clear) and isinstance(tool_input, dict):
+                paths = [str(tool_input.get("path") or "")]
+                if ctx.result.name == "apply_patch":
+                    paths.extend(
+                        str(item.get("path") or "")
+                        for item in tool_input.get("changes", ())
+                        if isinstance(item, dict)
+                    )
+                for path in paths:
+                    clear(path)
+        elif isinstance(edit_metadata, dict):
+            build = getattr(recovery_state, "edit_recovery_diagnostic", None)
+            diagnostic = build(edit_metadata) if callable(build) else ""
+            if diagnostic:
+                if callable(getattr(runtime_state, "record_recovery_diagnostic", None)):
+                    runtime_state.record_recovery_diagnostic(diagnostic)
+                ctx.messages.append(stamp_user_message({
+                    "role": "user",
+                    "content": diagnostic,
+                    "_nz_synthetic": True,
+                }))
+                ctx.loop.tracer.log(
+                    "edit_recovery_diagnostic",
+                    path=str(edit_metadata.get("path") or ""),
+                    code=str(edit_metadata.get("code") or ""),
+                )
+                return
     if ctx.result.name == "bash" and isinstance(tool_input, dict):
         vm = getattr(ctx.loop, "vm", None)
         status_reader = getattr(vm, "status", None)

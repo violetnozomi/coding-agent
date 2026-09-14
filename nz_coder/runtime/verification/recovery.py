@@ -10,7 +10,7 @@ import time
 import traceback
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from nz_coder.foundation.error_classification import is_context_overflow_error
 
@@ -197,6 +197,126 @@ class RecoveryState:
         self.repeated_tool_calls = 0
         self.tool_streak_resets = 0
         self._pending_tool_streak_event: dict | None = None
+        # Edit recovery is run-scoped and keyed by the normalized workspace
+        # path.  It intentionally lives beside the existing recovery counters
+        # instead of introducing a second state manager.
+        self.edit_recovery_attempts: dict[str, int] = {}
+        self.blocked_edit_writes: set[str] = set()
+        self._edit_recovery_versions: dict[str, dict] = {}
+
+    @staticmethod
+    def _edit_path(path: str) -> str:
+        from nz_coder.runtime.process.workdir import current_workdir
+
+        raw = str(path or "").strip().replace("\\", "/")
+        if not raw:
+            return ""
+        try:
+            root = current_workdir().resolve()
+            target = (root / raw).resolve()
+            target.relative_to(root)
+        except (OSError, ValueError):
+            return ""
+        return str(target)
+
+    def clear_edit_recovery(self, path: str) -> None:
+        """Clear only the resolved file's failed-anchor state after success."""
+        resolved = self._edit_path(path)
+        if not resolved:
+            return
+        self.edit_recovery_attempts.pop(resolved, None)
+        self.blocked_edit_writes.discard(resolved)
+        self._edit_recovery_versions.pop(resolved, None)
+
+    def edit_write_blocked(self, path: str) -> bool:
+        """Return whether an existing file still has an unresolved edit failure."""
+        resolved = self._edit_path(path)
+        if not resolved or resolved not in self.blocked_edit_writes:
+            return False
+        try:
+            stat = Path(resolved).stat()
+        except OSError:
+            self.clear_edit_recovery(path)
+            return False
+        expected = self._edit_recovery_versions.get(resolved) or {}
+        current = {"size": int(stat.st_size), "mtime_ns": int(stat.st_mtime_ns)}
+        if expected and any(current.get(key) != expected.get(key) for key in current):
+            # A user or another run changed the file; the old anchor evidence
+            # is stale and must not impose a permanent whole-file-write block.
+            self.clear_edit_recovery(path)
+            return False
+        return True
+
+    def edit_recovery_diagnostic(self, metadata: dict) -> str:
+        """Record one real edit failure and render bounded recovery evidence."""
+        if not isinstance(metadata, dict):
+            return ""
+        path = str(metadata.get("path") or "")
+        resolved = self._edit_path(path)
+        code = str(metadata.get("code") or "EDIT_NOT_FOUND")
+        if not resolved:
+            return ""
+        attempt = self.edit_recovery_attempts.get(resolved, 0) + 1
+        self.edit_recovery_attempts[resolved] = attempt
+        version = metadata.get("version") if isinstance(metadata.get("version"), dict) else {}
+        if metadata.get("exists") is True:
+            self.blocked_edit_writes.add(resolved)
+            self._edit_recovery_versions[resolved] = {
+                "size": version.get("size"),
+                "mtime_ns": version.get("mtime_ns"),
+            }
+        lines = [
+            "<edit-recovery>",
+            f"classification: {code.casefold()}",
+            f"file: {path}",
+            f"attempt: {attempt}",
+        ]
+        if code == "EDIT_TOO_LARGE":
+            lines.extend((
+                "The edit payload exceeded the safe edit limit.",
+                "Split the change into smaller precise edits; do not replace the existing file wholesale.",
+            ))
+        elif code == "EDIT_AMBIGUOUS":
+            lines.extend((
+                "The anchor matched multiple locations.",
+                "Expand it with distinguishing surrounding lines; do not shorten the anchor.",
+            ))
+        else:
+            lines.extend((
+                "The exact anchor was not found in the current file.",
+                "Re-read the current file and submit one precise unique edit; do not write the whole file.",
+            ))
+        candidates = metadata.get("candidates")
+        first_window: tuple[int, int] | None = None
+        if isinstance(candidates, list):
+            valid = [item for item in candidates[:3] if isinstance(item, dict)]
+            for index, candidate in enumerate(valid):
+                start = candidate.get("start_line")
+                end = candidate.get("end_line")
+                excerpt = str(candidate.get("excerpt") or "").strip()
+                if not excerpt:
+                    continue
+                if first_window is None and isinstance(start, int) and isinstance(end, int):
+                    first_window = (max(1, start), max(start, end))
+                label = "candidate" if index == 0 else "alternative"
+                lines.extend((
+                    f"{label}_lines: {start}-{end}",
+                    "```text",
+                    excerpt[:1800],
+                    "```",
+                ))
+        if not isinstance(candidates, list) or not any(
+            isinstance(item, dict) and str(item.get("excerpt") or "").strip()
+            for item in candidates
+        ):
+            lines.append("No reliable anchor candidate was found; use exact read_file output before editing.")
+        read_offset, read_end = first_window or (1, 200)
+        lines.extend((
+            f"read_file: path={path} offset={read_offset} limit={max(1, read_end - read_offset + 1)}",
+            f"file_version: size={version.get('size', '')} mtime_ns={version.get('mtime_ns', '')} hash={str(version.get('content_hash') or '')[:16]}",
+            "</edit-recovery>",
+        ))
+        return "\n".join(lines)
 
     def record_success(self):
         self.consecutive_errors = 0
@@ -377,7 +497,7 @@ class RecoveryState:
                 "evidence-backed change and run the most specific relevant check.\n"
                 "</doom-loop-diagnostic>"
             )
-        if "old_text not found" in lower:
+        if tool_name in {"edit_file", "apply_patch"} and "old_text not found" in lower:
             return (
                 "<tool-failure-diagnostic>\n"
                 f"Tool `{tool_name}` could not find the exact old_text.\n"
@@ -389,7 +509,7 @@ class RecoveryState:
                 "`path`, and `new_text`; omit `old_text` instead of guessing an anchor.\n"
                 "</tool-failure-diagnostic>"
             )
-        if "old_text matches" in lower:
+        if tool_name in {"edit_file", "apply_patch"} and "old_text matches" in lower:
             return (
                 "<tool-failure-diagnostic>\n"
                 f"Tool `{tool_name}` found multiple matches.\n"

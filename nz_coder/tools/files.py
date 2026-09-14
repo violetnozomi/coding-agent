@@ -307,6 +307,81 @@ def _nearby_context(content: str, needle: str, radius: int = 3) -> str:
     return "\n".join(chunks).rstrip(".\n")
 
 
+def _edit_anchor_candidates(
+    content: str,
+    needle: str,
+    *,
+    radius: int = 3,
+    limit: int = 3,
+) -> list[dict[str, object]]:
+    """Return bounded, line-addressable candidates for a failed edit anchor."""
+    tokens = [
+        token.strip(' "\'():,.[]{}')
+        for token in (needle or "").replace("\n", " ").split()
+    ]
+    tokens = list(dict.fromkeys(token for token in tokens if token))
+    if not tokens:
+        return []
+    lowered = [token.casefold() for token in tokens[:8]]
+    lines = content.splitlines()
+    ranked: list[tuple[int, int]] = []
+    for index, line in enumerate(lines):
+        score = sum(token in line.casefold() for token in lowered)
+        if score:
+            ranked.append((score, index))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    candidates: list[dict[str, object]] = []
+    seen: set[tuple[int, int]] = set()
+    for _score, index in ranked:
+        start = max(0, index - radius)
+        end = min(len(lines), index + radius + 1)
+        key = (start, end)
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append({
+            "start_line": start + 1,
+            "end_line": end,
+            "preview": lines[index].strip()[:160],
+            "excerpt": "\n".join(
+                f"{line_no + 1}: {lines[line_no]}" for line_no in range(start, end)
+            ),
+        })
+        if len(candidates) >= limit:
+            break
+    return candidates
+
+
+def _edit_failure_output(
+    path: str,
+    code: str,
+    message: str,
+    *,
+    content: str,
+    old_text: str,
+    expected: WorkspaceFileIdentity,
+) -> ToolOutput:
+    """Keep legacy text while attaching precise, file-scoped recovery facts."""
+    return ToolOutput(
+        message,
+        title=f"Edit failed: {path}",
+        metadata={
+            "error_code": code,
+            "edit_recovery": {
+                "code": code,
+                "path": str(path).replace("\\", "/"),
+                "exists": bool(expected.expected_exists),
+                "version": {
+                    "size": expected.size,
+                    "mtime_ns": expected.mtime_ns,
+                    "content_hash": expected.content_hash,
+                },
+                "candidates": _edit_anchor_candidates(content, old_text),
+            },
+        },
+    )
+
+
 def _collect_context_matches(lines: list[str], tokens: list[str], matches: list[int]) -> None:
     lowered_tokens = [t.lower() for t in tokens[:8]]
     for idx, line in enumerate(lines):
@@ -586,9 +661,23 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
         if count == 0:
             context = _nearby_context(content, old_text)
             extra = f"\nNearby context:\n{context}" if context else ""
-            return f"Error: old_text not found in {path}. Re-read or copy the exact snippet from nearby context.{extra}"
+            return _edit_failure_output(
+                path,
+                "EDIT_NOT_FOUND",
+                f"Error: old_text not found in {path}. Re-read or copy the exact snippet from nearby context.{extra}",
+                content=content,
+                old_text=old_text,
+                expected=expected,
+            )
         if count > 1:
-            return f"Error: old_text matches {count} locations in {path}. Be more specific."
+            return _edit_failure_output(
+                path,
+                "EDIT_AMBIGUOUS",
+                f"Error: old_text matches {count} locations in {path}. Be more specific.",
+                content=content,
+                old_text=old_text,
+                expected=expected,
+            )
         updated = content.replace(old_text, new_text, 1)
         txn = _get_txn()
         access.write_text(path, updated, transaction=txn, expected=expected)
@@ -646,7 +735,24 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
         if not isinstance(changes, list) or not changes:
             return "Error: changes must be a non-empty list"
         if len(changes) > 20:
-            return "Error: Max 20 changes per patch"
+            path_hint = next(
+                (str(item.get("path") or "") for item in changes if isinstance(item, dict)),
+                "",
+            )
+            return ToolOutput(
+                "Error: Max 20 changes per patch",
+                title="Patch too large",
+                metadata={
+                    "error_code": "EDIT_TOO_LARGE",
+                    "edit_recovery": {
+                        "code": "EDIT_TOO_LARGE",
+                        "path": path_hint,
+                        "exists": False,
+                        "version": {},
+                        "candidates": [],
+                    },
+                },
+            )
 
         access = _file_access()
         prepared: dict[str, dict] = {}
@@ -723,9 +829,23 @@ def apply_patch(changes: list, dry_run: bool = False, path: str = "") -> str:
             if count == 0:
                 context = _nearby_context(current, old_text)
                 extra = f"\nNearby context:\n{context}" if context else ""
-                return f"Error: change {i} old_text not found in {path}. Re-read or copy the exact snippet from nearby context.{extra}"
+                return _edit_failure_output(
+                    path,
+                    "EDIT_NOT_FOUND",
+                    f"Error: change {i} old_text not found in {path}. Re-read or copy the exact snippet from nearby context.{extra}",
+                    content=current,
+                    old_text=old_text,
+                    expected=prepared[key]["expected"],
+                )
             if count > 1:
-                return f"Error: change {i} old_text matches {count} locations in {path}. Be more specific."
+                return _edit_failure_output(
+                    path,
+                    "EDIT_AMBIGUOUS",
+                    f"Error: change {i} old_text matches {count} locations in {path}. Be more specific.",
+                    content=current,
+                    old_text=old_text,
+                    expected=prepared[key]["expected"],
+                )
             prepared[key]["after"] = current.replace(old_text, new_text, 1)
 
         txn, manage_locally = _begin_local_txn()

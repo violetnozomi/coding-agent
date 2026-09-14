@@ -225,6 +225,51 @@ class ProductionToolPolicy:
         del context, tool_calls
         return {}
 
+    def edit_recovery_write_rejections(
+        self,
+        context: ToolPolicyContext,
+        tool_calls: list[dict],
+    ) -> dict[int, ToolExecutionResult]:
+        """Block ungrounded whole-file writes after an edit anchor failure."""
+        recovery = context.recovery
+        blocked_lookup = getattr(recovery, "edit_write_blocked", None)
+        if not callable(blocked_lookup):
+            return {}
+        rejected: dict[int, ToolExecutionResult] = {}
+        for index, tool_call in enumerate(tool_calls):
+            function = tool_call.get("function", {})
+            name = str(function.get("name") or "")
+            if name not in {"write_file", "write_files_batch"}:
+                continue
+            tool_input = context.parse_input(function.get("arguments", {}))
+            paths = (
+                [str(tool_input.get("path") or "")]
+                if name == "write_file" else [
+                    str(item.get("path") or "")
+                    for item in tool_input.get("files", ())
+                    if isinstance(item, dict)
+                ]
+            )
+            blocked = next((path for path in paths if blocked_lookup(path)), "")
+            if not blocked:
+                continue
+            rejected[index] = ToolExecutionResult(
+                name=name,
+                tool_input=tool_input,
+                output=(
+                    f"Denied: edit anchor recovery is active for existing file '{blocked}'. "
+                    "Use the current edit candidates or read_file before making a precise edit; "
+                    "whole-file overwrite is not evidence-backed."
+                ),
+                executed=False,
+                dispatch_failed=True,
+                command_failed=False,
+                is_write=True,
+                permission_denied=True,
+                metadata={"edit_recovery_write_blocked": True, "path": blocked},
+            )
+        return rejected
+
 
     def task_constraint_rejections(
         self,

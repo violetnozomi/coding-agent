@@ -167,6 +167,7 @@ class ProductionToolRuntime:
         blocked.update(self.policy.admission_tool_rejections(context, calls))
         blocked.update(self.policy.strict_private_path_rejections(context, calls))
         blocked.update(self.policy.task_constraint_rejections(context, calls))
+        blocked.update(self.policy.edit_recovery_write_rejections(context, calls))
         blocked.update(self.policy.implementation_phase_rejections(context, calls))
         blocked.update(self.policy.closure_phase_rejections(context, calls))
         blocked.update(self.policy.strict_progress_rejections(context, calls))

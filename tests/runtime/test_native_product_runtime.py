@@ -217,3 +217,76 @@ def test_product_default_retrieval_reaches_provider(monkeypatch, tmp_path, metad
         assert environment.repo_intelligence.semantic_available is False
     finally:
         environment.close()
+
+
+def test_native_runner_carries_edit_recovery_into_next_model_request(monkeypatch, tmp_path):
+    """A real AgentRunner turn receives anchors before choosing the next edit."""
+    from nz_coder.runtime.execution import native_sdk
+    from nz_coder.runtime.core.result import RunStatus
+
+    target = tmp_path / "module.py"
+    target.write_text("value = 1\n", encoding="utf-8")
+    requests = []
+
+    class Provider:
+        name = "offline"
+
+        def create_completion(self, _client, **kwargs):
+            requests.append(copy.deepcopy(kwargs))
+            call_count = len(requests)
+            if call_count == 1:
+                message = SimpleNamespace(
+                    content="",
+                    tool_calls=[SimpleNamespace(
+                        id="edit-failure",
+                        type="function",
+                        function=SimpleNamespace(
+                            name="edit_file",
+                            arguments='{"path":"module.py","old_text":"value = 9","new_text":"value = 0"}',
+                        ),
+                    )],
+                )
+                finish = "tool_calls"
+            elif call_count == 2:
+                message = SimpleNamespace(
+                    content="",
+                    tool_calls=[SimpleNamespace(
+                        id="edit-success",
+                        type="function",
+                        function=SimpleNamespace(
+                            name="edit_file",
+                            arguments='{"path":"module.py","old_text":"value = 1","new_text":"value = 2"}',
+                        ),
+                    )],
+                )
+                finish = "tool_calls"
+            else:
+                message = SimpleNamespace(content="fixed", tool_calls=[])
+                finish = "stop"
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=message, finish_reason=finish)],
+                usage=SimpleNamespace(prompt_tokens=4, completion_tokens=2, total_tokens=6),
+            )
+
+    runtime = replace(_runtime(), provider=Provider())
+    monkeypatch.setattr(native_sdk, "resolve_model_runtime", lambda _: runtime)
+    monkeypatch.setattr("nz_coder.runtime.execution.loop.resolve_model_runtime", lambda _: runtime)
+    request = replace(
+        _request(tmp_path),
+        messages=({"role": "user", "content": "Set module.py value to 2"},),
+    )
+    options = RunOptions(permission_asker=lambda *_: True)
+    environment = native_sdk.build_product_run_environment(request, options)
+    try:
+        result = asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request, options))
+        assert result.status is RunStatus.COMPLETED
+        assert target.read_text(encoding="utf-8") == "value = 2\n"
+        assert len(requests) >= 3
+        second_request = "\n".join(
+            str(message.get("content", "")) for message in requests[1]["messages"]
+        )
+        assert "<edit-recovery>" in second_request
+        assert "candidate_lines:" in second_request
+        assert "read_file: path=module.py" in second_request
+    finally:
+        environment.close()
