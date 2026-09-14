@@ -298,6 +298,16 @@ class ProductionToolRuntime:
                 host._finish_tool_transaction(has_write, False, messages)
             raise
 
+        record_evidence = getattr(host.recovery, "record_tool_result_evidence", None)
+        if callable(record_evidence):
+            for _index, _tool_call, result in dispatched:
+                record_evidence(
+                    result.name, result.tool_input, result.output,
+                    executed=result.executed,
+                    dispatch_failed=result.dispatch_failed,
+                    cache_hit=bool((result.metadata or {}).get("read_cache_hit")),
+                )
+
         if has_write and batch_state["all_succeeded"]:
             record_committed = getattr(host.executor, "record_committed_writes", None)
             if callable(record_committed):
@@ -500,6 +510,16 @@ class ProductionToolRuntime:
             if has_write and not transaction_finished and lifecycle.transaction_active():
                 lifecycle.finish_transaction(has_write, False, messages)
             raise
+
+        record_evidence = getattr(context.policy.recovery, "record_tool_result_evidence", None)
+        if callable(record_evidence):
+            for _index, _tool_call, result in dispatched:
+                record_evidence(
+                    result.name, result.tool_input, result.output,
+                    executed=result.executed,
+                    dispatch_failed=result.dispatch_failed,
+                    cache_hit=bool((result.metadata or {}).get("read_cache_hit")),
+                )
 
         if has_write and batch_state["all_succeeded"]:
             record_committed = getattr(lifecycle.executor, "record_committed_writes", None)

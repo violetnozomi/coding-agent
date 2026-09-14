@@ -672,3 +672,34 @@ def test_agent_doom_loop_permission_can_approve_exact_repeat():
     assert 0 in blocked
     assert agent._resolve_doom_loop_permissions(blocked, [call]) == {}
     assert agent.recovery.repeated_tool_calls == 0
+
+
+def test_repeated_call_streak_resets_only_when_same_call_gets_new_evidence():
+    from nz_coder.runtime.verification.recovery import RecoveryState
+
+    state = RecoveryState()
+    call = {"path": "src.py"}
+    state.observe_tool_call("read_file", call, threshold=3)
+    state.record_tool_result_evidence(
+        "read_file", call, "old contents", executed=True, dispatch_failed=False,
+    )
+    state.observe_tool_call("read_file", call, threshold=3)
+    state.record_tool_result_evidence(
+        "read_file", call, "new contents", executed=True, dispatch_failed=False,
+    )
+    assert state.repeated_tool_calls == 0
+    assert state.observe_tool_call("read_file", call, threshold=3)["should_block"] is False
+
+
+def test_repeated_unchanged_result_remains_bounded():
+    from nz_coder.runtime.verification.recovery import RecoveryState
+
+    state = RecoveryState()
+    call = {"path": "src.py"}
+    for _ in range(2):
+        state.observe_tool_call("read_file", call, threshold=3)
+        state.record_tool_result_evidence(
+            "read_file", call, "unchanged", executed=True, dispatch_failed=False,
+        )
+    blocked = state.observe_tool_call("read_file", call, threshold=3)
+    assert blocked["should_block"] is True

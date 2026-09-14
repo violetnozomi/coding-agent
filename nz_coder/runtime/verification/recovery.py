@@ -3,6 +3,7 @@ from __future__ import annotations
 
 
 import json
+import hashlib
 import math
 import re
 import shlex
@@ -197,6 +198,8 @@ class RecoveryState:
         self.repeated_tool_calls = 0
         self.tool_streak_resets = 0
         self._pending_tool_streak_event: dict | None = None
+        self._last_tool_result_signature: str | None = None
+        self._last_tool_result_digest: str | None = None
         # Edit recovery is run-scoped and keyed by the normalized workspace
         # path.  It intentionally lives beside the existing recovery counters
         # instead of introducing a second state manager.
@@ -418,6 +421,29 @@ class RecoveryState:
         event = self._pending_tool_streak_event
         self._pending_tool_streak_event = None
         return event
+
+    def record_tool_result_evidence(
+        self, tool_name: str, tool_input: object, output: str, *,
+        executed: bool, dispatch_failed: bool, cache_hit: bool = False,
+    ) -> bool:
+        """Reset an exact-call streak only when its executed evidence changed."""
+        if not executed or dispatch_failed or cache_hit:
+            return False
+        encoded = json.dumps(
+            tool_input, ensure_ascii=False, sort_keys=True,
+            separators=(",", ":"), default=str,
+        )
+        signature = f"{tool_name}\0{encoded}"
+        digest = hashlib.sha256(str(output or "").encode("utf-8")).hexdigest()
+        changed = (
+            signature == self._last_tool_result_signature
+            and digest != self._last_tool_result_digest
+        )
+        self._last_tool_result_signature = signature
+        self._last_tool_result_digest = digest
+        if changed:
+            self.reset_tool_call_history(reason="new_tool_evidence")
+        return changed
 
     def _record_tool_streak_reset(self, *, reason: str, next_tool: str | None) -> None:
         self.tool_streak_resets += 1

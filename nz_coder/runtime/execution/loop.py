@@ -3974,6 +3974,12 @@ class ProductRunEnvironment:
         tracer = getattr(self, "tracer", None)
         if tracer is None:
             return
+        if event.get("is_stuck") is False and event.get("trace") == "sidecar_ok":
+            recovery = getattr(self, "recovery", None)
+            reset = getattr(recovery, "reset_tool_call_history", None)
+            if callable(reset):
+                reset(reason="stall_not_stuck")
+                tracer.log("stall_sidecar_not_stuck", trace=event.get("trace"))
         tracer.log("stall_sidecar_verdict", **dict(event))
 
     def _provider_stall_sidecar(
