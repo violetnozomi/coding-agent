@@ -198,6 +198,7 @@ class RecoveryState:
         self.repeated_tool_calls = 0
         self.tool_streak_resets = 0
         self._pending_tool_streak_event: dict | None = None
+        self._tool_state_revision = 0
         self._last_tool_result_signature: str | None = None
         self._last_tool_result_digest: str | None = None
         # Edit recovery is run-scoped and keyed by the normalized workspace
@@ -407,6 +408,25 @@ class RecoveryState:
         self._last_tool_signature = None
         self._last_tool_name = None
         self.repeated_tool_calls = 0
+        self._tool_state_revision += 1
+
+    def stall_scope_token(self) -> dict:
+        """Capture the streak state to which an asynchronous verdict belongs."""
+        return {
+            "revision": self._tool_state_revision,
+            "signature": self._last_tool_signature,
+            "count": self.repeated_tool_calls,
+        }
+
+    def stall_scope_current(self, token: object) -> bool:
+        """Return whether a verdict still targets the current streak state."""
+        if not isinstance(token, dict):
+            return False
+        return (
+            token.get("revision") == self._tool_state_revision
+            and token.get("signature") == self._last_tool_signature
+            and token.get("count") == self.repeated_tool_calls
+        )
 
     def start_tool_call_run(self) -> None:
         """Start per-run streak accounting without carrying previous-run statistics."""
@@ -415,6 +435,7 @@ class RecoveryState:
         self.repeated_tool_calls = 0
         self.tool_streak_resets = 0
         self._pending_tool_streak_event = None
+        self._tool_state_revision += 1
 
     def consume_tool_streak_event(self) -> dict | None:
         """Return and clear the latest streak reset event for trace emission."""
@@ -424,9 +445,10 @@ class RecoveryState:
 
     def record_tool_result_evidence(
         self, tool_name: str, tool_input: object, output: str, *,
-        executed: bool, dispatch_failed: bool, cache_hit: bool = False,
+        executed: bool, dispatch_failed: bool, command_failed: bool = False,
+        cache_hit: bool = False, metadata: dict | None = None,
     ) -> bool:
-        """Reset an exact-call streak only when its executed evidence changed."""
+        """Reset a streak only when structured, relevant evidence changed."""
         if not executed or dispatch_failed or cache_hit:
             return False
         encoded = json.dumps(
@@ -434,7 +456,9 @@ class RecoveryState:
             separators=(",", ":"), default=str,
         )
         signature = f"{tool_name}\0{encoded}"
-        digest = hashlib.sha256(str(output or "").encode("utf-8")).hexdigest()
+        digest = self._tool_evidence_digest(
+            output, command_failed=command_failed, metadata=metadata,
+        )
         changed = (
             signature == self._last_tool_result_signature
             and digest != self._last_tool_result_digest
@@ -444,6 +468,32 @@ class RecoveryState:
         if changed:
             self.reset_tool_call_history(reason="new_tool_evidence")
         return changed
+
+    @staticmethod
+    def _tool_evidence_digest(
+        output: str, *, command_failed: bool, metadata: dict | None,
+    ) -> str:
+        """Ignore volatile timing fields while retaining failure diagnostics."""
+        data = metadata if isinstance(metadata, dict) else {}
+        volatile = {"timestamp", "time", "elapsed", "elapsed_ms", "duration", "duration_ms", "wall_ms"}
+        if command_failed:
+            evidence = {
+                "exit": data.get("exit"),
+                "diagnostic": re.sub(
+                    r"(?:\b\d{4}-\d{2}-\d{2}[T ][^\s]+|\b\d+(?:\.\d+)?\s*(?:ms|s|seconds))",
+                    "<volatile>", str(data.get("output") or output or ""),
+                    flags=re.IGNORECASE,
+                ),
+            }
+        elif any(key in data for key in ("state", "status", "phase")):
+            evidence = {
+                key: value for key, value in data.items()
+                if key not in volatile and key not in {"output", "preview"}
+            }
+        else:
+            evidence = str(output or "")
+        encoded = json.dumps(evidence, ensure_ascii=False, sort_keys=True, default=str)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     def _record_tool_streak_reset(self, *, reason: str, next_tool: str | None) -> None:
         self.tool_streak_resets += 1
@@ -489,6 +539,7 @@ class RecoveryState:
             self._last_tool_signature = signature
             self._last_tool_name = tool_name
             self.repeated_tool_calls = 1
+        self._tool_state_revision += 1
         effective_threshold = max(2, threshold)
         consecutive_block = self.repeated_tool_calls >= effective_threshold
         return {

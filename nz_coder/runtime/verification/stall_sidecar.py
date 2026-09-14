@@ -208,7 +208,10 @@ class StallSidecarOrchestrator:
             if len(self._transcript) > self._window:
                 del self._transcript[:-self._window]
 
-    def record_tool_use(self, call: dict[str, Any], *, cache_hit: bool = False) -> bool:
+    def record_tool_use(
+        self, call: dict[str, Any], *, cache_hit: bool = False,
+        scope: dict[str, Any] | None = None,
+    ) -> bool:
         """Record a call and launch L2 without waiting when L1 fires."""
         tool_name = str(call.get("name") or "")
         call_id = str(call.get("id") or "")
@@ -229,7 +232,7 @@ class StallSidecarOrchestrator:
         cancel_event = threading.Event()
         thread = threading.Thread(
             target=self._run_evaluation,
-            args=(epoch, signal, user_message, cancel_event),
+            args=(epoch, signal, user_message, cancel_event, dict(scope or {})),
             name="nz-stall-sidecar",
             daemon=True,
         )
@@ -245,6 +248,7 @@ class StallSidecarOrchestrator:
         signal: StallSignal,
         user_message: str,
         cancel_event: threading.Event,
+        scope: dict[str, Any],
     ) -> None:
         started = time.monotonic()
         completed = threading.Event()
@@ -305,6 +309,7 @@ class StallSidecarOrchestrator:
         event.update({
             "elapsed_ms": round((time.monotonic() - started) * 1000, 3),
             "signal_envelope": signal.envelope,
+            "scope": scope,
         })
         if self._on_event is not None:
             try:

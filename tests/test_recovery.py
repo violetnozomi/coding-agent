@@ -703,3 +703,74 @@ def test_repeated_unchanged_result_remains_bounded():
         )
     blocked = state.observe_tool_call("read_file", call, threshold=3)
     assert blocked["should_block"] is True
+
+
+def test_failed_command_timing_noise_does_not_reset_streak():
+    from nz_coder.runtime.verification.recovery import RecoveryState
+
+    state = RecoveryState()
+    call = {"command": "python -m pytest -q tests/test_one.py"}
+    state.observe_tool_call("bash", call, threshold=3)
+    state.record_tool_result_evidence(
+        "bash", call, "", executed=True, dispatch_failed=False,
+        command_failed=True,
+        metadata={"exit": 1, "output": "FAILED test_one (0.10s) at 2026-09-14T10:00:00Z"},
+    )
+    state.observe_tool_call("bash", call, threshold=3)
+    changed = state.record_tool_result_evidence(
+        "bash", call, "", executed=True, dispatch_failed=False,
+        command_failed=True,
+        metadata={"exit": 1, "output": "FAILED test_one (0.20s) at 2026-09-14T10:01:00Z"},
+    )
+    assert changed is False
+    assert state.repeated_tool_calls == 2
+
+
+def test_pending_poll_timing_noise_does_not_count_as_progress():
+    from nz_coder.runtime.verification.recovery import RecoveryState
+
+    state = RecoveryState()
+    call = {"job": "build-1"}
+    state.observe_tool_call("poll_status", call, threshold=3)
+    state.record_tool_result_evidence(
+        "poll_status", call, "pending at 10:00", executed=True,
+        dispatch_failed=False, metadata={"state": "pending", "timestamp": "10:00"},
+    )
+    state.observe_tool_call("poll_status", call, threshold=3)
+    changed = state.record_tool_result_evidence(
+        "poll_status", call, "pending at 10:01", executed=True,
+        dispatch_failed=False, metadata={"state": "pending", "timestamp": "10:01"},
+    )
+    assert changed is False
+    assert state.repeated_tool_calls == 2
+
+
+def test_stall_verdict_scope_does_not_clear_newer_same_signature_streak():
+    from nz_coder.runtime.verification.recovery import RecoveryState
+
+    state = RecoveryState()
+    call = {"path": "src.py"}
+    state.observe_tool_call("read_file", call, threshold=3)
+    verdict_scope = state.stall_scope_token()
+    state.observe_tool_call("read_file", call, threshold=3)
+    assert state.stall_scope_current(verdict_scope) is False
+    assert state.repeated_tool_calls == 2
+
+
+def test_stall_verdict_scope_remains_valid_until_evidence_changes():
+    from nz_coder.runtime.verification.recovery import RecoveryState
+
+    state = RecoveryState()
+    call = {"path": "src.py"}
+    state.observe_tool_call("read_file", call, threshold=3)
+    state.record_tool_result_evidence(
+        "read_file", call, "old", executed=True, dispatch_failed=False,
+    )
+    state.observe_tool_call("read_file", call, threshold=3)
+    scope = state.stall_scope_token()
+    assert state.stall_scope_current(scope) is True
+    state.record_tool_result_evidence(
+        "read_file", call, "new", executed=True,
+        dispatch_failed=False,
+    )
+    assert state.stall_scope_current(scope) is False

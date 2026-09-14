@@ -547,6 +547,11 @@ class ProductionToolPolicy:
                     )
                 continue
 
+            observation = recovery.observe_tool_call(
+                fn_name,
+                signature_input,
+                threshold=threshold,
+            )
             if orchestrator is not None and fn_name in _STALL_SIDECAR_EXEMPT_TOOLS:
                 context.trace(
                     "stall_sidecar_observation_skipped",
@@ -554,18 +559,23 @@ class ProductionToolPolicy:
                     reason="deterministic_closure_tool",
                 )
             elif orchestrator is not None:
-                signaled = orchestrator.record_tool_use({
+                stall_call = {
                     "id": str(tool_call.get("id") or ""),
                     "name": fn_name,
                     "input": signature_input,
-                })
+                }
+                try:
+                    signaled = orchestrator.record_tool_use(
+                        stall_call, scope=recovery.stall_scope_token(),
+                    )
+                except TypeError as exc:
+                    # Preserve compatibility with narrow test/integration
+                    # adapters that predate scoped verdicts.
+                    if "scope" not in str(exc):
+                        raise
+                    signaled = orchestrator.record_tool_use(stall_call)
                 if signaled:
                     context.trace("stall_l1_signal", name=fn_name)
-            observation = recovery.observe_tool_call(
-                fn_name,
-                signature_input,
-                threshold=threshold,
-            )
             self.trace_tool_streak_reset(context)
             if not observation["should_block"]:
                 continue

@@ -3977,9 +3977,13 @@ class ProductRunEnvironment:
         if event.get("is_stuck") is False and event.get("trace") == "sidecar_ok":
             recovery = getattr(self, "recovery", None)
             reset = getattr(recovery, "reset_tool_call_history", None)
-            if callable(reset):
+            still_current = getattr(recovery, "stall_scope_current", None)
+            scope_valid = callable(still_current) and still_current(event.get("scope"))
+            if callable(reset) and scope_valid:
                 reset(reason="stall_not_stuck")
                 tracer.log("stall_sidecar_not_stuck", trace=event.get("trace"))
+            elif callable(tracer.log):
+                tracer.log("stall_sidecar_verdict_stale", scope_valid=scope_valid)
         tracer.log("stall_sidecar_verdict", **dict(event))
 
     def _provider_stall_sidecar(

@@ -305,7 +305,9 @@ class ProductionToolRuntime:
                     result.name, result.tool_input, result.output,
                     executed=result.executed,
                     dispatch_failed=result.dispatch_failed,
+                    command_failed=result.command_failed,
                     cache_hit=bool((result.metadata or {}).get("read_cache_hit")),
+                    metadata=result.metadata,
                 )
 
         if has_write and batch_state["all_succeeded"]:
@@ -518,7 +520,9 @@ class ProductionToolRuntime:
                     result.name, result.tool_input, result.output,
                     executed=result.executed,
                     dispatch_failed=result.dispatch_failed,
+                    command_failed=result.command_failed,
                     cache_hit=bool((result.metadata or {}).get("read_cache_hit")),
+                    metadata=result.metadata,
                 )
 
         if has_write and batch_state["all_succeeded"]:
