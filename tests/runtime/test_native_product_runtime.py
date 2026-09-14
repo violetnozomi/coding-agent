@@ -226,6 +226,12 @@ def test_native_runner_carries_edit_recovery_into_next_model_request(monkeypatch
 
     target = tmp_path / "module.py"
     target.write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_module.py").write_text(
+        "from module import value\n\n"
+        "def test_value_was_fixed():\n    assert value == 2\n",
+        encoding="utf-8",
+    )
     requests = []
 
     class Provider:
@@ -260,6 +266,19 @@ def test_native_runner_carries_edit_recovery_into_next_model_request(monkeypatch
                     )],
                 )
                 finish = "tool_calls"
+            elif call_count == 3:
+                message = SimpleNamespace(
+                    content="",
+                    tool_calls=[SimpleNamespace(
+                        id="verify-fix",
+                        type="function",
+                        function=SimpleNamespace(
+                            name="bash",
+                            arguments='{"command":"python -m pytest -q tests/test_module.py"}',
+                        ),
+                    )],
+                )
+                finish = "tool_calls"
             else:
                 message = SimpleNamespace(content="fixed", tool_calls=[])
                 finish = "stop"
@@ -281,12 +300,15 @@ def test_native_runner_carries_edit_recovery_into_next_model_request(monkeypatch
         result = asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request, options))
         assert result.status is RunStatus.COMPLETED
         assert target.read_text(encoding="utf-8") == "value = 2\n"
-        assert len(requests) >= 3
+        assert len(requests) >= 4
         second_request = "\n".join(
             str(message.get("content", "")) for message in requests[1]["messages"]
         )
         assert "<edit-recovery>" in second_request
         assert "candidate_lines:" in second_request
         assert "read_file: path=module.py" in second_request
+        assert "1 passed" in "\n".join(
+            str(message.get("content", "")) for message in requests[3]["messages"]
+        )
     finally:
         environment.close()
