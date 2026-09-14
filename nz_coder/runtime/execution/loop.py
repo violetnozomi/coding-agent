@@ -589,6 +589,7 @@ class ProductRunEnvironment:
         self._project_profile_block_cache: str = ""
         self._project_execution_facts_cache: dict | None = None
         self._implementation_bundle_cache: str = ""
+        self._implementation_bundle_cache_key: tuple | None = None
         self.run_evidence = RunEvidence(run_id=self.tracer.run_id)
         try:
             from nz_coder.runtime.agent.subagent import bind_parent_context
@@ -1986,22 +1987,38 @@ class ProductRunEnvironment:
                 fallback=decision.fallback,
                 elapsed_ms=decision.elapsed_ms,
             )
-        turn = int(getattr(self.runtime_state, "turn_count", 0) or 0)
-        if turn > 1:
-            if selected == "policy" and decision.guidance:
-                return "<repo-routing>\n" + decision.guidance + "\n</repo-routing>"
-            return ""
-        return decision.prompt_block
+        block = decision.prompt_block
+        if selected in {"auto-context", "policy"} and not decision.auto_context:
+            state = str(getattr(decision.signal, "index_status", "unknown") or "unknown")
+            reason = decision.fallback or (
+                "no-high-confidence-candidates" if state == "ready" else f"index-{state}"
+            )
+            fallback_block = (
+                "<repo-routing>\n"
+                f"Repository intelligence did not provide bounded evidence ({reason}). "
+                "Use repo_context, grep_search, or read_file for precise verification; "
+                "this is not evidence that the repository has no match.\n"
+                "</repo-routing>"
+            )
+            block = "\n\n".join(part for part in (block, fallback_block) if part)
+        return block
 
     def _implementation_bundle_block(self, query: str) -> str:
-        """Build one bounded first-turn workset for complex multi-artifact work."""
-        if int(getattr(self.runtime_state, "turn_count", 0) or 0) > 1:
-            return ""
-        if self._implementation_bundle_cache:
-            return self._implementation_bundle_cache
+        """Build a bounded workset and refresh it when indexed facts change."""
         contract_data = getattr(self.runtime_state, "task_contract", None)
         if not isinstance(contract_data, dict) or not contract_data:
             return ""
+        if self._implementation_bundle_cache:
+            changed_paths = tuple(self.change_tracker.current_changed_paths())
+            cache_key = (
+                str(query),
+                repr(contract_data),
+                int(getattr(self.repo_intelligence.state, "generation", 0) or 0),
+                str(getattr(self.repo_intelligence.state, "status", "")),
+                changed_paths,
+            )
+            if cache_key == self._implementation_bundle_cache_key:
+                return self._implementation_bundle_cache
         from nz_coder.intelligence.implementation_bundle import (
             build_implementation_bundle,
             should_build_implementation_bundle,
@@ -2061,6 +2078,13 @@ class ProductRunEnvironment:
             )
             return ""
         self._implementation_bundle_cache = block
+        self._implementation_bundle_cache_key = (
+            str(query),
+            repr(contract_data),
+            int(getattr(self.repo_intelligence.state, "generation", 0) or 0),
+            str(getattr(self.repo_intelligence.state, "status", "")),
+            tuple(self.change_tracker.current_changed_paths()),
+        )
         self.tracer.log(
             "implementation_bundle_ready",
             requirement_count=len(contract.requirements),

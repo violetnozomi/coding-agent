@@ -80,8 +80,8 @@ class RepoRetrievalPolicy:
         declared_paths = self._normalize_known_paths(known_paths)
         state = service.state
         cache_key = (
-            selected, int(state.generation), str(query), tuple(changed_paths),
-            bool(semantic_available), declared_paths,
+            selected, int(state.generation), str(state.status), str(state.error),
+            str(query), tuple(changed_paths), bool(semantic_available), declared_paths,
         )
         cached = self._cache.get(cache_key)
         if cached is not None:
@@ -175,7 +175,13 @@ class RepoRetrievalPolicy:
             )
             if selected in {"guidance", "policy"} else ""
         )
-        auto_context = self._format_auto_context(accepted, operation)
+        auto_context = self._format_auto_context(
+            accepted,
+            operation,
+            service=service,
+            state=state,
+            changed_paths=changed_paths,
+        )
         decision = RetrievalDecision(
             strategy=selected, signal=signal, guidance=guidance,
             auto_context=auto_context, fallback=fallback,
@@ -355,20 +361,167 @@ class RepoRetrievalPolicy:
             "changed-code reasoning -> changed_scope/impact." + semantic
         )
 
-    def _format_auto_context(self, items: list[dict], operation: str) -> str:
+    def _format_auto_context(
+        self,
+        items: list[dict],
+        operation: str,
+        *,
+        service=None,
+        state=None,
+        changed_paths: tuple[str, ...] = (),
+    ) -> str:
         if not items:
             return ""
-        lines = [f"High-confidence bounded {operation} candidates:"]
+        state_status = str(getattr(state, "status", "unknown") or "unknown")
+        state_generation = getattr(state, "generation", None)
+        lines = [
+            f"High-confidence bounded {operation} candidates "
+            f"(status={state_status}, generation={state_generation}):"
+        ]
+        scope = None
+        if (
+            operation == "changed_scope"
+            and service is not None
+            and str(getattr(state, "status", "")) == "ready"
+            and changed_paths
+        ):
+            try:
+                scope = service.changed_scope(
+                    changed_paths=list(changed_paths),
+                    limit=self.limit,
+                    node_limit=20,
+                    wait_budget_ms=0,
+                )
+            except (RuntimeError, ValueError, OSError):
+                scope = None
+
         for item in items[:self.limit]:
             identity = item.get("symbol_id") or item.get("identity") or ""
             locator = item.get("file") or item.get("locator") or ""
             title = item.get("title") or identity or locator
-            lines.append(
-                f"- {title} | {locator} | identity={identity} | score={float(item.get('score') or 0):.3f}"
+            score = float(item.get("score") or 0)
+            confidence = float(item.get("confidence") or score)
+            freshness = str(
+                item.get("freshness")
+                or ("indexed" if state_status == "ready" else state_status)
             )
-        rendered = "\n".join(lines)
+            lines.append(
+                f"- {title} | {locator} | identity={identity} | score={score:.3f} "
+                f"| confidence={confidence:.3f} | freshness={freshness} "
+                f"| source={item.get('source') or 'unknown'}"
+            )
+            snippet = self._clean_evidence_value(item.get("snippet"))
+            if snippet:
+                lines.append(f"  Summary: {snippet}")
+
+            detail = scope if operation == "changed_scope" else None
+            if detail is None and service is not None and str(identity):
+                try:
+                    if str(identity).startswith("symbol:"):
+                        detail = service.symbol_context(str(identity), limit=8, wait_budget_ms=0)
+                    elif str(identity).startswith("module:"):
+                        detail = service.module_context(str(identity), wait_budget_ms=0)
+                except (RuntimeError, ValueError, OSError):
+                    detail = None
+            lines.extend(self._render_candidate_evidence(
+                detail,
+                locator=str(locator),
+                freshness=freshness,
+            ))
         max_chars = self.token_budget * 4
-        return rendered[:max_chars]
+        rendered_lines: list[str] = []
+        size = 0
+        for line in lines:
+            addition = len(line) + (1 if rendered_lines else 0)
+            if rendered_lines and size + addition > max_chars:
+                break
+            rendered_lines.append(line)
+            size += addition
+        return "\n".join(rendered_lines)
+
+    @classmethod
+    def _render_candidate_evidence(
+        cls,
+        detail: dict | None,
+        *,
+        locator: str,
+        freshness: str,
+    ) -> list[str]:
+        """Render a few traceable facts without copying a full graph payload."""
+        if not isinstance(detail, dict):
+            return [f"  Evidence: unavailable ({freshness}); use repo_context or grep_search."]
+
+        facts: list[str] = []
+        definition = detail.get("definition")
+        if isinstance(definition, dict):
+            path = cls._clean_evidence_value(
+                definition.get("path") or definition.get("file_path")
+            )
+            line = definition.get("line")
+            if path:
+                facts.append(f"definition={path}:{line}" if line else f"definition={path}")
+            module = cls._clean_evidence_value(definition.get("module_id"))
+            if module:
+                facts.append(f"module={module}")
+        signature = cls._clean_evidence_value(detail.get("signature"))
+        if signature:
+            facts.append(f"signature={signature}")
+        for key, label in (
+            ("dependencies", "dependencies"),
+            ("dependents", "dependents"),
+            ("related_tests", "related_tests"),
+            ("entry_files", "entry_files"),
+            ("direct_callers", "callers"),
+            ("impacted_callers", "impacted_callers"),
+            ("changed_symbols", "changed_symbols"),
+            ("dependent_modules", "dependents"),
+            ("risk", "risk"),
+        ):
+            value = detail.get(key)
+            rendered = cls._clean_evidence_list(value)
+            if rendered:
+                facts.append(f"{label}={rendered}")
+        callers = cls._clean_evidence_list(
+            [item.get("caller") for item in detail.get("callers", ()) if isinstance(item, dict)]
+        )
+        callees = cls._clean_evidence_list(
+            [item.get("callee") for item in detail.get("callees", ()) if isinstance(item, dict)]
+        )
+        if callers:
+            facts.append(f"callers={callers}")
+        if callees:
+            facts.append(f"callees={callees}")
+        alternatives = cls._clean_evidence_list(
+            [
+                f"{item.get('path') or item.get('file_path')}:{item.get('line')}"
+                for item in detail.get("alternatives", ())
+                if isinstance(item, dict)
+            ]
+        )
+        if alternatives:
+            facts.append(f"alternatives={alternatives}")
+        if detail.get("warnings"):
+            facts.append("warnings=" + cls._clean_evidence_list(detail["warnings"]))
+        if facts:
+            return ["  Evidence: " + " | ".join(facts)] + [
+                f"  Next read: read_file path={locator.split(':', 1)[0]}"
+            ]
+        return [f"  Evidence: {freshness}; use repo_context or grep_search to verify."]
+
+    @staticmethod
+    def _clean_evidence_value(value) -> str:
+        text = str(value or "").replace("\n", " ").replace("\r", " ").strip()
+        return text[:120]
+
+    @classmethod
+    def _clean_evidence_list(cls, values) -> str:
+        if isinstance(values, (str, bytes)):
+            values = [values]
+        if not isinstance(values, (list, tuple, set)):
+            return ""
+        cleaned = [cls._clean_evidence_value(value) for value in values]
+        cleaned = [value for value in cleaned if value]
+        return ", ".join(list(dict.fromkeys(cleaned))[:8])
 
 
 __all__ = [

@@ -490,3 +490,71 @@ def test_explicit_semantic_tool_uses_query_budget_not_hot_path_budget(monkeypatc
     with scoped_workdir(tmp_path):
         semantic_search("business intent")
     assert captured["wait_budget_ms"] == 2_000
+
+
+def test_auto_context_expands_changed_candidate_into_traceable_evidence(tmp_path) -> None:
+    """Automatic routing must expose bounded graph/test facts, not only a score."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "pricing.py").write_text(
+        "def calculate_total(subtotal):\n    return subtotal + 5\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "checkout.py").write_text(
+        "from src.pricing import calculate_total\n\n"
+        "def checkout(subtotal):\n    return calculate_total(subtotal)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "test_checkout.py").write_text(
+        "from checkout import checkout\n\n"
+        "def test_checkout_total():\n    assert checkout(10) == 15\n",
+        encoding="utf-8",
+    )
+    from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
+
+    service = _service(tmp_path)
+    try:
+        decision = RepoRetrievalPolicy(hot_path_ms=500).decide(
+            "review the current changes",
+            service=service,
+            strategy="auto-context",
+            changed_paths=("src/pricing.py",),
+        )
+    finally:
+        service.close()
+
+    assert "freshness=indexed" in decision.auto_context
+    assert "confidence=" in decision.auto_context
+    assert "related_tests=test_checkout.py" in decision.auto_context
+    assert "dependents=checkout.py" in decision.auto_context
+    assert "read_file" in decision.auto_context
+
+
+def test_auto_context_expands_unknown_structural_candidates(tmp_path) -> None:
+    """Unknown structural work receives module and symbol evidence in the request block."""
+    (tmp_path / "billing").mkdir()
+    (tmp_path / "billing" / "api.py").write_text(
+        "def charge(order):\n    return order\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "main.py").write_text(
+        "from billing.api import charge\n"
+        "def checkout(order):\n    return charge(order)\n",
+        encoding="utf-8",
+    )
+    from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
+
+    service = _service(tmp_path)
+    try:
+        decision = RepoRetrievalPolicy(hot_path_ms=500).decide(
+            "module billing",
+            service=service,
+            strategy="auto-context",
+            semantic_available=False,
+        )
+    finally:
+        service.close()
+
+    assert "module:billing" in decision.auto_context
+    assert "definition=billing/api.py:1" in decision.auto_context
+    assert "callers=checkout" in decision.auto_context
+    assert "Next read: read_file path=billing/api.py" in decision.auto_context
