@@ -148,12 +148,10 @@ def build_product_run_environment(
     environment.model_capability_options = copy.deepcopy(
         request.metadata.get("model_capability_options") or {}
     )
-    environment.repo_retrieval_strategy = str(
-        request.metadata.get("repo_retrieval_strategy") or "guidance"
-    )
-    environment.repo_intelligence_mode = str(
-        request.metadata.get("repo_intelligence_mode") or "lookup"
-    )
+    # Absence must remain distinct from an explicit guidance/tool-only choice.
+    # The scoped execution resolver owns defaults and benchmark overrides.
+    environment.repo_retrieval_strategy = request.metadata.get("repo_retrieval_strategy")
+    environment.repo_intelligence_mode = request.metadata.get("repo_intelligence_mode")
     semantic_model = str(request.metadata.get("semantic_model") or "").strip()
     if semantic_model:
         from nz_coder.intelligence.semantic import sentence_transformer_provider

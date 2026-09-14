@@ -630,7 +630,7 @@ class ProductRunEnvironment:
         self._initialize_repo_intelligence(self.workdir)
         from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
         self.repo_retrieval_policy = RepoRetrievalPolicy()
-        self.repo_retrieval_strategy = "guidance"
+        self.repo_retrieval_strategy: str | None = None
         self._repo_retrieval_trace_signature = ""
         self._followup_pending: Callable[[], bool] | None = None
 

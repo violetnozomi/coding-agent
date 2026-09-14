@@ -2,6 +2,12 @@
 from __future__ import annotations
 
 import inspect
+import asyncio
+import copy
+from dataclasses import replace
+from types import SimpleNamespace
+
+import pytest
 
 from nz_coder.providers.capabilities import ModelCapabilities
 from nz_coder.runtime.core import MAIN_PROFILE
@@ -160,3 +166,54 @@ def test_agent_client_forwards_product_interaction_ports(tmp_path):
     assert captured["options"].question_asker is question
     assert captured["options"].workflow_approval_asker is approval
     assert captured["options"].event_bus is marker
+
+
+@pytest.mark.parametrize("metadata,evidence", [
+    ({}, True),
+    ({"repo_retrieval_strategy": "guidance"}, False),
+    ({"repo_intelligence_mode": "off"}, False),
+    ({"repo_retrieval_strategy": "tool-only"}, False),
+])
+def test_product_default_retrieval_reaches_provider(monkeypatch, tmp_path, metadata, evidence):
+    """An unset terminal strategy reaches the model through the production factory."""
+    from nz_coder.runtime.execution import native_sdk
+
+    (tmp_path / "billing").mkdir()
+    (tmp_path / "billing/api.py").write_text("def charge(order):\n    return order\n")
+    requests = []
+
+    class Provider:
+        name = "offline"
+
+        def create_completion(self, _client, **kwargs):
+            requests.append(copy.deepcopy(kwargs))
+            return SimpleNamespace(
+                choices=[SimpleNamespace(
+                    message=SimpleNamespace(content="The billing module defines charge.", tool_calls=[]),
+                    finish_reason="stop",
+                )],
+                usage=None,
+            )
+
+    runtime = replace(_runtime(), provider=Provider())
+    monkeypatch.setattr(native_sdk, "resolve_model_runtime", lambda _: runtime)
+    monkeypatch.setattr("nz_coder.runtime.execution.loop.resolve_model_runtime", lambda _: runtime)
+    request = replace(
+        _request(tmp_path),
+        messages=({"role": "user", "content": "module billing"},),
+        metadata={**_request(tmp_path).metadata, **metadata},
+    )
+    options = RunOptions(permission_asker=lambda *_: True)
+    environment = native_sdk.build_product_run_environment(request, options)
+    try:
+        assert environment.repo_intelligence.wait_ready(timeout=5).status == "ready"
+        result = asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request, options))
+        assert result.status.value == "completed"
+        visible = "\n".join(str(m.get("content", "")) for m in requests[0]["messages"])
+        assert ("High-confidence bounded" in visible) is evidence
+        if evidence:
+            assert "billing/api.py" in visible
+            assert "Next read: read_file" in visible
+        assert environment.repo_intelligence.semantic_available is False
+    finally:
+        environment.close()

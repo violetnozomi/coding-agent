@@ -83,8 +83,8 @@ def repo_intelligence_mode() -> str:
 
 
 def repo_retrieval_strategy() -> str:
-    """Return deterministic retrieval behavior for this execution."""
-    return str(_RUNTIME_OVERRIDES.get().repo_retrieval_strategy or "guidance")
+    """Resolve an explicit scoped strategy, otherwise use bounded task routing."""
+    return str(_RUNTIME_OVERRIDES.get().repo_retrieval_strategy or "policy")
 
 
 def broad_tests_blocked() -> bool:
