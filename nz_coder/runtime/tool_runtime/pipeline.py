@@ -299,6 +299,9 @@ class ProductionToolRuntime:
             raise
 
         if has_write and batch_state["all_succeeded"]:
+            record_committed = getattr(host.executor, "record_committed_writes", None)
+            if callable(record_committed):
+                record_committed(dispatched)
             if host._admission_session is not None:
                 for _index, _tool_call, result in dispatched:
                     host._admission_session.record_committed_mutation(result)
@@ -499,6 +502,9 @@ class ProductionToolRuntime:
             raise
 
         if has_write and batch_state["all_succeeded"]:
+            record_committed = getattr(lifecycle.executor, "record_committed_writes", None)
+            if callable(record_committed):
+                record_committed(dispatched)
             lifecycle.observer.post_write(dispatched, messages)
             self.policy.trace_tool_streak_reset(policy_context)
         lifecycle.observer.after_batch(messages, batch_state, on_text)

@@ -31,6 +31,7 @@ from nz_coder.runtime.agent.agent_resilience import (
 from nz_coder.protocol.session_events import publish_session_event
 from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess, WorkspaceFileIdentity
 from nz_coder.tool_platform.execution import (
     WRITE_TOOLS,
     ToolExecutionResult,
@@ -83,11 +84,24 @@ class _ReadCacheEntry:
     size: int
 
 
+@dataclass(frozen=True)
+class _ReadObservation:
+    """Version actually delivered to the model by read_file."""
+
+    path: str
+    identity: WorkspaceFileIdentity
+    offset: int
+    limit: int
+    complete: bool
+    source: str = "model_read"
+
+
 class _ReadFileStateCache:
     """Per-Agent unchanged-read suppression with filesystem invalidation."""
 
     def __init__(self) -> None:
         self._entries: dict[tuple[str, int, int], _ReadCacheEntry] = {}
+        self._observations: dict[str, _ReadObservation] = {}
         self._lock = threading.RLock()
 
     @staticmethod
@@ -162,6 +176,127 @@ class _ReadFileStateCache:
         with self._lock:
             self._entries[(str(target), offset, limit)] = identity
 
+    @staticmethod
+    def _canonical_path(raw_path: str) -> tuple[Path, str] | None:
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            return None
+        root = current_workdir().resolve()
+        target = (root / raw_path).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            return None
+        return target, str(target)
+
+    def record_observation(self, tool_input: dict, metadata: dict) -> None:
+        """Record the identity captured by the same read that produced output."""
+        raw = metadata.get("model_read_observation") if isinstance(metadata, dict) else None
+        if not isinstance(raw, dict):
+            return
+        canonical = self._canonical_path(raw.get("path") or tool_input.get("path"))
+        identity_data = raw.get("identity")
+        if canonical is None or not isinstance(identity_data, dict):
+            return
+        try:
+            identity = WorkspaceFileIdentity(
+                bool(identity_data.get("expected_exists")),
+                int(identity_data.get("device", 0)),
+                int(identity_data.get("inode", 0)),
+                int(identity_data.get("size", 0)),
+                int(identity_data.get("mtime_ns", 0)),
+                str(identity_data.get("content_hash", "")),
+            )
+            offset = int(raw.get("offset", 1))
+            limit = int(raw.get("limit", 2000))
+            complete = bool(raw.get("complete", False))
+        except (TypeError, ValueError, OverflowError):
+            return
+        with self._lock:
+            self._observations[canonical[1]] = _ReadObservation(
+                canonical[1], identity, offset, limit, complete,
+            )
+
+    def check_write_freshness(self, tool_input: dict) -> dict | None:
+        """Check model-observed versions before dispatching a mutation.
+
+        The mutation handler still performs its own handle-based CAS check. This
+        preflight only protects against edits based on a stale model observation.
+        """
+        paths = _write_paths(tool_input)
+        if not paths:
+            return None
+        with self._lock:
+            observations = [
+                self._observations.get(canonical[1])
+                for raw in paths
+                if (canonical := self._canonical_path(raw)) is not None
+            ]
+        observations = [item for item in observations if item is not None]
+        if not observations:
+            return None
+        access = WorkspaceFileAccess(current_workdir())
+        for observation in observations:
+            try:
+                _data, current = access.read_bytes_with_identity(observation.path)
+            except FileNotFoundError:
+                current = WorkspaceFileIdentity.missing()
+            except Exception:
+                return {
+                    "path": observation.path,
+                    "reason": "current_version_unavailable",
+                    "observed": observation.identity.__dict__.copy(),
+                    "offset": observation.offset,
+                    "limit": observation.limit,
+                }
+            # A touch changes timestamps but not content; content identity is
+            # authoritative for stale-read detection.
+            if current.expected_exists != observation.identity.expected_exists:
+                return self._stale_payload(observation, current)
+            if current.expected_exists and current.content_hash != observation.identity.content_hash:
+                return self._stale_payload(observation, current)
+        return None
+
+    @staticmethod
+    def _stale_payload(observation: _ReadObservation, current: WorkspaceFileIdentity) -> dict:
+        try:
+            shown_path = Path(observation.path).relative_to(current_workdir().resolve()).as_posix()
+        except ValueError:
+            shown_path = observation.path
+        return {
+            "path": shown_path,
+            "reason": "file_changed_after_model_read" if current.expected_exists else "file_deleted_after_model_read",
+            "observed": observation.identity.__dict__.copy(),
+            "current": current.__dict__.copy(),
+            "offset": observation.offset,
+            "limit": observation.limit,
+            "complete": observation.complete,
+        }
+
+    def record_committed_writes(self, results: list) -> None:
+        """Advance baselines only after the surrounding transaction commits."""
+        access = WorkspaceFileAccess(current_workdir())
+        for result in results:
+            if not getattr(result, "is_write", False) or getattr(result, "dispatch_failed", True):
+                continue
+            tool_input = getattr(result, "tool_input", {})
+            if isinstance(tool_input, dict) and tool_input.get("dry_run") is True:
+                continue
+            for raw_path in _write_paths(tool_input):
+                canonical = self._canonical_path(raw_path)
+                if canonical is None:
+                    continue
+                try:
+                    _data, identity = access.read_bytes_with_identity(raw_path)
+                except Exception:
+                    continue
+                with self._lock:
+                    previous = self._observations.get(canonical[1])
+                    if previous is not None:
+                        self._observations[canonical[1]] = _ReadObservation(
+                            canonical[1], identity, previous.offset, previous.limit,
+                            previous.complete, source="agent_write",
+                        )
+
     def forget_paths(self, paths: set[str]) -> None:
         if not paths:
             return
@@ -228,6 +363,14 @@ class ToolExecutor:
     def clear_read_cache(self) -> None:
         """Drop read references after context compaction removes their results."""
         self._read_cache.clear()
+
+    def record_committed_writes(self, results: list) -> None:
+        """Advance observed file baselines after the host commits a batch."""
+        self._read_cache.record_committed_writes(
+            [result for _index, _call, result in results]
+            if results and isinstance(results[0], tuple)
+            else results
+        )
 
     def execute_one(self, tool_call: dict, index: int) -> ToolExecutionResult:
         """Resolve one dynamic generation before authorization and dispatch."""
@@ -354,6 +497,24 @@ class ToolExecutor:
                     permission_denied=True,
                 )
 
+        if is_write:
+            stale = self._read_cache.check_write_freshness(tool_input)
+            if stale is not None:
+                path = str(stale.get("path") or tool_input.get("path") or "")
+                return ToolExecutionResult(
+                    name=fn_name,
+                    tool_input=tool_input,
+                    output=(
+                        f"Error: stale file read for {path}: the file changed "
+                        "after the model read. Re-read with read_file before retrying."
+                    ),
+                    executed=False,
+                    dispatch_failed=True,
+                    command_failed=False,
+                    is_write=True,
+                    metadata={"stale_read": stale, "error_code": "STALE_READ"},
+                )
+
         if fn_name == "read_file" and settings.read_dedup_enabled:
             cached_output = self._read_cache.lookup(tool_input)
             if cached_output is not None:
@@ -422,6 +583,8 @@ class ToolExecutor:
             self._read_cache.record(tool_input)
         elif is_write and not dispatch_failed:
             self._read_cache.forget_paths(_write_paths(tool_input))
+        if fn_name == "read_file" and not dispatch_failed:
+            self._read_cache.record_observation(tool_input, metadata)
         # bash 命令非零退出是"验证反馈"，不是调度失败。
         # 不应将其计入 all_succeeded=False，从而触发事务回滚。
         command_failed = command_failed_from_result(

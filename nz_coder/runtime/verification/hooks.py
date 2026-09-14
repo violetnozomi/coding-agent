@@ -1162,6 +1162,32 @@ def tool_failure_diagnostic_hook(ctx: ToolResultContext) -> None:
         if isinstance(getattr(ctx.result, "metadata", None), dict)
         else None
     )
+    stale_metadata = (
+        (getattr(ctx.result, "metadata", None) or {}).get("stale_read")
+        if isinstance(getattr(ctx.result, "metadata", None), dict)
+        else None
+    )
+    if isinstance(stale_metadata, dict):
+        path = str(stale_metadata.get("path") or tool_input.get("path") or "")
+        offset = stale_metadata.get("offset", 1)
+        limit = stale_metadata.get("limit", 2000)
+        diagnostic = (
+            "<stale-read-recovery>\n"
+            f"The write to `{path}` was refused because the file changed after "
+            "the version delivered to the model. No mutation was performed.\n"
+            f"Reason: {stale_metadata.get('reason', 'file_changed_after_model_read')}\n"
+            f"Re-read with: read_file(path={path!r}, offset={offset}, limit={limit})\n"
+            "Use the new contents to submit a precise edit; do not overwrite the "
+            "whole file from the stale text.\n"
+            "</stale-read-recovery>"
+        )
+        if callable(getattr(runtime_state, "record_recovery_diagnostic", None)):
+            runtime_state.record_recovery_diagnostic(diagnostic)
+        ctx.messages.append(stamp_user_message({
+            "role": "user", "content": diagnostic, "_nz_synthetic": True,
+        }))
+        ctx.loop.tracer.log("stale_read_rejected", path=path)
+        return
     if ctx.result.name in {"edit_file", "apply_patch"}:
         if not ctx.result.dispatch_failed:
             clear = getattr(recovery_state, "clear_edit_recovery", None)

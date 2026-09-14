@@ -104,6 +104,27 @@ def _file_access() -> WorkspaceFileAccess:
     return WorkspaceFileAccess(current_workdir())
 
 
+def _model_read_observation(
+    path: str, identity: WorkspaceFileIdentity, *, offset: int,
+    limit: int, complete: bool,
+) -> dict:
+    """Describe the exact file identity captured while producing read output."""
+    return {
+        "path": str(path),
+        "offset": int(offset),
+        "limit": int(limit),
+        "complete": bool(complete),
+        "identity": {
+            "expected_exists": identity.expected_exists,
+            "device": identity.device,
+            "inode": identity.inode,
+            "size": identity.size,
+            "mtime_ns": identity.mtime_ns,
+            "content_hash": identity.content_hash,
+        },
+    }
+
+
 def _read_for_mutation(
     access: WorkspaceFileAccess, path: str, *, errors: str = "strict",
 ) -> tuple[str, WorkspaceFileIdentity]:
@@ -501,7 +522,7 @@ def read_file(
                     "loaded": [],
                 },
             )
-        data = access.read_bytes(path, maximum=MAX_IMAGE_BYTES)
+        data, identity = access.read_bytes_with_identity(path, maximum=MAX_IMAGE_BYTES)
         sample = data[:SAMPLE_BYTES]
         image_mime = sniff_image_mime(sample)
         if image_mime:
@@ -515,7 +536,12 @@ def read_file(
             return ToolOutput(
                 "Image read successfully",
                 title=f"Read {fp.name}",
-                metadata={"preview": "Image read successfully", "truncated": False},
+                metadata={
+                    "preview": "Image read successfully", "truncated": False,
+                    "model_read_observation": _model_read_observation(
+                        path, identity, offset=read_offset, limit=read_limit, complete=True,
+                    ),
+                },
                 attachments=[attachment],
             )
         document_mime = (
@@ -564,6 +590,10 @@ def read_file(
                         "total_pages": result.total_pages,
                         "read_pages": result.read_pages,
                     },
+                    "model_read_observation": _model_read_observation(
+                        path, identity, offset=read_offset, limit=read_limit,
+                        complete=not result.more,
+                    ),
                 },
             )
         if is_binary_file(fp, sample):
@@ -610,6 +640,10 @@ def read_file(
                 "truncated": truncated,
                 "loaded": [],
                 "encoding": result.encoding,
+                "model_read_observation": _model_read_observation(
+                    path, identity, offset=read_offset, limit=read_limit,
+                    complete=not truncated,
+                ),
             },
         )
     except Exception as e:

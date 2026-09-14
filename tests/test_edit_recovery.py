@@ -209,3 +209,121 @@ def test_external_file_change_discards_stale_whole_file_write_block(tmp_path, mo
         assert target.read_text(encoding="utf-8") == "value = 3\n"
     finally:
         agent.close()
+
+
+def test_read_version_blocks_edit_after_external_change_even_when_anchor_remains(
+    tmp_path, monkeypatch,
+):
+    from nz_coder.foundation import config
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    target = tmp_path / "module.py"
+    target.write_text("value = 1\n", encoding="utf-8")
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    executor = ToolExecutor(PermissionManager("auto"))
+    with scoped_workdir(tmp_path):
+        read = executor.execute_one({
+            "id": "read-v1",
+            "function": {"name": "read_file", "arguments": {"path": "module.py"}},
+        }, 0)
+        target.write_text("# user addition\nvalue = 1\n", encoding="utf-8")
+        edit = executor.execute_one({
+            "id": "edit-v1",
+            "function": {
+                "name": "edit_file",
+                "arguments": {"path": "module.py", "old_text": "value = 1", "new_text": "value = 2"},
+            },
+        }, 1)
+
+    assert read.executed is True
+    assert read.metadata["model_read_observation"]["identity"]["content_hash"]
+    assert edit.executed is False
+    assert edit.dispatch_failed is True
+    assert edit.metadata["stale_read"]["path"] == "module.py"
+    assert "re-read" in edit.output.lower()
+    assert target.read_text(encoding="utf-8") == "# user addition\nvalue = 1\n"
+
+
+def test_read_version_blocks_replace_lines_after_external_line_shift(
+    tmp_path, monkeypatch,
+):
+    from nz_coder.foundation import config
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    target = tmp_path / "config.txt"
+    target.write_text("first\nsecond\nthird\n", encoding="utf-8")
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    executor = ToolExecutor(PermissionManager("auto"))
+    with scoped_workdir(tmp_path):
+        executor.execute_one({
+            "id": "read-lines",
+            "function": {"name": "read_file", "arguments": {"path": "config.txt"}},
+        }, 0)
+        target.write_text("user\nfirst\nsecond\nthird\n", encoding="utf-8")
+        result = executor.execute_one({
+            "id": "replace-stale-lines",
+            "function": {
+                "name": "replace_lines",
+                "arguments": {"path": "config.txt", "start_line": 2, "end_line": 2, "new_text": "changed"},
+            },
+        }, 1)
+
+    assert result.executed is False
+    assert result.metadata["stale_read"]["path"] == "config.txt"
+    assert target.read_text(encoding="utf-8") == "user\nfirst\nsecond\nthird\n"
+
+
+def test_read_version_uses_content_hash_and_allows_touch(tmp_path, monkeypatch):
+    """Timestamp-only changes are safe; same-size content changes are stale."""
+    from nz_coder.foundation import config
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    target = tmp_path / "module.py"
+    target.write_text("value = 1\n", encoding="utf-8")
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    with scoped_workdir(tmp_path):
+        executor = ToolExecutor(PermissionManager("auto"))
+        executor.execute_one({"function": {"name": "read_file", "arguments": {"path": "module.py"}}}, 0)
+        import os
+        os.utime(target, ns=(target.stat().st_atime_ns, target.stat().st_mtime_ns + 1_000_000))
+        touched = executor.execute_one({"function": {"name": "edit_file", "arguments": {
+            "path": "module.py", "old_text": "value = 1", "new_text": "value = 2",
+        }}}, 1)
+        assert touched.dispatch_failed is False
+
+        executor.execute_one({"function": {"name": "read_file", "arguments": {"path": "module.py"}}}, 2)
+        before = target.stat()
+        target.write_text("value = 3\n", encoding="utf-8")
+        os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
+        stale = executor.execute_one({"function": {"name": "edit_file", "arguments": {
+            "path": "module.py", "old_text": "value = 3", "new_text": "value = 4",
+        }}}, 3)
+    assert stale.metadata["stale_read"]["reason"] == "file_changed_after_model_read"
+    assert target.read_text(encoding="utf-8") == "value = 3\n"
+
+
+def test_read_then_delete_is_not_an_unobserved_create(tmp_path, monkeypatch):
+    from nz_coder.foundation import config
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    target = tmp_path / "gone.txt"
+    target.write_text("old\n", encoding="utf-8")
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    with scoped_workdir(tmp_path):
+        executor = ToolExecutor(PermissionManager("auto"))
+        executor.execute_one({"function": {"name": "read_file", "arguments": {"path": "gone.txt"}}}, 0)
+        target.unlink()
+        result = executor.execute_one({"function": {"name": "write_file", "arguments": {
+            "path": "gone.txt", "content": "new\n",
+        }}}, 1)
+    assert result.dispatch_failed is True
+    assert result.metadata["stale_read"]["reason"] == "file_deleted_after_model_read"
+    assert not target.exists()
