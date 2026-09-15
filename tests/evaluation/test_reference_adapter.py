@@ -161,3 +161,82 @@ def test_reference_rescore_uses_stored_evidence_only(tmp_path, monkeypatch) -> N
     assert result["success_rate"] == 1.0
     assert result["runs"][0]["score"]["long_horizon_exercised"] is None
     assert result["scorer_revision"] == "completion-correctness-v2"
+
+
+def test_infcodex_reference_uses_json_mode_sa_and_preserves_effort(tmp_path, monkeypatch):
+    from nz_coder.evaluation.reference_adapter import (
+        InfCodeXReferenceAdapter, ReferenceCapability, ReferenceRunRequest,
+    )
+
+    adapter = InfCodeXReferenceAdapter(tmp_path / "reference")
+    capability = ReferenceCapability("InfCodeX", True, None, ("node", "cli.js"))
+    monkeypatch.setattr(adapter, "probe", lambda: capability)
+    captured = {}
+
+    def fake_execute(name, cap, command, request, *, env_overrides=None):
+        captured.update(command=command, request=request, env=env_overrides)
+        return type("Result", (), {"status": "completed"})()
+
+    monkeypatch.setattr("nz_coder.evaluation.reference_adapter._execute", fake_execute)
+    adapter.run(ReferenceRunRequest(
+        tmp_path, "fix auth", "model", "provider", reasoning="medium",
+    ))
+    command = captured["command"]
+    assert "--print" not in command
+    assert command[2:4] == ["--mode", "json"]
+    assert "fix auth" in command
+    assert command[command.index("--agent-mode") + 1] == "sa"
+    assert command[command.index("--effort") + 1] == "medium"
+
+
+def test_reference_behavior_matrix_honors_one_repetition(tmp_path, monkeypatch):
+    from nz_coder.evaluation.reference_adapter import (
+        ReferenceCapability, run_reference_behavior_matrix,
+    )
+
+    class Adapter:
+        name = "fixture-reference"
+        def probe(self):
+            return ReferenceCapability(self.name, True, None)
+
+    calls = []
+    class Benchmark:
+        def __init__(self, *_args):
+            pass
+        def run_case(self, case_id, config):
+            calls.append((case_id, config.repetition))
+            return {"score": {"success": True}}
+
+    monkeypatch.setattr("nz_coder.evaluation.behavioral.AgentBehaviorBenchmark", Benchmark)
+    result = run_reference_behavior_matrix(
+        tmp_path, adapter=Adapter(), provider="fixture", model="model",
+        repetitions=1, case_ids=("A",),
+    )
+    assert calls == [("A", 1)]
+    assert result["repetitions"] == 1
+
+
+def test_reference_event_normalization_uses_structured_failure_facts():
+    from nz_coder.evaluation.reference_adapter import ReferenceBehaviorDriver
+
+    events = ReferenceBehaviorDriver._normalize((
+        {"type": "tool.started", "id": "c1", "name": "bash", "input": {}},
+        {"type": "tool.completed", "id": "c1", "content": "previous run failed; retrying", "status": "success"},
+        {"type": "tool.started", "id": "c2", "name": "bash", "input": {}},
+        {"type": "tool.completed", "id": "c2", "content": "diagnostic", "exit_code": 1},
+    ))
+    assert events[0]["status"] == "ok"
+    assert events[0]["command_failed"] is False
+    assert events[1]["status"] == "nonzero"
+    assert events[1]["command_failed"] is True
+
+
+def test_reference_token_totals_prefer_cumulative_terminal_usage():
+    from nz_coder.evaluation.reference_adapter import _token_totals
+
+    events = (
+        {"type": "iteration.end", "usage": {"input_tokens": 10, "output_tokens": 2}},
+        {"type": "iteration.end", "usage": {"input_tokens": 12, "output_tokens": 3}},
+        {"type": "run.result", "usage": {"input_tokens": 22, "output_tokens": 5}},
+    )
+    assert _token_totals(events) == {"input": 22, "output": 5, "reasoning": 0, "cache": 0}

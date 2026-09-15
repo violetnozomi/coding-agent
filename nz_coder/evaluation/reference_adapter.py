@@ -105,26 +105,42 @@ def _json_events(output: str) -> tuple[dict[str, Any], ...]:
 
 
 def _token_totals(events: tuple[dict[str, Any], ...]) -> dict[str, int] | None:
+    def read_usage(value: Any) -> tuple[dict[str, int], bool]:
+        totals = {"input": 0, "output": 0, "reasoning": 0, "cache": 0}
+        found = False
+        if not isinstance(value, dict):
+            return totals, found
+        for key, item in value.items():
+            if not isinstance(item, (int, float)):
+                continue
+            lowered = str(key).lower()
+            target = next(
+                (name for name in totals if name in lowered and "token" in lowered),
+                None,
+            )
+            if target:
+                totals[target] += int(item)
+                found = True
+        return totals, found
+
+    # A terminal run.result usage block is cumulative. Prefer it over the
+    # per-turn increments so the same request is never counted twice.
+    for event in reversed(events):
+        if str(event.get("type") or event.get("event") or "") in {"run.result", "run.completed"}:
+            totals, found = read_usage(event.get("usage"))
+            if found:
+                return totals
     totals = {"input": 0, "output": 0, "reasoning": 0, "cache": 0}
     found = False
-
-    def visit(value: Any) -> None:
-        nonlocal found
-        if isinstance(value, dict):
-            for key, item in value.items():
-                lowered = str(key).lower()
-                if isinstance(item, (int, float)):
-                    target = next((name for name in totals if name in lowered and "token" in lowered), None)
-                    if target:
-                        totals[target] += int(item)
-                        found = True
-                else:
-                    visit(item)
-        elif isinstance(value, list):
-            for item in value:
-                visit(item)
-
-    visit(list(events))
+    for event in events:
+        kind = str(event.get("type") or event.get("event") or "")
+        if kind not in {"iteration.end", "turn.completed", "llm_response"}:
+            continue
+        current, present = read_usage(event.get("usage") or event)
+        if present:
+            found = True
+            for key in totals:
+                totals[key] += current[key]
     return totals if found else None
 
 
@@ -263,14 +279,21 @@ class InfCodeXReferenceAdapter:
             key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("API_KEY")
             if key:
                 env_overrides["DEEPSEEK_API_KEY"] = key
+        # InfCodeX rejects ``--mode json`` combined with ``--print``.  Pass
+        # the prompt positionally so the reference's real JSONL event path is
+        # exercised, while pinning the managed comparison to SA mode.
         command = list(capability.command) + [
-            "--print", request.prompt, "--provider", selected_provider,
+            "--mode", "json", request.prompt, "--provider", selected_provider,
             "--model", request.model, "--max-iter", str(request.max_turns), "--no-session",
             "--agent-mode", "sa", "--auto",
         ]
         reasoning = str(request.reasoning or "").strip().lower()
         if reasoning in {"off", "auto", "quick", "balanced", "deep"}:
             command.extend(("--reasoning", reasoning))
+        elif reasoning not in {"", "provider-default"}:
+            # New effort names (for example medium/high) are separate from
+            # InfCodeX's legacy --reasoning compatibility modes.
+            command.extend(("--effort", reasoning))
         with tempfile.TemporaryDirectory(prefix="nzcoder-infcodex-home-") as config_home:
             env_overrides["KODAX_HOME"] = config_home
             return _execute(
@@ -364,11 +387,14 @@ class ReferenceBehaviorDriver:
             elif kind in {"tool.result", "tool.completed"}:
                 tool_id = str(event.get("id") or "")
                 output = str(event.get("content") or event.get("output") or "")
-                lowered = output.casefold()
-                failed = any(marker in lowered for marker in (
-                    "command exited with code", "exit code 1", "exit code 2",
-                    "error:", "failed", "traceback (most recent call last)",
-                ))
+                status = str(event.get("status") or event.get("state") or "").casefold()
+                exit_value = event.get("exit_code", event.get("exit", event.get("returncode")))
+                try:
+                    failed = int(exit_value) != 0 if exit_value is not None else status in {
+                        "error", "failed", "failure", "nonzero", "cancelled", "timeout",
+                    }
+                except (TypeError, ValueError, OverflowError):
+                    failed = status in {"error", "failed", "failure", "nonzero", "cancelled", "timeout"}
                 call = pending_tools.pop(tool_id, {
                     "event": "tool_call", "tool_call_id": tool_id,
                     "name": str(event.get("name") or ""), "input": {},
@@ -430,7 +456,7 @@ def run_reference_behavior_matrix(
     else:
         benchmark = AgentBehaviorBenchmark(target_dir, ReferenceBehaviorDriver(adapter))
         runs = []
-        for repetition in range(1, max(3, int(repetitions)) + 1):
+        for repetition in range(1, max(1, int(repetitions)) + 1):
             for case_id in case_ids:
                 runs.append(benchmark.run_case(case_id, BehaviorBenchmarkConfig(
                     model=model, provider=provider, reasoning=reasoning,
@@ -440,7 +466,7 @@ def run_reference_behavior_matrix(
             "benchmark_version": 1, "suite_type": "reference-agent-behavior-matrix",
             "reference": adapter.name, "evidence_kind": "reference-production",
             "capability": asdict(capability), "provider": provider, "model": model,
-            "reasoning": reasoning, "repetitions": max(3, int(repetitions)),
+            "reasoning": reasoning, "repetitions": max(1, int(repetitions)),
             "runs": runs,
             "success_rate": sum(bool(run["score"]["success"]) for run in runs) / len(runs),
             "behavioral_effectiveness": "measured",

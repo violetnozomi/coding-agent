@@ -119,7 +119,7 @@ class ProductionAgentBehaviorDriver:
         "tool_search", "todo", "read_file", "write_file", "write_files_batch",
         "edit_file", "apply_patch", "replace_lines", "list_directory", "bash",
         "grep_search", "glob_search", "diff_status", "verify_changed_files",
-        "read_symbol", "find_symbol_callers",
+        "read_symbol", "find_symbol_callers", "read_tool_result",
     )
     _CURRENT_REPO_TOOLS = ("repo_map", "code_references")
     _V3_REPO_TOOLS = ("repo_context", "repo_map", "code_references", "analyze_impact")
