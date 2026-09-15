@@ -240,3 +240,16 @@ def test_reference_token_totals_prefer_cumulative_terminal_usage():
         {"type": "run.result", "usage": {"input_tokens": 22, "output_tokens": 5}},
     )
     assert _token_totals(events) == {"input": 22, "output": 5, "reasoning": 0, "cache": 0}
+
+
+def test_infcodex_probe_never_falls_back_to_npx_download(tmp_path, monkeypatch):
+    from nz_coder.evaluation.reference_adapter import InfCodeXReferenceAdapter
+
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/node" if name == "node" else "/usr/bin/npx")
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *_args, **_kwargs: type("Result", (), {"stdout": "v18.19.1\n"})(),
+    )
+    result = InfCodeXReferenceAdapter(tmp_path).probe()
+    assert result.available is False
+    assert "automatic npx runtime downloads are disabled" in str(result.reason)

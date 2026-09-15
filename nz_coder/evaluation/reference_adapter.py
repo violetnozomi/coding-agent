@@ -243,17 +243,8 @@ class InfCodeXReferenceAdapter:
             ).stdout.strip()
             if _version_tuple(runtime) >= (20, 0, 0):
                 node_command = (node,)
-        if not node_command and shutil.which("npx"):
-            shim = subprocess.run(
-                ["npx", "-y", "node@20", "--version"],
-                capture_output=True, text=True, timeout=30, check=False,
-            )
-            shim_runtime = shim.stdout.strip()
-            if shim.returncode == 0 and _version_tuple(shim_runtime) >= (20, 0, 0):
-                runtime = shim_runtime
-                node_command = ("npx", "-y", "node@20")
         if not node_command:
-            reason = "node runtime >=20 is not installed and the Node 20 npx shim is unavailable"
+            reason = "node runtime >=20 is not installed; automatic npx runtime downloads are disabled"
             if runtime:
                 reason += f"; found {runtime}"
             return ReferenceCapability(self.name, False, "runtime_version_mismatch: " + reason, runtime=runtime or None)
