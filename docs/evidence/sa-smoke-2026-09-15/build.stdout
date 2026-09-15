@@ -1,0 +1,12 @@
+
+> @kodax-ai/kodax@0.7.71 build:packages
+> tsc -b tsconfig.build.json && npm run copy:builtin -w @kodax-ai/agent && npm run copy:provider-caps -w @kodax-ai/llm
+
+
+> @kodax-ai/agent@0.7.71 copy:builtin
+> node -e "require('fs').cpSync('src/capabilities/skills/builtin','dist/capabilities/skills/builtin',{recursive:true})"
+
+
+> @kodax-ai/llm@0.7.71 copy:provider-caps
+> node -e "require('fs').mkdirSync('dist/providers',{recursive:true});require('fs').copyFileSync('src/providers/provider-capabilities.json','dist/providers/provider-capabilities.json')"
+

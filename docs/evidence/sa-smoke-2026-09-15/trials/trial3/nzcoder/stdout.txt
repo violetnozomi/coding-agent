@@ -1,0 +1,13 @@
+
+  [Permission] bash: python -m pytest -q
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+  Allow? (y/n/a=always/p=always-prefix):   Please answer y/n/a/p.
+{"status": "max_turns", "error": ""}

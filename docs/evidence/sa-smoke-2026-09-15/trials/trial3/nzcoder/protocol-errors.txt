@@ -1,0 +1,6 @@
+AssertionError("Denied by user\nassert ('ZeroDivisionError' in 'Denied by user')")
+AssertionError("Denied by user\nassert ('calc/service.py' in 'Denied by user' or 'Successfully' in 'Denied by user')")
+AssertionError("Denied by user\nassert '1 passed' in 'Denied by user'")
+AssertionError('Unexpected extra/auxiliary request; do not silently simulate it\nassert 6 == 5')
+AssertionError('Unexpected extra/auxiliary request; do not silently simulate it\nassert 7 == 5')
+AssertionError('Unexpected extra/auxiliary request; do not silently simulate it\nassert 8 == 5')

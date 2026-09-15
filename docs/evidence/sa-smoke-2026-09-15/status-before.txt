@@ -1,0 +1,28 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+/tmp/nz-sa-smoke-20260915/baseline-2bf96b5/nz_coder/evaluation/reference_adapter.py
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_____ test_real_emitter_missing_status_remains_unknown_and_cannot_recover ______
+/home/pyh/nzcoder/tests/evaluation/test_reference_adapter.py:268: in test_real_emitter_missing_status_remains_unknown_and_cannot_recover
+    assert call['status'] == 'unknown'
+E   AssertionError: assert 'ok' == 'unknown'
+E     
+E     - unknown
+E     + ok
+________ test_reference_unmatched_start_and_invalid_exit_remain_unknown ________
+/home/pyh/nzcoder/tests/evaluation/test_reference_adapter.py:284: in test_reference_unmatched_start_and_invalid_exit_remain_unknown
+    assert all(e['status'] == 'unknown' for e in events)
+E   assert False
+E    +  where False = all(<generator object test_reference_unmatched_start_and_invalid_exit_remain_unknown.<locals>.<genexpr> at 0x71ffa31c6b50>)
+___________ test_infcodex_zero_exit_without_events_is_not_completed ____________
+/home/pyh/nzcoder/tests/evaluation/test_reference_adapter.py:294: in test_infcodex_zero_exit_without_events_is_not_completed
+    assert result.status == 'incomplete_protocol'
+E   AssertionError: assert 'completed' == 'incomplete_protocol'
+E     
+E     - incomplete_protocol
+E     + completed
+=========================== short test summary info ============================
+FAILED ../../../home/pyh/nzcoder/tests/evaluation/test_reference_adapter.py::test_real_emitter_missing_status_remains_unknown_and_cannot_recover
+FAILED ../../../home/pyh/nzcoder/tests/evaluation/test_reference_adapter.py::test_reference_unmatched_start_and_invalid_exit_remain_unknown
+FAILED ../../../home/pyh/nzcoder/tests/evaluation/test_reference_adapter.py::test_infcodex_zero_exit_without_events_is_not_completed
+3 failed, 28 deselected in 0.23s

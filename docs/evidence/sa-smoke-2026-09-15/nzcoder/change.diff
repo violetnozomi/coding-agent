@@ -1,0 +1,6 @@
+--- a/calc/service.py
++++ b/calc/service.py
+@@ -1,2 +1,2 @@
+ def ratio(total, count):
+-    return total / count
++    return 0 if count == 0 else total / count

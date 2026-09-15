@@ -1,0 +1,2 @@
+{"tool": "bash", "input": {"command": "python -m pytest -q"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest -q"}, "allowed": true}

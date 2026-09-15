@@ -1,0 +1,7 @@
+{
+  "repo_retrieval_strategy_override": null,
+  "repo_retrieval_strategy": "policy",
+  "runner": "AgentRunner",
+  "tools": "ProductionToolRuntime",
+  "verifier": "ProductionCompletionVerifier"
+}

@@ -1,0 +1,7 @@
+(node:2698222) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+npm ERR! code ENOTCACHED
+npm ERR! request to https://registry.npmmirror.com/zod/-/zod-3.25.76.tgz failed: cache mode is 'only-if-cached' but no cached response is available.
+
+npm ERR! A complete log of this run can be found in:
+npm ERR!     /home/pyh/.npm/_logs/2026-09-15T03_34_38_934Z-debug-0.log

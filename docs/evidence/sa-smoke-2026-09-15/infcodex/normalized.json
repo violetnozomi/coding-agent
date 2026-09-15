@@ -1,0 +1,100 @@
+[
+  {
+    "event": "tool_call",
+    "tool_call_id": "smoke-1",
+    "name": "read",
+    "input": {
+      "path": "calc/service.py"
+    },
+    "output": "     1\tdef ratio(total, count):\n     2\t    return total / count\n\n[End of file - 2 lines total]",
+    "output_len": 94,
+    "status": "unknown",
+    "executed": null,
+    "command_failed": null,
+    "dispatch_failed": null,
+    "status_reason": "missing_execution_status"
+  },
+  {
+    "event": "reference_iteration",
+    "usage_semantics": "latest_response_snapshot",
+    "input_tokens": 100,
+    "output_tokens": 20
+  },
+  {
+    "event": "tool_call",
+    "tool_call_id": "smoke-2",
+    "name": "bash",
+    "input": {
+      "command": "python -m pytest -q"
+    },
+    "output": "Command: python -m pytest -q\nExit: 1\nF                                                                        [100%]\n=================================== FAILURES ===================================\n_______________________________ test_empty_count _______________________________\n\n>   def test_empty_count(): assert ratio(10, 0) == 0\n                                   ^^^^^^^^^^^^\n\ntests/test_ratio.py:2: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\ntotal = 10, count = 0\n\n    def ratio(total, count):\n>       return total / count\n               ^^^^^^^^^^^^^\nE       ZeroDivisionError: division by zero\n\ncalc/service.py:2: ZeroDivisionError\n=========================== short test summary info ============================\nFAILED tests/test_ratio.py::test_empty_count - ZeroDivisionError: division by...\n1 failed in 0.01s\n",
+    "output_len": 860,
+    "status": "unknown",
+    "executed": null,
+    "command_failed": null,
+    "dispatch_failed": null,
+    "status_reason": "missing_execution_status"
+  },
+  {
+    "event": "reference_iteration",
+    "usage_semantics": "latest_response_snapshot",
+    "input_tokens": 100,
+    "output_tokens": 20
+  },
+  {
+    "event": "tool_call",
+    "tool_call_id": "smoke-3",
+    "name": "edit",
+    "input": {
+      "path": "calc/service.py",
+      "old_string": "return total / count",
+      "new_string": "return 0 if count == 0 else total / count"
+    },
+    "output": "File edited: /tmp/nz-sa-smoke-20260915/pinned/infcodex/workspace/calc/service.py\n  (+1 lines, -1 lines)\n\n- return total / count\n+ return 0 if count == 0 else total / count",
+    "output_len": 171,
+    "status": "unknown",
+    "executed": null,
+    "command_failed": null,
+    "dispatch_failed": null,
+    "status_reason": "missing_execution_status"
+  },
+  {
+    "event": "reference_iteration",
+    "usage_semantics": "latest_response_snapshot",
+    "input_tokens": 100,
+    "output_tokens": 20
+  },
+  {
+    "event": "tool_call",
+    "tool_call_id": "smoke-4",
+    "name": "bash",
+    "input": {
+      "command": "python -m pytest -q"
+    },
+    "output": "Command: python -m pytest -q\nExit: 0\n.                                                                        [100%]\n1 passed in 0.01s\n",
+    "output_len": 135,
+    "status": "unknown",
+    "executed": null,
+    "command_failed": null,
+    "dispatch_failed": null,
+    "status_reason": "missing_execution_status"
+  },
+  {
+    "event": "reference_iteration",
+    "usage_semantics": "latest_response_snapshot",
+    "input_tokens": 100,
+    "output_tokens": 20
+  },
+  {
+    "event": "reference_iteration",
+    "usage_semantics": "latest_response_snapshot",
+    "input_tokens": 100,
+    "output_tokens": 20
+  },
+  {
+    "event": "reference_turn",
+    "usage_semantics": null,
+    "input_tokens": null,
+    "output_tokens": null
+  }
+]

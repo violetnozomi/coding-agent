@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/home/pyh/miniconda3/bin/python3.13",
+    "/home/pyh/nzcoder/tests/evaluation/fixtures/offline_exec.py",
+    "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+    "--import",
+    "/home/pyh/nzcoder/references/InfCodeX/node_modules/tsx/dist/esm/index.mjs",
+    "/home/pyh/nzcoder/tests/evaluation/fixtures/prepare-reference-session.mjs",
+    "/home/pyh/nzcoder/references/InfCodeX/src/sdk-runtime.ts"
+  ],
+  "exit_code": 0,
+  "stdout": "{\"permissionMode\":\"auto-in-project\",\"executionCwd\":\"/tmp/nz-sa-smoke-20260915/trial3/infcodex/workspace\",\"agentMode\":\"sa\",\"autoModeEngine\":\"rules\"}\n",
+  "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+}

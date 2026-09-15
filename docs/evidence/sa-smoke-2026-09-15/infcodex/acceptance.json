@@ -1,0 +1,45 @@
+{
+  "initial_hashes": {
+    "calc/service.py": "2ab9e87f7325f2203a79bdcc5f5d698607c52566e601b3a3db7556287c656ad3",
+    "tests/test_ratio.py": "b622b1c8ef4b5dfe961a4884692d0f7dc30cc7cf0678e3df036713eacf26c6a0"
+  },
+  "final_hashes": {
+    "calc/service.py": "9bd1e9ea8ebe1274db6a4a67550a7b89be8b0a852b8a65644c2c98a3c9801770",
+    ".pytest_cache/CACHEDIR.TAG": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
+    ".pytest_cache/README.md": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
+    ".pytest_cache/.gitignore": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
+    "tests/test_ratio.py": "b622b1c8ef4b5dfe961a4884692d0f7dc30cc7cf0678e3df036713eacf26c6a0",
+    ".pytest_cache/v/cache/lastfailed": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    ".pytest_cache/v/cache/nodeids": "2128a2af7585665933d3b401fa7811eb5a0c01db8d2315dd395dded3d8e188b4"
+  },
+  "status": "completed",
+  "actual_provider_requests": 5,
+  "auxiliary_requests": 0,
+  "usage_kind": "synthetic test values, not efficiency evidence",
+  "wall_time_ms": 3616.148,
+  "independent_retest": {
+    "argv": [
+      "/home/pyh/miniconda3/bin/python",
+      "/home/pyh/nzcoder/tests/evaluation/fixtures/offline_exec.py",
+      "/home/pyh/miniconda3/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "exit_code": 0,
+    "stdout": ".                                                                        [100%]\n1 passed in 0.01s\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "hidden_acceptance": {
+    "argv": [
+      "/home/pyh/miniconda3/bin/python",
+      "/home/pyh/nzcoder/tests/evaluation/fixtures/offline_exec.py",
+      "/home/pyh/miniconda3/bin/python",
+      "-c",
+      "from calc.service import ratio; assert ratio(10,0)==0; assert ratio(12,3)==4; assert ratio(-6,2)==-3"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  }
+}

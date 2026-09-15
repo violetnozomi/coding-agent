@@ -1,0 +1,83 @@
+{
+  "nz_base": "2bf96b58980b330126425265b3e10f289f4954d5",
+  "reference_commit": "d3a812379b589597347f5be12d5b68477e577f02",
+  "node": "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+  "node_version": "v24.18.1",
+  "node_sha256": "f3432a45b03b2da0d270095fdd8813dc34cbea73f5fc8b18c7a384b7cf9b333a",
+  "files": {
+    "package.json": "634e94368f183a6efe1273bdb9467400caea0d6d88135441334ec9efdcbcc75a",
+    "package-lock.json": "d891cf1247835a2d705a6b93627295b326edbc92bd33dfe2f835614fb1213ed9",
+    "tsconfig.build.json": "e7bbe2038f85792de1711072c10a335fbac011c9ca0a5cdcfe74af0615eda026",
+    "src/kodax_cli.ts": "ec45a3f06ef9c1f5bad4e813aa35d00a044d1ee39ed78dbbb76b9fcecdc073aa",
+    "src/cli_option_helpers.ts": "3cfb4d107265a96f5cc2566dc058a49a985ebe9505159f82c2cadbe684401785",
+    "packages/repl/src/ui/json-events.ts": "f112f8ed7b8e54028d6de1b6a052f381225f0a90ccbf29a5d1a33b2787251bef",
+    "packages/coding/dist/agent.js": "d7f4557f8944acd90cb5041f8b45c5f672e0975f5f0ac37e7f6ddc0b94321575",
+    "packages/coding/dist/coding-preset.js": "ccf42b4e85f6025b34cdac120d915285653bb7052e939c810d83b3acee5d5e19",
+    "packages/coding/dist/agent-runtime/run-substrate.js": "f0599341bc52e782e1c7fff21bb0de3e4f01febbfb66a7720af7ec3e8aad68c6",
+    "packages/llm/dist/providers/openai.js": "fc1f37d66c5109bda07469b8d6a7db57513776e10ee5081994300b089f91fa86",
+    "packages/repl/dist/ui/json-events.js": "70dd36925bc5e8cfa9fc8fbe38dce977d8a460cda63dc7b366f680943940e9fd"
+  },
+  "python": "Python 3.13.12",
+  "trials": {
+    "trial1": {
+      "infcodex": {
+        "http_requests": 1
+      },
+      "nzcoder": {
+        "http_requests": 0
+      }
+    },
+    "trial2": {
+      "infcodex": {
+        "http_requests": 5
+      },
+      "nzcoder": {
+        "http_requests": 0
+      }
+    },
+    "trial3": {
+      "infcodex": {
+        "http_requests": 5
+      },
+      "nzcoder": {
+        "http_requests": 8
+      }
+    },
+    "trial4": {
+      "infcodex": {
+        "http_requests": 5
+      },
+      "nzcoder": {
+        "http_requests": 5
+      }
+    },
+    "final": {
+      "infcodex": {
+        "http_requests": 5
+      },
+      "nzcoder": {
+        "http_requests": 5
+      }
+    },
+    "pinned": {
+      "infcodex": {
+        "http_requests": 5
+      },
+      "nzcoder": {
+        "http_requests": 5
+      }
+    }
+  },
+  "nz_execution_commit": "2c955bd7680808dc69ad560f35e1d5e77e5f5ba2",
+  "execution_scope": "InfCodeX real SA CLI with official preconfigured session; NZ production NativeSDKRunner; scripted local HTTP only",
+  "runtime_preparation": {
+    "node_downloaded": false,
+    "offline_npm_ci": "ENOTCACHED",
+    "locked_npm_ci_exit": 0,
+    "build_packages_exit": 0,
+    "forced_tsc_build_exit": 0,
+    "smoke_transport": "HTTP over Unix socket; inherited seccomp blocks non-AF_UNIX sockets and io_uring"
+  },
+  "total_http_requests": 49,
+  "debug_raw_archive": "/home/pyh/.codex/artifacts/nz-sa-smoke-20260915"
+}
