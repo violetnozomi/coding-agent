@@ -1,0 +1,1 @@
+Rename the public product formatting API to render_product and migrate affected in-repository callers and tests. Preserve the behavior of web, CLI, mobile and export consumers. A compatibility alias may remain. Run the relevant tests and report the change and verification.

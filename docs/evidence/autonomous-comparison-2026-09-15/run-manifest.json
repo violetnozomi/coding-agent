@@ -1,0 +1,511 @@
+{
+  "evidence_kind": "authorization-gated dry run, no Agent executed",
+  "nz_commit": "b54b3f52d897f41ef417bd67e0626b24e74d91a0",
+  "reference_commit": "d3a812379b589597347f5be12d5b68477e577f02",
+  "reference_probe": {
+    "name": "InfCodeX",
+    "available": true,
+    "reason": null,
+    "command": [
+      "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+      "--max-old-space-size=4096",
+      "--require",
+      "/home/pyh/nzcoder/references/InfCodeX/scripts/production-env.cjs",
+      "--import",
+      "/home/pyh/nzcoder/references/InfCodeX/node_modules/tsx/dist/esm/index.mjs",
+      "/home/pyh/nzcoder/references/InfCodeX/src/kodax_cli.ts"
+    ],
+    "runtime": "v24.18.1"
+  },
+  "previous_build_hashes_match": {
+    "package.json": true,
+    "package-lock.json": true,
+    "tsconfig.build.json": true,
+    "src/kodax_cli.ts": true,
+    "src/cli_option_helpers.ts": true,
+    "packages/repl/src/ui/json-events.ts": true,
+    "packages/coding/dist/agent.js": true,
+    "packages/coding/dist/coding-preset.js": true,
+    "packages/coding/dist/agent-runtime/run-substrate.js": true,
+    "packages/llm/dist/providers/openai.js": true,
+    "packages/repl/dist/ui/json-events.js": true
+  },
+  "node": "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+  "node_sha256": "f3432a45b03b2da0d270095fdd8813dc34cbea73f5fc8b18c7a384b7cf9b333a",
+  "authorization": {
+    "status": "missing_model_authorization",
+    "provider": null,
+    "endpoint": null,
+    "model_version": null,
+    "reasoning_effort": null,
+    "total_budget": null,
+    "max_total_requests": null,
+    "max_total_tokens": null
+  },
+  "planned_agent_runs": 6,
+  "executed_agent_runs": 0,
+  "outbound_model_requests": 0,
+  "repetitions": 1,
+  "automatic_reruns": false,
+  "entrypoints": {
+    "infcodex": "SA CLI, preconfigured-session via official sessions API",
+    "nzcoder": "build_product_run_environment -> NativeSDKRunner, unset retrieval override -> policy"
+  },
+  "not_ready": [
+    "authorized forwarding transport and aggregate cost bounds not validated",
+    "smoke seccomp is network-only; filesystem isolation from prior evidence and other workspace not validated",
+    "actual provider request effort and streaming comparability cannot be verified without authorized selection"
+  ],
+  "tasks": [
+    {
+      "id": "F",
+      "source": "behavioral._fixture_f",
+      "prompt": "Fix ratio for an empty count so it returns zero, preserve ordinary ratios, run the relevant tests, and report the change and verification.",
+      "command": [
+        "/home/pyh/miniconda3/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "legacy_scoring_metadata_applied": false,
+      "original_capability": "verification-recovery",
+      "initial_hashes": {
+        "REQUIREMENTS.txt": "218e5ebc232e20541b7d4c59c3f3e1cbd3fda60ee7bb9b2039430e3f8c75d2ad",
+        "calc/service.py": "2ab9e87f7325f2203a79bdcc5f5d698607c52566e601b3a3db7556287c656ad3",
+        "tests/test_ratio.py": "b622b1c8ef4b5dfe961a4884692d0f7dc30cc7cf0678e3df036713eacf26c6a0"
+      },
+      "initial_fixture_check": {
+        "command": [
+          "/home/pyh/miniconda3/bin/python",
+          "/home/pyh/nzcoder/tests/evaluation/fixtures/offline_exec.py",
+          "/home/pyh/miniconda3/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "-p",
+          "no:cacheprovider"
+        ],
+        "exit_code": 1,
+        "stdout": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_______________________________ test_empty_count _______________________________\n\n>   def test_empty_count(): assert ratio(10, 0) == 0\n                                   ^^^^^^^^^^^^\n\ntests/test_ratio.py:2: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\ntotal = 10, count = 0\n\n    def ratio(total, count):\n>       return total / count\n               ^^^^^^^^^^^^^\nE       ZeroDivisionError: division by zero\n\ncalc/service.py:2: ZeroDivisionError\n=========================== short test summary info ============================\nFAILED tests/test_ratio.py::test_empty_count - ZeroDivisionError: division by...\n1 failed in 0.01s\n",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n",
+        "evidence_kind": "initial_fixture_test_only"
+      }
+    },
+    {
+      "id": "B",
+      "source": "behavioral._fixture_b",
+      "prompt": "Rename the public product formatting API to render_product and migrate affected in-repository callers and tests. Preserve the behavior of web, CLI, mobile and export consumers. A compatibility alias may remain. Run the relevant tests and report the change and verification.",
+      "command": [
+        "/home/pyh/miniconda3/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "legacy_scoring_metadata_applied": false,
+      "original_capability": "cross-file-impact",
+      "initial_hashes": {
+        "REQUIREMENTS.txt": "3da9dd639325d4ae185bd91b148718c21ea4e1f25c22e4c569b13dfcc4cd4b75",
+        "catalog/api.py": "c6f1e203ed91ef388f0ac17ba7e1ad634d87892db507c9a0068226f61ef801ee",
+        "cli/report.py": "a566996b60d68ea6d2febbe1aab8f82aee69f176b7e931e04c570b166096e860",
+        "jobs/export.py": "623d8ac8f26b4c334f2249e5f438856b387dbd2b559595926358c608dc659df7",
+        "web/controller.py": "c2bec07c6410886dc020b9fd32832b46c7ddb8afa0af8925504e6a643953e917",
+        "mobile/presenter.py": "d10372070c06496dc727154e6c345fa1849ce97305592d2cf100b7b0f8668462",
+        "tests/test_catalog_api.py": "0a0528bcee007c2a50c8b6214888ebfd99557c367d11d023293366c8eb12a5b3",
+        "tests/test_report.py": "06732efaa41039fffdc8723a4b2265a9e49921ab2cd36ab825892fb1bf919957"
+      },
+      "initial_fixture_check": {
+        "command": [
+          "/home/pyh/miniconda3/bin/python",
+          "/home/pyh/nzcoder/tests/evaluation/fixtures/offline_exec.py",
+          "/home/pyh/miniconda3/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "-p",
+          "no:cacheprovider"
+        ],
+        "exit_code": 0,
+        "stdout": "..                                                                       [100%]\n2 passed in 0.00s\n",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n",
+        "evidence_kind": "initial_fixture_test_only"
+      }
+    },
+    {
+      "id": "N",
+      "source": "installed escape-string-regexp@2.0.0 (MIT), pinned reference dependency",
+      "source_hashes": {
+        "index.js": "48b8be4119e6f09b8942c490397fc047da012e0cc223d75a76363856af68fce4",
+        "index.d.ts": "a9fd76613c52aa62a036e7d85d6503601ac3aae1444f4765c738567e5f687f4f",
+        "license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+        "package.json": "f88b0cacc64b8e2d467bd8780cffdc9413eed5b635a82ee721c16551f8c1312a",
+        "readme.md": "a27d6a36becdd0354d4289f4b36b70d5b3c45de2194c07e52b79a5e73bf5ea89"
+      },
+      "prompt": "Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification.",
+      "command": [
+        "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+        "--test",
+        "literal.test.cjs"
+      ],
+      "fixture_adaptation": "Original package copied unchanged; added public node:test contract. No npm install/test scripts.",
+      "initial_hashes": {
+        "literal.test.cjs": "07e8cafbcdcefaa39f183ab47c4927ee4f0800f3c261562731b20b47b0c65319",
+        "readme.md": "a27d6a36becdd0354d4289f4b36b70d5b3c45de2194c07e52b79a5e73bf5ea89",
+        "package.json": "f88b0cacc64b8e2d467bd8780cffdc9413eed5b635a82ee721c16551f8c1312a",
+        "REQUIREMENTS.txt": "d0d5a8aa63a9565ef2d1a395bf6ce9e11d9cfb91f2b53c5086e5133449f653bf",
+        "license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+        "index.d.ts": "a9fd76613c52aa62a036e7d85d6503601ac3aae1444f4765c738567e5f687f4f",
+        "index.js": "48b8be4119e6f09b8942c490397fc047da012e0cc223d75a76363856af68fce4"
+      },
+      "initial_fixture_check": {
+        "command": [
+          "/home/pyh/miniconda3/bin/python",
+          "/home/pyh/nzcoder/tests/evaluation/fixtures/offline_exec.py",
+          "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+          "--test",
+          "literal.test.cjs"
+        ],
+        "exit_code": 1,
+        "stdout": "✔ ordinary literals still match (0.476825ms)\n✖ literals can be embedded in Unicode regular expressions (0.11993ms)\n✔ non-string inputs remain rejected (0.221145ms)\nℹ tests 3\nℹ suites 0\nℹ pass 2\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.211126\n\n✖ failing tests:\n\ntest at literal.test.cjs:10:1\n✖ literals can be embedded in Unicode regular expressions (0.11993ms)\n  SyntaxError: Invalid regular expression: /^a\\-b$/u: Invalid escape\n      at new RegExp (<anonymous>)\n      at TestContext.<anonymous> (/tmp/nz-comparison-check-9zo0fenj/workspace/literal.test.cjs:12:18)\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1325:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)\n      at Test.postRun (node:internal/test_runner/test:1465:19)\n      at Test.run (node:internal/test_runner/test:1390:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n",
+        "evidence_kind": "initial_fixture_test_only"
+      }
+    }
+  ],
+  "runs": [
+    {
+      "task": "F",
+      "side": "infcodex",
+      "repetition": 1,
+      "workspace": "/tmp/nz-autonomous-comparison-20260915-final/runs/F/infcodex/workspace",
+      "session": "autonomous-F-infcodex",
+      "status": "not_run",
+      "reason": "missing_model_authorization",
+      "initial_hashes": {
+        "REQUIREMENTS.txt": "218e5ebc232e20541b7d4c59c3f3e1cbd3fda60ee7bb9b2039430e3f8c75d2ad",
+        "calc/service.py": "2ab9e87f7325f2203a79bdcc5f5d698607c52566e601b3a3db7556287c656ad3",
+        "tests/test_ratio.py": "b622b1c8ef4b5dfe961a4884692d0f7dc30cc7cf0678e3df036713eacf26c6a0"
+      },
+      "model_calls": null,
+      "tokens": null,
+      "cost": null,
+      "wall_time_ms": null,
+      "final_acceptance": null,
+      "agent_verification": null,
+      "recovery_observed": null,
+      "diff": null,
+      "trajectory": null,
+      "run_template": {
+        "prefix": [
+          "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+          "--max-old-space-size=4096",
+          "--require",
+          "/home/pyh/nzcoder/references/InfCodeX/scripts/production-env.cjs",
+          "--import",
+          "/home/pyh/nzcoder/references/InfCodeX/node_modules/tsx/dist/esm/index.mjs",
+          "/home/pyh/nzcoder/references/InfCodeX/src/kodax_cli.ts"
+        ],
+        "arguments": [
+          "--mode",
+          "json",
+          "Fix ratio for an empty count so it returns zero, preserve ordinary ratios, run the relevant tests, and report the change and verification.",
+          "--agent-mode",
+          "sa",
+          "--session",
+          "autonomous-F-infcodex"
+        ],
+        "unresolved_arguments": {
+          "--provider": null,
+          "--model": null,
+          "--effort": null,
+          "--max-iter": null
+        },
+        "session_preparation": "official sessions.create/updateSettings in isolated HOME; no previous history",
+        "session_settings": {
+          "permissionMode": "auto-in-project",
+          "autoModeEngine": "rules",
+          "agentMode": "sa"
+        }
+      },
+      "execution_ready": false
+    },
+    {
+      "task": "F",
+      "side": "nzcoder",
+      "repetition": 1,
+      "workspace": "/tmp/nz-autonomous-comparison-20260915-final/runs/F/nzcoder/workspace",
+      "session": "autonomous-F-nzcoder",
+      "status": "not_run",
+      "reason": "missing_model_authorization",
+      "initial_hashes": {
+        "REQUIREMENTS.txt": "218e5ebc232e20541b7d4c59c3f3e1cbd3fda60ee7bb9b2039430e3f8c75d2ad",
+        "calc/service.py": "2ab9e87f7325f2203a79bdcc5f5d698607c52566e601b3a3db7556287c656ad3",
+        "tests/test_ratio.py": "b622b1c8ef4b5dfe961a4884692d0f7dc30cc7cf0678e3df036713eacf26c6a0"
+      },
+      "model_calls": null,
+      "tokens": null,
+      "cost": null,
+      "wall_time_ms": null,
+      "final_acceptance": null,
+      "agent_verification": null,
+      "recovery_observed": null,
+      "diff": null,
+      "trajectory": null,
+      "run_template": {
+        "factory": "nz_coder.runtime.execution.native_sdk.build_product_run_environment",
+        "runner": "NativeSDKRunner.run_result",
+        "instructions_factory": "nz_coder.runtime.conversation.prompt.build",
+        "request": {
+          "profile": "MAIN_PROFILE",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Fix ratio for an empty count so it returns zero, preserve ordinary ratios, run the relevant tests, and report the change and verification."
+            }
+          ],
+          "stream": true,
+          "provider": null,
+          "model": null,
+          "reasoning_effort": null,
+          "metadata": {
+            "permission_mode": "auto",
+            "persist_session": false
+          }
+        },
+        "retrieval": "no override; policy",
+        "tool_allowlist": "no historical experiment override"
+      },
+      "execution_ready": false
+    },
+    {
+      "task": "B",
+      "side": "infcodex",
+      "repetition": 1,
+      "workspace": "/tmp/nz-autonomous-comparison-20260915-final/runs/B/infcodex/workspace",
+      "session": "autonomous-B-infcodex",
+      "status": "not_run",
+      "reason": "missing_model_authorization",
+      "initial_hashes": {
+        "REQUIREMENTS.txt": "3da9dd639325d4ae185bd91b148718c21ea4e1f25c22e4c569b13dfcc4cd4b75",
+        "catalog/api.py": "c6f1e203ed91ef388f0ac17ba7e1ad634d87892db507c9a0068226f61ef801ee",
+        "cli/report.py": "a566996b60d68ea6d2febbe1aab8f82aee69f176b7e931e04c570b166096e860",
+        "jobs/export.py": "623d8ac8f26b4c334f2249e5f438856b387dbd2b559595926358c608dc659df7",
+        "web/controller.py": "c2bec07c6410886dc020b9fd32832b46c7ddb8afa0af8925504e6a643953e917",
+        "mobile/presenter.py": "d10372070c06496dc727154e6c345fa1849ce97305592d2cf100b7b0f8668462",
+        "tests/test_catalog_api.py": "0a0528bcee007c2a50c8b6214888ebfd99557c367d11d023293366c8eb12a5b3",
+        "tests/test_report.py": "06732efaa41039fffdc8723a4b2265a9e49921ab2cd36ab825892fb1bf919957"
+      },
+      "model_calls": null,
+      "tokens": null,
+      "cost": null,
+      "wall_time_ms": null,
+      "final_acceptance": null,
+      "agent_verification": null,
+      "recovery_observed": null,
+      "diff": null,
+      "trajectory": null,
+      "run_template": {
+        "prefix": [
+          "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+          "--max-old-space-size=4096",
+          "--require",
+          "/home/pyh/nzcoder/references/InfCodeX/scripts/production-env.cjs",
+          "--import",
+          "/home/pyh/nzcoder/references/InfCodeX/node_modules/tsx/dist/esm/index.mjs",
+          "/home/pyh/nzcoder/references/InfCodeX/src/kodax_cli.ts"
+        ],
+        "arguments": [
+          "--mode",
+          "json",
+          "Rename the public product formatting API to render_product and migrate affected in-repository callers and tests. Preserve the behavior of web, CLI, mobile and export consumers. A compatibility alias may remain. Run the relevant tests and report the change and verification.",
+          "--agent-mode",
+          "sa",
+          "--session",
+          "autonomous-B-infcodex"
+        ],
+        "unresolved_arguments": {
+          "--provider": null,
+          "--model": null,
+          "--effort": null,
+          "--max-iter": null
+        },
+        "session_preparation": "official sessions.create/updateSettings in isolated HOME; no previous history",
+        "session_settings": {
+          "permissionMode": "auto-in-project",
+          "autoModeEngine": "rules",
+          "agentMode": "sa"
+        }
+      },
+      "execution_ready": false
+    },
+    {
+      "task": "B",
+      "side": "nzcoder",
+      "repetition": 1,
+      "workspace": "/tmp/nz-autonomous-comparison-20260915-final/runs/B/nzcoder/workspace",
+      "session": "autonomous-B-nzcoder",
+      "status": "not_run",
+      "reason": "missing_model_authorization",
+      "initial_hashes": {
+        "REQUIREMENTS.txt": "3da9dd639325d4ae185bd91b148718c21ea4e1f25c22e4c569b13dfcc4cd4b75",
+        "catalog/api.py": "c6f1e203ed91ef388f0ac17ba7e1ad634d87892db507c9a0068226f61ef801ee",
+        "cli/report.py": "a566996b60d68ea6d2febbe1aab8f82aee69f176b7e931e04c570b166096e860",
+        "jobs/export.py": "623d8ac8f26b4c334f2249e5f438856b387dbd2b559595926358c608dc659df7",
+        "web/controller.py": "c2bec07c6410886dc020b9fd32832b46c7ddb8afa0af8925504e6a643953e917",
+        "mobile/presenter.py": "d10372070c06496dc727154e6c345fa1849ce97305592d2cf100b7b0f8668462",
+        "tests/test_catalog_api.py": "0a0528bcee007c2a50c8b6214888ebfd99557c367d11d023293366c8eb12a5b3",
+        "tests/test_report.py": "06732efaa41039fffdc8723a4b2265a9e49921ab2cd36ab825892fb1bf919957"
+      },
+      "model_calls": null,
+      "tokens": null,
+      "cost": null,
+      "wall_time_ms": null,
+      "final_acceptance": null,
+      "agent_verification": null,
+      "recovery_observed": null,
+      "diff": null,
+      "trajectory": null,
+      "run_template": {
+        "factory": "nz_coder.runtime.execution.native_sdk.build_product_run_environment",
+        "runner": "NativeSDKRunner.run_result",
+        "instructions_factory": "nz_coder.runtime.conversation.prompt.build",
+        "request": {
+          "profile": "MAIN_PROFILE",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Rename the public product formatting API to render_product and migrate affected in-repository callers and tests. Preserve the behavior of web, CLI, mobile and export consumers. A compatibility alias may remain. Run the relevant tests and report the change and verification."
+            }
+          ],
+          "stream": true,
+          "provider": null,
+          "model": null,
+          "reasoning_effort": null,
+          "metadata": {
+            "permission_mode": "auto",
+            "persist_session": false
+          }
+        },
+        "retrieval": "no override; policy",
+        "tool_allowlist": "no historical experiment override"
+      },
+      "execution_ready": false
+    },
+    {
+      "task": "N",
+      "side": "infcodex",
+      "repetition": 1,
+      "workspace": "/tmp/nz-autonomous-comparison-20260915-final/runs/N/infcodex/workspace",
+      "session": "autonomous-N-infcodex",
+      "status": "not_run",
+      "reason": "missing_model_authorization",
+      "initial_hashes": {
+        "literal.test.cjs": "07e8cafbcdcefaa39f183ab47c4927ee4f0800f3c261562731b20b47b0c65319",
+        "readme.md": "a27d6a36becdd0354d4289f4b36b70d5b3c45de2194c07e52b79a5e73bf5ea89",
+        "package.json": "f88b0cacc64b8e2d467bd8780cffdc9413eed5b635a82ee721c16551f8c1312a",
+        "REQUIREMENTS.txt": "d0d5a8aa63a9565ef2d1a395bf6ce9e11d9cfb91f2b53c5086e5133449f653bf",
+        "license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+        "index.d.ts": "a9fd76613c52aa62a036e7d85d6503601ac3aae1444f4765c738567e5f687f4f",
+        "index.js": "48b8be4119e6f09b8942c490397fc047da012e0cc223d75a76363856af68fce4"
+      },
+      "model_calls": null,
+      "tokens": null,
+      "cost": null,
+      "wall_time_ms": null,
+      "final_acceptance": null,
+      "agent_verification": null,
+      "recovery_observed": null,
+      "diff": null,
+      "trajectory": null,
+      "run_template": {
+        "prefix": [
+          "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+          "--max-old-space-size=4096",
+          "--require",
+          "/home/pyh/nzcoder/references/InfCodeX/scripts/production-env.cjs",
+          "--import",
+          "/home/pyh/nzcoder/references/InfCodeX/node_modules/tsx/dist/esm/index.mjs",
+          "/home/pyh/nzcoder/references/InfCodeX/src/kodax_cli.ts"
+        ],
+        "arguments": [
+          "--mode",
+          "json",
+          "Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification.",
+          "--agent-mode",
+          "sa",
+          "--session",
+          "autonomous-N-infcodex"
+        ],
+        "unresolved_arguments": {
+          "--provider": null,
+          "--model": null,
+          "--effort": null,
+          "--max-iter": null
+        },
+        "session_preparation": "official sessions.create/updateSettings in isolated HOME; no previous history",
+        "session_settings": {
+          "permissionMode": "auto-in-project",
+          "autoModeEngine": "rules",
+          "agentMode": "sa"
+        }
+      },
+      "execution_ready": false
+    },
+    {
+      "task": "N",
+      "side": "nzcoder",
+      "repetition": 1,
+      "workspace": "/tmp/nz-autonomous-comparison-20260915-final/runs/N/nzcoder/workspace",
+      "session": "autonomous-N-nzcoder",
+      "status": "not_run",
+      "reason": "missing_model_authorization",
+      "initial_hashes": {
+        "literal.test.cjs": "07e8cafbcdcefaa39f183ab47c4927ee4f0800f3c261562731b20b47b0c65319",
+        "readme.md": "a27d6a36becdd0354d4289f4b36b70d5b3c45de2194c07e52b79a5e73bf5ea89",
+        "package.json": "f88b0cacc64b8e2d467bd8780cffdc9413eed5b635a82ee721c16551f8c1312a",
+        "REQUIREMENTS.txt": "d0d5a8aa63a9565ef2d1a395bf6ce9e11d9cfb91f2b53c5086e5133449f653bf",
+        "license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+        "index.d.ts": "a9fd76613c52aa62a036e7d85d6503601ac3aae1444f4765c738567e5f687f4f",
+        "index.js": "48b8be4119e6f09b8942c490397fc047da012e0cc223d75a76363856af68fce4"
+      },
+      "model_calls": null,
+      "tokens": null,
+      "cost": null,
+      "wall_time_ms": null,
+      "final_acceptance": null,
+      "agent_verification": null,
+      "recovery_observed": null,
+      "diff": null,
+      "trajectory": null,
+      "run_template": {
+        "factory": "nz_coder.runtime.execution.native_sdk.build_product_run_environment",
+        "runner": "NativeSDKRunner.run_result",
+        "instructions_factory": "nz_coder.runtime.conversation.prompt.build",
+        "request": {
+          "profile": "MAIN_PROFILE",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification."
+            }
+          ],
+          "stream": true,
+          "provider": null,
+          "model": null,
+          "reasoning_effort": null,
+          "metadata": {
+            "permission_mode": "auto",
+            "persist_session": false
+          }
+        },
+        "retrieval": "no override; policy",
+        "tool_allowlist": "no historical experiment override"
+      },
+      "execution_ready": false
+    }
+  ],
+  "core_conclusion": "尚不能提出新的 Core 修改"
+}

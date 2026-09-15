@@ -1,0 +1,1 @@
+Fix ratio for an empty count so it returns zero, preserve ordinary ratios, run the relevant tests, and report the change and verification.
