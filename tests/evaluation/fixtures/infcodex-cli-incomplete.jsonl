@@ -1,0 +1,6 @@
+{"type":"session.start","provider":"local-smoke","sessionId":"20260915_114623_bjw0w9lr","seq":1,"turnId":"turn_f7e2c146cd5b46b1","deliveryId":"delivery_25cb773d38b7481f","timestamp":"2026-09-15T03:46:24.173Z"}
+{"type":"turn.started","sessionId":"20260915_114623_bjw0w9lr","seq":2,"turnId":"turn_f7e2c146cd5b46b1","deliveryId":"delivery_25cb773d38b7481f","timestamp":"2026-09-15T03:46:24.174Z","deliveryKind":"initial"}
+{"type":"iteration.start","iter":1,"maxIter":8,"sessionId":"20260915_114623_bjw0w9lr","seq":3,"turnId":"turn_f7e2c146cd5b46b1","deliveryId":"delivery_25cb773d38b7481f","timestamp":"2026-09-15T03:46:24.224Z"}
+{"type":"tool.input.delta","toolName":"read","partialJson":"{\"path\": \"calc/service.py\"}","toolId":"smoke-1","sessionId":"20260915_114623_bjw0w9lr","seq":4,"turnId":"turn_f7e2c146cd5b46b1","deliveryId":"delivery_25cb773d38b7481f","timestamp":"2026-09-15T03:46:24.398Z"}
+{"type":"stream.end","sessionId":"20260915_114623_bjw0w9lr","seq":5,"turnId":"turn_f7e2c146cd5b46b1","deliveryId":"delivery_25cb773d38b7481f","timestamp":"2026-09-15T03:46:24.402Z"}
+{"type":"tool.start","id":"smoke-1","name":"read","input":{"path":"calc/service.py"},"sessionId":"20260915_114623_bjw0w9lr","seq":6,"turnId":"turn_f7e2c146cd5b46b1","deliveryId":"delivery_25cb773d38b7481f","timestamp":"2026-09-15T03:46:24.403Z"}

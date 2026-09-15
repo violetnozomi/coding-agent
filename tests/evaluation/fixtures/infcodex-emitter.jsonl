@@ -1,0 +1,4 @@
+{"type":"tool.start","id":"call-1","name":"bash","input":{"command":"python -m unittest -v"}}
+{"type":"tool.result","id":"call-1","name":"bash","content":"Ran 1 test\nFAILED (failures=1)","seq":1}
+{"type":"iteration.end","iter":1,"maxIter":8,"tokenCount":16,"tokenSource":"api","usage":{"inputTokens":12,"outputTokens":4,"totalTokens":16}}
+{"type":"turn.completed","turnId":"turn-1","sessionId":"fixture","seq":2}

@@ -1229,7 +1229,7 @@ def _verification_reliability_metrics(events: tuple[dict, ...]) -> dict:
     turn = 0
     first_failure_turn = None
     recovery_turn = None
-    failures = recoveries = targeted = regression = 0
+    failures = recoveries = targeted = regression = unknown = 0
     failed_commands: dict[str, int] = {}
     active_failure = False
     for event in events:
@@ -1259,13 +1259,20 @@ def _verification_reliability_metrics(events: tuple[dict, ...]) -> dict:
             failed = bool(
                 event.get("command_failed")
                 or event.get("dispatch_failed")
-                or event.get("status") in {"error", "nonzero"}
+                or event.get("status") in {"error", "failed", "failure", "nonzero"}
             )
             output = str(event.get("output") or "")
             if name == "verify_changed_files":
                 failed = output.startswith(("FAIL:", "Error:"))
+            succeeded = event.get("status") in {"ok", "success"}
+            if name == "verify_changed_files" and not failed:
+                succeeded = output.startswith("PASS:")
         else:
-            failed = not bool(event.get("success") or event.get("passed"))
+            failed = event.get("success") is False or event.get("passed") is False
+            succeeded = event.get("success") is True or event.get("passed") is True
+        if not failed and not succeeded:
+            unknown += 1
+            continue
         stage = classify_verification_command(command)
         targeted += int(stage == "targeted")
         regression += int(stage == "regression")
@@ -1281,6 +1288,7 @@ def _verification_reliability_metrics(events: tuple[dict, ...]) -> dict:
             if recovery_turn is None:
                 recovery_turn = max(1, turn)
     return {
+        "verification_unknown": unknown,
         "verification_failures": failures,
         "verification_recoveries": recoveries,
         "time_to_first_failure_turn": first_failure_turn,
@@ -1528,16 +1536,22 @@ def _score(
         str(observation.run_result.get("reference") or "") != ""
         and observation.run_result.get("reference_trajectory_available") is False
     )
+    reference_calls_unavailable = reference_trajectory_unavailable or (
+        observation.run_result.get("reference_model_calls_observable") is False
+    )
+    if reference_calls_unavailable:
+        for key in ("turns", "model_calls", "input_tokens", "output_tokens", "cost"):
+            metrics_payload[key] = None
     long_horizon_exercised: bool | None = (
         None
-        if reference_trajectory_unavailable
+        if reference_calls_unavailable
         else metrics.turns >= task.min_turns
     )
     recovery_complete: bool | None = (
-        None if recovery_required and reference_trajectory_unavailable
+        None if recovery_required and (reference_trajectory_unavailable or metrics_payload["verification_unknown"])
         else (
             not recovery_required
-            or (metrics.failed_commands >= 1 and metrics.verification_recoveries >= 1)
+            or (metrics_payload["verification_failures"] >= 1 and metrics_payload["verification_recoveries"] >= 1)
         )
     )
     child_execution_complete = (
@@ -1555,7 +1569,7 @@ def _score(
         } else True)
         and (verification["passed"] is not False)
         and (patch_correct is not False)
-        and recovery_complete is not False
+        and (not recovery_required or recovery_complete is True)
         and child_execution_complete
         and degraded_correct
         and no_unneeded_web
@@ -1581,7 +1595,7 @@ def _score(
         "verification": verification, "metrics": metrics_payload,
         "trajectory_diagnostics": asdict(diagnose_trajectory(list(observation.events))),
         "recovery_complete": recovery_complete,
-        "turn_requirement_observable": not reference_trajectory_unavailable,
+        "turn_requirement_observable": not reference_calls_unavailable,
         "long_horizon_exercised": long_horizon_exercised,
         "runtime_status": raw_status or str(observation.run_result.get("status") or ""),
         "verification_state": (

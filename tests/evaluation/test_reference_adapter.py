@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 
 def test_reference_probes_report_current_runtime_blockers(tmp_path, monkeypatch) -> None:
     from nz_coder.evaluation.reference_adapter import (
@@ -231,15 +232,15 @@ def test_reference_event_normalization_uses_structured_failure_facts():
     assert events[1]["command_failed"] is True
 
 
-def test_reference_token_totals_prefer_cumulative_terminal_usage():
+def test_reference_token_totals_require_explicit_cumulative_provenance():
     from nz_coder.evaluation.reference_adapter import _token_totals
 
     events = (
         {"type": "iteration.end", "usage": {"input_tokens": 10, "output_tokens": 2}},
         {"type": "iteration.end", "usage": {"input_tokens": 12, "output_tokens": 3}},
-        {"type": "run.result", "usage": {"input_tokens": 22, "output_tokens": 5}},
+        {"type": "run.result", "usage_semantics": "cumulative", "usage": {"input_tokens": 22, "output_tokens": 5}},
     )
-    assert _token_totals(events) == {"input": 22, "output": 5, "reasoning": 0, "cache": 0}
+    assert _token_totals(events) == {"input": 22, "output": 5}
 
 
 def test_infcodex_probe_never_falls_back_to_npx_download(tmp_path, monkeypatch):
@@ -253,3 +254,142 @@ def test_infcodex_probe_never_falls_back_to_npx_download(tmp_path, monkeypatch):
     result = InfCodeXReferenceAdapter(tmp_path).probe()
     assert result.available is False
     assert "automatic npx runtime downloads are disabled" in str(result.reason)
+
+
+def test_real_emitter_missing_status_remains_unknown_and_cannot_recover():
+    from pathlib import Path
+    from nz_coder.evaluation.reference_adapter import ReferenceBehaviorDriver, _json_events
+    from nz_coder.evaluation.behavioral import _verification_reliability_metrics
+
+    raw = _json_events((Path(__file__).parent / 'fixtures/infcodex-emitter.jsonl').read_text())
+    assert 'status' not in raw[1] and 'exit_code' not in raw[1]
+    normalized = ReferenceBehaviorDriver._normalize(raw)
+    call = normalized[0]
+    assert call['status'] == 'unknown'
+    assert call['command_failed'] is None
+    assert call['executed'] is None
+    assert call['status_reason'] == 'missing_execution_status'
+    failed = {**call, 'status': 'nonzero', 'command_failed': True}
+    metrics = _verification_reliability_metrics((failed, call))
+    assert metrics['verification_recoveries'] == 0
+    assert not any(event['event'] == 'llm_response' for event in normalized)
+
+
+def test_reference_unmatched_start_and_invalid_exit_remain_unknown():
+    from nz_coder.evaluation.reference_adapter import ReferenceBehaviorDriver
+    events = ReferenceBehaviorDriver._normalize((
+        {'type': 'tool.start', 'id': 'unfinished', 'name': 'bash', 'input': {}},
+        {'type': 'tool.result', 'id': 'bad', 'name': 'bash', 'exit_code': 'not-a-code'},
+    ))
+    assert all(e['status'] == 'unknown' for e in events)
+    assert any(e['status_reason'] == 'missing_tool_result' for e in events)
+
+
+def test_infcodex_zero_exit_without_events_is_not_completed(tmp_path):
+    import sys
+    from nz_coder.evaluation.reference_adapter import ReferenceCapability, ReferenceRunRequest, _execute
+    result = _execute('InfCodeX', ReferenceCapability('InfCodeX', True, None),
+                      [sys.executable, '-c', 'pass'],
+                      ReferenceRunRequest(tmp_path, 'fixture', 'local', 'local'))
+    assert result.status == 'incomplete_protocol'
+
+
+def test_reference_usage_snapshots_are_not_summed_as_requests():
+    from nz_coder.evaluation.reference_adapter import _token_totals
+    usage = {"inputTokens": 10, "outputTokens": 2}
+    assert _token_totals(({"type": "iteration.end", "usage": usage},
+                          {"type": "turn.completed", "usage": usage},
+                          {"type": "run.result", "usage": usage})) is None
+
+
+@pytest.mark.parametrize("facts,status", [
+    ({"status": "success", "executed": False}, "not_executed"),
+    ({"status": "cancelled"}, "cancelled"),
+    ({"status": "cancelled", "executed": False}, "cancelled"),
+    ({"status": "timeout"}, "timeout"),
+    ({"status": "denied"}, "denied"),
+    ({"exit_code": True}, "unknown"),
+    ({"exit_code": 0.5}, "unknown"),
+    ({"status": "banana"}, "unknown"),
+])
+def test_reference_non_success_states_do_not_count_as_recovery(facts, status):
+    from nz_coder.evaluation.reference_adapter import ReferenceBehaviorDriver
+    from nz_coder.evaluation.behavioral import _verification_reliability_metrics
+    events = ReferenceBehaviorDriver._normalize((
+        {"type": "tool.start", "id": "test", "name": "bash", "input": {"command": "python -m pytest -q"}},
+        {"type": "tool.result", "id": "test", **facts},
+    ))
+    assert events[0]["status"] == status
+    failure = {**events[0], "status": "nonzero", "command_failed": True}
+    assert _verification_reliability_metrics((failure, *events))["verification_recoveries"] == 0
+
+
+@pytest.mark.parametrize("terminal,exit_code", [(False, 0), (True, 1)])
+def test_real_process_failure_cannot_be_overridden_by_terminal(tmp_path, terminal, exit_code):
+    import sys
+    from nz_coder.evaluation.reference_adapter import ReferenceCapability, ReferenceRunRequest, _execute
+    script = "import json; print(json.dumps(" + repr({"type": "run.result", "success": terminal}) + f")); raise SystemExit({exit_code})"
+    result = _execute("InfCodeX", ReferenceCapability("InfCodeX", True, None),
+                      [sys.executable, "-c", script], ReferenceRunRequest(tmp_path, "task", "local", "local"))
+    assert result.status == "error"
+    assert result.exit_code == exit_code
+    assert json.loads(result.raw_stdout)["success"] is terminal
+
+
+def test_independent_pass_does_not_prove_unknown_historical_recovery(tmp_path):
+    from nz_coder.evaluation.behavioral import BehaviorBenchmarkConfig, BehaviorObservation, _fixture_f, _score
+    from nz_coder.evaluation.reference_adapter import ReferenceBehaviorDriver, _workspace_hashes
+    task = _fixture_f(tmp_path)
+    before = _workspace_hashes(tmp_path)
+    (tmp_path / "calc/service.py").write_text("def ratio(total, count):\n    return 0 if count == 0 else total / count\n")
+    observation = BehaviorObservation(final_response="done", events=ReferenceBehaviorDriver._normalize((
+        {"type": "tool.start", "id": "t", "name": "bash", "input": {"command": "python -m pytest -q"}},
+        {"type": "tool.result", "id": "t", "content": "1 passed"},
+    )), run_result={"reference": "InfCodeX", "reference_model_calls_observable": False,
+                    "metadata": {"raw_status": "completed"}})
+    score = _score(task, tmp_path, before, observation, 1, BehaviorBenchmarkConfig(model="local"))
+    assert score["verification"]["passed"] is True
+    assert score["recovery_complete"] is None
+    assert score["success"] is False
+    assert score["metrics"]["model_calls"] is None
+
+
+def test_recorded_real_cli_tools_remain_unknown():
+    from pathlib import Path
+    from nz_coder.evaluation.reference_adapter import ReferenceBehaviorDriver, _json_events, _token_totals
+    root = Path(__file__).parent / "fixtures"
+    raw = _json_events((root / "infcodex-cli-real.jsonl").read_text())
+    assert raw[-1]["type"] == "run.result" and raw[-1]["success"] is True
+    tools = [e for e in ReferenceBehaviorDriver._normalize(raw) if e["event"] == "tool_call"]
+    assert [e["name"] for e in tools] == ["read", "bash", "edit", "bash"]
+    assert all(e["status"] == "unknown" and e["executed"] is None for e in tools)
+    assert "ZeroDivisionError" in tools[1]["output"] and "1 passed" in tools[3]["output"]
+    assert _token_totals(raw) is None
+    incomplete = _json_events((root / "infcodex-cli-incomplete.jsonl").read_text())
+    assert not any(e["type"] == "run.result" for e in incomplete)
+    unfinished = [e for e in ReferenceBehaviorDriver._normalize(incomplete) if e["event"] == "tool_call"]
+    assert unfinished[0]["status_reason"] == "missing_tool_result"
+
+
+def test_stored_unknown_recovery_cannot_be_rescored_as_success(tmp_path):
+    from nz_coder.evaluation.reference_adapter import rescore_reference_matrix
+    target = tmp_path / "stored.json"
+    target.write_text(json.dumps({"runs": [{
+        "task": {"capability": "verification-recovery"},
+        "score": {"recovery_complete": None, "verification": {"passed": True},
+                  "final_patch_correctness": True, "run_result": {"reference_model_calls_observable": False}},
+    }]}))
+    result = rescore_reference_matrix(target)
+    assert result["runs"][0]["score"]["success"] is False
+    assert result["runs"][0]["score"]["long_horizon_exercised"] is None
+
+
+@pytest.mark.parametrize("terminal", [{"type": "run.result"}, {"type": "run.result", "success": "true"}])
+def test_invalid_terminal_success_is_unknown_protocol(tmp_path, terminal):
+    import sys
+    from nz_coder.evaluation.reference_adapter import ReferenceCapability, ReferenceRunRequest, _execute
+    result = _execute("InfCodeX", ReferenceCapability("InfCodeX", True, None),
+        [sys.executable, "-c", "import json; print(json.dumps(" + repr(terminal) + "))"],
+        ReferenceRunRequest(tmp_path, "task", "local", "local"))
+    assert result.status == "incomplete_protocol"
+    assert "no valid boolean" in result.error

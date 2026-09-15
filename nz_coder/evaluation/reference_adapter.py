@@ -47,6 +47,8 @@ class ReferenceRunResult:
     tokens: dict[str, int] | None = None
     error: str | None = None
     capability: ReferenceCapability | None = None
+    raw_stdout: str = ""
+    raw_stderr: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
@@ -105,43 +107,30 @@ def _json_events(output: str) -> tuple[dict[str, Any], ...]:
 
 
 def _token_totals(events: tuple[dict[str, Any], ...]) -> dict[str, int] | None:
-    def read_usage(value: Any) -> tuple[dict[str, int], bool]:
-        totals = {"input": 0, "output": 0, "reasoning": 0, "cache": 0}
-        found = False
-        if not isinstance(value, dict):
-            return totals, found
-        for key, item in value.items():
-            if not isinstance(item, (int, float)):
-                continue
-            lowered = str(key).lower()
-            target = next(
-                (name for name in totals if name in lowered and "token" in lowered),
-                None,
-            )
-            if target:
-                totals[target] += int(item)
-                found = True
-        return totals, found
-
-    # A terminal run.result usage block is cumulative. Prefer it over the
-    # per-turn increments so the same request is never counted twice.
+    # InfCodeX iteration usage is the latest response snapshot; recovery can
+    # re-emit it. turn.completed is a lifecycle event and run.result carries no
+    # usage contract. Only explicit cumulative provenance is safe to total.
     for event in reversed(events):
-        if str(event.get("type") or event.get("event") or "") in {"run.result", "run.completed"}:
-            totals, found = read_usage(event.get("usage"))
-            if found:
-                return totals
-    totals = {"input": 0, "output": 0, "reasoning": 0, "cache": 0}
-    found = False
-    for event in events:
-        kind = str(event.get("type") or event.get("event") or "")
-        if kind not in {"iteration.end", "turn.completed", "llm_response"}:
+        if event.get("usage_semantics") != "cumulative":
             continue
-        current, present = read_usage(event.get("usage") or event)
-        if present:
-            found = True
-            for key in totals:
-                totals[key] += current[key]
-    return totals if found else None
+        usage = event.get("usage")
+        if not isinstance(usage, dict):
+            continue
+        totals = {}
+        for target, names in {
+            "input": ("inputTokens", "input_tokens"),
+            "output": ("outputTokens", "output_tokens"),
+            "reasoning": ("thoughtTokens", "reasoning_tokens"),
+            "cache": ("cachedReadTokens", "cached_tokens"),
+        }.items():
+            for name in names:
+                value = usage.get(name)
+                if type(value) is int and value >= 0:
+                    totals[target] = value
+                    break
+        if totals:
+            return totals
+    return None
 
 
 def _final_text(events: tuple[dict[str, Any], ...], output: str) -> str:
@@ -171,6 +160,7 @@ def _execute(
     request: ReferenceRunRequest,
     *,
     env_overrides: dict[str, str] | None = None,
+    environment: dict[str, str] | None = None,
 ) -> ReferenceRunResult:
     if not capability.available:
         return ReferenceRunResult(
@@ -181,7 +171,7 @@ def _execute(
     workspace = request.workspace.resolve()
     before = _workspace_hashes(workspace)
     started = time.monotonic()
-    environment = os.environ.copy()
+    environment = dict(os.environ if environment is None else environment)
     environment.update(env_overrides or {})
     process = subprocess.Popen(
         command, cwd=str(workspace), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -202,17 +192,20 @@ def _execute(
         error = f"reference run exceeded {request.timeout_s:g}s"
     events = _json_events(stdout)
     terminal = next((event for event in reversed(events) if event.get("type") == "run.result"), None)
-    if isinstance(terminal, dict):
-        if terminal.get("success") is True:
-            status = "completed"
-            error = None
-        elif terminal.get("interrupted") is True:
+    if status == "completed" and isinstance(terminal, dict):
+        if terminal.get("interrupted") is True:
             status = "interrupted"
             error = str(terminal.get("signalReason") or "reference run interrupted")
-        else:
+        elif terminal.get("success") is True:
+            status = "completed"
+            error = None
+        elif terminal.get("success") is False:
             status = "error"
             error = str(terminal.get("signalReason") or error or "reference run reported failure")
-    elif name == "InfCodeX" and events:
+        else:
+            status = "incomplete_protocol"
+            error = "run.result has no valid boolean success fact"
+    elif name == "InfCodeX" and status == "completed":
         status = "incomplete_protocol"
         error = "InfCodeX exited without the documented run.result terminal event"
     return ReferenceRunResult(
@@ -221,6 +214,7 @@ def _execute(
         wall_time_ms=round((time.monotonic() - started) * 1000, 3),
         exit_code=process.returncode, trajectory=events, tokens=_token_totals(events),
         error=error, capability=capability,
+        raw_stdout=stdout, raw_stderr=stderr,
     )
 
 
@@ -344,6 +338,36 @@ def reference_capability_report(
     return {adapter.name: asdict(adapter.probe()) for adapter in adapters}
 
 
+def _execution_facts(event: dict[str, Any]) -> dict[str, Any]:
+    """Preserve unknown execution facts; content is evidence, not a status API."""
+    facts = {"status": "unknown", "executed": None, "command_failed": None,
+             "dispatch_failed": None, "status_reason": "missing_execution_status"}
+    status = str(event.get("status") or event.get("state") or "").casefold()
+    exit_value = event.get("exit_code", event.get("exit", event.get("returncode")))
+    if status in {"cancelled", "canceled", "interrupted", "timeout", "denied", "not_executed"}:
+        return {**facts, "status": status,
+                "executed": False if status in {"denied", "not_executed"} else (
+                    event["executed"] if type(event.get("executed")) is bool else None),
+                "status_reason": "explicit_status"}
+    if event.get("executed") is False:
+        return {**facts, "status": "not_executed", "executed": False,
+                "status_reason": "explicit_not_executed"}
+    if exit_value is not None:
+        if type(exit_value) is not int:
+            return {**facts, "status_reason": "invalid_exit_status"}
+        return {**facts, "status": "nonzero" if exit_value else "ok", "executed": True,
+                "command_failed": exit_value != 0, "dispatch_failed": False,
+                "status_reason": "explicit_exit_status"}
+    if status in {"ok", "success", "succeeded"}:
+        return {**facts, "status": "ok", "executed": True, "command_failed": False,
+                "dispatch_failed": False, "status_reason": "explicit_status"}
+    if status in {"error", "failed", "failure", "nonzero"}:
+        return {**facts, "status": status, "status_reason": "explicit_failure_status"}
+    if status:
+        facts["status_reason"] = "invalid_execution_status"
+    return facts
+
+
 class ReferenceBehaviorDriver:
     """Expose a reference adapter through the common behavioral driver contract."""
 
@@ -363,9 +387,10 @@ class ReferenceBehaviorDriver:
             elif kind in {"iteration.end", "turn.completed"}:
                 usage = event.get("usage") if isinstance(event.get("usage"), dict) else {}
                 normalized.append({
-                    "event": "llm_response",
-                    "input_tokens": int(usage.get("input_tokens") or usage.get("inputTokens") or 0),
-                    "output_tokens": int(usage.get("output_tokens") or usage.get("outputTokens") or 0),
+                    "event": "reference_iteration" if kind == "iteration.end" else "reference_turn",
+                    "usage_semantics": "latest_response_snapshot" if kind == "iteration.end" else None,
+                    "input_tokens": usage.get("inputTokens", usage.get("input_tokens")),
+                    "output_tokens": usage.get("outputTokens", usage.get("output_tokens")),
                 })
             elif kind in {"tool.start", "tool.started"}:
                 tool = event.get("tool") if isinstance(event.get("tool"), dict) else {}
@@ -378,25 +403,20 @@ class ReferenceBehaviorDriver:
             elif kind in {"tool.result", "tool.completed"}:
                 tool_id = str(event.get("id") or "")
                 output = str(event.get("content") or event.get("output") or "")
-                status = str(event.get("status") or event.get("state") or "").casefold()
-                exit_value = event.get("exit_code", event.get("exit", event.get("returncode")))
-                try:
-                    failed = int(exit_value) != 0 if exit_value is not None else status in {
-                        "error", "failed", "failure", "nonzero", "cancelled", "timeout",
-                    }
-                except (TypeError, ValueError, OverflowError):
-                    failed = status in {"error", "failed", "failure", "nonzero", "cancelled", "timeout"}
                 call = pending_tools.pop(tool_id, {
                     "event": "tool_call", "tool_call_id": tool_id,
                     "name": str(event.get("name") or ""), "input": {},
                 })
                 call.update({
                     "output": output, "output_len": len(output),
-                    "status": "nonzero" if failed else "ok", "command_failed": failed,
+                    **_execution_facts(event),
                 })
                 normalized.append(call)
             elif kind in {"compact.finish", "compaction"}:
                 normalized.append({"event": "compaction"})
+        for call in pending_tools.values():
+            normalized.append({**call, **_execution_facts({}),
+                               "status_reason": "missing_tool_result"})
         return tuple(normalized)
 
     def run(self, task, workspace: Path, config):  # noqa: ANN001
@@ -410,6 +430,7 @@ class ReferenceBehaviorDriver:
         payload = result.to_dict()
         payload["metadata"] = {"raw_status": result.status}
         payload["reference_trajectory_available"] = bool(result.trajectory)
+        payload["reference_model_calls_observable"] = False
         error = "" if result.status == "completed" else str(result.error or result.status)
         return BehaviorObservation(
             final_response=result.final_text,
@@ -481,10 +502,11 @@ def rescore_reference_matrix(path: Path) -> dict[str, Any]:
         score_data = run.get("score") or {}
         run_result = score_data.get("run_result") or {}
         trajectory_available = run_result.get("reference_trajectory_available") is not False
-        score_data["turn_requirement_observable"] = trajectory_available
+        calls_observable = trajectory_available and run_result.get("reference_model_calls_observable") is not False
+        score_data["turn_requirement_observable"] = calls_observable
         score_data["long_horizon_exercised"] = (
             bool((score_data.get("metrics") or {}).get("turns", 0) >= int(task_data.get("min_turns", 1)))
-            if trajectory_available else None
+            if calls_observable else None
         )
         expected_files = tuple(task_data.get("expected_files") or ())
         expected_symbols = tuple(task_data.get("expected_symbols") or ())
@@ -498,11 +520,14 @@ def rescore_reference_matrix(path: Path) -> dict[str, Any]:
             "unknown-location-localization", "process-understanding",
             "large-repo-navigation", "tool-scale",
         }
+        requires_recovery = bool((task_data.get("metadata") or {}).get("requires_verification_recovery"))
+        requires_recovery = requires_recovery or task_data.get("capability") == "verification-recovery"
         score_data["success"] = bool(
             not score_data.get("error")
             and score_data.get("final_patch_correctness") is not False
             and (score_data.get("verification") or {}).get("passed") is not False
-            and score_data.get("recovery_complete") is not False
+            and (score_data.get("recovery_complete") is True if requires_recovery
+                 else score_data.get("recovery_complete") is not False)
             and score_data.get("child_execution_complete") is not False
             and score_data.get("no_unneeded_web") is not False
             and (not requires_localization or localization_complete)
