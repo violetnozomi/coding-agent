@@ -1,0 +1,3 @@
+{"tool": "bash", "input": {"command": "node --test literal.test.cjs 2>&1 | tail -40; node -e \"console.log(JSON.stringify(new RegExp('^a\\\\\\\\-b$','u').source))\" 2>&1 | tail -3"}, "allowed": false}
+{"tool": "bash", "input": {"command": "node --test literal.test.cjs"}, "allowed": true}
+{"tool": "bash", "input": {"command": "node --test literal.test.cjs"}, "allowed": true}

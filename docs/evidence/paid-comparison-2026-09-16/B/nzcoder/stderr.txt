@@ -1,0 +1,1 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only

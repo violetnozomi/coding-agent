@@ -1,0 +1,55 @@
+{
+  "evidence_kind": "independent execution against frozen final files; hidden checks not sent to model",
+  "public_test": {
+    "argv": [
+      "/home/pyh/miniconda3/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "exit_code": 0,
+    "stdout": "...                                                                      [100%]\n3 passed in 0.00s\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "independent": {
+    "argv": [
+      "/home/pyh/miniconda3/bin/python",
+      "-c",
+      "import ast, importlib, pathlib\nfrom catalog.api import render_product\nfrom web.controller import show\nfrom cli.report import report\nfrom mobile.presenter import title\nfrom jobs.export import export\nfor value in ['A', '', '\u96ea', 'Widget-42']:\n p={'name':value, 'unused':object()}\n for fn in (render_product,show,report,title,export):\n  assert fn(p)==value, (fn.__name__, value)\nfor rel in ['web/controller.py','cli/report.py','mobile/presenter.py']:\n tree=ast.parse(pathlib.Path(rel).read_text())\n assert not any(isinstance(x,ast.Name) and x.id=='format_product' for x in ast.walk(tree)), rel\n assert any(isinstance(x,ast.Name) and x.id=='render_product' for x in ast.walk(tree)), rel\nfor rel in ['tests/test_catalog_api.py','tests/test_report.py']:\n tree=ast.parse(pathlib.Path(rel).read_text())\n assert any(isinstance(x,ast.Name) and x.id=='render_product' for x in ast.walk(tree)), rel\nprint('Independent acceptance: canonical API, migrated consumers/tests, four consumer behaviors passed')\n"
+    ],
+    "exit_code": 0,
+    "stdout": "Independent acceptance: canonical API, migrated consumers/tests, four consumer behaviors passed\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "passed": true,
+  "changed_files": [
+    "catalog/api.py",
+    "cli/report.py",
+    "mobile/presenter.py",
+    "tests/test_catalog_api.py",
+    "tests/test_report.py",
+    "web/controller.py"
+  ],
+  "initial_hashes": {
+    "REQUIREMENTS.txt": "3da9dd639325d4ae185bd91b148718c21ea4e1f25c22e4c569b13dfcc4cd4b75",
+    "catalog/api.py": "c6f1e203ed91ef388f0ac17ba7e1ad634d87892db507c9a0068226f61ef801ee",
+    "cli/report.py": "a566996b60d68ea6d2febbe1aab8f82aee69f176b7e931e04c570b166096e860",
+    "jobs/export.py": "623d8ac8f26b4c334f2249e5f438856b387dbd2b559595926358c608dc659df7",
+    "web/controller.py": "c2bec07c6410886dc020b9fd32832b46c7ddb8afa0af8925504e6a643953e917",
+    "mobile/presenter.py": "d10372070c06496dc727154e6c345fa1849ce97305592d2cf100b7b0f8668462",
+    "tests/test_catalog_api.py": "0a0528bcee007c2a50c8b6214888ebfd99557c367d11d023293366c8eb12a5b3",
+    "tests/test_report.py": "06732efaa41039fffdc8723a4b2265a9e49921ab2cd36ab825892fb1bf919957"
+  },
+  "frozen_hashes": {
+    "REQUIREMENTS.txt": "3da9dd639325d4ae185bd91b148718c21ea4e1f25c22e4c569b13dfcc4cd4b75",
+    "catalog/api.py": "47aa656e18607b86b3466e32c5bdd0f519981d8691d6f96ea4b5acba0559c01d",
+    "cli/report.py": "5c472ceb930ccbdd04a3413fde647098f4ae0000f89c294332f4333b891b0681",
+    "jobs/export.py": "623d8ac8f26b4c334f2249e5f438856b387dbd2b559595926358c608dc659df7",
+    "web/controller.py": "d345d26b2ced62743902890f1f77608d37ecf79b0a5772d4ecc36d27a8cdf708",
+    "mobile/presenter.py": "6c0122c35c82036f185e127f532ced9204db4af8411029d483dfa110ecfdc9ec",
+    "tests/test_catalog_api.py": "ea797ad741641d6c23bc79547812a821a91ddd511f720dc2610c6a413150bdec",
+    "tests/test_report.py": "498f05f26ba7615db6c516c32f24ec0bb5b8f97e68f3610f92de56a98a75aeab"
+  }
+}

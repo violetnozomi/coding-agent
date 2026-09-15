@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/home/pyh/miniconda3/bin/python",
+    "/home/pyh/nzcoder/tests/evaluation/fixtures/offline_exec.py",
+    "/home/pyh/miniconda3/bin/python",
+    "/tmp/nz-paid-comparison-20260916/B/nzcoder/run-nz.py"
+  ],
+  "exit_code": 0,
+  "elapsed_s": 19.892849329015007,
+  "env": {
+    "HOME": "/tmp/nz-paid-comparison-20260916/B/nzcoder/home",
+    "KODAX_HOME": "/tmp/nz-paid-comparison-20260916/B/nzcoder/home/.kodax",
+    "PATH": "/tmp/nz-paid-comparison-20260916/B/bin:/home/pyh/miniconda3/bin:/usr/bin:/bin",
+    "LANG": "C.UTF-8",
+    "PYTHONPATH": "/home/pyh/nzcoder",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "SMOKE_SOCKET": "/tmp/nz-paid-uds-t3my_32i/provider.sock",
+    "SMOKE_OUTPUT": "/tmp/nz-paid-comparison-20260916/B/nzcoder",
+    "TERM": "dumb",
+    "NO_COLOR": "1",
+    "CASE": "B",
+    "TASK_PROMPT": "Rename the public product formatting API to render_product and migrate affected in-repository callers and tests. Preserve the behavior of web, CLI, mobile and export consumers. A compatibility alias may remain. Run the relevant tests and report the change and verification."
+  }
+}

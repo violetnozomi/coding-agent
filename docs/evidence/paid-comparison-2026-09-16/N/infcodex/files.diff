@@ -1,0 +1,22 @@
+--- a/index.js
++++ b/index.js
+@@ -1,11 +1,17 @@
+ 'use strict';
+ 
+-const matchOperatorsRegex = /[|\\{}()[\]^$+*?.-]/g;
++const matchOperatorsRegex = /[|\\{}()[\]^$+*?.]/g;
++const hyphenRegex = /-/g;
+ 
+ module.exports = string => {
+ 	if (typeof string !== 'string') {
+ 		throw new TypeError('Expected a string');
+ 	}
+ 
+-	return string.replace(matchOperatorsRegex, '\\$&');
++	// Escape characters that are special inside or outside a character class.
++	// A plain `\-` escape is rejected by Unicode patterns, so encode the hyphen
++	// as `\x2d`, which is a valid escape everywhere.
++	return string
++		.replace(matchOperatorsRegex, match => '\\' + match)
++		.replace(hyphenRegex, '\\x2d');
+ };

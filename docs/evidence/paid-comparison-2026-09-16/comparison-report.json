@@ -1,0 +1,509 @@
+{
+  "evidence_kind": "paid model comparison through real InfCodeX SA CLI and NZ-Coder production NativeSDKRunner; one repetition per task/side; no automatic reruns",
+  "nz_commit": "2099a0d",
+  "reference_commit": "d3a812379b589597347f5be12d5b68477e577f02",
+  "model": "deepseek-v4-flash",
+  "provider": "DeepSeek OpenAI-compatible endpoint",
+  "reasoning_configuration": "Neither side sent an explicit effort/reasoning override; request payloads are preserved per side.",
+  "tasks": [
+    "B",
+    "N"
+  ],
+  "repetitions": 1,
+  "max_primary_turns_or_iterations": 12,
+  "authorization_scope": "User explicitly authorized paid comparison in this conversation. No paid F/B/N reruns beyond these recorded runs.",
+  "results": [
+    {
+      "task": "B",
+      "side": "infcodex",
+      "terminal": {
+        "type": "run.result",
+        "success": true,
+        "signal": "",
+        "signalReason": "",
+        "sessionId": "offline-F",
+        "limitReached": false
+      },
+      "acceptance": false,
+      "changed_files": [],
+      "actual_http_requests": 5,
+      "response_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "usage_present_calls": 5,
+      "usage_totals": {
+        "prompt_tokens": 91833,
+        "completion_tokens": 1963,
+        "total_tokens": 93796,
+        "prompt_cache_hit_tokens": 58624,
+        "prompt_cache_miss_tokens": 33209
+      },
+      "api_billed_cost": null,
+      "request_options": [
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        }
+      ],
+      "independent_public_pass": false
+    },
+    {
+      "task": "B",
+      "side": "nzcoder",
+      "terminal": "completed",
+      "acceptance": true,
+      "changed_files": [
+        "catalog/api.py",
+        "cli/report.py",
+        "mobile/presenter.py",
+        "tests/test_catalog_api.py",
+        "tests/test_report.py",
+        "web/controller.py"
+      ],
+      "actual_http_requests": 11,
+      "response_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "usage_present_calls": 11,
+      "usage_totals": {
+        "prompt_tokens": 114222,
+        "completion_tokens": 2969,
+        "total_tokens": 117191,
+        "prompt_cache_hit_tokens": 72576,
+        "prompt_cache_miss_tokens": 41646
+      },
+      "api_billed_cost": null,
+      "request_options": [
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": false,
+          "reasoning_effort": null,
+          "thinking": {
+            "type": "disabled"
+          },
+          "max_tokens": 1024,
+          "max_completion_tokens": null
+        }
+      ],
+      "independent_public_pass": true
+    },
+    {
+      "task": "N",
+      "side": "infcodex",
+      "terminal": {
+        "type": "run.result",
+        "success": true,
+        "signal": "",
+        "signalReason": "",
+        "sessionId": "offline-F",
+        "limitReached": false
+      },
+      "acceptance": true,
+      "changed_files": [
+        "index.js"
+      ],
+      "actual_http_requests": 12,
+      "response_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "usage_present_calls": 12,
+      "usage_totals": {
+        "prompt_tokens": 280442,
+        "completion_tokens": 5981,
+        "total_tokens": 286423,
+        "prompt_cache_hit_tokens": 241664,
+        "prompt_cache_miss_tokens": 38778
+      },
+      "api_billed_cost": null,
+      "request_options": [
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": null,
+          "max_completion_tokens": 32768
+        }
+      ],
+      "independent_public_pass": true
+    },
+    {
+      "task": "N",
+      "side": "nzcoder",
+      "terminal": "max_turns",
+      "acceptance": true,
+      "changed_files": [
+        "index.js"
+      ],
+      "actual_http_requests": 12,
+      "response_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "usage_present_calls": 12,
+      "usage_totals": {
+        "prompt_tokens": 120203,
+        "completion_tokens": 5741,
+        "total_tokens": 125944,
+        "prompt_cache_hit_tokens": 78848,
+        "prompt_cache_miss_tokens": 41355
+      },
+      "api_billed_cost": null,
+      "request_options": [
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        },
+        {
+          "model": "deepseek-v4-flash",
+          "stream": true,
+          "reasoning_effort": null,
+          "thinking": null,
+          "max_tokens": 64000,
+          "max_completion_tokens": null
+        }
+      ],
+      "independent_public_pass": true
+    }
+  ],
+  "cost": "Provider response usage was recorded; neither runtime exposed a billed USD amount, so no cost estimate or success rate is claimed.",
+  "security": "Child CLI/Runner and test subprocesses were launched through libseccomp offline_exec; only a parent Unix-socket forwarding proxy could reach the configured DeepSeek endpoint. Authorization headers were not written to artifacts.",
+  "artifacts": {
+    "raw_reference_events": "<task>/infcodex/stdout.jsonl",
+    "raw_nz_events": "<task>/nzcoder/events.jsonl and runtime.jsonl when present",
+    "provider_requests": "<task>/<side>/provider-requests.jsonl",
+    "provider_responses": "<task>/<side>/provider-responses.jsonl",
+    "frozen_acceptance": "<task>/<side>/acceptance.json",
+    "diff": "<task>/<side>/files.diff"
+  },
+  "limitations": [
+    "B InfCodeX emitted run.result success=true after investigation/plan with no business-file mutation; independent acceptance failed. This is a real observed termination/acceptance mismatch, not scored as task success.",
+    "B NZ-Coder completed and independent acceptance passed, but two generated Bash commands were rejected by the comparison permission callback; internal verifier tools supplied verification evidence. This is not equivalent to an allowed direct Bash test.",
+    "N NZ-Coder changed the target and independent tests passed, but ended at max_turns rather than a normal completed result.",
+    "One repetition per task cannot measure coding success rate or stable behavioral advantage. F remains a separate calibration pilot from 2025-09-15 with non-identical setup and is not pooled here.",
+    "Only Linux/Node 24.18.1 and Python 3.13 environment was executed; no Windows coverage."
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "task": "B",
+  "side": "infcodex",
+  "terminal": {
+    "type": "run.result",
+    "success": true,
+    "signal": "",
+    "signalReason": "",
+    "sessionId": "offline-F",
+    "limitReached": false
+  },
+  "acceptance": false,
+  "changed_files": [],
+  "actual_http_requests": 5,
+  "response_statuses": [
+    200,
+    200,
+    200,
+    200,
+    200
+  ],
+  "usage_present_calls": 5,
+  "usage_totals": {
+    "prompt_tokens": 91833,
+    "completion_tokens": 1963,
+    "total_tokens": 93796,
+    "prompt_cache_hit_tokens": 58624,
+    "prompt_cache_miss_tokens": 33209
+  },
+  "api_billed_cost": null,
+  "request_options": [
+    {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "reasoning_effort": null,
+      "thinking": null,
+      "max_tokens": null,
+      "max_completion_tokens": 32768
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "reasoning_effort": null,
+      "thinking": null,
+      "max_tokens": null,
+      "max_completion_tokens": 32768
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "reasoning_effort": null,
+      "thinking": null,
+      "max_tokens": null,
+      "max_completion_tokens": 32768
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "reasoning_effort": null,
+      "thinking": null,
+      "max_tokens": null,
+      "max_completion_tokens": 32768
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "reasoning_effort": null,
+      "thinking": null,
+      "max_tokens": null,
+      "max_completion_tokens": 32768
+    }
+  ]
+}

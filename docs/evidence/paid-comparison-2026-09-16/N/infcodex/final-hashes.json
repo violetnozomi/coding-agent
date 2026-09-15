@@ -1,0 +1,19 @@
+{
+  ".agent/repo-intelligence/file-analysis-index.json": "4a0d7dd83e0356d7e5626c0067673565fbb6e70bd295987a8071dedf3672b984",
+  ".agent/repo-intelligence/manifest.json": "b6f8523571f5999551878fcfd958f0880f021d02418ab1ae9f0086146c8d2822",
+  ".agent/repo-intelligence/module-index.json": "c8982536313763ed5b095b2c373b80347e2a065dad77d822691424de091ca732",
+  ".agent/repo-intelligence/process-index.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+  ".agent/repo-intelligence/repo-intelligence-dirty-source-hint.json": "d312ce3c1b63271afa8ed93b63d235959658f426ae3f3d93b1bf32067dd13b15",
+  ".agent/repo-intelligence/repo-intelligence-index.json": "a85e2fdaed4434a6a83cdd96f40785581bb0081a157b9c0510cae0e1c9a5abdc",
+  ".agent/repo-intelligence/repo-intelligence-manifest.json": "ea4f59f5a1323c83cdd951f435dc0ef99f39d1848e2f76fb0877020c633e2ada",
+  ".agent/repo-intelligence/repo-overview-inventory.json": "22e85fd341587fe0eb44ab8477b98ec7bf22fa9192b4579dd9da5a6d9e535706",
+  ".agent/repo-intelligence/repo-overview.json": "2c2338e6422ea6647925e03178614b01380c76c87ff38eadd1f978fb5b9335b6",
+  ".agent/repo-intelligence/symbol-index.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+  "REQUIREMENTS.txt": "d0d5a8aa63a9565ef2d1a395bf6ce9e11d9cfb91f2b53c5086e5133449f653bf",
+  "index.d.ts": "a9fd76613c52aa62a036e7d85d6503601ac3aae1444f4765c738567e5f687f4f",
+  "index.js": "8aa520f0cee2ae2ed28d2976787fa364af56a1de6581b605b64e7ed553abe7c3",
+  "license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+  "literal.test.cjs": "07e8cafbcdcefaa39f183ab47c4927ee4f0800f3c261562731b20b47b0c65319",
+  "package.json": "f88b0cacc64b8e2d467bd8780cffdc9413eed5b635a82ee721c16551f8c1312a",
+  "readme.md": "a27d6a36becdd0354d4289f4b36b70d5b3c45de2194c07e52b79a5e73bf5ea89"
+}

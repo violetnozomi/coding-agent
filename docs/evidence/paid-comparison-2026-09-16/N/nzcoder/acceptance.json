@@ -1,0 +1,45 @@
+{
+  "evidence_kind": "independent execution against frozen final files; hidden checks not sent to model",
+  "public_test": {
+    "argv": [
+      "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+      "--test",
+      "literal.test.cjs"
+    ],
+    "exit_code": 0,
+    "stdout": "\u2714 ordinary literals still match (0.417677ms)\n\u2714 literals can be embedded in Unicode regular expressions (0.088277ms)\n\u2714 non-string inputs remain rejected (0.19617ms)\n\u2139 tests 3\n\u2139 suites 0\n\u2139 pass 3\n\u2139 fail 0\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 29.530752\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "independent": {
+    "argv": [
+      "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+      "-e",
+      "const assert=require('node:assert/strict'); const escape=require('./index.js');\nfor (const s of ['a-b','-','--','[x]','(a)+','a.b','^$','x/y','\\\\','?*','\u96ea-\u2603','hello world','']) {\n const r=new RegExp('^(?:'+escape(s)+')$', 'u'); assert.equal(r.test(s),true,s); assert.equal(r.test(s+'!'),false,s);\n}\nfor (const x of [null,undefined,0,{},[],true]) assert.throws(()=>escape(x),TypeError);\nconsole.log('Independent acceptance: Unicode literals, metacharacters and rejected input types passed');\n"
+    ],
+    "exit_code": 0,
+    "stdout": "Independent acceptance: Unicode literals, metacharacters and rejected input types passed\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "passed": true,
+  "changed_files": [
+    "index.js"
+  ],
+  "initial_hashes": {
+    "literal.test.cjs": "07e8cafbcdcefaa39f183ab47c4927ee4f0800f3c261562731b20b47b0c65319",
+    "readme.md": "a27d6a36becdd0354d4289f4b36b70d5b3c45de2194c07e52b79a5e73bf5ea89",
+    "package.json": "f88b0cacc64b8e2d467bd8780cffdc9413eed5b635a82ee721c16551f8c1312a",
+    "REQUIREMENTS.txt": "d0d5a8aa63a9565ef2d1a395bf6ce9e11d9cfb91f2b53c5086e5133449f653bf",
+    "license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+    "index.d.ts": "a9fd76613c52aa62a036e7d85d6503601ac3aae1444f4765c738567e5f687f4f",
+    "index.js": "48b8be4119e6f09b8942c490397fc047da012e0cc223d75a76363856af68fce4"
+  },
+  "frozen_hashes": {
+    "literal.test.cjs": "07e8cafbcdcefaa39f183ab47c4927ee4f0800f3c261562731b20b47b0c65319",
+    "readme.md": "a27d6a36becdd0354d4289f4b36b70d5b3c45de2194c07e52b79a5e73bf5ea89",
+    "package.json": "f88b0cacc64b8e2d467bd8780cffdc9413eed5b635a82ee721c16551f8c1312a",
+    "REQUIREMENTS.txt": "d0d5a8aa63a9565ef2d1a395bf6ce9e11d9cfb91f2b53c5086e5133449f653bf",
+    "license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+    "index.d.ts": "a9fd76613c52aa62a036e7d85d6503601ac3aae1444f4765c738567e5f687f4f",
+    "index.js": "4094a0ac1f2bf2b659023ec6fe14133c1b8dfd8e667a6c7937b3d0771ce84520"
+  }
+}

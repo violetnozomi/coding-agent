@@ -1,0 +1,46 @@
+--- a/catalog/api.py
++++ b/catalog/api.py
+@@ -1,2 +1,6 @@
+-def format_product(product):
++def render_product(product):
+     return product['name']
++
++
++# Backwards-compatible alias for the previous public name.
++format_product = render_product
+--- a/cli/report.py
++++ b/cli/report.py
+@@ -1,2 +1,2 @@
+-from catalog.api import format_product
+-def report(p): return format_product(p)
++from catalog.api import render_product
++def report(p): return render_product(p)
+--- a/mobile/presenter.py
++++ b/mobile/presenter.py
+@@ -1,2 +1,2 @@
+-from catalog.api import format_product
+-def title(p): return format_product(p)
++from catalog.api import render_product
++def title(p): return render_product(p)
+--- a/tests/test_catalog_api.py
++++ b/tests/test_catalog_api.py
+@@ -1,2 +1,2 @@
+-from catalog.api import format_product
+-def test_format(): assert format_product({'name':'A'}) == 'A'
++from catalog.api import render_product
++def test_format(): assert render_product({'name':'A'}) == 'A'
+--- a/tests/test_report.py
++++ b/tests/test_report.py
+@@ -1,2 +1,3 @@
+-from catalog.api import format_product
+-def test_report(): assert format_product({'name':'A'}) == 'A'
++from catalog.api import format_product, render_product
++def test_report(): assert render_product({'name':'A'}) == 'A'
++def test_legacy_alias(): assert format_product({'name':'A'}) == 'A'
+--- a/web/controller.py
++++ b/web/controller.py
+@@ -1,2 +1,2 @@
+-from catalog.api import format_product
+-def show(p): return format_product(p)
++from catalog.api import render_product
++def show(p): return render_product(p)

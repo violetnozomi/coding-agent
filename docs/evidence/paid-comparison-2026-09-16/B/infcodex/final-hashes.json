@@ -1,0 +1,20 @@
+{
+  ".agent/repo-intelligence/file-analysis-index.json": "0176e366701cdef61aa065b1fa187b066e1e04a58a3ba478afcba380cb061e33",
+  ".agent/repo-intelligence/manifest.json": "9f2d0fb07dc48b1e82f45be22873517b8a4120d60240f1ae20ac55ae6d9416db",
+  ".agent/repo-intelligence/module-index.json": "3af0fdb98c310d4b6226484eb97baf5d9d3801b75484451d87a7377b5eee143e",
+  ".agent/repo-intelligence/process-index.json": "f0155f0ab261090d57842f6d239402ca790049b1d2e43db96beb12d96202d352",
+  ".agent/repo-intelligence/repo-intelligence-dirty-source-hint.json": "d3425a49f0a0dec4caa660b7096ccfc7224b17df4a6c7b9331ce86e647db13f8",
+  ".agent/repo-intelligence/repo-intelligence-index.json": "e3e09b283b44fb928ba25d1a4e5a6a3c8d1ae89def2b4bd23fb56ee43bac5635",
+  ".agent/repo-intelligence/repo-intelligence-manifest.json": "2cf32554a22116fc5a6247dd1808c186b67039460c80248237c66a0d9dd8563c",
+  ".agent/repo-intelligence/repo-overview-inventory.json": "2d3f0c16ecb8c462d60114ccb0c1a2f14a9518cbf78bcd5e2fc98d6232178445",
+  ".agent/repo-intelligence/repo-overview.json": "91ca6d90d07c40dfabea40417820922398dec3217a7fec06f4ec3cc7c8915e76",
+  ".agent/repo-intelligence/symbol-index.json": "fb413824906d818623889f4a2739436f9b19060daa87003fd3eb1790b19ebfd3",
+  "REQUIREMENTS.txt": "3da9dd639325d4ae185bd91b148718c21ea4e1f25c22e4c569b13dfcc4cd4b75",
+  "catalog/api.py": "c6f1e203ed91ef388f0ac17ba7e1ad634d87892db507c9a0068226f61ef801ee",
+  "cli/report.py": "a566996b60d68ea6d2febbe1aab8f82aee69f176b7e931e04c570b166096e860",
+  "jobs/export.py": "623d8ac8f26b4c334f2249e5f438856b387dbd2b559595926358c608dc659df7",
+  "mobile/presenter.py": "d10372070c06496dc727154e6c345fa1849ce97305592d2cf100b7b0f8668462",
+  "tests/test_catalog_api.py": "0a0528bcee007c2a50c8b6214888ebfd99557c367d11d023293366c8eb12a5b3",
+  "tests/test_report.py": "06732efaa41039fffdc8723a4b2265a9e49921ab2cd36ab825892fb1bf919957",
+  "web/controller.py": "c2bec07c6410886dc020b9fd32832b46c7ddb8afa0af8925504e6a643953e917"
+}

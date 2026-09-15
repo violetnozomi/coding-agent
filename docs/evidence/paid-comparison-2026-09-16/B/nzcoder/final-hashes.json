@@ -1,0 +1,19 @@
+{
+  ".nz-coder/index/code-index.sqlite3": "a43815d03949a87623bd3055bdfe9381888431611fa97f5e851b326b86bfd0f9",
+  ".nz-coder/index/repository-graph-v2.journal.jsonl": "70212668036670986f1cb772902f5c68666f9b955eeb70999395ec1e613e6fca",
+  ".nz-coder/index/repository-graph-v2.json": "7c97a47b5a821e7f4d59978f163335d432157e2f44803b826819c75b26606d50",
+  "REQUIREMENTS.txt": "3da9dd639325d4ae185bd91b148718c21ea4e1f25c22e4c569b13dfcc4cd4b75",
+  "catalog/__pycache__/api.cpython-313.pyc": "e2648f236f5911b489c9c7450a9a527c3b4f52ab6f0ffeecacdcd9f082490537",
+  "catalog/api.py": "47aa656e18607b86b3466e32c5bdd0f519981d8691d6f96ea4b5acba0559c01d",
+  "cli/__pycache__/report.cpython-313.pyc": "5dd7439e84a5207ac16fe2317052ff5f319e7ab7b38d06350ba9b7e303f75649",
+  "cli/report.py": "5c472ceb930ccbdd04a3413fde647098f4ae0000f89c294332f4333b891b0681",
+  "jobs/export.py": "623d8ac8f26b4c334f2249e5f438856b387dbd2b559595926358c608dc659df7",
+  "mobile/__pycache__/presenter.cpython-313.pyc": "e12a8d929e4bd2a40b8883007b4e636ca8dbb27930d51586acf73ab86c732b1e",
+  "mobile/presenter.py": "6c0122c35c82036f185e127f532ced9204db4af8411029d483dfa110ecfdc9ec",
+  "tests/__pycache__/test_catalog_api.cpython-313.pyc": "959c41c9b161dbe3fd6c9c3215f2ba3df9c5c33f92834d9bf941dd182e2186f1",
+  "tests/__pycache__/test_report.cpython-313.pyc": "4f6316b34c7c79646b2341d8912ad79100bd9957ff01265a86a51f024dc86f87",
+  "tests/test_catalog_api.py": "ea797ad741641d6c23bc79547812a821a91ddd511f720dc2610c6a413150bdec",
+  "tests/test_report.py": "498f05f26ba7615db6c516c32f24ec0bb5b8f97e68f3610f92de56a98a75aeab",
+  "web/__pycache__/controller.cpython-313.pyc": "3cd50861f521d65cee370f48abaa5743695fb2357b10e3b2750a681287e6c5a7",
+  "web/controller.py": "d345d26b2ced62743902890f1f77608d37ecf79b0a5772d4ecc36d27a8cdf708"
+}

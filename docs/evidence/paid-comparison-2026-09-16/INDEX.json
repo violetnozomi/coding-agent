@@ -1,0 +1,19 @@
+{
+  "source_artifact": "/home/pyh/.codex/artifacts/nz-paid-comparison-2026-09-16",
+  "included": "raw model request/response JSONL, entrypoint events, normalized events, permissions, diffs, frozen acceptance and summaries",
+  "omitted": [
+    "API credentials",
+    ".env",
+    "generated .kodax runtime duplicate",
+    "workspace binaries/symlinks",
+    "temporary harness source"
+  ],
+  "tasks": [
+    "B",
+    "N"
+  ],
+  "sides": [
+    "infcodex",
+    "nzcoder"
+  ]
+}

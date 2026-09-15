@@ -1,0 +1,3 @@
+{"tool": "bash", "input": {"command": "python -m pytest -q 2>&1 | tail -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -c \"\nfrom catalog.api import render_product, format_product\nfrom web.controller import show\nfrom cli.report import report\nfrom mobile.presenter import title\nfrom jobs.export import export\np={'name':'A'}\nassert render_product(p)=='A'\nassert format_product(p)=='A'\nassert render_product is format_product\nfor f in (show, report, title, export): assert f(p)=='A', f\nprint('behavior OK')\n\""}, "allowed": false}
+{"tool": "process", "input": {"operation": "start", "command": "python -m pytest -q tests"}, "allowed": false}
