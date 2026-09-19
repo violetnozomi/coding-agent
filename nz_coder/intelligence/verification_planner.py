@@ -17,6 +17,7 @@ from nz_coder.runtime.agent.task_policy import (
     is_test_file,
     language_for_path,
     native_runner_positional_selectors,
+    test_command_targets,
 )
 from nz_coder.tools import register
 
@@ -574,6 +575,9 @@ def _segment_verification_stage(tokens: list[str]) -> str | None:
 
     if executable in {"pytest", "py.test", "pytest3"}:
         return _pytest_stage(args)
+    if executable == "node" and args[:1] == ["--test"]:
+        targets = test_command_targets(shlex.join(["node", *args]))
+        return "targeted" if targets and all(is_test_file(path) for path in targets) else None
     if executable == "go" and lowered_args:
         if lowered_args[0] == "vet":
             return "static"

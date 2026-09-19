@@ -2350,3 +2350,16 @@ def test_runtime_emergency_eligibility_requires_failure_and_known_target():
 
     state.changed_files = []
     assert state.emergency_eligibility().eligible is False
+
+
+def test_node_verification_paths_are_not_required_mutations():
+    from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+    assert extract_explicit_mutation_paths(
+        "Run node --test literal.test.cjs and report the change and verification."
+    ) == []
+    assert extract_explicit_mutation_paths(
+        "Fix index.js and run node --test literal.test.cjs."
+    ) == ["index.js"]
+    assert extract_explicit_mutation_paths(
+        "Update literal.test.cjs. Run node --test literal.test.cjs."
+    ) == ["literal.test.cjs"]

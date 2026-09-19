@@ -43,6 +43,26 @@ def test_extracts_english_command_before_following_sentence():
     assert contract.targets == ("cron_engine/tests",)
 
 
+def test_extracts_node_test_command_from_task_requirements():
+    contract = extract_verification_contract(
+        "Run node --test literal.test.cjs and report the verification result."
+    )
+
+    assert contract is not None
+    assert contract.command == "node --test literal.test.cjs"
+    assert contract.targets == ("literal.test.cjs",)
+
+
+def test_node_test_contract_matches_only_the_declared_target():
+    contract = VerificationContract(
+        command="node --test literal.test.cjs",
+        targets=("literal.test.cjs",),
+    )
+
+    assert contract.matches_command("node --test literal.test.cjs") is True
+    assert contract.matches_command("node --test other.test.cjs") is False
+
+
 @pytest.mark.parametrize(
     "text",
     [
@@ -130,3 +150,15 @@ def test_contract_rejects_non_equivalent_command(command):
     )
 
     assert contract.matches_command(command) is False
+
+
+@pytest.mark.parametrize("command", [
+    "node --test", "node --test literal.test.cjs --test-name-pattern safe",
+    "node --test literal.test.cjs --watch", "node --test ../literal.test.cjs",
+    "node --test /tmp/literal.test.cjs", "node --test C:/literal.test.cjs",
+    "node --test literal.test.cjs | tail -1", "node --test literal.test.cjs || true",
+    "node --test '*.test.cjs'", "node --test literal.test.cjs > result.txt",
+    "NODE --test literal.test.cjs --watch",
+])
+def test_node_contract_does_not_shorten_unsupported_execution(command):
+    assert extract_verification_contract(command) is None

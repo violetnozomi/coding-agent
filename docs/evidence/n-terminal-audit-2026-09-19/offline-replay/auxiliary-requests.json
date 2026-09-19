@@ -1,0 +1,56 @@
+[
+  {
+    "model": "offline-model",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a verification sidecar for an autonomous coding agent. A DIFFERENT agent (the \"main agent\") has just emitted what it considers its final answer for the user's current request. Your job is to do a second-pass judgment by reading the main agent's recent transcript + the file edits it made + the user's original ask.\n\n# IMPORTANT — role separation\n\nThe transcript shown to you contains the MAIN AGENT's past messages and tool calls. You are NOT the author of those messages. You are a third-party observer judging whether that agent satisfied the user's request. Do not say \"I edited the file\" or \"my reasoning\" — the actions belong to the main agent. Your only action is to call `emit_sidecar_verdict` once.\n\n# Three-state verdict\n\nCall `emit_sidecar_verdict` with one of three verdict values:\n\n## verdict = \"accept\"\n\nThe main agent's output satisfies the user's current ask:\n- The text answer addresses what the user asked\n- IF the task required code changes: the file edits shown actually implement what the agent claimed\n- No obvious correctness issues in the diff (compile-breaking syntax, missing imports, wrong API usage)\n- The agent did not hallucinate completion of work it never performed\n- Added or changed API calls follow the exact local registration and validation pattern; method-name differences such as public versus internal registration surfaces can be correctness-critical\n- The patch does not bypass uniqueness or integrity conflicts by deleting existing persisted data unless the user's request explicitly authorizes that data loss and the repository proves the records are disposable duplicates\n\nA reasonable workaround that satisfies the user's stated ask is `accept`, not `revise`. When the agent explained why the literal approach was not viable and the workaround achieves the goal, accept it — do not penalize a valid divergence.\n\n## verdict = \"revise\"\n\nThe main agent's output is missing the literal thing the user named in the current turn. Use revise when ONE more iteration could plausibly close a gap that the user actually asked about:\n- A sub-requirement explicitly named in the user's ask was not satisfied\n- The agent claimed completion but the file-edit summary contradicts the claim (intent-vs-action gap)\n- The text answer is too vague where the user asked for specifics\n\nScope discipline (important — over-revising is a failure mode):\n- If the user asked for feature X and the diff implements feature X (even imperfectly), that is `accept`, not `revise`. Hardening, cleanup, leak-prevention, and best-practice polish are NOT \"missing pieces\" — they are unrequested improvements.\n- If the user named one call site and the agent edited only that call site, do NOT revise to ask for unrelated call sites.\n- Do not revise to ask the agent to re-show or re-verify work the transcript already shows. Trust the transcript.\n\nWhen you choose revise, populate `reason` with a concrete, actionable correction the main agent should make. The main agent will see this as a user message — write it like a user follow-up, not like a third-party report.\n\n## verdict = \"blocked\"\n\nThe main agent has stopped because human input or external action is needed before another iteration can help:\n- The agent stopped to ask the user a clarifying question\n- Task requires resources or permissions the agent does not have\n- The agent is fundamentally on the wrong track and revising will not recover\n\nWhen you choose blocked, populate `reason` with what the user needs to do to unblock.\n\n# Output format\n\nOutput ONLY the `emit_sidecar_verdict` tool call — no narration, no other tool calls, no free-form text."
+      },
+      {
+        "role": "user",
+        "content": "=== USER REQUEST (CURRENT TURN) ===\nMake escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification.\n\n=== RECENT MAIN AGENT TRANSCRIPT ===\n[USER]: Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification.\n[MAIN AGENT TOOL]: read_file({\"path\": \"index.js\"})\n[MAIN AGENT TOOL]: read_file({\"path\": \"index.d.ts\"})\n[MAIN AGENT TOOL]: bash({\"command\": \"node --test literal.test.cjs\"})\n[MAIN AGENT TOOL]: grep_search({\"head_limit\": 30, \"include\": \"*.md\", \"output_mode\": \"content\", \"pattern\": \"-\"})\n[USER]: <test-failure-diagnostic>\n\nRoot cause:\ns 2\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 26.973803\n\n✖ failing tests:\n\ntest at literal.test.cjs:10:1\n✖ literals can be embedded in Unicode regular expressions (0.135483ms)\n  SyntaxError: Invalid regular expression: /^a\\-b$/u: Invalid escape\n      at new RegExp (<anonymous>)\n      at TestContext.<anonymous> (/tmp/pytest-of-pyh/pytest-351/test_paid_n_action_fragment_us0/literal.test.cjs:12:18)\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1325:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)\n      at Test.postRun (node:internal/test_runner/test:1465:19)\n      at Test.run (node:internal/test_runner/test:1390:12)\n      at async startSubtestAfter…[truncated]\n[MAIN AGENT TOOL]: edit_file({\"new_text\": \"const matchOperatorsRegex = /[|\\\\\\\\{}()[\\\\]^$+*?.]/g;\", \"old_text\": \"const matchOperatorsRegex = /[|\\\\\\\\{}()[\\\\]^$+*?.-]/g;\", \"path\": \"index.js\"})\n[MAIN AGENT TOOL]: read_file({\"path\": \"index.js\"})\n[MAIN AGENT TOOL]: bash({\"command\": \"node --test literal.test.cjs\"})\n\n=== FILE EDITS PERFORMED THIS TURN ===\n- index.js: tracked change; run diff contains 2 changed line(s)\nChange set: 20260919_135245_74452c8b\nWorkspace: /tmp/pytest-of-pyh/pytest-351/test_paid_n_action_fragment_us0\n\n## index.js\n--- a/index.js\n+++ b/index.js\n@@ -1,6 +1,6 @@\n 'use strict';\n \n-const matchOperatorsRegex = /[|\\\\{}()[\\]^$+*?.-]/g;\n+const matchOperatorsRegex = /[|\\\\{}()[\\]^$+*?.]/g;\n \n module.exports = string => {\n \tif (typeof string !== 'string') {\n\n=== MAIN AGENT FINAL TEXT (the answer the agent is delivering) ===\nCompleted the requested changes in index.js. Exact acceptance passed: `node --test literal.test.cjs`.\n\n=== ADDITIONAL VERIFICATION CRITERIA ===\nTask objective: Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification.\nRequirement R1 [behavior]: Implement the requested behavior: Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification.\nRequirement R2 [compatibility]: Preserve the requested compatibility guarantees.\nRequired evidence: semantic_review\nRequirement R3 [verification]: Pass the exact acceptance command: node --test literal.test.cjs\nExact acceptance (passed-current-generation): node --test literal.test.cjs\nTrusted exact-acceptance output: ✔ ordinary literals still match (0.406612ms)\n✔ literals can be embedded in Unicode regular expressions (0.094089ms)\n✔ non-string inputs remain rejected (0.197251ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 30.159037\nSEMANTIC CONTRACT CERTIFICATION MODE\n- Audit every explicit requirement and constraint independently against the actual diff. An explicit compatibility, preservation, regression, security, or data-integrity promise is a blocking requirement, not optional hardening.\n- The permissive \"feature X even imperfectly\" rule applies only to incidental quality not named by the user. It never permits a missing or contradicted explicit sub-requirement.\n- Do not infer compatibility or semantic correctness from the main agent narration or from a passing test command alone. Check whether tests actually exercise each promised behavior.\n- A newly added test cannot prove compatibility when it assigns new behavior to a legacy input; that is regression evidence unless the user requested the semantic change.\n- Check interactions between explicitly requested syntaxes or behaviors, not only each feature in isolation.\n- An `Exact acceptance (passed-current-generation)` line and its trusted output are Runtime-owned execution facts. Do not request that command be re-run or re-shown. This fact proves execution only; continue auditing semantic compatibility from the diff and targeted evidence.\n- If the evidence is insufficient to prove every hard requirement, return revise with one concrete counterexample or missing check.\nCOMPATIBILITY DELTA EVIDENCE (before/after changes that must be audited, not automatically accepted):\n[index.js]\n-const matchOperatorsRegex = /[|\\\\{}()[\\]^$+*?.-]/g;\n+const matchOperatorsRegex = /[|\\\\{}()[\\]^$+*?.]/g;\n\nNow call `emit_sidecar_verdict` exactly once with verdict ∈ {accept, revise, blocked} and a `reason`. Remember: when verdict=revise, the `reason` becomes a synthetic user follow-up the main agent will see — write it as the user would."
+      }
+    ],
+    "max_tokens": 1024,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "emit_sidecar_verdict",
+          "description": "Report verification of the Main Agent final answer.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "accept",
+                  "revise",
+                  "blocked"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "suggestedFix": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "verdict",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "function",
+      "function": {
+        "name": "emit_sidecar_verdict"
+      }
+    },
+    "stream": false
+  }
+]

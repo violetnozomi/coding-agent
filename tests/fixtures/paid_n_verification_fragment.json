@@ -1,0 +1,70 @@
+{
+  "provenance": "Paid NZ N requests 3, 5, 7, 8 at 2099a0dc211167acffbdc750b35ff308234dcd0b; tool actions only, no reasoning; other investigative actions omitted. Controlled replay does not predict live model behavior.",
+  "task": "Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification.",
+  "files": {
+    "literal.test.cjs": "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst escape = require('./index.js');\n\ntest('ordinary literals still match', () => {\n  for (const value of ['a.b', '[x]', 'a+b', 'a\\\\b']) {\n    assert.equal(new RegExp('^' + escape(value) + '$').test(value), true);\n  }\n});\ntest('literals can be embedded in Unicode regular expressions', () => {\n  for (const value of ['a-b', '[]-x', 'foo.bar']) {\n    assert.equal(new RegExp('^' + escape(value) + '$', 'u').test(value), true);\n  }\n});\ntest('non-string inputs remain rejected', () => {\n  for (const value of [null, 3, {}]) assert.throws(() => escape(value), TypeError);\n});\n",
+    "readme.md": "# escape-string-regexp [![Build Status](https://travis-ci.org/sindresorhus/escape-string-regexp.svg?branch=master)](https://travis-ci.org/sindresorhus/escape-string-regexp)\n\n> Escape RegExp special characters\n\n\n## Install\n\n```\n$ npm install escape-string-regexp\n```\n\n\n## Usage\n\n```js\nconst escapeStringRegexp = require('escape-string-regexp');\n\nconst escapedString = escapeStringRegexp('How much $ for a 🦄?');\n//=> 'How much \\\\$ for a 🦄\\\\?'\n\nnew RegExp(escapedString);\n```\n\nYou can also use this to escape a string that is inserted into the middle of a regex, for example, into a character class.\n\n\n## License\n\nMIT © [Sindre Sorhus](https://sindresorhus.com)\n",
+    "package.json": "{\n\t\"name\": \"escape-string-regexp\",\n\t\"version\": \"2.0.0\",\n\t\"description\": \"Escape RegExp special characters\",\n\t\"license\": \"MIT\",\n\t\"repository\": \"sindresorhus/escape-string-regexp\",\n\t\"author\": {\n\t\t\"name\": \"Sindre Sorhus\",\n\t\t\"email\": \"sindresorhus@gmail.com\",\n\t\t\"url\": \"sindresorhus.com\"\n\t},\n\t\"maintainers\": [\n\t\t\"Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)\",\n\t\t\"Joshua Boy Nicolai Appelman <joshua@jbna.nl> (jbna.nl)\"\n\t],\n\t\"engines\": {\n\t\t\"node\": \">=8\"\n\t},\n\t\"scripts\": {\n\t\t\"test\": \"xo && ava && tsd\"\n\t},\n\t\"files\": [\n\t\t\"index.js\",\n\t\t\"index.d.ts\"\n\t],\n\t\"keywords\": [\n\t\t\"escape\",\n\t\t\"regex\",\n\t\t\"regexp\",\n\t\t\"re\",\n\t\t\"regular\",\n\t\t\"expression\",\n\t\t\"string\",\n\t\t\"str\",\n\t\t\"special\",\n\t\t\"characters\"\n\t],\n\t\"devDependencies\": {\n\t\t\"ava\": \"^1.4.1\",\n\t\t\"tsd\": \"^0.7.2\",\n\t\t\"xo\": \"^0.24.0\"\n\t}\n}\n",
+    "REQUIREMENTS.txt": "Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification.\n",
+    "license": "MIT License\n\nCopyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n",
+    "index.d.ts": "/**\nEscape RegExp special characters.\n\nYou can also use this to escape a string that is inserted into the middle of a regex, for example, into a character class.\n\n@example\n```\nimport escapeStringRegexp = require('escape-string-regexp');\n\nconst escapedString = escapeStringRegexp('How much $ for a 🦄?');\n//=> 'How much \\\\$ for a 🦄\\\\?'\n\nnew RegExp(escapedString);\n```\n*/\ndeclare const escapeStringRegexp: (string: string) => string;\n\nexport = escapeStringRegexp;\n",
+    "index.js": "'use strict';\n\nconst matchOperatorsRegex = /[|\\\\{}()[\\]^$+*?.-]/g;\n\nmodule.exports = string => {\n\tif (typeof string !== 'string') {\n\t\tthrow new TypeError('Expected a string');\n\t}\n\n\treturn string.replace(matchOperatorsRegex, '\\\\$&');\n};\n"
+  },
+  "actions": [
+    [
+      [
+        "read_file",
+        {
+          "path": "index.js"
+        }
+      ],
+      [
+        "read_file",
+        {
+          "path": "index.d.ts"
+        }
+      ]
+    ],
+    [
+      [
+        "bash",
+        {
+          "command": "node --test literal.test.cjs"
+        }
+      ],
+      [
+        "grep_search",
+        {
+          "pattern": "-",
+          "include": "*.md",
+          "output_mode": "content",
+          "head_limit": 30
+        }
+      ]
+    ],
+    [
+      [
+        "edit_file",
+        {
+          "path": "index.js",
+          "old_text": "const matchOperatorsRegex = /[|\\\\{}()[\\]^$+*?.-]/g;",
+          "new_text": "const matchOperatorsRegex = /[|\\\\{}()[\\]^$+*?.]/g;"
+        }
+      ]
+    ],
+    [
+      [
+        "read_file",
+        {
+          "path": "index.js"
+        }
+      ],
+      [
+        "bash",
+        {
+          "command": "node --test literal.test.cjs"
+        }
+      ]
+    ]
+  ]
+}

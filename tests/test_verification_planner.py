@@ -347,6 +347,12 @@ def test_classify_compound_command_uses_highest_verification_stage():
     assert classify_verification_command(command) == "targeted"
 
 
+def test_classify_node_builtin_test_as_targeted_verification():
+    from nz_coder.intelligence.verification_planner import classify_verification_command
+
+    assert classify_verification_command("node --test literal.test.cjs") == "targeted"
+
+
 def test_planner_exact_match_cannot_override_non_execution_filter():
     from nz_coder.intelligence.verification_planner import classify_verification_command
 

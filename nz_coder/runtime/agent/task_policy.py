@@ -406,7 +406,7 @@ _PYTEST_VALUE_OPTIONS = {
 
 
 def test_command_targets(command: str) -> tuple[str, ...]:
-    """Return normalized explicit test targets from a pytest command.
+    """Return normalized explicit test targets from a supported test command.
 
     The parser is deliberately conservative: a command with no path target is
     repository-wide and therefore returns an empty tuple. Shell output filters
@@ -417,6 +417,19 @@ def test_command_targets(command: str) -> tuple[str, ...]:
     except ValueError:
         return ()
     lowered = [token.lower() for token in tokens]
+    if lowered[:2] == ["node", "--test"]:
+        # Only direct, bounded Node test paths are eligible. Flags that alter
+        # selection/execution and shell syntax must not become acceptance.
+        args = tokens[2:]
+        if any(
+            token.startswith("-")
+            or re.match(r"^[A-Za-z]:", token)
+            or any(char in token for char in "|;&><$`*?[]")
+            or not _normalize_test_target(token)
+            for token in args
+        ):
+            return ()
+        return tuple(dict.fromkeys(_normalize_test_target(token) for token in args))
     try:
         runner = lowered.index("pytest")
     except ValueError:

@@ -84,9 +84,9 @@ _ROUND_NEGATED_MUTATION_RE = re.compile(
 _VERIFICATION_CLAUSE_RE = re.compile(
     r"(?:\b(?:and\s+)?(?:then\s+)?(?:run|execute)\s+"
     r"(?:(?:python|python3)(?:\.\d+)?\s+-m\s+)?"
-    r"(?:pytest|py\.test|tox|nox)\b)"
+    r"(?:pytest|py\.test|tox|nox|node\s+--test)\b)"
     r"|(?:(?:并|然后)?运行\s*(?:(?:python|python3)\s+-m\s+)?"
-    r"(?:pytest|py\.test|tox|nox)\b)",
+    r"(?:pytest|py\.test|tox|nox|node\s+--test)\b)",
     re.IGNORECASE,
 )
 _TRACEBACK_EVIDENCE_RE = re.compile(

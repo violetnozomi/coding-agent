@@ -11,7 +11,7 @@ from nz_coder.runtime.agent.task_policy import is_test_file, test_command_target
 
 
 _COMMAND_RE = re.compile(
-    r"(?P<command>(?:python(?:3(?:\.\d+)?)?\s+-m\s+)?pytest\b[^\n`，,。；;]*)",
+    r"(?P<command>(?:(?:python(?:3(?:\.\d+)?)?\s+-m\s+)?pytest|node\s+--test)\b[^\n`，,。；;]*)",
     re.IGNORECASE,
 )
 _SHELL_COMPOSITION_RE = re.compile(r"(?:\|\||&&|[|><;$])")
@@ -46,7 +46,7 @@ def effective_acceptance_generation(state) -> int:
 
 @dataclass
 class VerificationContract:
-    """One safe pytest command and its latest mutation-scoped evidence."""
+    """One safe declared test command and its latest mutation-scoped evidence."""
 
     command: str
     targets: tuple[str, ...]
@@ -140,7 +140,7 @@ class VerificationContract:
 
 
 def extract_verification_contract(text: str) -> VerificationContract | None:
-    """Extract one bounded workspace-relative pytest command from user text."""
+    """Extract one bounded workspace-relative test command from user text."""
     for match in _COMMAND_RE.finditer(text or ""):
         command = match.group("command").strip()
         if not command or _SHELL_COMPOSITION_RE.search(command):
@@ -148,6 +148,10 @@ def extract_verification_contract(text: str) -> VerificationContract | None:
         try:
             tokens = shlex.split(command, posix=True)
         except ValueError:
+            continue
+        if [token.lower() for token in tokens[:2]] == ["node", "--test"] and not test_command_targets(command):
+            # Do not shorten an unsafe or filtered Node command to a different
+            # command just because an earlier target happens to be valid.
             continue
         # English prose often follows an unquoted command in the same line.
         # Walk back to the longest prefix whose positional arguments are all
