@@ -1,0 +1,67 @@
+F.F..F                                                                   [100%]
+=================================== FAILURES ===================================
+_ test_scope_negation_and_reference_are_not_write_authority[\u4e0d\u8981\u4fee\u6539 SPEC.md\uff1b\u4fee\u6539 api.py-expected0] _
+
+text = '不要修改 SPEC.md；修改 api.py', expected = ['api.py']
+
+    @pytest.mark.parametrize('text, expected', [
+        ('不要修改 SPEC.md；修改 api.py', ['api.py']),
+        ('Do not modify SPEC.md and update api.py', ['api.py']),
+        ('Never change SPEC.md; fix api.py', ['api.py']),
+        ('Read README.md and implement api.py', ['api.py']),
+        ('Add the new API documentation to REQUIREMENTS.md', ['REQUIREMENTS.md']),
+    ])
+    def test_scope_negation_and_reference_are_not_write_authority(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['SPEC.md', 'api.py'] == ['api.py']
+E         
+E         At index 0 diff: 'SPEC.md' != 'api.py'
+E         Left contains one more item: 'api.py'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:274: AssertionError
+_ test_scope_negation_and_reference_are_not_write_authority[Never change SPEC.md; fix api.py-expected2] _
+
+text = 'Never change SPEC.md; fix api.py', expected = ['api.py']
+
+    @pytest.mark.parametrize('text, expected', [
+        ('不要修改 SPEC.md；修改 api.py', ['api.py']),
+        ('Do not modify SPEC.md and update api.py', ['api.py']),
+        ('Never change SPEC.md; fix api.py', ['api.py']),
+        ('Read README.md and implement api.py', ['api.py']),
+        ('Add the new API documentation to REQUIREMENTS.md', ['REQUIREMENTS.md']),
+    ])
+    def test_scope_negation_and_reference_are_not_write_authority(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['SPEC.md', 'api.py'] == ['api.py']
+E         
+E         At index 0 diff: 'SPEC.md' != 'api.py'
+E         Left contains one more item: 'api.py'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:274: AssertionError
+________ test_node_test_can_be_both_mutation_and_verification_artifact _________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-369/test_node_test_can_be_both_mut0')
+
+    def test_node_test_can_be_both_mutation_and_verification_artifact(tmp_path):
+        from nz_coder.runtime.agent.task_contract import derive_task_contract
+        from nz_coder.runtime.execution.runtime_state import RuntimeState
+        text = 'Modify literal.test.cjs and run node --test literal.test.cjs.'
+        (tmp_path / 'literal.test.cjs').write_text('// existing tests\n')
+        state = RuntimeState()
+        state.set_acceptance_criteria_from_text(text)
+        contract = derive_task_contract(text, acceptance_command=state.verification_contract['command'],
+                                       workspace=tmp_path, explicit_path_allowlist=tuple(state.requested_paths))
+>       assert any('literal.test.cjs' in r.expected_artifacts for r in contract.requirements)
+E       assert False
+E        +  where False = any(<generator object test_node_test_can_be_both_mutation_and_verification_artifact.<locals>.<genexpr> at 0x7a449d9f8110>)
+
+tests/runtime/test_requirement_scope_runtime.py:286: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_scope_negation_and_reference_are_not_write_authority[\u4e0d\u8981\u4fee\u6539 SPEC.md\uff1b\u4fee\u6539 api.py-expected0]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_scope_negation_and_reference_are_not_write_authority[Never change SPEC.md; fix api.py-expected2]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_node_test_can_be_both_mutation_and_verification_artifact
+3 failed, 3 passed, 31 deselected in 0.34s

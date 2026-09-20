@@ -1,0 +1,25 @@
+...F                                                                     [100%]
+=================================== FAILURES ===================================
+__________ test_adding_documentation_updates_existing_reference_file ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b33795f9e10>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-372/test_adding_documentation_upda0')
+
+    def test_adding_documentation_updates_existing_reference_file(monkeypatch, tmp_path):
+        actions = _small(tmp_path)
+        actions += [[('edit_file', {'path': 'REQUIREMENTS.md', 'old_text': 'must be 2.', 'new_text': 'must be 2. The new contract is value=2.'})],
+                    [('bash', {'command': 'python -m pytest -q tests'})], 'Implemented and documented value=2; tests passed.']
+        result, state, *_ = _run(monkeypatch, tmp_path,
+            'Fix api.py and add the new API documentation to REQUIREMENTS.md. Run python -m pytest -q tests.',
+            actions, label='explicit-documentation-update')
+>       assert result.status.value == 'completed', state['requirement_ledger']
+E       AssertionError: {'items': [{'evidence': [{'command': None, 'fingerprint': None, 'generation': 1, 'path': 'api.py', ...}, {'command': '..., 'expected_artifacts': [], ...}, 'status': 'satisfied'}], 'latest_generation': 1, 'latest_verification_generation': 1}
+E       assert 'max_turns' == 'completed'
+E         
+E         - completed
+E         + max_turns
+
+tests/runtime/test_requirement_scope_runtime.py:341: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_adding_documentation_updates_existing_reference_file
+1 failed, 3 passed, 37 deselected in 1.12s

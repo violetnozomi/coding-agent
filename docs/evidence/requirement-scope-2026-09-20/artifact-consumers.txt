@@ -1,0 +1,34 @@
+nz_coder/intelligence/implementation_bundle.py:22:        for path in requirement.expected_artifacts
+nz_coder/intelligence/implementation_bundle.py:53:                f" | artifacts={','.join(item.expected_artifacts)}"
+nz_coder/intelligence/implementation_bundle.py:54:                if item.expected_artifacts else ""
+nz_coder/intelligence/implementation_bundle.py:68:        for path in requirement.expected_artifacts
+nz_coder/runtime/agent/task_contract.py:70:    expected_artifacts: tuple[str, ...] = ()
+nz_coder/runtime/agent/task_contract.py:94:                    "expected_artifacts": list(item.expected_artifacts),
+nz_coder/runtime/agent/task_contract.py:143:                raw.get("expected_artifacts") or [],
+nz_coder/runtime/agent/task_contract.py:184:                expected_artifacts=artifacts,
+nz_coder/runtime/agent/task_contract.py:345:                if path in progress.requirement.expected_artifacts
+nz_coder/runtime/agent/task_contract.py:403:                acceptance and not progress.requirement.expected_artifacts
+nz_coder/runtime/agent/task_contract.py:406:            if progress.requirement.expected_artifacts and not self._has_artifact_evidence(
+nz_coder/runtime/agent/task_contract.py:496:        paths = progress.requirement.expected_artifacts
+nz_coder/runtime/agent/task_contract.py:541:        for artifact in progress.requirement.expected_artifacts:
+nz_coder/runtime/agent/task_contract.py:631:            "expected_artifacts": list(artifacts),
+nz_coder/runtime/agent/task_contract.py:711:            "expected_artifacts": [path],
+nz_coder/runtime/agent/task_contract.py:841:        target = ", ".join(requirement.expected_artifacts) or "repository evidence"
+nz_coder/runtime/agent/task_contract.py:870:        requirement.expected_artifacts,
+nz_coder/runtime/agent/task_contract.py:882:        expected_artifacts=requirement.expected_artifacts,
+nz_coder/runtime/agent/task_contract.py:933:        raise ValueError("expected_artifacts must be a list")
+nz_coder/runtime/verification/completion_gate.py:48:            artifacts = ", ".join(item.requirement.expected_artifacts)
+nz_coder/runtime/verification/sidecar_verifier.py:796:                for item in raw.get("expected_artifacts") or []
+nz_coder/runtime/verification/verification_scheduler.py:33:        unresolved_requirements: tuple[str, ...] | list[str],
+nz_coder/runtime/verification/verification_scheduler.py:111:                and not tuple(unresolved_requirements)
+nz_coder/runtime/verification/hooks.py:1275:        for path in requirement.get("expected_artifacts", ())
+nz_coder/runtime/conversation/continuation_context.py:68:    unresolved = _unresolved_requirements(
+nz_coder/runtime/conversation/continuation_context.py:363:def _unresolved_requirements(ledger: dict) -> list[str]:
+nz_coder/runtime/execution/runtime_state.py:1747:            for path in requirement.get("expected_artifacts") or []:
+nz_coder/runtime/execution/loop.py:1963:                for path in requirement.get("expected_artifacts", ())
+nz_coder/runtime/execution/loop.py:2094:                for path in item.expected_artifacts
+nz_coder/runtime/execution/loop.py:2934:                        for path in item.expected_artifacts
+nz_coder/runtime/execution/loop.py:3018:            '  "requirements": [{"id": "R1", "description": "...", "kind": "behavior|artifact|test|docs|compatibility|verification", "expected_artifacts": ["workspace/relative/path"], "satisfaction_mode": "deterministic|semantic|mixed", "depends_on": [], "required_evidence": ["semantic_review"]}],\n'
+nz_coder/runtime/execution/loop.py:3026:            "- Use unique IDs R1, R2, ... and workspace-relative expected_artifacts; never emit absolute paths or '..'.\n"
+nz_coder/runtime/execution/runner.py:2199:            unresolved_requirements=list(unresolved_ids),
+nz_coder/runtime/execution/runner.py:2277:            unresolved_requirements=unresolved,

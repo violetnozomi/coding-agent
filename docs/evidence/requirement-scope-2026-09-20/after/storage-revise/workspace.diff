@@ -1,0 +1,879 @@
+--- a/README.md
++++ b/README.md
+@@ -1,2 +1,105 @@
+ # Settings store
+-Flat JSON settings with CLI and sync consumers.
++
++Versioned, validated, atomically-written JSON settings shared by the CLI
++(`cli.update`) and sync (`sync.merge`) consumers.  Standard library only, no
++network access.
++
++## On-disk format
++
++### v1 (legacy)
++
++A flat JSON object whose values are JSON scalars, e.g.
++
++```json
++{"name": "雪", "count": 3, "active": true}
++```
++
++A v1 file has **revision 0**.  Any JSON object that does not carry all three
++reserved envelope keys is treated as v1 data -- including a dictionary with
++only a `"version"` key, e.g. `{"version": 2}`.
++
++### v2 (current)
++
++Exactly: 
++
++```json
++{"version": 2, "revision": 1, "data": {"name": "雪", "count": 3}}
++```
++
++* `version` must be the integer `2`.
++* `revision` must be a **positive** integer (`bool` is rejected even though it
++  is an `int` subclass).
++* `data` is a data dictionary (see below).
++* No other top-level keys are allowed.
++
++A top-level object is interpreted as an envelope when it contains **all three**
++reserved keys (`version`, `revision`, `data`).
++
++### Data dictionaries
++
++`data` is a dictionary with **string keys** and JSON **scalar** values:
++`str`, `int`, finite `float`, `bool` or `None`.  Nested containers, non-string
++keys and non-finite floats (`NaN`, `Infinity`, `-Infinity`) are rejected with
++`ValueError` when you pass them to `save`/`update`/`merge`.
++
++## API
++
++| Function | Result |
++| --- | --- |
++| `store.load(path)` | independent `dict` of data; a missing file yields `{}` |
++| `store.load_snapshot(path)` | frozen `Snapshot(revision: int, data: dict)` |
++| `store.save(path, data, *, expected_revision=None)` | the new `revision` (`int`) |
++| `cli.update(path, key, value, expected_revision=None)` | the new data `dict` |
++| `sync.merge(path, updates, expected_revision=None)` | the new `revision` (`int`) |
++
++Returned dictionaries are independent copies, so mutating them never changes
++the stored file.  `save` never mutates the dictionary you hand it.
++
++## Errors
++
++All library errors derive from `store.StoreError`:
++
++* `store.CorruptStoreError` -- the file exists but is not a valid v1/v2 store:
++  malformed JSON, invalid UTF-8, a non-object top level, duplicate keys at any
++  nesting level, an unsupported `version`, a non-positive / non-integer
++  `revision` (including `bool`), invalid envelope `data`, or extra envelope
++  fields.
++* `store.ConflictError` -- `expected_revision` was supplied and does not match
++  the stored revision.
++
++`ValueError` (not a `StoreError`) is raised when *you* supply invalid data or an
++invalid `expected_revision`; validation always happens before the file is read
++or written.
++
++## Atomic saves and rollback
++
++`save` validates the data and `expected_revision` first, then reads and
++validates the current file (which is why a corrupt file is **never** silently
++replaced), then checks `expected_revision`, and only then writes:
++
++1. a unique temporary file is created in the destination directory,
++2. UTF-8 JSON is written, flushed and `fsync`ed,
++3. the temp file's permission bits are set (existing destination bits are
++   preserved; new files get the process default), and
++4. `os.replace` atomically moves it over the destination.
++
++If anything fails before `os.replace`, the original bytes are untouched (or the
++destination stays absent), the temporary file is removed, and the original I/O
++exception is propagated.  Successful saves upgrade v1 content to v2 and
++increment the revision; no sidecar/temporary files remain afterwards.
++
++## Concurrency boundary
++
++Concurrent writers are **not** promised serializability.  `save` reads,
++validates and then replaces the file, but it does not hold a cross-process
++lock, so two writers that interleave can still lose an update.  Use
++`expected_revision` to detect *sequential* stale writes (e.g. a sync loop that
++saw revision 4 will get `ConflictError` instead of clobbering revision 5); it is
++not a mutex, and it cannot protect against a writer that passes
++`expected_revision=None`.
++
++## Verification
++
++```
++python -m pytest -q tests
++```
+--- a/cli.py
++++ b/cli.py
+@@ -1,6 +1,15 @@
++"""CLI-facing helper for the settings store."""
++
+ import store
+-def update(path, key, value):
++
++
++def update(path, key, value, expected_revision=None):
++    """Set ``key`` to ``value`` and return the new data dict.
++
++    ``expected_revision`` is forwarded to :func:`store.save` so callers can
++    detect stale writes.
++    """
+     data = store.load(path)
+     data[key] = value
+-    store.save(path, data)
++    store.save(path, data, expected_revision=expected_revision)
+     return data
+--- a/store.py
++++ b/store.py
+@@ -1,7 +1,263 @@
++"""Versioned settings store.
++
++Two on-disk formats are supported:
++
++* **v1 (legacy)** -- a flat JSON object whose values are JSON scalars.  Its
++  revision is ``0``.
++* **v2 (current)** -- exactly ``{"version": 2, "revision": <positive int>,
++  "data": <flat dict>}``.
++
++See ``README.md`` for the validation rules, the atomic-save guarantees and the
++concurrency boundary.
++"""
++
++from __future__ import annotations
++
++import dataclasses
+ import json
++import math
++import os
++import stat
++import tempfile
+ from pathlib import Path
++
++__all__ = [
++    "StoreError",
++    "CorruptStoreError",
++    "ConflictError",
++    "Snapshot",
++    "load",
++    "load_snapshot",
++    "save",
++]
++
++VERSION = 2
++_RESERVED = frozenset({"version", "revision", "data"})
++
++
++class StoreError(Exception):
++    """Base class for every settings-store failure."""
++
++
++class CorruptStoreError(StoreError):
++    """The stored file exists but is not a valid v1/v2 settings file."""
++
++
++class ConflictError(StoreError):
++    """The stored revision does not match the caller's expected revision."""
++
++
++@dataclasses.dataclass(frozen=True)
++class Snapshot:
++    """A frozen view of a stored settings file.
++
++    ``revision`` is always a plain ``int``.  ``data`` is an independent plain
++    ``dict`` copy, so mutating it never affects the store (or the next read).
++    """
++
++    revision: int
++    data: dict
++
++
++# ---------------------------------------------------------------------------
++# parsing / validation helpers
++# ---------------------------------------------------------------------------
++
++
++class _Rejected(Exception):
++    """Internal marker raised while decoding a rejected JSON construct."""
++
++
++def _reject_constant(name):
++    # ``json`` accepts NaN/Infinity/-Infinity by default; a stored settings file
++    # must never contain them.
++    raise _Rejected(name)
++
++
++def _pairs_hook(pairs):
++    result = {}
++    for key, value in pairs:
++        if key in result:
++            raise _Rejected(f"duplicate key {key!r}")
++        result[key] = value
++    return result
++
++
++def _parse(text):
++    try:
++        return json.loads(
++            text,
++            object_pairs_hook=_pairs_hook,
++            parse_constant=_reject_constant,
++        )
++    except _Rejected as exc:
++        raise CorruptStoreError(f"malformed JSON: {exc}") from exc
++    except ValueError as exc:  # includes json.JSONDecodeError
++        raise CorruptStoreError(f"malformed JSON: {exc}") from exc
++
++
++def _validate_data(data):
++    """Validate a v1/v2 data dictionary, raising ``ValueError`` on failure."""
++    if not isinstance(data, dict):
++        raise ValueError(f"data must be a dictionary, got {type(data).__name__}")
++    for key, value in data.items():
++        if not isinstance(key, str):
++            raise ValueError(
++                f"data keys must be strings, got {type(key).__name__}"
++            )
++        if value is None or isinstance(value, (bool, str, int)):
++            continue
++        if isinstance(value, float):
++            if not math.isfinite(value):
++                raise ValueError(
++                    f"data value for {key!r} must be finite, got {value!r}"
++                )
++            continue
++        raise ValueError(
++            f"data value for {key!r} must be a JSON scalar, got {type(value).__name__}"
++        )
++    return data
++
++
++def _validate_expected_revision(expected_revision):
++    if expected_revision is None:
++        return
++    if (
++        isinstance(expected_revision, bool)
++        or not isinstance(expected_revision, int)
++        or expected_revision < 0
++    ):
++        raise ValueError(
++            "expected_revision must be None or a nonnegative integer"
++        )
++
++
++def _decode(text):
++    """Return ``(revision, data)`` for the text of a store file."""
++    raw = _parse(text)
++    if not isinstance(raw, dict):
++        raise CorruptStoreError("top-level JSON value must be an object")
++
++    if _RESERVED.issubset(raw):
++        extra = set(raw) - _RESERVED
++        if extra:
++            raise CorruptStoreError(
++                f"unexpected envelope fields: {sorted(extra)!r}"
++            )
++        version = raw["version"]
++        if isinstance(version, bool) or not isinstance(version, int) or version != VERSION:
++            raise CorruptStoreError(f"unsupported store version: {version!r}")
++        revision = raw["revision"]
++        if isinstance(revision, bool) or not isinstance(revision, int) or revision <= 0:
++            raise CorruptStoreError(f"invalid revision: {revision!r}")
++        data = raw["data"]
++        try:
++            _validate_data(data)
++        except ValueError as exc:
++            raise CorruptStoreError(f"invalid envelope data: {exc}") from exc
++        return revision, dict(data)
++
++    # Anything else is legacy v1 data: a flat dictionary of scalars.
++    try:
++        _validate_data(raw)
++    except ValueError as exc:
++        raise CorruptStoreError(f"invalid legacy data: {exc}") from exc
++    return 0, dict(raw)
++
++
++def _read(path):
++    try:
++        text = path.read_text(encoding="utf-8")
++    except FileNotFoundError:
++        return 0, {}
++    except UnicodeDecodeError as exc:
++        raise CorruptStoreError(f"file is not valid UTF-8: {exc}") from exc
++    return _decode(text)
++
++
++# ---------------------------------------------------------------------------
++# atomic write
++# ---------------------------------------------------------------------------
++
++
++def _default_file_mode():
++    current = os.umask(0)
++    try:
++        return 0o666 & ~current
++    finally:
++        os.umask(current)
++
++
++def _write_atomically(path, text, mode):
++    """Write ``text`` to ``path`` via a fsynced temp file + ``os.replace``.
++
++    On any failure the destination keeps its previous bytes (or stays absent)
++    and the temporary file is removed before the original exception is
++    re-raised.
++    """
++    directory = path.parent if str(path.parent) else Path(".")
++    fd, tmp_name = tempfile.mkstemp(
++        prefix=f".{path.name}.", suffix=".tmp", dir=str(directory)
++    )
++    tmp_path = Path(tmp_name)
++    try:
++        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
++            fd = -1  # ownership transferred to the file object
++            handle.write(text)
++            handle.flush()
++            os.fsync(handle.fileno())
++        os.chmod(tmp_path, mode)
++        os.replace(tmp_path, path)
++    except BaseException:
++        if fd != -1:
++            try:
++                os.close(fd)
++            except OSError:
++                pass
++        try:
++            tmp_path.unlink()
++        except OSError:
++            pass
++        raise
++
++
++# ---------------------------------------------------------------------------
++# public API
++# ---------------------------------------------------------------------------
++
++
+ def load(path):
++    """Return an independent data ``dict``; a missing file yields ``{}``."""
++    _revision, data = _read(Path(path))
++    return data
++
++
++def load_snapshot(path):
++    """Return a frozen :class:`Snapshot` (``revision`` + independent ``data``)."""
++    revision, data = _read(Path(path))
++    return Snapshot(revision=revision, data=dict(data))
++
++
++def save(path, data, *, expected_revision=None):
++    """Validate, then atomically persist ``data`` as v2, returning the revision."""
++    _validate_data(data)
++    _validate_expected_revision(expected_revision)
++
+     path = Path(path)
+-    return json.loads(path.read_text()) if path.exists() else {}
+-def save(path, data):
+-    Path(path).write_text(json.dumps(data))
++    current_revision, _current_data = _read(path)
++    if expected_revision is not None and expected_revision != current_revision:
++        raise ConflictError(
++            f"expected revision {expected_revision}, found {current_revision}"
++        )
++
++    new_revision = current_revision + 1
++    payload = {"version": VERSION, "revision": new_revision, "data": data}
++    text = json.dumps(payload, ensure_ascii=False, allow_nan=False)
++
++    try:
++        mode = stat.S_IMODE(path.stat().st_mode)
++    except OSError:
++        mode = _default_file_mode()
++
++    _write_atomically(path, text, mode)
++    return new_revision
+--- a/sync.py
++++ b/sync.py
+@@ -1,5 +1,14 @@
++"""Sync-facing helper for the settings store."""
++
+ import store
+-def merge(path, updates):
++
++
++def merge(path, updates, expected_revision=None):
++    """Merge ``updates`` into the stored settings and return the new revision.
++
++    Unrelated entries are preserved.  ``expected_revision`` is forwarded to
++    :func:`store.save`.
++    """
+     data = store.load(path)
+     data.update(updates)
+-    store.save(path, data)
++    return store.save(path, data, expected_revision=expected_revision)
+--- a/tests/test_callers.py
++++ b/tests/test_callers.py
+@@ -0,0 +1,103 @@
++"""Tests for the two settings-store callers: cli.update and sync.merge."""
++
++import pytest
++
++import store
++from cli import update
++from sync import merge
++
++
++def test_update_returns_new_data(tmp_path):
++    path = tmp_path / "s.json"
++    assert update(path, "a", 1) == {"a": 1}
++    assert update(path, "b", "x") == {"a": 1, "b": "x"}
++    assert store.load(path) == {"a": 1, "b": "x"}
++
++
++def test_update_forwards_expected_revision(tmp_path):
++    path = tmp_path / "s.json"
++    update(path, "a", 1)  # revision 1
++    assert update(path, "b", 2, expected_revision=1) == {"a": 1, "b": 2}
++    before = path.read_bytes()
++    with pytest.raises(store.ConflictError):
++        update(path, "c", 3, expected_revision=1)
++    assert path.read_bytes() == before
++
++
++def test_update_accepts_positional_expected_revision(tmp_path):
++    path = tmp_path / "s.json"
++    update(path, "a", 1)
++    assert update(path, "b", 2, 1) == {"a": 1, "b": 2}
++
++
++def test_update_on_corrupt_file(tmp_path):
++    path = tmp_path / "s.json"
++    path.write_text("{oops", encoding="utf-8")
++    with pytest.raises(store.CorruptStoreError):
++        update(path, "a", 1)
++    assert path.read_text(encoding="utf-8") == "{oops"
++
++
++def test_update_rejects_invalid_value(tmp_path):
++    path = tmp_path / "s.json"
++    with pytest.raises(ValueError):
++        update(path, "a", {"nested": 1})
++    assert not path.exists()
++
++
++def test_update_upgrades_legacy(tmp_path):
++    path = tmp_path / "s.json"
++    path.write_text('{"a": 1}', encoding="utf-8")
++    assert update(path, "b", 2) == {"a": 1, "b": 2}
++    assert store.load_snapshot(path).revision == 1
++
++
++def test_merge_preserves_unrelated_entries(tmp_path):
++    path = tmp_path / "s.json"
++    store.save(path, {"keep": 1, "change": 1})
++    revision = merge(path, {"change": 2, "new": 3})
++    assert revision == 2
++    assert store.load(path) == {"keep": 1, "change": 2, "new": 3}
++
++
++def test_merge_returns_revision(tmp_path):
++    path = tmp_path / "s.json"
++    assert merge(path, {"a": 1}) == 1
++    assert merge(path, {"b": 2}) == 2
++    assert store.load_snapshot(path).revision == 2
++
++
++def test_merge_forwards_expected_revision(tmp_path):
++    path = tmp_path / "s.json"
++    assert merge(path, {"a": 1}) == 1
++    assert merge(path, {"b": 2}, expected_revision=1) == 2
++    assert merge(path, {"c": 3}, 2) == 3
++    before = path.read_bytes()
++    with pytest.raises(store.ConflictError):
++        merge(path, {"d": 4}, expected_revision=0)
++    assert path.read_bytes() == before
++
++
++def test_merge_on_corrupt_file(tmp_path):
++    path = tmp_path / "s.json"
++    path.write_text("[]", encoding="utf-8")
++    with pytest.raises(store.CorruptStoreError):
++        merge(path, {"a": 1})
++    assert path.read_text(encoding="utf-8") == "[]"
++
++
++def test_merge_rejects_invalid_update(tmp_path):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    before = path.read_bytes()
++    with pytest.raises(ValueError):
++        merge(path, {"b": [1, 2]})
++    assert path.read_bytes() == before
++
++
++def test_merge_upgrades_legacy(tmp_path):
++    path = tmp_path / "s.json"
++    path.write_text('{"a": 1}', encoding="utf-8")
++    assert merge(path, {"b": 2}) == 1
++    assert store.load(path) == {"a": 1, "b": 2}
++    assert store.load_snapshot(path).revision == 1
+--- a/tests/test_store_v2.py
++++ b/tests/test_store_v2.py
+@@ -0,0 +1,353 @@
++"""Failure-path and contract tests for the v2 settings store."""
++
++import dataclasses
++import json
++import os
++import stat
++
++import pytest
++
++import store
++
++
++def _write(path, text):
++    path.write_bytes(text.encode("utf-8"))
++    return path
++
++
++# ---------------------------------------------------------------------------
++# happy paths / format detection
++# ---------------------------------------------------------------------------
++
++
++def test_missing_file_is_revision_zero(tmp_path):
++    snap = store.load_snapshot(tmp_path / "missing.json")
++    assert snap.revision == 0
++    assert isinstance(snap.revision, int)
++    assert snap.data == {}
++    assert store.load(tmp_path / "missing.json") == {}
++
++
++def test_legacy_dict_is_revision_zero(tmp_path):
++    path = _write(
++        tmp_path / "s.json",
++        '{"a": 1, "b": "x", "c": null, "d": 1.5, "e": true}',
++    )
++    snap = store.load_snapshot(path)
++    assert snap.revision == 0
++    assert snap.data == {"a": 1, "b": "x", "c": None, "d": 1.5, "e": True}
++
++
++def test_dict_with_only_version_is_legacy(tmp_path):
++    path = _write(tmp_path / "s.json", '{"version": 2}')
++    snap = store.load_snapshot(path)
++    assert snap.revision == 0
++    assert snap.data == {"version": 2}
++
++
++def test_partial_envelope_keys_are_legacy(tmp_path):
++    path = _write(tmp_path / "s.json", '{"version": 2, "revision": 7}')
++    snap = store.load_snapshot(path)
++    assert snap.revision == 0
++    assert snap.data == {"version": 2, "revision": 7}
++
++
++def test_empty_object_is_legacy(tmp_path):
++    path = _write(tmp_path / "s.json", "{}")
++    snap = store.load_snapshot(path)
++    assert snap.revision == 0
++    assert snap.data == {}
++
++
++def test_envelope_roundtrip(tmp_path):
++    path = tmp_path / "s.json"
++    assert store.save(path, {"name": "雪", "count": 3}) == 1
++    assert json.loads(path.read_text(encoding="utf-8")) == {
++        "version": 2,
++        "revision": 1,
++        "data": {"name": "雪", "count": 3},
++    }
++    snap = store.load_snapshot(path)
++    assert snap.revision == 1
++    assert snap.data == {"name": "雪", "count": 3}
++    assert store.load(path) == {"name": "雪", "count": 3}
++
++
++def test_save_upgrades_legacy_and_increments(tmp_path):
++    path = _write(tmp_path / "s.json", '{"a": 1}')
++    assert store.save(path, {"a": 2}) == 1
++    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
++    assert store.load_snapshot(path).revision == 1
++    assert store.load(path) == {"a": 2}
++    assert store.save(path, {"a": 3}) == 2
++    assert store.load_snapshot(path).revision == 2
++
++
++# ---------------------------------------------------------------------------
++# corrupt files are never rewritten
++# ---------------------------------------------------------------------------
++
++
++@pytest.mark.parametrize(
++    "text",
++    [
++        "{",  # malformed JSON
++        "",  # empty file
++        "[1, 2]",  # non-object top level
++        '"scalar"',
++        "null",
++        '{"a": 1, "a": 2}',  # duplicate key at top level
++        '{"version": 2, "revision": 1, "revision": 2, "data": {}}',
++        '{"a": {"b": 1, "b": 2}}',  # duplicate key nested
++        '{"a": [1, {"x": 1, "x": 2}]}',
++        '{"version": 3, "revision": 1, "data": {}}',  # unsupported version
++        '{"version": "2", "revision": 1, "data": {}}',
++        '{"version": true, "revision": 1, "data": {}}',
++        '{"version": 2, "revision": 0, "data": {}}',  # non-positive revision
++        '{"version": 2, "revision": -1, "data": {}}',
++        '{"version": 2, "revision": 1.0, "data": {}}',
++        '{"version": 2, "revision": true, "data": {}}',
++        '{"version": 2, "revision": "1", "data": {}}',
++        '{"version": 2, "revision": 1, "data": {}, "extra": 1}',
++        '{"version": 2, "revision": 1, "data": {"n": {"x": 1}}}',
++        '{"version": 2, "revision": 1, "data": [1]}',
++        '{"version": 2, "revision": 1, "data": {"n": NaN}}',
++        '{"version": 2, "revision": 1, "data": {"n": Infinity}}',
++        '{"nested": [1, 2]}',  # legacy data must be flat
++        '{"a": NaN}',
++        '{"a": Infinity}',
++    ],
++)
++def test_corrupt_files_raise_and_are_not_rewritten(tmp_path, text):
++    path = _write(tmp_path / "s.json", text)
++    before = path.read_bytes()
++    with pytest.raises(store.CorruptStoreError):
++        store.load(path)
++    with pytest.raises(store.CorruptStoreError):
++        store.load_snapshot(path)
++    with pytest.raises(store.CorruptStoreError):
++        store.save(path, {"ok": 1})
++    assert path.read_bytes() == before
++
++
++def test_trailing_whitespace_is_accepted(tmp_path):
++    path = _write(tmp_path / "s.json", '{"a": 1}\n')
++    assert store.load(path) == {"a": 1}
++
++
++def test_invalid_utf8_is_corrupt(tmp_path):
++    path = tmp_path / "s.json"
++    path.write_bytes(b"\xff\xfe\x00")
++    before = path.read_bytes()
++    with pytest.raises(store.CorruptStoreError):
++        store.load(path)
++    with pytest.raises(store.CorruptStoreError):
++        store.save(path, {"a": 1})
++    assert path.read_bytes() == before
++
++
++def test_error_hierarchy():
++    assert issubclass(store.CorruptStoreError, store.StoreError)
++    assert issubclass(store.ConflictError, store.StoreError)
++    assert issubclass(store.StoreError, Exception)
++
++
++# ---------------------------------------------------------------------------
++# data validation
++# ---------------------------------------------------------------------------
++
++
++@pytest.mark.parametrize(
++    "data",
++    [
++        "not-a-dict",
++        [1, 2],
++        {1: "x"},
++        {None: "x"},
++        {"a": {"b": 1}},
++        {"a": [1]},
++        {"a": (1,)},
++        {"a": {1, 2}},
++        {"a": float("nan")},
++        {"a": float("inf")},
++        {"a": float("-inf")},
++    ],
++)
++def test_save_rejects_invalid_data(tmp_path, data):
++    path = tmp_path / "s.json"
++    with pytest.raises(ValueError):
++        store.save(path, data)
++    assert not path.exists()
++
++
++def test_save_accepts_scalars(tmp_path):
++    path = tmp_path / "s.json"
++    data = {"s": "雪", "i": 7, "f": 1.25, "b": False, "n": None}
++    assert store.save(path, data) == 1
++    assert store.load(path) == data
++
++
++def test_save_invalid_data_leaves_existing_file(tmp_path):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    before = path.read_bytes()
++    with pytest.raises(ValueError):
++        store.save(path, {"b": {"nested": 1}})
++    assert path.read_bytes() == before
++
++
++# ---------------------------------------------------------------------------
++# expected_revision
++# ---------------------------------------------------------------------------
++
++
++@pytest.mark.parametrize("value", [True, False, -1, 1.0, "1", object()])
++def test_save_rejects_invalid_expected_revision(tmp_path, value):
++    path = tmp_path / "s.json"
++    with pytest.raises(ValueError):
++        store.save(path, {"a": 1}, expected_revision=value)
++    assert not path.exists()
++
++
++def test_expected_revision_match_succeeds(tmp_path):
++    path = tmp_path / "s.json"
++    assert store.save(path, {"a": 1}, expected_revision=0) == 1
++    assert store.save(path, {"a": 2}, expected_revision=1) == 2
++
++
++def test_conflict_raises_without_touching_bytes(tmp_path):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    store.save(path, {"a": 2})
++    before = path.read_bytes()
++    with pytest.raises(store.ConflictError):
++        store.save(path, {"a": 3}, expected_revision=1)
++    assert path.read_bytes() == before
++    assert store.load_snapshot(path).revision == 2
++
++
++def test_conflict_on_missing_file(tmp_path):
++    path = tmp_path / "s.json"
++    with pytest.raises(store.ConflictError):
++        store.save(path, {"a": 1}, expected_revision=1)
++    assert not path.exists()
++
++
++def test_conflict_on_corrupt_file_reports_corruption(tmp_path):
++    path = _write(tmp_path / "s.json", "{oops")
++    with pytest.raises(store.CorruptStoreError):
++        store.save(path, {"a": 1}, expected_revision=0)
++
++
++# ---------------------------------------------------------------------------
++# atomic write / failure injection
++# ---------------------------------------------------------------------------
++
++
++def test_replace_failure_preserves_bytes_and_cleans_temp(tmp_path, monkeypatch):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    before = path.read_bytes()
++
++    def boom(*args, **kwargs):
++        raise OSError("replace failed")
++
++    monkeypatch.setattr(os, "replace", boom)
++    with pytest.raises(OSError, match="replace failed"):
++        store.save(path, {"a": 2})
++    monkeypatch.undo()
++    assert path.read_bytes() == before
++    assert [p.name for p in tmp_path.iterdir()] == ["s.json"]
++
++
++def test_replace_failure_keeps_destination_absent(tmp_path, monkeypatch):
++    path = tmp_path / "s.json"
++
++    def boom(*args, **kwargs):
++        raise OSError("replace failed")
++
++    monkeypatch.setattr(os, "replace", boom)
++    with pytest.raises(OSError, match="replace failed"):
++        store.save(path, {"a": 1})
++    monkeypatch.undo()
++    assert not path.exists()
++    assert list(tmp_path.iterdir()) == []
++
++
++def test_fsync_failure_preserves_old_bytes(tmp_path, monkeypatch):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    before = path.read_bytes()
++
++    def boom(fd):
++        raise OSError("fsync failed")
++
++    monkeypatch.setattr(os, "fsync", boom)
++    with pytest.raises(OSError, match="fsync failed"):
++        store.save(path, {"a": 2})
++    monkeypatch.undo()
++    assert path.read_bytes() == before
++    assert [p.name for p in tmp_path.iterdir()] == ["s.json"]
++
++
++def test_no_sidecar_files_after_success(tmp_path):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    store.save(path, {"a": 2})
++    assert [p.name for p in tmp_path.iterdir()] == ["s.json"]
++
++
++@pytest.mark.skipif(os.name != "posix", reason="posix permission bits")
++def test_save_preserves_permission_bits(tmp_path):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    os.chmod(path, 0o640)
++    store.save(path, {"a": 2})
++    assert stat.S_IMODE(path.stat().st_mode) == 0o640
++
++
++@pytest.mark.skipif(os.name != "posix", reason="posix permission bits")
++def test_save_preserves_read_only_bits(tmp_path):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    os.chmod(path, 0o444)
++    assert store.save(path, {"a": 2}) == 2
++    assert stat.S_IMODE(path.stat().st_mode) == 0o444
++
++
++# ---------------------------------------------------------------------------
++# independence / frozen snapshot
++# ---------------------------------------------------------------------------
++
++
++def test_loaded_data_is_independent(tmp_path):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    data = store.load(path)
++    data["a"] = 99
++    data["b"] = 2
++    assert store.load(path) == {"a": 1}
++
++
++def test_snapshot_data_is_independent(tmp_path):
++    path = tmp_path / "s.json"
++    store.save(path, {"a": 1})
++    snap = store.load_snapshot(path)
++    snap.data["a"] = 99
++    assert store.load(path) == {"a": 1}
++
++
++def test_save_does_not_mutate_caller_data(tmp_path):
++    path = tmp_path / "s.json"
++    data = {"a": 1}
++    store.save(path, data)
++    data["b"] = 2
++    assert store.load(path) == {"a": 1}
++
++
++def test_snapshot_is_frozen(tmp_path):
++    snap = store.load_snapshot(tmp_path / "missing.json")
++    with pytest.raises(dataclasses.FrozenInstanceError):
++        snap.revision = 3
++    with pytest.raises(dataclasses.FrozenInstanceError):
++        snap.data = {}

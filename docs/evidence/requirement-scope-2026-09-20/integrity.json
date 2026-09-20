@@ -1,0 +1,27 @@
+{
+  "head": "d53605d8acf03af6c8030e06879b0aa0863c9f92",
+  "baseline_production_diff": "0885c87..d53605d: docs/evidence additions only",
+  "old_manifest_files_verified": 736,
+  "old_tracked_evidence_unchanged": true,
+  "production_and_test_source_hashes_verified": true,
+  "structured_json_files_scanned": 83,
+  "private_fields_found": [],
+  "same_final_money_hashes_before_after": true,
+  "money_requirements_unchanged": true,
+  "money_independent_acceptance_before_after": "19 passed / 19 passed",
+  "money_boundary_before_after": "max_turns / completed",
+  "paid_model_requests": 0,
+  "network_policy": "kernel IPv4/IPv6 denial for final suites and production replays; local provider substitutes",
+  "known_baseline_failures": [
+    "test_context_overflow_stops_after_three_compaction_attempts",
+    "test_pre_send_and_reactive_compactions_share_one_three_attempt_owner"
+  ],
+  "implementation_modified_files": [
+    "nz_coder/intelligence/bootstrap_artifacts.py",
+    "nz_coder/runtime/agent/task_contract.py",
+    "nz_coder/runtime/agent/task_policy.py",
+    "nz_coder/runtime/execution/runtime_state.py",
+    "tests/runtime/test_node_verification_runtime.py",
+    "tests/test_runtime_state.py"
+  ]
+}

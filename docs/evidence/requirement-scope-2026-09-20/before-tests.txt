@@ -1,0 +1,377 @@
+FF.FFFFFF..FF.F....                                                      [100%]
+=================================== FAILURES ===================================
+_____________ test_paid_money_reference_does_not_block_completion ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7bd6e302aea0>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-363/test_paid_money_reference_does0')
+
+    def test_paid_money_reference_does_not_block_completion(monkeypatch, tmp_path):
+        fixture = _money(tmp_path)
+        result, state, trace, requests, reviews = _run(
+            monkeypatch, tmp_path, fixture['task'], _money_actions(fixture), label='money-reference')
+        checks = [x['status'] for x in trace if x.get('event') == 'verification_result']
+        assert checks == ['failed', 'passed']
+        assert '6 failed' in str(requests[3]['messages'])
+        assert state['verification_contract']['passed'] is True
+        assert state['verification_generation'] == state['mutation_generation']
+        assert state['verification_contract']['attempted_generation'] == state['acceptance_mutation_generation']
+        for name, expected in fixture['final_hashes'].items():
+            assert hashlib.sha256((tmp_path / name).read_bytes()).hexdigest() == expected, name
+>       assert result.status.value == 'completed', state['requirement_ledger']
+E       AssertionError: {'items': [{'evidence': [], 'mutation_generation': 0, 'requirement': {'depends_on': [], 'description': 'Implement the ...artifacts': [], 'id': 'R4', ...}, 'status': 'satisfied'}], 'latest_generation': 2, 'latest_verification_generation': 2}
+E       assert 'max_turns' == 'completed'
+E         
+E         - completed
+E         + max_turns
+
+tests/runtime/test_requirement_scope_runtime.py:142: AssertionError
+_ test_reference_mutation_and_verification_roles[Read REQUIREMENTS.md and implement X-expected0] _
+
+text = 'Read REQUIREMENTS.md and implement X', expected = []
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['REQUIREMENTS.md'] == []
+E         
+E         Left contains one more item: 'REQUIREMENTS.md'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+_ test_reference_mutation_and_verification_roles[Follow SPEC.md and change api.py-expected2] _
+
+text = 'Follow SPEC.md and change api.py', expected = ['api.py']
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['SPEC.md', 'api.py'] == ['api.py']
+E         
+E         At index 0 diff: 'SPEC.md' != 'api.py'
+E         Left contains one more item: 'api.py'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+_ test_reference_mutation_and_verification_roles[Modify SPEC.md to match api.py-expected3] _
+
+text = 'Modify SPEC.md to match api.py', expected = ['SPEC.md']
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['SPEC.md', 'api.py'] == ['SPEC.md']
+E         
+E         Left contains one more item: 'api.py'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+_ test_reference_mutation_and_verification_roles[Implement the API described in contract.json-expected4] _
+
+text = 'Implement the API described in contract.json', expected = []
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['contract.js'] == []
+E         
+E         Left contains one more item: 'contract.js'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+_ test_reference_mutation_and_verification_roles[According to notes.txt, migrate api.py-expected5] _
+
+text = 'According to notes.txt, migrate api.py', expected = ['api.py']
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert [] == ['api.py']
+E         
+E         Right contains one more item: 'api.py'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+_ test_reference_mutation_and_verification_roles[Use the requirements in guide.rst and change api.py-expected6] _
+
+text = 'Use the requirements in guide.rst and change api.py'
+expected = ['api.py']
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['guide.rs', 'api.py'] == ['api.py']
+E         
+E         At index 0 diff: 'guide.rs' != 'api.py'
+E         Left contains one more item: 'api.py'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+_ test_reference_mutation_and_verification_roles[Read source.py and update target.py according to fixtures/spec.json-expected7] _
+
+text = 'Read source.py and update target.py according to fixtures/spec.json'
+expected = ['target.py']
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['source.py',...ures/spec.js'] == ['target.py']
+E         
+E         At index 0 diff: 'source.py' != 'target.py'
+E         Left contains 2 more items, first extra item: 'target.py'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+_ test_reference_mutation_and_verification_roles[Implement X and run tests/test_money.py-expected10] _
+
+text = 'Implement X and run tests/test_money.py', expected = []
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['tests/test_money.py'] == []
+E         
+E         Left contains one more item: 'tests/test_money.py'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+_ test_reference_mutation_and_verification_roles[Fix api.py and validate against fixtures/rounding.json-expected11] _
+
+text = 'Fix api.py and validate against fixtures/rounding.json'
+expected = ['api.py']
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['api.py', 'f.../rounding.js'] == ['api.py']
+E         
+E         Left contains one more item: 'fixtures/rounding.js'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+_ test_reference_mutation_and_verification_roles[Update web.py, cli.py, jobs.py, mobile.py and reporting.py-expected13] _
+
+text = 'Update web.py, cli.py, jobs.py, mobile.py and reporting.py'
+expected = ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']
+
+    @pytest.mark.parametrize('text, expected', [
+        ('Read REQUIREMENTS.md and implement X', []),
+        ('Update REQUIREMENTS.md and implement X', ['REQUIREMENTS.md']),
+        ('Follow SPEC.md and change api.py', ['api.py']),
+        ('Modify SPEC.md to match api.py', ['SPEC.md']),
+        ('Implement the API described in contract.json', []),
+        ('According to notes.txt, migrate api.py', ['api.py']),
+        ('Use the requirements in guide.rst and change api.py', ['api.py']),
+        ('Read source.py and update target.py according to fixtures/spec.json', ['target.py']),
+        ('Run node --test literal.test.cjs', []),
+        ('Modify literal.test.cjs and run node --test literal.test.cjs', ['literal.test.cjs']),
+        ('Implement X and run tests/test_money.py', []),
+        ('Fix api.py and validate against fixtures/rounding.json', ['api.py']),
+        ('Read SPEC.md and update SPEC.md', ['SPEC.md']),
+        ('Update web.py, cli.py, jobs.py, mobile.py and reporting.py', ['web.py', 'cli.py', 'jobs.py', 'mobile.py', 'reporting.py']),
+        ('Create migration-notes.md', ['migration-notes.md']),
+        ('Delete obsolete.md', ['obsolete.md']),
+        ('Rename old.md to new.md', ['old.md', 'new.md']),
+        ('Inspect README.md and summarize the API changes', []),
+    ])
+    def test_reference_mutation_and_verification_roles(text, expected):
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+>       assert extract_explicit_mutation_paths(text) == expected
+E       AssertionError: assert ['web.py'] == ['web.py', 'c...reporting.py']
+E         
+E         Right contains 4 more items, first extra item: 'cli.py'
+E         Use -v to get more diff
+
+tests/runtime/test_requirement_scope_runtime.py:172: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_paid_money_reference_does_not_block_completion
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[Read REQUIREMENTS.md and implement X-expected0]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[Follow SPEC.md and change api.py-expected2]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[Modify SPEC.md to match api.py-expected3]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[Implement the API described in contract.json-expected4]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[According to notes.txt, migrate api.py-expected5]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[Use the requirements in guide.rst and change api.py-expected6]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[Read source.py and update target.py according to fixtures/spec.json-expected7]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[Implement X and run tests/test_money.py-expected10]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[Fix api.py and validate against fixtures/rounding.json-expected11]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_reference_mutation_and_verification_roles[Update web.py, cli.py, jobs.py, mobile.py and reporting.py-expected13]
+11 failed, 8 passed in 1.78s

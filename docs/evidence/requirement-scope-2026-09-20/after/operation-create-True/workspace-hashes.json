@@ -1,0 +1,7 @@
+{
+  "REQUIREMENTS.md": "9305c52c15ae401d89b2d429de0d70fa95393f0de537a92273b9e3dbd0fd19a1",
+  "obsolete.md": "abdcccf4a6a5fae3da2c8232d6fbf33b61d5db886742c35218e724b8e5c6b0e0",
+  "migration-notes.md": "11fbae301a8130fbaa4a5a92c231e02b7e0b99449cda52ea3b6749b656b56082",
+  "api.py": "69ef4f409b530264b0da21ad4054978ada08895c93631a0da1957e2a10b592b5",
+  "tests/test_api.py": "638dd9533b446d79f90403d376935957bf026ed7a4432d1897e1d761a8fecb90"
+}

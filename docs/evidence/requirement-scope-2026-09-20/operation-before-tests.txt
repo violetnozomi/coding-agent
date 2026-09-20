@@ -1,0 +1,35 @@
+........................F.....                                           [100%]
+=================================== FAILURES ===================================
+_ test_mutation_operation_uses_real_workspace_fact[Delete obsolete.md-changes0-False] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7be90aecc590>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-366/test_mutation_operation_uses_r0')
+instruction = 'Delete obsolete.md'
+changes = [{'new_text': 'changed', 'old_text': 'obsolete', 'op': 'replace', 'path': 'obsolete.md'}]
+ready = False
+
+    @pytest.mark.parametrize('instruction, changes, ready', [
+        ('Delete obsolete.md', [{'op': 'replace', 'path': 'obsolete.md', 'old_text': 'obsolete', 'new_text': 'changed'}], False),
+        ('Delete obsolete.md', [{'op': 'delete', 'path': 'obsolete.md'}], True),
+        ('Rename obsolete.md to migration-notes.md', [{'op': 'create', 'path': 'migration-notes.md', 'content': 'obsolete\n'}], False),
+        ('Rename obsolete.md to migration-notes.md', [{'op': 'delete', 'path': 'obsolete.md'}, {'op': 'create', 'path': 'migration-notes.md', 'content': 'obsolete\n'}], True),
+        ('Create migration-notes.md', [{'op': 'create', 'path': 'migration-notes.md', 'content': 'API value is 2.\n'}], True),
+    ])
+    def test_mutation_operation_uses_real_workspace_fact(monkeypatch, tmp_path, instruction, changes, ready):
+        actions = _small(tmp_path)
+        actions += [[('apply_patch', {'changes': changes})],
+                    [('bash', {'command': 'python -m pytest -q tests'})], 'API value is 2. Tests passed.']
+        result, state, trace, *_ = _run(monkeypatch, tmp_path,
+            f'Fix api.py. {instruction}. Run python -m pytest -q tests.', actions,
+            label='operation-' + instruction.split()[0].lower() + '-' + str(ready))
+        assert state['verification_contract']['passed'] is True
+>       assert (result.status.value == 'completed') is ready, state['requirement_ledger']
+E       AssertionError: {'items': [{'evidence': [{'command': None, 'fingerprint': None, 'generation': 1, 'path': 'api.py', ...}, {'command': '...artifacts': [], 'id': 'R3', ...}, 'status': 'satisfied'}], 'latest_generation': 1, 'latest_verification_generation': 1}
+E       assert ('completed' == 'completed'
+E         
+E           completed) is False
+
+tests/runtime/test_requirement_scope_runtime.py:241: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_mutation_operation_uses_real_workspace_fact[Delete obsolete.md-changes0-False]
+1 failed, 29 passed in 10.33s

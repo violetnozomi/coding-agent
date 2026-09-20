@@ -254,3 +254,21 @@ def test_paid_n_action_fragment_uses_current_node_evidence(monkeypatch, node_pro
     assert hashlib.sha256((node_project / "index.js").read_bytes()).hexdigest() == (
         "4094a0ac1f2bf2b659023ec6fe14133c1b8dfd8e667a6c7937b3d0771ce84520"
     )
+
+
+@pytest.mark.parametrize('modify_test', [False, True])
+def test_explicit_node_test_mutation_is_independent_of_green_execution(monkeypatch, node_project, modify_test):
+    (node_project / 'index.js').write_text('module.exports = x => x;\n')
+    actions = [[_tool('read_file', path='literal.test.cjs')]]
+    if modify_test:
+        actions.append([_tool('edit_file', path='literal.test.cjs',
+                              old_text="test('Unicode hyphen'", new_text="test('Unicode literal hyphen'")])
+    actions += [TEST, 'Node test passed.']
+    result, state, trace, *_ = _run(monkeypatch, node_project, actions,
+        task='Modify literal.test.cjs and run node --test literal.test.cjs.')
+    assert any(e.get('event') == 'verification_result' and e.get('status') == 'passed' for e in trace)
+    if modify_test:
+        assert state['verification_contract']['passed'] is True
+    assert (result.status.value == 'completed') is modify_test
+    assert any('literal.test.cjs' in r['expected_artifacts']
+               for r in state['task_contract']['requirements'])

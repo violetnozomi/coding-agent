@@ -1,0 +1,10 @@
+{
+  "nz_coder/intelligence/bootstrap_artifacts.py": "d7841b47be36aa33130724083816c1c2db22dabf6283600284b9c900d5d7d6a0",
+  "nz_coder/runtime/agent/task_policy.py": "47646d5f8e222116471bf5b0676146701d7623ccbaed4b6e83413f47fc0eab65",
+  "nz_coder/runtime/agent/task_contract.py": "1d258765ca9920c886278b1203da894d8f42ac464ec3b691a4840f720d8fb2a4",
+  "nz_coder/runtime/execution/runtime_state.py": "68bcdde5359f68f687cbaab651dd193ad8e353a2c64e414c5c9748fdde0b4fec",
+  "tests/test_runtime_state.py": "6852ee4c41b066ba20badeb23b556304fb0a9d2917dd98bca49e21e323a26cf7",
+  "tests/runtime/test_node_verification_runtime.py": "b0e37e1700b37a8b82aaec135d190546776f0036d23e00116df944f7f36f6b25",
+  "tests/runtime/test_requirement_scope_runtime.py": "8769542889461f218e73311fbbe12af947b0056b31593be1adf12f54793596a0",
+  "tests/fixtures/paid_m_requirement_fragment.json": "96a8822a91a2bea1c6817772db515efc59de118c8070471ac15465f46c56456f"
+}

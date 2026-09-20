@@ -1,0 +1,163 @@
+{
+  "paid_model_requests": 0,
+  "commands": [
+    {
+      "phase": "original red before implementation edits",
+      "argv": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/runtime/test_requirement_scope_runtime.py"
+      ],
+      "output": "before-tests.txt",
+      "expected_exit": 1
+    },
+    {
+      "phase": "baseline isolated confirmation",
+      "cwd": "/tmp/nz-requirement-scope-baseline-d53605d",
+      "argv": [
+        "python",
+        "tests/evaluation/fixtures/offline_exec.py",
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/runtime/test_requirement_scope_runtime.py::test_paid_money_reference_does_not_block_completion",
+        "tests/test_loop_fake.py::test_context_overflow_stops_after_three_compaction_attempts",
+        "tests/test_loop_fake.py::test_pre_send_and_reactive_compactions_share_one_three_attempt_owner"
+      ],
+      "output": "baseline-confirmation.txt",
+      "exit_code": 1
+    },
+    {
+      "phase": "first broad suite",
+      "argv": [
+        "python",
+        "tests/evaluation/fixtures/offline_exec.py",
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_task_policy.py",
+        "tests/test_runtime_state.py",
+        "tests/runtime/test_task_contract.py",
+        "tests/runtime/test_bootstrap_artifacts.py",
+        "tests/runtime/test_completion_gate.py",
+        "tests/runtime/test_verification_contract.py",
+        "tests/runtime/test_verification_scheduler.py",
+        "tests/runtime/test_node_verification_runtime.py",
+        "tests/runtime/test_native_runner.py",
+        "tests/runtime/test_native_product_runtime.py",
+        "tests/test_sidecar_verifier.py",
+        "tests/test_verification.py",
+        "tests/test_verification_planner.py",
+        "tests/test_run_evidence.py",
+        "tests/test_edit_recovery.py",
+        "tests/security/test_workspace_mutation_semantics.py",
+        "tests/security/test_artifact_boundary.py",
+        "tests/security/test_transaction_recovery.py",
+        "tests/test_permissions.py",
+        "tests/test_stall_detector.py",
+        "tests/test_stall_sidecar.py",
+        "tests/test_recovery.py",
+        "tests/test_gap_recovery_phase3.py",
+        "tests/test_loop_fake.py"
+      ],
+      "output": "broad-focused.txt",
+      "exit_code": 1,
+      "result": "767 passed, 3 skipped, 2 baseline failures"
+    },
+    {
+      "phase": "final focused suites",
+      "argv": [
+        "python",
+        "tests/evaluation/fixtures/offline_exec.py",
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/runtime/test_requirement_scope_runtime.py",
+        "tests/test_task_policy.py",
+        "tests/test_runtime_state.py",
+        "tests/runtime/test_task_contract.py",
+        "tests/runtime/test_bootstrap_artifacts.py",
+        "tests/runtime/test_completion_gate.py",
+        "tests/runtime/test_verification_contract.py",
+        "tests/runtime/test_verification_scheduler.py",
+        "tests/runtime/test_node_verification_runtime.py",
+        "tests/runtime/test_native_runner.py",
+        "tests/runtime/test_native_product_runtime.py",
+        "tests/test_sidecar_verifier.py",
+        "tests/test_verification.py",
+        "tests/test_verification_planner.py",
+        "tests/test_run_evidence.py",
+        "tests/test_edit_recovery.py",
+        "tests/security/test_workspace_mutation_semantics.py",
+        "tests/security/test_artifact_boundary.py",
+        "tests/security/test_transaction_recovery.py",
+        "tests/test_permissions.py",
+        "tests/test_stall_detector.py",
+        "tests/test_stall_sidecar.py",
+        "tests/test_recovery.py",
+        "tests/test_gap_recovery_phase3.py",
+        "tests/test_loop_fake.py",
+        "-k",
+        "not test_context_overflow_stops_after_three_compaction_attempts and not test_pre_send_and_reactive_compactions_share_one_three_attempt_owner"
+      ],
+      "output": "final-regressions.txt",
+      "exit_code": 0,
+      "result": "820 passed, 3 skipped, 2 deselected"
+    },
+    {
+      "phase": "final Node dual-role confirmation",
+      "argv": [
+        "python",
+        "tests/evaluation/fixtures/offline_exec.py",
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/runtime/test_node_verification_runtime.py"
+      ],
+      "output": "node-confirmed.txt",
+      "exit_code": 0,
+      "result": "11 passed"
+    },
+    {
+      "phase": "final production replay capture",
+      "argv": [
+        "python",
+        "tests/evaluation/fixtures/offline_exec.py",
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/runtime/test_requirement_scope_runtime.py",
+        "tests/test_loop_fake.py::test_strict_progress_soft_boundary_allows_reads_beyond_retired_hard_limit"
+      ],
+      "env": {
+        "NZ_SCOPE_EVIDENCE_DIR": "/home/pyh/nzcoder/docs/evidence/requirement-scope-2026-09-20/after"
+      },
+      "output": "final-replay-capture.txt",
+      "exit_code": 0,
+      "result": "52 passed"
+    },
+    {
+      "phase": "baseline continuation latency check",
+      "cwd": "/tmp/nz-requirement-scope-baseline-d53605d",
+      "argv": [
+        "python",
+        "tests/evaluation/fixtures/offline_exec.py",
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_loop_fake.py::test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget"
+      ],
+      "output": "resume-baseline.txt",
+      "exit_code": 0,
+      "result": "1 passed in 236.47s; current implementation also passes in final focused suites"
+    }
+  ]
+}

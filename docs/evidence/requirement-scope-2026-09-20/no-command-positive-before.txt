@@ -1,0 +1,113 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_ test_explicit_file_obligation_without_command_resolves_after_real_write[Create migration-notes.md-changes0] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75aeae90aea0>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-393/test_explicit_file_obligation_0')
+instruction = 'Create migration-notes.md'
+changes = [{'content': 'Migration notes.\n', 'op': 'create', 'path': 'migration-notes.md'}]
+
+    @pytest.mark.parametrize('instruction, changes', [
+        ('Create migration-notes.md', [{'op': 'create', 'path': 'migration-notes.md', 'content': 'Migration notes.\n'}]),
+        ('Delete obsolete.md', [{'op': 'delete', 'path': 'obsolete.md'}]),
+        ('Rename obsolete.md to migration-notes.md', [{'op': 'delete', 'path': 'obsolete.md'}, {'op': 'create', 'path': 'migration-notes.md', 'content': 'obsolete\n'}]),
+        ('Update REQUIREMENTS.md', [{'op': 'replace', 'path': 'REQUIREMENTS.md', 'old_text': 'must be 2.', 'new_text': 'must be exactly 2.'}]),
+    ])
+    def test_explicit_file_obligation_without_command_resolves_after_real_write(monkeypatch, tmp_path, instruction, changes):
+        actions = _small(tmp_path)[:1]
+        actions += [[('apply_patch', {'changes': changes})], 'Requested file operation completed.']
+        result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions,
+            label='no-command-done-' + instruction.split()[0].lower())
+>       assert result.status.value == 'completed', state['requirement_ledger']
+E       AssertionError: {'items': [{'evidence': [], 'mutation_generation': 0, 'requirement': {'artifact_operations': [], 'depends_on': [], 'de...': ['migration-notes.md'], ...}, 'status': 'candidate'}], 'latest_generation': 0, 'latest_verification_generation': -1}
+E       assert 'max_turns' == 'completed'
+E         
+E         - completed
+E         + max_turns
+
+tests/runtime/test_requirement_scope_runtime.py:428: AssertionError
+_ test_explicit_file_obligation_without_command_resolves_after_real_write[Delete obsolete.md-changes1] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75aeb1446190>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-393/test_explicit_file_obligation_1')
+instruction = 'Delete obsolete.md'
+changes = [{'op': 'delete', 'path': 'obsolete.md'}]
+
+    @pytest.mark.parametrize('instruction, changes', [
+        ('Create migration-notes.md', [{'op': 'create', 'path': 'migration-notes.md', 'content': 'Migration notes.\n'}]),
+        ('Delete obsolete.md', [{'op': 'delete', 'path': 'obsolete.md'}]),
+        ('Rename obsolete.md to migration-notes.md', [{'op': 'delete', 'path': 'obsolete.md'}, {'op': 'create', 'path': 'migration-notes.md', 'content': 'obsolete\n'}]),
+        ('Update REQUIREMENTS.md', [{'op': 'replace', 'path': 'REQUIREMENTS.md', 'old_text': 'must be 2.', 'new_text': 'must be exactly 2.'}]),
+    ])
+    def test_explicit_file_obligation_without_command_resolves_after_real_write(monkeypatch, tmp_path, instruction, changes):
+        actions = _small(tmp_path)[:1]
+        actions += [[('apply_patch', {'changes': changes})], 'Requested file operation completed.']
+        result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions,
+            label='no-command-done-' + instruction.split()[0].lower())
+>       assert result.status.value == 'completed', state['requirement_ledger']
+E       AssertionError: {'items': [{'evidence': [], 'mutation_generation': 0, 'requirement': {'artifact_operations': [], 'depends_on': [], 'de...tifacts': ['obsolete.md'], ...}, 'status': 'candidate'}], 'latest_generation': 0, 'latest_verification_generation': -1}
+E       assert 'max_turns' == 'completed'
+E         
+E         - completed
+E         + max_turns
+
+tests/runtime/test_requirement_scope_runtime.py:428: AssertionError
+_ test_explicit_file_obligation_without_command_resolves_after_real_write[Rename obsolete.md to migration-notes.md-changes2] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75aeae52fe30>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-393/test_explicit_file_obligation_2')
+instruction = 'Rename obsolete.md to migration-notes.md'
+changes = [{'op': 'delete', 'path': 'obsolete.md'}, {'content': 'obsolete\n', 'op': 'create', 'path': 'migration-notes.md'}]
+
+    @pytest.mark.parametrize('instruction, changes', [
+        ('Create migration-notes.md', [{'op': 'create', 'path': 'migration-notes.md', 'content': 'Migration notes.\n'}]),
+        ('Delete obsolete.md', [{'op': 'delete', 'path': 'obsolete.md'}]),
+        ('Rename obsolete.md to migration-notes.md', [{'op': 'delete', 'path': 'obsolete.md'}, {'op': 'create', 'path': 'migration-notes.md', 'content': 'obsolete\n'}]),
+        ('Update REQUIREMENTS.md', [{'op': 'replace', 'path': 'REQUIREMENTS.md', 'old_text': 'must be 2.', 'new_text': 'must be exactly 2.'}]),
+    ])
+    def test_explicit_file_obligation_without_command_resolves_after_real_write(monkeypatch, tmp_path, instruction, changes):
+        actions = _small(tmp_path)[:1]
+        actions += [[('apply_patch', {'changes': changes})], 'Requested file operation completed.']
+        result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions,
+            label='no-command-done-' + instruction.split()[0].lower())
+>       assert result.status.value == 'completed', state['requirement_ledger']
+E       AssertionError: {'items': [{'evidence': [], 'mutation_generation': 0, 'requirement': {'artifact_operations': [], 'depends_on': [], 'de...notes.md', 'obsolete.md'], ...}, 'status': 'candidate'}], 'latest_generation': 0, 'latest_verification_generation': -1}
+E       assert 'max_turns' == 'completed'
+E         
+E         - completed
+E         + max_turns
+
+tests/runtime/test_requirement_scope_runtime.py:428: AssertionError
+_ test_explicit_file_obligation_without_command_resolves_after_real_write[Update REQUIREMENTS.md-changes3] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75aeae3ab790>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-393/test_explicit_file_obligation_3')
+instruction = 'Update REQUIREMENTS.md'
+changes = [{'new_text': 'must be exactly 2.', 'old_text': 'must be 2.', 'op': 'replace', 'path': 'REQUIREMENTS.md'}]
+
+    @pytest.mark.parametrize('instruction, changes', [
+        ('Create migration-notes.md', [{'op': 'create', 'path': 'migration-notes.md', 'content': 'Migration notes.\n'}]),
+        ('Delete obsolete.md', [{'op': 'delete', 'path': 'obsolete.md'}]),
+        ('Rename obsolete.md to migration-notes.md', [{'op': 'delete', 'path': 'obsolete.md'}, {'op': 'create', 'path': 'migration-notes.md', 'content': 'obsolete\n'}]),
+        ('Update REQUIREMENTS.md', [{'op': 'replace', 'path': 'REQUIREMENTS.md', 'old_text': 'must be 2.', 'new_text': 'must be exactly 2.'}]),
+    ])
+    def test_explicit_file_obligation_without_command_resolves_after_real_write(monkeypatch, tmp_path, instruction, changes):
+        actions = _small(tmp_path)[:1]
+        actions += [[('apply_patch', {'changes': changes})], 'Requested file operation completed.']
+        result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions,
+            label='no-command-done-' + instruction.split()[0].lower())
+>       assert result.status.value == 'completed', state['requirement_ledger']
+E       AssertionError: {'items': [{'evidence': [], 'mutation_generation': 0, 'requirement': {'artifact_operations': [], 'depends_on': [], 'de...cts': ['REQUIREMENTS.md'], ...}, 'status': 'candidate'}], 'latest_generation': 0, 'latest_verification_generation': -1}
+E       assert 'max_turns' == 'completed'
+E         
+E         - completed
+E         + max_turns
+
+tests/runtime/test_requirement_scope_runtime.py:428: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_explicit_file_obligation_without_command_resolves_after_real_write[Create migration-notes.md-changes0]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_explicit_file_obligation_without_command_resolves_after_real_write[Delete obsolete.md-changes1]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_explicit_file_obligation_without_command_resolves_after_real_write[Rename obsolete.md to migration-notes.md-changes2]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_explicit_file_obligation_without_command_resolves_after_real_write[Update REQUIREMENTS.md-changes3]
+4 failed, 47 deselected in 1.70s

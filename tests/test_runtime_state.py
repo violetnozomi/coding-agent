@@ -766,7 +766,9 @@ def test_runtime_state_warns_when_task_requests_tests_but_none_changed():
     block = state.build_prompt_block()
 
     assert "User named target files" in block
-    assert "test/user_manger.py" in block
+    # The base implementation is reference context, not an explicit write target.
+    assert "test/user_manger.py" not in state.requested_paths
+    assert "test_user_manager.py" in state.requested_paths
     assert "no test files have been changed yet" in block.lower()
 
 

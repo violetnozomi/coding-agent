@@ -502,3 +502,107 @@ def _looks_like_test_scope(target: str) -> bool:
         is_test_file(target)
         or any(part in _TEST_DIR_NAMES for part in parts)
     )
+
+
+_ROUND_MUTATION_INTENT_RE = re.compile(
+    r"(?:\b(?:add|change|complete|create|delete|document|edit|fix|implement|"
+    r"migrate|modify|refactor|remove|rename|replace|support|update|write)\b|"
+    r"新增|添加|创建|删除|文档化|编辑|修复|实现|完善|支持|补充|修改|改动|移除|重命名|迁移|替换|更新|编写|完成|写)",
+    re.IGNORECASE,
+)
+_ROUND_NEGATED_MUTATION_RE = re.compile(
+    r"(?:\b(?:do\s+not|don't|must\s+not|never|without)\s+"
+    r"(?:change|changing|create|creating|delete|deleting|edit|editing|modify|"
+    r"modifying|remove|removing|rename|renaming|replace|replacing|update|"
+    r"updating|write|writing)\b|"
+    r"(?:(?:不要|不得|无需|不需要|不)\s*"
+    r"(?:新增|添加|创建|删除|编辑|修改|改动|移除|重命名|替换|更新|编写|写)))",
+    re.IGNORECASE,
+)
+_TRACEBACK_EVIDENCE_RE = re.compile(
+    r"\btraceback\b|\bstack\s+trace\b|(?:^|\s)调用栈(?:\s|$)",
+    re.IGNORECASE,
+)
+
+_REFERENCE_SCOPE_RE = re.compile(
+    r"\b(?:read|follow|inspect|explain|summarize|consult|use|using|"
+    r"according\s+to|based\s+on|described\s+in|specified\s+in|"
+    r"requirements?\s+in|refer\s+to|to\s+match|against)\b"
+    r"|参考|参照|根据|依据|遵循|读取|阅读|查看|解释|总结",
+    re.IGNORECASE,
+)
+_VERIFY_SCOPE_RE = re.compile(
+    r"\b(?:run|execute|validate|verify|check)\b|运行|执行|验证|校验",
+    re.IGNORECASE,
+)
+
+_MUTATION_SCOPE_MARKERS = re.compile(
+    "|".join(f"(?P<{name}>{pattern.pattern})" for name, pattern in (
+        ("negated", _ROUND_NEGATED_MUTATION_RE),
+        ("reference", _REFERENCE_SCOPE_RE),
+        ("verification", _VERIFY_SCOPE_RE),
+        ("mutation", _ROUND_MUTATION_INTENT_RE),
+    )), re.IGNORECASE,
+)
+
+
+def mutation_instruction_scopes(text: str) -> tuple[str, ...]:
+    """Keep only write-governed spans, not all paths in a write-bearing clause.
+
+    Reference and verification phrases end write authority; a later explicit
+    write verb starts it again. Commas preserve an enumerated target list.
+    Paths are masked while locating verbs, so e.g. ``read.py`` is not a verb.
+    This is the shared scope authority for runtime paths and bootstrap hints.
+    """
+    scopes = []
+    for clause in re.split(
+        r"(?:[!?。！？;；]|\.(?=\s|$)|\bbut\b|\bhowever\b)\s*|\n+",
+        str(text or ""), flags=re.IGNORECASE,
+    ):
+        masked = re.sub(
+            r"[\w./-]+\.[A-Za-z][A-Za-z0-9]*",
+            lambda m: " " * len(m.group()), clause,
+        )
+        evidence = _TRACEBACK_EVIDENCE_RE.search(masked)
+        if evidence:
+            masked = masked[:evidence.start()]
+        matches = list(_MUTATION_SCOPE_MARKERS.finditer(masked))
+        for index, match in enumerate(matches):
+            if match.lastgroup != "mutation":
+                continue
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(masked)
+            scopes.append(clause[match.start():end])
+    return tuple(scopes)
+
+
+
+def successful_mutation_operations(name: str, payload: dict, output: str) -> dict[str, str]:
+    """Refine settled file-tool writes using their operation/output contract.
+
+    Called only after actual successful dispatch, not on model-supplied evidence.
+    A non-overwriting create and a delete are enforced by the filesystem tool.
+    An overwriting patch alone cannot prove the target was newly created.
+    """
+    operations = {}
+    if name == "apply_patch":
+        for change in payload.get("changes") or []:
+            if not isinstance(change, dict):
+                continue
+            path = normalize_path(str(change.get("path") or "")).removeprefix("./")
+            op = change.get("op", "replace")
+            if op == "delete":
+                operations[path] = "delete"
+            elif op == "create" and not change.get("overwrite"):
+                operations[path] = "create"
+            elif path not in operations:
+                operations[path] = "change"
+    elif name == "write_file":
+        path = normalize_path(str(payload.get("path") or "")).removeprefix("./")
+        if tool_output_reports_created_path(output, path):
+            operations[path] = "create"
+    elif name == "write_files_batch":
+        created = re.search(r"^Created: \d+\n(.*?)^Updated:", output, re.MULTILINE | re.DOTALL)
+        if created:
+            operations.update({normalize_path(line[2:]).removeprefix("./"): "create"
+                               for line in created[1].splitlines() if line.startswith("- ")})
+    return operations

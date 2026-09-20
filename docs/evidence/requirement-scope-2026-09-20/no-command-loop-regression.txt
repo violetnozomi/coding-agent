@@ -1,0 +1,91 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+........................................................................ [  9%]
+........................................................................ [ 18%]
+........................................................................ [ 27%]
+........................................................................ [ 37%]
+........................................................................ [ 46%]
+........................................................................ [ 55%]
+........................................................................ [ 65%]
+..............................................s.....ss.................. [ 74%]
+........................................................................ [ 83%]
+.................................F
+=================================== FAILURES ===================================
+__ test_strict_progress_soft_boundary_allows_reads_beyond_retired_hard_limit ___
+
+    def test_strict_progress_soft_boundary_allows_reads_beyond_retired_hard_limit():
+        """The real strict loop keeps executing reads after the advisory nudge."""
+        from nz_coder.loop import AgentLoop
+        from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    
+        old, tmp = _tmp_workdir()
+        try:
+            (tmp / "tests").mkdir()
+            tokens = " ".join(f"token_{index}" for index in range(10))
+            (tmp / "app.py").write_text(f"value = '{tokens}'\n", encoding="utf-8")
+            (tmp / "tests" / "test_app.py").write_text(
+                "def test_value():\n    assert True\n",
+                encoding="utf-8",
+            )
+            localized_calls = [
+                FakeToolCall("read_file", {"path": "app.py"}, call_id="source"),
+                FakeToolCall(
+                    "read_file",
+                    {"path": "tests/test_app.py"},
+                    call_id="test",
+                ),
+                *[
+                    FakeToolCall(
+                        "grep_search",
+                        {"pattern": f"token_{index}", "path": "app.py"},
+                        call_id=f"grep-{index}",
+                    )
+                    for index in range(10)
+                ],
+            ]
+            fake = FakeClient([
+                FakeResponse(FakeMessage(tool_calls=localized_calls)),
+                FakeResponse(FakeMessage(tool_calls=[
+                    FakeToolCall(
+                        "grep_search", {"pattern": f"late-clue-{index}", "path": "app.py"},
+                        call_id=f"late-{index}",
+                    )
+                    for index in range(8)
+                ])),
+                FakeResponse(FakeMessage(tool_calls=[
+                    FakeToolCall(
+                        "grep_search",
+                        {"pattern": "beyond-old-limit-one", "path": "app.py"},
+                        call_id="beyond-one",
+                    ),
+                ])),
+                FakeResponse(FakeMessage(tool_calls=[
+                    FakeToolCall(
+                        "grep_search",
+                        {"pattern": "beyond-old-limit-two", "path": "app.py"},
+                        call_id="beyond-two",
+                    ),
+                ])),
+                FakeResponse(FakeMessage("continued after soft convergence")),
+            ])
+            messages = [{"role": "user", "content": "Fix the bug in app.py"}]
+            agent = AgentLoop(
+                "test",
+                permission_mode="auto",
+                client=fake,
+                trace_enabled=False,
+            )
+    
+            with scoped_runtime_overrides(strict_local_tools=True):
+                status = _run_agent(agent, messages, stream=False)
+    
+>           assert status["status"] == "completed"
+E           AssertionError: assert 'max_turns' == 'completed'
+E             
+E             - completed
+E             + max_turns
+
+tests/test_loop_fake.py:421: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_loop_fake.py::test_strict_progress_soft_boundary_allows_reads_beyond_retired_hard_limit
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 678 passed, 3 skipped, 2 deselected in 162.32s (0:02:42)

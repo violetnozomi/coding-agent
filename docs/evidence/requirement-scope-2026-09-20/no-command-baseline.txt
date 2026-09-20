@@ -1,0 +1,59 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_ test_explicit_file_obligation_without_declared_test_still_blocks_missing_work[Create migration-notes.md] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7edf59e82d70>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-398/test_explicit_file_obligation_0')
+instruction = 'Create migration-notes.md'
+
+    @pytest.mark.parametrize('instruction', ['Create migration-notes.md', 'Delete obsolete.md', 'Rename obsolete.md to migration-notes.md'])
+    def test_explicit_file_obligation_without_declared_test_still_blocks_missing_work(monkeypatch, tmp_path, instruction):
+        actions = _small(tmp_path)[:1]
+        actions.append('Done.')
+        result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions, label='no-command-' + instruction.split()[0].lower())
+>       assert result.status.value != 'completed'
+E       AssertionError: assert 'completed' != 'completed'
+E        +  where 'completed' = <RunStatus.COMPLETED: 'completed'>.value
+E        +    where <RunStatus.COMPLETED: 'completed'> = RunResult(status=<RunStatus.COMPLETED: 'completed'>, final_text='Done.', messages=({'role': 'user', 'content': 'Create...0, 'verification_results': 0, 'tool_failures': 0, 'limitations': []}}, 'raw_status': 'completed', 'changed_files': []}).status
+
+tests/runtime/test_requirement_scope_runtime.py:414: AssertionError
+_ test_explicit_file_obligation_without_declared_test_still_blocks_missing_work[Delete obsolete.md] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7edf5c8be060>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-398/test_explicit_file_obligation_1')
+instruction = 'Delete obsolete.md'
+
+    @pytest.mark.parametrize('instruction', ['Create migration-notes.md', 'Delete obsolete.md', 'Rename obsolete.md to migration-notes.md'])
+    def test_explicit_file_obligation_without_declared_test_still_blocks_missing_work(monkeypatch, tmp_path, instruction):
+        actions = _small(tmp_path)[:1]
+        actions.append('Done.')
+        result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions, label='no-command-' + instruction.split()[0].lower())
+>       assert result.status.value != 'completed'
+E       AssertionError: assert 'completed' != 'completed'
+E        +  where 'completed' = <RunStatus.COMPLETED: 'completed'>.value
+E        +    where <RunStatus.COMPLETED: 'completed'> = RunResult(status=<RunStatus.COMPLETED: 'completed'>, final_text='Done.', messages=({'role': 'user', 'content': 'Delete...0, 'verification_results': 0, 'tool_failures': 0, 'limitations': []}}, 'raw_status': 'completed', 'changed_files': []}).status
+
+tests/runtime/test_requirement_scope_runtime.py:414: AssertionError
+_ test_explicit_file_obligation_without_declared_test_still_blocks_missing_work[Rename obsolete.md to migration-notes.md] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7edf59926f90>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-398/test_explicit_file_obligation_2')
+instruction = 'Rename obsolete.md to migration-notes.md'
+
+    @pytest.mark.parametrize('instruction', ['Create migration-notes.md', 'Delete obsolete.md', 'Rename obsolete.md to migration-notes.md'])
+    def test_explicit_file_obligation_without_declared_test_still_blocks_missing_work(monkeypatch, tmp_path, instruction):
+        actions = _small(tmp_path)[:1]
+        actions.append('Done.')
+        result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions, label='no-command-' + instruction.split()[0].lower())
+>       assert result.status.value != 'completed'
+E       AssertionError: assert 'completed' != 'completed'
+E        +  where 'completed' = <RunStatus.COMPLETED: 'completed'>.value
+E        +    where <RunStatus.COMPLETED: 'completed'> = RunResult(status=<RunStatus.COMPLETED: 'completed'>, final_text='Done.', messages=({'role': 'user', 'content': 'Rename...0, 'verification_results': 0, 'tool_failures': 0, 'limitations': []}}, 'raw_status': 'completed', 'changed_files': []}).status
+
+tests/runtime/test_requirement_scope_runtime.py:414: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_explicit_file_obligation_without_declared_test_still_blocks_missing_work[Create migration-notes.md]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_explicit_file_obligation_without_declared_test_still_blocks_missing_work[Delete obsolete.md]
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_explicit_file_obligation_without_declared_test_still_blocks_missing_work[Rename obsolete.md to migration-notes.md]
+3 failed, 48 deselected in 1.37s

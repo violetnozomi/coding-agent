@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 
 from nz_coder.runtime.agent.task_policy import (
     is_documentation_file,
+    mutation_instruction_scopes,
     task_forbids_test_changes,
     task_wants_tests,
 )
@@ -70,6 +71,7 @@ class Requirement:
     satisfaction_mode: str = "mixed"
     depends_on: tuple[str, ...] = ()
     required_evidence: tuple[str, ...] = ()
+    artifact_operations: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,7 @@ class TaskContract:
                     "expected_artifacts": list(item.expected_artifacts),
                     "depends_on": list(item.depends_on),
                     "required_evidence": list(item.required_evidence),
+                    "artifact_operations": [list(pair) for pair in item.artifact_operations],
                 }
                 for item in self.requirements
             ],
@@ -140,6 +143,16 @@ class TaskContract:
                 raw.get("expected_artifacts") or [],
                 workspace=workspace,
             )
+            operations = []
+            for pair in raw.get("artifact_operations") or []:
+                if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                    raise ValueError("artifact_operations must contain path/operation pairs")
+                path, operation = pair
+                if path not in artifacts or operation not in {"change", "create", "delete"}:
+                    raise ValueError("invalid artifact operation or unbound path")
+                if any(prior[0] == path for prior in operations):
+                    raise ValueError("duplicate artifact operation path")
+                operations.append((path, operation))
             depends_on = tuple(dict.fromkeys(
                 str(item).strip()
                 for item in (raw.get("depends_on") or [])
@@ -172,6 +185,7 @@ class TaskContract:
                 satisfaction_mode=satisfaction_mode,
                 depends_on=depends_on,
                 required_evidence=required_evidence,
+                artifact_operations=tuple(operations),
             ))
         known_ids = {item.id for item in requirements}
         for item in requirements:
@@ -304,7 +318,10 @@ class RequirementLedger:
         item = self.items.get(requirement_id)
         return item.status if item is not None else "pending"
 
-    def observe_mutation(self, generation: int, paths: list[str] | tuple[str, ...]) -> None:
+    def observe_mutation(
+        self, generation: int, paths: list[str] | tuple[str, ...],
+        *, operations: dict[str, str] | None = None,
+    ) -> None:
         """Record successful writes and invalidate stale semantic verification."""
         normalized_paths = tuple(dict.fromkeys(
             path for path in (_normalize_path(item) for item in paths) if path
@@ -331,10 +348,17 @@ class RequirementLedger:
                 continue
             progress.mutation_generation = generation
             for path in matched:
+                operation = (operations or {}).get(path, "change")
+                # The latest existence-changing operation supersedes the old
+                # fact. An ordinary edit keeps a prior successful creation.
+                progress.evidence[:] = [e for e in progress.evidence if not (
+                    e.path == path and (e.type == "file_deleted" or operation == "delete")
+                )]
                 self._append_evidence(progress, EvidenceRef(
                     type=(
-                        "test_added"
-                        if progress.requirement.kind == "test"
+                        "file_deleted" if operation == "delete"
+                        else "file_created" if operation == "create"
+                        else "test_added" if progress.requirement.kind == "test"
                         else "file_changed"
                     ),
                     path=path,
@@ -345,6 +369,7 @@ class RequirementLedger:
             if (
                 progress.requirement.kind in {"docs", "artifact"}
                 and progress.requirement.satisfaction_mode == "deterministic"
+                and self._has_artifact_evidence(progress)
             ):
                 progress.status = "satisfied"
             else:
@@ -462,10 +487,17 @@ class RequirementLedger:
 
     @staticmethod
     def _has_artifact_evidence(progress: RequirementProgress) -> bool:
-        return any(
-            item.type in {"file_changed", "test_added", "symbol_present"}
-            for item in progress.evidence
-        )
+        operations = dict(progress.requirement.artifact_operations)
+        types = {
+            "change": {"file_changed", "file_created", "test_added", "symbol_present"},
+            "create": {"file_created"},
+            "delete": {"file_deleted"},
+        }
+        paths = progress.requirement.expected_artifacts
+        if not paths:
+            return any(e.type in types["change"] for e in progress.evidence)
+        return all(any(e.path == path and e.type in types[operations.get(path, "change")]
+                       for e in progress.evidence) for path in paths)
 
     @classmethod
     def _required_evidence_satisfied(
@@ -534,14 +566,13 @@ def derive_task_contract(
 ) -> TaskContract:
     """Build a conservative zero-call contract from explicit user intent.
 
-    A deterministic contract is only enforceable when the request contains a
-    validated exact acceptance command.  Without one, returning an empty
-    contract avoids turning model-inferred prose into an unsatisfiable hard
-    completion gate.
+    Behavior contracts require a validated exact acceptance command. Explicit
+    file lifecycle/documentation requests can instead reuse the deterministic
+    artifact contract, without inventing a test obligation for those tasks.
     """
     text = " ".join(str(task_text or "").split())
     command = " ".join(str(acceptance_command or "").split())
-    if not text or not command:
+    if not text:
         return TaskContract()
 
     lowered = text.casefold()
@@ -554,6 +585,20 @@ def derive_task_contract(
         workspace=workspace or Path.cwd(),
         explicit_path_allowlist=explicit_path_allowlist,
     )
+    from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_operations
+    mutation_operations = extract_explicit_mutation_operations(text)
+    hard_artifact_intent = any(
+        operation in {"create", "delete"} or is_documentation_file(path)
+        for path, operation in mutation_operations.items()
+    )
+    if not command:
+        if not hard_artifact_intent:
+            return TaskContract()
+        paths = tuple(path for path in resolution.required_paths
+                      if path in mutation_operations and (
+                          artifact_allowlist is None or path in artifact_allowlist
+                      ))
+        return derive_round_artifact_contract(text, artifact_paths=paths, workspace=workspace)
     allowed_artifacts = (
         None
         if artifact_allowlist is None
@@ -584,6 +629,10 @@ def derive_task_contract(
             "description": description,
             "kind": kind,
             "expected_artifacts": list(artifacts),
+            "artifact_operations": [
+                [path, mutation_operations[path]] for path in artifacts
+                if path in mutation_operations
+            ],
             "satisfaction_mode": mode,
             "depends_on": [],
             "required_evidence": (
@@ -596,7 +645,7 @@ def derive_task_contract(
         f"Implement the requested behavior: {text[:900]}",
         artifacts=resolution.required_for("behavior"),
     )
-    if task_wants_tests(text):
+    if task_wants_tests(text) or resolution.required_for("test"):
         test_artifacts = resolution.required_for("test")
         if test_artifacts:
             for artifact in test_artifacts:
@@ -607,9 +656,10 @@ def derive_task_contract(
                 )
         else:
             add("test", "Add or update the explicitly requested test coverage.")
-    if _contains_any(lowered, (
-        "readme", "documentation", "docs", "document ", "文档", "说明",
-    )):
+    if resolution.required_for("docs") or _contains_any(
+        " ".join(mutation_instruction_scopes(text)).casefold(),
+        ("readme", "documentation", "docs", "document ", "文档", "说明"),
+    ):
         add(
             "docs",
             "Update the explicitly requested documentation.",
@@ -621,7 +671,8 @@ def derive_task_contract(
         "兼容", "保持现有", "公开 api", "不破坏",
     )):
         add("compatibility", "Preserve the requested compatibility guarantees.")
-    add("verification", f"Pass the exact acceptance command: {command}")
+    if command:
+        add("verification", f"Pass the exact acceptance command: {command}")
     constraints = (
         ["Do not modify test files."]
         if task_forbids_test_changes(text) else []
@@ -643,6 +694,9 @@ def derive_round_artifact_contract(
 ) -> TaskContract:
     """Build only deterministic artifact obligations from explicit write targets."""
     text = " ".join(str(task_text or "").split())
+    from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_operations
+
+    operations = extract_explicit_mutation_operations(text)
     requirements: list[dict] = []
     for raw_path in artifact_paths[:20]:
         path = _normalize_path(raw_path)
@@ -655,6 +709,7 @@ def derive_round_artifact_contract(
             "description": f"Update the explicitly requested artifact: {path}",
             "kind": kind,
             "expected_artifacts": [path],
+            "artifact_operations": [[path, operations.get(path, "change")]],
             "satisfaction_mode": "deterministic",
             "depends_on": [],
             "required_evidence": [],
@@ -815,6 +870,7 @@ def _requirement_signature(requirement: Requirement) -> tuple:
         requirement.expected_artifacts,
         requirement.satisfaction_mode,
         requirement.required_evidence,
+        requirement.artifact_operations,
     )
 
 
@@ -827,6 +883,7 @@ def _requirement_with_id(requirement: Requirement, requirement_id: str) -> Requi
         satisfaction_mode=requirement.satisfaction_mode,
         depends_on=requirement.depends_on,
         required_evidence=requirement.required_evidence,
+        artifact_operations=requirement.artifact_operations,
     )
 
 

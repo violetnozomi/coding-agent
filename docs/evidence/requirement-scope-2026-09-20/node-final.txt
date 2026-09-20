@@ -1,0 +1,26 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+.........F.                                                              [100%]
+=================================== FAILURES ===================================
+__ test_explicit_node_test_mutation_is_independent_of_green_execution[False] ___
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x754308ededd0>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-378/test_explicit_node_test_mutati0')
+modify_test = False
+
+    @pytest.mark.parametrize('modify_test', [False, True])
+    def test_explicit_node_test_mutation_is_independent_of_green_execution(monkeypatch, node_project, modify_test):
+        (node_project / 'index.js').write_text('module.exports = x => x;\n')
+        actions = [[_tool('read_file', path='literal.test.cjs')]]
+        if modify_test:
+            actions.append([_tool('edit_file', path='literal.test.cjs',
+                                  old_text="test('Unicode hyphen'", new_text="test('Unicode literal hyphen'")])
+        actions += [TEST, 'Node test passed.']
+        result, state, *_ = _run(monkeypatch, node_project, actions,
+            task='Modify literal.test.cjs and run node --test literal.test.cjs.')
+>       assert state['verification_contract']['passed'] is True
+E       assert None is True
+
+tests/runtime/test_node_verification_runtime.py:269: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_node_verification_runtime.py::test_explicit_node_test_mutation_is_independent_of_green_execution[False]
+1 failed, 10 passed in 5.49s

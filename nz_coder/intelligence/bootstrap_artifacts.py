@@ -6,6 +6,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from nz_coder.runtime.agent.task_policy import (
+    is_documentation_file, is_test_file, mutation_instruction_scopes,
+)
+
 
 _IGNORED_PARTS = frozenset({
     ".git", ".hg", ".mypy_cache", ".nz-coder", ".pytest_cache",
@@ -81,20 +85,19 @@ def resolve_bootstrap_artifacts(
     """Resolve high-confidence artifacts using only bounded filesystem facts."""
     root = Path(workspace).resolve()
     text = " ".join(str(task_text or "").split())
-    lowered = text.casefold()
     if not text or not root.is_dir():
         return BootstrapArtifactResolution()
 
     paths = _workspace_files(root, max_files=max_files)
-    allowed_explicit_paths = (
-        None
-        if explicit_path_allowlist is None
-        else {
-            normalized
-            for raw in explicit_path_allowlist
-            if (normalized := _safe_relative(raw))
-        }
-    )
+    if explicit_path_allowlist is None:
+        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
+
+        explicit_path_allowlist = tuple(extract_explicit_mutation_paths(text, limit=20))
+    allowed_explicit_paths = {
+        normalized
+        for raw in explicit_path_allowlist
+        if (normalized := _safe_relative(raw))
+    }
     by_name: dict[str, list[str]] = {}
     by_stem: dict[str, list[str]] = {}
     for path in paths:
@@ -122,26 +125,19 @@ def resolve_bootstrap_artifacts(
 
     normalized_text = text.replace("\\", "/")
     explicit_mentions = list(_PATH_RE.findall(normalized_text))
-    if allowed_explicit_paths is not None:
-        explicit_mentions.extend(_BASENAME_FILE_RE.findall(normalized_text))
+    explicit_mentions.extend(_BASENAME_FILE_RE.findall(normalized_text))
     for match in dict.fromkeys(explicit_mentions):
         normalized = _safe_relative(match)
         if (
             normalized
-            and (
-                allowed_explicit_paths is None
-                or normalized in allowed_explicit_paths
-            )
-            and (
-            normalized in paths or _looks_like_explicit_file(normalized)
-            )
+            and (normalized in paths or _looks_like_explicit_file(normalized))
         ):
             add(
                 normalized,
                 1.0,
-                _role_for_path(normalized),
-                True,
-                "explicit path",
+                _role_for_path(normalized) if normalized in allowed_explicit_paths else "context",
+                normalized in allowed_explicit_paths,
+                "explicit mutation target" if normalized in allowed_explicit_paths else "reference or verification path",
                 allow_missing=True,
             )
 
@@ -149,16 +145,20 @@ def resolve_bootstrap_artifacts(
     # Do not feed traceback or verification-command paths back into semantic
     # surface inference, where a distant verb such as "fix" could otherwise
     # promote `src/_pytest/runner.py` to a required mutation artifact.
-    semantic_text = _PATH_RE.sub(" ", normalized_text)
-    if allowed_explicit_paths is not None:
-        semantic_text = _BASENAME_FILE_RE.sub(" ", semantic_text)
+    # Only write-governed prose can infer hard surfaces. Keep explicit context
+    # paths above as navigation candidates; never promote them through stems.
+    mutation_text = "; ".join(mutation_instruction_scopes(normalized_text))
+    semantic_text = _PATH_RE.sub(" ", mutation_text)
+    semantic_text = _BASENAME_FILE_RE.sub(" ", semantic_text)
     words = tuple(dict.fromkeys(
         word.casefold() for word in _WORD_RE.findall(semantic_text)
     ))
-    mentions_tests = any(marker in lowered for marker in _TEST_MARKERS)
-    mentions_docs = any(marker in lowered for marker in _DOC_MARKERS)
+    mentions_tests = any(marker in mutation_text.casefold() for marker in _TEST_MARKERS)
+    mentions_docs = any(marker in semantic_text.casefold() for marker in _DOC_MARKERS)
 
-    if mentions_docs:
+    if mentions_docs and not any(
+        item.required and item.role == "docs" for item in resolved.values()
+    ):
         for name in ("readme.md", "readme.rst", "readme.txt", "readme"):
             selected = _select_nearest(by_name.get(name, []), words)
             if selected:
@@ -184,7 +184,7 @@ def resolve_bootstrap_artifacts(
         ]
         if len(source_matches) == 1:
             source = source_matches[0]
-            if _surface_has_behavior_action(lowered, surface):
+            if _surface_has_behavior_action(mutation_text.casefold(), surface):
                 add(source, 0.95, "behavior", True, "unique action surface")
             else:
                 add(source, 0.75, "candidate", False, "mentioned source surface")
@@ -204,7 +204,7 @@ def resolve_bootstrap_artifacts(
     has_required_behavior = any(
         item.required and item.role == "behavior" for item in resolved.values()
     )
-    if not has_required_behavior and any(marker in lowered for marker in _BEHAVIOR_MARKERS):
+    if not has_required_behavior and mentions_tests:
         for surface in mentioned_surfaces:
             source_matches = [
                 path for path in by_stem.get(surface, [])
@@ -282,10 +282,9 @@ def _looks_like_explicit_file(path: str) -> bool:
 
 
 def _role_for_path(path: str) -> str:
-    name = PurePosixPath(path).name.casefold()
-    if name.startswith("readme") or "/docs/" in f"/{path.casefold()}/":
+    if is_documentation_file(path):
         return "docs"
-    if name.startswith("test_") or name.endswith("_test.py") or "/tests/" in f"/{path}":
+    if is_test_file(path):
         return "test"
     return "behavior"
 

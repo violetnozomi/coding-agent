@@ -1,0 +1,8 @@
+--- a/migration-notes.md
++++ b/migration-notes.md
+@@ -0,0 +1 @@
++obsolete
+--- a/obsolete.md
++++ b/obsolete.md
+@@ -1 +0,0 @@
+-obsolete

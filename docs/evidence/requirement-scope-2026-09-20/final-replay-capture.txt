@@ -1,0 +1,3 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+....................................................                     [100%]
+52 passed in 16.57s

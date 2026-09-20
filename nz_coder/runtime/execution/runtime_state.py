@@ -27,6 +27,8 @@ from nz_coder.runtime.agent.task_policy import (
     is_documentation_file,
     is_exact_test_command,
     is_test_file,
+    mutation_instruction_scopes,
+    successful_mutation_operations,
     task_forbids_test_changes,
     task_wants_tests,
     update_ephemeral_scratch_lifecycle,
@@ -65,32 +67,6 @@ _EXPLICIT_TASK_LIST_REQUEST_RE = re.compile(
     r"(?:\b(?:use|maintain|create|keep|show|update)\s+"
     r"(?:a\s+|the\s+)?(?:todo(?:\s+(?:list|checklist))?|checklist|task\s+list)\b)"
     r"|(?:(?:使用|维护|创建|保留|显示|更新).{0,4}(?:待办|任务清单|检查清单))",
-    re.IGNORECASE,
-)
-_ROUND_MUTATION_INTENT_RE = re.compile(
-    r"(?:\b(?:add|change|complete|create|delete|document|edit|fix|implement|"
-    r"modify|refactor|remove|rename|replace|update|write)\b|"
-    r"新增|添加|创建|删除|文档化|编辑|修复|实现|修改|改动|移除|重命名|替换|更新|编写|完成)",
-    re.IGNORECASE,
-)
-_ROUND_NEGATED_MUTATION_RE = re.compile(
-    r"(?:\b(?:do\s+not|don't|without)\s+"
-    r"(?:change|changing|create|creating|delete|deleting|edit|editing|modify|"
-    r"modifying|remove|removing|rename|renaming|replace|replacing|update|"
-    r"updating|write|writing)\b|"
-    r"不要|不得|无需|不需要|不修改|不改动|不更新|不编辑|不删除)",
-    re.IGNORECASE,
-)
-_VERIFICATION_CLAUSE_RE = re.compile(
-    r"(?:\b(?:and\s+)?(?:then\s+)?(?:run|execute)\s+"
-    r"(?:(?:python|python3)(?:\.\d+)?\s+-m\s+)?"
-    r"(?:pytest|py\.test|tox|nox|node\s+--test)\b)"
-    r"|(?:(?:并|然后)?运行\s*(?:(?:python|python3)\s+-m\s+)?"
-    r"(?:pytest|py\.test|tox|nox|node\s+--test)\b)",
-    re.IGNORECASE,
-)
-_TRACEBACK_EVIDENCE_RE = re.compile(
-    r"\btraceback\b|\bstack\s+trace\b|(?:^|\s)调用栈(?:\s|$)",
     re.IGNORECASE,
 )
 
@@ -546,7 +522,7 @@ class RuntimeState:
     def set_acceptance_criteria_from_text(self, text: str, limit: int = 5) -> None:
         """从用户任务文本中提取轻量 L1 验收标准。"""
         self.acceptance_criteria = extract_acceptance_criteria(text, limit=limit)
-        self.requested_paths = extract_explicit_mutation_paths(text, limit=limit)
+        self.requested_paths = extract_explicit_mutation_paths(text, limit=20)
         self.task_mode = detect_task_mode(text)
         self.wants_tests = task_wants_tests(text)
         self.forbids_test_changes = task_forbids_test_changes(text)
@@ -568,11 +544,11 @@ class RuntimeState:
             self.acceptance_criteria,
             limit=limit,
         )
-        current_paths = extract_explicit_mutation_paths(text, limit=limit)
+        current_paths = extract_explicit_mutation_paths(text, limit=20)
         self.requested_paths = _prioritized_unique(
             current_paths,
             self.requested_paths,
-            limit=limit,
+            limit=20,
         )
 
         forbids_test_changes = task_forbids_test_changes(text)
@@ -599,7 +575,7 @@ class RuntimeState:
                 ),
             )
         else:
-            mutation_paths = extract_explicit_mutation_paths(text, limit=limit)
+            mutation_paths = extract_explicit_mutation_paths(text, limit=20)
             if mutation_paths:
                 self._merge_current_round_artifacts(
                     text,
@@ -939,14 +915,14 @@ class RuntimeState:
             int(self.provider_turns_by_outcome.get(outcome) or 0) + 1
         )
 
-    def _observe_requirement_mutation(self, paths: list[str]) -> None:
+    def _observe_requirement_mutation(self, paths: list[str], operations: dict[str, str] | None = None) -> None:
         if not self.requirement_ledger:
             return
         ledger = self.requirement_ledger_snapshot()
-        ledger.observe_mutation(self.mutation_generation, paths)
+        ledger.observe_mutation(self.mutation_generation, paths, operations=operations)
         self.requirement_ledger = ledger.to_dict()
 
-    def _record_workspace_mutation(self, paths: list[str]) -> None:
+    def _record_workspace_mutation(self, paths: list[str], operations: dict[str, str] | None = None) -> None:
         """Advance mutation-scoped state for one settled workspace write."""
         self.last_edit_turn = self.turn_count
         self.edits_this_run += 1
@@ -963,7 +939,7 @@ class RuntimeState:
         self.strict_progress_nudges = 0
         self.strict_progress_blocks = 0
         self.transition = "edited_source"
-        self._observe_requirement_mutation(paths)
+        self._observe_requirement_mutation(paths, operations)
 
     def task_complexity(self) -> str:
         """按当前 diff/edit 规模给任务分级：L0/L1/L2/L3。"""
@@ -1367,7 +1343,9 @@ class RuntimeState:
                 if ephemeral:
                     self.transition = "edited_scratch"
                 else:
-                    self._record_workspace_mutation(paths)
+                    self._record_workspace_mutation(
+                        paths, successful_mutation_operations(name, tool_input, output)
+                    )
 
         # ── diff_status ──────────────────────────────────────────────────────
         elif name == "diff_status":
@@ -2006,7 +1984,7 @@ def extract_explicit_paths(text: str, limit: int = 5) -> list[str]:
     if not isinstance(text, str) or not text.strip():
         return []
     paths: list[str] = []
-    pattern = r"(?<![\w/.-])([\w./-]+\.(?:py|pyi|js|jsx|mjs|cjs|ts|tsx|go|rs|java|rb|php|c|cc|cpp|h|hpp|md|json|ya?ml))"
+    pattern = r"(?<![\w/.-])([\w./-]+\.(?:py|pyi|js|jsx|mjs|cjs|ts|tsx|go|rs|java|rb|php|c|cc|cpp|h|hpp|md|rst|txt|json|ya?ml))(?![\w-]|\.[A-Za-z0-9_])"
     scan_text = text.replace("\\", "/")
     for match in re.findall(pattern, scan_text, flags=re.IGNORECASE):
         normalized = _normalize_explicit_task_path(match)
@@ -2020,30 +1998,30 @@ def extract_explicit_paths(text: str, limit: int = 5) -> list[str]:
 
 def extract_explicit_mutation_paths(text: str, limit: int = 5) -> list[str]:
     """Return paths explicitly coupled to a non-negated write instruction."""
-    if not isinstance(text, str) or not text.strip():
-        return []
-    paths: list[str] = []
-    clauses = re.split(
-        r"(?:[!?。！？;,，；]|\.(?=\s|$)|\bbut\b|\bhowever\b)\s*|\n+",
-        text,
-        flags=re.IGNORECASE,
-    )
-    for clause in clauses:
-        negated = _ROUND_NEGATED_MUTATION_RE.search(clause)
-        positive_clause = clause[:negated.start()] if negated else clause
-        evidence = _TRACEBACK_EVIDENCE_RE.search(positive_clause)
-        if evidence:
-            positive_clause = positive_clause[:evidence.start()]
-        verification = _VERIFICATION_CLAUSE_RE.search(positive_clause)
-        if verification:
-            positive_clause = positive_clause[:verification.start()]
-        if not _ROUND_MUTATION_INTENT_RE.search(positive_clause):
-            continue
-        for path in extract_explicit_paths(positive_clause, limit=limit):
-            _append_unique(paths, path, limit)
-            if len(paths) >= limit:
-                return paths
-    return paths
+    return list(extract_explicit_mutation_operations(text, limit=limit))
+
+
+def extract_explicit_mutation_operations(text: str, limit: int = 20) -> dict[str, str]:
+    """Retain create/delete/rename intent alongside the existing path authority."""
+    operations: dict[str, str] = {}
+    for scope in mutation_instruction_scopes(text):
+        paths = extract_explicit_paths(scope, limit=limit)
+        operation = "change"
+        if re.match(r"create\b|新建|创建|新增", scope, re.IGNORECASE):
+            operation = "create"
+        elif re.match(r"(?:delete|remove)\b|删除|移除", scope, re.IGNORECASE):
+            operation = "delete"
+        elif re.match(r"rename\b|重命名", scope, re.IGNORECASE):
+            # Both ends are obligations; copying without removal is not rename.
+            if len(paths) == 2:
+                for path, action in zip(paths, ("delete", "create")):
+                    if path in operations or len(operations) < limit:
+                        operations[path] = action
+                continue
+        for path in paths:
+            if path in operations or len(operations) < limit:
+                operations[path] = operation
+    return operations
 
 
 def _normalize_explicit_task_path(value: str) -> str:

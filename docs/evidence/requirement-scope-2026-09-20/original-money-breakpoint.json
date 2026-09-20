@@ -1,0 +1,264 @@
+{
+  "source_commit": "d53605d8acf03af6c8030e06879b0aa0863c9f92",
+  "production_fix_baseline": "0885c87",
+  "source": "docs/evidence/complex-paired-2026-09-20/M/nzcoder",
+  "final_state": {
+    "requested_paths": [
+      "REQUIREMENTS.md"
+    ],
+    "task_contract": {
+      "objective": "Implement the invoice pricing migration described in REQUIREMENTS.md. Replace float-based totals with an immutable Quote returned by billing.quote.quote_order; migrate every in-repository consumer and its tests to the new API, and document it. Preserve the documented consumer output formats while adding currency correctness, quantity/price validation and discounts. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+      "requirements": [
+        {
+          "id": "R1",
+          "description": "Implement the requested behavior: Implement the invoice pricing migration described in REQUIREMENTS.md. Replace float-based totals with an immutable Quote returned by billing.quote.quote_order; migrate every in-repository consumer and its tests to the new API, and document it. Preserve the documented consumer output formats while adding currency correctness, quantity/price validation and discounts. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+          "kind": "behavior",
+          "expected_artifacts": [
+            "REQUIREMENTS.md"
+          ],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": []
+        },
+        {
+          "id": "R2",
+          "description": "Update the explicitly requested documentation.",
+          "kind": "docs",
+          "expected_artifacts": [
+            "README.md"
+          ],
+          "satisfaction_mode": "mixed",
+          "depends_on": [],
+          "required_evidence": []
+        },
+        {
+          "id": "R3",
+          "description": "Preserve the requested compatibility guarantees.",
+          "kind": "compatibility",
+          "expected_artifacts": [],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": [
+            "semantic_review"
+          ]
+        },
+        {
+          "id": "R4",
+          "description": "Pass the exact acceptance command: python -m pytest -q tests",
+          "kind": "verification",
+          "expected_artifacts": [],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": []
+        }
+      ],
+      "constraints": [],
+      "acceptance_commands": [
+        "python -m pytest -q tests"
+      ],
+      "contract_version": 2
+    },
+    "requirement_ledger": {
+      "items": [
+        {
+          "requirement": {
+            "id": "R1",
+            "description": "Implement the requested behavior: Implement the invoice pricing migration described in REQUIREMENTS.md. Replace float-based totals with an immutable Quote returned by billing.quote.quote_order; migrate every in-repository consumer and its tests to the new API, and document it. Preserve the documented consumer output formats while adding currency correctness, quantity/price validation and discounts. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+            "kind": "behavior",
+            "expected_artifacts": [
+              "REQUIREMENTS.md"
+            ],
+            "satisfaction_mode": "semantic",
+            "depends_on": [],
+            "required_evidence": []
+          },
+          "status": "pending",
+          "evidence": [],
+          "mutation_generation": 0
+        },
+        {
+          "requirement": {
+            "id": "R2",
+            "description": "Update the explicitly requested documentation.",
+            "kind": "docs",
+            "expected_artifacts": [
+              "README.md"
+            ],
+            "satisfaction_mode": "mixed",
+            "depends_on": [],
+            "required_evidence": []
+          },
+          "status": "satisfied",
+          "evidence": [
+            {
+              "type": "file_changed",
+              "path": "README.md",
+              "command": null,
+              "generation": 8,
+              "fingerprint": null
+            },
+            {
+              "type": "verification_passed",
+              "path": null,
+              "command": "python -m pytest -q tests",
+              "generation": 9,
+              "fingerprint": null
+            }
+          ],
+          "mutation_generation": 9
+        },
+        {
+          "requirement": {
+            "id": "R3",
+            "description": "Preserve the requested compatibility guarantees.",
+            "kind": "compatibility",
+            "expected_artifacts": [],
+            "satisfaction_mode": "semantic",
+            "depends_on": [],
+            "required_evidence": [
+              "semantic_review"
+            ]
+          },
+          "status": "candidate",
+          "evidence": [
+            {
+              "type": "verification_passed",
+              "path": null,
+              "command": "python -m pytest -q tests",
+              "generation": 9,
+              "fingerprint": null
+            }
+          ],
+          "mutation_generation": 9
+        },
+        {
+          "requirement": {
+            "id": "R4",
+            "description": "Pass the exact acceptance command: python -m pytest -q tests",
+            "kind": "verification",
+            "expected_artifacts": [],
+            "satisfaction_mode": "semantic",
+            "depends_on": [],
+            "required_evidence": []
+          },
+          "status": "satisfied",
+          "evidence": [
+            {
+              "type": "verification_passed",
+              "path": null,
+              "command": "python -m pytest -q tests",
+              "generation": 9,
+              "fingerprint": null
+            }
+          ],
+          "mutation_generation": 9
+        }
+      ],
+      "latest_generation": 9,
+      "latest_verification_generation": 9
+    },
+    "mutation_generation": 9,
+    "acceptance_mutation_generation": 9,
+    "verification_generation": 9,
+    "verification_contract": {
+      "command": "python -m pytest -q tests",
+      "targets": [
+        "tests"
+      ],
+      "attempted_generation": 9,
+      "attempts": 2,
+      "passed": true,
+      "output": "....................                                                     [100%]\n20 passed in 0.01s",
+      "source": "model",
+      "zone": ""
+    },
+    "completion_review_generation": -1
+  },
+  "terminal": [
+    {
+      "time": 1789874239.4253294,
+      "run_id": "20260920_111455_3963f395",
+      "request_id": 25,
+      "event": "terminal_boundary_settled",
+      "boundary": "natural_completion",
+      "decision": "finalize",
+      "status": "max_turns",
+      "reason": "hard_requirements_unresolved",
+      "completed_turns": 24,
+      "nominal_turns": 24,
+      "hard_cap": 24,
+      "contract_executed": false,
+      "contract_required": true,
+      "contract_passed": true,
+      "mutation_generation": 9,
+      "unresolved_requirements": [
+        "R1",
+        "R3"
+      ],
+      "semantic_review_pending_before": false,
+      "semantic_review_pending_after": false,
+      "semantic_review_generation": -1,
+      "early_tool_completion_candidate": false
+    }
+  ],
+  "acceptance": {
+    "passed": true,
+    "checks": {
+      "public": {
+        "argv": [
+          "/home/pyh/miniconda3/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "-p",
+          "no:cacheprovider",
+          "tests"
+        ],
+        "exit_code": 0,
+        "stdout": "....................                                                     [100%]\n20 passed in 0.01s\n",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      "independent": {
+        "argv": [
+          "/home/pyh/miniconda3/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "-p",
+          "no:cacheprovider",
+          "/home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py"
+        ],
+        "exit_code": 0,
+        "stdout": "...................                                                      [100%]\n19 passed in 0.02s\n",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      }
+    },
+    "changed_files": [
+      "README.md",
+      "billing/quote.py",
+      "cli.py",
+      "jobs.py",
+      "mobile.py",
+      "reporting.py",
+      "tests/test_consumers.py",
+      "web.py"
+    ],
+    "source_hashes": {
+      "README.md": "c161dbc6ba2c56fbaff3c2ef4c80d9a271716fa51bc77e223182006ff9ef3398",
+      "REQUIREMENTS.md": "37b543633f7cc036163840ca97ed9f6256e4e456b1f4b93d2c2e959cc44b1bcf",
+      "billing/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "billing/legacy.py": "90a7a0e14f58c8e9da76db1ea9661d2f7f38b77b879a48c331fd638d8d130a9d",
+      "billing/quote.py": "1565eaace53b6bf0ab197f3dcfdc0e2fe82921a203a6e6b825aec5c2a75060d8",
+      "cli.py": "b20a3f21a1826ae662245d237bc8998ea1b1c086582bf8ab6f6bab84621f76d7",
+      "jobs.py": "608583234e10220e678f722dd317cff8d54624e9c7ebf1760298400fb5747b57",
+      "mobile.py": "dd3f2a5649dfa87870afca4129c0a09206d8a94cad2bcd16e625f5f6508218f2",
+      "reporting.py": "f6f41aaa4e3d7d9a8f17dedb01236c97c8e7780a45d9061a335f22bfe8b7d5a0",
+      "tests/test_consumers.py": "45d49eacaf5e380f565cf80b9baded35fb9eefa017db68ceaf28ca6a1f16c854",
+      "web.py": "def6db44757521c12aecc8f2c301f1c52f8d1cb0fc6269acee0f11425d629105"
+    }
+  },
+  "request_counts": {
+    "main": 24,
+    "auxiliary": 1
+  }
+}
