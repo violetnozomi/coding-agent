@@ -1,0 +1,10 @@
+{
+  "README.md": "340cb9aed5da815809e704ad99437c49dbec0d1da4dd02a681824405f7c69eda",
+  "REQUIREMENTS.md": "a0cae14964c8bb29da487f07a25bd1aa0b5bb756fe1c5762a48ce751ff80ac79",
+  "cli.py": "fb6d11bded03d61da29a3394e1fbb5bee016b45e1396aa3d0d55f492761abf17",
+  "store.py": "a7a1060492f2fdce22919b0b0151007daf5a379c0127d5e937e0de6d802257db",
+  "sync.py": "e4ec935bfcb3519df3adebfd218fb8894ad947200b8a681935a69638209ac3dd",
+  "tests/test_callers.py": "359bd9329e1a815969b75ade4233a11cb205a96adddcfd72ffba694ca7d5de00",
+  "tests/test_store.py": "aecff9dd42184738209fe9b6ffd3e2e8b3ae1f8ab9a60db84bea661fd18fd2ef",
+  "tests/test_store_v2.py": "e4e4e87beea90c14793082300fc5e80f216ac22c5e578eca93db88b2a028ddea"
+}

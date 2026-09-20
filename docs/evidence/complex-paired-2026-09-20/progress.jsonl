@@ -1,0 +1,12 @@
+{"event": "run_started", "case": "M", "side": "infcodex", "time": 1789874054.987961}
+{"event": "run_finished", "case": "M", "side": "infcodex", "time": 1789874095.5178187, "counts": {"main": 3, "auxiliary": 0}, "acceptance": false}
+{"event": "run_started", "case": "M", "side": "nzcoder", "time": 1789874095.5284333}
+{"event": "run_finished", "case": "M", "side": "nzcoder", "time": 1789874240.1309083, "counts": {"main": 24, "auxiliary": 1}, "acceptance": true}
+{"event": "run_started", "case": "Q", "side": "nzcoder", "time": 1789874240.1414733}
+{"event": "run_finished", "case": "Q", "side": "nzcoder", "time": 1789874433.4733534, "counts": {"main": 16, "auxiliary": 1}, "acceptance": true}
+{"event": "run_started", "case": "Q", "side": "infcodex", "time": 1789874434.5207043}
+{"event": "run_finished", "case": "Q", "side": "infcodex", "time": 1789874548.0792174, "counts": {"main": 9, "auxiliary": 0}, "acceptance": true}
+{"event": "run_started", "case": "S", "side": "infcodex", "time": 1789874549.125762}
+{"event": "run_finished", "case": "S", "side": "infcodex", "time": 1789874575.0258386, "counts": {"main": 3, "auxiliary": 0}, "acceptance": false}
+{"event": "run_started", "case": "S", "side": "nzcoder", "time": 1789874575.0364718}
+{"event": "run_finished", "case": "S", "side": "nzcoder", "time": 1789874749.7850256, "counts": {"main": 12, "auxiliary": 2}, "acceptance": true}

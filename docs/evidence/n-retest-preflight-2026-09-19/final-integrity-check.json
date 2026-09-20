@@ -1,0 +1,12 @@
+{
+  "historical_directory": "docs/evidence/paid-comparison-2026-09-16",
+  "historical_files": 63,
+  "before_after_identical": true,
+  "initial_seven_hashes_still_identical": true,
+  "production_and_test_diff_empty": true,
+  "HEAD": "0885c874b949792723c515ff098c24d31cd238c9",
+  "remote_main": "0885c874b949792723c515ff098c24d31cd238c9\trefs/heads/main",
+  "worktree_tracked_status": "",
+  "new_artifacts_git_ignored": true,
+  "no_commit_or_push": true
+}

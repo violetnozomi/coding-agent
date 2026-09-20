@@ -1,0 +1,10 @@
+{
+  "README.md": "a576bf215be3580dba11ec2a347696a27706f8bf3d4ec455f3069c7e6afc4a38",
+  "REQUIREMENTS.md": "7a3e48a4e3e7cdcaedb59bdc1e3b524597a1764f00bfaab23a70a1d7ecff9bed",
+  "index.cjs": "d381c6f7be04252e280c53926eeb0b4fdd9621cf183a05f81f14791fb19738b5",
+  "lib/batch.cjs": "e3df305d640107a76bbb6b656dd9ef0c51b9e3cabc54e25319b1cf08206afaad",
+  "lib/pool.cjs": "c787c366ebc00d2d17dd1ceeee20efcc2a024552e65bc90ba1f7ef5768c906a0",
+  "package.json": "5f99124db57570f6d19ecf5c35ab29326ab192f73d7836392c63844846d0a3a6",
+  "tests/batch.test.cjs": "ac8f36a9baebf4e2cf554e3825fd3e610613f2e97902229b2b802d151f936ab8",
+  "tests/pool.test.cjs": "614120dc65d6e6dda800f80de1baec0eed5426fee34f1fc19c68a00e17d348a7"
+}

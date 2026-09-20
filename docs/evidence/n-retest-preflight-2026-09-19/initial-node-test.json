@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/home/pyh/miniconda3/bin/python",
+    "/home/pyh/nzcoder/tests/evaluation/fixtures/offline_exec.py",
+    "node",
+    "--test",
+    "literal.test.cjs"
+  ],
+  "cwd": "/tmp/nz-n-preflight-0885c87-20260919/initial",
+  "exit_code": 1,
+  "stdout": "\u2714 ordinary literals still match (0.42ms)\n\u2716 literals can be embedded in Unicode regular expressions (0.113066ms)\n\u2714 non-string inputs remain rejected (0.201459ms)\n\u2139 tests 3\n\u2139 suites 0\n\u2139 pass 2\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 34.021173\n\n\u2716 failing tests:\n\ntest at literal.test.cjs:10:1\n\u2716 literals can be embedded in Unicode regular expressions (0.113066ms)\n  SyntaxError: Invalid regular expression: /^a\\-b$/u: Invalid escape\n      at new RegExp (<anonymous>)\n      at TestContext.<anonymous> (/tmp/nz-n-preflight-0885c87-20260919/initial/literal.test.cjs:12:18)\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1325:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)\n      at Test.postRun (node:internal/test_runner/test:1465:19)\n      at Test.run (node:internal/test_runner/test:1390:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n",
+  "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n",
+  "kind": "initial-state check, not final acceptance"
+}

@@ -1,0 +1,1 @@
+Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification.

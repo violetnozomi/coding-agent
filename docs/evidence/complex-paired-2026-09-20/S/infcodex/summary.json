@@ -1,0 +1,45 @@
+{
+  "case": "S",
+  "side": "infcodex",
+  "requests": 3,
+  "responses": 3,
+  "usage": {
+    "main": {
+      "requests": 3,
+      "usage_available": 3,
+      "prompt_tokens": 58746,
+      "completion_tokens": 5531,
+      "total_tokens": 64277,
+      "prompt_cache_hit_tokens": 25856,
+      "prompt_cache_miss_tokens": 32890
+    }
+  },
+  "terminal": {
+    "capture_time": 1789874574.3780086,
+    "capture_request_id": 3,
+    "type": "run.result",
+    "success": true,
+    "signal": "",
+    "signalReason": "",
+    "sessionId": "complex-pair",
+    "limitReached": false
+  },
+  "acceptance_passed": false,
+  "checks": {
+    "public": {
+      "exit_code": 0,
+      "tail": "...                                                                      [100%]\n3 passed in 0.00s\n"
+    },
+    "independent": {
+      "exit_code": 1,
+      "tail": "\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_corrupt_reads_and_saves_never_rewrite[{\"version\":2,\"revision\":1,\"data\":{\"a\":1,\"a\":2}}]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_corrupt_reads_and_saves_never_rewrite[{\"x\":NaN}]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_corrupt_reads_and_saves_never_rewrite[{\"x\":{}}]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_validation_before_touching_storage\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_io_failure_atomicity_cleanup_and_exception_identity[True-fsync]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_io_failure_atomicity_cleanup_and_exception_identity[True-replace]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_io_failure_atomicity_cleanup_and_exception_identity[False-fsync]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_io_failure_atomicity_cleanup_and_exception_identity[False-replace]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_replace_uses_same_dir_after_fsync_and_preserves_mode\n1 failed, 18 errors in 0.05s\n"
+    }
+  },
+  "process": {
+    "exit_code": 0,
+    "elapsed_s": 25.32399047492072,
+    "harness_timeout": false
+  },
+  "tool_executions": 8,
+  "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+}

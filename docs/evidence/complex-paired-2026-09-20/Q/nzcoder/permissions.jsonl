@@ -1,0 +1,8 @@
+{"tool": "bash", "input": {"command": "ls -la; ls -la lib tests 2>/dev/null; cat package.json 2>/dev/null; cat index.cjs 2>/dev/null; cat lib/index.cjs 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "node --version"}, "allowed": false}
+{"tool": "bash", "input": {"command": "node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | tail -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | grep -E \"^(not ok|\u2139 (pass|fail|tests))\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "for i in 1 2 3; do node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | tail -8; done"}, "allowed": false}
+{"tool": "bash", "input": {"command": "node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | tail -8"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff --stat 2>/dev/null; echo \"---\"; git status --short 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "node --test tests/pool.test.cjs tests/batch.test.cjs", "_nz_runtime_contract": true}, "allowed": true}

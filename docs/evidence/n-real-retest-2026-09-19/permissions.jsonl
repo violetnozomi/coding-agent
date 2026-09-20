@@ -1,0 +1,2 @@
+{"tool": "bash", "input": {"command": "node --test literal.test.cjs 2>&1 | tail -30"}, "allowed": true}
+{"tool": "bash", "input": {"command": "node --test literal.test.cjs", "_nz_runtime_contract": true}, "allowed": true}

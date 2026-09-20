@@ -1,0 +1,8 @@
+{
+  "network_calls": 0,
+  "redaction": true,
+  "main_25_denied": true,
+  "auxiliary_9_denied": true,
+  "permission_ast_identical_to_previous_nz": true,
+  "frozen_tasks_and_acceptance_hashes_match": true
+}

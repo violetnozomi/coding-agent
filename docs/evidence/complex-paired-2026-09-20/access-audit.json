@@ -1,0 +1,268 @@
+[
+  {
+    "case": "M",
+    "side": "nzcoder",
+    "tools": [
+      "apply_patch",
+      "bash",
+      "edit_file",
+      "grep_search",
+      "list_directory",
+      "read_file",
+      "report_stall_judgment",
+      "verify_changed_files",
+      "write_file",
+      "write_files_batch"
+    ],
+    "paths": [
+      ".",
+      "/tmp/complex-paired-20260920/M/nzcoder/workspace",
+      "README.md",
+      "REQUIREMENTS.md",
+      "billing/__init__.py",
+      "billing/legacy.py",
+      "billing/quote.py",
+      "cli.py",
+      "jobs.py",
+      "mobile.py",
+      "reporting.py",
+      "tests/test_consumers.py",
+      "web.py"
+    ],
+    "commands": [
+      {
+        "request_id": 2,
+        "command": "for f in billing/__init__.py billing/legacy.py web.py cli.py jobs.py mobile.py reporting.py tests/test_consumers.py README.md; do echo \"===== $f =====\"; cat -n \"$f\"; done"
+      },
+      {
+        "request_id": 4,
+        "command": "cd /tmp/complex-paired-20260920/M/nzcoder/workspace && python -m pytest -q tests 2>&1 | tail -5 && python -V"
+      },
+      {
+        "request_id": 15,
+        "command": "cd /tmp/complex-paired-20260920/M/nzcoder/workspace && git show HEAD:tests/test_consumers.py; echo \"=== consumers ===\"; git show HEAD:web.py; git show HEAD:cli.py; git show HEAD:jobs.py; git show HEAD:mobile.py; git show HEAD:reporting.py"
+      },
+      {
+        "request_id": 16,
+        "command": "python -m pytest -q tests"
+      },
+      {
+        "request_id": 18,
+        "command": "python -m pytest -q tests 2>&1 | tail -20"
+      },
+      {
+        "request_id": 19,
+        "command": "python -m pytest -q tests; echo \"--- legacy usage ---\"; python - <<'PY'\nimport subprocess,glob\nfor f in glob.glob('*.py')+glob.glob('billing/*.py')+glob.glob('tests/*.py'):\n    t=open(f).read()\n    if 'legacy' in t or 'total_amount' in t:\n        print(f, [l for l in t.splitlines() if 'legacy' in l or 'total_amount' in l])\nPY"
+      },
+      {
+        "request_id": 23,
+        "command": "python -m pytest -q tests"
+      },
+      {
+        "request_id": 24,
+        "command": "git show HEAD:tests/test_consumers.py | head -80; echo \"=== quote.py at HEAD? ===\"; git show HEAD --stat | head -20"
+      }
+    ],
+    "outside_explicit_paths": [],
+    "suspicious_commands": [],
+    "manual_review": "Commands inspected: workspace-local source/git/test/runtime probes only; npm test invokes existing local script. No observed acceptance/cross-side reads. Not a syscall audit or hermetic filesystem guarantee."
+  },
+  {
+    "case": "M",
+    "side": "infcodex",
+    "tools": [
+      "bash",
+      "read",
+      "todo_create"
+    ],
+    "paths": [
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/README.md",
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/REQUIREMENTS.md",
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/billing/__init__.py",
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/billing/legacy.py",
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/cli.py",
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/jobs.py",
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/mobile.py",
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/reporting.py",
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/tests/test_consumers.py",
+      "/tmp/complex-paired-20260920/M/infcodex/workspace/web.py"
+    ],
+    "commands": [
+      {
+        "request_id": 2,
+        "command": "cd /tmp/complex-paired-20260920/M/infcodex/workspace && ls -laR && echo \"---STATUS---\" && git status && echo \"---PY---\" && python --version && python -m pytest --version"
+      }
+    ],
+    "outside_explicit_paths": [],
+    "suspicious_commands": [],
+    "manual_review": "Commands inspected: workspace-local source/git/test/runtime probes only; npm test invokes existing local script. No observed acceptance/cross-side reads. Not a syscall audit or hermetic filesystem guarantee."
+  },
+  {
+    "case": "Q",
+    "side": "nzcoder",
+    "tools": [
+      "apply_patch",
+      "bash",
+      "emit_sidecar_verdict",
+      "list_directory",
+      "read_file",
+      "review_run_evidence",
+      "verify_changed_files",
+      "write_file"
+    ],
+    "paths": [
+      ".",
+      "README.md",
+      "REQUIREMENTS.md",
+      "index.cjs",
+      "lib/batch.cjs",
+      "lib/pool.cjs",
+      "package.json",
+      "tests/batch.test.cjs",
+      "tests/pool.test.cjs"
+    ],
+    "commands": [
+      {
+        "request_id": 2,
+        "command": "ls -la; ls -la lib tests 2>/dev/null; cat package.json 2>/dev/null; cat index.cjs 2>/dev/null; cat lib/index.cjs 2>/dev/null"
+      },
+      {
+        "request_id": 5,
+        "command": "node --version"
+      },
+      {
+        "request_id": 9,
+        "command": "node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | tail -40"
+      },
+      {
+        "request_id": 10,
+        "command": "node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | grep -E \"^(not ok|ℹ (pass|fail|tests))\""
+      },
+      {
+        "request_id": 11,
+        "command": "for i in 1 2 3; do node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | tail -8; done"
+      },
+      {
+        "request_id": 12,
+        "command": "node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | tail -8"
+      },
+      {
+        "request_id": 13,
+        "command": "git diff --stat 2>/dev/null; echo \"---\"; git status --short 2>/dev/null"
+      }
+    ],
+    "outside_explicit_paths": [],
+    "suspicious_commands": [],
+    "manual_review": "Commands inspected: workspace-local source/git/test/runtime probes only; npm test invokes existing local script. No observed acceptance/cross-side reads. Not a syscall audit or hermetic filesystem guarantee."
+  },
+  {
+    "case": "Q",
+    "side": "infcodex",
+    "tools": [
+      "bash",
+      "edit",
+      "read",
+      "write"
+    ],
+    "paths": [
+      "/tmp/complex-paired-20260920/Q/infcodex/workspace/README.md",
+      "/tmp/complex-paired-20260920/Q/infcodex/workspace/REQUIREMENTS.md",
+      "/tmp/complex-paired-20260920/Q/infcodex/workspace/index.cjs",
+      "/tmp/complex-paired-20260920/Q/infcodex/workspace/lib/batch.cjs",
+      "/tmp/complex-paired-20260920/Q/infcodex/workspace/lib/pool.cjs",
+      "/tmp/complex-paired-20260920/Q/infcodex/workspace/package.json",
+      "/tmp/complex-paired-20260920/Q/infcodex/workspace/tests/batch.test.cjs",
+      "/tmp/complex-paired-20260920/Q/infcodex/workspace/tests/pool.test.cjs"
+    ],
+    "commands": [
+      {
+        "request_id": 4,
+        "command": "cd /tmp/complex-paired-20260920/Q/infcodex/workspace && node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1"
+      },
+      {
+        "request_id": 6,
+        "command": "cd /tmp/complex-paired-20260920/Q/infcodex/workspace && node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1"
+      },
+      {
+        "request_id": 8,
+        "command": "cd /tmp/complex-paired-20260920/Q/infcodex/workspace && echo \"=== public exports ===\" && node -e \"const m=require('./index.cjs'); console.log(Object.keys(m).sort()); console.log('mapLimit:', typeof m.mapLimit, '| processBatch:', typeof m.processBatch)\" && echo && echo \"=== node --test tests/pool.test.cjs tests/batch.test.cjs ===\" && node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | tail -12 && echo && echo \"=== npm test ===\" && npm test 2>&1 | tail -12"
+      }
+    ],
+    "outside_explicit_paths": [],
+    "suspicious_commands": [],
+    "manual_review": "Commands inspected: workspace-local source/git/test/runtime probes only; npm test invokes existing local script. No observed acceptance/cross-side reads. Not a syscall audit or hermetic filesystem guarantee."
+  },
+  {
+    "case": "S",
+    "side": "nzcoder",
+    "tools": [
+      "apply_patch",
+      "bash",
+      "emit_sidecar_verdict",
+      "list_directory",
+      "read_file",
+      "review_run_evidence",
+      "verify_changed_files",
+      "write_files_batch"
+    ],
+    "paths": [
+      ".",
+      "README.md",
+      "REQUIREMENTS.md",
+      "cli.py",
+      "store.py",
+      "sync.py",
+      "tests/test_callers.py",
+      "tests/test_store.py",
+      "tests/test_store_v2.py"
+    ],
+    "commands": [
+      {
+        "request_id": 1,
+        "command": "ls -la && echo \"---\" && find . -type f -not -path './.git/*' | head -50"
+      },
+      {
+        "request_id": 6,
+        "command": "python -m pytest -q tests 2>&1 | tail -40"
+      },
+      {
+        "request_id": 7,
+        "command": "git status --short; echo \"---\"; git diff --stat"
+      },
+      {
+        "request_id": 10,
+        "command": "python -m pytest -q tests"
+      }
+    ],
+    "outside_explicit_paths": [],
+    "suspicious_commands": [],
+    "manual_review": "Commands inspected: workspace-local source/git/test/runtime probes only; npm test invokes existing local script. No observed acceptance/cross-side reads. Not a syscall audit or hermetic filesystem guarantee."
+  },
+  {
+    "case": "S",
+    "side": "infcodex",
+    "tools": [
+      "bash",
+      "glob",
+      "read",
+      "todo_create"
+    ],
+    "paths": [
+      "/tmp/complex-paired-20260920/S/infcodex/workspace/README.md",
+      "/tmp/complex-paired-20260920/S/infcodex/workspace/REQUIREMENTS.md",
+      "/tmp/complex-paired-20260920/S/infcodex/workspace/cli.py",
+      "/tmp/complex-paired-20260920/S/infcodex/workspace/store.py",
+      "/tmp/complex-paired-20260920/S/infcodex/workspace/sync.py",
+      "/tmp/complex-paired-20260920/S/infcodex/workspace/tests/test_store.py"
+    ],
+    "commands": [
+      {
+        "request_id": 2,
+        "command": "cd /tmp/complex-paired-20260920/S/infcodex/workspace && python --version && python -m pytest -q tests 2>&1 | tail -20 && echo \"---git---\" && git log --oneline -5 && git status --short"
+      }
+    ],
+    "outside_explicit_paths": [],
+    "suspicious_commands": [],
+    "manual_review": "Commands inspected: workspace-local source/git/test/runtime probes only; npm test invokes existing local script. No observed acceptance/cross-side reads. Not a syscall audit or hermetic filesystem guarantee."
+  }
+]

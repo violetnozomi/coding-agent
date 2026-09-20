@@ -1,0 +1,55 @@
+{
+  "A": {
+    "request": 3,
+    "snapshot_after": 21,
+    "workspace_version": 1,
+    "generation": 1,
+    "hash": "4094a0ac1f2bf2b659023ec6fe14133c1b8dfd8e667a6c7937b3d0771ce84520",
+    "strength": "strong; contemporaneous file snapshot plus frozen acceptance"
+  },
+  "B": {
+    "request": 5,
+    "origin": "runtime-owned exact contract command after main stop",
+    "tool_result_line": 9,
+    "exit": 0,
+    "pass": 3,
+    "fail": 0,
+    "earlier_request_4": "real Node output 3 pass but only pipeline exit known; not trusted exact execution",
+    "strength": "strong"
+  },
+  "C": {
+    "request": 5,
+    "event_line": 124,
+    "first_bound_snapshot": 36,
+    "generation": 1,
+    "contract_source": "runtime",
+    "main_model_saw_current_bound_evidence": false,
+    "auxiliary_saw_current_bound_evidence": true,
+    "strength": "strong"
+  },
+  "D": {
+    "main_request_completed": 5,
+    "auxiliary_request": 6,
+    "snapshot": 41,
+    "ledger": "R1/R2/R3 satisfied",
+    "semantic_generation": 1,
+    "strength": "strong for known runtime conditions; not exhaustive behavioral proof"
+  },
+  "E": {
+    "event_line": 130,
+    "snapshot": 42,
+    "boundary": "natural_completion",
+    "reason": "semantic_review_and_ledger_satisfied",
+    "strength": "strong"
+  },
+  "F": {
+    "main_request": 5,
+    "main_finish_reason": "stop",
+    "auxiliary_request": 6,
+    "auxiliary_finish_reason": "tool_calls",
+    "auxiliary_verdict": "accept",
+    "runtime_status": "completed",
+    "early_completion": false,
+    "strength": "strong"
+  }
+}

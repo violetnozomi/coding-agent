@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "/home/pyh/miniconda3/bin/python",
+    "/home/pyh/nzcoder/tests/evaluation/fixtures/offline_exec.py",
+    "/home/pyh/miniconda3/bin/python",
+    "/home/pyh/nzcoder/docs/evidence/n-real-retest-2026-09-19/run-nz.py"
+  ],
+  "cwd": "/tmp/nz-n-real-0885c87-20260919/workspace",
+  "env": {
+    "HOME": "/tmp/nz-n-real-0885c87-20260919/home",
+    "KODAX_HOME": "/tmp/nz-n-real-0885c87-20260919/home/.kodax",
+    "PATH": "/tmp/nz-n-real-0885c87-20260919/bin:/home/pyh/miniconda3/bin:/usr/bin:/bin",
+    "LANG": "C.UTF-8",
+    "PYTHONPATH": "/home/pyh/nzcoder",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "SMOKE_SOCKET": "/tmp/nz-real-n-uds-2a1zlnwy/provider.sock",
+    "SMOKE_OUTPUT": "/home/pyh/nzcoder/docs/evidence/n-real-retest-2026-09-19",
+    "TERM": "dumb",
+    "NO_COLOR": "1",
+    "CASE": "N",
+    "TASK_PROMPT": "Make escaped literals usable with new RegExp(..., 'u'), including hyphens. Preserve ordinary literal matching and rejection of non-string inputs. Run node --test literal.test.cjs and report the change and verification."
+  }
+}

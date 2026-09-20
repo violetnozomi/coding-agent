@@ -1,0 +1,187 @@
+[
+  {
+    "request_id": 1,
+    "purpose": "coding",
+    "status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_RL8cobESsvZO9rBGYjrU8580",
+        "name": "list_directory",
+        "arguments": "{\"path\": \".\", \"depth\": 2}"
+      },
+      {
+        "id": "call_01_mt7kQO2FbQxMdWGxw2QD1677",
+        "name": "glob_search",
+        "arguments": "{\"pattern\": \"**/literal*\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 7515,
+      "completion_tokens": 97,
+      "total_tokens": 7612,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 13
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 7515
+    }
+  },
+  {
+    "request_id": 2,
+    "purpose": "coding",
+    "status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_ET_NThXmwcGZIMpL3C2dVQ74681",
+        "name": "read_file",
+        "arguments": "{\"path\": \"index.js\"}"
+      },
+      {
+        "id": "call_01_ET_tsD5diCatCE1D5zMj53U2297",
+        "name": "read_file",
+        "arguments": "{\"path\": \"literal.test.cjs\"}"
+      },
+      {
+        "id": "call_02_ET_TueeS25xaEJB9MTwKFuV2065",
+        "name": "read_file",
+        "arguments": "{\"path\": \"readme.md\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 7703,
+      "completion_tokens": 100,
+      "total_tokens": 7803,
+      "prompt_tokens_details": {
+        "cached_tokens": 6912
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 6912,
+      "prompt_cache_miss_tokens": 791
+    }
+  },
+  {
+    "request_id": 3,
+    "purpose": "coding",
+    "status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_mwd7xUMsjEHXuSqD4dfU1211",
+        "name": "edit_file",
+        "arguments": "{\"path\": \"index.js\", \"old_text\": \"const matchOperatorsRegex = /[|\\\\\\\\{}()[\\\\]^$+*?.-]/g;\", \"new_text\": \"const matchOperatorsRegex = /[|\\\\\\\\{}()[\\\\]^$+*?.]/g;\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8544,
+      "completion_tokens": 618,
+      "total_tokens": 9162,
+      "prompt_tokens_details": {
+        "cached_tokens": 6912
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 506
+      },
+      "prompt_cache_hit_tokens": 6912,
+      "prompt_cache_miss_tokens": 1632
+    }
+  },
+  {
+    "request_id": 4,
+    "purpose": "coding",
+    "status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_lAvFBDOyzRJkYSw61g0o7764",
+        "name": "read_file",
+        "arguments": "{\"path\": \"index.js\"}"
+      },
+      {
+        "id": "call_01_xJ8aOO0GBL3xCetMKBS72132",
+        "name": "bash",
+        "arguments": "{\"command\": \"node --test literal.test.cjs 2>&1 | tail -30\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8689,
+      "completion_tokens": 888,
+      "total_tokens": 9577,
+      "prompt_tokens_details": {
+        "cached_tokens": 6912
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 808
+      },
+      "prompt_cache_hit_tokens": 6912,
+      "prompt_cache_miss_tokens": 1777
+    }
+  },
+  {
+    "request_id": 5,
+    "purpose": "coding",
+    "status": 200,
+    "finish_reason": [
+      "stop"
+    ],
+    "content": "Change: in `index.js`, removed the hyphen from `matchOperatorsRegex`, so `escape('-')` now returns `-` instead of `\\-`. A lone `\\-` is an invalid identity escape under `new RegExp(..., 'u')`, so literals containing hyphens previously threw in Unicode mode.\n\n```js\nconst matchOperatorsRegex = /[|\\\\{}()[\\]^$+*?.]/g;\n```\n\nPreserved behavior: non-string inputs still throw `TypeError`, and all other escaped operators are untouched, so ordinary literal matching is unchanged.\n\nVerification: `node --test literal.test.cjs` → 3 pass, 0 fail (ordinary literals, Unicode-embedding with hyphens, non-string rejection).",
+    "tool_calls": [],
+    "usage": {
+      "prompt_tokens": 8959,
+      "completion_tokens": 209,
+      "total_tokens": 9168,
+      "prompt_tokens_details": {
+        "cached_tokens": 6912
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 52
+      },
+      "prompt_cache_hit_tokens": 6912,
+      "prompt_cache_miss_tokens": 2047
+    }
+  },
+  {
+    "request_id": 6,
+    "purpose": "verifier",
+    "status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_UheFn3Qd1BSopjL6Yvx85453",
+        "name": "emit_sidecar_verdict",
+        "arguments": "{\"verdict\": \"accept\", \"reason\": \"The diff removes the hyphen from the escape operator class. Under 'u' flag, '\\\\-' is an invalid identity escape (only SyntaxCharacter and '/'), so leaving it in caused new RegExp(..., 'u') to throw. Removing the hyphen keeps ordinary literal matching intact because an unescaped '-' outside a character class is a literal hyphen, and non-string rejection is untouched. The exact acceptance command passes 3/3, exercising ordinary matching, hyphen embedding in Unicode regex, and non-string rejection. This satisfies the stated ask.\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 2595,
+      "completion_tokens": 160,
+      "total_tokens": 2755,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 2595
+    }
+  }
+]

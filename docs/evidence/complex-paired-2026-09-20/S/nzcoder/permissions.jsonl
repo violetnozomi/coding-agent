@@ -1,0 +1,4 @@
+{"tool": "bash", "input": {"command": "ls -la && echo \"---\" && find . -type f -not -path './.git/*' | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests 2>&1 | tail -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git status --short; echo \"---\"; git diff --stat"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests"}, "allowed": true}

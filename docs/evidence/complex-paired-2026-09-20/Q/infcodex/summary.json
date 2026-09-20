@@ -1,0 +1,45 @@
+{
+  "case": "Q",
+  "side": "infcodex",
+  "requests": 9,
+  "responses": 9,
+  "usage": {
+    "main": {
+      "requests": 9,
+      "usage_available": 9,
+      "prompt_tokens": 380299,
+      "completion_tokens": 24278,
+      "total_tokens": 404577,
+      "prompt_cache_hit_tokens": 16000,
+      "prompt_cache_miss_tokens": 364299
+    }
+  },
+  "terminal": {
+    "capture_time": 1789874547.6253572,
+    "capture_request_id": 9,
+    "type": "run.result",
+    "success": true,
+    "signal": "",
+    "signalReason": "",
+    "sessionId": "complex-pair",
+    "limitReached": false
+  },
+  "acceptance_passed": true,
+  "checks": {
+    "public": {
+      "exit_code": 0,
+      "tail": " limit with TypeError (1.476396ms)\n✔ rejects a non-callable worker with TypeError, even for empty input (0.140899ms)\n✔ validates before invoking the worker (0.091422ms)\n✔ rejects a malformed signal with TypeError (0.228253ms)\n✔ does not mutate the input array (0.166531ms)\n✔ preserves input order regardless of completion order (29.969373ms)\n✔ never exceeds the limit and fills free slots eagerly (20.609675ms)\n✔ starts each item exactly once (0.116877ms)\n✔ supports a limit larger than the item count (0.048917ms)\n✔ drains after the first failure, preserves its identity, and starts no more work (9.363809ms)\n✔ handles a synchronous worker throw and stops scheduling (0.101138ms)\n✔ first observed worker error wins and secondary rejections stay handled (20.353506ms)\n✔ already-aborted signal starts no work and rejects with the reason identity (0.138633ms)\n✔ preserves a non-Error abort reason (0.111438ms)\n✔ abort mid-run stops scheduling, drains in-flight work, and rejects with the reason (9.661491ms)\n✔ does not resolve before an uncooperative in-flight worker settles (30.558374ms)\n✔ abort observed before a worker error wins (10.331618ms)\n✔ worker error observed before an abort wins (5.374665ms)\n✔ removes abort listeners after a successful settlement (0.179666ms)\n✔ removes abort listeners after an abort rejection (5.594257ms)\n✔ removes abort listeners after a worker failure (0.111556ms)\nℹ tests 37\nℹ suites 0\nℹ pass 37\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 178.086811\n"
+    },
+    "independent": {
+      "exit_code": 0,
+      "tail": "✔ fills capacity, refills freed slots and preserves order and ownership (2.323519ms)\n✔ first failure stops scheduling and drains secondary failures (0.389335ms)\n✔ abort drains in-flight, forwards signal and removes listeners (0.376825ms)\n✔ pre-abort, empty validation and sync throw identity (0.509852ms)\n✔ first observed failure wins over later abort (0.795874ms)\n✔ batch forwards concurrency and abort (0.385308ms)\n✔ documents drain and cancellation (0.168465ms)\nℹ tests 7\nℹ suites 0\nℹ pass 7\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 29.249182\n"
+    }
+  },
+  "process": {
+    "exit_code": 0,
+    "elapsed_s": 113.19723156106193,
+    "harness_timeout": false
+  },
+  "tool_executions": 17,
+  "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+}

@@ -1,0 +1,16 @@
+{
+  "head": "0885c874b949792723c515ff098c24d31cd238c9",
+  "remote_main": "0885c874b949792723c515ff098c24d31cd238c9\trefs/heads/main",
+  "python": "/home/pyh/miniconda3/bin/python",
+  "python_version": "3.13.12 | packaged by Anaconda, Inc. | (main, Feb 24 2026, 16:13:31) [GCC 14.3.0]",
+  "node": "/home/pyh/.local/lib/python3.13/site-packages/playwright/driver/node",
+  "node_version": "v24.18.1",
+  "node_sha256": "f3432a45b03b2da0d270095fdd8813dc34cbea73f5fc8b18c7a384b7cf9b333a",
+  "historical_node_link": "/tmp/nz-paid-comparison-20260916/N/bin/node",
+  "authorization": "missing_new_paid_authorization",
+  "real_N_executed": false,
+  "main_requests": 0,
+  "auxiliary_requests": 0,
+  "embedding_requests": 0,
+  "online_evaluations": 0
+}

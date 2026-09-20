@@ -1,0 +1,9 @@
+{"tool": "bash", "input": {"command": "cd /tmp/complex-paired-20260920/M/nzcoder/workspace && python -m pytest -q tests 2>&1 | tail -5 && python -V"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /tmp/complex-paired-20260920/M/nzcoder/workspace && git show HEAD:tests/test_consumers.py; echo \"=== consumers ===\"; git show HEAD:web.py; git show HEAD:cli.py; git show HEAD:jobs.py; git show HEAD:mobile.py; git show HEAD:reporting.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests", "workdir": "/tmp/complex-paired-20260920/M/nzcoder/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile billing/quote.py", "_nz_runtime_verification_stage": "static"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests 2>&1 | tail -20", "workdir": "/tmp/complex-paired-20260920/M/nzcoder/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests; echo \"--- legacy usage ---\"; python - <<'PY'\nimport subprocess,glob\nfor f in glob.glob('*.py')+glob.glob('billing/*.py')+glob.glob('tests/*.py'):\n    t=open(f).read()\n    if 'legacy' in t or 'total_amount' in t:\n        print(f, [l for l in t.splitlines() if 'legacy' in l or 'total_amount' in l])\nPY", "workdir": "/tmp/complex-paired-20260920/M/nzcoder/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pytest tests/test_consumers.py::test_consumers_share_the_documented_output_formats", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests", "workdir": "/tmp/complex-paired-20260920/M/nzcoder/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git show HEAD:tests/test_consumers.py | head -80; echo \"=== quote.py at HEAD? ===\"; git show HEAD --stat | head -20", "workdir": "/tmp/complex-paired-20260920/M/nzcoder/workspace"}, "allowed": false}

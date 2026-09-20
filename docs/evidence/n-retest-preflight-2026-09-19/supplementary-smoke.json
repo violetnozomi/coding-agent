@@ -1,0 +1,253 @@
+{
+  "kind": "offline supplementary smoke; controlled model boundary, not real N",
+  "commands": [
+    {
+      "command": "echo \"pass\"",
+      "classification": null,
+      "reliable_success": true
+    },
+    {
+      "command": "echo \"node --test literal.test.cjs\"",
+      "classification": null,
+      "reliable_success": true
+    },
+    {
+      "command": "node -e \"console.log(\"pass\")\"",
+      "classification": null,
+      "reliable_success": true
+    },
+    {
+      "command": "node --help",
+      "classification": null,
+      "reliable_success": true
+    },
+    {
+      "command": "node --version",
+      "classification": null,
+      "reliable_success": true
+    },
+    {
+      "command": "node --test literal.test.cjs || true",
+      "classification": "targeted",
+      "reliable_success": false
+    },
+    {
+      "command": "node --test literal.test.cjs | tail -1",
+      "classification": "targeted",
+      "reliable_success": false
+    }
+  ],
+  "node_nonpass": [
+    {
+      "case": "empty_file_counted_by_node_as_one_file_test",
+      "node_exit_code": 0,
+      "node_stdout": "✔ literal.test.cjs (17.633342ms)\nℹ tests 1\nℹ suites 0\nℹ pass 1\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 21.059694\n",
+      "node_stderr": "",
+      "no_tests_recognized": false,
+      "runtime_status": "completed",
+      "mutation_generation": 1,
+      "verification_generation": 1,
+      "contract": {
+        "command": "node --test literal.test.cjs",
+        "targets": [
+          "literal.test.cjs"
+        ],
+        "attempted_generation": 1,
+        "attempts": 1,
+        "passed": true,
+        "output": "✔ literal.test.cjs (16.97354ms)\nℹ tests 1\nℹ suites 0\nℹ pass 1\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 20.47141",
+        "source": "model",
+        "zone": ""
+      },
+      "verification_events": [
+        {
+          "ts": 1789816527.057266,
+          "run_id": "20260919_191526_8ecbfad1",
+          "trace_id": "20260919_191526_8ecbfad1",
+          "session_id": "node-evidence",
+          "agent_id": "agent-56c0c648",
+          "parent_agent_id": null,
+          "parent_trace_id": null,
+          "agent_type": "main",
+          "event": "verification_result",
+          "command": "node --test literal.test.cjs",
+          "stage": "targeted",
+          "status": "passed",
+          "output": "✔ literal.test.cjs (16.97354ms)\nℹ tests 1\nℹ suites 0\nℹ pass 1\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 20.47141"
+        }
+      ],
+      "terminal_boundary": [
+        {
+          "ts": 1789816527.0624998,
+          "run_id": "20260919_191526_8ecbfad1",
+          "trace_id": "20260919_191526_8ecbfad1",
+          "session_id": "node-evidence",
+          "agent_id": "agent-56c0c648",
+          "parent_agent_id": null,
+          "parent_trace_id": null,
+          "agent_type": "main",
+          "event": "terminal_boundary_settled",
+          "boundary": "tool_batch",
+          "decision": "finalize",
+          "status": "completed",
+          "reason": "exact_acceptance_and_ledger_satisfied",
+          "completed_turns": 3,
+          "nominal_turns": 3,
+          "hard_cap": 3,
+          "contract_executed": false,
+          "contract_required": true,
+          "contract_passed": true,
+          "mutation_generation": 1,
+          "unresolved_requirements": [],
+          "semantic_review_pending_before": false,
+          "semantic_review_pending_after": false,
+          "semantic_review_generation": -1,
+          "early_tool_completion_candidate": false
+        }
+      ],
+      "offline_main_responses": 3,
+      "offline_auxiliary_responses": 0
+    },
+    {
+      "case": "all_skipped",
+      "node_exit_code": 0,
+      "node_stdout": "﹣ skipped (0.29467ms) # SKIP\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 0\nℹ cancelled 0\nℹ skipped 1\nℹ todo 0\nℹ duration_ms 31.247402\n",
+      "node_stderr": "",
+      "no_tests_recognized": false,
+      "runtime_status": "completed",
+      "mutation_generation": 1,
+      "verification_generation": 1,
+      "contract": {
+        "command": "node --test literal.test.cjs",
+        "targets": [
+          "literal.test.cjs"
+        ],
+        "attempted_generation": 1,
+        "attempts": 1,
+        "passed": true,
+        "output": "﹣ skipped (0.287711ms) # SKIP\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 0\nℹ cancelled 0\nℹ skipped 1\nℹ todo 0\nℹ duration_ms 32.270424",
+        "source": "model",
+        "zone": ""
+      },
+      "verification_events": [
+        {
+          "ts": 1789816527.4327285,
+          "run_id": "20260919_191527_7de5c634",
+          "trace_id": "20260919_191527_7de5c634",
+          "session_id": "node-evidence",
+          "agent_id": "agent-680b182f",
+          "parent_agent_id": null,
+          "parent_trace_id": null,
+          "agent_type": "main",
+          "event": "verification_result",
+          "command": "node --test literal.test.cjs",
+          "stage": "targeted",
+          "status": "passed",
+          "output": "﹣ skipped (0.287711ms) # SKIP\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 0\nℹ cancelled 0\nℹ skipped 1\nℹ todo 0\nℹ duration_ms 32.270424"
+        }
+      ],
+      "terminal_boundary": [
+        {
+          "ts": 1789816527.4363241,
+          "run_id": "20260919_191527_7de5c634",
+          "trace_id": "20260919_191527_7de5c634",
+          "session_id": "node-evidence",
+          "agent_id": "agent-680b182f",
+          "parent_agent_id": null,
+          "parent_trace_id": null,
+          "agent_type": "main",
+          "event": "terminal_boundary_settled",
+          "boundary": "tool_batch",
+          "decision": "finalize",
+          "status": "completed",
+          "reason": "exact_acceptance_and_ledger_satisfied",
+          "completed_turns": 3,
+          "nominal_turns": 3,
+          "hard_cap": 3,
+          "contract_executed": false,
+          "contract_required": true,
+          "contract_passed": true,
+          "mutation_generation": 1,
+          "unresolved_requirements": [],
+          "semantic_review_pending_before": false,
+          "semantic_review_pending_after": false,
+          "semantic_review_generation": -1,
+          "early_tool_completion_candidate": false
+        }
+      ],
+      "offline_main_responses": 3,
+      "offline_auxiliary_responses": 0
+    },
+    {
+      "case": "zero_tests_empty_suite",
+      "fixture_test_content": "const {describe}=require('node:test');describe('empty',()=>{});\n",
+      "node_exit_code": 0,
+      "node_stdout": "✔ empty (0.220804ms)\nℹ tests 0\nℹ suites 1\nℹ pass 0\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 34.935232\n",
+      "node_stderr": "",
+      "no_tests_recognized": false,
+      "runtime_status": "completed",
+      "mutation_generation": 1,
+      "verification_generation": 1,
+      "contract": {
+        "command": "node --test literal.test.cjs",
+        "targets": [
+          "literal.test.cjs"
+        ],
+        "attempted_generation": 1,
+        "attempts": 1,
+        "passed": true,
+        "output": "✔ empty (0.21782ms)\nℹ tests 0\nℹ suites 1\nℹ pass 0\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 28.132691",
+        "source": "model",
+        "zone": ""
+      },
+      "verification_events": [
+        {
+          "ts": 1789816951.4796476,
+          "run_id": "20260919_192231_1b7dc0de",
+          "trace_id": "20260919_192231_1b7dc0de",
+          "session_id": "node-evidence",
+          "agent_id": "agent-6d954c49",
+          "parent_agent_id": null,
+          "parent_trace_id": null,
+          "agent_type": "main",
+          "event": "verification_result",
+          "command": "node --test literal.test.cjs",
+          "stage": "targeted",
+          "status": "passed",
+          "output": "✔ empty (0.21782ms)\nℹ tests 0\nℹ suites 1\nℹ pass 0\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 28.132691"
+        }
+      ],
+      "terminal_boundary": [
+        {
+          "ts": 1789816951.4840405,
+          "run_id": "20260919_192231_1b7dc0de",
+          "trace_id": "20260919_192231_1b7dc0de",
+          "session_id": "node-evidence",
+          "agent_id": "agent-6d954c49",
+          "parent_agent_id": null,
+          "parent_trace_id": null,
+          "agent_type": "main",
+          "event": "terminal_boundary_settled",
+          "boundary": "tool_batch",
+          "decision": "finalize",
+          "status": "completed",
+          "reason": "exact_acceptance_and_ledger_satisfied",
+          "completed_turns": 3,
+          "nominal_turns": 3,
+          "hard_cap": 3,
+          "contract_executed": false,
+          "contract_required": true,
+          "contract_passed": true,
+          "mutation_generation": 1,
+          "unresolved_requirements": [],
+          "semantic_review_pending_before": false,
+          "semantic_review_pending_after": false,
+          "semantic_review_generation": -1,
+          "early_tool_completion_candidate": false
+        }
+      ],
+      "offline_main_responses": 3,
+      "offline_auxiliary_responses": 0
+    }
+  ]
+}

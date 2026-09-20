@@ -1,0 +1,272 @@
+[
+  {
+    "case": "M",
+    "side": "infcodex",
+    "requests": 3,
+    "responses": 3,
+    "usage": {
+      "main": {
+        "requests": 3,
+        "usage_available": 3,
+        "prompt_tokens": 64521,
+        "completion_tokens": 8698,
+        "total_tokens": 73219,
+        "prompt_cache_hit_tokens": 25600,
+        "prompt_cache_miss_tokens": 38921
+      }
+    },
+    "terminal": {
+      "capture_time": 1789874095.0255463,
+      "capture_request_id": 3,
+      "type": "run.result",
+      "success": true,
+      "signal": "",
+      "signalReason": "",
+      "sessionId": "complex-pair",
+      "limitReached": false
+    },
+    "acceptance_passed": false,
+    "checks": {
+      "public": {
+        "exit_code": 0,
+        "tail": ".                                                                        [100%]\n1 passed in 0.00s\n"
+      },
+      "independent": {
+        "exit_code": 1,
+        "tail": "omplex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_price[bad]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_price[1.2]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_price[None]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[0]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[-1]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[1.5]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[True]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[2]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[None]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_validation_on_empty_order\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_all_five_consumers\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_consumers_use_central_quote\n1 failed, 1 passed, 17 errors in 0.07s\n"
+      }
+    },
+    "process": {
+      "exit_code": 0,
+      "elapsed_s": 40.11044732097071,
+      "harness_timeout": false
+    },
+    "tool_executions": 11,
+    "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+  },
+  {
+    "case": "M",
+    "side": "nzcoder",
+    "requests": 25,
+    "responses": 25,
+    "usage": {
+      "main": {
+        "requests": 24,
+        "usage_available": 24,
+        "prompt_tokens": 423729,
+        "completion_tokens": 23684,
+        "total_tokens": 447413,
+        "prompt_cache_hit_tokens": 161024,
+        "prompt_cache_miss_tokens": 262705
+      },
+      "auxiliary": {
+        "requests": 1,
+        "usage_available": 1,
+        "prompt_tokens": 3487,
+        "completion_tokens": 178,
+        "total_tokens": 3665,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 3487
+      }
+    },
+    "terminal": "max_turns",
+    "acceptance_passed": true,
+    "checks": {
+      "public": {
+        "exit_code": 0,
+        "tail": "....................                                                     [100%]\n20 passed in 0.01s\n"
+      },
+      "independent": {
+        "exit_code": 0,
+        "tail": "...................                                                      [100%]\n19 passed in 0.02s\n"
+      }
+    },
+    "process": {
+      "exit_code": 0,
+      "elapsed_s": 144.18385551008396,
+      "harness_timeout": false
+    },
+    "tool_executions": 36,
+    "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+  },
+  {
+    "case": "Q",
+    "side": "infcodex",
+    "requests": 9,
+    "responses": 9,
+    "usage": {
+      "main": {
+        "requests": 9,
+        "usage_available": 9,
+        "prompt_tokens": 380299,
+        "completion_tokens": 24278,
+        "total_tokens": 404577,
+        "prompt_cache_hit_tokens": 16000,
+        "prompt_cache_miss_tokens": 364299
+      }
+    },
+    "terminal": {
+      "capture_time": 1789874547.6253572,
+      "capture_request_id": 9,
+      "type": "run.result",
+      "success": true,
+      "signal": "",
+      "signalReason": "",
+      "sessionId": "complex-pair",
+      "limitReached": false
+    },
+    "acceptance_passed": true,
+    "checks": {
+      "public": {
+        "exit_code": 0,
+        "tail": " limit with TypeError (1.476396ms)\n✔ rejects a non-callable worker with TypeError, even for empty input (0.140899ms)\n✔ validates before invoking the worker (0.091422ms)\n✔ rejects a malformed signal with TypeError (0.228253ms)\n✔ does not mutate the input array (0.166531ms)\n✔ preserves input order regardless of completion order (29.969373ms)\n✔ never exceeds the limit and fills free slots eagerly (20.609675ms)\n✔ starts each item exactly once (0.116877ms)\n✔ supports a limit larger than the item count (0.048917ms)\n✔ drains after the first failure, preserves its identity, and starts no more work (9.363809ms)\n✔ handles a synchronous worker throw and stops scheduling (0.101138ms)\n✔ first observed worker error wins and secondary rejections stay handled (20.353506ms)\n✔ already-aborted signal starts no work and rejects with the reason identity (0.138633ms)\n✔ preserves a non-Error abort reason (0.111438ms)\n✔ abort mid-run stops scheduling, drains in-flight work, and rejects with the reason (9.661491ms)\n✔ does not resolve before an uncooperative in-flight worker settles (30.558374ms)\n✔ abort observed before a worker error wins (10.331618ms)\n✔ worker error observed before an abort wins (5.374665ms)\n✔ removes abort listeners after a successful settlement (0.179666ms)\n✔ removes abort listeners after an abort rejection (5.594257ms)\n✔ removes abort listeners after a worker failure (0.111556ms)\nℹ tests 37\nℹ suites 0\nℹ pass 37\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 178.086811\n"
+      },
+      "independent": {
+        "exit_code": 0,
+        "tail": "✔ fills capacity, refills freed slots and preserves order and ownership (2.323519ms)\n✔ first failure stops scheduling and drains secondary failures (0.389335ms)\n✔ abort drains in-flight, forwards signal and removes listeners (0.376825ms)\n✔ pre-abort, empty validation and sync throw identity (0.509852ms)\n✔ first observed failure wins over later abort (0.795874ms)\n✔ batch forwards concurrency and abort (0.385308ms)\n✔ documents drain and cancellation (0.168465ms)\nℹ tests 7\nℹ suites 0\nℹ pass 7\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 29.249182\n"
+      }
+    },
+    "process": {
+      "exit_code": 0,
+      "elapsed_s": 113.19723156106193,
+      "harness_timeout": false
+    },
+    "tool_executions": 17,
+    "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+  },
+  {
+    "case": "Q",
+    "side": "nzcoder",
+    "requests": 17,
+    "responses": 17,
+    "usage": {
+      "main": {
+        "requests": 16,
+        "usage_available": 16,
+        "prompt_tokens": 237575,
+        "completion_tokens": 41456,
+        "total_tokens": 279031,
+        "prompt_cache_hit_tokens": 105984,
+        "prompt_cache_miss_tokens": 131591
+      },
+      "auxiliary": {
+        "requests": 1,
+        "usage_available": 1,
+        "prompt_tokens": 10421,
+        "completion_tokens": 207,
+        "total_tokens": 10628,
+        "prompt_cache_hit_tokens": 896,
+        "prompt_cache_miss_tokens": 9525
+      }
+    },
+    "terminal": "completed",
+    "acceptance_passed": true,
+    "checks": {
+      "public": {
+        "exit_code": 0,
+        "tail": "588ms)\n✔ propagates send rejection with identity (0.126879ms)\n✔ forwards options.signal to mapLimit and to send (0.17189ms)\n✔ already-aborted signal starts no sends and rejects with the reason (0.110199ms)\n✔ maps values and preserves falsy results (0.814206ms)\n✔ empty input resolves [] (3.537097ms)\n✔ preserves input order regardless of completion order (30.375556ms)\n✔ worker receives item, index and signal (0.19278ms)\n✔ never exceeds limit in flight (0.330353ms)\n✔ refills a free slot without waiting for the whole batch (0.22011ms)\n✔ starts each item exactly once (0.113024ms)\n✔ does not mutate items (0.098181ms)\n✔ rejects TypeError for invalid arguments before invoking worker (empty input too) (0.319961ms)\n✔ propagates synchronous throw with identity and drains started work (5.515661ms)\n✔ rejects with the first observed async error and preserves identity (0.120163ms)\n✔ secondary failures do not produce unhandled rejections while draining (35.405671ms)\n✔ already-aborted signal rejects with signal.reason and starts no work (0.114557ms)\n✔ already-aborted signal rejects on empty input too (0.061425ms)\n✔ mid-run abort stops scheduling and waits for in-flight work (9.917812ms)\n✔ mid-run abort with non-Error reason preserves identity (10.331682ms)\n✔ abort wins even when an in-flight worker later rejects (9.335192ms)\n✔ removes the installed abort listener after settlement (0.162477ms)\nℹ tests 27\nℹ suites 0\nℹ pass 27\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 135.787559\n"
+      },
+      "independent": {
+        "exit_code": 0,
+        "tail": "✔ fills capacity, refills freed slots and preserves order and ownership (2.38689ms)\n✔ first failure stops scheduling and drains secondary failures (0.382009ms)\n✔ abort drains in-flight, forwards signal and removes listeners (0.378287ms)\n✔ pre-abort, empty validation and sync throw identity (0.508886ms)\n✔ first observed failure wins over later abort (0.795364ms)\n✔ batch forwards concurrency and abort (0.383698ms)\n✔ documents drain and cancellation (0.157163ms)\nℹ tests 7\nℹ suites 0\nℹ pass 7\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 32.848732\n"
+      }
+    },
+    "process": {
+      "exit_code": 0,
+      "elapsed_s": 192.9141537330579,
+      "harness_timeout": false
+    },
+    "tool_executions": 27,
+    "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+  },
+  {
+    "case": "S",
+    "side": "infcodex",
+    "requests": 3,
+    "responses": 3,
+    "usage": {
+      "main": {
+        "requests": 3,
+        "usage_available": 3,
+        "prompt_tokens": 58746,
+        "completion_tokens": 5531,
+        "total_tokens": 64277,
+        "prompt_cache_hit_tokens": 25856,
+        "prompt_cache_miss_tokens": 32890
+      }
+    },
+    "terminal": {
+      "capture_time": 1789874574.3780086,
+      "capture_request_id": 3,
+      "type": "run.result",
+      "success": true,
+      "signal": "",
+      "signalReason": "",
+      "sessionId": "complex-pair",
+      "limitReached": false
+    },
+    "acceptance_passed": false,
+    "checks": {
+      "public": {
+        "exit_code": 0,
+        "tail": "...                                                                      [100%]\n3 passed in 0.00s\n"
+      },
+      "independent": {
+        "exit_code": 1,
+        "tail": "\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_corrupt_reads_and_saves_never_rewrite[{\"version\":2,\"revision\":1,\"data\":{\"a\":1,\"a\":2}}]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_corrupt_reads_and_saves_never_rewrite[{\"x\":NaN}]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_corrupt_reads_and_saves_never_rewrite[{\"x\":{}}]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_validation_before_touching_storage\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_io_failure_atomicity_cleanup_and_exception_identity[True-fsync]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_io_failure_atomicity_cleanup_and_exception_identity[True-replace]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_io_failure_atomicity_cleanup_and_exception_identity[False-fsync]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_io_failure_atomicity_cleanup_and_exception_identity[False-replace]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/S.py::test_replace_uses_same_dir_after_fsync_and_preserves_mode\n1 failed, 18 errors in 0.05s\n"
+      }
+    },
+    "process": {
+      "exit_code": 0,
+      "elapsed_s": 25.32399047492072,
+      "harness_timeout": false
+    },
+    "tool_executions": 8,
+    "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+  },
+  {
+    "case": "S",
+    "side": "nzcoder",
+    "requests": 14,
+    "responses": 14,
+    "usage": {
+      "main": {
+        "requests": 12,
+        "usage_available": 12,
+        "prompt_tokens": 216278,
+        "completion_tokens": 30259,
+        "total_tokens": 246537,
+        "prompt_cache_hit_tokens": 88320,
+        "prompt_cache_miss_tokens": 127958
+      },
+      "auxiliary": {
+        "requests": 2,
+        "usage_available": 2,
+        "prompt_tokens": 12782,
+        "completion_tokens": 551,
+        "total_tokens": 13333,
+        "prompt_cache_hit_tokens": 1920,
+        "prompt_cache_miss_tokens": 10862
+      }
+    },
+    "terminal": "completed",
+    "acceptance_passed": true,
+    "checks": {
+      "public": {
+        "exit_code": 0,
+        "tail": "........................................................................ [ 86%]\n...........                                                              [100%]\n83 passed in 0.08s\n"
+      },
+      "independent": {
+        "exit_code": 0,
+        "tail": "...................                                                      [100%]\n19 passed in 0.03s\n"
+      }
+    },
+    "process": {
+      "exit_code": 0,
+      "elapsed_s": 173.97516064101364,
+      "harness_timeout": false
+    },
+    "tool_executions": 17,
+    "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+  }
+]

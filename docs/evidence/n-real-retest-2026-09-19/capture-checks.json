@@ -1,0 +1,8 @@
+{
+  "network_requests": 0,
+  "redaction_preserves_usage_and_live_input": true,
+  "sse_projection": true,
+  "main_13_denied_auxiliary_separate": true,
+  "permission_ast_identical": true,
+  "syntax_checks": true
+}

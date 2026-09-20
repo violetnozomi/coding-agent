@@ -1,0 +1,10 @@
+{
+  "user_message": "确认",
+  "authorized_plan": "three tasks × two sides × one run; per run 24 main + 8 auxiliary; no auto reruns",
+  "main_total_cap": 144,
+  "auxiliary_total_cap": 48,
+  "cost": "cost unknown",
+  "core_changes": false,
+  "permission_policy": "NZ original callback; InfCodeX auto-in-project rules; not identical authorization surfaces",
+  "filesystem_sandbox": "bwrap unavailable (uid map denied); isolated directories, not hermetic filesystem; access audit required"
+}

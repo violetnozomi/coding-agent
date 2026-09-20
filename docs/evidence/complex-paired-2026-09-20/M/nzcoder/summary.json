@@ -1,0 +1,45 @@
+{
+  "case": "M",
+  "side": "nzcoder",
+  "requests": 25,
+  "responses": 25,
+  "usage": {
+    "main": {
+      "requests": 24,
+      "usage_available": 24,
+      "prompt_tokens": 423729,
+      "completion_tokens": 23684,
+      "total_tokens": 447413,
+      "prompt_cache_hit_tokens": 161024,
+      "prompt_cache_miss_tokens": 262705
+    },
+    "auxiliary": {
+      "requests": 1,
+      "usage_available": 1,
+      "prompt_tokens": 3487,
+      "completion_tokens": 178,
+      "total_tokens": 3665,
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 3487
+    }
+  },
+  "terminal": "max_turns",
+  "acceptance_passed": true,
+  "checks": {
+    "public": {
+      "exit_code": 0,
+      "tail": "....................                                                     [100%]\n20 passed in 0.01s\n"
+    },
+    "independent": {
+      "exit_code": 0,
+      "tail": "...................                                                      [100%]\n19 passed in 0.02s\n"
+    }
+  },
+  "process": {
+    "exit_code": 0,
+    "elapsed_s": 144.18385551008396,
+    "harness_timeout": false
+  },
+  "tool_executions": 36,
+  "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+}

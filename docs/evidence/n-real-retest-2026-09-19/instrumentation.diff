@@ -1,0 +1,36 @@
+--- historical/run-nz.py
++++ new/run-nz.py
+@@ -10,14 +10,16 @@
+ from nz_coder.runtime.core.request import AgentDefinition,RunOptions,RunRequest
+ from nz_coder.runtime.execution import native_sdk,loop
+ from nz_coder.runtime.model_gateway import ResolvedModelRuntime
++from capture import Capture, append, save
+ case=os.environ["CASE"]; out=Path(os.environ["SMOKE_OUTPUT"]); ws=Path.cwd()
++capture=Capture(out,ws)
+ provider=OpenAICompatibleProvider(api_key="local-paid",base_url="http://localhost/v1")
+-client=OpenAI(api_key="local-paid",base_url="http://localhost/v1",max_retries=0,http_client=httpx.Client(transport=httpx.HTTPTransport(uds=os.environ["SMOKE_SOCKET"]),trust_env=False))
++client=OpenAI(api_key="local-paid",base_url="http://localhost/v1",max_retries=0,http_client=httpx.Client(transport=httpx.HTTPTransport(uds=os.environ["SMOKE_SOCKET"]),trust_env=False,event_hooks={"request":[capture.request_hook]}))
+ runtime=ResolvedModelRuntime(provider_id=provider.name,model_id="deepseek-v4-flash",request_model_id="deepseek-v4-flash",variant=None,provider=provider,client=client,capabilities=provider.capabilities("deepseek-v4-flash"),owns_client=True)
+ native_sdk.resolve_model_runtime=lambda *_a,**_k: runtime
+ loop.resolve_model_runtime=lambda *_a,**_k: runtime
+ def event(e):
+- (out/"events.jsonl").open("a").write(json.dumps(asdict(e),default=str)+"\n")
++ append(out/"events.jsonl",asdict(e))
+ def permission(name,args):
+  command=str(args.get("command", "")); ok=False
+  try:
+@@ -30,9 +32,13 @@
+ rq=RunRequest(agent=AgentDefinition(name="paid-comparison",instructions=prompt.build(memory_block="",skill_descriptions="")),profile=MAIN_PROFILE,workspace=ws,session_id="paid-"+case,stream=True,provider="openai-compatible",model="deepseek-v4-flash",reasoning_effort=None,messages=({"role":"user","content":os.environ["TASK_PROMPT"]},),metadata={"permission_mode":"auto","persist_session":False,"max_turns":12})
+ opts=RunOptions(on_event=event,permission_asker=permission)
+ start=time.monotonic(); env=native_sdk.build_product_run_environment(rq,opts)
++capture.install(env)
+ try:
+  (out/"effective.json").write_text(json.dumps({"retrieval":env.repo_retrieval_strategy,"runner":type(env.runner).__name__},default=str))
+  result=asyncio.run(native_sdk.NativeSDKRunner(env).run_result(rq,opts))
+- (out/"result.json").write_text(json.dumps(asdict(result),default=str,indent=2))
++ save(out/"result.json",asdict(result))
++ capture.snapshot("final_result")
++ save(out/"final-state.json",{"state":env.runtime_state.to_dict(),"run_evidence":env.run_evidence.to_dict(),"verification_manager":env.vm.status()})
++ (out/"runtime.jsonl").write_bytes(env.tracer.path.read_bytes())
+  print(json.dumps({"status":result.status.value,"error":result.error,"elapsed_s":time.monotonic()-start}))
+ finally: env.close()

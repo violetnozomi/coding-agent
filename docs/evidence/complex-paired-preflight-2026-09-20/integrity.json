@@ -1,0 +1,22 @@
+{
+  "nz_head": "0885c874b949792723c515ff098c24d31cd238c9",
+  "reference_head": "d3a812379b589597347f5be12d5b68477e577f02",
+  "reference_build_artifacts_match_historical": {
+    "package.json": true,
+    "package-lock.json": true,
+    "tsconfig.build.json": true,
+    "src/kodax_cli.ts": true,
+    "src/cli_option_helpers.ts": true,
+    "packages/repl/src/ui/json-events.ts": true,
+    "packages/coding/dist/agent.js": true,
+    "packages/coding/dist/coding-preset.js": true,
+    "packages/coding/dist/agent-runtime/run-substrate.js": true,
+    "packages/llm/dist/providers/openai.js": true,
+    "packages/repl/dist/ui/json-events.js": true
+  },
+  "tracked_status": "",
+  "core_changes": false,
+  "real_model_calls": 0,
+  "fixture_integrity": true,
+  "new_directory_ignored_by_git": true
+}

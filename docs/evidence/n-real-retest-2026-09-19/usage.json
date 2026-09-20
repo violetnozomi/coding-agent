@@ -1,0 +1,129 @@
+{
+  "per_request": [
+    {
+      "request_id": 1,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 7515,
+        "completion_tokens": 97,
+        "total_tokens": 7612,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 13
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 7515
+      }
+    },
+    {
+      "request_id": 2,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 7703,
+        "completion_tokens": 100,
+        "total_tokens": 7803,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 791
+      }
+    },
+    {
+      "request_id": 3,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 8544,
+        "completion_tokens": 618,
+        "total_tokens": 9162,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 506
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 1632
+      }
+    },
+    {
+      "request_id": 4,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 8689,
+        "completion_tokens": 888,
+        "total_tokens": 9577,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 808
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 1777
+      }
+    },
+    {
+      "request_id": 5,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 8959,
+        "completion_tokens": 209,
+        "total_tokens": 9168,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 52
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 2047
+      }
+    },
+    {
+      "request_id": 6,
+      "purpose": "verifier",
+      "usage": {
+        "prompt_tokens": 2595,
+        "completion_tokens": 160,
+        "total_tokens": 2755,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 2595
+      }
+    }
+  ],
+  "totals_by_purpose": {
+    "coding": {
+      "prompt_tokens": 41410,
+      "completion_tokens": 1912,
+      "total_tokens": 43322,
+      "prompt_cache_hit_tokens": 27648,
+      "prompt_cache_miss_tokens": 13762
+    },
+    "verifier": {
+      "prompt_tokens": 2595,
+      "completion_tokens": 160,
+      "total_tokens": 2755,
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 2595
+    }
+  },
+  "totals": {
+    "prompt_tokens": 44005,
+    "completion_tokens": 2072,
+    "total_tokens": 46077,
+    "prompt_cache_hit_tokens": 27648,
+    "prompt_cache_miss_tokens": 16357
+  },
+  "provider_cost": null,
+  "cost_label": "cost unknown",
+  "cache_rule": "cache hit and miss are components of prompt_tokens, not additional input"
+}

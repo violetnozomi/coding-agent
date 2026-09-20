@@ -1,0 +1,21 @@
+{
+  "authorization": {
+    "user_message": "执行真实N测，我授权付费",
+    "scope": "one real NZ N with original production natural auxiliary calls; no InfCodeX rerun",
+    "main_cap": 12
+  },
+  "commit": "0885c874b949792723c515ff098c24d31cd238c9",
+  "task_initial_source": "docs/evidence/autonomous-comparison-2026-09-15/initial/N",
+  "model": "deepseek-v4-flash",
+  "main_output_limit": 64000,
+  "reasoning_effort": "main omitted",
+  "permission_callback": "identical to original run-nz.py",
+  "network": "same offline_exec.py seccomp and Unix proxy transport",
+  "auxiliary": "natural production logic, separately counted",
+  "reference": "historical paired reference / 非同时重跑样本",
+  "reference_commit": "d3a812379b589597347f5be12d5b68477e577f02",
+  "core_changes": false,
+  "reasoning_content_persisted": false,
+  "cost": "cost unknown",
+  "thinking_policy": "main omitted; auxiliary production policy unchanged"
+}

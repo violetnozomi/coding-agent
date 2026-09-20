@@ -1,0 +1,40 @@
+{
+  "kind": "read-only source corroboration; no code changes or paid replay",
+  "sources": {
+    "infcodex_hidden_todo": {
+      "path": "references/InfCodeX/packages/coding/src/agent-runtime/event-emitter.ts",
+      "sha256": "18aab7424d81736a6733a610995b3f731b84387d17f6ba551d1f9806442714ad"
+    },
+    "infcodex_tool_result_visibility": {
+      "path": "references/InfCodeX/packages/coding/src/agent-runtime/tool-dispatch.ts",
+      "sha256": "1010da080b75a88c8560577f29d5027cee6ef023a019cf54dd354f35abdc9158"
+    },
+    "infcodex_empty_tool_result_completion": {
+      "path": "references/InfCodeX/packages/coding/src/agent-runtime/run-substrate.ts",
+      "sha256": "a1774414637a077fa05bb4702fa42462a1328eecf176c422ec855b095290d46a"
+    },
+    "nz_requirement_artifact_gate": {
+      "path": "nz_coder/runtime/agent/task_contract.py",
+      "sha256": "3236451f13ff5720dc5e687642edfaec98a86607544cc961b9c3e6340f2bea98"
+    }
+  },
+  "observations": [
+    {
+      "side": "infcodex",
+      "facts": "M and S final responses contain only todo_create tool calls, valid IDs and JSON; tool result events for those calls are not public; no task file changes; then turn.completed and run.result success=true with limitReached=false",
+      "source_chain": [
+        "event-emitter.ts: hidden todo set and isVisibleToolName",
+        "tool-dispatch.ts applyPostToolProcessing only appends visible results",
+        "run-substrate.ts toolResults.length===0 branch emits completed and success=true"
+      ],
+      "strength": "strong source-supported explanation; internal todo success/failure not exposed, not claimed"
+    },
+    {
+      "side": "nzcoder",
+      "case": "M",
+      "facts": "Initial behavior requirement expected_artifacts contains REQUIREMENTS.md; exact pytest passed at current generation; final R1 pending and R3 candidate; terminal reason hard_requirements_unresolved",
+      "interpretation": "Task asks implementation described in REQUIREMENTS.md, not modification of that file. Artifact obligation blocks known completion; compatibility semantic evidence remains absent.",
+      "strength": "strong actual runtime facts; no counterfactual paid rerun"
+    }
+  ]
+}

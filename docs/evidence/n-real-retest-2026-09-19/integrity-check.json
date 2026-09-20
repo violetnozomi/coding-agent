@@ -1,0 +1,17 @@
+{
+  "HEAD": "0885c874b949792723c515ff098c24d31cd238c9",
+  "remote_main": "0885c874b949792723c515ff098c24d31cd238c9\trefs/heads/main",
+  "tracked_status": "",
+  "historical_files_unchanged": 63,
+  "core_and_tests_unchanged": true,
+  "request_response_pairs": 6,
+  "main": 5,
+  "auxiliary": 1,
+  "provider_retries": 0,
+  "structured_evidence_files_privacy_checked": 33,
+  "private_reasoning_fields_found": 0,
+  "acceptance_passed": true,
+  "generation_bound": true,
+  "new_artifacts_git_ignored": true,
+  "no_commit_or_push": true
+}

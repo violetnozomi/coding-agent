@@ -1,0 +1,783 @@
+{
+  "state": {
+    "turn_count": 16,
+    "max_turns": 24,
+    "started_at": 1789874240.5584333,
+    "timeout_seconds": 0.0,
+    "last_edit_turn": 8,
+    "edits_this_run": 6,
+    "has_diff": true,
+    "diff_chars": 22577,
+    "changed_files": [
+      "README.md",
+      "lib/batch.cjs",
+      "lib/pool.cjs",
+      "tests/batch.test.cjs",
+      "tests/pool.test.cjs"
+    ],
+    "tests_modified": true,
+    "source_only": false,
+    "acceptance_criteria": [],
+    "requested_paths": [
+      "README.md"
+    ],
+    "task_mode": "feature",
+    "wants_tests": false,
+    "forbids_test_changes": false,
+    "plan_generated": false,
+    "plan_text": "",
+    "replan_count": 0,
+    "open_todo_items": 0,
+    "task_contract": {
+      "objective": "Repair lib/pool.cjs and its batch consumer according to REQUIREMENTS.md. Implement bounded concurrency, stable result ordering, failure draining and AbortSignal cancellation without breaking the public API. Add meaningful tests and update README.md. Run node --test tests/pool.test.cjs tests/batch.test.cjs and report the actual result and remaining limitations.",
+      "requirements": [
+        {
+          "id": "R1",
+          "description": "Implement the requested behavior: Repair lib/pool.cjs and its batch consumer according to REQUIREMENTS.md. Implement bounded concurrency, stable result ordering, failure draining and AbortSignal cancellation without breaking the public API. Add meaningful tests and update README.md. Run node --test tests/pool.test.cjs tests/batch.test.cjs and report the actual result and remaining limitations.",
+          "kind": "behavior",
+          "expected_artifacts": [
+            "lib/batch.cjs"
+          ],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": []
+        },
+        {
+          "id": "R2",
+          "description": "Update the explicitly requested documentation.",
+          "kind": "docs",
+          "expected_artifacts": [
+            "README.md"
+          ],
+          "satisfaction_mode": "mixed",
+          "depends_on": [],
+          "required_evidence": []
+        },
+        {
+          "id": "R3",
+          "description": "Preserve the requested compatibility guarantees.",
+          "kind": "compatibility",
+          "expected_artifacts": [],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": [
+            "semantic_review"
+          ]
+        },
+        {
+          "id": "R4",
+          "description": "Pass the exact acceptance command: node --test tests/pool.test.cjs tests/batch.test.cjs",
+          "kind": "verification",
+          "expected_artifacts": [],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": []
+        }
+      ],
+      "constraints": [],
+      "acceptance_commands": [
+        "node --test tests/pool.test.cjs tests/batch.test.cjs"
+      ],
+      "contract_version": 2
+    },
+    "requirement_ledger": {
+      "items": [
+        {
+          "requirement": {
+            "id": "R1",
+            "description": "Implement the requested behavior: Repair lib/pool.cjs and its batch consumer according to REQUIREMENTS.md. Implement bounded concurrency, stable result ordering, failure draining and AbortSignal cancellation without breaking the public API. Add meaningful tests and update README.md. Run node --test tests/pool.test.cjs tests/batch.test.cjs and report the actual result and remaining limitations.",
+            "kind": "behavior",
+            "expected_artifacts": [
+              "lib/batch.cjs"
+            ],
+            "satisfaction_mode": "semantic",
+            "depends_on": [],
+            "required_evidence": []
+          },
+          "status": "satisfied",
+          "evidence": [
+            {
+              "type": "file_changed",
+              "path": "lib/batch.cjs",
+              "command": null,
+              "generation": 2,
+              "fingerprint": null
+            },
+            {
+              "type": "verification_passed",
+              "path": null,
+              "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+              "generation": 5,
+              "fingerprint": null
+            }
+          ],
+          "mutation_generation": 5
+        },
+        {
+          "requirement": {
+            "id": "R2",
+            "description": "Update the explicitly requested documentation.",
+            "kind": "docs",
+            "expected_artifacts": [
+              "README.md"
+            ],
+            "satisfaction_mode": "mixed",
+            "depends_on": [],
+            "required_evidence": []
+          },
+          "status": "satisfied",
+          "evidence": [
+            {
+              "type": "file_changed",
+              "path": "README.md",
+              "command": null,
+              "generation": 6,
+              "fingerprint": null
+            },
+            {
+              "type": "verification_passed",
+              "path": null,
+              "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+              "generation": 5,
+              "fingerprint": null
+            }
+          ],
+          "mutation_generation": 5
+        },
+        {
+          "requirement": {
+            "id": "R3",
+            "description": "Preserve the requested compatibility guarantees.",
+            "kind": "compatibility",
+            "expected_artifacts": [],
+            "satisfaction_mode": "semantic",
+            "depends_on": [],
+            "required_evidence": [
+              "semantic_review"
+            ]
+          },
+          "status": "satisfied",
+          "evidence": [
+            {
+              "type": "verification_passed",
+              "path": null,
+              "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+              "generation": 5,
+              "fingerprint": null
+            },
+            {
+              "type": "semantic_review_passed",
+              "path": null,
+              "command": null,
+              "generation": 5,
+              "fingerprint": "verifier_ok:compatibility"
+            }
+          ],
+          "mutation_generation": 5
+        },
+        {
+          "requirement": {
+            "id": "R4",
+            "description": "Pass the exact acceptance command: node --test tests/pool.test.cjs tests/batch.test.cjs",
+            "kind": "verification",
+            "expected_artifacts": [],
+            "satisfaction_mode": "semantic",
+            "depends_on": [],
+            "required_evidence": []
+          },
+          "status": "satisfied",
+          "evidence": [
+            {
+              "type": "verification_passed",
+              "path": null,
+              "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+              "generation": 5,
+              "fingerprint": null
+            }
+          ],
+          "mutation_generation": 5
+        }
+      ],
+      "latest_generation": 5,
+      "latest_verification_generation": 5
+    },
+    "completion_gate_prompts": 0,
+    "completion_gate_signature": "",
+    "initial_task_text": "Repair lib/pool.cjs and its batch consumer according to REQUIREMENTS.md. Implement bounded concurrency, stable result ordering, failure draining and AbortSignal cancellation without breaking the public API. Add meaningful tests and update README.md. Run node --test tests/pool.test.cjs tests/batch.test.cjs and report the actual result and remaining limitations.",
+    "current_round_instruction_text": "",
+    "initial_plan_complexity": "",
+    "patch_risk": {
+      "risk": "high",
+      "fingerprint": "83c22ba029df734a",
+      "requires_replan": true,
+      "risk_signals": [
+        {
+          "category": "requested_scope_expansion",
+          "severity": "replan",
+          "detail": "lib/batch.cjs, lib/pool.cjs"
+        }
+      ],
+      "reasons": [
+        "2 source files changed",
+        "large diff (22577 chars)",
+        "source changes extend beyond user-named paths (lib/batch.cjs, lib/pool.cjs)",
+        "no low-noise verification inferred"
+      ],
+      "affected_files": [
+        "README.md",
+        "lib/batch.cjs",
+        "lib/pool.cjs",
+        "tests/batch.test.cjs",
+        "tests/pool.test.cjs"
+      ],
+      "likely_tests": [],
+      "suggested_verification": [],
+      "review_notes": [
+        "Review the diff manually before finalizing; impact may cross module boundaries.",
+        "Confirm test changes match the user request and are not masking failures.",
+        "Re-read the affected declarations and revise the plan before continuing; preserve public APIs and user-named scope unless the task explicitly requires otherwise."
+      ],
+      "structural_impact": {
+        "changed_symbols": [],
+        "impacted_callers": [],
+        "direct_callers": [],
+        "transitive_callers": [],
+        "dependent_modules": [],
+        "related_tests": [],
+        "public_api_exposure": [],
+        "truncated": false,
+        "budget": {},
+        "related": [],
+        "source": "unavailable"
+      }
+    },
+    "risk_feedback_fingerprint": "83c22ba029df734a",
+    "risk_replan_fingerprint": "",
+    "verification_attempts": 1,
+    "py_compile_ok": true,
+    "changed_files_verified": true,
+    "broad_test_attempts": 0,
+    "exact_test_attempts": 0,
+    "verification_contract": {
+      "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+      "targets": [
+        "tests/pool.test.cjs",
+        "tests/batch.test.cjs"
+      ],
+      "attempted_generation": 5,
+      "attempts": 1,
+      "passed": true,
+      "output": "✔ batch maps ids (0.790526ms)\n✔ index.cjs keeps exporting both mapLimit and processBatch (0.076284ms)\n✔ returns ordered {id, value} results even when completions race (25.442653ms)\n✔ defaults to concurrency 2 (0.299394ms)\n✔ honours options.concurrency (0.400458ms)\n✔ sends each record at most once (0.133675ms)\n✔ propagates send rejection with identity (0.122181ms)\n✔ forwards options.signal to mapLimit and to send (0.169101ms)\n✔ already-aborted signal starts no sends and rejects with the reason (0.112527ms)\n✔ maps values and preserves falsy results (1.315589ms)\n✔ empty input resolves [] (0.565148ms)\n✔ preserves input order regardless of completion order (30.894923ms)\n✔ worker receives item, index and signal (0.18509ms)\n✔ never exceeds limit in flight (0.31549ms)\n✔ refills a free slot without waiting for the whole batch (0.228147ms)\n✔ starts each item exactly once (0.117152ms)\n✔ does not mutate items (0.085893ms)\n✔ rejects TypeError for invalid arguments before invoking worker (empty input too) (0.298805ms)\n✔ propagates synchronous throw with identity and drains started work (5.507287ms)\n✔ rejects with the first observed async error and preserves identity (0.125405ms)\n✔ secondary failures do not produce unhandled rejections while draining (35.471351ms)\n✔ already-aborted signal rejects with signal.reason and starts no work (0.131158ms)\n✔ already-aborted signal rejects on empty input too (0.065635ms)\n✔ mid-run abort stops scheduling and waits for in-flight work (9.594795ms)\n✔ mid-run abort with non-Error reason preserves identity (10.335335ms)\n✔ abort wins even when an in-flight worker later rejects (9.274595ms)\n✔ removes the installed abort listener after settlement (0.179695ms)\nℹ tests 27\nℹ suites 0\nℹ pass 27\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 142.703484",
+      "source": "runtime",
+      "zone": "completion"
+    },
+    "verification_failures": 0,
+    "last_verification_failure": "",
+    "completion_review_rejections": 0,
+    "last_completion_review_rejection": "",
+    "completion_review_generation": 6,
+    "needs_broad_exploration": false,
+    "scheduled_verification_generations": {},
+    "primary_recovery_classification": "",
+    "supporting_recovery_classifications": [],
+    "recovery_repair_targets": [],
+    "searched_patterns": [],
+    "read_files": [
+      "lib/pool.cjs",
+      "lib/batch.cjs",
+      "index.cjs",
+      "package.json",
+      "tests/pool.test.cjs",
+      "tests/batch.test.cjs"
+    ],
+    "investigation_calls_since_edit": 0,
+    "mutation_generation": 6,
+    "source_mutation_generation": 2,
+    "acceptance_mutation_generation": 5,
+    "diff_generation": -1,
+    "verification_generation": 6,
+    "strict_progress_nudges": 0,
+    "strict_progress_blocks": 0,
+    "budget_zones_emitted": [],
+    "budget_pressure_zone": "green",
+    "work_phase": "normal",
+    "workspace_git_available": true,
+    "package_install_attempts": 0,
+    "emergency_broad_exploration": 0,
+    "provider_calls": 17,
+    "provider_attempts": 17,
+    "provider_calls_by_purpose": {
+      "coding": 16,
+      "verifier": 1
+    },
+    "provider_calls_by_model": {
+      "openai-compatible/deepseek-v4-flash": 17
+    },
+    "provider_usage": {
+      "input": 141116,
+      "output": 9323,
+      "total": 289659,
+      "reasoning": 32340,
+      "cache_read": 106880,
+      "cache_write": 0
+    },
+    "provider_usage_by_purpose": {
+      "coding": {
+        "input": 131591,
+        "output": 9116,
+        "total": 279031,
+        "reasoning": 32340,
+        "cache_read": 105984,
+        "cache_write": 0
+      },
+      "verifier": {
+        "input": 9525,
+        "output": 207,
+        "total": 10628,
+        "reasoning": 0,
+        "cache_read": 896,
+        "cache_write": 0
+      }
+    },
+    "provider_usage_by_model": {
+      "openai-compatible/deepseek-v4-flash": {
+        "input": 141116,
+        "output": 9323,
+        "total": 289659,
+        "reasoning": 32340,
+        "cache_read": 106880,
+        "cache_write": 0
+      }
+    },
+    "provider_duration_ms_by_purpose": {
+      "coding": 189447.139,
+      "verifier": 1653.015
+    },
+    "provider_duration_ms_by_model": {
+      "openai-compatible/deepseek-v4-flash": 191100.154
+    },
+    "provider_cost_usd": 0.0,
+    "provider_cost_usd_by_purpose": {},
+    "provider_cost_usd_by_model": {},
+    "provider_cost_unknown_calls": 17,
+    "provider_cost_sources": {
+      "unknown": 17
+    },
+    "provider_turn_records": [
+      {
+        "turn": 1,
+        "reason": "initial_investigation",
+        "outcome": "investigation_batch",
+        "tool_names": [
+          "read_file",
+          "read_file",
+          "read_file",
+          "read_file"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 0,
+        "mutation_generation_after": 0,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 2,
+        "reason": "investigation",
+        "outcome": "verification_batch",
+        "tool_names": [
+          "bash"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 0,
+        "mutation_generation_after": 0,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 3,
+        "reason": "investigation",
+        "outcome": "investigation_batch",
+        "tool_names": [
+          "list_directory"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 0,
+        "mutation_generation_after": 0,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 4,
+        "reason": "investigation",
+        "outcome": "investigation_batch",
+        "tool_names": [
+          "read_file",
+          "read_file",
+          "read_file",
+          "read_file"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 0,
+        "mutation_generation_after": 0,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 5,
+        "reason": "investigation",
+        "outcome": "verification_batch",
+        "tool_names": [
+          "bash"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 0,
+        "mutation_generation_after": 0,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 6,
+        "reason": "investigation",
+        "outcome": "mutation_batch",
+        "tool_names": [
+          "write_file",
+          "write_file"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 0,
+        "mutation_generation_after": 2,
+        "mutation_delta": 2,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 7,
+        "reason": "verification",
+        "outcome": "mutation_batch",
+        "tool_names": [
+          "write_file",
+          "write_file"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 2,
+        "mutation_generation_after": 4,
+        "mutation_delta": 2,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 8,
+        "reason": "verification",
+        "outcome": "mutation_batch",
+        "tool_names": [
+          "apply_patch",
+          "write_file"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 4,
+        "mutation_generation_after": 6,
+        "mutation_delta": 2,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 9,
+        "reason": "verification",
+        "outcome": "verification_batch",
+        "tool_names": [
+          "bash"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 6,
+        "mutation_generation_after": 6,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 10,
+        "reason": "verification",
+        "outcome": "verification_batch",
+        "tool_names": [
+          "verify_changed_files",
+          "bash"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 6,
+        "mutation_generation_after": 6,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 11,
+        "reason": "verification",
+        "outcome": "verification_batch",
+        "tool_names": [
+          "bash"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 6,
+        "mutation_generation_after": 6,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 12,
+        "reason": "verification",
+        "outcome": "verification_batch",
+        "tool_names": [
+          "bash"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 6,
+        "mutation_generation_after": 6,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 13,
+        "reason": "verification",
+        "outcome": "mixed_tool_batch",
+        "tool_names": [
+          "bash",
+          "review_run_evidence"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 6,
+        "mutation_generation_after": 6,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 14,
+        "reason": "verification",
+        "outcome": "other_tool_batch",
+        "tool_names": [
+          "review_run_evidence"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 6,
+        "mutation_generation_after": 6,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 15,
+        "reason": "verification",
+        "outcome": "other_tool_batch",
+        "tool_names": [
+          "review_run_evidence"
+        ],
+        "finish_reason": "tool_calls",
+        "mutation_generation_before": 6,
+        "mutation_generation_after": 6,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      },
+      {
+        "turn": 16,
+        "reason": "verification",
+        "outcome": "final_answer",
+        "tool_names": [],
+        "finish_reason": "stop",
+        "mutation_generation_before": 6,
+        "mutation_generation_after": 6,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      }
+    ],
+    "provider_turns_by_reason": {
+      "initial_investigation": 1,
+      "investigation": 5,
+      "verification": 10
+    },
+    "provider_turns_by_outcome": {
+      "investigation_batch": 3,
+      "verification_batch": 6,
+      "mutation_batch": 3,
+      "mixed_tool_batch": 1,
+      "other_tool_batch": 2,
+      "final_answer": 1
+    },
+    "transition": "verified",
+    "_state_block_emitted": false,
+    "_diff_seen_from_tool": false,
+    "active": true,
+    "saved_at": 1789874432.9128587
+  },
+  "run_evidence": {
+    "run_id": "20260920_111720_2daecf5e",
+    "task_mode": "feature",
+    "project_spec": null,
+    "blueprint": null,
+    "created_files": [],
+    "modified_files": [
+      "lib/pool.cjs",
+      "lib/batch.cjs",
+      "tests/pool.test.cjs",
+      "tests/batch.test.cjs",
+      "README.md"
+    ],
+    "expected_files": [],
+    "actual_output_paths": [
+      "lib/pool.cjs",
+      "lib/batch.cjs",
+      "tests/pool.test.cjs",
+      "tests/batch.test.cjs",
+      "README.md"
+    ],
+    "verification_results": [
+      {
+        "tool": "verify_changed_files",
+        "command": "verify_changed_files",
+        "stage": "static",
+        "status": "warn",
+        "summary": "WARN: changed files verification incomplete",
+        "preview": "WARN: changed files verification incomplete\nWARN node: changed JS/TS files but no package typecheck script or local node_modules/.bin/tsc was found."
+      },
+      {
+        "tool": "bash",
+        "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+        "stage": "targeted",
+        "status": "passed",
+        "preview": "✔ batch maps ids (0.790526ms)\n✔ index.cjs keeps exporting both mapLimit and processBatch (0.076284ms)\n✔ returns ordered {id, value} results even when completions race (25.442653ms)\n✔ defaults to concurrency 2 (0.299394ms)\n✔ honours options.concurrency (0.400458ms)\n✔ sends each record at most once (0.133675ms)\n✔ propagates send rejection with identity (0.122181ms)\n✔ forwards options.signal to mapLimit and to send (0.169101ms)\n✔ already-aborted signal starts no sends and rejects with the reason (0.112527ms)\n✔ maps values and preserves falsy results (1.315589ms)\n✔ empty input resolves [] (0.565148ms)\n✔ preserves input order regardless of completion order (30.894923ms)\n✔ worker receives item, index and signal (0.18509ms)\n✔ never exceeds limit in flight (0.31549ms)\n✔ refills a free slot without"
+      }
+    ],
+    "verification_evidence": [
+      {
+        "kind": "command",
+        "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+        "scope": "targeted",
+        "status": "passed",
+        "passed": true,
+        "output_reference": "✔ batch maps ids (0.790526ms)\n✔ index.cjs keeps exporting both mapLimit and processBatch (0.076284ms)\n✔ returns ordered {id, value} results even when completions race (25.442653ms)\n✔ defaults to concurrency 2 (0.299394ms)\n✔ honours options.concurrency (0.400458ms)\n✔ sends each record at most once (0.133675ms)\n✔ propagates send rejection with identity (0.122181ms)\n✔ forwards options.signal to mapLimit and to send (0.169101ms)\n✔ already-aborted signal starts no sends and rejects with the reason (0.112527ms)\n✔ maps values and preserves falsy results (1.315589ms)\n✔ empty input resolves [] (0.565148ms)\n✔ preserves input order regardless of completion order (30.894923ms)\n✔ worker receives item, index and signal (0.18509ms)\n✔ never exceeds limit in flight (0.31549ms)\n✔ refills a free slot without",
+        "affected_files": [],
+        "exit_code": 0,
+        "timestamp": 1789874431.1921322,
+        "confidence": 1.0,
+        "source": "bash",
+        "generation": null
+      }
+    ],
+    "build_results": [],
+    "impact_review": {
+      "risk": "high",
+      "fingerprint": "83c22ba029df734a",
+      "requires_replan": true,
+      "risk_signals": [
+        {
+          "category": "requested_scope_expansion",
+          "severity": "replan",
+          "detail": "lib/batch.cjs, lib/pool.cjs"
+        }
+      ],
+      "reasons": [
+        "2 source files changed",
+        "large diff (22577 chars)",
+        "source changes extend beyond user-named paths (lib/batch.cjs, lib/pool.cjs)",
+        "no low-noise verification inferred"
+      ],
+      "affected_files": [
+        "README.md",
+        "lib/batch.cjs",
+        "lib/pool.cjs",
+        "tests/batch.test.cjs",
+        "tests/pool.test.cjs"
+      ],
+      "likely_tests": [],
+      "suggested_verification": [],
+      "review_notes": [
+        "Review the diff manually before finalizing; impact may cross module boundaries.",
+        "Confirm test changes match the user request and are not masking failures.",
+        "Re-read the affected declarations and revise the plan before continuing; preserve public APIs and user-named scope unless the task explicitly requires otherwise."
+      ],
+      "structural_impact": {
+        "changed_symbols": [],
+        "impacted_callers": [],
+        "direct_callers": [],
+        "transitive_callers": [],
+        "dependent_modules": [],
+        "related_tests": [],
+        "public_api_exposure": [],
+        "truncated": false,
+        "budget": {},
+        "related": [],
+        "source": "unavailable"
+      }
+    },
+    "completeness_review": null,
+    "limitations": [],
+    "tool_failures": [
+      {
+        "name": "bash",
+        "status": "denied",
+        "preview": "Denied by user"
+      }
+    ],
+    "child_outcomes": [],
+    "notes": []
+  },
+  "verification_manager": {
+    "verification_needed": false,
+    "verification_state": "degraded",
+    "last_verification": {
+      "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+      "stage": "acceptance",
+      "status": "passed",
+      "output": "✔ batch maps ids (0.790526ms)\n✔ index.cjs keeps exporting both mapLimit and processBatch (0.076284ms)\n✔ returns ordered {id, value} results even when completions race (25.442653ms)\n✔ defaults to concurrency 2 (0.299394ms)\n✔ honours options.concurrency (0.400458ms)\n✔ sends each record at most once (0.133675ms)\n✔ propagates send rejection with identity (0.122181ms)\n✔ forwards options.signal to mapLimit and to send (0.169101ms)\n✔ already-aborted signal starts no sends and rejects with the reason (0.112527ms)\n✔ maps values and preserves falsy results (1.315589ms)\n✔ empty input resolves [] (0.565148ms)\n✔ preserves input order regardless of completion order (30.894923ms)\n✔ worker receives item, index and signal (0.18509ms)\n✔ never exceeds limit in flight (0.31549ms)\n✔ refills a free slot without waiting for the whole batch (0.228147ms)\n✔ starts each item exactly once (0.117152ms)\n✔ does not mutate items (0.085893ms)\n✔ rejects TypeError for invalid arguments before invoking worker (empty input too) (0.298805ms)\n✔ propagates synchronous throw with identity and drains started work (5.507287ms)\n✔ rejects with the first observed async error and preserves identity (0.125405ms)\n✔ secondary failures do not produce unhandled rejections while draining (35.471351ms)\n✔ already-aborted signal rejects with signal.reason and starts no work (0.131158ms)\n✔ already-aborted signal rejects on empty input too (0.065635ms)\n✔ mid-run abort stops scheduling and waits for in-flight work (9.594795ms)\n✔ mid-run abort with non-Error reason preserves identity (10.335335ms)\n✔ abort wins even when an in-flight worker later rejects (9.274595ms)\n✔ removes the installed abort listener after settlement (0.179695ms)\nℹ tests 27\nℹ suites 0\nℹ pass 27\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 142.703484"
+    },
+    "environment_blocker": null,
+    "verification_pipeline": {
+      "changed_files": [
+        "lib/pool.cjs",
+        "lib/batch.cjs",
+        "tests/pool.test.cjs",
+        "tests/batch.test.cjs"
+      ],
+      "stages": [
+        {
+          "name": "static",
+          "required": false,
+          "evidence_required": false,
+          "status": "skipped",
+          "commands": [],
+          "observed": [
+            {
+              "command": "verify_changed_files",
+              "required": false,
+              "status": "skipped",
+              "last_command": "verify_changed_files"
+            }
+          ]
+        },
+        {
+          "name": "targeted",
+          "required": false,
+          "evidence_required": false,
+          "status": "passed",
+          "commands": [],
+          "observed": [
+            {
+              "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+              "required": false,
+              "status": "passed",
+              "last_command": "node --test tests/pool.test.cjs tests/batch.test.cjs"
+            }
+          ]
+        },
+        {
+          "name": "regression",
+          "required": false,
+          "evidence_required": false,
+          "status": "optional",
+          "commands": [
+            {
+              "command": "pytest",
+              "reason": "configured JS/TS test script",
+              "required": false,
+              "status": "not_run"
+            }
+          ],
+          "observed": []
+        }
+      ],
+      "next_required_stage": null
+    }
+  }
+}

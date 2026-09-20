@@ -1,0 +1,35 @@
+[
+  {
+    "time": 1789832014.5273256,
+    "run_id": "20260919_233309_7931b8fe",
+    "request_id": 5,
+    "event": "sidecar_gate_decision",
+    "fire": true,
+    "reason": "semantic-contract",
+    "files_changed": 1,
+    "changed_lines": 2,
+    "rounds": 5
+  },
+  {
+    "time": 1789832014.527837,
+    "run_id": "20260919_233309_7931b8fe",
+    "request_id": 5,
+    "event": "sidecar_started",
+    "provider": "openai-compatible",
+    "model": "deepseek-v4-flash",
+    "source": "inherit-main"
+  },
+  {
+    "time": 1789832016.1192358,
+    "run_id": "20260919_233309_7931b8fe",
+    "request_id": 6,
+    "event": "sidecar_finished",
+    "verdict": "accept",
+    "trace": "verifier_ok",
+    "reason": "The diff removes the hyphen from the escape operator class. Under 'u' flag, '\\-' is an invalid identity escape (only SyntaxCharacter and '/'), so leaving it in caused new RegExp(..., 'u') to throw. Removing the hyphen keeps ordinary literal matching intact because an unescaped '-' outside a character class is a literal hyphen, and non-string rejection is untouched. The exact acceptance command passes 3/3, exercising ordinary matching, hyphen embedding in Unicode regex, and non-string rejection. This satisfies the stated ask.",
+    "elapsed_ms": 1591.339,
+    "provider": "openai-compatible",
+    "model": "deepseek-v4-flash",
+    "source": "inherit-main"
+  }
+]
