@@ -1,0 +1,108 @@
+{
+  "audit": "offline only; no model requests",
+  "nz_commit": "d5655a9996076fc614835367b1cc53cf5d3c3bc7",
+  "reference_commit": "d3a812379b589597347f5be12d5b68477e577f02",
+  "tracked_tree_clean": true,
+  "old_evidence_tracked_files_verified_against_HEAD": 63,
+  "preflight_manifest_all_hashes_valid": true,
+  "paired_initial_git_identical": true,
+  "structured_privacy_files_scanned": 77,
+  "private_fields_found": [],
+  "runs": [
+    {
+      "case": "M",
+      "side": "nzcoder",
+      "counts": {
+        "main": 24,
+        "auxiliary": 2
+      },
+      "all_http_200": true,
+      "usage_all_present": true,
+      "options": [
+        {
+          "max_tokens": 1024,
+          "model": "deepseek-v4-flash",
+          "stream": false,
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        {
+          "max_tokens": 64000,
+          "model": "deepseek-v4-flash",
+          "stream": true
+        }
+      ],
+      "changed_files": [
+        "README.md",
+        "billing/quote.py",
+        "cli.py",
+        "jobs.py",
+        "mobile.py",
+        "reporting.py",
+        "tests/test_consumers.py",
+        "tests/test_quote.py",
+        "web.py"
+      ],
+      "initial_files_verified": 10,
+      "final_files_verified": 12
+    },
+    {
+      "case": "M",
+      "side": "infcodex",
+      "counts": {
+        "main": 6,
+        "auxiliary": 0
+      },
+      "all_http_200": true,
+      "usage_all_present": true,
+      "options": [
+        {
+          "max_completion_tokens": 32768,
+          "model": "deepseek-v4-flash",
+          "stream": true
+        }
+      ],
+      "changed_files": [],
+      "initial_files_verified": 10,
+      "final_files_verified": 10
+    }
+  ],
+  "usage_totals": {
+    "nzcoder": {
+      "main": {
+        "requests": 24,
+        "usage_available": 24,
+        "prompt_tokens": 436585,
+        "completion_tokens": 24247,
+        "total_tokens": 460832,
+        "prompt_cache_hit_tokens": 161152,
+        "prompt_cache_miss_tokens": 275433
+      },
+      "auxiliary": {
+        "requests": 2,
+        "usage_available": 2,
+        "prompt_tokens": 20627,
+        "completion_tokens": 758,
+        "total_tokens": 21385,
+        "prompt_cache_hit_tokens": 1920,
+        "prompt_cache_miss_tokens": 18707
+      }
+    },
+    "infcodex": {
+      "main": {
+        "requests": 6,
+        "usage_available": 6,
+        "prompt_tokens": 116955,
+        "completion_tokens": 8523,
+        "total_tokens": 125478,
+        "prompt_cache_hit_tokens": 83712,
+        "prompt_cache_miss_tokens": 33243
+      }
+    }
+  },
+  "cost": "cost unknown",
+  "errors": [],
+  "execution_harness_hashes_unchanged": true,
+  "historical_manifest_files_unchanged": 975
+}

@@ -1,0 +1,20 @@
+{
+  "nzcoder": {
+    "initial_prompt_matches": true,
+    "initial_hashes_match": true,
+    "all_main_options_match": true,
+    "paid_requests": 26
+  },
+  "infcodex": {
+    "initial_prompt_matches": true,
+    "initial_hashes_match": true,
+    "all_main_options_match": true,
+    "paid_requests": 6
+  },
+  "execution_adapter_comparison": {
+    "run-nz.py": "identical to historical harness",
+    "capture.py": "identical to historical harness",
+    "prepare-session.mjs": "identical to historical harness",
+    "unix-fetch.mjs": "identical to historical harness"
+  }
+}

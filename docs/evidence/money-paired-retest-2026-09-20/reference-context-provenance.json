@@ -1,0 +1,64 @@
+{
+  "read_results": [
+    {
+      "request_id": 2,
+      "before_snapshot": 11,
+      "after_snapshot": 12,
+      "result": {
+        "name": "read_file",
+        "tool_input": {
+          "path": "REQUIREMENTS.md"
+        },
+        "output": "<path>/tmp/money-paired-retest-20260920/M/nzcoder/workspace/REQUIREMENTS.md</path>\n<type>file</type>\n<content>\n1: # Invoice pricing migration\n2: Add a frozen dataclass Quote in billing/quote.py with currency, subtotal_minor, discount_minor, total_minor. quote_order(lines, *, currency=\"USD\", discount_bps=0) accepts an iterable of dictionaries with unit_price (decimal string) and quantity (positive integer; bool is invalid). Ignore unrelated line keys; do not mutate caller input. Empty orders are valid.\n3: Supported currencies: USD and EUR (2 decimal places), JPY (0). Validate currency and discount even for empty orders. Reject unsupported currencies, invalid/non-finite/negative prices, invalid quantities and discount_bps outside integer 0..10000 with ValueError (bool is invalid for discount). Price string parsing may accept normal decimal notation; no float input.\n4: For each line, multiply exact decimal unit price by quantity then round HALF_UP to currency minor units; sum rounded lines. Round the total-order discount HALF_UP to minor units. total_minor=subtotal_minor-discount_minor. Do not round each unit price before multiplying.\n5: Migrate web.checkout, cli.receipt, jobs.export, mobile.summary and reporting.monthly to call quote_order, not the old total_amount API. Keep the old billing.legacy.total_amount callable for external users, but no internal consumer may call it. Existing tests should remain meaningful; add coverage for the new contract.\n6: All five consumers accept the same lines and keyword-only currency/discount_bps defaults. web.checkout returns {\"currency\": currency, \"total_minor\": integer}; CLI returns e.g. \"USD 12.30\" (JPY no decimals); export returns \"currency,total_minor\\nUSD,1230\\n\"; mobile returns the formatted numeric amount without currency; monthly returns integer minor units. Outputs must come from the central Quote, not duplicate pricing arithmetic.\n7: Document rounding, validation, the legacy compatibility boundary and usage in README.md. Do not install dependencies or use network. Verification: python -m pytest -q tests.\n\n(End of file - total 7 lines)\n</content>",
+        "executed": true,
+        "dispatch_failed": false,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 6.594,
+        "queue_wait_ms": 0.246,
+        "permission_denied": false,
+        "title": "Read REQUIREMENTS.md",
+        "metadata": {
+          "preview": "# Invoice pricing migration\nAdd a frozen dataclass Quote in billing/quote.py with currency, subtotal_minor, discount_minor, total_minor. quote_order(lines, *, currency=\"USD\", discount_bps=0) accepts an iterable of dictionaries with unit_price (decimal string) and quantity (positive integer; bool is invalid). Ignore unrelated line keys; do not mutate caller input. Empty orders are valid.\nSupported currencies: USD and EUR (2 decimal places), JPY (0). Validate currency and discount even for empty orders. Reject unsupported currencies, invalid/non-finite/negative prices, invalid quantities and discount_bps outside integer 0..10000 with ValueError (bool is invalid for discount). Price string parsing may accept normal decimal notation; no float input.\nFor each line, multiply exact decimal unit price by quantity then round HALF_UP to currency minor units; sum rounded lines. Round the total-order discount HALF_UP to minor units. total_minor=subtotal_minor-discount_minor. Do not round each unit price before multiplying.\nMigrate web.checkout, cli.receipt, jobs.export, mobile.summary and reporting.monthly to call quote_order, not the old total_amount API. Keep the old billing.legacy.total_amount callable for external users, but no internal consumer may call it. Existing tests should remain meaningful; add coverage for the new contract.\nAll five consumers accept the same lines and keyword-only currency/discount_bps defaults. web.checkout returns {\"currency\": currency, \"total_minor\": integer}; CLI returns e.g. \"USD 12.30\" (JPY no decimals); export returns \"currency,total_minor\\nUSD,1230\\n\"; mobile returns the formatted numeric amount without currency; monthly returns integer minor units. Outputs must come from the central Quote, not duplicate pricing arithmetic.\nDocument rounding, validation, the legacy compatibility boundary and usage in README.md. Do not install dependencies or use network. Verification: python -m pytest -q tests.",
+          "truncated": false,
+          "loaded": [],
+          "encoding": "utf-8",
+          "model_read_observation": {
+            "path": "REQUIREMENTS.md",
+            "offset": 1,
+            "limit": 2000,
+            "complete": true,
+            "identity": {
+              "expected_exists": true,
+              "device": 66309,
+              "inode": 21904526,
+              "size": 1954,
+              "mtime_ns": 1789873476555669376,
+              "content_hash": "37b543633f7cc036163840ca97ed9f6256e4e456b1f4b93d2c2e959cc44b1bcf"
+            }
+          }
+        },
+        "attachments": [],
+        "category": "read"
+      }
+    }
+  ],
+  "spec_sha256": "37b543633f7cc036163840ca97ed9f6256e4e456b1f4b93d2c2e959cc44b1bcf",
+  "verifier_inputs": [
+    {
+      "http_request": 16,
+      "spec_full_text_present": false,
+      "consumer_contract_sentence_present": false
+    },
+    {
+      "http_request": 26,
+      "spec_full_text_present": false,
+      "consumer_contract_sentence_present": false
+    }
+  ],
+  "late_main_correction_http": 19,
+  "before_correction_version": "v005",
+  "after_correction_version": "v006",
+  "independent_results": "19 passed -> 17 passed / 2 failed",
+  "causal_strength": "Observed verdict -> visible synthetic follow-up -> matching code change; no model reasoning inference; no counterfactual provider rerun."
+}

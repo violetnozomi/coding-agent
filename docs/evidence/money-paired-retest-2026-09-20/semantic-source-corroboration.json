@@ -1,0 +1,28 @@
+{
+  "commit": "d5655a9996076fc614835367b1cc53cf5d3c3bc7",
+  "path": "nz_coder/runtime/verification/sidecar_verifier.py",
+  "sha256": "61fb9cbbedf7c7e464937ae1f124e2d38b4cf7d6583c40ad3114b9e221034f27",
+  "excerpts": [
+    {
+      "first_line": 24,
+      "last_line": 28,
+      "text": "ROLLING_BUFFER_SIZE = 24\nROUNDS_VERIFY_THRESHOLD = 10\nTRIVIAL_LINES = 20\nVERIFIER_DIFF_MAX_EACH = 8000\nVERIFIER_DIFF_MAX_TOTAL = 12000"
+    },
+    {
+      "first_line": 105,
+      "last_line": 111,
+      "text": "\nREVISE_RETROSPECTIVE = (\n    \"A previous attempt at this task failed Sidecar Verifier review. Treat \"\n    \"prior failed todo items as ground truth: the same approach will not pass \"\n    \"twice. Read the failure note before retrying and add a distinct todo when \"\n    \"the correction requires a fundamentally different step.\"\n)"
+    },
+    {
+      "first_line": 199,
+      "last_line": 225,
+      "text": "\ndef build_verifier_context(\n    transcript: list[dict[str, Any]] | tuple[dict[str, Any], ...],\n    last_assistant_text: str,\n    *,\n    file_edits: list[dict[str, Any]] | tuple[dict[str, Any], ...],\n    additional_criteria: str = \"\",\n) -> VerifierContext:\n    \"\"\"Build the last-turn query, rolling transcript, and actual edit evidence.\"\"\"\n    filtered = [dict(message) for message in transcript if message.get(\"role\") != \"system\"]\n    recent = tuple(filtered[-ROLLING_BUFFER_SIZE:])\n    edits = tuple(\n        (\n            str(item.get(\"path\") or \"\"),\n            str(item.get(\"diff_hint\") or item.get(\"diffHint\") or \"\"),\n        )\n        for item in file_edits\n        if str(item.get(\"path\") or \"\").strip()\n    )\n    return VerifierContext(\n        current_turn_user_queries=_extract_current_turn_user_queries(transcript),\n        recent_transcript=recent,\n        file_edit_summary=edits,\n        last_assistant_text=str(last_assistant_text or \"\"),\n        additional_criteria=str(additional_criteria or \"\"),\n    )\n"
+    },
+    {
+      "first_line": 264,
+      "last_line": 315,
+      "text": "def build_verifier_user_message(context: VerifierContext) -> str:\n    \"\"\"Render one third-person verifier message instead of prior assistant history.\"\"\"\n    sections = [\"=== USER REQUEST (CURRENT TURN) ===\"]\n    sections.extend(\n        context.current_turn_user_queries\n        or (\"(no current-turn user queries — evidence missing)\",)\n    )\n    sections.extend((\"\", \"=== RECENT MAIN AGENT TRANSCRIPT ===\"))\n    sections.append(_render_transcript(context.recent_transcript) or \"(empty)\")\n    sections.extend((\"\", \"=== FILE EDITS PERFORMED THIS TURN ===\"))\n    if context.file_edit_summary:\n        remaining = VERIFIER_DIFF_MAX_TOTAL\n        for path, hint in context.file_edit_summary:\n            if remaining <= 0:\n                sections.append(f\"- {path}: (diff evidence omitted: budget exhausted)\")\n                continue\n            limit = min(VERIFIER_DIFF_MAX_EACH, remaining)\n            bounded = _truncate_inside_budget(hint, limit, \"…[truncated]\")\n            sections.append(f\"- {path}: {bounded}\")\n            remaining -= len(bounded)\n    else:\n        sections.append(\n            \"(no file edits — text-only response, OR the agent did not actually \"\n            \"edit anything despite claiming it did)\"\n        )\n    sections.extend((\n        \"\",\n        \"=== MAIN AGENT FINAL TEXT (the answer the agent is delivering) ===\",\n        context.last_assistant_text or \"(empty text response)\",\n    ))\n    if context.additional_criteria.strip():\n        sections.extend((\n            \"\",\n            \"=== ADDITIONAL VERIFICATION CRITERIA ===\",\n            context.additional_criteria.strip(),\n        ))\n    sections.extend((\n        \"\",\n        \"Now call `emit_sidecar_verdict` exactly once with verdict ∈ \"\n        \"{accept, revise, blocked} and a `reason`. Remember: when \"\n        \"verdict=revise, the `reason` becomes a synthetic user follow-up the \"\n        \"main agent will see — write it as the user would.\",\n    ))\n    return \"\\n\".join(sections)\n\n\n_GREETING = re.compile(\n    r\"^(你好|您好|嗨|嘿|早安|早上好|早|hi|hello|hey|thanks|thank\\s*you|谢谢|\"\n    r\"多谢|谢|byebye|bye|再见|拜拜|ok|okay|好的|好|嗯|哦|noted|got\\s*it|sure|👋|🙏)\",\n    re.IGNORECASE,\n)\n_IMPERATIVE = re.compile("
+    }
+  ],
+  "finding": "24-message rolling transcript plus actual edit evidence; original context document body absent in both observed verifier payloads. This is a source-supported explanation, not a fixed regression or counterfactual model experiment."
+}

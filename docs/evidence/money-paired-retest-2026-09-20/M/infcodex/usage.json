@@ -1,0 +1,119 @@
+{
+  "per_request": [
+    {
+      "request_id": 1,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 17125,
+        "completion_tokens": 144,
+        "total_tokens": 17269,
+        "prompt_tokens_details": {
+          "cached_tokens": 1408
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 23
+        },
+        "prompt_cache_hit_tokens": 1408,
+        "prompt_cache_miss_tokens": 15717
+      }
+    },
+    {
+      "request_id": 2,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 17706,
+        "completion_tokens": 104,
+        "total_tokens": 17810,
+        "prompt_tokens_details": {
+          "cached_tokens": 1408
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 7
+        },
+        "prompt_cache_hit_tokens": 1408,
+        "prompt_cache_miss_tokens": 16298
+      }
+    },
+    {
+      "request_id": 3,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 18082,
+        "completion_tokens": 212,
+        "total_tokens": 18294,
+        "prompt_tokens_details": {
+          "cached_tokens": 17792
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 17792,
+        "prompt_cache_miss_tokens": 290
+      }
+    },
+    {
+      "request_id": 4,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 18456,
+        "completion_tokens": 211,
+        "total_tokens": 18667,
+        "prompt_tokens_details": {
+          "cached_tokens": 18176
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 18176,
+        "prompt_cache_miss_tokens": 280
+      }
+    },
+    {
+      "request_id": 5,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 18986,
+        "completion_tokens": 7514,
+        "total_tokens": 26500,
+        "prompt_tokens_details": {
+          "cached_tokens": 18560
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 7388
+        },
+        "prompt_cache_hit_tokens": 18560,
+        "prompt_cache_miss_tokens": 426
+      }
+    },
+    {
+      "request_id": 6,
+      "purpose": "coding",
+      "usage": {
+        "prompt_tokens": 26600,
+        "completion_tokens": 338,
+        "total_tokens": 26938,
+        "prompt_tokens_details": {
+          "cached_tokens": 26368
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 40
+        },
+        "prompt_cache_hit_tokens": 26368,
+        "prompt_cache_miss_tokens": 232
+      }
+    }
+  ],
+  "totals": {
+    "main": {
+      "requests": 6,
+      "usage_available": 6,
+      "prompt_tokens": 116955,
+      "completion_tokens": 8523,
+      "total_tokens": 125478,
+      "prompt_cache_hit_tokens": 83712,
+      "prompt_cache_miss_tokens": 33243
+    }
+  },
+  "cost": "cost unknown",
+  "cache_rule": "already included in prompt total"
+}

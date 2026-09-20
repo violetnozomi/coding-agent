@@ -1,0 +1,52 @@
+[
+  {
+    "time": 1789902434.666559,
+    "run_id": "20260920_190646_54430ce2",
+    "request_id": 6,
+    "event": "verification_result",
+    "command": "python -m pytest -q tests",
+    "stage": "regression",
+    "status": "failed",
+    "output": "...................................                      [100%]\n=================================== FAILURES ===================================\n________________ test_half_up_rounding_per_line[1.005-100-101] _________________\n\nunit_price = '1.005', quantity = 100, expected_minor = 101\n\n    @pytest.mark.parametrize(\n        \"unit_price,quantity,expected_minor\",\n        [\n            (\"0.005\", 1, 1),  # half up at the minor unit\n            (\"0.125\", 1, 13),\n            (\"0.125\", 4, 50),\n            (\"2.675\", 1, 268),\n            (\"0\", 5, 0),\n            (\"1.005\", 100, 101),\n        ],\n    )\n    def test_half_up_rounding_per_line(unit_price, quantity, expected_minor):\n        quote = quote_order([{\"unit_price\": unit_price, \"quantity\": quantity}])\n>       assert quote.subtotal_minor == expected_minor\nE       AssertionError: assert 10050 == 101\nE        +  where 10050 = Quote(currency='USD', subtotal_minor=10050, discount_minor=0, total_minor=10050).subtotal_minor\n\ntests/test_quote.py:46: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_quote.py::test_half_up_rounding_per_line[1.005-100-101] - A...\n1 failed, 50 passed in 0.03s"
+  },
+  {
+    "time": 1789902467.9730744,
+    "run_id": "20260920_190646_54430ce2",
+    "request_id": 15,
+    "event": "verification_result",
+    "command": "python -m pytest -q tests",
+    "stage": "regression",
+    "status": "passed",
+    "output": ".....................................................                    [100%]\n53 passed in 0.03s"
+  },
+  {
+    "time": 1789902532.3562508,
+    "run_id": "20260920_190646_54430ce2",
+    "request_id": 20,
+    "event": "verification_result",
+    "command": "python -m pytest -q tests 2>&1 | tail -30",
+    "stage": "regression",
+    "status": "failed",
+    "output": "......................................                   [100%]\n=================================== FAILURES ===================================\n__________________ test_consumers_share_keyword_only_options ___________________\n\n    def test_consumers_share_keyword_only_options():\n>       assert checkout(LINES, discount_bps=500) == {\"total\": 1.25}\nE       AssertionError: assert {'total': 2.37} == {'total': 1.25}\nE         \nE         Differing items:\nE         {'total': 2.37} != {'total': 1.25}\nE         Use -v to get more diff\n\ntests/test_consumers.py:36: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_consumers.py::test_consumers_share_keyword_only_options - A...\n1 failed, 53 passed in 0.03s"
+  },
+  {
+    "time": 1789902542.2496796,
+    "run_id": "20260920_190646_54430ce2",
+    "request_id": 24,
+    "event": "verification_result",
+    "command": "verify_changed_files",
+    "stage": "static",
+    "status": "passed",
+    "output": "OK: py_compile changed files\nOK  cli.py\nOK  jobs.py\nOK  mobile.py\nOK  reporting.py\nOK  web.py\nOK  billing/quote.py"
+  },
+  {
+    "time": 1789902563.0232656,
+    "run_id": "20260920_190646_54430ce2",
+    "request_id": 25,
+    "event": "verification_result",
+    "command": "python -m pytest -q tests",
+    "stage": "regression",
+    "status": "passed",
+    "output": "......................................................                   [100%]\n54 passed in 0.02s"
+  }
+]

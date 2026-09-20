@@ -1,0 +1,11 @@
+{
+  "user_message": "那就继续付费测试，看看我的nzcoder与infcodex的差别。完成任务后push一下。",
+  "scope": "One money task, each side once; existing natural auxiliary verifier/stall review included",
+  "per_run_main_cap": 24,
+  "per_run_auxiliary_cap": 8,
+  "main_total_cap": 48,
+  "auxiliary_total_cap": 16,
+  "automatic_reruns": false,
+  "cost": "cost unknown",
+  "source": "New user authorization this turn; historical authorization not reused"
+}

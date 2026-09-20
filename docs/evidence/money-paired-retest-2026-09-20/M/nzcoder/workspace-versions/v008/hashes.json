@@ -1,0 +1,14 @@
+{
+  "README.md": "84978eed9f14257c6dc102ac951ba0557ae498f416f74e9ecd4e14fefa4a97be",
+  "REQUIREMENTS.md": "37b543633f7cc036163840ca97ed9f6256e4e456b1f4b93d2c2e959cc44b1bcf",
+  "billing/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "billing/legacy.py": "90a7a0e14f58c8e9da76db1ea9661d2f7f38b77b879a48c331fd638d8d130a9d",
+  "billing/quote.py": "2a5bddd22ae841410ef164eba3e0b6910687ce6f245ba44dfb7866d0f9b3d46a",
+  "cli.py": "03fc7bd5028ed57e328d4be449d7d2f2d528ea53ee8b681e605ed2a239de5a1d",
+  "jobs.py": "e13b3790b675406cd3c418cac68bac0fe1e69bcd5c5e7e261a15a7432f08299d",
+  "mobile.py": "8ec50e7f395e93e75d49bb492eb484ba1501e976a5f1bb84f07f2262d1a153cd",
+  "reporting.py": "579eef14076e6e29594323b462f094fba431ed45d446b741f39039909c2fdfa1",
+  "tests/test_consumers.py": "6d0374b53d514c707569a048b025533ee1d16f6ba392df16bd5dda241e5ba6f8",
+  "tests/test_quote.py": "83c95487bee1e6926527606d8531ce60df3482cc1d4ac41f4fa15c74c923061f",
+  "web.py": "1038f43e11724a5fbcabec925989aaac004af6e2e955d43ececdf31eef35da0e"
+}

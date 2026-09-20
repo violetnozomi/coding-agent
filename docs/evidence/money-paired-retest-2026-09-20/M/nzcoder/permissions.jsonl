@@ -1,0 +1,12 @@
+{"tool": "bash", "input": {"command": "find . -type f -not -path \"./.git/*\" -not -path \"*/__pycache__/*\" | head -50 && echo \"---\" && cat REQUIREMENTS.md"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff --stat && echo \"=== original test_consumers ===\" && git show HEAD:tests/test_consumers.py 2>/dev/null; echo \"=== original files ===\"; git show HEAD:web.py 2>/dev/null; echo ---; git show HEAD:mobile.py 2>/dev/null; echo ---; git show HEAD:reporting.py 2>/dev/null; echo ---; git show HEAD:cli.py 2>/dev/null; echo ---; git show HEAD:jobs.py 2>/dev/null; echo ---; git ls-files"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git show HEAD:tests/test_consumers.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git diff -- tests/test_consumers.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git log --oneline -5; echo \"---\"; git status --short"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -a; ls .git 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile billing/quote.py", "_nz_runtime_verification_stage": "static"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests 2>&1 | tail -30"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests 2>&1 | tail -20"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests", "_nz_runtime_contract": true}, "allowed": true}

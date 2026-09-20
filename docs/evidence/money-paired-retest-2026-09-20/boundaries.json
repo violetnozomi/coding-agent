@@ -1,0 +1,55 @@
+{
+  "A": {
+    "strength": "strong frozen-version evidence",
+    "main_request": 14,
+    "transport_version": "v005",
+    "mutation_generation": 14,
+    "note": "First sampled complete artifact state passing all 19 independent checks, evaluated offline only after run. v001-v004 passed 18 but lacked documentation."
+  },
+  "B": {
+    "strength": "strong actual subprocess",
+    "main_request": 15,
+    "http_request": 15,
+    "command": "python -m pytest -q tests",
+    "result": "53 passed",
+    "exit": 0
+  },
+  "C": {
+    "strength": "strong runtime state",
+    "before_http_request": 16,
+    "mutation_generation": 14,
+    "verification_generation": 14,
+    "acceptance_mutation_generation": 13,
+    "note": "Documentation mutation is generation 14; required verification bound to current generation. REQUIREMENTS is unchanged and not required mutation."
+  },
+  "D": {
+    "strength": "strong runtime state, incomplete semantic acceptance",
+    "after_main_request": 15,
+    "statuses": {
+      "R1": "satisfied",
+      "R2": "satisfied",
+      "R3": "candidate",
+      "R4": "satisfied"
+    },
+    "note": "Deterministic completion candidate exists; not all completion conditions satisfied until review accepts, which never occurs."
+  },
+  "E": {
+    "strength": "strong terminal event",
+    "first_completion_review_candidate_after_main": 15,
+    "boundary": "streamed_tool_batch",
+    "early_tool_completion_candidate": true,
+    "decision": "continue",
+    "reason": "semantic_review_requires_revision",
+    "accepted_terminal_boundary": null
+  },
+  "F": {
+    "strength": "strong provider and terminal records",
+    "main_requests": 24,
+    "auxiliary_requests": 2,
+    "main_finish_reason": "stop",
+    "final_status": "max_turns",
+    "terminal_reason": "semantic_review_requires_revision",
+    "final_acceptance": "17 passed, 2 failed",
+    "normal_completion": false
+  }
+}

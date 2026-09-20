@@ -1,0 +1,113 @@
+[
+  {
+    "case": "M",
+    "side": "nzcoder",
+    "tools": [
+      "apply_patch",
+      "bash",
+      "diff_status",
+      "edit_file",
+      "emit_sidecar_verdict",
+      "glob_search",
+      "list_directory",
+      "read_file",
+      "verify_changed_files",
+      "write_file",
+      "write_files_batch"
+    ],
+    "paths": [
+      ".",
+      "README.md",
+      "REQUIREMENTS.md",
+      "billing/__init__.py",
+      "billing/legacy.py",
+      "billing/quote.py",
+      "cli.py",
+      "jobs.py",
+      "mobile.py",
+      "reporting.py",
+      "tests/test_consumers.py",
+      "tests/test_quote.py",
+      "web.py"
+    ],
+    "commands": [
+      {
+        "request_id": 1,
+        "command": "find . -type f -not -path \"./.git/*\" -not -path \"*/__pycache__/*\" | head -50 && echo \"---\" && cat REQUIREMENTS.md"
+      },
+      {
+        "request_id": 6,
+        "command": "python -m pytest -q tests"
+      },
+      {
+        "request_id": 8,
+        "command": "git diff --stat && echo \"=== original test_consumers ===\" && git show HEAD:tests/test_consumers.py 2>/dev/null; echo \"=== original files ===\"; git show HEAD:web.py 2>/dev/null; echo ---; git show HEAD:mobile.py 2>/dev/null; echo ---; git show HEAD:reporting.py 2>/dev/null; echo ---; git show HEAD:cli.py 2>/dev/null; echo ---; git show HEAD:jobs.py 2>/dev/null; echo ---; git ls-files"
+      },
+      {
+        "request_id": 10,
+        "command": "git show HEAD:tests/test_consumers.py"
+      },
+      {
+        "request_id": 13,
+        "command": "git diff -- tests/test_consumers.py"
+      },
+      {
+        "request_id": 15,
+        "command": "python -m pytest -q tests"
+      },
+      {
+        "request_id": 18,
+        "command": "git log --oneline -5; echo \"---\"; git status --short"
+      },
+      {
+        "request_id": 18,
+        "command": "ls -a; ls .git 2>/dev/null | head"
+      },
+      {
+        "request_id": 20,
+        "command": "python -m pytest -q tests 2>&1 | tail -30"
+      },
+      {
+        "request_id": 23,
+        "command": "python -m pytest -q tests 2>&1 | tail -20"
+      }
+    ],
+    "outside_explicit_paths": [],
+    "suspicious_commands": [],
+    "manual_review": "Automated suspicious path/command checks; individual commands retained below for manual review. Not a syscall audit or hermetic filesystem guarantee."
+  },
+  {
+    "case": "M",
+    "side": "infcodex",
+    "tools": [
+      "bash",
+      "read",
+      "todo_create"
+    ],
+    "paths": [
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/README.md",
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/REQUIREMENTS.md",
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/billing/__init__.py",
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/billing/legacy.py",
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/cli.py",
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/jobs.py",
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/mobile.py",
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/reporting.py",
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/tests/test_consumers.py",
+      "/tmp/money-paired-retest-20260920/M/infcodex/workspace/web.py"
+    ],
+    "commands": [
+      {
+        "request_id": 2,
+        "command": "cd /tmp/money-paired-retest-20260920/M/infcodex/workspace && find . -path ./.git -prune -o -type f -print | sort"
+      },
+      {
+        "request_id": 5,
+        "command": "cd /tmp/money-paired-retest-20260920/M/infcodex/workspace && git status --short && echo \"---\" && python --version && python -m pytest -q tests 2>&1 | tail -20"
+      }
+    ],
+    "outside_explicit_paths": [],
+    "suspicious_commands": [],
+    "manual_review": "Automated suspicious path/command checks; individual commands retained below for manual review. Not a syscall audit or hermetic filesystem guarantee."
+  }
+]

@@ -1,0 +1,98 @@
+[
+  {
+    "time": 1789902474.931082,
+    "run_id": "20260920_190646_54430ce2",
+    "request_id": 16,
+    "event": "terminal_boundary_settled",
+    "boundary": "streamed_tool_batch",
+    "decision": "continue",
+    "status": "",
+    "reason": "semantic_review_requires_revision",
+    "completed_turns": 15,
+    "nominal_turns": 24,
+    "hard_cap": 24,
+    "contract_executed": false,
+    "contract_required": true,
+    "contract_passed": true,
+    "mutation_generation": 14,
+    "unresolved_requirements": [
+      "R3"
+    ],
+    "semantic_review_pending_before": true,
+    "semantic_review_pending_after": true,
+    "semantic_review_generation": 14,
+    "early_tool_completion_candidate": true
+  },
+  {
+    "time": 1789902483.6711938,
+    "run_id": "20260920_190646_54430ce2",
+    "request_id": 17,
+    "event": "terminal_boundary_settled",
+    "boundary": "streamed_tool_batch",
+    "decision": "continue",
+    "status": "",
+    "reason": "hard_requirements_unresolved",
+    "completed_turns": 16,
+    "nominal_turns": 24,
+    "hard_cap": 24,
+    "contract_executed": false,
+    "contract_required": true,
+    "contract_passed": true,
+    "mutation_generation": 14,
+    "unresolved_requirements": [
+      "R3"
+    ],
+    "semantic_review_pending_before": true,
+    "semantic_review_pending_after": true,
+    "semantic_review_generation": 14,
+    "early_tool_completion_candidate": true
+  },
+  {
+    "time": 1789902491.991119,
+    "run_id": "20260920_190646_54430ce2",
+    "request_id": 18,
+    "event": "terminal_boundary_settled",
+    "boundary": "streamed_tool_batch",
+    "decision": "continue",
+    "status": "",
+    "reason": "hard_requirements_unresolved",
+    "completed_turns": 17,
+    "nominal_turns": 24,
+    "hard_cap": 24,
+    "contract_executed": false,
+    "contract_required": true,
+    "contract_passed": true,
+    "mutation_generation": 14,
+    "unresolved_requirements": [
+      "R3"
+    ],
+    "semantic_review_pending_before": true,
+    "semantic_review_pending_after": true,
+    "semantic_review_generation": 14,
+    "early_tool_completion_candidate": true
+  },
+  {
+    "time": 1789902564.9246376,
+    "run_id": "20260920_190646_54430ce2",
+    "request_id": 26,
+    "event": "terminal_boundary_settled",
+    "boundary": "natural_completion",
+    "decision": "finalize",
+    "status": "max_turns",
+    "reason": "semantic_review_requires_revision",
+    "completed_turns": 24,
+    "nominal_turns": 24,
+    "hard_cap": 24,
+    "contract_executed": true,
+    "contract_required": true,
+    "contract_passed": true,
+    "mutation_generation": 17,
+    "unresolved_requirements": [
+      "R3"
+    ],
+    "semantic_review_pending_before": true,
+    "semantic_review_pending_after": true,
+    "semantic_review_generation": 17,
+    "early_tool_completion_candidate": false
+  }
+]

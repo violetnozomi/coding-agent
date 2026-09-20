@@ -1,0 +1,4 @@
+{"event": "run_started", "case": "M", "side": "infcodex", "time": 1789902367.1129968}
+{"event": "run_finished", "case": "M", "side": "infcodex", "time": 1789902405.9173768, "counts": {"main": 6, "auxiliary": 0}, "acceptance": false}
+{"event": "run_started", "case": "M", "side": "nzcoder", "time": 1789902405.9303973}
+{"event": "run_finished", "case": "M", "side": "nzcoder", "time": 1789902565.8397257, "counts": {"main": 24, "auxiliary": 2}, "acceptance": false}

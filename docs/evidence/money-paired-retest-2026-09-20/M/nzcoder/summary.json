@@ -1,0 +1,45 @@
+{
+  "case": "M",
+  "side": "nzcoder",
+  "requests": 26,
+  "responses": 26,
+  "usage": {
+    "main": {
+      "requests": 24,
+      "usage_available": 24,
+      "prompt_tokens": 436585,
+      "completion_tokens": 24247,
+      "total_tokens": 460832,
+      "prompt_cache_hit_tokens": 161152,
+      "prompt_cache_miss_tokens": 275433
+    },
+    "auxiliary": {
+      "requests": 2,
+      "usage_available": 2,
+      "prompt_tokens": 20627,
+      "completion_tokens": 758,
+      "total_tokens": 21385,
+      "prompt_cache_hit_tokens": 1920,
+      "prompt_cache_miss_tokens": 18707
+    }
+  },
+  "terminal": "max_turns",
+  "acceptance_passed": false,
+  "checks": {
+    "public": {
+      "exit_code": 0,
+      "tail": "......................................................                   [100%]\n54 passed in 0.03s\n"
+    },
+    "independent": {
+      "exit_code": 1,
+      "tail": "         Use -v to get more diff\n\n/home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py:72: AssertionError\n_______________________ test_consumers_use_central_quote _______________________\n\napi = <module 'billing.quote' from '/tmp/complex-final-check-xyphli_z/workspace/billing/quote.py'>\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x79ff6372f360>\n\n    def test_consumers_use_central_quote(api, monkeypatch):\n        calls = []\n        def sentinel(*args, **kwargs):\n            calls.append((args, kwargs))\n            return api.Quote(currency='USD', subtotal_minor=987, discount_minor=0, total_minor=987)\n        monkeypatch.setattr(api, 'quote_order', sentinel)\n        modules = [importlib.reload(importlib.import_module(n)) for n in ['web', 'cli', 'jobs', 'mobile', 'reporting']]\n        lines = [{'unit_price': '1', 'quantity': 1}]\n>       assert modules[0].checkout(lines)['total_minor'] == 987\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE       KeyError: 'total_minor'\n\n/home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py:87: KeyError\n=========================== short test summary info ============================\nFAILED ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_all_five_consumers\nFAILED ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_consumers_use_central_quote\n2 failed, 17 passed in 0.02s\n"
+    }
+  },
+  "process": {
+    "exit_code": 0,
+    "elapsed_s": 159.27024169301149,
+    "harness_timeout": false
+  },
+  "tool_executions": 44,
+  "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+}

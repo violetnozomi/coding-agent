@@ -1,0 +1,45 @@
+{
+  "case": "M",
+  "side": "infcodex",
+  "requests": 6,
+  "responses": 6,
+  "usage": {
+    "main": {
+      "requests": 6,
+      "usage_available": 6,
+      "prompt_tokens": 116955,
+      "completion_tokens": 8523,
+      "total_tokens": 125478,
+      "prompt_cache_hit_tokens": 83712,
+      "prompt_cache_miss_tokens": 33243
+    }
+  },
+  "terminal": {
+    "capture_time": 1789902405.5083365,
+    "capture_request_id": 6,
+    "type": "run.result",
+    "success": true,
+    "signal": "",
+    "signalReason": "",
+    "sessionId": "complex-pair",
+    "limitReached": false
+  },
+  "acceptance_passed": false,
+  "checks": {
+    "public": {
+      "exit_code": 0,
+      "tail": ".                                                                        [100%]\n1 passed in 0.00s\n"
+    },
+    "independent": {
+      "exit_code": 1,
+      "tail": "omplex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_price[bad]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_price[1.2]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_price[None]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[0]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[-1]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[1.5]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[True]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[2]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_invalid_quantity[None]\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_validation_on_empty_order\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_all_five_consumers\nERROR ../../../home/pyh/nzcoder/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py::test_consumers_use_central_quote\n1 failed, 1 passed, 17 errors in 0.07s\n"
+    }
+  },
+  "process": {
+    "exit_code": 0,
+    "elapsed_s": 38.46165984799154,
+    "harness_timeout": false
+  },
+  "tool_executions": 12,
+  "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+}
