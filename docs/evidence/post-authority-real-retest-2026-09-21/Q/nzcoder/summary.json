@@ -1,0 +1,36 @@
+{
+  "case": "Q",
+  "side": "nzcoder",
+  "requests": 7,
+  "responses": 7,
+  "usage": {
+    "main": {
+      "requests": 7,
+      "usage_available": 7,
+      "prompt_tokens": 77766,
+      "completion_tokens": 42473,
+      "total_tokens": 120239,
+      "prompt_cache_hit_tokens": 43904,
+      "prompt_cache_miss_tokens": 33862
+    }
+  },
+  "terminal": "error",
+  "acceptance_passed": false,
+  "checks": {
+    "public": {
+      "exit_code": null,
+      "tail": ""
+    },
+    "independent": {
+      "exit_code": 1,
+      "tail": "tops scheduling and drains secondary failures (0.37846ms)\n✔ abort drains in-flight, forwards signal and removes listeners (1.790439ms)\n✔ pre-abort, empty validation and sync throw identity (0.555882ms)\n✔ first observed failure wins over later abort (0.817905ms)\n✔ batch forwards concurrency and abort (0.38311ms)\n✖ documents drain and cancellation (2.960245ms)\nℹ tests 7\nℹ suites 0\nℹ pass 6\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 43.226242\n\n✖ failing tests:\n\ntest at ../../..<REPO>/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/Q.cjs:78:1\n✖ documents drain and cancellation (2.960245ms)\n  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n  \n    assert.ok(text.includes('abort') && text.includes('concurr') && (text.includes('drain') || text.includes('in-flight')))\n  \n      at TestContext.<anonymous> (<REPO>/docs/evidence/complex-paired-preflight-2026-09-20/acceptance/Q.cjs:80:10)\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1325:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)\n      at Test.postRun (node:internal/test_runner/test:1465:19)\n      at Test.run (node:internal/test_runner/test:1390:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,\n    operator: '==',\n    diff: 'simple'\n  }\n"
+    }
+  },
+  "process": {
+    "exit_code": 0,
+    "elapsed_s": 311.3686806250007,
+    "harness_timeout": false
+  },
+  "tool_executions": 16,
+  "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+}

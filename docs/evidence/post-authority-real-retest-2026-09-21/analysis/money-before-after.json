@@ -1,0 +1,47 @@
+{
+  "before": {
+    "source": "money-paired-retest-2026-09-20/M/nzcoder",
+    "best_acceptance": "19/19",
+    "final_acceptance": "17/19",
+    "main": 24,
+    "auxiliary": 2,
+    "terminal": "max_turns",
+    "spec_visible": false,
+    "verdicts": [
+      "revise",
+      "revise"
+    ],
+    "first_damage": "main #18 / V5 -> V6, checkout + export restored to old format"
+  },
+  "after": {
+    "evidence_source": "M/nzcoder",
+    "authority_source": "initial_user_instruction",
+    "best_acceptance": "19/19",
+    "first_full_acceptance": {
+      "main": 13,
+      "generation": 12,
+      "version": "V5"
+    },
+    "final_acceptance": "19/19",
+    "main": 17,
+    "auxiliary": 1,
+    "terminal": "completed",
+    "spec_visible": true,
+    "authority_hash": "37b543633f7cc036163840ca97ed9f6256e4e456b1f4b93d2c2e959cc44b1bcf",
+    "model_observed": true,
+    "complete": true,
+    "authority_epoch": 0,
+    "source_message_id": "",
+    "verdicts": [
+      "accept"
+    ],
+    "asks_old_output_restoration": false,
+    "post_review_mutation": false,
+    "first_divergence_from_best": null,
+    "final_verification_generation": 12,
+    "terminal_reason": "semantic_review_and_ledger_satisfied",
+    "classification": "A"
+  },
+  "comparison": "historical comparison; not concurrent rerun",
+  "interpretation": "Observed spec-loss/destructive-review trajectory did not recur in this single sample. Not an isolated counterfactual or general success rate estimate."
+}

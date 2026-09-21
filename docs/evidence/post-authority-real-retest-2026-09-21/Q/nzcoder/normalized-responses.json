@@ -1,0 +1,257 @@
+[
+  {
+    "request_id": 1,
+    "purpose": "coding",
+    "http_status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_3QeRYzhMuxfMFtBetmGK7030",
+        "name": "bash",
+        "arguments": "{\"command\": \"ls -la && echo \\\"---\\\" && ls -la lib tests 2>/dev/null\"}"
+      },
+      {
+        "id": "call_01_ppWv31krgtvJ1NlQB3XA2012",
+        "name": "read_file",
+        "arguments": "{\"path\": \"REQUIREMENTS.md\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 7863,
+      "completion_tokens": 95,
+      "total_tokens": 7958,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 8
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 7863
+    },
+    "transport_error_type": null
+  },
+  {
+    "request_id": 2,
+    "purpose": "coding",
+    "http_status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_tRMjqWRZurtIcGPAW0478770",
+        "name": "list_directory",
+        "arguments": "{\"path\": \".\", \"depth\": 2}"
+      },
+      {
+        "id": "call_01_yKVAlEhZIbzL8HB3ytI89415",
+        "name": "read_file",
+        "arguments": "{\"path\": \"lib/pool.cjs\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8416,
+      "completion_tokens": 98,
+      "total_tokens": 8514,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 13
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 608
+    },
+    "transport_error_type": null
+  },
+  {
+    "request_id": 3,
+    "purpose": "coding",
+    "http_status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_ET_3QKRQP3crjOD56wP5KWm4868",
+        "name": "read_file",
+        "arguments": "{\"path\": \"lib/batch.cjs\"}"
+      },
+      {
+        "id": "call_01_ET_3hYFwpN2vzYcxNZvQMHY3652",
+        "name": "read_file",
+        "arguments": "{\"path\": \"index.cjs\"}"
+      },
+      {
+        "id": "call_02_ET_UCJDkSjxfzX8fJkEmBvk7536",
+        "name": "read_file",
+        "arguments": "{\"path\": \"README.md\"}"
+      },
+      {
+        "id": "call_03_ET_QjIUNSplbA8UUxpY8yUe6626",
+        "name": "read_file",
+        "arguments": "{\"path\": \"tests/pool.test.cjs\"}"
+      },
+      {
+        "id": "call_04_ET_Ft2hRLWERFX0mez8nkP21992",
+        "name": "read_file",
+        "arguments": "{\"path\": \"tests/batch.test.cjs\"}"
+      },
+      {
+        "id": "call_05_ET_HSbT4KwANfSsxAk6Z0vO8140",
+        "name": "read_file",
+        "arguments": "{\"path\": \"package.json\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8690,
+      "completion_tokens": 196,
+      "total_tokens": 8886,
+      "prompt_tokens_details": {
+        "cached_tokens": 8320
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 8320,
+      "prompt_cache_miss_tokens": 370
+    },
+    "transport_error_type": null
+  },
+  {
+    "request_id": 4,
+    "purpose": "coding",
+    "http_status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_CTycp3AYhxnUhySpDeUU2911",
+        "name": "bash",
+        "arguments": "{\"command\": \"node --version\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 9609,
+      "completion_tokens": 14723,
+      "total_tokens": 24332,
+      "prompt_tokens_details": {
+        "cached_tokens": 8832
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 14684
+      },
+      "prompt_cache_hit_tokens": 8832,
+      "prompt_cache_miss_tokens": 777
+    },
+    "transport_error_type": null
+  },
+  {
+    "request_id": 5,
+    "purpose": "coding",
+    "http_status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_kTxKJVybUkbrB3Oz2lGK7555",
+        "name": "write_file",
+        "arguments": "{\"path\": \"lib/pool.cjs\", \"content\": \"'use strict';\\n\\n/**\\n * Bounded-concurrency map.\\n *\\n * mapLimit(items, limit, worker, {signal} = {}) -> Promise<results>\\n *\\n * Guarantees:\\n *  - arguments are validated (TypeError) before any worker is invoked,\\n *    including for empty input;\\n *  - results resolve in input order and the input array is never mutated;\\n *  - at most `limit` workers are in flight, available slots are filled\\n *    immediately and every item is started exactly once;\\n *  - the first observed worker failure stops scheduling; already-started\\n *    work is allowed to drain and then the first failure is rethrown with\\n *    its original identity;\\n *  - an optional AbortSignal cancels pending work, preserves the abort\\n *    reason identity and its listener is removed once settled.\\n */\\nfunction mapLimit(items, limit, worker, options) {\\n  return new Promise((resolve, reject) => {\\n    if (!Array.isArray(items)) {\\n      reject(new TypeError('mapLimit: items must be an array'));\\n      return;\\n    }\\n    if (!Number.isInteger(limit) || limit <= 0) {\\n      reject(new TypeError('mapLimit: limit must be a positive integer'));\\n      return;\\n    }\\n    if (typeof worker !== 'function') {\\n      reject(new TypeError('mapLimit: worker must be a function'));\\n      return;\\n    }\\n\\n    const opts = options == null ? {} : options;\\n    const signal = opts.signal;\\n    const canListen = signal != null && typeof signal.addEventListener === 'function';\\n\\n    // An already-aborted signal starts no work at all.\\n    if (signal != null && signal.aborted) {\\n      reject(signal.reason);\\n      return;\\n    }\\n\\n    const total = items.length;\\n    const results = new Array(total);\\n\\n    let nextIndex = 0;\\n    let active = 0;\\n    let failureObserved = false;\\n    let failureReason;\\n    let settled = false;\\n\\n    function removeAbortListener() {\\n      if (canListen) signal.removeEventListener('abort', onAbort);\\n    }\\n\\n    function observeFailure(reason) {\\n      if (failureObserved) return;\\n      failureObserved = true;\\n      failureReason = reason;\\n    }\\n\\n    function finish() {\\n      if (settled) return;\\n      if (failureObserved) {\\n        // Wait for every already-started worker to settle before rejecting.\\n        if (active > 0) return;\\n        settled = true;\\n        removeAbortListener();\\n        reject(failureReason);\\n        return;\\n      }\\n      if (active === 0 && nextIndex >= total) {\\n        settled = true;\\n        removeAbortListener();\\n        resolve(results);\\n      }\\n    }\\n\\n    function onSlotSettled() {\\n      active -= 1;\\n      if (failureObserved) finish();\\n      else schedule();\\n    }\\n\\n    function onAbort() {\\n      // First observed failure/abort wins; in-flight work still drains.\\n      observeFailure(signal.reason);\\n      finish();\\n    }\\n\\n    function schedule() {\\n      if (settled) return;\\n      while (!failureObserved && active < limit && nextIndex < total) {\\n        const index = nextIndex;\\n        nextIndex += 1;\\n        active += 1;\\n\\n        let produced;\\n        try {\\n          produced = worker(items[index], index, signal);\\n        } catch (error) {\\n          active -= 1;\\n          observeFailure(error);\\n          finish();\\n          return;\\n        }\\n\\n        // Both handlers are attached so secondary failures stay handled.\\n        Promise.resolve(produced).then(\\n          (value) => {\\n            results[index] = value;\\n            onSlotSettled();\\n          },\\n          (error) => {\\n            observeFailure(error);\\n            onSlotSettled();\\n          }\\n        );\\n      }\\n      finish();\\n    }\\n\\n    if (canListen) signal.addEventListener('abort', onAbort);\\n    schedule();\\n  });\\n}\\n\\nmodule.exports = {mapLimit};\\n\"}"
+      },
+      {
+        "id": "call_01_sWZtYM7VyBbUS2AtHN4M1775",
+        "name": "write_file",
+        "arguments": "{\"path\": \"lib/batch.cjs\", \"content\": \"'use strict';\\n\\nconst {mapLimit} = require('./pool.cjs');\\n\\nconst DEFAULT_CONCURRENCY = 2;\\n\\n/**\\n * processBatch(records, send, options = {}) -> Promise<Array<{id, value}>>\\n *\\n * Runs `send(record)` for every record with bounded concurrency\\n * (options.concurrency, default 2), forwards options.signal for\\n * cancellation and resolves ordered {id, value} records. Every record is\\n * sent at most once, and a failure/abort propagates as a rejection.\\n */\\nasync function processBatch(records, send, options) {\\n  const opts = options == null ? {} : options;\\n  const concurrency = opts.concurrency == null ? DEFAULT_CONCURRENCY : opts.concurrency;\\n\\n  return mapLimit(\\n    records,\\n    concurrency,\\n    async (record) => ({id: record.id, value: await send(record)}),\\n    {signal: opts.signal}\\n  );\\n}\\n\\nmodule.exports = {processBatch};\\n\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 9685,
+      "completion_tokens": 21944,
+      "total_tokens": 31629,
+      "prompt_tokens_details": {
+        "cached_tokens": 6784
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 20794
+      },
+      "prompt_cache_hit_tokens": 6784,
+      "prompt_cache_miss_tokens": 2901
+    },
+    "transport_error_type": null
+  },
+  {
+    "request_id": 6,
+    "purpose": "coding",
+    "http_status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "Now the tests, per the requirement to add meaningful coverage:",
+    "tool_calls": [
+      {
+        "id": "call_00_cDh9v2XSmgScgr5127Zs6131",
+        "name": "write_file",
+        "arguments": "{\"content\": \"const test = require('node:test');\\nconst assert = require('node:assert/strict');\\nconst {mapLimit} = require('../index.cjs');\\n\\nfunction deferred() {\\n  let resolve;\\n  let reject;\\n  const promise = new Promise((res, rej) => {\\n    resolve = res;\\n    reject = rej;\\n  });\\n  return {promise, resolve, reject};\\n}\\n\\nfunction trackAbortListeners(signal) {\\n  const counts = {added: 0, removed: 0};\\n  const add = signal.addEventListener.bind(signal);\\n  const remove = signal.removeEventListener.bind(signal);\\n  signal.addEventListener = (type, fn, opts) => {\\n    if (type === 'abort') counts.added += 1;\\n    return add(type, fn, opts);\\n  };\\n  signal.removeEventListener = (type, fn, opts) => {\\n    if (type === 'abort') counts.removed += 1;\\n    return remove(type, fn, opts);\\n  };\\n  return counts;\\n}\\n\\ntest('maps values and preserves falsy results', async () => {\\n  assert.deepEqual(await mapLimit([1, 2], 2, x => x - 1), [0, 1]);\\n  assert.deepEqual(await mapLimit([1, 2, 3], 2, () => 0), [0, 0, 0]);\\n  assert.deepEqual(await mapLimit([1, 2, 3], 1, () => false), [false, false, false]);\\n  assert.deepEqual(await mapLimit([1, 2], 2, () => null), [null, null]);\\n  assert.deepEqual(await mapLimit([1, 2], 2, () => ''), ['', '']);\\n});\\n\\ntest('empty input', async () => assert.deepEqual(await mapLimit([], 2, x => x), []));\\n\\ntest('rejects invalid arguments with TypeError before invoking the worker', async () => {\\n  let calls = 0;\\n  const worker = () => {\\n    calls += 1;\\n  };\\n\\n  await assert.rejects(() => mapLimit('nope', 2, worker), TypeError);\\n  await assert.rejects(() => mapLimit(null, 2, worker), TypeError);\\n  await assert.rejects(() => mapLimit([1], 0, worker), TypeError);\\n  await assert.rejects(() => mapLimit([1], -1, worker), TypeError);\\n  await assert.rejects(() => mapLimit([1], 1.5, worker), TypeError);\\n  await assert.rejects(() => mapLimit([1], '2', worker), TypeError);\\n  await assert.rejects(() => mapLimit([1], 2, 'nope'), TypeError);\\n\\n  // Validation must also happen for empty input, before any worker runs.\\n  await assert.rejects(() => mapLimit([], 0, worker), TypeError);\\n  await assert.rejects(() => mapLimit([], -3, worker), TypeError);\\n  await assert.rejects(() => mapLimit('', 2, worker), TypeError);\\n\\n  assert.equal(calls, 0);\\n});\\n\\ntest('never mutates the input array and reports (item, index, signal)', async () => {\\n  const items = [3, 1, 2];\\n  const snapshot = items.slice();\\n  const seen = [];\\n  const signal = new AbortController().signal;\\n\\n  const results = await mapLimit(items, 2, (item, index, received) => {\\n    seen.push([item, index, received]);\\n    return item * 10;\\n  }, {signal});\\n\\n  assert.deepEqual(results, [30, 10, 20]);\\n  assert.deepEqual(items, snapshot);\\n  assert.deepEqual(seen.map((entry) => entry[1]).sort((a, b) => a - b), [0, 1, 2]);\\n  assert.deepEqual(seen.map((entry) => entry[0]).sort((a, b) => a - b), [1, 2, 3]);\\n  for (const entry of seen) assert.equal(entry[2], signal);\\n});\\n\\ntest('caps in-flight workers at limit and fills free slots eagerly', async () => {\\n  const gate = deferred();\\n  const started = [];\\n  let inFlight = 0;\\n  let peak = 0;\\n\\n  const running = mapLimit([0, 1, 2, 3, 4, 5], 2, async (item) => {\\n    started.push(item);\\n    inFlight += 1;\\n    peak = Math.max(peak, inFlight);\\n    await gate.promise;\\n    inFlight -= 1;\\n    return item;\\n  });\\n\\n  // Exactly `limit` workers start without waiting for the whole batch.\\n  await Promise.resolve();\\n  assert.deepEqual(started, [0, 1]);\\n\\n  gate.resolve();\\n  assert.deepEqual(await running, [0, 1, 2, 3, 4, 5]);\\n  assert.equal(peak, 2);\\n  assert.deepEqual(started, [0, 1, 2, 3, 4, 5]);\\n});\\n\\ntest('starts every item exactly once even when limit exceeds the workload', async () => {\\n  const started = [];\\n  const results = await mapLimit([9, 8, 7], 10, (item, index) => {\\n    started.push(index);\\n    return item;\\n  });\\n  assert.deepEqual(results, [9, 8, 7]);\\n  assert.deepEqual(started, [0, 1, 2]);\\n});\\n\\ntest('drains already-started work, stops scheduling and rethrows the first error', async () => {\\n  const first = new Error('first boom');\\n  const second = new Error('second boom');\\n  const gate = deferred();\\n  const started = [];\\n  let release = 0;\\n\\n  const running = mapLimit([0, 1, 2, 3, 4], 2, async (item) => {\\n    started.push(item);\\n    if (item === 0) throw first;\\n    if (item === 1) {\\n      await gate.promise;\\n      throw second;\\n    }\\n    release += 1;\\n    return item;\\n  });\\n\\n  const observed = await running.then(\\n    () => {\\n      throw new Error('expected mapLimit to reject');\\n    },\\n    (error) => error\\n  );\\n\\n  assert.equal(observed, first);\\n  // Item 1 was already in flight, so it must be allowed to settle...\\n  assert.deepEqual(started, [0, 1]);\\n  // ...and no further item is ever started.\\n  assert.equal(release, 0);\\n  gate.resolve();\\n});\\n\\ntest('rejects with the first error even when a later failure is observed first', async () => {\\n  const slow = new Error('slow');\\n  const fast = new Error('fast');\\n  const gate = deferred();\\n\\n  await assert.rejects(\\n    mapLimit([0, 1], 2, async (item) => {\\n      if (item === 0) {\\n        await gate.promise;\\n        throw slow;\\n      }\\n      // Observed before the other slot settles, but not the first failure\\n      // in scheduling order? Here it *is* observed first.\\n      throw fast;\\n    }),\\n    (error) => error === fast\\n  );\\n  gate.resolve();\\n});\\n\\ntest('waits for in-flight work to settle before rejecting', async () => {\\n  let drained = false;\\n  const gate = deferred();\\n\\n  const running = mapLimit([0, 1], 2, async (item) => {\\n    if (item === 0) throw new Error('boom');\\n    await gate.promise;\\n    drained = true;\\n    return item;\\n  });\\n\\n  let settled = false;\\n  running.catch(() => {\\n    settled = true;\\n  });\\n\\n  await new Promise((resolve) => setTimeout(resolve, 5));\\n  assert.equal(settled, false, 'must not reject while a worker is still in flight');\\n  assert.equal(drained, false);\\n\\n  gate.resolve();\\n  await running.catch(() => {});\\n  assert.equal(drained, true);\\n});\\n\\ntest('already-aborted signal starts no work and preserves the reason identity', async () => {\\n  const controller = new AbortController();\\n  const reason = {code: 'pre-aborted'};\\n  controller.abort(reason);\\n  let started = 0;\\n\\n  await assert.rejects(\\n    mapLimit([1, 2, 3], 2, () => {\\n      started += 1;\\n      return 1;\\n    }, {signal: controller.signal}),\\n    (error) => error === reason\\n  );\\n  assert.equal(started, 0);\\n\\n  // Also with an empty workload.\\n  await assert.rejects(\\n    mapLimit([], 2, () => 1, {signal: controller.signal}),\\n    (error) => error === reason\\n  );\\n});\\n\\ntest('mid-run abort stops scheduling, drains in-flight work and preserves reason', async () => {\\n  const controller = new AbortController();\\n  const reason = new Error('cancelled');\\n  const gate = deferred();\\n  const started = [];\\n\\n  const running = mapLimit([0, 1, 2, 3], 2, async (item) => {\\n    started.push(item);\\n    await gate.promise;\\n    return item;\\n  }, {signal: controller.signal});\\n\\n  await Promise.resolve();\\n  assert.deepEqual(started, [0, 1]);\\n\\n  controller.abort(reason);\\n\\n  let settled = false;\\n  running.catch(() => {\\n    settled = true;\\n  });\\n  await new Promise((resolve) => setTimeout(resolve, 5));\\n  assert.equal(settled, false, 'in-flight workers must be allowed to drain');\\n\\n  gate.resolve();\\n  await assert.rejects(running, (error) => error === reason);\\n  assert.deepEqual(started, [0, 1]);\\n});\\n\\ntest('a synchronous worker throw is a first-class failure', async () => {\\n  const boom = new Error('sync boom');\\n  const started = [];\\n\\n  await assert.rejects(\\n    mapLimit([0, 1, 2], 1, (item) => {\\n      started.push(item);\\n      throw boom;\\n    }),\\n    (error) => error === boom\\n  );\\n  assert.deepEqual(started, [0]);\\n});\\n\\ntest('the first observed failure wins over a later abort', async () => {\\n  const controller = new AbortController();\\n  const boom = new Error('worker boom');\\n  const abortReason = new Error('abort reason');\\n  const gate = deferred();\\n\\n  const running = mapLimit([0, 1, 2], 2, async (item) => {\\n    if (item === 0) throw boom;\\n    await gate.promise;\\n    return item;\\n  }, {signal: controller.signal});\\n\\n  await new Promise((resolve) => setTimeout(resolve, 5));\\n  controller.abort(abortReason);\\n  gate.resolve();\\n\\n  await assert.rejects(running, (error) => error === boom);\\n});\\n\\ntest('secondary failures do not become unhandled rejections', async () => {\\n  const unhandled = [];\\n  const onUnhandled = (reason) => unhandled.push(reason);\\n  process.on('unhandledRejection', onUnhandled);\\n\\n  try {\\n    const first = new Error('first');\\n    const second = new Error('second');\\n    const gate = deferred();\\n\\n    await assert.rejects(\\n      mapLimit([0, 1], 2, async (item) => {\\n        if (item === 0) {\\n          await gate.promise;\\n          throw first;\\n        }\\n        throw second;\\n      }),\\n      (error) => error === second\\n    );\\n    gate.resolve();\\n\\n    // Give any stray rejection a chance to surface.\\n    await new Promise((resolve) => setTimeout(resolve, 10));\\n    assert.deepEqual(unhandled, []);\\n  } finally {\\n    process.removeListener('unhandledRejection', onUnhandled);\\n  }\\n});\\n\\ntest('removes the abort listener after settling', async () => {\\n  const controller = new AbortController();\\n  const counts = trackAbortListeners(controller.signal);\\n\\n  await mapLimit([1, 2], 2, (x) => x, {signal: controller.signal});\\n  assert.equal(counts.added, 1);\\n  assert.equal(counts.removed, 1);\\n\\n  const failing = new AbortController();\\n  const failingCounts = trackAbortListeners(failing.signal);\\n  await assert.rejects(\\n    mapLimit([1], 1, () => {\\n      throw new Error('nope');\\n    }, {signal: failing.signal})\\n  );\\n  assert.equal(failingCounts.added, 1);\\n  assert.equal(failingCounts.removed, 1);\\n});\\n\\ntest('options and signal are optional', async () => {\\n  assert.deepEqual(await mapLimit([1, 2], 2, (x) => x * 2), [2, 4]);\\n  assert.deepEqual(await mapLimit([1, 2], 2, (x) => x * 2, {}), [2, 4]);\\n  assert.deepEqual(await mapLimit([1, 2], 2, (x, _i, signal) => signal, {signal: undefined}), [\\n    undefined,\\n    undefined\\n  ]);\\n});\\n\", \"path\": \"tests/pool.test.cjs\"}"
+      },
+      {
+        "id": "call_01_7m3f0HN2zmLO0s1wqOZk5654",
+        "name": "write_file",
+        "arguments": "{\"content\": \"const test = require('node:test');\\nconst assert = require('node:assert/strict');\\nconst {processBatch} = require('../index.cjs');\\n\\nfunction deferred() {\\n  let resolve;\\n  let reject;\\n  const promise = new Promise((res, rej) => {\\n    resolve = res;\\n    reject = rej;\\n  });\\n  return {promise, resolve, reject};\\n}\\n\\ntest('batch maps ids', async () => {\\n  assert.deepEqual(await processBatch([{id: 'a'}, {id: 'b'}], async x => x.id),\\n    [{id: 'a', value: 'a'}, {id: 'b', value: 'b'}]);\\n});\\n\\ntest('returns ordered records regardless of completion order', async () => {\\n  const gates = [deferred(), deferred(), deferred()];\\n  const records = [{id: 'a'}, {id: 'b'}, {id: 'c'}];\\n\\n  const running = processBatch(records, async (record) => {\\n    const index = records.indexOf(record);\\n    await gates[index].promise;\\n    return record.id.toUpperCase();\\n  });\\n\\n  // Resolve out of order.\\n  gates[2].resolve();\\n  gates[0].resolve();\\n  gates[1].resolve();\\n\\n  assert.deepEqual(await running, [\\n    {id: 'a', value: 'A'},\\n    {id: 'b', value: 'B'},\\n    {id: 'c', value: 'C'}\\n  ]);\\n});\\n\\ntest('sends each record at most once', async () => {\\n  const sent = [];\\n  const records = [{id: 'a'}, {id: 'b'}, {id: 'c'}, {id: 'd'}];\\n\\n  await processBatch(records, async (record) => {\\n    sent.push(record.id);\\n    return 1;\\n  });\\n\\n  assert.deepEqual(sent.slice().sort(), ['a', 'b', 'c', 'd']);\\n  assert.equal(sent.length, records.length);\\n});\\n\\ntest('defaults to concurrency 2 and honours options.concurrency', async () => {\\n  const gate = deferred();\\n\\n  let inFlight = 0;\\n  let peakDefault = 0;\\n  const defaultRun = processBatch([{id: 1}, {id: 2}, {id: 3}, {id: 4}], async () => {\\n    inFlight += 1;\\n    peakDefault = Math.max(peakDefault, inFlight);\\n    await gate.promise;\\n    inFlight -= 1;\\n    return true;\\n  });\\n  await Promise.resolve();\\n  assert.equal(peakDefault, 2);\\n  gate.resolve();\\n  await defaultRun;\\n\\n  const gate2 = deferred();\\n  let peakCustom = 0;\\n  let inFlight2 = 0;\\n  const customRun = processBatch(\\n    [{id: 1}, {id: 2}, {id: 3}, {id: 4}],\\n    async () => {\\n      inFlight2 += 1;\\n      peakCustom = Math.max(peakCustom, inFlight2);\\n      await gate2.promise;\\n      inFlight2 -= 1;\\n      return true;\\n    },\\n    {concurrency: 1}\\n  );\\n  await Promise.resolve();\\n  assert.equal(peakCustom, 1);\\n  gate2.resolve();\\n  await customRun;\\n});\\n\\ntest('propagates send rejections with identity and drains in-flight work', async () => {\\n  const boom = new Error('send failed');\\n  const gate = deferred();\\n  const started = [];\\n\\n  const running = processBatch(\\n    [{id: 'a'}, {id: 'b'}, {id: 'c'}, {id: 'd'}],\\n    async (record) => {\\n      started.push(record.id);\\n      if (record.id === 'a') throw boom;\\n      await gate.promise;\\n      return record.id;\\n    },\\n    {concurrency: 2}\\n  );\\n\\n  await assert.rejects(running, (error) => error === boom);\\n  assert.deepEqual(started, ['a', 'b']);\\n  gate.resolve();\\n});\\n\\ntest('cancels via options.signal and preserves the abort reason', async () => {\\n  const controller = new AbortController();\\n  const reason = new Error('batch cancelled');\\n  const gate = deferred();\\n  const started = [];\\n\\n  const running = processBatch(\\n    [{id: 'a'}, {id: 'b'}, {id: 'c'}],\\n    async (record) => {\\n      started.push(record.id);\\n      await gate.promise;\\n      return record.id;\\n    },\\n    {concurrency: 1, signal: controller.signal}\\n  );\\n\\n  await Promise.resolve();\\n  controller.abort(reason);\\n\\n  let settled = false;\\n  running.catch(() => {\\n    settled = true;\\n  });\\n  await new Promise((resolve) => setTimeout(resolve, 5));\\n  assert.equal(settled, false, 'in-flight send must drain before rejecting');\\n\\n  gate.resolve();\\n  await assert.rejects(running, (error) => error === reason);\\n  assert.deepEqual(started, ['a']);\\n});\\n\\ntest('an already-aborted signal sends nothing', async () => {\\n  const controller = new AbortController();\\n  const reason = {code: 'pre-aborted'};\\n  controller.abort(reason);\\n  let calls = 0;\\n\\n  await assert.rejects(\\n    processBatch([{id: 'a'}], () => {\\n      calls += 1;\\n      return 1;\\n    }, {signal: controller.signal}),\\n    (error) => error === reason\\n  );\\n  assert.equal(calls, 0);\\n});\\n\\ntest('rejects invalid arguments with TypeError', async () => {\\n  await assert.rejects(() => processBatch('nope', async () => 1), TypeError);\\n  await assert.rejects(() => processBatch([{id: 'a'}], 'nope'), TypeError);\\n  await assert.rejects(() => processBatch([{id: 'a'}], async () => 1, {concurrency: 0}), TypeError);\\n});\\n\\ntest('empty input resolves to an empty list', async () => {\\n  assert.deepEqual(await processBatch([], async () => 1), []);\\n});\\n\", \"path\": \"tests/batch.test.cjs\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 12736,
+      "completion_tokens": 5288,
+      "total_tokens": 18024,
+      "prompt_tokens_details": {
+        "cached_tokens": 5248
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 993
+      },
+      "prompt_cache_hit_tokens": 5248,
+      "prompt_cache_miss_tokens": 7488
+    },
+    "transport_error_type": null
+  },
+  {
+    "request_id": 7,
+    "purpose": "coding",
+    "http_status": 200,
+    "finish_reason": [
+      "tool_calls"
+    ],
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_00_fzaPnK7y1x8RJv5iYMs13002",
+        "name": "bash",
+        "arguments": "{\"command\": \"node --test tests/pool.test.cjs tests/batch.test.cjs\"}"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 20767,
+      "completion_tokens": 129,
+      "total_tokens": 20896,
+      "prompt_tokens_details": {
+        "cached_tokens": 6912
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 78
+      },
+      "prompt_cache_hit_tokens": 6912,
+      "prompt_cache_miss_tokens": 13855
+    },
+    "transport_error_type": null
+  }
+]

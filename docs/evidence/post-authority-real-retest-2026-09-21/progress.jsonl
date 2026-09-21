@@ -1,0 +1,4 @@
+{"event": "run_started", "case": "M", "side": "nzcoder", "time": 1789998895.6406825}
+{"event": "run_finished", "case": "M", "side": "nzcoder", "time": 1789998980.1859438, "counts": {"main": 17, "auxiliary": 1}, "acceptance": true}
+{"event": "run_started", "case": "Q", "side": "nzcoder", "time": 1789999100.6991978}
+{"event": "run_finished", "case": "Q", "side": "nzcoder", "time": 1789999457.558634, "counts": {"main": 7, "auxiliary": 0}, "acceptance": false}

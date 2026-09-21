@@ -1,0 +1,39 @@
+{
+  "passed": true,
+  "baseline": "45db8e38a8de58d404b6601a47b2fe5b518f248a",
+  "invariants": {
+    "source": {
+      "files": 376,
+      "changed": []
+    },
+    "historical": {
+      "files": 1814,
+      "changed": []
+    },
+    "M": {
+      "frozen_files": 196,
+      "changed": [],
+      "unexpected": []
+    },
+    "Q": {
+      "frozen_files": 96,
+      "changed": [],
+      "unexpected": []
+    }
+  },
+  "scanned_files": 469,
+  "checks": [
+    "exact configured secret values (never emitted)",
+    "credential patterns",
+    "structured private reasoning/header keys",
+    "host user paths",
+    "frozen evidence hashes",
+    "historical and production hashes"
+  ],
+  "failures": [],
+  "real_main_requests": 24,
+  "real_auxiliary_requests": 1,
+  "infcodex_requests": 0,
+  "cost": "unknown",
+  "limitation": "Pattern and exact-value scans do not prove absence of every possible unknown secret."
+}

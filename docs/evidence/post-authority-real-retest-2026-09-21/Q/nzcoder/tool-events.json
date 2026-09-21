@@ -1,0 +1,535 @@
+[
+  {
+    "request_id": 1,
+    "before_snapshot": 6,
+    "after_snapshot": 7,
+    "result": {
+      "name": "bash",
+      "tool_input": {
+        "command": "ls -la && echo \"---\" && ls -la lib tests 2>/dev/null"
+      },
+      "output": "Denied by user",
+      "executed": false,
+      "dispatch_failed": true,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 2.876,
+      "queue_wait_ms": 0.135,
+      "permission_denied": true,
+      "title": "",
+      "metadata": {},
+      "attachments": [],
+      "category": "command"
+    }
+  },
+  {
+    "request_id": 1,
+    "before_snapshot": 8,
+    "after_snapshot": 9,
+    "result": {
+      "name": "read_file",
+      "tool_input": {
+        "path": "REQUIREMENTS.md"
+      },
+      "output": "<path>/tmp/post-authority-real-retest-20260921/Q/nzcoder/workspace/REQUIREMENTS.md</path>\n<type>file</type>\n<content>\n1: # Worker pool contract\n2: mapLimit(items, limit, worker, {signal}={}) is exported from lib/pool.cjs and returns a Promise of results in input order. items is an array, limit a positive integer, worker callable; reject invalid arguments with TypeError before invoking worker (validate even for empty input). Do not mutate items. worker receives (item, index, signal), may return a value or Promise, and may throw synchronously. Empty input resolves [] when not aborted.\n3: Never have more than limit workers in flight. Fill available slots without waiting for the whole batch; start each item exactly once. Once a worker error is observed, stop starting new work; wait for all already-started workers to settle, then reject with the first observed worker error, preserving object identity. Attach rejection handlers so secondary failures do not produce unhandled rejections.\n4: If signal is already aborted, start no work and reject with signal.reason (preserve identity, including non-Error reasons). If abort arrives mid-run, stop scheduling and wait for in-flight work to settle, then reject with that reason. The first observed failure/abort wins. Do not pretend an uncooperative worker has stopped; do not use arbitrary delays or polling as correctness machinery. Remove installed abort listeners after settlement. Do not overwrite worker results that are falsy.\n5: Update lib/batch.cjs: processBatch(records, send, options={}) calls mapLimit with options.concurrency default 2 and options.signal, returns ordered {id, value} records, sends each record at most once, and propagates rejection. Keep index.cjs exports compatible. Add tests and document concurrency, cancellation and drain semantics in README.md. Use Node built-ins only; no dependency install/network. Verification: node --test tests/pool.test.cjs tests/batch.test.cjs.\n\n(End of file - total 5 lines)\n</content>",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 1.444,
+      "queue_wait_ms": 3.101,
+      "permission_denied": false,
+      "title": "Read REQUIREMENTS.md",
+      "metadata": {
+        "preview": "# Worker pool contract\nmapLimit(items, limit, worker, {signal}={}) is exported from lib/pool.cjs and returns a Promise of results in input order. items is an array, limit a positive integer, worker callable; reject invalid arguments with TypeError before invoking worker (validate even for empty input). Do not mutate items. worker receives (item, index, signal), may return a value or Promise, and may throw synchronously. Empty input resolves [] when not aborted.\nNever have more than limit workers in flight. Fill available slots without waiting for the whole batch; start each item exactly once. Once a worker error is observed, stop starting new work; wait for all already-started workers to settle, then reject with the first observed worker error, preserving object identity. Attach rejection handlers so secondary failures do not produce unhandled rejections.\nIf signal is already aborted, start no work and reject with signal.reason (preserve identity, including non-Error reasons). If abort arrives mid-run, stop scheduling and wait for in-flight work to settle, then reject with that reason. The first observed failure/abort wins. Do not pretend an uncooperative worker has stopped; do not use arbitrary delays or polling as correctness machinery. Remove installed abort listeners after settlement. Do not overwrite worker results that are falsy.\nUpdate lib/batch.cjs: processBatch(records, send, options={}) calls mapLimit with options.concurrency default 2 and options.signal, returns ordered {id, value} records, sends each record at most once, and propagates rejection. Keep index.cjs exports compatible. Add tests and document concurrency, cancellation and drain semantics in README.md. Use Node built-ins only; no dependency install/network. Verification: node --test tests/pool.test.cjs tests/batch.test.cjs.",
+        "truncated": false,
+        "loaded": [],
+        "encoding": "utf-8",
+        "model_read_observation": {
+          "path": "REQUIREMENTS.md",
+          "offset": 1,
+          "limit": 2000,
+          "complete": true,
+          "identity": {
+            "expected_exists": true,
+            "device": 66309,
+            "inode": 22036053,
+            "size": 1827,
+            "mtime_ns": 1789873476830427362,
+            "content_hash": "7a3e48a4e3e7cdcaedb59bdc1e3b524597a1764f00bfaab23a70a1d7ecff9bed"
+          }
+        }
+      },
+      "attachments": [],
+      "category": "read"
+    }
+  },
+  {
+    "request_id": 2,
+    "before_snapshot": 14,
+    "after_snapshot": 15,
+    "result": {
+      "name": "list_directory",
+      "tool_input": {
+        "path": ".",
+        "depth": 2
+      },
+      "output": "lib/\n  lib/batch.cjs\n  lib/pool.cjs\ntests/\n  tests/batch.test.cjs\n  tests/pool.test.cjs\nindex.cjs\npackage.json\nREADME.md\nREQUIREMENTS.md",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 2.219,
+      "queue_wait_ms": 0.142,
+      "permission_denied": false,
+      "title": "",
+      "metadata": {},
+      "attachments": [],
+      "category": "read"
+    }
+  },
+  {
+    "request_id": 2,
+    "before_snapshot": 16,
+    "after_snapshot": 17,
+    "result": {
+      "name": "read_file",
+      "tool_input": {
+        "path": "lib/pool.cjs"
+      },
+      "output": "<path>/tmp/post-authority-real-retest-20260921/Q/nzcoder/workspace/lib/pool.cjs</path>\n<type>file</type>\n<content>\n1: async function mapLimit(items, limit, worker, options = {}) {\n2:   const results = [];\n3:   for (let i = 0; i < items.length; i++) results.push(await worker(items[i], i));\n4:   return results;\n5: }\n6: module.exports = {mapLimit};\n\n(End of file - total 6 lines)\n</content>",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 1.179,
+      "queue_wait_ms": 0.072,
+      "permission_denied": false,
+      "title": "Read lib/pool.cjs",
+      "metadata": {
+        "preview": "async function mapLimit(items, limit, worker, options = {}) {\n  const results = [];\n  for (let i = 0; i < items.length; i++) results.push(await worker(items[i], i));\n  return results;\n}\nmodule.exports = {mapLimit};",
+        "truncated": false,
+        "loaded": [],
+        "encoding": "utf-8",
+        "model_read_observation": {
+          "path": "lib/pool.cjs",
+          "offset": 1,
+          "limit": 2000,
+          "complete": true,
+          "identity": {
+            "expected_exists": true,
+            "device": 66309,
+            "inode": 22036071,
+            "size": 215,
+            "mtime_ns": 1789873476830244077,
+            "content_hash": "c5980f6446b09bb993bb2da8deaf122838e6c2f95976d55903ce473a864d3ed3"
+          }
+        }
+      },
+      "attachments": [],
+      "category": "read"
+    }
+  },
+  {
+    "request_id": 3,
+    "before_snapshot": 22,
+    "after_snapshot": 23,
+    "result": {
+      "name": "read_file",
+      "tool_input": {
+        "path": "lib/batch.cjs"
+      },
+      "output": "<path>/tmp/post-authority-real-retest-20260921/Q/nzcoder/workspace/lib/batch.cjs</path>\n<type>file</type>\n<content>\n1: const {mapLimit} = require('./pool.cjs');\n2: async function processBatch(records, send, options = {}) {\n3:   return mapLimit(records, 2, async record => ({id: record.id, value: await send(record)}));\n4: }\n5: module.exports = {processBatch};\n\n(End of file - total 5 lines)\n</content>",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 3.159,
+      "queue_wait_ms": 0.114,
+      "permission_denied": false,
+      "title": "Read lib/batch.cjs",
+      "metadata": {
+        "preview": "const {mapLimit} = require('./pool.cjs');\nasync function processBatch(records, send, options = {}) {\n  return mapLimit(records, 2, async record => ({id: record.id, value: await send(record)}));\n}\nmodule.exports = {processBatch};",
+        "truncated": false,
+        "loaded": [],
+        "encoding": "utf-8",
+        "model_read_observation": {
+          "path": "lib/batch.cjs",
+          "offset": 1,
+          "limit": 2000,
+          "complete": true,
+          "identity": {
+            "expected_exists": true,
+            "device": 66309,
+            "inode": 22036072,
+            "size": 229,
+            "mtime_ns": 1789873476830275108,
+            "content_hash": "f6393c69e7c484b9e329df5d22b28bd0df353764313b557b31241c89a33bc3f5"
+          }
+        }
+      },
+      "attachments": [],
+      "category": "read"
+    }
+  },
+  {
+    "request_id": 3,
+    "before_snapshot": 24,
+    "after_snapshot": 25,
+    "result": {
+      "name": "read_file",
+      "tool_input": {
+        "path": "index.cjs"
+      },
+      "output": "<path>/tmp/post-authority-real-retest-20260921/Q/nzcoder/workspace/index.cjs</path>\n<type>file</type>\n<content>\n1: module.exports = {...require('./lib/pool.cjs'), ...require('./lib/batch.cjs')};\n\n(End of file - total 1 lines)\n</content>",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 2.479,
+      "queue_wait_ms": 0.689,
+      "permission_denied": false,
+      "title": "Read index.cjs",
+      "metadata": {
+        "preview": "module.exports = {...require('./lib/pool.cjs'), ...require('./lib/batch.cjs')};",
+        "truncated": false,
+        "loaded": [],
+        "encoding": "utf-8",
+        "model_read_observation": {
+          "path": "index.cjs",
+          "offset": 1,
+          "limit": 2000,
+          "complete": true,
+          "identity": {
+            "expected_exists": true,
+            "device": 66309,
+            "inode": 22036052,
+            "size": 80,
+            "mtime_ns": 1789873476830293746,
+            "content_hash": "d381c6f7be04252e280c53926eeb0b4fdd9621cf183a05f81f14791fb19738b5"
+          }
+        }
+      },
+      "attachments": [],
+      "category": "read"
+    }
+  },
+  {
+    "request_id": 3,
+    "before_snapshot": 26,
+    "after_snapshot": 27,
+    "result": {
+      "name": "read_file",
+      "tool_input": {
+        "path": "README.md"
+      },
+      "output": "<path>/tmp/post-authority-real-retest-20260921/Q/nzcoder/workspace/README.md</path>\n<type>file</type>\n<content>\n1: # Delivery pool\n2: Exports mapLimit and processBatch. Current implementation is sequential.\n\n(End of file - total 2 lines)\n</content>",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 3.957,
+      "queue_wait_ms": 0.959,
+      "permission_denied": false,
+      "title": "Read README.md",
+      "metadata": {
+        "preview": "# Delivery pool\nExports mapLimit and processBatch. Current implementation is sequential.",
+        "truncated": false,
+        "loaded": [],
+        "encoding": "utf-8",
+        "model_read_observation": {
+          "path": "README.md",
+          "offset": 1,
+          "limit": 2000,
+          "complete": true,
+          "identity": {
+            "expected_exists": true,
+            "device": 66309,
+            "inode": 22036059,
+            "size": 89,
+            "mtime_ns": 1789873476830402013,
+            "content_hash": "a576bf215be3580dba11ec2a347696a27706f8bf3d4ec455f3069c7e6afc4a38"
+          }
+        }
+      },
+      "attachments": [],
+      "category": "read"
+    }
+  },
+  {
+    "request_id": 3,
+    "before_snapshot": 28,
+    "after_snapshot": 29,
+    "result": {
+      "name": "read_file",
+      "tool_input": {
+        "path": "tests/pool.test.cjs"
+      },
+      "output": "<path>/tmp/post-authority-real-retest-20260921/Q/nzcoder/workspace/tests/pool.test.cjs</path>\n<type>file</type>\n<content>\n1: const test = require('node:test');\n2: const assert = require('node:assert/strict');\n3: const {mapLimit} = require('../index.cjs');\n4: test('maps values and preserves falsy results', async () => {\n5:   assert.deepEqual(await mapLimit([1, 2], 2, x => x - 1), [0, 1]);\n6: });\n7: test('empty input', async () => assert.deepEqual(await mapLimit([], 2, x => x), []));\n\n(End of file - total 7 lines)\n</content>",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 4.06,
+      "queue_wait_ms": 1.421,
+      "permission_denied": false,
+      "title": "Read tests/pool.test.cjs",
+      "metadata": {
+        "preview": "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst {mapLimit} = require('../index.cjs');\ntest('maps values and preserves falsy results', async () => {\n  assert.deepEqual(await mapLimit([1, 2], 2, x => x - 1), [0, 1]);\n});\ntest('empty input', async () => assert.deepEqual(await mapLimit([], 2, x => x), []));",
+        "truncated": false,
+        "loaded": [],
+        "encoding": "utf-8",
+        "model_read_observation": {
+          "path": "tests/pool.test.cjs",
+          "offset": 1,
+          "limit": 2000,
+          "complete": true,
+          "identity": {
+            "expected_exists": true,
+            "device": 66309,
+            "inode": 22036074,
+            "size": 344,
+            "mtime_ns": 1789873476830364394,
+            "content_hash": "494aa2cbefb471dff9421bf67101410ccf2942ecb186d74a42edeee98b139862"
+          }
+        }
+      },
+      "attachments": [],
+      "category": "read"
+    }
+  },
+  {
+    "request_id": 3,
+    "before_snapshot": 30,
+    "after_snapshot": 31,
+    "result": {
+      "name": "read_file",
+      "tool_input": {
+        "path": "tests/batch.test.cjs"
+      },
+      "output": "<path>/tmp/post-authority-real-retest-20260921/Q/nzcoder/workspace/tests/batch.test.cjs</path>\n<type>file</type>\n<content>\n1: const test = require('node:test');\n2: const assert = require('node:assert/strict');\n3: const {processBatch} = require('../index.cjs');\n4: test('batch maps ids', async () => {\n5:   assert.deepEqual(await processBatch([{id:'a'}, {id:'b'}], async x => x.id),\n6:     [{id:'a',value:'a'}, {id:'b',value:'b'}]);\n7: });\n\n(End of file - total 7 lines)\n</content>",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 1.245,
+      "queue_wait_ms": 5.933,
+      "permission_denied": false,
+      "title": "Read tests/batch.test.cjs",
+      "metadata": {
+        "preview": "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst {processBatch} = require('../index.cjs');\ntest('batch maps ids', async () => {\n  assert.deepEqual(await processBatch([{id:'a'}, {id:'b'}], async x => x.id),\n    [{id:'a',value:'a'}, {id:'b',value:'b'}]);\n});",
+        "truncated": false,
+        "loaded": [],
+        "encoding": "utf-8",
+        "model_read_observation": {
+          "path": "tests/batch.test.cjs",
+          "offset": 1,
+          "limit": 2000,
+          "complete": true,
+          "identity": {
+            "expected_exists": true,
+            "device": 66309,
+            "inode": 22036075,
+            "size": 295,
+            "mtime_ns": 1789873476830386163,
+            "content_hash": "bdc64f08c76b71e43cc3c13b8f97de5d63e689a93bb4be850080b508c3075bfa"
+          }
+        }
+      },
+      "attachments": [],
+      "category": "read"
+    }
+  },
+  {
+    "request_id": 3,
+    "before_snapshot": 32,
+    "after_snapshot": 33,
+    "result": {
+      "name": "read_file",
+      "tool_input": {
+        "path": "package.json"
+      },
+      "output": "<path>/tmp/post-authority-real-retest-20260921/Q/nzcoder/workspace/package.json</path>\n<type>file</type>\n<content>\n1: {\"name\":\"delivery-pool\",\"private\":true,\"scripts\":{\"test\":\"node --test tests/pool.test.cjs tests/batch.test.cjs\"}}\n\n(End of file - total 1 lines)\n</content>",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 1.132,
+      "queue_wait_ms": 5.987,
+      "permission_denied": false,
+      "title": "Read package.json",
+      "metadata": {
+        "preview": "{\"name\":\"delivery-pool\",\"private\":true,\"scripts\":{\"test\":\"node --test tests/pool.test.cjs tests/batch.test.cjs\"}}",
+        "truncated": false,
+        "loaded": [],
+        "encoding": "utf-8",
+        "model_read_observation": {
+          "path": "package.json",
+          "offset": 1,
+          "limit": 2000,
+          "complete": true,
+          "identity": {
+            "expected_exists": true,
+            "device": 66309,
+            "inode": 22036069,
+            "size": 114,
+            "mtime_ns": 1789873476830335086,
+            "content_hash": "5f99124db57570f6d19ecf5c35ab29326ab192f73d7836392c63844846d0a3a6"
+          }
+        }
+      },
+      "attachments": [],
+      "category": "read"
+    }
+  },
+  {
+    "request_id": 4,
+    "before_snapshot": 38,
+    "after_snapshot": 39,
+    "result": {
+      "name": "bash",
+      "tool_input": {
+        "command": "node --version"
+      },
+      "output": "Denied by user",
+      "executed": false,
+      "dispatch_failed": true,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 0.206,
+      "queue_wait_ms": 0.0,
+      "permission_denied": true,
+      "title": "",
+      "metadata": {},
+      "attachments": [],
+      "category": "command"
+    }
+  },
+  {
+    "request_id": 5,
+    "before_snapshot": 44,
+    "after_snapshot": 45,
+    "result": {
+      "name": "write_file",
+      "tool_input": {
+        "path": "lib/pool.cjs",
+        "content": "'use strict';\n\n/**\n * Bounded-concurrency map.\n *\n * mapLimit(items, limit, worker, {signal} = {}) -> Promise<results>\n *\n * Guarantees:\n *  - arguments are validated (TypeError) before any worker is invoked,\n *    including for empty input;\n *  - results resolve in input order and the input array is never mutated;\n *  - at most `limit` workers are in flight, available slots are filled\n *    immediately and every item is started exactly once;\n *  - the first observed worker failure stops scheduling; already-started\n *    work is allowed to drain and then the first failure is rethrown with\n *    its original identity;\n *  - an optional AbortSignal cancels pending work, preserves the abort\n *    reason identity and its listener is removed once settled.\n */\nfunction mapLimit(items, limit, worker, options) {\n  return new Promise((resolve, reject) => {\n    if (!Array.isArray(items)) {\n      reject(new TypeError('mapLimit: items must be an array'));\n      return;\n    }\n    if (!Number.isInteger(limit) || limit <= 0) {\n      reject(new TypeError('mapLimit: limit must be a positive integer'));\n      return;\n    }\n    if (typeof worker !== 'function') {\n      reject(new TypeError('mapLimit: worker must be a function'));\n      return;\n    }\n\n    const opts = options == null ? {} : options;\n    const signal = opts.signal;\n    const canListen = signal != null && typeof signal.addEventListener === 'function';\n\n    // An already-aborted signal starts no work at all.\n    if (signal != null && signal.aborted) {\n      reject(signal.reason);\n      return;\n    }\n\n    const total = items.length;\n    const results = new Array(total);\n\n    let nextIndex = 0;\n    let active = 0;\n    let failureObserved = false;\n    let failureReason;\n    let settled = false;\n\n    function removeAbortListener() {\n      if (canListen) signal.removeEventListener('abort', onAbort);\n    }\n\n    function observeFailure(reason) {\n      if (failureObserved) return;\n      failureObserved = true;\n      failureReason = reason;\n    }\n\n    function finish() {\n      if (settled) return;\n      if (failureObserved) {\n        // Wait for every already-started worker to settle before rejecting.\n        if (active > 0) return;\n        settled = true;\n        removeAbortListener();\n        reject(failureReason);\n        return;\n      }\n      if (active === 0 && nextIndex >= total) {\n        settled = true;\n        removeAbortListener();\n        resolve(results);\n      }\n    }\n\n    function onSlotSettled() {\n      active -= 1;\n      if (failureObserved) finish();\n      else schedule();\n    }\n\n    function onAbort() {\n      // First observed failure/abort wins; in-flight work still drains.\n      observeFailure(signal.reason);\n      finish();\n    }\n\n    function schedule() {\n      if (settled) return;\n      while (!failureObserved && active < limit && nextIndex < total) {\n        const index = nextIndex;\n        nextIndex += 1;\n        active += 1;\n\n        let produced;\n        try {\n          produced = worker(items[index], index, signal);\n        } catch (error) {\n          active -= 1;\n          observeFailure(error);\n          finish();\n          return;\n        }\n\n        // Both handlers are attached so secondary failures stay handled.\n        Promise.resolve(produced).then(\n          (value) => {\n            results[index] = value;\n            onSlotSettled();\n          },\n          (error) => {\n            observeFailure(error);\n            onSlotSettled();\n          }\n        );\n      }\n      finish();\n    }\n\n    if (canListen) signal.addEventListener('abort', onAbort);\n    schedule();\n  });\n}\n\nmodule.exports = {mapLimit};\n"
+      },
+      "output": "Updated lib/pool.cjs (3637 bytes)\n\nDiff:\n--- a/lib/pool.cjs\n+++ b/lib/pool.cjs\n@@ -1,6 +1,130 @@\n-async function mapLimit(items, limit, worker, options = {}) {\n-  const results = [];\n-  for (let i = 0; i < items.length; i++) results.push(await worker(items[i], i));\n-  return results;\n+'use strict';\n+\n+/**\n+ * Bounded-concurrency map.\n+ *\n+ * mapLimit(items, limit, worker, {signal} = {}) -> Promise<results>\n+ *\n+ * Guarantees:\n+ *  - arguments are validated (TypeError) before any worker is invoked,\n+ *    including for empty input;\n+ *  - results resolve in input order and the input array is never mutated;\n+ *  - at most `limit` workers are in flight, available slots are filled\n+ *    immediately and every item is started exactly once;\n+ *  - the first observed worker failure stops scheduling; already-started\n+ *    work is allowed to drain and then the first failure is rethrown with\n+ *    its original identity;\n+ *  - an optional AbortSignal cancels pending work, preserves the abort\n+ *    reason identity and its listener is removed once settled.\n+ */\n+function mapLimit(items, limit, worker, options) {\n+  return new Promise((resolve, reject) => {\n+    if (!Array.isArray(items)) {\n+      reject(new TypeError('mapLimit: items must be an array'));\n+      return;\n+    }\n+    if (!Number.isInteger(limit) || limit <= 0) {\n+      reject(new TypeError('mapLimit: limit must be a positive integer'));\n+      return;\n+    }\n+    if (typeof worker !== 'function') {\n+      reject(new TypeError('mapLimit: worker must be a function'));\n+      return;\n+    }\n+\n+    const opts = options == null ? {} : options;\n+    const signal = opts.signal;\n+    const canListen = signal != null && typeof signal.addEventListener === 'function';\n+\n+    // An already-aborted signal starts no work at all.\n+    if (signal != null && signal.aborted) {\n+      reject(signal.reason);\n+      return;\n+    }\n+\n+    const total = items.length;\n+    const results = new Array(total);\n+\n+    let nextIndex = 0;\n+    let active = 0;\n+    let failureObserved = false;\n+    let failureReason;\n+    let settled = false;\n+\n+    function removeAbortListener() {\n+      if (canListen) signal.removeEventListener('abort', onAbort);\n+    }\n+\n+    function observeFailure(reason) {\n+      if (failureObserved) return;\n+      failureObserved = true;\n+      failureReason = reason;\n+    }\n+\n+    function finish() {\n+      if (settled) return;\n+      if (failureObserved) {\n+        // Wait for every already-started worker to settle before rejecting.\n+        if (active > 0) return;\n+        settled = true;\n+        removeAbortListener();\n+        reject(failureReason);\n+        return;\n+      }\n+      if (active === 0 && nextIndex >= total) {\n+        settled = true;\n+        removeAbortListener();\n+        resolve(results);\n+      }\n+    }\n+\n+    function onSlotSettled() {\n+      active -= 1;\n+      if (failureObserved) finish();\n+      else schedule();\n+    }\n+\n+    function onAbort() {\n+      // First observed failure/abort wins; in-flight work still drains.\n+      observeFailure(signal.reason);\n+      finish();\n+    }\n+\n+    function schedule() {\n+      if (settled) return;\n+      while (!failureObserved && active < limit && nextIndex < total) {\n+        const index = nextIndex;\n+        nextIndex += 1;\n+        active += 1;\n+\n+        let produced;\n+        try {\n+          produced = worker(items[index], index, signal);\n+        } catch (error) {\n+          active -= 1;\n+          observeFailure(error);\n+          finish();\n+          return;\n+        }\n+\n+        // Both handlers are attached so secondary failures stay handled.\n+        Promise.resolve(produced).then(\n+          (value) => {\n+            results[index] = value;\n+            onSlotSettled();\n+          },\n+          (error) => {\n+            observeFailure(error);\n+            onSlotSettled();\n+          }\n+        );\n+      }\n+      finish();\n+    }\n+\n+    if (canListen) signal.addEventListener('abort', onAbort);\n+    schedule();\n+  });\n }\n+\n module.exports = {mapLimit};\n",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": true,
+      "duration_ms": 7.517,
+      "queue_wait_ms": 0.0,
+      "permission_denied": false,
+      "title": "",
+      "metadata": {},
+      "attachments": [],
+      "category": "edit"
+    }
+  },
+  {
+    "request_id": 5,
+    "before_snapshot": 46,
+    "after_snapshot": 47,
+    "result": {
+      "name": "write_file",
+      "tool_input": {
+        "path": "lib/batch.cjs",
+        "content": "'use strict';\n\nconst {mapLimit} = require('./pool.cjs');\n\nconst DEFAULT_CONCURRENCY = 2;\n\n/**\n * processBatch(records, send, options = {}) -> Promise<Array<{id, value}>>\n *\n * Runs `send(record)` for every record with bounded concurrency\n * (options.concurrency, default 2), forwards options.signal for\n * cancellation and resolves ordered {id, value} records. Every record is\n * sent at most once, and a failure/abort propagates as a rejection.\n */\nasync function processBatch(records, send, options) {\n  const opts = options == null ? {} : options;\n  const concurrency = opts.concurrency == null ? DEFAULT_CONCURRENCY : opts.concurrency;\n\n  return mapLimit(\n    records,\n    concurrency,\n    async (record) => ({id: record.id, value: await send(record)}),\n    {signal: opts.signal}\n  );\n}\n\nmodule.exports = {processBatch};\n"
+      },
+      "output": "Updated lib/batch.cjs (825 bytes)\n\nDiff:\n--- a/lib/batch.cjs\n+++ b/lib/batch.cjs\n@@ -1,5 +1,27 @@\n+'use strict';\n+\n const {mapLimit} = require('./pool.cjs');\n-async function processBatch(records, send, options = {}) {\n-  return mapLimit(records, 2, async record => ({id: record.id, value: await send(record)}));\n+\n+const DEFAULT_CONCURRENCY = 2;\n+\n+/**\n+ * processBatch(records, send, options = {}) -> Promise<Array<{id, value}>>\n+ *\n+ * Runs `send(record)` for every record with bounded concurrency\n+ * (options.concurrency, default 2), forwards options.signal for\n+ * cancellation and resolves ordered {id, value} records. Every record is\n+ * sent at most once, and a failure/abort propagates as a rejection.\n+ */\n+async function processBatch(records, send, options) {\n+  const opts = options == null ? {} : options;\n+  const concurrency = opts.concurrency == null ? DEFAULT_CONCURRENCY : opts.concurrency;\n+\n+  return mapLimit(\n+    records,\n+    concurrency,\n+    async (record) => ({id: record.id, value: await send(record)}),\n+    {signal: opts.signal}\n+  );\n }\n+\n module.exports = {processBatch};\n",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": true,
+      "duration_ms": 7.284,
+      "queue_wait_ms": 0.0,
+      "permission_denied": false,
+      "title": "",
+      "metadata": {},
+      "attachments": [],
+      "category": "edit"
+    }
+  },
+  {
+    "request_id": 6,
+    "before_snapshot": 52,
+    "after_snapshot": 53,
+    "result": {
+      "name": "write_file",
+      "tool_input": {
+        "content": "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst {mapLimit} = require('../index.cjs');\n\nfunction deferred() {\n  let resolve;\n  let reject;\n  const promise = new Promise((res, rej) => {\n    resolve = res;\n    reject = rej;\n  });\n  return {promise, resolve, reject};\n}\n\nfunction trackAbortListeners(signal) {\n  const counts = {added: 0, removed: 0};\n  const add = signal.addEventListener.bind(signal);\n  const remove = signal.removeEventListener.bind(signal);\n  signal.addEventListener = (type, fn, opts) => {\n    if (type === 'abort') counts.added += 1;\n    return add(type, fn, opts);\n  };\n  signal.removeEventListener = (type, fn, opts) => {\n    if (type === 'abort') counts.removed += 1;\n    return remove(type, fn, opts);\n  };\n  return counts;\n}\n\ntest('maps values and preserves falsy results', async () => {\n  assert.deepEqual(await mapLimit([1, 2], 2, x => x - 1), [0, 1]);\n  assert.deepEqual(await mapLimit([1, 2, 3], 2, () => 0), [0, 0, 0]);\n  assert.deepEqual(await mapLimit([1, 2, 3], 1, () => false), [false, false, false]);\n  assert.deepEqual(await mapLimit([1, 2], 2, () => null), [null, null]);\n  assert.deepEqual(await mapLimit([1, 2], 2, () => ''), ['', '']);\n});\n\ntest('empty input', async () => assert.deepEqual(await mapLimit([], 2, x => x), []));\n\ntest('rejects invalid arguments with TypeError before invoking the worker', async () => {\n  let calls = 0;\n  const worker = () => {\n    calls += 1;\n  };\n\n  await assert.rejects(() => mapLimit('nope', 2, worker), TypeError);\n  await assert.rejects(() => mapLimit(null, 2, worker), TypeError);\n  await assert.rejects(() => mapLimit([1], 0, worker), TypeError);\n  await assert.rejects(() => mapLimit([1], -1, worker), TypeError);\n  await assert.rejects(() => mapLimit([1], 1.5, worker), TypeError);\n  await assert.rejects(() => mapLimit([1], '2', worker), TypeError);\n  await assert.rejects(() => mapLimit([1], 2, 'nope'), TypeError);\n\n  // Validation must also happen for empty input, before any worker runs.\n  await assert.rejects(() => mapLimit([], 0, worker), TypeError);\n  await assert.rejects(() => mapLimit([], -3, worker), TypeError);\n  await assert.rejects(() => mapLimit('', 2, worker), TypeError);\n\n  assert.equal(calls, 0);\n});\n\ntest('never mutates the input array and reports (item, index, signal)', async () => {\n  const items = [3, 1, 2];\n  const snapshot = items.slice();\n  const seen = [];\n  const signal = new AbortController().signal;\n\n  const results = await mapLimit(items, 2, (item, index, received) => {\n    seen.push([item, index, received]);\n    return item * 10;\n  }, {signal});\n\n  assert.deepEqual(results, [30, 10, 20]);\n  assert.deepEqual(items, snapshot);\n  assert.deepEqual(seen.map((entry) => entry[1]).sort((a, b) => a - b), [0, 1, 2]);\n  assert.deepEqual(seen.map((entry) => entry[0]).sort((a, b) => a - b), [1, 2, 3]);\n  for (const entry of seen) assert.equal(entry[2], signal);\n});\n\ntest('caps in-flight workers at limit and fills free slots eagerly', async () => {\n  const gate = deferred();\n  const started = [];\n  let inFlight = 0;\n  let peak = 0;\n\n  const running = mapLimit([0, 1, 2, 3, 4, 5], 2, async (item) => {\n    started.push(item);\n    inFlight += 1;\n    peak = Math.max(peak, inFlight);\n    await gate.promise;\n    inFlight -= 1;\n    return item;\n  });\n\n  // Exactly `limit` workers start without waiting for the whole batch.\n  await Promise.resolve();\n  assert.deepEqual(started, [0, 1]);\n\n  gate.resolve();\n  assert.deepEqual(await running, [0, 1, 2, 3, 4, 5]);\n  assert.equal(peak, 2);\n  assert.deepEqual(started, [0, 1, 2, 3, 4, 5]);\n});\n\ntest('starts every item exactly once even when limit exceeds the workload', async () => {\n  const started = [];\n  const results = await mapLimit([9, 8, 7], 10, (item, index) => {\n    started.push(index);\n    return item;\n  });\n  assert.deepEqual(results, [9, 8, 7]);\n  assert.deepEqual(started, [0, 1, 2]);\n});\n\ntest('drains already-started work, stops scheduling and rethrows the first error', async () => {\n  const first = new Error('first boom');\n  const second = new Error('second boom');\n  const gate = deferred();\n  const started = [];\n  let release = 0;\n\n  const running = mapLimit([0, 1, 2, 3, 4], 2, async (item) => {\n    started.push(item);\n    if (item === 0) throw first;\n    if (item === 1) {\n      await gate.promise;\n      throw second;\n    }\n    release += 1;\n    return item;\n  });\n\n  const observed = await running.then(\n    () => {\n      throw new Error('expected mapLimit to reject');\n    },\n    (error) => error\n  );\n\n  assert.equal(observed, first);\n  // Item 1 was already in flight, so it must be allowed to settle...\n  assert.deepEqual(started, [0, 1]);\n  // ...and no further item is ever started.\n  assert.equal(release, 0);\n  gate.resolve();\n});\n\ntest('rejects with the first error even when a later failure is observed first', async () => {\n  const slow = new Error('slow');\n  const fast = new Error('fast');\n  const gate = deferred();\n\n  await assert.rejects(\n    mapLimit([0, 1], 2, async (item) => {\n      if (item === 0) {\n        await gate.promise;\n        throw slow;\n      }\n      // Observed before the other slot settles, but not the first failure\n      // in scheduling order? Here it *is* observed first.\n      throw fast;\n    }),\n    (error) => error === fast\n  );\n  gate.resolve();\n});\n\ntest('waits for in-flight work to settle before rejecting', async () => {\n  let drained = false;\n  const gate = deferred();\n\n  const running = mapLimit([0, 1], 2, async (item) => {\n    if (item === 0) throw new Error('boom');\n    await gate.promise;\n    drained = true;\n    return item;\n  });\n\n  let settled = false;\n  running.catch(() => {\n    settled = true;\n  });\n\n  await new Promise((resolve) => setTimeout(resolve, 5));\n  assert.equal(settled, false, 'must not reject while a worker is still in flight');\n  assert.equal(drained, false);\n\n  gate.resolve();\n  await running.catch(() => {});\n  assert.equal(drained, true);\n});\n\ntest('already-aborted signal starts no work and preserves the reason identity', async () => {\n  const controller = new AbortController();\n  const reason = {code: 'pre-aborted'};\n  controller.abort(reason);\n  let started = 0;\n\n  await assert.rejects(\n    mapLimit([1, 2, 3], 2, () => {\n      started += 1;\n      return 1;\n    }, {signal: controller.signal}),\n    (error) => error === reason\n  );\n  assert.equal(started, 0);\n\n  // Also with an empty workload.\n  await assert.rejects(\n    mapLimit([], 2, () => 1, {signal: controller.signal}),\n    (error) => error === reason\n  );\n});\n\ntest('mid-run abort stops scheduling, drains in-flight work and preserves reason', async () => {\n  const controller = new AbortController();\n  const reason = new Error('cancelled');\n  const gate = deferred();\n  const started = [];\n\n  const running = mapLimit([0, 1, 2, 3], 2, async (item) => {\n    started.push(item);\n    await gate.promise;\n    return item;\n  }, {signal: controller.signal});\n\n  await Promise.resolve();\n  assert.deepEqual(started, [0, 1]);\n\n  controller.abort(reason);\n\n  let settled = false;\n  running.catch(() => {\n    settled = true;\n  });\n  await new Promise((resolve) => setTimeout(resolve, 5));\n  assert.equal(settled, false, 'in-flight workers must be allowed to drain');\n\n  gate.resolve();\n  await assert.rejects(running, (error) => error === reason);\n  assert.deepEqual(started, [0, 1]);\n});\n\ntest('a synchronous worker throw is a first-class failure', async () => {\n  const boom = new Error('sync boom');\n  const started = [];\n\n  await assert.rejects(\n    mapLimit([0, 1, 2], 1, (item) => {\n      started.push(item);\n      throw boom;\n    }),\n    (error) => error === boom\n  );\n  assert.deepEqual(started, [0]);\n});\n\ntest('the first observed failure wins over a later abort', async () => {\n  const controller = new AbortController();\n  const boom = new Error('worker boom');\n  const abortReason = new Error('abort reason');\n  const gate = deferred();\n\n  const running = mapLimit([0, 1, 2], 2, async (item) => {\n    if (item === 0) throw boom;\n    await gate.promise;\n    return item;\n  }, {signal: controller.signal});\n\n  await new Promise((resolve) => setTimeout(resolve, 5));\n  controller.abort(abortReason);\n  gate.resolve();\n\n  await assert.rejects(running, (error) => error === boom);\n});\n\ntest('secondary failures do not become unhandled rejections', async () => {\n  const unhandled = [];\n  const onUnhandled = (reason) => unhandled.push(reason);\n  process.on('unhandledRejection', onUnhandled);\n\n  try {\n    const first = new Error('first');\n    const second = new Error('second');\n    const gate = deferred();\n\n    await assert.rejects(\n      mapLimit([0, 1], 2, async (item) => {\n        if (item === 0) {\n          await gate.promise;\n          throw first;\n        }\n        throw second;\n      }),\n      (error) => error === second\n    );\n    gate.resolve();\n\n    // Give any stray rejection a chance to surface.\n    await new Promise((resolve) => setTimeout(resolve, 10));\n    assert.deepEqual(unhandled, []);\n  } finally {\n    process.removeListener('unhandledRejection', onUnhandled);\n  }\n});\n\ntest('removes the abort listener after settling', async () => {\n  const controller = new AbortController();\n  const counts = trackAbortListeners(controller.signal);\n\n  await mapLimit([1, 2], 2, (x) => x, {signal: controller.signal});\n  assert.equal(counts.added, 1);\n  assert.equal(counts.removed, 1);\n\n  const failing = new AbortController();\n  const failingCounts = trackAbortListeners(failing.signal);\n  await assert.rejects(\n    mapLimit([1], 1, () => {\n      throw new Error('nope');\n    }, {signal: failing.signal})\n  );\n  assert.equal(failingCounts.added, 1);\n  assert.equal(failingCounts.removed, 1);\n});\n\ntest('options and signal are optional', async () => {\n  assert.deepEqual(await mapLimit([1, 2], 2, (x) => x * 2), [2, 4]);\n  assert.deepEqual(await mapLimit([1, 2], 2, (x) => x * 2, {}), [2, 4]);\n  assert.deepEqual(await mapLimit([1, 2], 2, (x, _i, signal) => signal, {signal: undefined}), [\n    undefined,\n    undefined\n  ]);\n});\n",
+        "path": "tests/pool.test.cjs"
+      },
+      "output": "Updated tests/pool.test.cjs (10021 bytes)\n\nDiff:\n--- a/tests/pool.test.cjs\n+++ b/tests/pool.test.cjs\n@@ -1,7 +1,333 @@\n const test = require('node:test');\n const assert = require('node:assert/strict');\n const {mapLimit} = require('../index.cjs');\n+\n+function deferred() {\n+  let resolve;\n+  let reject;\n+  const promise = new Promise((res, rej) => {\n+    resolve = res;\n+    reject = rej;\n+  });\n+  return {promise, resolve, reject};\n+}\n+\n+function trackAbortListeners(signal) {\n+  const counts = {added: 0, removed: 0};\n+  const add = signal.addEventListener.bind(signal);\n+  const remove = signal.removeEventListener.bind(signal);\n+  signal.addEventListener = (type, fn, opts) => {\n+    if (type === 'abort') counts.added += 1;\n+    return add(type, fn, opts);\n+  };\n+  signal.removeEventListener = (type, fn, opts) => {\n+    if (type === 'abort') counts.removed += 1;\n+    return remove(type, fn, opts);\n+  };\n+  return counts;\n+}\n+\n test('maps values and preserves falsy results', async () => {\n   assert.deepEqual(await mapLimit([1, 2], 2, x => x - 1), [0, 1]);\n-});\n+  assert.deepEqual(await mapLimit([1, 2, 3], 2, () => 0), [0, 0, 0]);\n+  assert.deepEqual(await mapLimit([1, 2, 3], 1, () => false), [false, false, false]);\n+  assert.deepEqual(await mapLimit([1, 2], 2, () => null), [null, null]);\n+  assert.deepEqual(await mapLimit([1, 2], 2, () => ''), ['', '']);\n+});\n+\n test('empty input', async () => assert.deepEqual(await mapLimit([], 2, x => x), []));\n+\n+test('rejects invalid arguments with TypeError before invoking the worker', async () => {\n+  let calls = 0;\n+  const worker = () => {\n+    calls += 1;\n+  };\n+\n+  await assert.rejects(() => mapLimit('nope', 2, worker), TypeError);\n+  await assert.rejects(() => mapLimit(null, 2, worker), TypeError);\n+  await assert.rejects(() => mapLimit([1], 0, worker), TypeError);\n+  await assert.rejects(() => mapLimit([1], -1, worker), TypeError);\n+  await assert.rejects(() => mapLimit([1], 1.5, worker), TypeError);\n+  await assert.rejects(() => mapLimit([1], '2', worker), TypeError);\n+  await assert.rejects(() => mapLimit([1], 2, 'nope'), TypeError);\n+\n+  // Validation must also happen for empty input, before any worker runs.\n+  await assert.rejects(() => mapLimit([], 0, worker), TypeError);\n+  await assert.rejects(() => mapLimit([], -3, worker), TypeError);\n+  await assert.rejects(() => mapLimit('', 2, worker), TypeError);\n+\n+  assert.equal(calls, 0);\n+});\n+\n+test('never mutates the input array and reports (item, index, signal)', async () => {\n+  const items = [3, 1, 2];\n+  const snapshot = items.slice();\n+  const seen = [];\n+  const signal = new AbortController().signal;\n+\n+  const results = await mapLimit(items, 2, (item, index, received) => {\n+    seen.push([item, index, received]);\n+    return item * 10;\n+  }, {signal});\n+\n+  assert.deepEqual(results, [30, 10, 20]);\n+  assert.deepEqual(items, snapshot);\n+  assert.deepEqual(seen.map((entry) => entry[1]).sort((a, b) => a - b), [0, 1, 2]);\n+  assert.deepEqual(seen.map((entry) => entry[0]).sort((a, b) => a - b), [1, 2, 3]);\n+  for (const entry of seen) assert.equal(entry[2], signal);\n+});\n+\n+test('caps in-flight workers at limit and fills free slots eagerly', async () => {\n+  const gate = deferred();\n+  const started = [];\n+  let inFlight = 0;\n+  let peak = 0;\n+\n+  const running = mapLimit([0, 1, 2, 3, 4, 5], 2, async (item) => {\n+    started.push(item);\n+    inFlight += 1;\n+    peak = Math.max(peak, inFlight);\n+    await gate.promise;\n+    inFlight -= 1;\n+    return item;\n+  });\n+\n+  // Exactly `limit` workers start without waiting for the whole batch.\n+  await Promise.resolve();\n+  assert.deepEqual(started, [0, 1]);\n+\n+  gate.resolve();\n+  assert.deepEqual(await running, [0, 1, 2, 3, 4, 5]);\n+  assert.equal(peak, 2);\n+  assert.deepEqual(started, [0, 1, 2, 3, 4, 5]);\n+});\n+\n+test('starts every item exactly once even when limit exceeds the workload', async () => {\n+  const started = [];\n+  const results = await mapLimit([9, 8, 7], 10, (item, index) => {\n+    started.push(index);\n+    return item;\n+  });\n+  assert.deepEqual(results, [9, 8, 7]);\n+  assert.deepEqual(started, [0, 1, 2]);\n+});\n+\n+test('drains already-started work, stops scheduling and rethrows the first error', async () => {\n+  const first = new Error('first boom');\n+  const second = new Error('second boom');\n+  const gate = deferred();\n+  const started = [];\n+  let release = 0;\n+\n+  const running = mapLimit([0, 1, 2, 3, 4], 2, async (item) => {\n+    started.push(item);\n+    if (item === 0) throw first;\n+    if (item === 1) {\n+      await gate.promise;\n+      throw second;\n+    }\n+    release += 1;\n+    return item;\n+  });\n+\n+  const observed = await running.then(\n+    () => {\n+      throw new Error('expected mapLimit to reject');\n+    },\n+    (error) => error\n+  );\n+\n+  assert.equal(observed, first);\n+  // Item 1 was already in flight, so it must be allowed to settle...\n+  assert.deepEqual(started, [0, 1]);\n+  // ...and no further item is ever started.\n+  assert.equal(release, 0);\n+  gate.resolve();\n+});\n+\n+test('rejects with the first error even when a later failure is observed first', async () => {\n+  const slow = new Error('slow');\n+  const fast = new Error('fast');\n+  const gate = deferred();\n+\n+  await assert.rejects(\n+    mapLimit([0, 1], 2, async (item) => {\n+      if (item === 0) {\n+        await gate.promise;\n+        throw slow;\n+      }\n+      // Observed before the other slot settles, but not the first failure\n+      // in scheduling order? Here it *is* observed first.\n+      throw fast;\n+    }),\n+    (error) => error === fast\n+  );\n+  gate.resolve();\n+});\n+\n+test('waits for in-flight work to settle before rejecting', async () => {\n+  let drained = false;\n+  const gate = deferred();\n+\n+  const running = mapLimit([0, 1], 2, async (item) => {\n+    if (item === 0) throw new Error('boom');\n+    await gate.promise;\n+    drained = true;\n+    return item;\n+  });\n+\n+  let settled = false;\n+  running.catch(() => {\n+    settled = true;\n+  });\n+\n+  await new Promise((resolve) => setTimeout(resolve, 5));\n+  assert.equal(settled, false, 'must not reject while a worker is still in flight');\n+  assert.equal(drained, false);\n+\n+  gate.resolve();\n+  await running.catch(() => {});\n+  assert.equal(drained, true);\n+});\n+\n+test('already-aborted signal starts no work and preserves the reason identity', async () => {\n+  const controller = new AbortController();\n+  const reason = {code: 'pre-aborted'};\n+  controller.abort(reason);\n+  let started = 0;\n+\n+  await assert.rejects(\n+    mapLimit([1, 2, 3], 2, () => {\n+      started += 1;\n+      return 1;\n+    }, {signal: controller.signal}),\n+    (error) => error === reason\n+  );\n+  assert.equal(started, 0);\n+\n+  // Also with an empty workload.\n+  await assert.rejects(\n+    mapLimit([], 2, () => 1, {signal: controller.signal}),\n+    (error) => error === reason\n+  );\n+});\n+\n+test('mid-run abort stops scheduling, drains in-flight work and preserves reason', async () => {\n+  const controller = new AbortController();\n+  const reason = new Error('cancelled');\n+  const gate = deferred();\n+  const started = [];\n+\n+  const running = mapLimit([0, 1, 2, 3], 2, async (item) => {\n+    started.push(item);\n+    await gate.promise;\n+    return item;\n+  }, {signal: controller.signal});\n+\n+  await Promise.resolve();\n+  assert.deepEqual(started, [0, 1]);\n+\n+  controller.abort(reason);\n+\n+  let settled = false;\n+  running.catch(() => {\n+    settled = true;\n+  });\n+  await new Promise((resolve) => setTimeout(resolve, 5));\n+  assert.equal(settled, false, 'in-flight workers must be allowed to drain');\n+\n+  gate.resolve();\n+  await assert.rejects(running, (error) => error === reason);\n+  assert.deepEqual(started, [0, 1]);\n+});\n+\n+test('a synchronous worker throw is a first-class failure', async () => {\n+  const boom = new Error('sync boom');\n+  const started = [];\n+\n+  await assert.rejects(\n+    mapLimit([0, 1, 2], 1, (item) => {\n+      started.push(item);\n+      throw boom;\n+    }),\n+    (error) => error === boom\n+  );\n+  assert.deepEqual(started, [0]);\n+});\n+\n+test('the first observed failure wins over a later abort', async () => {\n+  const controller = new AbortController();\n+  const boom = new Error('worker boom');\n+  const abortReason = new Error('abort reason');\n+  const gate = deferred();\n+\n+  const running = mapLimit([0, 1, 2], 2, async (item) => {\n+    if (item === 0) throw boom;\n+    await gate.promise;\n+    return item;\n+  }, {signal: controller.signal});\n+\n+  await new Promise((resolve) => setTimeout(resolve, 5));\n+  controller.abort(abortReason);\n+  gate.resolve();\n+\n+  await assert.rejects(running, (error) => error === boom);\n+});\n+\n+test('secondary failures do not become unhandled rejections', async () => {\n+  const unhandled = [];\n+  const onUnhandled = (reason) => unhandled.push(reason);\n+  process.on('unhandledRejection', onUnhandled);\n+\n+  try {\n+    const first = new Error('first');\n+    const second = new Error('second');\n+    const gate = deferred();\n+\n+    await assert.rejects(\n+      mapLimit([0, 1], 2, async (item) => {\n+        if (item === 0) {\n+          await gate.promise;\n+          throw first;\n+        }\n+        throw second;\n+      }),\n+      (error) => error === second\n+    );\n+    gate.resolve();\n+\n+    // Give any stray rejection a chance to surface.\n+    await new Promise((resolve) => setTimeout(resolve, 10));\n+    assert.deepEqual(unhandled, []);\n+  } finally {\n+    process.removeListener('unhandledRejection', onUnhandled);\n+  }\n+});\n+\n+test('removes the abort listener after settling', async () => {\n+  const controller = new AbortController();\n+  const counts = trackAbortListeners(controller.signal);\n+\n+  await mapLimit([1, 2], 2, (x) => x, {signal: controller.signal});\n+  assert.equal(counts.added, 1);\n+  assert.equal(counts.removed, 1);\n+\n+  const failing = new AbortController();\n+  const failingCounts = trackAbortListeners(failing.signal);\n+  await assert.rejects(\n+    mapLimit([1], 1, () => {\n+      throw new Error('nope');\n+    }, {signal: failing.signal})\n+  );\n+  assert.equal(failingCounts.added, 1);\n+  assert.equal(failingCounts.removed, 1);\n+});\n+\n+test('options and signal are optional', async () => {\n+  assert.deepEqual(await mapLimit([1, 2], 2, (x) => x * 2), [2, 4]);\n+  assert.deepEqual(await mapLimit([1, 2], 2, (x) => x * 2, {}), [2, 4]);\n+  assert.deepEqual(await mapLimit([1, 2], 2, (x, _i, signal) => signal, {signal: undefined}), [\n+    undefined,\n+    undefined\n+  ]);\n+});\n",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": true,
+      "duration_ms": 8.316,
+      "queue_wait_ms": 0.0,
+      "permission_denied": false,
+      "title": "",
+      "metadata": {},
+      "attachments": [],
+      "category": "edit"
+    }
+  },
+  {
+    "request_id": 6,
+    "before_snapshot": 54,
+    "after_snapshot": 55,
+    "result": {
+      "name": "write_file",
+      "tool_input": {
+        "content": "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst {processBatch} = require('../index.cjs');\n\nfunction deferred() {\n  let resolve;\n  let reject;\n  const promise = new Promise((res, rej) => {\n    resolve = res;\n    reject = rej;\n  });\n  return {promise, resolve, reject};\n}\n\ntest('batch maps ids', async () => {\n  assert.deepEqual(await processBatch([{id: 'a'}, {id: 'b'}], async x => x.id),\n    [{id: 'a', value: 'a'}, {id: 'b', value: 'b'}]);\n});\n\ntest('returns ordered records regardless of completion order', async () => {\n  const gates = [deferred(), deferred(), deferred()];\n  const records = [{id: 'a'}, {id: 'b'}, {id: 'c'}];\n\n  const running = processBatch(records, async (record) => {\n    const index = records.indexOf(record);\n    await gates[index].promise;\n    return record.id.toUpperCase();\n  });\n\n  // Resolve out of order.\n  gates[2].resolve();\n  gates[0].resolve();\n  gates[1].resolve();\n\n  assert.deepEqual(await running, [\n    {id: 'a', value: 'A'},\n    {id: 'b', value: 'B'},\n    {id: 'c', value: 'C'}\n  ]);\n});\n\ntest('sends each record at most once', async () => {\n  const sent = [];\n  const records = [{id: 'a'}, {id: 'b'}, {id: 'c'}, {id: 'd'}];\n\n  await processBatch(records, async (record) => {\n    sent.push(record.id);\n    return 1;\n  });\n\n  assert.deepEqual(sent.slice().sort(), ['a', 'b', 'c', 'd']);\n  assert.equal(sent.length, records.length);\n});\n\ntest('defaults to concurrency 2 and honours options.concurrency', async () => {\n  const gate = deferred();\n\n  let inFlight = 0;\n  let peakDefault = 0;\n  const defaultRun = processBatch([{id: 1}, {id: 2}, {id: 3}, {id: 4}], async () => {\n    inFlight += 1;\n    peakDefault = Math.max(peakDefault, inFlight);\n    await gate.promise;\n    inFlight -= 1;\n    return true;\n  });\n  await Promise.resolve();\n  assert.equal(peakDefault, 2);\n  gate.resolve();\n  await defaultRun;\n\n  const gate2 = deferred();\n  let peakCustom = 0;\n  let inFlight2 = 0;\n  const customRun = processBatch(\n    [{id: 1}, {id: 2}, {id: 3}, {id: 4}],\n    async () => {\n      inFlight2 += 1;\n      peakCustom = Math.max(peakCustom, inFlight2);\n      await gate2.promise;\n      inFlight2 -= 1;\n      return true;\n    },\n    {concurrency: 1}\n  );\n  await Promise.resolve();\n  assert.equal(peakCustom, 1);\n  gate2.resolve();\n  await customRun;\n});\n\ntest('propagates send rejections with identity and drains in-flight work', async () => {\n  const boom = new Error('send failed');\n  const gate = deferred();\n  const started = [];\n\n  const running = processBatch(\n    [{id: 'a'}, {id: 'b'}, {id: 'c'}, {id: 'd'}],\n    async (record) => {\n      started.push(record.id);\n      if (record.id === 'a') throw boom;\n      await gate.promise;\n      return record.id;\n    },\n    {concurrency: 2}\n  );\n\n  await assert.rejects(running, (error) => error === boom);\n  assert.deepEqual(started, ['a', 'b']);\n  gate.resolve();\n});\n\ntest('cancels via options.signal and preserves the abort reason', async () => {\n  const controller = new AbortController();\n  const reason = new Error('batch cancelled');\n  const gate = deferred();\n  const started = [];\n\n  const running = processBatch(\n    [{id: 'a'}, {id: 'b'}, {id: 'c'}],\n    async (record) => {\n      started.push(record.id);\n      await gate.promise;\n      return record.id;\n    },\n    {concurrency: 1, signal: controller.signal}\n  );\n\n  await Promise.resolve();\n  controller.abort(reason);\n\n  let settled = false;\n  running.catch(() => {\n    settled = true;\n  });\n  await new Promise((resolve) => setTimeout(resolve, 5));\n  assert.equal(settled, false, 'in-flight send must drain before rejecting');\n\n  gate.resolve();\n  await assert.rejects(running, (error) => error === reason);\n  assert.deepEqual(started, ['a']);\n});\n\ntest('an already-aborted signal sends nothing', async () => {\n  const controller = new AbortController();\n  const reason = {code: 'pre-aborted'};\n  controller.abort(reason);\n  let calls = 0;\n\n  await assert.rejects(\n    processBatch([{id: 'a'}], () => {\n      calls += 1;\n      return 1;\n    }, {signal: controller.signal}),\n    (error) => error === reason\n  );\n  assert.equal(calls, 0);\n});\n\ntest('rejects invalid arguments with TypeError', async () => {\n  await assert.rejects(() => processBatch('nope', async () => 1), TypeError);\n  await assert.rejects(() => processBatch([{id: 'a'}], 'nope'), TypeError);\n  await assert.rejects(() => processBatch([{id: 'a'}], async () => 1, {concurrency: 0}), TypeError);\n});\n\ntest('empty input resolves to an empty list', async () => {\n  assert.deepEqual(await processBatch([], async () => 1), []);\n});\n",
+        "path": "tests/batch.test.cjs"
+      },
+      "output": "Updated tests/batch.test.cjs (4582 bytes)\n\nDiff:\n--- a/tests/batch.test.cjs\n+++ b/tests/batch.test.cjs\n@@ -1,7 +1,168 @@\n const test = require('node:test');\n const assert = require('node:assert/strict');\n const {processBatch} = require('../index.cjs');\n+\n+function deferred() {\n+  let resolve;\n+  let reject;\n+  const promise = new Promise((res, rej) => {\n+    resolve = res;\n+    reject = rej;\n+  });\n+  return {promise, resolve, reject};\n+}\n+\n test('batch maps ids', async () => {\n-  assert.deepEqual(await processBatch([{id:'a'}, {id:'b'}], async x => x.id),\n-    [{id:'a',value:'a'}, {id:'b',value:'b'}]);\n+  assert.deepEqual(await processBatch([{id: 'a'}, {id: 'b'}], async x => x.id),\n+    [{id: 'a', value: 'a'}, {id: 'b', value: 'b'}]);\n });\n+\n+test('returns ordered records regardless of completion order', async () => {\n+  const gates = [deferred(), deferred(), deferred()];\n+  const records = [{id: 'a'}, {id: 'b'}, {id: 'c'}];\n+\n+  const running = processBatch(records, async (record) => {\n+    const index = records.indexOf(record);\n+    await gates[index].promise;\n+    return record.id.toUpperCase();\n+  });\n+\n+  // Resolve out of order.\n+  gates[2].resolve();\n+  gates[0].resolve();\n+  gates[1].resolve();\n+\n+  assert.deepEqual(await running, [\n+    {id: 'a', value: 'A'},\n+    {id: 'b', value: 'B'},\n+    {id: 'c', value: 'C'}\n+  ]);\n+});\n+\n+test('sends each record at most once', async () => {\n+  const sent = [];\n+  const records = [{id: 'a'}, {id: 'b'}, {id: 'c'}, {id: 'd'}];\n+\n+  await processBatch(records, async (record) => {\n+    sent.push(record.id);\n+    return 1;\n+  });\n+\n+  assert.deepEqual(sent.slice().sort(), ['a', 'b', 'c', 'd']);\n+  assert.equal(sent.length, records.length);\n+});\n+\n+test('defaults to concurrency 2 and honours options.concurrency', async () => {\n+  const gate = deferred();\n+\n+  let inFlight = 0;\n+  let peakDefault = 0;\n+  const defaultRun = processBatch([{id: 1}, {id: 2}, {id: 3}, {id: 4}], async () => {\n+    inFlight += 1;\n+    peakDefault = Math.max(peakDefault, inFlight);\n+    await gate.promise;\n+    inFlight -= 1;\n+    return true;\n+  });\n+  await Promise.resolve();\n+  assert.equal(peakDefault, 2);\n+  gate.resolve();\n+  await defaultRun;\n+\n+  const gate2 = deferred();\n+  let peakCustom = 0;\n+  let inFlight2 = 0;\n+  const customRun = processBatch(\n+    [{id: 1}, {id: 2}, {id: 3}, {id: 4}],\n+    async () => {\n+      inFlight2 += 1;\n+      peakCustom = Math.max(peakCustom, inFlight2);\n+      await gate2.promise;\n+      inFlight2 -= 1;\n+      return true;\n+    },\n+    {concurrency: 1}\n+  );\n+  await Promise.resolve();\n+  assert.equal(peakCustom, 1);\n+  gate2.resolve();\n+  await customRun;\n+});\n+\n+test('propagates send rejections with identity and drains in-flight work', async () => {\n+  const boom = new Error('send failed');\n+  const gate = deferred();\n+  const started = [];\n+\n+  const running = processBatch(\n+    [{id: 'a'}, {id: 'b'}, {id: 'c'}, {id: 'd'}],\n+    async (record) => {\n+      started.push(record.id);\n+      if (record.id === 'a') throw boom;\n+      await gate.promise;\n+      return record.id;\n+    },\n+    {concurrency: 2}\n+  );\n+\n+  await assert.rejects(running, (error) => error === boom);\n+  assert.deepEqual(started, ['a', 'b']);\n+  gate.resolve();\n+});\n+\n+test('cancels via options.signal and preserves the abort reason', async () => {\n+  const controller = new AbortController();\n+  const reason = new Error('batch cancelled');\n+  const gate = deferred();\n+  const started = [];\n+\n+  const running = processBatch(\n+    [{id: 'a'}, {id: 'b'}, {id: 'c'}],\n+    async (record) => {\n+      started.push(record.id);\n+      await gate.promise;\n+      return record.id;\n+    },\n+    {concurrency: 1, signal: controller.signal}\n+  );\n+\n+  await Promise.resolve();\n+  controller.abort(reason);\n+\n+  let settled = false;\n+  running.catch(() => {\n+    settled = true;\n+  });\n+  await new Promise((resolve) => setTimeout(resolve, 5));\n+  assert.equal(settled, false, 'in-flight send must drain before rejecting');\n+\n+  gate.resolve();\n+  await assert.rejects(running, (error) => error === reason);\n+  assert.deepEqual(started, ['a']);\n+});\n+\n+test('an already-aborted signal sends nothing', async () => {\n+  const controller = new AbortController();\n+  const reason = {code: 'pre-aborted'};\n+  controller.abort(reason);\n+  let calls = 0;\n+\n+  await assert.rejects(\n+    processBatch([{id: 'a'}], () => {\n+      calls += 1;\n+      return 1;\n+    }, {signal: controller.signal}),\n+    (error) => error === reason\n+  );\n+  assert.equal(calls, 0);\n+});\n+\n+test('rejects invalid arguments with TypeError', async () => {\n+  await assert.rejects(() => processBatch('nope', async () => 1), TypeError);\n+  await assert.rejects(() => processBatch([{id: 'a'}], 'nope'), TypeError);\n+  await assert.rejects(() => processBatch([{id: 'a'}], async () => 1, {concurrency: 0}), TypeError);\n+});\n+\n+test('empty input resolves to an empty list', async () => {\n+  assert.deepEqual(await processBatch([], async () => 1), []);\n+});\n",
+      "executed": true,
+      "dispatch_failed": false,
+      "command_failed": false,
+      "is_write": true,
+      "duration_ms": 5.994,
+      "queue_wait_ms": 0.0,
+      "permission_denied": false,
+      "title": "",
+      "metadata": {},
+      "attachments": [],
+      "category": "edit"
+    }
+  },
+  {
+    "request_id": 7,
+    "before_snapshot": 60,
+    "after_snapshot": 61,
+    "result": {
+      "name": "bash",
+      "tool_input": {
+        "command": "node --test tests/pool.test.cjs tests/batch.test.cjs"
+      },
+      "output": "Error: Command timed out (120s)",
+      "executed": true,
+      "dispatch_failed": true,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 120019.697,
+      "queue_wait_ms": 0.0,
+      "permission_denied": false,
+      "title": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+      "metadata": {
+        "exit": null,
+        "cancelled": false,
+        "timed_out": true,
+        "truncated": false,
+        "output_incomplete": true,
+        "raw_artifact_complete": false,
+        "raw_artifact_error": "No recoverable output was captured"
+      },
+      "attachments": [],
+      "category": "command"
+    }
+  }
+]

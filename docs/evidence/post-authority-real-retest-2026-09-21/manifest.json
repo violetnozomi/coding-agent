@@ -1,0 +1,58 @@
+{
+  "status": "authorized",
+  "nz_commit": "45db8e38a8de58d404b6601a47b2fe5b518f248a",
+  "model": "deepseek-v4-flash",
+  "repetitions_per_task_side": 1,
+  "planned_runs": 2,
+  "main_request_cap_per_run": 24,
+  "auxiliary_request_cap_per_run": 8,
+  "main_request_cap_total": 48,
+  "auxiliary_request_cap_total": 16,
+  "all_paid_request_cap_total": 64,
+  "retry_accounting": "each physical request consumes its purpose cap",
+  "automatic_reruns": false,
+  "reasoning_effort": "main field omitted",
+  "output_limits": {
+    "nzcoder": 64000
+  },
+  "cost": "cost unknown; request caps are not a monetary cap",
+  "real_requests": 0,
+  "tasks": [
+    {
+      "id": "M",
+      "title": "Money API migration across five consumers",
+      "prompt": "Implement the invoice pricing migration described in REQUIREMENTS.md. Replace float-based totals with an immutable Quote returned by billing.quote.quote_order; migrate every in-repository consumer and its tests to the new API, and document it. Preserve the documented consumer output formats while adding currency correctness, quantity/price validation and discounts. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+      "initial_hashes": {
+        "README.md": "8a764203864cc5c546165956b25b8cc4e328faec0c21f9f7b3e4b59a3d5f4493",
+        "REQUIREMENTS.md": "37b543633f7cc036163840ca97ed9f6256e4e456b1f4b93d2c2e959cc44b1bcf",
+        "billing/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "billing/legacy.py": "90a7a0e14f58c8e9da76db1ea9661d2f7f38b77b879a48c331fd638d8d130a9d",
+        "cli.py": "6c610bdf6aebb22191086e5596e2f9d025dae0baa792259b3a361a893c15e5a6",
+        "jobs.py": "08df6334c59a816af4d5c090c3f3916e84eec8b34da360ed7ea6e58ac4adca2c",
+        "mobile.py": "9b9661983f2d71f4e2ca6c720a8620a3433c40618da027e977ed372544ec6f11",
+        "reporting.py": "0bb2a7f89c4a420e1721141b2d0c51a5cf0230e89a245585f774b5d0cc5647ac",
+        "tests/test_consumers.py": "24b30969546a8f06b27eada7347fe11f7e02e2038779c80dd78f29130d60eccc",
+        "web.py": "e1f48a6be77a79f93ad67711e63e012ced47594600658bc40f0741032c10d88e"
+      }
+    },
+    {
+      "id": "Q",
+      "title": "Bounded async worker pool, failure drain and cancellation",
+      "prompt": "Repair lib/pool.cjs and its batch consumer according to REQUIREMENTS.md. Implement bounded concurrency, stable result ordering, failure draining and AbortSignal cancellation without breaking the public API. Add meaningful tests and update README.md. Run node --test tests/pool.test.cjs tests/batch.test.cjs and report the actual result and remaining limitations.",
+      "initial_hashes": {
+        "README.md": "a576bf215be3580dba11ec2a347696a27706f8bf3d4ec455f3069c7e6afc4a38",
+        "REQUIREMENTS.md": "7a3e48a4e3e7cdcaedb59bdc1e3b524597a1764f00bfaab23a70a1d7ecff9bed",
+        "index.cjs": "d381c6f7be04252e280c53926eeb0b4fdd9621cf183a05f81f14791fb19738b5",
+        "lib/batch.cjs": "f6393c69e7c484b9e329df5d22b28bd0df353764313b557b31241c89a33bc3f5",
+        "lib/pool.cjs": "c5980f6446b09bb993bb2da8deaf122838e6c2f95976d55903ce473a864d3ed3",
+        "package.json": "5f99124db57570f6d19ecf5c35ab29326ab192f73d7836392c63844846d0a3a6",
+        "tests/batch.test.cjs": "bdc64f08c76b71e43cc3c13b8f97de5d63e689a93bb4be850080b508c3075bfa",
+        "tests/pool.test.cjs": "494aa2cbefb471dff9421bf67101410ccf2942ecb186d74a42edeee98b139862"
+      }
+    }
+  ],
+  "execution_order": [
+    "M/nzcoder",
+    "Q/nzcoder"
+  ]
+}

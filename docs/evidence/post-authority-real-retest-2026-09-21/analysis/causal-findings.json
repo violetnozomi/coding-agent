@@ -1,0 +1,38 @@
+{
+  "money": {
+    "classification": "A",
+    "observation": "G12/19 pass preserved through retained-spec verifier accept and completed",
+    "strength": "strong for this run; moderate attribution across changed stochastic trajectories"
+  },
+  "q_test_deadlock": {
+    "observation": "Generated tests await draining rejection before resolving the very in-flight gate needed to drain",
+    "causal_evidence": [
+      "final-files/tests/pool.test.cjs:115",
+      "final-files/tests/batch.test.cjs:92",
+      "analysis/Q-unmodified-test-diagnosis.json: both unmodified subsets timeout at 2000ms",
+      "production command timed out at 120s; independent behavioral checks pass 6/6"
+    ],
+    "confidence": "high for test-design circular wait; not a review interface failure"
+  },
+  "q_runtime_error_candidate": {
+    "observation": "After executed tool timeout, Runtime ended error/provider_error with 17 main requests unused; upstream HTTP 200 and complete SSE were recorded before tool completion",
+    "causal_evidence": [
+      "Q/nzcoder/provider-responses.jsonl request 7",
+      "analysis/Q-termination.json",
+      "source-corroboration.json"
+    ],
+    "alternative_explanations": [
+      "A post-tool local stream/SDK error or callback error; exact private cause is not present in public capture",
+      "Tool timeout and transport error classification are distinct; sequence alone does not establish a new deterministic Core defect"
+    ],
+    "confidence": "high for event sequence and attribution mismatch; medium/insufficient for exact Core root cause",
+    "next": "Separate offline failure regression for successful stream + tool timeout + post-tool settlement; do not patch based on this run alone"
+  },
+  "review_efficiency": {
+    "observation": "Schema delivered with empty properties; no review tool calls before error",
+    "strength": "insufficient to prove real-model review convergence or semantic correctness"
+  },
+  "paid_runs_complete": true,
+  "automatic_reruns": false,
+  "production_changes": false
+}

@@ -1,0 +1,37 @@
+{
+  "scope": "Post-run diagnostic only; same final files, test-name filter and bounded timeout; no fixture edits and no provider calls",
+  "results": [
+    {
+      "label": "pool-drain",
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "<REPO>/tests/evaluation/fixtures/offline_exec.py",
+        "<USER_HOME>/.local/lib/python3.13/site-packages/playwright/driver/node",
+        "--test",
+        "--test-timeout=2000",
+        "--test-name-pattern=^drains already-started work",
+        "tests/pool.test.cjs"
+      ],
+      "exit_code": 1,
+      "stdout": "✖ drains already-started work, stops scheduling and rethrows the first error (2003.545255ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 0\nℹ cancelled 1\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 2033.710994\n\n✖ failing tests:\n\ntest at tests/pool.test.cjs:115:1\n✖ drains already-started work, stops scheduling and rethrows the first error (2003.545255ms)\n  'test timed out after 2000ms'\n",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n",
+      "elapsed_s": 2.071261040997342
+    },
+    {
+      "label": "batch-drain",
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "<REPO>/tests/evaluation/fixtures/offline_exec.py",
+        "<USER_HOME>/.local/lib/python3.13/site-packages/playwright/driver/node",
+        "--test",
+        "--test-timeout=2000",
+        "--test-name-pattern=^propagates send rejections",
+        "tests/batch.test.cjs"
+      ],
+      "exit_code": 1,
+      "stdout": "✖ propagates send rejections with identity and drains in-flight work (2002.073857ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 0\nℹ cancelled 1\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 2035.24662\n\n✖ failing tests:\n\ntest at tests/batch.test.cjs:92:1\n✖ propagates send rejections with identity and drains in-flight work (2002.073857ms)\n  'test timed out after 2000ms'\n",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n",
+      "elapsed_s": 2.071559658001206
+    }
+  ]
+}

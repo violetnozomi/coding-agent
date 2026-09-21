@@ -1,0 +1,65 @@
+{
+  "historical": {
+    "source": "complex-paired-2026-09-20/Q/nzcoder",
+    "acceptance": "7/7",
+    "main": 16,
+    "auxiliary": 1,
+    "terminal": "completed",
+    "review_calls": 3,
+    "field_exploration_calls": 3,
+    "review_dispatch_failures": 0,
+    "review_states": [
+      "failed: missing modified_files",
+      "needs_fix: missing verification_results",
+      "approved"
+    ],
+    "permission_denials": 5
+  },
+  "new": {
+    "acceptance": "6/7 (behavior checks 6/6, required documentation missing)",
+    "main": 7,
+    "auxiliary": 0,
+    "terminal": "error",
+    "raw_finish_reason": "tool_calls",
+    "runtime_turn_outcome": "provider_error",
+    "review_calls": 0,
+    "extra_arg_attempts": 0,
+    "zero_arg_calls": 0,
+    "review_dispatch_failures": 0,
+    "same_generation_duplicates": 0,
+    "pending_tool_batch_reviews": 0,
+    "permission_denials": 2,
+    "semantic_revise_count": 0,
+    "semantic_review": "not reached",
+    "duration_s": 311.3686806250007,
+    "classification": "C: delivered acceptance regresses; review efficiency cannot be measured because the review path was not reached"
+  },
+  "new_review_schema_actually_sent": {
+    "type": "function",
+    "function": {
+      "name": "review_run_evidence",
+      "description": "Inspect the current Agent's Runtime-owned evidence and unresolved requirements. Call with no arguments; do not supply files, commands, or verification claims. Read-only advisory review; normal completion and semantic review still apply.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  "comparison": "historical comparison, not concurrent rerun; zero calls before early error is not proof of removed schema exploration",
+  "first_blocker": {
+    "main_request": 7,
+    "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+    "executed": true,
+    "permission_denied": false,
+    "timed_out": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "exit": null,
+    "runtime_duration_ms": 120019.697,
+    "raw_provider_http": 200,
+    "raw_provider_done": true,
+    "next_main_request": null,
+    "main_budget_unused": 17
+  }
+}

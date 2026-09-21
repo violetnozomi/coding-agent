@@ -1,0 +1,3 @@
+{"tool": "bash", "input": {"command": "ls -la && echo \"---\" && ls -la lib tests 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "node --version"}, "allowed": false}
+{"tool": "bash", "input": {"command": "node --test tests/pool.test.cjs tests/batch.test.cjs"}, "allowed": true}
