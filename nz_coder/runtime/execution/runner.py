@@ -1199,7 +1199,9 @@ class AgentRunner:
                     if on_text:
                         on_text("[context overflow: compacting]")
                     try:
-                        compactor = getattr(context_runtime, "compact", None)
+                        compactor = getattr(context_runtime, "compact_overflow", None)
+                        if not callable(compactor):
+                            compactor = getattr(context_runtime, "compact", None)
                         using_context_compactor = callable(compactor)
                         if not using_context_compactor:
                             compactor = context.messages.compact_messages

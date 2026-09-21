@@ -623,11 +623,20 @@ class AgentHooks:
         if not prompt:
             return None
         self._stop_hook_reanimate_count += 1
+        retained = ""
+        if decision.source == "sidecar-verifier":
+            from nz_coder.runtime.verification.reference_evidence import render_references
+
+            state = getattr(loop, "runtime_state", None)
+            retained = "\n\n" + render_references(
+                getattr(state, "task_reference_evidence", []),
+                getattr(state, "task_reference_omitted_count", 0),
+            )
         messages.append(stamp_user_message({
             "role": "user",
             "content": (
                 "<stop-hook-guidance>\n"
-                f"{prompt[:4000]}\n"
+                f"{prompt[:4000]}{retained}\n"
                 "</stop-hook-guidance>"
             ),
             "_nz_synthetic": True,

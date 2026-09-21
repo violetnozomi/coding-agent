@@ -1,0 +1,24 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_bootstrap_does_not_extend_spec_authority_across_newline _________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-426/test_bootstrap_does_not_extend0')
+
+    def test_bootstrap_does_not_extend_spec_authority_across_newline(tmp_path):
+        task = 'Follow SPEC.md\napi.py contains the current implementation.'
+        (tmp_path / 'SPEC.md').write_text('Target contract')
+        (tmp_path / 'api.py').write_text('value = 1')
+        roles = {r.path: r.role for r in classify_instruction_paths(task)}
+        artifacts = {r.path: r for r in resolve_bootstrap_artifacts(task, workspace=tmp_path).artifacts}
+        assert roles['api.py'] == 'context'
+>       assert artifacts['api.py'].role == 'context'
+E       AssertionError: assert 'task_reference' == 'context'
+E         
+E         - context
+E         + task_reference
+
+tests/runtime/test_reference_scope_followups.py:13: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_reference_scope_followups.py::test_bootstrap_does_not_extend_spec_authority_across_newline
+1 failed in 0.04s

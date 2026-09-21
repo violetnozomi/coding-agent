@@ -1,0 +1,14 @@
+{
+  "baseline": "e9e24913e419c1dd12ef2e60b745d4422ec6da2a",
+  "source_version": "uncommitted working tree; source-hashes.json + implementation.patch",
+  "paid_model_requests": 0,
+  "historical_tracked_files_checked": 1481,
+  "historical_tracked_changes": [],
+  "previous_reference_evidence_files_checked": 248,
+  "previous_reference_evidence_changes": [],
+  "reasoning_content_json_keys": [],
+  "source_files_hashed": 25,
+  "evidence_directory_gitignored": true,
+  "committed": false,
+  "pushed": false
+}

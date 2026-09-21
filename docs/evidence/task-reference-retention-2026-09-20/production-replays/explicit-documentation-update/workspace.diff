@@ -1,0 +1,10 @@
+--- a/REQUIREMENTS.md
++++ b/REQUIREMENTS.md
+@@ -1 +1 @@
+-The API value must be 2.
++The API value must be 2. The new contract is value=2.
+--- a/api.py
++++ b/api.py
+@@ -1 +1 @@
+-value = 1
++value = 2

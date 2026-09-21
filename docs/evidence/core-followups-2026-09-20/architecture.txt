@@ -1,0 +1,50 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+..........F.F.........                                                   [100%]
+=================================== FAILURES ===================================
+______________ test_all_direct_subprocess_launches_are_classified ______________
+
+    def test_all_direct_subprocess_launches_are_classified():
+        names = {'subprocess.Popen', 'subprocess.run', 'asyncio.create_subprocess_exec', 'multiprocessing.Process'}
+        actual: Counter[tuple[str, str]] = Counter()
+        lines: dict[tuple[str, str], list[int]] = defaultdict(list)
+        for path, tree in _trees():
+            relative = path.relative_to(ROOT).as_posix()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call) and _dotted(node.func) in names:
+                    key = (relative, _dotted(node.func))
+                    actual[key] += 1
+                    lines[key].append(node.lineno)
+        expected = {key: value.count for key, value in PROCESS_SITES.items()}
+        problems = [f'{path}:{lines[(path, call)]}: {call} is unclassified or changed; declare identity/trust/env/cwd/owner' for path, call in sorted(set(actual) | set(expected)) if actual.get((path, call), 0) != expected.get((path, call), 0)]
+>       assert not problems, '\n'.join(problems)
+E       AssertionError: nz_coder/evaluation/reference_adapter.py:[304, 235]: subprocess.run is unclassified or changed; declare identity/trust/env/cwd/owner
+E       assert not ['nz_coder/evaluation/reference_adapter.py:[304, 235]: subprocess.run is unclassified or changed; declare identity/trust/env/cwd/owner']
+
+tests/architecture/test_security_boundaries.py:534: AssertionError
+______________ test_raw_exception_projection_sites_are_classified ______________
+
+    def test_raw_exception_projection_sites_are_classified():
+        actual: Counter[str] = Counter()
+        for path, tree in _trees():
+            relative = path.relative_to(ROOT).as_posix()
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or _dotted(node.func) not in {'str', 'repr'} or not node.args:
+                    continue
+                first = node.args[0]
+                if isinstance(first, ast.Name) and first.id in {'exc', 'error', 'e'}:
+                    actual[relative] += 1
+        expected = {path: count for path, (_kind, count) in PUBLIC_ERROR_MODULE_COUNTS.items()}
+>       assert actual == expected, f'raw exception projection inventory changed: expected {expected}, found {dict(actual)}; use PublicError or classify the reviewed site'
+E       AssertionError: raw exception projection inventory changed: expected {'nz_coder/evaluation/eval_runner.py': 2, 'nz_coder/evaluation/provider_smoke.py': 1, 'nz_coder/foundation/error_classification.py': 1, 'nz_coder/foundation/private_paths.py': 1, 'nz_coder/foundation/workspace_paths.py': 1, 'nz_coder/foundation/workspace_trust.py': 1, 'nz_coder/intelligence/semantic.py': 1, 'nz_coder/intelligence/verification.py': 1, 'nz_coder/interface/commands/handlers/core.py': 8, 'nz_coder/interface/commands/handlers/workflow.py': 3, 'nz_coder/interface/custom_commands.py': 1, 'nz_coder/interface/setup/doctor.py': 2, 'nz_coder/project_creation/verifier.py': 1, 'nz_coder/runtime/agent/agent_manager.py': 1, 'nz_coder/runtime/agent/agent_resilience.py': 1, 'nz_coder/runtime/execution/loop.py': 20, 'nz_coder/runtime/execution/provider_stream.py': 1, 'nz_coder/runtime/execution/run_lifecycle.py': 2, 'nz_coder/runtime/execution/runner.py': 2, 'nz_coder/runtime/execution/services.py': 1, 'nz_coder/runtime/model_gateway/errors.py': 3, 'nz_coder/runtime/model_gateway/gateway.py': 12, 'nz_coder/runtime/model_gateway/models.py': 4, 'nz_coder/runtime/verification/hooks.py': 4, 'nz_coder/runtime/verification/recovery.py': 3, 'nz_coder/runtime/verification/stall_sidecar.py': 1, 'nz_coder/runtime/workflows/workflow_generation.py': 1, 'nz_coder/state/context.py': 1, 'nz_coder/state/trace.py': 2, 'nz_coder/state/workspace.py': 1, 'nz_coder/swebench/orchestrator.py': 5, 'nz_coder/swebench/submission.py': 1, 'nz_coder/tool_platform/results.py': 1, 'nz_coder/tools/bash.py': 1, 'nz_coder/tools/question.py': 1, 'nz_coder/tools/read_support.py': 1, 'nz_coder/tools/webfetch.py': 1}, found {'nz_coder/evaluation/eval_runner.py': 2, 'nz_coder/evaluation/provider_smoke.py': 1, 'nz_coder/foundation/error_classification.py': 1, 'nz_coder/foundation/private_paths.py': 1, 'nz_coder/foundation/workspace_paths.py': 1, 'nz_coder/foundation/workspace_trust.py': 1, 'nz_coder/intelligence/semantic.py': 1, 'nz_coder/intelligence/verification.py': 1, 'nz_coder/interface/commands/handlers/core.py': 8, 'nz_coder/interface/commands/handlers/workflow.py': 3, 'nz_coder/interface/custom_commands.py': 1, 'nz_coder/interface/setup/doctor.py': 2, 'nz_coder/project_creation/verifier.py': 1, 'nz_coder/runtime/agent/agent_manager.py': 1, 'nz_coder/runtime/agent/agent_resilience.py': 1, 'nz_coder/runtime/execution/loop.py': 20, 'nz_coder/runtime/execution/provider_stream.py': 1, 'nz_coder/runtime/execution/run_lifecycle.py': 2, 'nz_coder/runtime/execution/runner.py': 2, 'nz_coder/runtime/execution/services.py': 1, 'nz_coder/runtime/model_gateway/errors.py': 3, 'nz_coder/runtime/model_gateway/gateway.py': 12, 'nz_coder/runtime/model_gateway/models.py': 4, 'nz_coder/runtime/tool_runtime/policy.py': 1, 'nz_coder/runtime/verification/hooks.py': 4, 'nz_coder/runtime/verification/recovery.py': 3, 'nz_coder/runtime/verification/stall_sidecar.py': 1, 'nz_coder/runtime/workflows/workflow_generation.py': 1, 'nz_coder/state/context.py': 1, 'nz_coder/state/trace.py': 2, 'nz_coder/state/workspace.py': 1, 'nz_coder/swebench/orchestrator.py': 5, 'nz_coder/swebench/submission.py': 1, 'nz_coder/tool_platform/results.py': 1, 'nz_coder/tools/bash.py': 1, 'nz_coder/tools/question.py': 1, 'nz_coder/tools/read_support.py': 1, 'nz_coder/tools/webfetch.py': 1}; use PublicError or classify the reviewed site
+E       assert Counter({'nz_...fetch.py': 1}) == {'nz_coder/ev...s.py': 1, ...}
+E         
+E         Omitting 37 identical items, use -vv to show
+E         Left contains 1 more item:
+E         {'nz_coder/runtime/tool_runtime/policy.py': 1}
+E         Use -v to get more diff
+
+tests/architecture/test_security_boundaries.py:587: AssertionError
+=========================== short test summary info ============================
+FAILED tests/architecture/test_security_boundaries.py::test_all_direct_subprocess_launches_are_classified
+FAILED tests/architecture/test_security_boundaries.py::test_raw_exception_projection_sites_are_classified
+2 failed, 20 passed in 3.15s

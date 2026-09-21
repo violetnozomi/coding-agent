@@ -21,6 +21,7 @@ class ContextExecutionContext:
     report_pressure: Callable[[dict], None] = lambda _payload: None
     projected_replay_tokens: Callable[[list[dict]], int] | None = None
     cancel_compaction: Callable[[], object] | None = None
+    compact_overflow: Callable[[list[dict]], list[dict]] | None = None
 
     def __post_init__(self) -> None:
         workspace = Path(self.workspace).resolve()
@@ -46,4 +47,6 @@ class ContextExecutionContext:
             raise TypeError(
                 "ContextExecutionContext cancel_compaction must be callable"
             )
+        if self.compact_overflow is not None and not callable(self.compact_overflow):
+            raise TypeError("ContextExecutionContext compact_overflow must be callable")
         object.__setattr__(self, "workspace", workspace)

@@ -1,0 +1,13 @@
+{
+  "nz_coder/intelligence/bootstrap_artifacts.py": "8342b545a93c420992ff1707468087c45fff2a26ac067beae17c31ce794d7963",
+  "nz_coder/protocol/message_schema.py": "8115498d3996d6fc352e0b7fc8888609ccd34bb489dfe3b0948f78ce44aa6fd1",
+  "nz_coder/runtime/adapters/lifecycle.py": "4245d2367be77868d1b8a23bc7dbeab78fcce463d7b8cfbbd16231c848b45e4e",
+  "nz_coder/runtime/agent/task_policy.py": "d3f38880d025d01ba29bde10f5916a425f2517a8a9fee56b5539cbecef9c3b91",
+  "nz_coder/runtime/execution/loop.py": "9f320756bf1b9ec16555acc3e8e4a1f6e6146af813c1328af8032ade194fe48b",
+  "nz_coder/runtime/execution/runtime_state.py": "c7e4c1fa0af5d09102d76a70fca1aa8de2ac2cf9aad7743b1b31a099880706da",
+  "nz_coder/runtime/verification/hooks.py": "e7b5a25f5428e4aa2a6a05af9e0ff11f07e99693f497dca0572b96800e146eb9",
+  "nz_coder/runtime/verification/reference_evidence.py": "46eb513648aee05309fb5dd03d6eabc1c25b0cdf08dbb5ae782688a5862fb1ff",
+  "nz_coder/runtime/verification/sidecar_verifier.py": "c8bf335f7d6d93070f8faf115dbf65edb1860f4e3a937121ae906b87abea9fea",
+  "tests/runtime/test_task_reference_evidence.py": "253f889827d4dd3b940389a9e0db62dfbd7b5014eb5533371906b5ee5bcc6167",
+  "tests/test_sidecar_verifier.py": "b5e6256f651f0816b967284836c3b61e703087f1ea62c59adaaf8b6a1b17747c"
+}

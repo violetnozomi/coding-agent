@@ -1,0 +1,65 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+______ test_production_retains_original_reference_outside_rolling_history ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x78488a4f5cd0>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-400/test_production_retains_origin0')
+
+    def test_production_retains_original_reference_outside_rolling_history(monkeypatch, tmp_path):
+        from test_requirement_scope_runtime import _run
+    
+        (tmp_path / 'REQUIREMENTS.md').write_text(SPEC)
+        (tmp_path / 'api.py').write_text('def answer(): return 0\n')
+        (tmp_path / 'tests').mkdir()
+        (tmp_path / 'tests/test_api.py').write_text('from api import answer\ndef test_answer(): assert answer() == 1\n')
+        for i in range(27):
+            (tmp_path / f'context{i}.txt').write_text(f'ordinary context {i}\n')
+        actions = [[('read_file', {'path': 'REQUIREMENTS.md'})]]
+        actions += [[('read_file', {'path': f'context{i}.txt'})] for i in range(27)]
+        actions += [
+            [('write_file', {'path': 'api.py', 'content': 'def answer(): return 1\n'})],
+            [('bash', {'command': 'python -m pytest -q tests'})],
+            'Implemented and verified; no external integrations exercised.',
+        ]
+        _, state, _, requests, reviews = _run(monkeypatch, tmp_path, TASK, actions, label='reference-retention')
+        assert reviews
+        message = reviews[0]['messages'][1]['content']
+        recent = message.split('=== RECENT MAIN AGENT TRANSCRIPT ===')[1].split('=== FILE EDITS')[0]
+        assert SPEC.strip() not in recent
+>       assert '=== AUTHORITATIVE TASK REFERENCES ===' in message
+E       AssertionError: assert '=== AUTHORITATIVE TASK REFERENCES ===' in '=== USER REQUEST (CURRENT TURN) ===\nImplement the behavior described in REQUIREMENTS.md. Fix api.py and run python -... verdict=revise, the `reason` becomes a synthetic user follow-up the main agent will see — write it as the user would.'
+
+tests/runtime/test_task_reference_evidence.py:38: AssertionError
+________________ test_reference_bootstrap_preserves_provenance _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-400/test_reference_bootstrap_prese0')
+
+    def test_reference_bootstrap_preserves_provenance(tmp_path):
+        from nz_coder.intelligence.bootstrap_artifacts import resolve_bootstrap_artifacts
+        (tmp_path / 'REQUIREMENTS.md').write_text(SPEC)
+        ref = next(r for r in resolve_bootstrap_artifacts(TASK, workspace=tmp_path).artifacts if r.path == 'REQUIREMENTS.md')
+>       assert ref.role == 'task_reference'
+E       AssertionError: assert 'context' == 'task_reference'
+E         
+E         - task_reference
+E         + context
+
+tests/runtime/test_task_reference_evidence.py:53: AssertionError
+________________ test_review_feedback_is_not_new_user_authority ________________
+
+    def test_review_feedback_is_not_new_user_authority():
+        from nz_coder.runtime.verification.sidecar_verifier import REVISE_RETROSPECTIVE
+>       assert 'ground truth' not in REVISE_RETROSPECTIVE
+E       AssertionError: assert 'ground truth' not in 'A previous ...ferent step.'
+E         
+E         'ground truth' is contained here:
+E            items as ground truth: the same approach will not pass twice. Read the failure note before retrying and add a distinct todo when the correction requires a fundamentally different step.
+E         ?           ++++++++++++
+
+tests/runtime/test_task_reference_evidence.py:60: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_task_reference_evidence.py::test_production_retains_original_reference_outside_rolling_history
+FAILED tests/runtime/test_task_reference_evidence.py::test_reference_bootstrap_preserves_provenance
+FAILED tests/runtime/test_task_reference_evidence.py::test_review_feedback_is_not_new_user_authority
+3 failed in 2.60s

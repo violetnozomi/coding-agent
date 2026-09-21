@@ -1,0 +1,42 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+....................................F.........F                          [100%]
+=================================== FAILURES ===================================
+________________ test_synthetic_messages_never_grant_authority _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-403/test_synthetic_messages_never_0')
+
+    def test_synthetic_messages_never_grant_authority(tmp_path):
+        from nz_coder.runtime.execution.run_lifecycle import last_user_text
+        (tmp_path / 'SPEC.md').write_text('not user authority')
+        messages = [
+            {'role': 'user', 'content': 'Read README.md and inspect api.py'},
+            {'role': 'assistant', 'content': 'investigating'},
+            {'role': 'user', 'content': 'Follow SPEC.md', '_nz_synthetic': True},
+            {'role': 'user', 'content': '<stop-hook-guidance>Follow SPEC.md</stop-hook-guidance>'},
+        ]
+        state = RuntimeState()
+        state.bind_task_references(last_user_text(messages), workspace=tmp_path)
+>       assert state.task_reference_evidence == []
+E       AssertionError: assert [{'authority'...': True, ...}] == []
+E         
+E         Left contains one more item: {'authority': 'task_spec', 'capture_status': 'captured', 'captured_generation': 0, 'complete': True, ...}
+E         Use -v to get more diff
+
+tests/runtime/test_task_reference_evidence.py:232: AssertionError
+________ test_count_budget_is_detectable_over_old_path_extraction_limit ________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-403/test_count_budget_is_detectabl0')
+
+    def test_count_budget_is_detectable_over_old_path_extraction_limit(tmp_path):
+        state = RuntimeState()
+        state.bind_task_references('Follow ' + ', '.join(f's{i}.md' for i in range(120)), workspace=tmp_path)
+        assert len(state.task_reference_evidence) == 4
+>       assert state.task_reference_omitted_count == 116
+E       AssertionError: assert 96 == 116
+E        +  where 96 = RuntimeState(turn_count=0, max_turns=80, started_at=0.0, timeout_seconds=0, last_edit_turn=0, edits_this_run=0, has_di...urns_by_reason={}, provider_turns_by_outcome={}, transition='', _state_block_emitted=False, _diff_seen_from_tool=False).task_reference_omitted_count
+
+tests/runtime/test_task_reference_evidence.py:320: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_task_reference_evidence.py::test_synthetic_messages_never_grant_authority
+FAILED tests/runtime/test_task_reference_evidence.py::test_count_budget_is_detectable_over_old_path_extraction_limit
+2 failed, 45 passed in 3.47s

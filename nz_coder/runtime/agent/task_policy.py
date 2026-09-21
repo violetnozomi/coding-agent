@@ -9,6 +9,7 @@ from __future__ import annotations
 import posixpath
 import re
 import shlex
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -524,55 +525,127 @@ _TRACEBACK_EVIDENCE_RE = re.compile(
     re.IGNORECASE,
 )
 
+_TASK_REFERENCE_SCOPE_RE = re.compile(
+    r"\b(?:follow|according\s+to|based\s+on|described\s+in|specified\s+in|"
+    r"requirements?\s+in)\b|按照|根据|依据|遵循", re.IGNORECASE,
+)
 _REFERENCE_SCOPE_RE = re.compile(
-    r"\b(?:read|follow|inspect|explain|summarize|consult|use|using|"
-    r"according\s+to|based\s+on|described\s+in|specified\s+in|"
-    r"requirements?\s+in|refer\s+to|to\s+match|against)\b"
-    r"|参考|参照|根据|依据|遵循|读取|阅读|查看|解释|总结",
+    r"\b(?:read|inspect|look\s+at|explain|summarize|consult|use|using|"
+    r"refer\s+to|to\s+match|against)\b|参考|参照|读取|阅读|查看|解释|总结",
     re.IGNORECASE,
 )
 _VERIFY_SCOPE_RE = re.compile(
     r"\b(?:run|execute|validate|verify|check)\b|运行|执行|验证|校验",
     re.IGNORECASE,
 )
-
-_MUTATION_SCOPE_MARKERS = re.compile(
+_NEGATED_REFERENCE_RE = re.compile(
+    r"\b(?:do\s+not|don't|must\s+not|never|without)\s+"
+    r"(?:follow|read|use|consult|inspect)\b|(?:不要|不得|无需|不需要|不)\s*(?:遵循|按照|根据|读取|阅读)",
+    re.IGNORECASE,
+)
+_SCOPE_MARKERS = re.compile(
     "|".join(f"(?P<{name}>{pattern.pattern})" for name, pattern in (
+        ("negated_reference", _NEGATED_REFERENCE_RE),
         ("negated", _ROUND_NEGATED_MUTATION_RE),
-        ("reference", _REFERENCE_SCOPE_RE),
+        ("task_reference", _TASK_REFERENCE_SCOPE_RE),
+        ("context", _REFERENCE_SCOPE_RE),
         ("verification", _VERIFY_SCOPE_RE),
         ("mutation", _ROUND_MUTATION_INTENT_RE),
     )), re.IGNORECASE,
 )
+_INSTRUCTION_PATH_RE = re.compile(
+    r"(?<![\w/.:~-])([\w./-]+\.(?:py|pyi|js|jsx|mjs|cjs|ts|tsx|go|rs|java|rb|php|c|cc|cpp|h|hpp|md|rst|txt|json|ya?ml))(?![\w-]|\.[A-Za-z0-9_])",
+    re.IGNORECASE,
+)
 
 
-def mutation_instruction_scopes(text: str) -> tuple[str, ...]:
-    """Keep only write-governed spans, not all paths in a write-bearing clause.
+@dataclass(frozen=True)
+class InstructionPathRole:
+    """One explicit path occurrence and the instruction governing it."""
 
-    Reference and verification phrases end write authority; a later explicit
-    write verb starts it again. Commas preserve an enumerated target list.
-    Paths are masked while locating verbs, so e.g. ``read.py`` is not a verb.
-    This is the shared scope authority for runtime paths and bootstrap hints.
-    """
-    scopes = []
+    path: str
+    role: str
+    authority: str = ""
+    operation: str = ""
+
+
+def normalize_instruction_path(value: str) -> str:
+    if not isinstance(value, str):
+        return ""
+    normalized = value.strip().replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    if (not normalized or len(normalized) > 1024 or normalized.startswith("/")
+            or ":" in normalized or ".." in normalized.split("/")
+            or any(ord(c) < 32 for c in normalized)):
+        return ""
+    return normalized
+
+
+def explicit_instruction_paths(text: str, limit: int | None = 20) -> list[str]:
+    if not isinstance(text, str) or (limit is not None and limit <= 0):
+        return []
+    paths = []
+    for match in _INSTRUCTION_PATH_RE.finditer(text.replace("\\", "/")):
+        path = normalize_instruction_path(match[1])
+        if path and path not in paths:
+            paths.append(path)
+            if limit is not None and len(paths) >= limit:
+                break
+    return paths
+
+
+def _instruction_scopes(text: str):
+    """Single scope authority for mutation, named specs, verification and context."""
     for clause in re.split(
         r"(?:[!?。！？;；]|\.(?=\s|$)|\bbut\b|\bhowever\b)\s*|\n+",
         str(text or ""), flags=re.IGNORECASE,
     ):
-        masked = re.sub(
-            r"[\w./-]+\.[A-Za-z][A-Za-z0-9]*",
-            lambda m: " " * len(m.group()), clause,
-        )
+        masked = re.sub(r"[\w./-]+\.[A-Za-z][A-Za-z0-9]*",
+                        lambda m: " " * len(m.group()), clause)
         evidence = _TRACEBACK_EVIDENCE_RE.search(masked)
         if evidence:
             masked = masked[:evidence.start()]
-        matches = list(_MUTATION_SCOPE_MARKERS.finditer(masked))
+        matches = list(_SCOPE_MARKERS.finditer(masked))
+        prefix_end = matches[0].start() if matches else len(masked)
+        yield "context", clause[:prefix_end]
         for index, match in enumerate(matches):
-            if match.lastgroup != "mutation":
-                continue
             end = matches[index + 1].start() if index + 1 < len(matches) else len(masked)
-            scopes.append(clause[match.start():end])
-    return tuple(scopes)
+            role = match.lastgroup
+            if role in {"negated", "negated_reference"}:
+                role = "context"
+            yield role, clause[match.start():end]
+
+
+def mutation_instruction_scopes(text: str) -> tuple[str, ...]:
+    return tuple(scope for role, scope in _instruction_scopes(text) if role == "mutation")
+
+
+def classify_instruction_paths(text: str) -> tuple[InstructionPathRole, ...]:
+    """Preserve distinct roles when the user both changes and verifies a file."""
+    result = []
+    for role, scope in _instruction_scopes(text):
+        paths = explicit_instruction_paths(scope, limit=None)
+        operation = "change" if role == "mutation" else ""
+        if role == "mutation":
+            if re.match(r"create\b|新建|创建|新增", scope, re.IGNORECASE):
+                operation = "create"
+            elif re.match(r"(?:delete|remove)\b|删除|移除", scope, re.IGNORECASE):
+                operation = "delete"
+        rename = role == "mutation" and re.match(r"rename\b|重命名", scope, re.IGNORECASE) and len(paths) == 2
+        for index, path in enumerate(paths):
+            item = InstructionPathRole(
+                path, role, "task_spec" if role == "task_reference" else "",
+                ("delete", "create")[index] if rename else operation,
+            )
+            if item not in result:
+                result.append(item)
+    return tuple(result)
+
+
+def extract_task_reference_paths(text: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(r.path for r in classify_instruction_paths(text)
+                               if r.role == "task_reference"))
 
 
 

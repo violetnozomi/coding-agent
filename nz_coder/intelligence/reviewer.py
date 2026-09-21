@@ -2,12 +2,29 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Callable
 
 from nz_coder.tools import register
 
 _FAIL_STATUSES = {"failed", "error", "denied", "blocked", "timeout"}
 _PASS_STATUSES = {"passed", "ok"}
 _LIMITED_VERIFY_STATUSES = {"missing_dependency", "warn"}
+
+_RUNTIME_REVIEW: ContextVar[Callable[[], dict] | None] = ContextVar(
+    "nz_runtime_evidence_review", default=None,
+)
+
+
+@contextmanager
+def scoped_runtime_review(reader: Callable[[], dict] | None):
+    """Bind only the executing Agent's read capability, never a model payload."""
+    token = _RUNTIME_REVIEW.set(reader)
+    try:
+        yield
+    finally:
+        _RUNTIME_REVIEW.reset(token)
 
 
 def _short(text: str, limit: int = 180) -> str:
@@ -431,29 +448,33 @@ def review_run_evidence(evidence: dict, runtime: dict | None = None, task_mode: 
     review["task_mode"] = resolved_mode
     return review
 
-def review_run_evidence_tool(evidence: dict, runtime: dict | None = None, task_mode: str | None = None) -> str:
-    try:
-        payload = review_run_evidence(evidence=evidence, runtime=runtime, task_mode=task_mode)
-        return json.dumps(payload, ensure_ascii=False, indent=2)
-    except Exception as exc:
-        return f"Error: {exc}"
+def review_run_evidence_tool() -> str:
+    """Model-facing review has no authority-bearing arguments.
+
+    Offline callers can still use review_run_evidence(evidence, runtime).
+    The tool never falls back to trusting caller-supplied ledgers.
+    """
+    reader = _RUNTIME_REVIEW.get()
+    payload = reader() if reader is not None else {
+        "review_status": "unavailable",
+        "evidence_source": "runtime_unavailable",
+        "summary": "No active Runtime evidence is bound. Do not infer completion.",
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 
 register(
     name="review_run_evidence",
     description=(
-        "Review current structured run evidence and summarize whether the evidence is sufficient, missing, or limited. "
-        "This is read-only and does not block finalization."
+        "Inspect the current Agent's Runtime-owned evidence and unresolved requirements. "
+        "Call with no arguments; do not supply files, commands, or verification claims. "
+        "Read-only advisory review; normal completion and semantic review still apply."
     ),
     parameters={
         "type": "object",
-        "properties": {
-            "evidence": {"type": "object", "description": "Structured evidence from RunEvidence.to_dict() or an eval result evidence object."},
-            "runtime": {"type": "object", "description": "Optional runtime summary from AgentLoop."},
-            "task_mode": {"type": "string", "description": "Optional explicit task mode override."},
-        },
-        "required": ["evidence"],
+        "properties": {},
+        "required": [],
     },
     handler=review_run_evidence_tool,
     execution="read",

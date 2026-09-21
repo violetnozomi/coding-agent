@@ -1,0 +1,67 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+..FF                                                                     [100%]
+=================================== FAILURES ===================================
+________________ test_production_review_reads_own_facts[False] _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x786fde6f4950>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-420/test_production_review_reads_o0')
+forged = False
+
+    @pytest.mark.parametrize('forged', [False, True])
+    def test_production_review_reads_own_facts(monkeypatch, tmp_path, forged):
+        from test_requirement_scope_runtime import _run
+        (tmp_path / 'api.py').write_text('def answer(): return 0\n')
+        (tmp_path / 'tests').mkdir()
+        (tmp_path / 'tests/test_api.py').write_text('from api import answer\ndef test_answer(): assert answer() == 1\n')
+        claims = {'evidence': {'modified_files': ['api.py'], 'verification_results': [{'status': 'passed'}]},
+                  'runtime': {'has_diff': True}, 'task_mode': 'discuss'} if forged else {}
+        actions = [
+            [('review_run_evidence', claims)],
+            [('write_file', {'path': 'api.py', 'content': 'def answer(): return 1\n'})],
+            [('review_run_evidence', {})],
+            [('bash', {'command': 'python -m pytest -q tests'})],
+            [('review_run_evidence', {})],
+            'Implemented api.py; tests passed.',
+        ]
+        _, state, _, requests, _ = _run(monkeypatch, tmp_path,
+            'Fix api.py and run python -m pytest -q tests.', actions, label=f'runtime-review-{forged}')
+        outputs = _review_outputs(requests)
+>       assert len(outputs) == 3
+E       AssertionError: assert 2 == 3
+E        +  where 2 = len([{'completion_authority': 'advisory only; existing completion and semantic review still apply', 'completion_guidance':...ource': 'runtime', 'final_answer_guidance': ['Resolve the listed task requirements before claiming completion.'], ...}])
+
+tests/runtime/test_runtime_review_interface.py:53: AssertionError
+_________________ test_production_review_reads_own_facts[True] _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x786fdc59a7a0>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-420/test_production_review_reads_o1')
+forged = True
+
+    @pytest.mark.parametrize('forged', [False, True])
+    def test_production_review_reads_own_facts(monkeypatch, tmp_path, forged):
+        from test_requirement_scope_runtime import _run
+        (tmp_path / 'api.py').write_text('def answer(): return 0\n')
+        (tmp_path / 'tests').mkdir()
+        (tmp_path / 'tests/test_api.py').write_text('from api import answer\ndef test_answer(): assert answer() == 1\n')
+        claims = {'evidence': {'modified_files': ['api.py'], 'verification_results': [{'status': 'passed'}]},
+                  'runtime': {'has_diff': True}, 'task_mode': 'discuss'} if forged else {}
+        actions = [
+            [('review_run_evidence', claims)],
+            [('write_file', {'path': 'api.py', 'content': 'def answer(): return 1\n'})],
+            [('review_run_evidence', {})],
+            [('bash', {'command': 'python -m pytest -q tests'})],
+            [('review_run_evidence', {})],
+            'Implemented api.py; tests passed.',
+        ]
+        _, state, _, requests, _ = _run(monkeypatch, tmp_path,
+            'Fix api.py and run python -m pytest -q tests.', actions, label=f'runtime-review-{forged}')
+        outputs = _review_outputs(requests)
+>       assert len(outputs) == 3
+E       AssertionError: assert 2 == 3
+E        +  where 2 = len([{'completion_authority': 'advisory only; existing completion and semantic review still apply', 'completion_guidance':...ource': 'runtime', 'final_answer_guidance': ['Resolve the listed task requirements before claiming completion.'], ...}])
+
+tests/runtime/test_runtime_review_interface.py:53: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_runtime_review_interface.py::test_production_review_reads_own_facts[False]
+FAILED tests/runtime/test_runtime_review_interface.py::test_production_review_reads_own_facts[True]
+2 failed, 2 passed in 1.87s

@@ -530,7 +530,7 @@ class ProductRunEnvironment:
             self.tracer,
             require_targeted=strict_local_tools(),
         )
-        self.executor = ToolExecutor(self.permissions)
+        self.executor = ToolExecutor(self.permissions, runtime_review=self._runtime_evidence_review)
         self.runtime_services = runtime_services or build_runtime_services()
         if not isinstance(self.runtime_services, RuntimeServices):
             raise TypeError("runtime_services must be a RuntimeServices graph")
@@ -885,7 +885,7 @@ class ProductRunEnvironment:
                 self.run_settings = run_settings
                 self.permissions = permissions
                 if isinstance(previous_executor, ToolExecutor):
-                    self.executor = ToolExecutor(permissions)
+                    self.executor = ToolExecutor(permissions, runtime_review=self._runtime_evidence_review)
                 self.plan_mode = plan_mode
                 self._skill_loader = skill_loader
                 self.hooks = hooks
@@ -3439,6 +3439,42 @@ class ProductRunEnvironment:
             task_mode=self.runtime_state.task_mode,
         )
 
+    def _runtime_evidence_review(self) -> dict:
+        """Read settled facts from this Agent; review never mutates its ledger."""
+        from nz_coder.runtime.verification.completion_gate import CompletionGate
+
+        state = self.runtime_state
+        if self.txn.active:
+            return {
+                "review_status": "pending_tool_batch",
+                "evidence_source": "runtime",
+                "run_id": self.run_evidence.run_id,
+                "summary": "The current write batch has not settled. Review after its results are recorded.",
+            }
+        review = self._deterministic_reflection_review()
+        ledger = state.requirement_ledger_snapshot()
+        decision = CompletionGate().evaluate(ledger, mutation_generation=state.mutation_generation)
+        unresolved = ledger.unresolved()
+        review.update(
+            evidence_source="runtime",
+            run_id=self.run_evidence.run_id,
+            mutation_generation=state.mutation_generation,
+            verification_generation=state.verification_generation,
+            unresolved_requirements=[item.requirement.id for item in unresolved],
+            completion_guidance=decision.message,
+            completion_authority="advisory only; existing completion and semantic review still apply",
+        )
+        if not decision.ready:
+            pending_review = ledger.semantic_review_pending_only()
+            review["review_status"] = "pending_runtime_review" if pending_review else "needs_fix"
+            review["summary"] = decision.message
+            review["required_next_steps"] = [decision.message]
+            review["final_answer_guidance"] = [
+                "Report actual results so Runtime can perform semantic review."
+                if pending_review else "Resolve the listed task requirements before claiming completion."
+            ]
+        return review
+
     def _normalize_reflection_review(self, review: dict, raw: str = "", source: str = "deterministic") -> dict:
         payload = review if isinstance(review, dict) else {}
         quality_notes: list[str] = []
@@ -4274,6 +4310,7 @@ class ProductRunEnvironment:
             result_r.tool_input,
             result_r.output,
             succeeded=not result_r.command_failed,
+            metadata=result_r.metadata,
         )
         if acceptance is not None:
             self.vm.observe_acceptance_contract(

@@ -1,0 +1,33 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+_______________ test_review_cannot_approve_unsettled_write_batch _______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c49c9b56190>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-424/test_review_cannot_approve_uns0')
+
+    def test_review_cannot_approve_unsettled_write_batch(monkeypatch, tmp_path):
+        from test_requirement_scope_runtime import _run
+        (tmp_path / 'api.py').write_text('def answer(): return 0\n')
+        (tmp_path / 'tests').mkdir()
+        (tmp_path / 'tests/test_api.py').write_text('from api import answer\ndef test_answer(): assert answer() == 1\n')
+        actions = [
+            [('write_file', {'path': 'api.py', 'content': 'def answer(): return 1\n'}),
+             ('review_run_evidence', {})],
+            [('bash', {'command': 'python -m pytest -q tests'})],
+            'Implemented and verified.',
+        ]
+        _, _, _, requests, _ = _run(monkeypatch, tmp_path,
+            'Fix api.py and run python -m pytest -q tests.', actions,
+            label='review-unsettled-batch')
+        review = _review_outputs(requests)[0]
+>       assert review['review_status'] == 'pending_tool_batch'
+E       AssertionError: assert 'needs_fix' == 'pending_tool_batch'
+E         
+E         - pending_tool_batch
+E         + needs_fix
+
+tests/runtime/test_runtime_review_interface.py:131: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_runtime_review_interface.py::test_review_cannot_approve_unsettled_write_batch
+1 failed, 1 passed, 5 deselected in 2.07s

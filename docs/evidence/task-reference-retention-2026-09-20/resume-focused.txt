@@ -1,0 +1,146 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+__________ test_lifecycle_resume_does_not_capture_current_rules[none] __________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70d55c53f360>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-410/test_lifecycle_resume_does_not0')
+checkpoint = 'none'
+
+    @pytest.mark.parametrize('checkpoint', ['none', 'legacy', 'retained'])
+    def test_lifecycle_resume_does_not_capture_current_rules(monkeypatch, tmp_path, checkpoint):
+        from types import SimpleNamespace
+        from test_native_product_runtime import _request, _runtime
+        from nz_coder.runtime.execution import native_sdk
+        from nz_coder.runtime.adapters import lifecycle
+        from nz_coder.runtime.core.request import RunOptions
+        from nz_coder.state.sessions import session_runtime_state_path
+        from nz_coder.state.workdir import scoped_workdir
+        monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+        monkeypatch.setattr(native_sdk, 'resolve_model_runtime', lambda *_: _runtime())
+        monkeypatch.setattr(lifecycle, 'current_run_settings', lambda: SimpleNamespace(runtime_state_persist=True))
+        original = _bound(tmp_path)
+        (tmp_path / 'REQUIREMENTS.md').write_text('AGENT_REWRITTEN_RULES')
+>       env = native_sdk.build_product_run_environment(_request(tmp_path), RunOptions())
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_task_reference_evidence.py:455: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+nz_coder/runtime/execution/native_sdk.py:80: in build_product_run_environment
+    run_snapshot = config_snapshot or load_config_snapshot(request.workspace)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+nz_coder/foundation/workspace_trust.py:714: in load_config_snapshot
+    _ensure_store_outside_workspace(store.path, root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = PosixPath('/tmp/pytest-of-pyh/pytest-410/test_lifecycle_resume_does_not0/home/.config/nz-coder/workspace-trust.json')
+workspace = PosixPath('/tmp/pytest-of-pyh/pytest-410/test_lifecycle_resume_does_not0')
+
+    def _ensure_store_outside_workspace(path: Path, workspace: Path) -> None:
+        store = path.expanduser().absolute()
+        root = workspace.expanduser().absolute().resolve(strict=False)
+        try:
+            store.resolve(strict=False).relative_to(root)
+        except ValueError:
+            return
+>       raise ConfigValidationError("Workspace trust store must be outside the workspace")
+E       nz_coder.foundation.workspace_trust.ConfigValidationError: Workspace trust store must be outside the workspace
+
+nz_coder/foundation/workspace_trust.py:978: ConfigValidationError
+_________ test_lifecycle_resume_does_not_capture_current_rules[legacy] _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70d55d4c2190>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-410/test_lifecycle_resume_does_not1')
+checkpoint = 'legacy'
+
+    @pytest.mark.parametrize('checkpoint', ['none', 'legacy', 'retained'])
+    def test_lifecycle_resume_does_not_capture_current_rules(monkeypatch, tmp_path, checkpoint):
+        from types import SimpleNamespace
+        from test_native_product_runtime import _request, _runtime
+        from nz_coder.runtime.execution import native_sdk
+        from nz_coder.runtime.adapters import lifecycle
+        from nz_coder.runtime.core.request import RunOptions
+        from nz_coder.state.sessions import session_runtime_state_path
+        from nz_coder.state.workdir import scoped_workdir
+        monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+        monkeypatch.setattr(native_sdk, 'resolve_model_runtime', lambda *_: _runtime())
+        monkeypatch.setattr(lifecycle, 'current_run_settings', lambda: SimpleNamespace(runtime_state_persist=True))
+        original = _bound(tmp_path)
+        (tmp_path / 'REQUIREMENTS.md').write_text('AGENT_REWRITTEN_RULES')
+>       env = native_sdk.build_product_run_environment(_request(tmp_path), RunOptions())
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_task_reference_evidence.py:455: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+nz_coder/runtime/execution/native_sdk.py:80: in build_product_run_environment
+    run_snapshot = config_snapshot or load_config_snapshot(request.workspace)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+nz_coder/foundation/workspace_trust.py:714: in load_config_snapshot
+    _ensure_store_outside_workspace(store.path, root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = PosixPath('/tmp/pytest-of-pyh/pytest-410/test_lifecycle_resume_does_not1/home/.config/nz-coder/workspace-trust.json')
+workspace = PosixPath('/tmp/pytest-of-pyh/pytest-410/test_lifecycle_resume_does_not1')
+
+    def _ensure_store_outside_workspace(path: Path, workspace: Path) -> None:
+        store = path.expanduser().absolute()
+        root = workspace.expanduser().absolute().resolve(strict=False)
+        try:
+            store.resolve(strict=False).relative_to(root)
+        except ValueError:
+            return
+>       raise ConfigValidationError("Workspace trust store must be outside the workspace")
+E       nz_coder.foundation.workspace_trust.ConfigValidationError: Workspace trust store must be outside the workspace
+
+nz_coder/foundation/workspace_trust.py:978: ConfigValidationError
+________ test_lifecycle_resume_does_not_capture_current_rules[retained] ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70d55a7d1fd0>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-410/test_lifecycle_resume_does_not2')
+checkpoint = 'retained'
+
+    @pytest.mark.parametrize('checkpoint', ['none', 'legacy', 'retained'])
+    def test_lifecycle_resume_does_not_capture_current_rules(monkeypatch, tmp_path, checkpoint):
+        from types import SimpleNamespace
+        from test_native_product_runtime import _request, _runtime
+        from nz_coder.runtime.execution import native_sdk
+        from nz_coder.runtime.adapters import lifecycle
+        from nz_coder.runtime.core.request import RunOptions
+        from nz_coder.state.sessions import session_runtime_state_path
+        from nz_coder.state.workdir import scoped_workdir
+        monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+        monkeypatch.setattr(native_sdk, 'resolve_model_runtime', lambda *_: _runtime())
+        monkeypatch.setattr(lifecycle, 'current_run_settings', lambda: SimpleNamespace(runtime_state_persist=True))
+        original = _bound(tmp_path)
+        (tmp_path / 'REQUIREMENTS.md').write_text('AGENT_REWRITTEN_RULES')
+>       env = native_sdk.build_product_run_environment(_request(tmp_path), RunOptions())
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_task_reference_evidence.py:455: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+nz_coder/runtime/execution/native_sdk.py:80: in build_product_run_environment
+    run_snapshot = config_snapshot or load_config_snapshot(request.workspace)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+nz_coder/foundation/workspace_trust.py:714: in load_config_snapshot
+    _ensure_store_outside_workspace(store.path, root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = PosixPath('/tmp/pytest-of-pyh/pytest-410/test_lifecycle_resume_does_not2/home/.config/nz-coder/workspace-trust.json')
+workspace = PosixPath('/tmp/pytest-of-pyh/pytest-410/test_lifecycle_resume_does_not2')
+
+    def _ensure_store_outside_workspace(path: Path, workspace: Path) -> None:
+        store = path.expanduser().absolute()
+        root = workspace.expanduser().absolute().resolve(strict=False)
+        try:
+            store.resolve(strict=False).relative_to(root)
+        except ValueError:
+            return
+>       raise ConfigValidationError("Workspace trust store must be outside the workspace")
+E       nz_coder.foundation.workspace_trust.ConfigValidationError: Workspace trust store must be outside the workspace
+
+nz_coder/foundation/workspace_trust.py:978: ConfigValidationError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_task_reference_evidence.py::test_lifecycle_resume_does_not_capture_current_rules[none]
+FAILED tests/runtime/test_task_reference_evidence.py::test_lifecycle_resume_does_not_capture_current_rules[legacy]
+FAILED tests/runtime/test_task_reference_evidence.py::test_lifecycle_resume_does_not_capture_current_rules[retained]
+3 failed, 53 deselected in 0.41s

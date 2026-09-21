@@ -1,0 +1,5 @@
+--- a/REQUIREMENTS.md
++++ b/REQUIREMENTS.md
+@@ -1 +1 @@
+-The API value must be 2.
++The API value must be exactly 2.

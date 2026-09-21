@@ -82,6 +82,20 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
                     )
                 if host.runtime_state.plan_text:
                     host._sp.replace_category("plan", host.runtime_state.plan_text)
+        if not restored:
+            if resume_activation:
+                # Lost/legacy checkpoint: the workspace may already contain
+                # agent edits. A continuation summary cannot certify originals.
+                host.runtime_state.task_references_bound = True
+            else:
+                host.runtime_state.bind_task_references(task_text, workspace=current_workdir())
+            host.tracer.log(
+                "task_references_bound",
+                references=[{k: v for k, v in ref.items() if k != "text"}
+                            for ref in host.runtime_state.task_reference_evidence],
+                omitted_count=host.runtime_state.task_reference_omitted_count,
+                original_capture_unavailable=bool(resume_activation),
+            )
         try:
             host.runtime_state.workspace_git_available = (
                 current_workdir() / ".git"

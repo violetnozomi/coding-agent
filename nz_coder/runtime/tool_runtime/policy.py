@@ -23,6 +23,8 @@ from nz_coder.state.skills import current_skill_allowed_tools
 _STALL_SIDECAR_EXEMPT_TOOLS = frozenset({
     "diff_status",
     "verify_changed_files",
+    # Its empty input is stable even when the Runtime facts being reviewed change.
+    "review_run_evidence",
 })
 
 

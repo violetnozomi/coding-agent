@@ -1,0 +1,29 @@
+{
+  "all_tracked_historical_evidence_checked": true,
+  "baseline": "e9e24913e419c1dd12ef2e60b745d4422ec6da2a",
+  "current_source_commit": "working-tree (uncommitted)",
+  "evidence_directory_is_gitignored": true,
+  "forbidden_json_keys": [],
+  "historical_evidence_dirs": [
+    "docs/evidence/money-paired-retest-2026-09-20",
+    "docs/evidence/complex-paired-2026-09-20",
+    "docs/evidence/requirement-scope-2026-09-20"
+  ],
+  "historical_evidence_unchanged": true,
+  "historical_working_tree_changes": [],
+  "paid_model_requests": 0,
+  "reasoning_content_saved": false,
+  "source_files_hashed": [
+    "nz_coder/intelligence/bootstrap_artifacts.py",
+    "nz_coder/protocol/message_schema.py",
+    "nz_coder/runtime/adapters/lifecycle.py",
+    "nz_coder/runtime/agent/task_policy.py",
+    "nz_coder/runtime/execution/loop.py",
+    "nz_coder/runtime/execution/runtime_state.py",
+    "nz_coder/runtime/verification/hooks.py",
+    "nz_coder/runtime/verification/reference_evidence.py",
+    "nz_coder/runtime/verification/sidecar_verifier.py",
+    "tests/runtime/test_task_reference_evidence.py",
+    "tests/test_sidecar_verifier.py"
+  ]
+}

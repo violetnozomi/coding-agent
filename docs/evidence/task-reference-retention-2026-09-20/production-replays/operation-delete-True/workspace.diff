@@ -1,0 +1,9 @@
+--- a/api.py
++++ b/api.py
+@@ -1 +1 @@
+-value = 1
++value = 2
+--- a/obsolete.md
++++ b/obsolete.md
+@@ -1 +0,0 @@
+-obsolete

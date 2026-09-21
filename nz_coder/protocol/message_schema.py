@@ -311,6 +311,7 @@ _LEGACY_SYNTHETIC_USER_PREFIXES = (
     "<reflection-review",
     "<reminder",
     "<system-reminder",
+    "<stop-hook-guidance",
     "<test-failure-diagnostic",
     "<tool-failure-diagnostic",
     "<transaction-rollback",

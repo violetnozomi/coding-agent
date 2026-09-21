@@ -152,7 +152,8 @@ PROCESS_SITES = {
     ('nz_coder/evaluation/core_capability.py', 'subprocess.run'): ProcessBoundary(2, 'test command', 'evaluation fixture', 'evaluation profile', 'fixture workspace', 'evaluation harness'),
     ('nz_coder/evaluation/eval_runner.py', 'subprocess.run'): ProcessBoundary(5, 'evaluation command', 'operator invocation', 'evaluation profile', 'fixture workspace', 'evaluation harness'),
     ('nz_coder/evaluation/reference_adapter.py', 'subprocess.Popen'): ProcessBoundary(1, 'reference product', 'operator configuration', 'evaluation profile', 'fixture workspace', 'evaluation adapter'),
-    ('nz_coder/evaluation/reference_adapter.py', 'subprocess.run'): ProcessBoundary(3, 'reference command', 'operator configuration', 'evaluation profile', 'fixture workspace', 'evaluation adapter'),
+    # Two bounded local --version probes; automatic npx downloads were removed.
+    ('nz_coder/evaluation/reference_adapter.py', 'subprocess.run'): ProcessBoundary(2, 'resolved node/bun --version', 'operator PATH', 'inherited host environment', 'caller cwd', 'reference capability probe'),
     ('nz_coder/evaluation/terminal_product.py', 'subprocess.run'): ProcessBoundary(1, 'terminal smoke command', 'product installation', 'evaluation profile', 'fixture workspace', 'evaluation harness'),
     ('nz_coder/http_service/daemon.py', 'subprocess.Popen'): ProcessBoundary(1, 'daemon executable', 'host operation', 'scrubbed service', 'explicit workspace', 'daemon launcher'),
     ('nz_coder/intelligence/code_index.py', 'subprocess.run'): ProcessBoundary(1, 'git helper', 'host operation', 'scrubbed helper', 'repository', 'code index'),
@@ -222,6 +223,8 @@ PUBLIC_ERROR_MODULE_COUNTS = {
     'nz_coder/runtime/model_gateway/errors.py': ('private diagnostic', 3),
     'nz_coder/runtime/model_gateway/gateway.py': ('private diagnostic', 12),
     'nz_coder/runtime/model_gateway/models.py': ('private diagnostic', 4),
+    # Compatibility dispatch checks TypeError text internally; no text is emitted.
+    'nz_coder/runtime/tool_runtime/policy.py': ('private diagnostic', 1),
     'nz_coder/runtime/verification/hooks.py': ('private diagnostic', 4),
     'nz_coder/runtime/verification/recovery.py': ('private diagnostic', 3),
     'nz_coder/runtime/verification/stall_sidecar.py': ('private diagnostic', 1),

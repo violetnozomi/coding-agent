@@ -1,0 +1,154 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_________________ test_review_schema_requires_no_model_ledger __________________
+
+    def test_review_schema_requires_no_model_ledger():
+        from nz_coder.tools import get_specs
+        from nz_coder.intelligence import reviewer  # noqa: F401
+        spec = next(t['function'] for t in get_specs() if t['function']['name'] == 'review_run_evidence')
+>       assert spec['parameters'].get('required', []) == []
+E       AssertionError: assert ['evidence'] == []
+E         
+E         Left contains one more item: 'evidence'
+E         Use -v to get more diff
+
+tests/runtime/test_runtime_review_interface.py:23: AssertionError
+_______________ test_unbound_review_cannot_trust_model_evidence ________________
+
+    def test_unbound_review_cannot_trust_model_evidence():
+        from nz_coder.tools import dispatch
+        result = json.loads(dispatch('review_run_evidence', {'evidence': {}, 'task_mode': 'discuss'}))
+>       assert result['review_status'] == 'unavailable'
+E       AssertionError: assert 'approved' == 'unavailable'
+E         
+E         - unavailable
+E         + approved
+
+tests/runtime/test_runtime_review_interface.py:30: AssertionError
+________________ test_production_review_reads_own_facts[False] _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x71a8314c0a70>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-418/test_production_review_reads_o0')
+forged = False
+
+    @pytest.mark.parametrize('forged', [False, True])
+    def test_production_review_reads_own_facts(monkeypatch, tmp_path, forged):
+        from test_requirement_scope_runtime import _run
+        (tmp_path / 'api.py').write_text('def answer(): return 0\n')
+        (tmp_path / 'tests').mkdir()
+        (tmp_path / 'tests/test_api.py').write_text('from api import answer\ndef test_answer(): assert answer() == 1\n')
+        claims = {'evidence': {'modified_files': ['api.py'], 'verification_results': [{'status': 'passed'}]},
+                  'runtime': {'has_diff': True}, 'task_mode': 'discuss'} if forged else {}
+        actions = [
+            [('review_run_evidence', claims)],
+            [('write_file', {'path': 'api.py', 'content': 'def answer(): return 1\n'})],
+            [('review_run_evidence', {})],
+            [('bash', {'command': 'python -m pytest -q tests'})],
+            [('review_run_evidence', {})],
+            'Implemented api.py; tests passed.',
+        ]
+        _, state, _, requests, _ = _run(monkeypatch, tmp_path,
+            'Fix api.py and run python -m pytest -q tests.', actions, label=f'runtime-review-{forged}')
+>       outputs = _review_outputs(requests)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_runtime_review_interface.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/runtime/test_runtime_review_interface.py:15: in _review_outputs
+    outputs[message['tool_call_id']] = json.loads(message['content'])
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../miniconda3/lib/python3.13/json/__init__.py:352: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../miniconda3/lib/python3.13/json/decoder.py:345: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <json.decoder.JSONDecoder object at 0x71a8330f38c0>
+s = 'Error: review_run_evidence failed due to the following issue:\nThe required parameter `evidence` is missing'
+idx = 0
+
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON document from ``s`` (a ``str`` beginning with
+        a JSON document) and return a 2-tuple of the Python
+        representation and the index in ``s`` where the document ended.
+    
+        This can be used to decode a JSON document from a string that may
+        have extraneous data at the end.
+    
+        """
+        try:
+            obj, end = self.scan_once(s, idx)
+        except StopIteration as err:
+>           raise JSONDecodeError("Expecting value", s, err.value) from None
+E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+../miniconda3/lib/python3.13/json/decoder.py:363: JSONDecodeError
+_________________ test_production_review_reads_own_facts[True] _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x71a82f37d150>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-418/test_production_review_reads_o1')
+forged = True
+
+    @pytest.mark.parametrize('forged', [False, True])
+    def test_production_review_reads_own_facts(monkeypatch, tmp_path, forged):
+        from test_requirement_scope_runtime import _run
+        (tmp_path / 'api.py').write_text('def answer(): return 0\n')
+        (tmp_path / 'tests').mkdir()
+        (tmp_path / 'tests/test_api.py').write_text('from api import answer\ndef test_answer(): assert answer() == 1\n')
+        claims = {'evidence': {'modified_files': ['api.py'], 'verification_results': [{'status': 'passed'}]},
+                  'runtime': {'has_diff': True}, 'task_mode': 'discuss'} if forged else {}
+        actions = [
+            [('review_run_evidence', claims)],
+            [('write_file', {'path': 'api.py', 'content': 'def answer(): return 1\n'})],
+            [('review_run_evidence', {})],
+            [('bash', {'command': 'python -m pytest -q tests'})],
+            [('review_run_evidence', {})],
+            'Implemented api.py; tests passed.',
+        ]
+        _, state, _, requests, _ = _run(monkeypatch, tmp_path,
+            'Fix api.py and run python -m pytest -q tests.', actions, label=f'runtime-review-{forged}')
+>       outputs = _review_outputs(requests)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_runtime_review_interface.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/runtime/test_runtime_review_interface.py:15: in _review_outputs
+    outputs[message['tool_call_id']] = json.loads(message['content'])
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../miniconda3/lib/python3.13/json/__init__.py:352: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../miniconda3/lib/python3.13/json/decoder.py:345: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <json.decoder.JSONDecoder object at 0x71a8330f38c0>
+s = 'Error: review_run_evidence failed due to the following issue:\nThe required parameter `evidence` is missing'
+idx = 0
+
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON document from ``s`` (a ``str`` beginning with
+        a JSON document) and return a 2-tuple of the Python
+        representation and the index in ``s`` where the document ended.
+    
+        This can be used to decode a JSON document from a string that may
+        have extraneous data at the end.
+    
+        """
+        try:
+            obj, end = self.scan_once(s, idx)
+        except StopIteration as err:
+>           raise JSONDecodeError("Expecting value", s, err.value) from None
+E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+../miniconda3/lib/python3.13/json/decoder.py:363: JSONDecodeError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_runtime_review_interface.py::test_review_schema_requires_no_model_ledger
+FAILED tests/runtime/test_runtime_review_interface.py::test_unbound_review_cannot_trust_model_evidence
+FAILED tests/runtime/test_runtime_review_interface.py::test_production_review_reads_own_facts[False]
+FAILED tests/runtime/test_runtime_review_interface.py::test_production_review_reads_own_facts[True]
+4 failed in 1.84s

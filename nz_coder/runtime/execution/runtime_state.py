@@ -21,13 +21,17 @@ import time
 from dataclasses import asdict, dataclass, field, fields as dataclass_fields
 from pathlib import Path
 
+from nz_coder.runtime.verification.reference_evidence import (
+    capture_references, observe_reference_read, sanitize_references,
+)
 from nz_coder.runtime.agent.task_policy import (
     detect_task_mode,
     is_broad_test_command,
     is_documentation_file,
     is_exact_test_command,
     is_test_file,
-    mutation_instruction_scopes,
+    classify_instruction_paths,
+    explicit_instruction_paths,
     successful_mutation_operations,
     task_forbids_test_changes,
     task_wants_tests,
@@ -344,6 +348,9 @@ class RuntimeState:
     plan_text: str = ""
     replan_count: int = 0
     open_todo_items: int = 0
+    task_reference_evidence: list[dict] = field(default_factory=list)
+    task_references_bound: bool = False
+    task_reference_omitted_count: int = 0
     task_contract: dict = field(default_factory=dict)
     requirement_ledger: dict = field(default_factory=dict)
     completion_gate_prompts: int = 0
@@ -452,6 +459,9 @@ class RuntimeState:
         self.plan_text = ""
         self.replan_count = 0
         self.open_todo_items = 0
+        self.task_reference_evidence = []
+        self.task_references_bound = False
+        self.task_reference_omitted_count = 0
         self.task_contract = {}
         self.requirement_ledger = {}
         self.completion_gate_prompts = 0
@@ -705,6 +715,22 @@ class RuntimeState:
             # evidence-backed closure reserve as if repository-wide discovery
             # were still required.
             self.needs_broad_exploration = False
+
+    def bind_task_references(self, task: str, *, workspace: str | Path) -> None:
+        """Called only by fresh genuine-task lifecycle, before model/tools run."""
+        if self.task_references_bound:
+            return
+        refs, omitted = capture_references(task, workspace, self.mutation_generation)
+        self.task_reference_evidence = [ref.to_dict() for ref in refs]
+        self.task_reference_omitted_count = omitted
+        self.task_references_bound = True
+
+    def observe_task_reference_read(self, metadata: dict | None) -> None:
+        from nz_coder.runtime.process.workdir import current_workdir
+
+        self.task_reference_evidence = [ref.to_dict() for ref in observe_reference_read(
+            self.task_reference_evidence, metadata, current_workdir(),
+        )]
 
     def set_task_contract(self, contract) -> None:
         """Bind a validated planner contract and initialize its evidence ledger."""
@@ -965,6 +991,11 @@ class RuntimeState:
             not data.get("active") and not allow_inactive
         ):
             return False
+        # Old snapshots have no original reference evidence. Never recapture
+        # today's potentially agent-modified file as an original on resume.
+        self.task_reference_evidence = []
+        self.task_reference_omitted_count = 0
+        self.task_references_bound = True
         # Scratch lifecycle state is deliberately not persisted. Restoring a
         # snapshot must therefore fail closed instead of reusing stale paths
         # from an earlier in-memory activation.
@@ -979,6 +1010,10 @@ class RuntimeState:
             self.acceptance_mutation_generation = _nonnegative_int(
                 data.get("mutation_generation")
             )
+        self.task_reference_evidence = [ref.to_dict() for ref in
+                                        sanitize_references(self.task_reference_evidence)]
+        self.task_reference_omitted_count = min(10000, _nonnegative_int(self.task_reference_omitted_count))
+        self.task_references_bound = True
         self._sanitize_restored_control_state()
         self._sanitize_restored_provider_accounting()
         return True
@@ -1267,6 +1302,7 @@ class RuntimeState:
         output: str,
         *,
         succeeded: bool | None = None,
+        metadata: dict | None = None,
     ) -> dict | None:
         """根据工具调用更新状态。
 
@@ -1299,6 +1335,8 @@ class RuntimeState:
 
         # ── exact file reads ──────────────────────────────────────────────────
         elif name in ("read_file", "read_symbol"):
+            if succeeded is True:
+                self.observe_task_reference_read(metadata)
             evidence_path = _successful_exact_read(
                 name,
                 tool_input,
@@ -1980,63 +2018,20 @@ class RuntimeState:
 
 
 def extract_explicit_paths(text: str, limit: int = 5) -> list[str]:
-    """Extract explicit file paths or basenames mentioned in the task text."""
-    if not isinstance(text, str) or not text.strip():
-        return []
-    paths: list[str] = []
-    pattern = r"(?<![\w/.-])([\w./-]+\.(?:py|pyi|js|jsx|mjs|cjs|ts|tsx|go|rs|java|rb|php|c|cc|cpp|h|hpp|md|rst|txt|json|ya?ml))(?![\w-]|\.[A-Za-z0-9_])"
-    scan_text = text.replace("\\", "/")
-    for match in re.findall(pattern, scan_text, flags=re.IGNORECASE):
-        normalized = _normalize_explicit_task_path(match)
-        if not normalized:
-            continue
-        _append_unique(paths, normalized, limit)
-        if len(paths) >= limit:
-            break
-    return paths
+    return explicit_instruction_paths(text, limit=limit)
 
 
 def extract_explicit_mutation_paths(text: str, limit: int = 5) -> list[str]:
-    """Return paths explicitly coupled to a non-negated write instruction."""
     return list(extract_explicit_mutation_operations(text, limit=limit))
 
 
 def extract_explicit_mutation_operations(text: str, limit: int = 20) -> dict[str, str]:
-    """Retain create/delete/rename intent alongside the existing path authority."""
     operations: dict[str, str] = {}
-    for scope in mutation_instruction_scopes(text):
-        paths = extract_explicit_paths(scope, limit=limit)
-        operation = "change"
-        if re.match(r"create\b|新建|创建|新增", scope, re.IGNORECASE):
-            operation = "create"
-        elif re.match(r"(?:delete|remove)\b|删除|移除", scope, re.IGNORECASE):
-            operation = "delete"
-        elif re.match(r"rename\b|重命名", scope, re.IGNORECASE):
-            # Both ends are obligations; copying without removal is not rename.
-            if len(paths) == 2:
-                for path, action in zip(paths, ("delete", "create")):
-                    if path in operations or len(operations) < limit:
-                        operations[path] = action
-                continue
-        for path in paths:
-            if path in operations or len(operations) < limit:
-                operations[path] = operation
+    for item in classify_instruction_paths(text):
+        if item.role == "mutation" and (item.path in operations or len(operations) < limit):
+            operations[item.path] = item.operation
     return operations
 
-
-def _normalize_explicit_task_path(value: str) -> str:
-    """Return one workspace-relative task path or an empty unsafe sentinel."""
-    normalized = str(value or "").strip().replace("\\", "/")
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    if (
-        not normalized
-        or normalized.startswith("/")
-        or re.match(r"^[A-Za-z]:/", normalized)
-        or ".." in normalized.split("/")
-    ):
-        return ""
-    return normalized
 
 
 def extract_acceptance_criteria(text: str, limit: int = 5) -> list[str]:

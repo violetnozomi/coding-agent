@@ -85,3 +85,19 @@ def test_context_execution_context_resolves_workspace_and_rejects_bad_callbacks(
         assert "projected_tokens" in str(exc)
     else:
         raise AssertionError("invalid projected_tokens callback was accepted")
+
+
+def test_context_adapter_keeps_proactive_and_overflow_compaction_distinct(tmp_path):
+    host = _LegacyHost(tmp_path)
+    flags = []
+
+    def compact(messages, *, overflow=False):
+        flags.append(overflow)
+        return messages
+
+    host._compact_messages = compact
+    context = context_from_legacy_host(host)
+    messages = [{'role': 'user', 'content': 'task'}]
+    assert context.compact(messages) is messages
+    assert context.compact_overflow(messages) is messages
+    assert flags == [False, True]

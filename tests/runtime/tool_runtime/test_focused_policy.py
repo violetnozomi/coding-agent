@@ -1,6 +1,8 @@
 """Tool policy behavior through run-scoped focused state."""
 from __future__ import annotations
 
+import pytest
+
 from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.core.tool_context import ToolPolicyContext
 from nz_coder.runtime.tool_runtime.policy import ProductionToolPolicy
@@ -399,7 +401,8 @@ def test_model_verification_marker_does_not_bypass_stall_detection() -> None:
     assert context.recovery.repeated_tool_calls == 1
 
 
-def test_deterministic_closure_tools_skip_l2_but_keep_local_doom_guard() -> None:
+@pytest.mark.parametrize("tool_name", ["diff_status", "review_run_evidence"])
+def test_deterministic_closure_tools_skip_l2_but_keep_local_doom_guard(tool_name) -> None:
     """Repeated evidence summaries need no paid judge, but must remain bounded."""
     recorded = []
     traces = []
@@ -422,7 +425,7 @@ def test_deterministic_closure_tools_skip_l2_but_keep_local_doom_guard() -> None
     }
     call = {
         "id": "call-diff",
-        "function": {"name": "diff_status", "arguments": {}},
+        "function": {"name": tool_name, "arguments": {}},
     }
 
     assert policy.find_repeated_tool_calls(context, [verify_call]) == {}

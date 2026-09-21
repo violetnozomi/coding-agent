@@ -19,6 +19,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
@@ -356,9 +357,13 @@ class ToolExecutor:
     不负责 messages 追加、事务管理或 tracer 记录。
     """
 
-    def __init__(self, permissions: PermissionManager):
+    def __init__(
+        self, permissions: PermissionManager, *,
+        runtime_review: Callable[[], dict] | None = None,
+    ):
         self._permissions = permissions
         self._read_cache = _ReadFileStateCache()
+        self._runtime_review = runtime_review
 
     def clear_read_cache(self) -> None:
         """Drop read references after context compaction removes their results."""
@@ -531,7 +536,12 @@ class ToolExecutor:
 
         # ── 执行 ───────────────────────────────────────────────────────────
         try:
-            with scoped_tool_call(str(tool_call.get("id") or "")):
+            from nz_coder.intelligence.reviewer import scoped_runtime_review
+
+            with (
+                scoped_tool_call(str(tool_call.get("id") or "")),
+                scoped_runtime_review(self._runtime_review),
+            ):
                 raw_output = dispatch(fn_name, tool_input)
         except Exception as exc:
             # Tool implementation failures are repair evidence, not Provider

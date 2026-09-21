@@ -22,6 +22,7 @@ def context_from_legacy_host(host) -> ContextExecutionContext:
         budget=host._prompt_budget(),
         projected_tokens=host._projected_request_tokens,
         compact=host._compact_messages,
+        compact_overflow=lambda messages: host._compact_messages(messages, overflow=True),
         stamp_auto_compaction=host._stamp_auto_compaction,
         trace=tracer.log,
         report_pressure=report_pressure,

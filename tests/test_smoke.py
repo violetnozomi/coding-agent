@@ -173,7 +173,7 @@ def test_prompt_builder():
     assert "do not start with grep_search unless you are intentionally reusing local code" in prompt.lower()
     assert "same-basename file in a different directory" in prompt
     assert "Missing requested tests means the task is not complete." in prompt
-    assert "Before finalizing a code-changing task, call review_run_evidence" in prompt
+    assert "call review_run_evidence with no arguments" in prompt
     print("OK: prompt builder works")
 
 

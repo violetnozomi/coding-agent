@@ -145,12 +145,9 @@ def test_tool_failures_force_needs_fix():
 
 
 def test_review_handler_returns_valid_json():
-    text = review_run_evidence_tool({
-        "task_mode": "project_creation",
-        "created_files": ["todo_api/app/main.py"],
-        "verification_results": [{"status": "missing_dependency", "command": "pytest"}],
-    })
+    text = review_run_evidence_tool()
 
     payload = json.loads(text)
-    assert payload["review_status"] in {"approved_with_limitations", "needs_fix"}
+    assert payload["review_status"] == "unavailable"
+    assert payload["evidence_source"] == "runtime_unavailable"
     assert payload["summary"]

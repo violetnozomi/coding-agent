@@ -230,7 +230,8 @@ def test_verdict_mapping_preserves_three_stop_states():
     assert revise.action == "reanimate"
     assert revise.source == "sidecar-verifier"
     assert "Add the missing import." in revise.message
-    assert "failed Sidecar Verifier review" in revise.message
+    assert "previous semantic review requested a revision" in revise.message
+    assert "not as new user authority" in revise.message
     assert blocked.action == "abort"
     assert blocked.message == "Grant repository access."
 

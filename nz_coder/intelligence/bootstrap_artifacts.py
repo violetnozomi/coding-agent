@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 
 from nz_coder.runtime.agent.task_policy import (
     is_documentation_file, is_test_file, mutation_instruction_scopes,
+    classify_instruction_paths,
 )
 
 
@@ -43,6 +44,7 @@ class BootstrapArtifact:
     role: str
     required: bool
     reason: str
+    authority: str = ""
 
 
 @dataclass(frozen=True)
@@ -84,15 +86,18 @@ def resolve_bootstrap_artifacts(
 ) -> BootstrapArtifactResolution:
     """Resolve high-confidence artifacts using only bounded filesystem facts."""
     root = Path(workspace).resolve()
-    text = " ".join(str(task_text or "").split())
+    # Newlines terminate instruction scopes; collapsing them promotes context
+    # on the next line to the preceding mutation/specification authority.
+    text = str(task_text or "").strip()
     if not text or not root.is_dir():
         return BootstrapArtifactResolution()
 
+    path_roles = classify_instruction_paths(text)
+    references = {r.path: r.authority for r in path_roles if r.role == "task_reference"}
+    verification_paths = {r.path for r in path_roles if r.role == "verification"}
     paths = _workspace_files(root, max_files=max_files)
     if explicit_path_allowlist is None:
-        from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_paths
-
-        explicit_path_allowlist = tuple(extract_explicit_mutation_paths(text, limit=20))
+        explicit_path_allowlist = tuple(r.path for r in path_roles if r.role == "mutation")[:20]
     allowed_explicit_paths = {
         normalized
         for raw in explicit_path_allowlist
@@ -119,13 +124,14 @@ def resolve_bootstrap_artifacts(
         if path not in paths and not allow_missing:
             return
         current = resolved.get(path)
-        candidate = BootstrapArtifact(path, confidence, role, required, reason)
+        candidate = BootstrapArtifact(path, confidence, role, required, reason, references.get(path, ""))
         if current is None or (required, confidence) > (current.required, current.confidence):
             resolved[path] = candidate
 
     normalized_text = text.replace("\\", "/")
     explicit_mentions = list(_PATH_RE.findall(normalized_text))
     explicit_mentions.extend(_BASENAME_FILE_RE.findall(normalized_text))
+    explicit_mentions.extend(r.path for r in path_roles)
     for match in dict.fromkeys(explicit_mentions):
         normalized = _safe_relative(match)
         if (
@@ -135,9 +141,13 @@ def resolve_bootstrap_artifacts(
             add(
                 normalized,
                 1.0,
-                _role_for_path(normalized) if normalized in allowed_explicit_paths else "context",
+                (_role_for_path(normalized) if normalized in allowed_explicit_paths
+                 else "task_reference" if normalized in references
+                 else "verification" if normalized in verification_paths else "context"),
                 normalized in allowed_explicit_paths,
-                "explicit mutation target" if normalized in allowed_explicit_paths else "reference or verification path",
+                ("explicit mutation target" if normalized in allowed_explicit_paths
+                 else "explicit user task specification" if normalized in references
+                 else "reference or verification path"),
                 allow_missing=True,
             )
 

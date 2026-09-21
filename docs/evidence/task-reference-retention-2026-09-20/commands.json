@@ -1,0 +1,130 @@
+{
+  "baseline": {
+    "cwd": "/home/pyh/nzcoder",
+    "head": "e9e24913e419c1dd12ef2e60b745d4422ec6da2a",
+    "origin_main": "e9e24913e419c1dd12ef2e60b745d4422ec6da2a",
+    "paid_model_requests": 0
+  },
+  "commands": [
+    {
+      "phase": "red reproduction",
+      "result": "3 failed (expected before implementation)",
+      "evidence": "before.txt",
+      "argv_recorded": false,
+      "note": "Exact original argv was not retained in this log; result is from saved pytest output. Do not treat a reconstructed command as executed.",
+      "cwd": "/home/pyh/nzcoder"
+    },
+    {
+      "phase": "focused green",
+      "result": "138 passed",
+      "evidence": "first-focused.txt",
+      "argv_recorded": false,
+      "note": "Exact original argv was not retained in this log; result is from saved pytest output. Do not treat a reconstructed command as executed.",
+      "cwd": "/home/pyh/nzcoder"
+    },
+    {
+      "phase": "edge regression",
+      "result": "2 failed / 45 passed before fixes; then fixed",
+      "evidence": "edges-before.txt",
+      "argv_recorded": false,
+      "note": "Exact original argv was not retained in this log; result is from saved pytest output. Do not treat a reconstructed command as executed.",
+      "cwd": "/home/pyh/nzcoder"
+    },
+    {
+      "phase": "reference final",
+      "argv": "python tests/evaluation/fixtures/offline_exec.py python -m pytest -q tests/runtime/test_task_reference_evidence.py",
+      "result": "53 passed",
+      "evidence": "references-final.txt",
+      "cwd": "/home/pyh/nzcoder"
+    },
+    {
+      "phase": "resume adapter",
+      "argv": "python tests/evaluation/fixtures/offline_exec.py python -m pytest -q tests/runtime/test_task_reference_evidence.py -k 'resume'",
+      "result": "3 passed / 53 deselected",
+      "evidence": "resume-confirmed.txt",
+      "cwd": "/home/pyh/nzcoder"
+    },
+    {
+      "phase": "runtime related final",
+      "argv": "python tests/evaluation/fixtures/offline_exec.py python -m pytest -q tests/runtime tests/test_sidecar_verifier.py tests/test_message_schema.py tests/test_runtime_state.py tests/test_task_policy.py tests/security/test_workspace_file_access.py tests/security/test_workspace_path_policy.py tests/security/test_user_runtime_state.py tests/security/test_instruction_authority_snapshot.py tests/security/test_run_control_lifecycle.py",
+      "result": "895 passed / 1 skipped",
+      "evidence": "runtime-final.txt",
+      "cwd": "/home/pyh/nzcoder"
+    },
+    {
+      "phase": "broad suite",
+      "argv": "see broad-command.json",
+      "result": "1040 passed / 4 skipped / 2 failed; failures are existing compaction tests, separately reproduced on baseline",
+      "evidence": "broad.txt",
+      "cwd": "/home/pyh/nzcoder"
+    },
+    {
+      "phase": "baseline compaction",
+      "result": "2 failed on independent e9e2491 baseline",
+      "evidence": "baseline-e9e2491-compaction.txt",
+      "argv_recorded": false,
+      "note": "Exact original argv was not retained in this log; result is from saved pytest output. Do not treat a reconstructed command as executed.",
+      "cwd": "/tmp/nz-reference-retention-baseline-e9e2491"
+    },
+    {
+      "phase": "static",
+      "result": "passed",
+      "evidence": "lint.txt",
+      "argv_recorded": false,
+      "note": "Exact original argv was not retained in this log; result is from saved pytest output. Do not treat a reconstructed command as executed.",
+      "cwd": "/home/pyh/nzcoder"
+    },
+    {
+      "phase": "requirement/runtime/security focused",
+      "argv_recorded": false,
+      "cwd": "/home/pyh/nzcoder",
+      "result": "344 passed / 1 skipped",
+      "evidence": "focused.txt"
+    },
+    {
+      "phase": "reference intermediate",
+      "argv_recorded": false,
+      "cwd": "/home/pyh/nzcoder",
+      "result": "50 passed",
+      "evidence": "references-focused.txt"
+    },
+    {
+      "phase": "resume fixture setup failure",
+      "argv_recorded": false,
+      "cwd": "/home/pyh/nzcoder",
+      "result": "3 failed / 53 deselected; test HOME placed inside workspace, corrected later",
+      "evidence": "resume-focused.txt"
+    },
+    {
+      "phase": "static final",
+      "cwd": "/home/pyh/nzcoder",
+      "argv": [
+        "ruff",
+        "check",
+        "nz_coder/intelligence/bootstrap_artifacts.py",
+        "nz_coder/protocol/message_schema.py",
+        "nz_coder/runtime/adapters/lifecycle.py",
+        "nz_coder/runtime/agent/task_policy.py",
+        "nz_coder/runtime/execution/loop.py",
+        "nz_coder/runtime/execution/runtime_state.py",
+        "nz_coder/runtime/verification/hooks.py",
+        "nz_coder/runtime/verification/reference_evidence.py",
+        "nz_coder/runtime/verification/sidecar_verifier.py",
+        "tests/runtime/test_task_reference_evidence.py",
+        "tests/test_sidecar_verifier.py"
+      ],
+      "result": "All checks passed!",
+      "evidence": "lint.txt"
+    },
+    {
+      "phase": "diff whitespace",
+      "cwd": "/home/pyh/nzcoder",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "result": "exit 0"
+    }
+  ]
+}

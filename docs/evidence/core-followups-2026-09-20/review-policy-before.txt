@@ -1,0 +1,49 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+_ test_deterministic_closure_tools_skip_l2_but_keep_local_doom_guard[review_run_evidence] _
+
+tool_name = 'review_run_evidence'
+
+    @pytest.mark.parametrize("tool_name", ["diff_status", "review_run_evidence"])
+    def test_deterministic_closure_tools_skip_l2_but_keep_local_doom_guard(tool_name) -> None:
+        """Repeated evidence summaries need no paid judge, but must remain bounded."""
+        recorded = []
+        traces = []
+    
+        class _Sidecar:
+            def consume_pending_nudge(self):
+                return None
+    
+            def record_tool_use(self, call):
+                recorded.append(call)
+                return True
+    
+        context = _context()
+        context.stall_orchestrator = _Sidecar()
+        context.trace = lambda event, **payload: traces.append((event, payload))
+        policy = ProductionToolPolicy()
+        verify_call = {
+            "id": "call-verify",
+            "function": {"name": "verify_changed_files", "arguments": {}},
+        }
+        call = {
+            "id": "call-diff",
+            "function": {"name": tool_name, "arguments": {}},
+        }
+    
+        assert policy.find_repeated_tool_calls(context, [verify_call]) == {}
+        assert policy.find_repeated_tool_calls(context, [call]) == {}
+        assert policy.find_repeated_tool_calls(context, [call]) == {}
+        blocked = policy.find_repeated_tool_calls(context, [call])
+    
+>       assert recorded == []
+E       AssertionError: assert [{'id': 'call...un_evidence'}] == []
+E         
+E         Left contains 3 more items, first extra item: {'id': 'call-diff', 'input': {}, 'name': 'review_run_evidence'}
+E         Use -v to get more diff
+
+tests/runtime/tool_runtime/test_focused_policy.py:436: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/tool_runtime/test_focused_policy.py::test_deterministic_closure_tools_skip_l2_but_keep_local_doom_guard[review_run_evidence]
+1 failed, 1 passed, 16 deselected in 0.10s

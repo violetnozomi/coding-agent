@@ -1,0 +1,117 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+........................................................................ [  6%]
+........................................................................ [ 13%]
+........................................................................ [ 20%]
+........................................................................ [ 27%]
+........................................................................ [ 34%]
+........................................................................ [ 41%]
+........................................................................ [ 48%]
+........................................................................ [ 55%]
+.........................s.....ss....................................... [ 61%]
+........................................................................ [ 68%]
+.........................................................FF............. [ 75%]
+........................................................................ [ 82%]
+........................................................................ [ 89%]
+.............................................................s.......... [ 96%]
+......................................                                   [100%]
+=================================== FAILURES ===================================
+_________ test_context_overflow_stops_after_three_compaction_attempts __________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72243c262740>
+
+    def test_context_overflow_stops_after_three_compaction_attempts(monkeypatch):
+        from nz_coder.loop import AgentLoop, LLMResult
+        from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    
+        old, tmp = _tmp_workdir()
+        try:
+            agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
+            compact_calls = []
+    
+            monkeypatch.setattr(
+                agent,
+                "_call_llm",
+                lambda *_args, **_kwargs: LLMResult(
+                    needs_compaction=True,
+                    compaction_error="context_length_exceeded",
+                ),
+            )
+    
+            def fake_compact(_messages, *, overflow=False):
+                compact_calls.append(overflow)
+                return [{
+                    "role": "user",
+                    "content": "<session-summary>bounded</session-summary>",
+                    "_nz_compaction": {"overflow": overflow},
+                }]
+    
+            monkeypatch.setattr(agent, "_compact_messages", fake_compact)
+            messages = [{"role": "user", "content": "large request"}]
+    
+            with scoped_runtime_overrides(max_agent_turns=5):
+                status = _run_agent(agent, messages, stream=False)
+    
+            assert status["status"] == "error"
+>           assert compact_calls == [True, True, True]
+E           assert [False, False, False] == [True, True, True]
+E             
+E             At index 0 diff: False != True
+E             Use -v to get more diff
+
+tests/test_loop_fake.py:2273: AssertionError
+_____ test_pre_send_and_reactive_compactions_share_one_three_attempt_owner _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72242544be00>
+
+    def test_pre_send_and_reactive_compactions_share_one_three_attempt_owner(monkeypatch):
+        from nz_coder.state.context import prompt_budget
+        from nz_coder.loop import AgentLoop, LLMResult
+        from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    
+        old, tmp = _tmp_workdir()
+        try:
+            agent = AgentLoop(
+                "test",
+                permission_mode="auto",
+                client=FakeClient([]),
+                trace_enabled=False,
+            )
+            model_calls = []
+            compact_calls = []
+            monkeypatch.setattr(agent, "_prompt_budget", lambda: prompt_budget(10_000, 2_000))
+            monkeypatch.setattr(agent, "_projected_request_tokens", lambda _messages: 9_000)
+            monkeypatch.setattr(
+                agent,
+                "_call_llm",
+                lambda *_args, **_kwargs: model_calls.append(True) or LLMResult(
+                    needs_compaction=True,
+                    compaction_error="context_length_exceeded",
+                ),
+            )
+    
+            def fake_compact(_messages, *, overflow=False):
+                compact_calls.append(overflow)
+                return [{
+                    "role": "user",
+                    "content": "<session-summary>bounded</session-summary>",
+                    "_nz_compaction": {"auto": True, "created_at": time.time()},
+                }]
+    
+            monkeypatch.setattr(agent, "_compact_messages", fake_compact)
+            messages = [{"role": "user", "content": "large request"}]
+    
+            with scoped_runtime_overrides(max_agent_turns=5):
+                status = _run_agent(agent, messages, stream=False)
+    
+            assert status["status"] == "error"
+>           assert compact_calls == [False, True, False]
+E           assert [False, False, False] == [False, True, False]
+E             
+E             At index 1 diff: False != True
+E             Use -v to get more diff
+
+tests/test_loop_fake.py:2323: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_loop_fake.py::test_context_overflow_stops_after_three_compaction_attempts
+FAILED tests/test_loop_fake.py::test_pre_send_and_reactive_compactions_share_one_three_attempt_owner
+2 failed, 1040 passed, 4 skipped in 211.23s (0:03:31)
