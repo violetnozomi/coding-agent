@@ -1,0 +1,241 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+.FF......FFFF...                                                         [100%]
+=================================== FAILURES ===================================
+________ test_successful_streamed_tool_timeout_is_recoverable[0.2-600] _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x716f96678fc0>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1')
+idle = 0.2, hard = 600
+
+    @pytest.mark.parametrize('idle,hard', [(60, 600), (0.2, 600), (0, 1)])
+    def test_successful_streamed_tool_timeout_is_recoverable(monkeypatch, tmp_path, idle, hard):
+        capture = _run(monkeypatch, tmp_path, idle=idle, hard=hard)
+        assert capture['tools'], capture['exceptions']
+        tool = capture['tools'][0]
+        assert tool['executed'] and tool['dispatch_failed']
+        assert not tool['command_failed'] and not tool['permission_denied']
+        assert tool['metadata']['timed_out'] is True
+        assert tool['metadata']['exit'] is None
+        assert tool['metadata']['cancelled'] is False
+>       assert len(capture['requests']) == 2, capture['exceptions']
+E       AssertionError: ['Traceback (most recent call last):
+E           File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", ... stalled or delayed response ({idle:g}s idle)"
+E             )
+E         TimeoutError: Stream stalled or delayed response (0.2s idle)
+E         ']
+E       assert 1 == 2
+E        +  where 1 = len([{'max_tokens': 8000, 'messages': [{'content': 'Inspect command outcomes.\n\n## Model-family guidance (InfCode product...mand outcome and explain it. Do not modify files.', 'role': 'user'}], 'model': 'failure-domains', 'stream': True, ...}])
+
+tests/runtime/test_streamed_tool_failure_domains.py:194: AssertionError
+__________ test_successful_streamed_tool_timeout_is_recoverable[0-1] ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x716f95d6fbf0>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_2')
+idle = 0, hard = 1
+
+    @pytest.mark.parametrize('idle,hard', [(60, 600), (0.2, 600), (0, 1)])
+    def test_successful_streamed_tool_timeout_is_recoverable(monkeypatch, tmp_path, idle, hard):
+        capture = _run(monkeypatch, tmp_path, idle=idle, hard=hard)
+        assert capture['tools'], capture['exceptions']
+        tool = capture['tools'][0]
+        assert tool['executed'] and tool['dispatch_failed']
+        assert not tool['command_failed'] and not tool['permission_denied']
+        assert tool['metadata']['timed_out'] is True
+        assert tool['metadata']['exit'] is None
+        assert tool['metadata']['cancelled'] is False
+>       assert len(capture['requests']) == 2, capture['exceptions']
+E       AssertionError: ['Traceback (most recent call last):
+E           File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", ...uts
+E             raise TimeoutError(f"Provider hard timeout after {hard:g}s")
+E         TimeoutError: Provider hard timeout after 1s
+E         ']
+E       assert 1 == 2
+E        +  where 1 = len([{'max_tokens': 8000, 'messages': [{'content': 'Inspect command outcomes.\n\n## Model-family guidance (InfCode product...mand outcome and explain it. Do not modify files.', 'role': 'user'}], 'model': 'failure-domains', 'stream': True, ...}])
+
+tests/runtime/test_streamed_tool_failure_domains.py:194: AssertionError
+_______________ test_streamed_verification_timeout_never_passes ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x716f95c62eb0>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-32/test_streamed_verification_tim0')
+
+    def test_streamed_verification_timeout_never_passes(monkeypatch, tmp_path):
+        capture = _run(monkeypatch, tmp_path, idle=0.2, verification=True)
+>       assert len(capture['requests']) == 3, capture['exceptions']
+E       AssertionError: ['Traceback (most recent call last):
+E           File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", ... stalled or delayed response ({idle:g}s idle)"
+E             )
+E         TimeoutError: Stream stalled or delayed response (0.2s idle)
+E         ']
+E       assert 1 == 3
+E        +  where 1 = len([{'max_tokens': 8000, 'messages': [{'content': 'Inspect command outcomes.\n\n## Model-family guidance (InfCode product... -m pytest -q test_wait.py and report the result.', 'role': 'user'}], 'model': 'failure-domains', 'stream': True, ...}])
+
+tests/runtime/test_streamed_tool_failure_domains.py:252: AssertionError
+________________ test_verification_success_requires_real_rerun _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x716f95c60f30>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-32/test_verification_success_requ0')
+
+    def test_verification_success_requires_real_rerun(monkeypatch, tmp_path):
+        capture = _run(monkeypatch, tmp_path, idle=0.2, verification=True, rerun=True)
+>       assert len(capture['requests']) == 3, capture['exceptions']
+E       AssertionError: ['Traceback (most recent call last):
+E           File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", ... stalled or delayed response ({idle:g}s idle)"
+E             )
+E         TimeoutError: Stream stalled or delayed response (0.2s idle)
+E         ']
+E       assert 1 == 3
+E        +  where 1 = len([{'max_tokens': 8000, 'messages': [{'content': 'Inspect command outcomes.\n\n## Model-family guidance (InfCode product... -m pytest -q test_wait.py and report the result.', 'role': 'user'}], 'model': 'failure-domains', 'stream': True, ...}])
+
+tests/runtime/test_streamed_tool_failure_domains.py:264: AssertionError
+______________ test_consumer_time_is_not_provider_timeout[1-1000] ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x716f95c13790>
+idle = 1, hard = 1000
+
+    @pytest.mark.parametrize('idle,hard', [(1, 1000), (0, 1)])
+    def test_consumer_time_is_not_provider_timeout(monkeypatch, idle, hard):
+        clock = [0.0]
+        monkeypatch.setattr(stream, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+        values = stream.iter_stream_with_timeouts(
+            iter(['tool_calls', 'trailing_usage']), idle_timeout_seconds=idle, hard_timeout_seconds=hard)
+        assert next(values) == 'tool_calls'
+        clock[0] += 100  # deterministic local tool wait, no Provider wait
+>       assert list(values) == ['trailing_usage']
+               ^^^^^^^^^^^^
+
+tests/runtime/model_gateway/test_stream_timeout_ownership.py:18:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+stream = <list_iterator object at 0x716f95d7aa70>
+
+    def iter_stream_with_timeouts(
+        stream,
+        *,
+        idle_timeout_seconds: float,
+        hard_timeout_seconds: float,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[object]:
+        """Pull a blocking iterator behind idle, hard, and cancellation guards."""
+        events: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=256)
+        stopped = threading.Event()
+        consumed = threading.Event()
+
+        def publish(kind: str, value: object) -> bool:
+            while not stopped.is_set():
+                try:
+                    events.put((kind, value), timeout=0.05)
+                    return True
+                except queue.Full:
+                    continue
+            return False
+
+        def consume() -> None:
+            try:
+                for item in stream:
+                    consumed.clear()
+                    if not publish("item", item):
+                        return
+                    while not stopped.is_set() and not consumed.wait(0.05):
+                        continue
+            except BaseException as exc:
+                publish("error", exc)
+            finally:
+                publish("done", None)
+
+        threading.Thread(target=consume, name="nz-provider-stream", daemon=True).start()
+        started = time.monotonic()
+        last_activity = started
+        idle = max(0.0, float(idle_timeout_seconds))
+        hard = max(0.001, float(hard_timeout_seconds))
+        try:
+            while True:
+                now = time.monotonic()
+                if cancelled is not None and cancelled():
+                    return
+                if now - started >= hard:
+                    raise TimeoutError(f"Provider hard timeout after {hard:g}s")
+                if idle and now - last_activity >= idle:
+>                   raise TimeoutError(
+                        f"Stream stalled or delayed response ({idle:g}s idle)"
+                    )
+E                   TimeoutError: Stream stalled or delayed response (1s idle)
+
+baseline/nz_coder/runtime/model_gateway/stream.py:67: TimeoutError
+_______________ test_consumer_time_is_not_provider_timeout[0-1] ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x716f95b8c110>
+idle = 0, hard = 1
+
+    @pytest.mark.parametrize('idle,hard', [(1, 1000), (0, 1)])
+    def test_consumer_time_is_not_provider_timeout(monkeypatch, idle, hard):
+        clock = [0.0]
+        monkeypatch.setattr(stream, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+        values = stream.iter_stream_with_timeouts(
+            iter(['tool_calls', 'trailing_usage']), idle_timeout_seconds=idle, hard_timeout_seconds=hard)
+        assert next(values) == 'tool_calls'
+        clock[0] += 100  # deterministic local tool wait, no Provider wait
+>       assert list(values) == ['trailing_usage']
+               ^^^^^^^^^^^^
+
+tests/runtime/model_gateway/test_stream_timeout_ownership.py:18:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+stream = <list_iterator object at 0x716f966c5210>
+
+    def iter_stream_with_timeouts(
+        stream,
+        *,
+        idle_timeout_seconds: float,
+        hard_timeout_seconds: float,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[object]:
+        """Pull a blocking iterator behind idle, hard, and cancellation guards."""
+        events: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=256)
+        stopped = threading.Event()
+        consumed = threading.Event()
+
+        def publish(kind: str, value: object) -> bool:
+            while not stopped.is_set():
+                try:
+                    events.put((kind, value), timeout=0.05)
+                    return True
+                except queue.Full:
+                    continue
+            return False
+
+        def consume() -> None:
+            try:
+                for item in stream:
+                    consumed.clear()
+                    if not publish("item", item):
+                        return
+                    while not stopped.is_set() and not consumed.wait(0.05):
+                        continue
+            except BaseException as exc:
+                publish("error", exc)
+            finally:
+                publish("done", None)
+
+        threading.Thread(target=consume, name="nz-provider-stream", daemon=True).start()
+        started = time.monotonic()
+        last_activity = started
+        idle = max(0.0, float(idle_timeout_seconds))
+        hard = max(0.001, float(hard_timeout_seconds))
+        try:
+            while True:
+                now = time.monotonic()
+                if cancelled is not None and cancelled():
+                    return
+                if now - started >= hard:
+>                   raise TimeoutError(f"Provider hard timeout after {hard:g}s")
+E                   TimeoutError: Provider hard timeout after 1s
+
+baseline/nz_coder/runtime/model_gateway/stream.py:65: TimeoutError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_successful_streamed_tool_timeout_is_recoverable[0.2-600]
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_successful_streamed_tool_timeout_is_recoverable[0-1]
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_streamed_verification_timeout_never_passes
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_verification_success_requires_real_rerun
+FAILED tests/runtime/model_gateway/test_stream_timeout_ownership.py::test_consumer_time_is_not_provider_timeout[1-1000]
+FAILED tests/runtime/model_gateway/test_stream_timeout_ownership.py::test_consumer_time_is_not_provider_timeout[0-1]
+6 failed, 10 passed in 6.58s

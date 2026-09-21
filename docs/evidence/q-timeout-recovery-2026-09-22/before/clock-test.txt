@@ -1,0 +1,150 @@
+FF...                                                                    [100%]
+=================================== FAILURES ===================================
+______________ test_consumer_time_is_not_provider_timeout[1-1000] ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7caefd2a2c40>
+idle = 1, hard = 1000
+
+    @pytest.mark.parametrize('idle,hard', [(1, 1000), (0, 1)])
+    def test_consumer_time_is_not_provider_timeout(monkeypatch, idle, hard):
+        clock = [0.0]
+        monkeypatch.setattr(stream, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+        values = stream.iter_stream_with_timeouts(
+            iter(['tool_calls', 'trailing_usage']), idle_timeout_seconds=idle, hard_timeout_seconds=hard)
+        assert next(values) == 'tool_calls'
+        clock[0] += 100  # deterministic local tool wait, no Provider wait
+>       assert list(values) == ['trailing_usage']
+               ^^^^^^^^^^^^
+
+tests/runtime/model_gateway/test_stream_timeout_ownership.py:18:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+stream = <list_iterator object at 0x7caefc76d8a0>
+
+    def iter_stream_with_timeouts(
+        stream,
+        *,
+        idle_timeout_seconds: float,
+        hard_timeout_seconds: float,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[object]:
+        """Pull a blocking iterator behind idle, hard, and cancellation guards."""
+        events: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=256)
+        stopped = threading.Event()
+        consumed = threading.Event()
+
+        def publish(kind: str, value: object) -> bool:
+            while not stopped.is_set():
+                try:
+                    events.put((kind, value), timeout=0.05)
+                    return True
+                except queue.Full:
+                    continue
+            return False
+
+        def consume() -> None:
+            try:
+                for item in stream:
+                    consumed.clear()
+                    if not publish("item", item):
+                        return
+                    while not stopped.is_set() and not consumed.wait(0.05):
+                        continue
+            except BaseException as exc:
+                publish("error", exc)
+            finally:
+                publish("done", None)
+
+        threading.Thread(target=consume, name="nz-provider-stream", daemon=True).start()
+        started = time.monotonic()
+        last_activity = started
+        idle = max(0.0, float(idle_timeout_seconds))
+        hard = max(0.001, float(hard_timeout_seconds))
+        try:
+            while True:
+                now = time.monotonic()
+                if cancelled is not None and cancelled():
+                    return
+                if now - started >= hard:
+                    raise TimeoutError(f"Provider hard timeout after {hard:g}s")
+                if idle and now - last_activity >= idle:
+>                   raise TimeoutError(
+                        f"Stream stalled or delayed response ({idle:g}s idle)"
+                    )
+E                   TimeoutError: Stream stalled or delayed response (1s idle)
+
+nz_coder/runtime/model_gateway/stream.py:67: TimeoutError
+_______________ test_consumer_time_is_not_provider_timeout[0-1] ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7caefd2a2520>
+idle = 0, hard = 1
+
+    @pytest.mark.parametrize('idle,hard', [(1, 1000), (0, 1)])
+    def test_consumer_time_is_not_provider_timeout(monkeypatch, idle, hard):
+        clock = [0.0]
+        monkeypatch.setattr(stream, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+        values = stream.iter_stream_with_timeouts(
+            iter(['tool_calls', 'trailing_usage']), idle_timeout_seconds=idle, hard_timeout_seconds=hard)
+        assert next(values) == 'tool_calls'
+        clock[0] += 100  # deterministic local tool wait, no Provider wait
+>       assert list(values) == ['trailing_usage']
+               ^^^^^^^^^^^^
+
+tests/runtime/model_gateway/test_stream_timeout_ownership.py:18:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+stream = <list_iterator object at 0x7caefc7baec0>
+
+    def iter_stream_with_timeouts(
+        stream,
+        *,
+        idle_timeout_seconds: float,
+        hard_timeout_seconds: float,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[object]:
+        """Pull a blocking iterator behind idle, hard, and cancellation guards."""
+        events: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=256)
+        stopped = threading.Event()
+        consumed = threading.Event()
+
+        def publish(kind: str, value: object) -> bool:
+            while not stopped.is_set():
+                try:
+                    events.put((kind, value), timeout=0.05)
+                    return True
+                except queue.Full:
+                    continue
+            return False
+
+        def consume() -> None:
+            try:
+                for item in stream:
+                    consumed.clear()
+                    if not publish("item", item):
+                        return
+                    while not stopped.is_set() and not consumed.wait(0.05):
+                        continue
+            except BaseException as exc:
+                publish("error", exc)
+            finally:
+                publish("done", None)
+
+        threading.Thread(target=consume, name="nz-provider-stream", daemon=True).start()
+        started = time.monotonic()
+        last_activity = started
+        idle = max(0.0, float(idle_timeout_seconds))
+        hard = max(0.001, float(hard_timeout_seconds))
+        try:
+            while True:
+                now = time.monotonic()
+                if cancelled is not None and cancelled():
+                    return
+                if now - started >= hard:
+>                   raise TimeoutError(f"Provider hard timeout after {hard:g}s")
+E                   TimeoutError: Provider hard timeout after 1s
+
+nz_coder/runtime/model_gateway/stream.py:65: TimeoutError
+=========================== short test summary info ============================
+FAILED tests/runtime/model_gateway/test_stream_timeout_ownership.py::test_consumer_time_is_not_provider_timeout[1-1000]
+FAILED tests/runtime/model_gateway/test_stream_timeout_ownership.py::test_consumer_time_is_not_provider_timeout[0-1]
+2 failed, 3 passed in 0.08s

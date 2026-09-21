@@ -1,0 +1,37 @@
+.......F......                                                           [100%]
+=================================== FAILURES ===================================
+_____________ test_user_cancellation_is_not_a_recoverable_timeout ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x793d1713c230>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-22/test_user_cancellation_is_not_0')
+
+    def test_user_cancellation_is_not_a_recoverable_timeout(monkeypatch, tmp_path):
+>       capture = _run(monkeypatch, tmp_path, cancel=True)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_streamed_tool_failure_domains.py:212:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests/runtime/test_streamed_tool_failure_domains.py:143: in _run
+    result = asyncio.run(exercise())
+             ^^^^^^^^^^^^^^^^^^^^^^^
+../miniconda3/lib/python3.13/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../miniconda3/lib/python3.13/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../miniconda3/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def exercise():
+        task = asyncio.create_task(native_sdk.NativeSDKRunner(env).run_result(request, options))
+        if cancel:
+>           assert await asyncio.to_thread(started.wait, 5)
+E           assert False
+
+tests/runtime/test_streamed_tool_failure_domains.py:138: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_user_cancellation_is_not_a_recoverable_timeout
+1 failed, 13 passed in 10.40s

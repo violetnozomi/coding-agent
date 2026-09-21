@@ -1,0 +1,31 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+__________ test_successful_streamed_tool_timeout_is_recoverable[0.2] ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b20a2b43bb0>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-19/test_successful_streamed_tool_1')
+idle = 0.2
+
+    @pytest.mark.parametrize('idle', [60, 0.2])
+    def test_successful_streamed_tool_timeout_is_recoverable(monkeypatch, tmp_path, idle):
+        capture = _run(monkeypatch, tmp_path, idle=idle)
+        assert capture['tools'], capture['exceptions']
+        tool = capture['tools'][0]
+        assert tool['executed'] and tool['dispatch_failed']
+        assert not tool['command_failed'] and not tool['permission_denied']
+        assert tool['metadata']['timed_out'] is True
+        assert tool['metadata']['exit'] is None
+        assert tool['metadata']['cancelled'] is False
+>       assert len(capture['requests']) == 2, capture['exceptions']
+E       AssertionError: ['Traceback (most recent call last):
+E           File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", ... stalled or delayed response ({idle:g}s idle)"
+E             )
+E         TimeoutError: Stream stalled or delayed response (0.2s idle)
+E         ']
+E       assert 1 == 2
+E        +  where 1 = len([{'max_tokens': 8000, 'messages': [{'content': 'Inspect command outcomes.\n\n## Model-family guidance (InfCode product...mand outcome and explain it. Do not modify files.', 'role': 'user'}], 'model': 'failure-domains', 'stream': True, ...}])
+
+tests/runtime/test_streamed_tool_failure_domains.py:127: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_successful_streamed_tool_timeout_is_recoverable[0.2]
+1 failed, 1 passed in 2.82s

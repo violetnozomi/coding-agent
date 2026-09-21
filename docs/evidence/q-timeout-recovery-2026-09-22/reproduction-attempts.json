@@ -1,0 +1,23 @@
+[
+  {
+    "condition": "Native production services + Bash timeout=1s, Provider idle=60s",
+    "before": "1 passed; next model request occurs"
+  },
+  {
+    "condition": "same chain, only Provider idle=0.2s",
+    "before": "1 failed, 1 passed; no next request; TimeoutError at stream.py:67"
+  },
+  {
+    "condition": "clock-only local consumer wait across idle/hard deadline",
+    "before": "2 failed, 3 passed"
+  },
+  {
+    "condition": "final matrix with exact baseline iterator loaded in isolated test process",
+    "before": "6 failed, 10 passed",
+    "mechanism": "baseline_check.py; no working-tree source reversal"
+  },
+  {
+    "condition": "6-line stream consumer clock ownership fix",
+    "after": "see focused-final.txt and commands.jsonl"
+  }
+]

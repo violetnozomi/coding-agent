@@ -1,0 +1,59 @@
+Traceback (most recent call last):
+  File "<REPO>/nz_coder/runtime/execution/services.py", line 72, in execute
+    return str(future.result())
+               ~~~~~~~~~~~~~^^
+  File "<USER_HOME>/miniconda3/lib/python3.13/concurrent/futures/_base.py", line 456, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "<USER_HOME>/miniconda3/lib/python3.13/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "<REPO>/nz_coder/runtime/execution/runner.py", line 863, in execute_stream_tools
+    return await self._middleware.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        "tool_batch", run_context, execute_batch,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<REPO>/nz_coder/runtime/core/middleware.py", line 47, in run
+    result = await execute()
+             ^^^^^^^^^^^^^^^
+  File "<REPO>/nz_coder/runtime/execution/runner.py", line 857, in execute_batch
+    return await services.tools.execute_batch_async(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "<REPO>/nz_coder/runtime/tool_runtime/pipeline.py", line 385, in execute_batch_async
+    return await self._execute_batch_async_snapshot(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<11 lines>...
+    )
+    ^
+  File "<REPO>/nz_coder/runtime/tool_runtime/pipeline.py", line 477, in _execute_batch_async_snapshot
+    else self.results.consume(
+         ~~~~~~~~~~~~~~~~~~~~^
+        context.projection, dispatched, messages, **consume_kwargs,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<REPO>/nz_coder/runtime/tool_runtime/result_projection.py", line 143, in consume
+    context.after_result(messages, result, output)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<REPO>/nz_coder/runtime/adapters/tool.py", line 45, in after_result
+    host.hooks.after_tool_result(host, messages, result, output)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<REPO>/nz_coder/runtime/verification/hooks.py", line 683, in after_tool_result
+    hook(ctx)
+    ~~~~^^^^^
+  File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", line 143, in broken_hook
+    raise RuntimeError('controlled lifecycle invariant failure')
+RuntimeError: controlled lifecycle invariant failure
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", line 117, in observe_bridge
+    return original_bridge(self, result)
+  File "<REPO>/nz_coder/runtime/execution/services.py", line 76, in execute
+    raise StreamToolExecutionFailed(str(error)) from error
+nz_coder.runtime.execution.services.StreamToolExecutionFailed: controlled lifecycle invariant failure

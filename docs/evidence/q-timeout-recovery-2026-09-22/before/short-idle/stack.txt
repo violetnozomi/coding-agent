@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", line 69, in observe_iterator
+    yield from original_iterator(*args, **kwargs)
+  File "<REPO>/nz_coder/runtime/model_gateway/stream.py", line 67, in iter_stream_with_timeouts
+    raise TimeoutError(
+        f"Stream stalled or delayed response ({idle:g}s idle)"
+    )
+TimeoutError: Stream stalled or delayed response (0.2s idle)

@@ -1,0 +1,2600 @@
+{
+  "requests": [
+    {
+      "model": "failure-domains",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Inspect command outcomes.\n\n## Model-family guidance (InfCode production contract)\n- Family: default\n- - Be concise, direct, and action-oriented; minimize narration outside tool use.\n- Inspect relevant files before editing and prefer the smallest change that solves the task.\n- Use tools for software-engineering work, verify changes, and report only the relevant outcome.\n- Do not invent URLs, repository facts, command output, or verification evidence.\n\n## Available skills\n- **code-review**: Code review checklist and best practices"
+        },
+        {
+          "role": "user",
+          "content": "<context-injection>\nRecalled background memory, runtime state, and working memory for this turn. Treat as context, not as a new user request.\nProjectProfile: languages=none; package_managers=none; tests=none; typecheck=none; source_roots=none; test_roots=none\n<system-reminder>\n- Turn 1/2 | task_complexity=L0 | task_mode=discuss | 1 turns remaining\n</system-reminder>\n<repo-routing>\nRetrieval routing: exact literal -> grep_search; exact symbol -> repo_context symbol_context or LSP; unknown structural location -> repo_context lookup; changed-code reasoning -> changed_scope/impact. Business-language intent with vocabulary mismatch: start broad with repo_context lookup or grep variants.\n</repo-routing>\n\n<repo-routing>\nRepository intelligence did not provide bounded evidence (no-high-confidence-candidates). Use repo_context, grep_search, or read_file for precise verification; this is not evidence that the repository has no match.\n</repo-routing>\n</context-injection>\n\nInspect the command outcome and explain it. Do not modify files."
+        }
+      ],
+      "max_tokens": 8000,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "apply_patch",
+            "description": "Apply exact text replacements, file creates, and file deletes atomically. Validates every hunk before writing and returns diffs. Every change must include its relative path.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Compatibility fallback for saved single-file calls; new calls must set path on every change."
+                },
+                "changes": {
+                  "type": "array",
+                  "description": "List of patch hunks.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "op": {
+                        "type": "string",
+                        "enum": [
+                          "replace",
+                          "create",
+                          "delete",
+                          "append"
+                        ],
+                        "description": "Patch operation. Default: replace. Use append only to add new content at end-of-file without old_text."
+                      },
+                      "path": {
+                        "type": "string",
+                        "description": "Relative path from workspace root."
+                      },
+                      "old_text": {
+                        "type": "string",
+                        "description": "Exact text to replace, or delete guard text."
+                      },
+                      "new_text": {
+                        "type": "string",
+                        "description": "Replacement or created file content."
+                      },
+                      "content": {
+                        "type": "string",
+                        "description": "Alias for new_text when op=create."
+                      },
+                      "overwrite": {
+                        "type": "boolean",
+                        "description": "Allow op=create to replace an existing file."
+                      }
+                    },
+                    "required": [
+                      "path"
+                    ]
+                  }
+                },
+                "dry_run": {
+                  "type": "boolean",
+                  "description": "Preview diffs without writing files. Default: false."
+                }
+              },
+              "required": [
+                "changes"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Run a shell command in the workspace. Use for running tests, installing packages, git operations, etc.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "The shell command to execute."
+                },
+                "timeout": {
+                  "type": "integer",
+                  "description": "Timeout in seconds, 1-120. Default: 120."
+                },
+                "workdir": {
+                  "type": "string",
+                  "description": "Workspace-relative directory in which to run the command. Use this instead of cd. Defaults to the workspace root."
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "compact",
+            "description": "Manually compress the conversation context to free up space.",
+            "parameters": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "diff_status",
+            "description": "Show current git diff status: which files changed, diff size, whether tests were modified, and whether to verify/finalize or keep searching.",
+            "parameters": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "edit_file",
+            "description": "Replace exact text in a file (first occurrence only). old_text must match exactly once.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Relative path from workspace root."
+                },
+                "old_text": {
+                  "type": "string",
+                  "description": "The exact text to find and replace. Must be unique in the file."
+                },
+                "new_text": {
+                  "type": "string",
+                  "description": "The replacement text."
+                }
+              },
+              "required": [
+                "path",
+                "old_text",
+                "new_text"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "emit_handoff",
+            "description": "Transfer this run to a declared Agent role after the current tool batch settles, or emit terminal=true when this terminal role is complete.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "type": "string",
+                  "enum": [
+                    "failure-domains"
+                  ]
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "terminal": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "glob_search",
+            "description": "Find files matching a glob pattern (e.g. '**/*.py', 'src/**/*.ts'). Results are sorted by modification time, most recent first.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string",
+                  "description": "Glob pattern to match files."
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Directory to search in. Omit to use the workspace root."
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep_search",
+            "description": "Search file contents with regex. Default mode returns matching lines grouped by absolute file path and sorted by file modification time. Use output_mode='files_with_matches' for paths only, or 'count' for counts. NEVER use bash grep/rg \u2014 always use this tool for search.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string",
+                  "description": "Regex pattern to search for."
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Directory to search in. Default: workspace root."
+                },
+                "include": {
+                  "type": "string",
+                  "description": "File glob filter, e.g. '*.py'. Default: all files."
+                },
+                "output_mode": {
+                  "type": "string",
+                  "enum": [
+                    "files_with_matches",
+                    "content",
+                    "count"
+                  ],
+                  "description": "Output mode. 'content' (default) shows matching lines. 'files_with_matches' shows paths. 'count' shows per-file matching-line counts."
+                },
+                "head_limit": {
+                  "type": "integer",
+                  "description": "Max results. Default: 100 (content) or 50 (files/count). Use 0 for unlimited."
+                },
+                "offset": {
+                  "type": "integer",
+                  "description": "Skip first N results for pagination. Default: 0."
+                },
+                "context": {
+                  "type": "integer",
+                  "description": "Lines of context around matches (content mode only). Default: 0."
+                },
+                "case_insensitive": {
+                  "type": "boolean",
+                  "description": "Case insensitive search (-i). Default: false."
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "list_directory",
+            "description": "List files and directories in a path. Use depth to control recursion.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Relative path. Default: current directory."
+                },
+                "depth": {
+                  "type": "integer",
+                  "description": "Max depth to recurse. Default: 1."
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "load_skill",
+            "description": "Load specialized domain knowledge or workflow instructions by skill name. Check the available skills list in the system prompt before calling.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Skill name to load (e.g. 'code-review')."
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "mcp_catalog",
+            "description": "Search MCP servers, tools, prompts, and resources without exposing every schema; then fetch one exact prompt or resource from the active MCP runtime.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "operation": {
+                  "type": "string",
+                  "enum": [
+                    "get_prompt",
+                    "read_resource",
+                    "search"
+                  ]
+                },
+                "query": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "",
+                    "prompt",
+                    "resource",
+                    "server",
+                    "tool"
+                  ]
+                },
+                "server": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                },
+                "arguments": {
+                  "type": "object"
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 50
+                }
+              },
+              "required": [
+                "operation"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "process",
+            "description": "Start and control a persistent long-running process across Agent turns. Use this, not bash, for dev servers, watch mode, REPLs, and live logs. Operations: start, read by byte cursor, write stdin, status/list, resize, kill.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "operation": {
+                  "type": "string",
+                  "enum": [
+                    "start",
+                    "read",
+                    "write",
+                    "status",
+                    "list",
+                    "resize",
+                    "kill"
+                  ]
+                },
+                "command": {
+                  "type": "string",
+                  "description": "Command for start."
+                },
+                "process_id": {
+                  "type": "string",
+                  "description": "Exact stable proc_* ID returned by start. Never invent an alias. Omit for status/list of all Session processes."
+                },
+                "data": {
+                  "type": "string",
+                  "description": "UTF-8 stdin data for write."
+                },
+                "append_newline": {
+                  "type": "boolean",
+                  "description": "Append a newline to write data."
+                },
+                "cursor": {
+                  "type": "integer",
+                  "description": "Read from this byte cursor; use next_cursor on later reads. -1 starts at current end."
+                },
+                "tail_bytes": {
+                  "type": "integer",
+                  "description": "When cursor is omitted, read only this many tail bytes."
+                },
+                "max_bytes": {
+                  "type": "integer",
+                  "description": "Maximum bytes returned, up to 65536."
+                },
+                "wait_seconds": {
+                  "type": "number",
+                  "description": "Wait up to 30 seconds for new output without killing the process."
+                },
+                "workdir": {
+                  "type": "string",
+                  "description": "Workspace-relative cwd for start."
+                },
+                "tty": {
+                  "type": "boolean",
+                  "description": "Request a PTY on POSIX; Windows uses persistent pipes."
+                },
+                "rows": {
+                  "type": "integer",
+                  "description": "PTY rows for start/resize."
+                },
+                "cols": {
+                  "type": "integer",
+                  "description": "PTY columns for start/resize."
+                }
+              },
+              "required": [
+                "operation"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "question",
+            "description": "Ask the user 1-4 structured questions only when a material decision cannot be resolved from the request, repository, or sensible defaults. Put a recommended choice first and suffix its label with '(Recommended)'. Users may type a custom answer, so do not add an Other option.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "questions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "question": {
+                        "type": "string"
+                      },
+                      "header": {
+                        "type": "string"
+                      },
+                      "multiple": {
+                        "type": "boolean"
+                      },
+                      "options": {
+                        "type": "array",
+                        "minItems": 2,
+                        "maxItems": 5,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "description"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "question",
+                      "header",
+                      "options"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "questions"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "description": "Read file contents with line numbers. Use offset/limit for large text or converted PDF/DOCX files. PDF page ranges use pages=\"5\" or pages=\"1-10\" with at most 20 pages per request.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Relative path from workspace root."
+                },
+                "offset": {
+                  "type": "integer",
+                  "description": "Start line number (1-based). Default: 1."
+                },
+                "limit": {
+                  "type": "integer",
+                  "description": "Number of lines to read. Default: 2000."
+                },
+                "pages": {
+                  "type": "string",
+                  "description": "PDF page range, for example \"5\" or \"1-10\". Maximum 20 pages per request."
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "read_scratchpad",
+            "description": "Read all entries in your working memory scratchpad. The scratchpad is also shown automatically each turn; only call this explicitly if you need the full untruncated history.",
+            "parameters": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "read_tool_result",
+            "description": "Read a bounded chunk of a persisted tool result by its opaque artifact ID. Only artifacts owned by the current Session are accessible.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "artifact_id": {
+                  "type": "string"
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65536
+                }
+              },
+              "required": [
+                "artifact_id"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "replace_lines",
+            "description": "Replace a 1-based inclusive line range in a file. Use after read_file shows exact line numbers, especially when exact-text edits are brittle.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Relative path from workspace root."
+                },
+                "start_line": {
+                  "type": "integer",
+                  "description": "First line to replace, 1-based."
+                },
+                "end_line": {
+                  "type": "integer",
+                  "description": "Last line to replace, 1-based inclusive."
+                },
+                "new_text": {
+                  "type": "string",
+                  "description": "Replacement text for the line range."
+                }
+              },
+              "required": [
+                "path",
+                "start_line",
+                "end_line",
+                "new_text"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "repo_context",
+            "description": "Query persistent lexical/structural repository intelligence: overview, module dependencies/dependents, unified structural intent lookup, symbol/process call contexts, dependency cycles, or changed scope.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "operation": {
+                  "type": "string",
+                  "enum": [
+                    "overview",
+                    "module_context",
+                    "relationship_scan",
+                    "cyclic_dependencies",
+                    "changed_scope",
+                    "symbol_search",
+                    "lookup",
+                    "symbol_context",
+                    "process_context",
+                    "runtime_metrics"
+                  ]
+                },
+                "module": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "auto",
+                    "symbol",
+                    "module",
+                    "process"
+                  ]
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                },
+                "refresh": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "operation"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "review_run_evidence",
+            "description": "Inspect the current Agent's Runtime-owned evidence and unresolved requirements. Call with no arguments; do not supply files, commands, or verification claims. Read-only advisory review; normal completion and semantic review still apply.",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "send_message",
+            "description": "Send a non-blocking coordinator instruction to a live child Agent by session id or display name, or use '*' for a bounded broadcast.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "to": {
+                  "type": "string",
+                  "description": "Live child session id, display name, or '*'."
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Actionable instruction that changes the child's plan."
+                },
+                "seen_by": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Forwarding chain copied from a received message."
+                }
+              },
+              "required": [
+                "to",
+                "content"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "task",
+            "description": "Spawn or resume a child-agent session with isolated context and its own worktree. Returns either a final summary or a parent handoff request.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "description": "Task description or follow-up reply for the child agent."
+                },
+                "agent_type": {
+                  "type": "string",
+                  "enum": [
+                    "explore",
+                    "plan",
+                    "general-purpose",
+                    "reflection"
+                  ],
+                  "description": "explore = cheap read-only repo scan, plan = parent-model read-only implementation design, general-purpose = parent-model full-tool worker in its own worktree, reflection = read-only completion critic. Default: explore."
+                },
+                "session_id": {
+                  "type": "string",
+                  "description": "Existing child session id to resume after the child asked the parent for help."
+                },
+                "allowed_tools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Optional allowlist to narrow the child's tool scope."
+                },
+                "target_paths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Optional repo-relative files or directories this child will own. Use for write-capable tasks to prevent overlapping edits with other active child sessions."
+                },
+                "output_schema": {
+                  "type": "object",
+                  "description": "Optional supported JSON-Schema subset for a validated structured child result."
+                },
+                "model_hint": {
+                  "type": "string",
+                  "enum": [
+                    "fast",
+                    "balanced",
+                    "deep"
+                  ],
+                  "description": "Semantic child model tier; unavailable tiers explicitly inherit the parent route."
+                },
+                "evidence_refs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Bounded file:/diff:/finding:/task_id: evidence references injected into the child briefing."
+                },
+                "verification": {
+                  "type": "object",
+                  "description": "Machine-checkable child postconditions: enforcement, mutation/read/path/final-text requirements."
+                }
+              },
+              "required": [
+                "prompt"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "todo",
+            "description": "Update the session task list. Keep one item in_progress. Use for multi-step work.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "description": "Complete list of todo items (replaces any previous list).",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "content": {
+                        "type": "string",
+                        "description": "Task description."
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed",
+                          "cancelled"
+                        ]
+                      },
+                      "priority": {
+                        "type": "string",
+                        "enum": [
+                          "high",
+                          "medium",
+                          "low"
+                        ],
+                        "description": "Optional priority; defaults to medium."
+                      }
+                    },
+                    "required": [
+                      "content",
+                      "status"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "items"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "tool_search",
+            "description": "Discover tools hidden by progressive schema exposure, including workflow, project creation, memory, advanced repository intelligence, web, MCP/LSP, planning, and orchestration capabilities. Use select:TOOL_NAME for an exact schema or descriptive keywords; matching tools are unlocked for the next model turn in this Session only.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "max_results": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 15
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "update_scratchpad",
+            "description": "Record session working notes. Prefer category='plan' for the active plan or confirmed facts, and category='failure' for failed attempts or verification failures.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "plan",
+                    "failure"
+                  ],
+                  "description": "plan: active plan or important confirmed fact; failure: what failed and why"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Your note. Keep it concise (max 500 chars)."
+                }
+              },
+              "required": [
+                "category",
+                "content"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "verify_changed_files",
+            "description": "Run low-noise language-aware checks on changed source files: Python py_compile, JS/TS typecheck when configured, Go package check, and Rust cargo check. Excludes test files by default.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "include_tests": {
+                  "type": "boolean",
+                  "description": "Include changed test files. Default: false."
+                },
+                "timeout": {
+                  "type": "integer",
+                  "description": "Per-file timeout in seconds. Default: 30, max: 120."
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "verify_project_build",
+            "description": "Run safe low-noise verification commands for a generated project directory without installing dependencies.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "project_dir": {
+                  "type": "string",
+                  "description": "Project directory relative to the workspace."
+                },
+                "commands": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Optional explicit verification commands. If omitted, common commands are inferred."
+                }
+              },
+              "required": [
+                "project_dir"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "write_file",
+            "description": "Write content to a file. Creates parent directories if needed. Overwrites existing content.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Relative path from workspace root."
+                },
+                "content": {
+                  "type": "string",
+                  "description": "The full content to write."
+                }
+              },
+              "required": [
+                "path",
+                "content"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "write_files_batch",
+            "description": "Write multiple files atomically. Validates every path before writing, blocks credential-like files, and fails the entire batch if any file conflicts.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "files": {
+                  "type": "array",
+                  "description": "List of file payloads.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "description": "Relative path from workspace root."
+                      },
+                      "content": {
+                        "type": "string",
+                        "description": "Full file content."
+                      },
+                      "purpose": {
+                        "type": "string",
+                        "description": "Optional short description for the file."
+                      }
+                    },
+                    "required": [
+                      "path",
+                      "content"
+                    ]
+                  }
+                },
+                "overwrite": {
+                  "type": "boolean",
+                  "description": "Allow overwriting existing files. Default: false."
+                }
+              },
+              "required": [
+                "files"
+              ]
+            }
+          }
+        }
+      ],
+      "stream": true
+    }
+  ],
+  "exceptions": [
+    "Traceback (most recent call last):\n  File \"<REPO>/tests/runtime/test_streamed_tool_failure_domains.py\", line 107, in observe_iterator\n    yield from original_iterator(*args, **kwargs)\n  File \"baseline/nz_coder/runtime/model_gateway/stream.py\", line 67, in iter_stream_with_timeouts\n    raise TimeoutError(\n        f\"Stream stalled or delayed response ({idle:g}s idle)\"\n    )\nTimeoutError: Stream stalled or delayed response (0.2s idle)\n",
+    "Traceback (most recent call last):\n  File \"<REPO>/nz_coder/runtime/model_gateway/gateway.py\", line 733, in complete_stream_sync\n    for chunk in iter_stream_with_timeouts(\n                 ~~~~~~~~~~~~~~~~~~~~~~~~~^\n        stream,\n        ^^^^^^^\n    ...<2 lines>...\n        cancelled=(cancel_event.is_set if cancel_event is not None else None),\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ):\n    ^\n  File \"<REPO>/tests/runtime/test_streamed_tool_failure_domains.py\", line 107, in observe_iterator\n    yield from original_iterator(*args, **kwargs)\n  File \"baseline/nz_coder/runtime/model_gateway/stream.py\", line 67, in iter_stream_with_timeouts\n    raise TimeoutError(\n        f\"Stream stalled or delayed response ({idle:g}s idle)\"\n    )\nTimeoutError: Stream stalled or delayed response (0.2s idle)\n"
+  ],
+  "tools": [
+    {
+      "name": "bash",
+      "tool_input": {
+        "command": "sleep 5",
+        "timeout": 1
+      },
+      "output": "Error: Command timed out (1s)",
+      "executed": true,
+      "dispatch_failed": true,
+      "command_failed": false,
+      "is_write": false,
+      "duration_ms": 1008.678,
+      "queue_wait_ms": 0.0,
+      "permission_denied": false,
+      "title": "sleep 5",
+      "metadata": {
+        "exit": null,
+        "cancelled": false,
+        "timed_out": true,
+        "truncated": false,
+        "output_incomplete": true,
+        "raw_artifact_complete": false,
+        "raw_artifact_error": "No recoverable output was captured"
+      },
+      "attachments": [],
+      "category": "command"
+    }
+  ],
+  "result": {
+    "status": "error",
+    "final_text": "",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Inspect the command outcome and explain it. Do not modify files.",
+        "_nz_message_id": "msg-c64ad0069cb1567a836033ad48930de5",
+        "_nz_session_id": "failure-domains",
+        "_nz_parts": [
+          {
+            "id": "part-68bbd8f1e2675c2498fdcb6bd085c5d3",
+            "message_id": "msg-c64ad0069cb1567a836033ad48930de5",
+            "type": "text",
+            "text": "Inspect the command outcome and explain it. Do not modify files.",
+            "interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f"
+          }
+        ],
+        "_nz_interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+        "_nz_time": {
+          "created": 1790008597.8988304
+        },
+        "_nz_user_agent": "build",
+        "_nz_user_model": {
+          "provider_id": "offline",
+          "model_id": "failure-domains"
+        }
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "_nz_interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+        "_nz_visible": true,
+        "_nz_internal": false,
+        "_nz_authoritative": true,
+        "_nz_mode": "build",
+        "_nz_agent": "build",
+        "_nz_path": {
+          "cwd": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace",
+          "root": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace"
+        },
+        "_nz_message_id": "msg-3614320b1b5446be970b79da700d09e4",
+        "_nz_session_id": "failure-domains",
+        "_nz_parts": [
+          {
+            "id": "part-ca1ab70b9b0650ef8cfd538d1c85efb1",
+            "message_id": "msg-3614320b1b5446be970b79da700d09e4",
+            "type": "step-start",
+            "time": {
+              "start": 1790008597.9183524
+            },
+            "snapshot": "snap-44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+            "visible": true,
+            "internal": false,
+            "authoritative": true
+          },
+          {
+            "id": "part-6429c3b3edd0515eb51c7344123c3af9",
+            "message_id": "msg-3614320b1b5446be970b79da700d09e4",
+            "type": "tool",
+            "tool": "bash",
+            "call_id": "call-1",
+            "state": {
+              "status": "error",
+              "input": {
+                "command": "sleep 5",
+                "timeout": 1
+              },
+              "time": {
+                "start": 1790008597.956273,
+                "end": 1790008598.974737
+              },
+              "error": "An internal error occurred.",
+              "interrupted": false
+            },
+            "index": 0,
+            "interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+            "visible": true,
+            "internal": false,
+            "authoritative": true
+          },
+          {
+            "id": "part-7d27c51cfce259eb80090cf92e0566c6",
+            "message_id": "msg-3614320b1b5446be970b79da700d09e4",
+            "type": "step-finish",
+            "time": {
+              "start": 1790008597.9183524,
+              "end": 1790008598.990041
+            },
+            "snapshot": "snap-44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "reason": "error",
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+            "visible": true,
+            "internal": false,
+            "authoritative": true
+          }
+        ],
+        "_nz_time": {
+          "created": 1790008597.9183338,
+          "completed": 1790008598.9900293
+        },
+        "tool_calls": [
+          {
+            "id": "call-1",
+            "type": "function",
+            "function": {
+              "name": "bash",
+              "arguments": {
+                "command": "sleep 5",
+                "timeout": 1
+              }
+            }
+          }
+        ],
+        "_nz_provider_id": "offline",
+        "_nz_provider_instance_id": "",
+        "_nz_model_id": "failure-domains",
+        "_timestamp": 1790008598.9830272,
+        "_nz_error": "An internal error occurred.",
+        "_nz_assistant_error": {
+          "name": "APIError",
+          "data": {
+            "message": "An internal error occurred.",
+            "public_error": {
+              "schema": "nz.public_error.v1",
+              "code": "internal_error",
+              "message": "An internal error occurred.",
+              "retryable": false,
+              "metadata": {
+                "error_type": "RuntimeError"
+              }
+            },
+            "isRetryable": false
+          }
+        },
+        "_nz_finish": "error",
+        "_nz_parent_id": "msg-c64ad0069cb1567a836033ad48930de5"
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call-1",
+        "content": "Error: Command timed out (1s)",
+        "_nz_message_id": "msg-0fafcee8583d51489bb9c43b2b8115ed",
+        "_nz_session_id": "failure-domains",
+        "_nz_parts": [
+          {
+            "id": "part-21aeb6005d4a5435a584347c42112a51",
+            "message_id": "msg-0fafcee8583d51489bb9c43b2b8115ed",
+            "type": "text",
+            "text": "Error: Command timed out (1s)"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "<tool-failure-diagnostic>\nTool `bash` failed. Use the error output as ground truth, inspect the current workspace state, and try a different approach.\n</tool-failure-diagnostic>",
+        "_nz_synthetic": true,
+        "_nz_time": {
+          "created": 1790008598.9750452
+        },
+        "_nz_message_id": "msg-a81cb168a06d51d195653b9488a4ca76",
+        "_nz_session_id": "failure-domains",
+        "_nz_parts": [
+          {
+            "id": "part-937d22b3e2d757228ed58f4ccd20ff9f",
+            "message_id": "msg-a81cb168a06d51d195653b9488a4ca76",
+            "type": "text",
+            "text": "<tool-failure-diagnostic>\nTool `bash` failed. Use the error output as ground truth, inspect the current workspace state, and try a different approach.\n</tool-failure-diagnostic>"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "_nz_finish": "stop",
+        "_nz_time": {
+          "created": 1790008598.9974353,
+          "completed": 1790008598.9974353
+        },
+        "_nz_provider_id": "offline",
+        "_nz_model_id": "failure-domains",
+        "_nz_mode": "build",
+        "_nz_agent": "build",
+        "_nz_path": {
+          "cwd": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace",
+          "root": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace"
+        },
+        "_nz_message_id": "msg-4b50a3dfd0b84f269b851171a52e5ee9",
+        "_nz_session_id": "failure-domains",
+        "_nz_parts": [],
+        "_nz_end_state": {
+          "reason": "errored"
+        },
+        "_nz_parent_id": "msg-c64ad0069cb1567a836033ad48930de5"
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cached_read_tokens": 0,
+      "cached_write_tokens": 0,
+      "reasoning_tokens": 0
+    },
+    "session_id": "failure-domains",
+    "active_agent": "failure-domains",
+    "error": "",
+    "metadata": {
+      "permission_mode": "auto",
+      "persist_session": true,
+      "max_turns": 2,
+      "interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+      "session_open": "created",
+      "tool_exposure": {
+        "unlocked": [
+          "grep_search",
+          "read_file",
+          "repo_context"
+        ],
+        "last_plan": {
+          "visible_names": [
+            "apply_patch",
+            "bash",
+            "compact",
+            "diff_status",
+            "edit_file",
+            "emit_handoff",
+            "glob_search",
+            "grep_search",
+            "list_directory",
+            "load_skill",
+            "mcp_catalog",
+            "process",
+            "question",
+            "read_file",
+            "read_scratchpad",
+            "read_tool_result",
+            "replace_lines",
+            "repo_context",
+            "review_run_evidence",
+            "send_message",
+            "task",
+            "todo",
+            "tool_search",
+            "update_scratchpad",
+            "verify_changed_files",
+            "verify_project_build",
+            "write_file",
+            "write_files_batch"
+          ],
+          "deferred_names": [],
+          "hidden_names": [
+            "agent_manager",
+            "analyze_impact",
+            "analyze_project_requirements",
+            "apply_agent_changes",
+            "check_project_completeness",
+            "code_references",
+            "create_project_blueprint",
+            "delete_memory",
+            "find_symbol_callers",
+            "inspect_generated_project",
+            "list_memories",
+            "load_optional_tools",
+            "plan_enter",
+            "plan_exit",
+            "plan_project_acceptance",
+            "plan_verification",
+            "project_profile",
+            "read_symbol",
+            "recall_memory",
+            "repo_map",
+            "save_memory",
+            "scaffold_project",
+            "web_search",
+            "webfetch",
+            "workflow_builtin",
+            "workflow_generate",
+            "workflow_generation",
+            "workflow_host",
+            "workflow_library",
+            "workflow_library_mutate",
+            "workflow_review_packet",
+            "workflow_run",
+            "workflow_run_archive",
+            "workflow_run_rename",
+            "workflow_runs",
+            "workflow_save",
+            "write_plan"
+          ],
+          "estimated_tokens_before": 9728,
+          "estimated_tokens_after": 4514
+        }
+      },
+      "context_pressure": {
+        "context_window": 100000,
+        "used_tokens": 16548,
+        "reserve_tokens": 8000
+      },
+      "runtime": {
+        "profile": "main",
+        "control_plane": "declared-agent-graph",
+        "active_agent": "failure-domains",
+        "admitted": false,
+        "admitted_capabilities": [],
+        "admission_violations": [],
+        "structured_output": {},
+        "turn_count": 1,
+        "edits": 0,
+        "last_edit_turn": 0,
+        "mutation_generation": 0,
+        "acceptance_mutation_generation": 0,
+        "diff_generation": -1,
+        "verification_generation": -1,
+        "strict_progress_blocks": 0,
+        "work_phase": "normal",
+        "verification_failures": 0,
+        "package_install_attempts": 0,
+        "emergency_broad_exploration": 0,
+        "work_budget_zone": "green",
+        "has_diff": false,
+        "diff_chars": 0,
+        "tests_modified": false,
+        "wants_tests": false,
+        "forbids_test_changes": false,
+        "requested_paths": [],
+        "broad_tests": 0,
+        "task_complexity": "L0",
+        "acceptance_criteria": [],
+        "plan_generated": false,
+        "replan_count": 0,
+        "provider_calls": 1,
+        "provider_attempts": 1,
+        "provider_calls_by_purpose": {
+          "coding": 1
+        },
+        "provider_calls_by_model": {
+          "offline/failure-domains": 1
+        },
+        "provider_usage": {
+          "input": 0,
+          "output": 0,
+          "total": 0,
+          "reasoning": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        },
+        "provider_usage_by_purpose": {
+          "coding": {
+            "input": 0,
+            "output": 0,
+            "total": 0,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          }
+        },
+        "provider_duration_ms_by_purpose": {
+          "coding": 1034.635
+        },
+        "provider_usage_by_model": {
+          "offline/failure-domains": {
+            "input": 0,
+            "output": 0,
+            "total": 0,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          }
+        },
+        "provider_duration_ms_by_model": {
+          "offline/failure-domains": 1034.635
+        },
+        "provider_cost_usd": 0.0,
+        "provider_cost_usd_by_purpose": {},
+        "provider_cost_usd_by_model": {},
+        "provider_cost_unknown_calls": 1,
+        "provider_cost_sources": {
+          "unknown": 1
+        },
+        "provider_turns_by_reason": {
+          "initial_investigation": 1
+        },
+        "provider_turns_by_outcome": {
+          "provider_error": 1
+        },
+        "provider_turn_records": [
+          {
+            "turn": 1,
+            "reason": "initial_investigation",
+            "outcome": "provider_error",
+            "tool_names": [
+              "bash"
+            ],
+            "finish_reason": "error",
+            "mutation_generation_before": 0,
+            "mutation_generation_after": 0,
+            "mutation_delta": 0,
+            "verification_generation_after": -1
+          }
+        ],
+        "patch_risk": {},
+        "patch_risk_reviewed": false,
+        "tool_observability": {
+          "batches": 1,
+          "calls": 1,
+          "wall_ms": 1008.901,
+          "tool_duration_ms": 1008.678,
+          "peak_concurrency": 1,
+          "parallel_segments": 0,
+          "serial_segments": 1,
+          "barrier_wait_ms": 0.0,
+          "streak_resets": 0
+        },
+        "reflection_status": null,
+        "reflection_summary": null,
+        "evidence": {
+          "created_files": 0,
+          "modified_files": 0,
+          "expected_files": 0,
+          "verification_results": 0,
+          "tool_failures": 1,
+          "limitations": []
+        }
+      },
+      "raw_status": "error",
+      "changed_files": []
+    }
+  },
+  "state": {
+    "turn_count": 1,
+    "max_turns": 2,
+    "started_at": 1790008597.8995461,
+    "timeout_seconds": 0.0,
+    "last_edit_turn": 0,
+    "edits_this_run": 0,
+    "has_diff": false,
+    "diff_chars": 0,
+    "changed_files": [],
+    "tests_modified": false,
+    "source_only": false,
+    "acceptance_criteria": [],
+    "requested_paths": [],
+    "task_mode": "discuss",
+    "wants_tests": false,
+    "forbids_test_changes": false,
+    "plan_generated": false,
+    "plan_text": "",
+    "replan_count": 0,
+    "open_todo_items": 0,
+    "task_reference_evidence": [],
+    "task_references_bound": true,
+    "task_authority_epoch": 0,
+    "task_authority_message_id": "",
+    "task_reference_omitted_count": 0,
+    "task_contract": {},
+    "requirement_ledger": {},
+    "completion_gate_prompts": 0,
+    "completion_gate_signature": "",
+    "initial_task_text": "Inspect the command outcome and explain it. Do not modify files.",
+    "current_round_instruction_text": "",
+    "initial_plan_complexity": "",
+    "patch_risk": {},
+    "risk_feedback_fingerprint": "",
+    "risk_replan_fingerprint": "",
+    "verification_attempts": 0,
+    "py_compile_ok": false,
+    "changed_files_verified": false,
+    "broad_test_attempts": 0,
+    "exact_test_attempts": 0,
+    "verification_contract": {},
+    "verification_failures": 0,
+    "last_verification_failure": "",
+    "completion_review_rejections": 0,
+    "last_completion_review_rejection": "",
+    "completion_review_generation": -1,
+    "needs_broad_exploration": false,
+    "scheduled_verification_generations": {},
+    "primary_recovery_classification": "",
+    "supporting_recovery_classifications": [],
+    "recovery_repair_targets": [],
+    "searched_patterns": [],
+    "read_files": [],
+    "investigation_calls_since_edit": 0,
+    "mutation_generation": 0,
+    "source_mutation_generation": 0,
+    "acceptance_mutation_generation": 0,
+    "diff_generation": -1,
+    "verification_generation": -1,
+    "strict_progress_nudges": 0,
+    "strict_progress_blocks": 0,
+    "budget_zones_emitted": [],
+    "budget_pressure_zone": "green",
+    "work_phase": "normal",
+    "workspace_git_available": false,
+    "package_install_attempts": 0,
+    "emergency_broad_exploration": 0,
+    "provider_calls": 1,
+    "provider_attempts": 1,
+    "provider_calls_by_purpose": {
+      "coding": 1
+    },
+    "provider_calls_by_model": {
+      "offline/failure-domains": 1
+    },
+    "provider_usage": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "reasoning": 0,
+      "cache_read": 0,
+      "cache_write": 0
+    },
+    "provider_usage_by_purpose": {
+      "coding": {
+        "input": 0,
+        "output": 0,
+        "total": 0,
+        "reasoning": 0,
+        "cache_read": 0,
+        "cache_write": 0
+      }
+    },
+    "provider_usage_by_model": {
+      "offline/failure-domains": {
+        "input": 0,
+        "output": 0,
+        "total": 0,
+        "reasoning": 0,
+        "cache_read": 0,
+        "cache_write": 0
+      }
+    },
+    "provider_duration_ms_by_purpose": {
+      "coding": 1034.635
+    },
+    "provider_duration_ms_by_model": {
+      "offline/failure-domains": 1034.635
+    },
+    "provider_cost_usd": 0.0,
+    "provider_cost_usd_by_purpose": {},
+    "provider_cost_usd_by_model": {},
+    "provider_cost_unknown_calls": 1,
+    "provider_cost_sources": {
+      "unknown": 1
+    },
+    "provider_turn_records": [
+      {
+        "turn": 1,
+        "reason": "initial_investigation",
+        "outcome": "provider_error",
+        "tool_names": [
+          "bash"
+        ],
+        "finish_reason": "error",
+        "mutation_generation_before": 0,
+        "mutation_generation_after": 0,
+        "mutation_delta": 0,
+        "verification_generation_after": -1
+      }
+    ],
+    "provider_turns_by_reason": {
+      "initial_investigation": 1
+    },
+    "provider_turns_by_outcome": {
+      "provider_error": 1
+    },
+    "transition": "",
+    "_state_block_emitted": false,
+    "_diff_seen_from_tool": false,
+    "active": true,
+    "saved_at": 1790008599.0137193
+  },
+  "runtime": [
+    {
+      "ts": 1790008597.8939133,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "repo_intelligence_cold_build",
+      "workspace": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace",
+      "status": "ready",
+      "generation": 0,
+      "cold_build_ms": 2.814,
+      "files_indexed": 0,
+      "symbols_indexed": 0,
+      "call_edges": 0,
+      "files_omitted": 0,
+      "error": {
+        "schema": "nz.public_error.v1",
+        "code": "internal_error",
+        "message": "An internal error occurred.",
+        "retryable": false,
+        "metadata": {}
+      }
+    },
+    {
+      "ts": 1790008597.8944333,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "repo_intelligence_watcher_started",
+      "workspace": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace",
+      "backend": "watchfiles"
+    },
+    {
+      "ts": 1790008597.8979905,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "agent_runner_enter",
+      "runner": "native",
+      "runtime_profile": "main",
+      "active_agent": "failure-domains",
+      "stream": true
+    },
+    {
+      "ts": 1790008597.8998404,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "task_references_bound",
+      "references": [],
+      "omitted_count": 0,
+      "original_capture_unavailable": false
+    },
+    {
+      "ts": 1790008597.9005854,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "run_start",
+      "message_count": 1,
+      "stream": true,
+      "mode": "auto",
+      "change_set": "<PYTEST_ROOT>/pytest-32/user-state-test_successful_streamed_tool_1/nz-coder/workspaces/e460a4b1c73f7611ee089112a2afefc3ad01a0c2294e739d49de7ae13c2c7d57/sessions/_artifacts/failure-domains/runtime/changes/20260922_003637_52ab6af5.json",
+      "max_turns": 2,
+      "restored_runtime_state": false,
+      "model": "failure-domains",
+      "request_model": "failure-domains",
+      "model_family": "generic",
+      "prompt_family": "default",
+      "context_tokens": 100000,
+      "output_tokens": 8000,
+      "supports_tools": true,
+      "supports_streaming": true,
+      "supports_reasoning": false,
+      "model_variant": null,
+      "available_variants": [],
+      "capability_source": "fallback",
+      "runtime_profile": "main",
+      "control_plane": "declared-agent-graph",
+      "active_agent": "failure-domains",
+      "admitted": false,
+      "admitted_capabilities": []
+    },
+    {
+      "ts": 1790008597.919416,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "workspace_snapshot_created",
+      "boundary": "step-start",
+      "message_id": "msg-3614320b1b5446be970b79da700d09e4",
+      "snapshot": "snap-44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "ts": 1790008597.9258876,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "repo_intelligence_query",
+      "workspace": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace",
+      "operation": "lookup",
+      "generation": 0,
+      "cache_hit": false,
+      "query_ms": 0.364
+    },
+    {
+      "ts": 1790008597.925988,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "repo_retrieval_decision",
+      "strategy": "policy",
+      "signal": {
+        "repo_size": 0,
+        "languages": [],
+        "changed_file_count": 0,
+        "candidate_modules": [],
+        "candidate_files": [],
+        "routing_confidence": 0.76,
+        "evidence_confidence": 0.0,
+        "candidate_count": 0,
+        "fallback_state": "",
+        "index_status": "ready",
+        "task_class": "unknown-location",
+        "recommended_operation": "lookup",
+        "recommended_tools": [
+          "repo_context",
+          "grep_search",
+          "read_file"
+        ]
+      },
+      "auto_context": false,
+      "fallback": "",
+      "elapsed_ms": 0.533
+    },
+    {
+      "ts": 1790008597.9261696,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "context_layers",
+      "budget_tokens": 6000,
+      "before_total_tokens": 335,
+      "after_total_tokens": 335,
+      "before_fixed_tokens": 133,
+      "before_memory_tokens": 0,
+      "before_state_tokens": 202,
+      "before_scratch_tokens": 0,
+      "after_fixed_tokens": 133,
+      "after_memory_tokens": 0,
+      "after_state_tokens": 202,
+      "after_scratch_tokens": 0
+    },
+    {
+      "ts": 1790008597.926201,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "instruction_context",
+      "source_count": 0,
+      "included_count": 0,
+      "truncated_count": 0,
+      "per_file_truncated_count": 0,
+      "total_truncated_count": 0,
+      "omitted_count": 0,
+      "included_bytes": 0,
+      "paths": [],
+      "disabled_count": 0,
+      "warnings": []
+    },
+    {
+      "ts": 1790008597.9301076,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "tool_exposure_planned",
+      "visible_names": [
+        "apply_patch",
+        "bash",
+        "compact",
+        "diff_status",
+        "edit_file",
+        "emit_handoff",
+        "glob_search",
+        "grep_search",
+        "list_directory",
+        "load_skill",
+        "mcp_catalog",
+        "process",
+        "question",
+        "read_file",
+        "read_scratchpad",
+        "read_tool_result",
+        "replace_lines",
+        "repo_context",
+        "review_run_evidence",
+        "send_message",
+        "task",
+        "todo",
+        "tool_search",
+        "update_scratchpad",
+        "verify_changed_files",
+        "verify_project_build",
+        "write_file",
+        "write_files_batch"
+      ],
+      "deferred_names": [],
+      "hidden_names": [
+        "agent_manager",
+        "analyze_impact",
+        "analyze_project_requirements",
+        "apply_agent_changes",
+        "check_project_completeness",
+        "code_references",
+        "create_project_blueprint",
+        "delete_memory",
+        "find_symbol_callers",
+        "inspect_generated_project",
+        "list_memories",
+        "load_optional_tools",
+        "plan_enter",
+        "plan_exit",
+        "plan_project_acceptance",
+        "plan_verification",
+        "project_profile",
+        "read_symbol",
+        "recall_memory",
+        "repo_map",
+        "save_memory",
+        "scaffold_project",
+        "web_search",
+        "webfetch",
+        "workflow_builtin",
+        "workflow_generate",
+        "workflow_generation",
+        "workflow_host",
+        "workflow_library",
+        "workflow_library_mutate",
+        "workflow_review_packet",
+        "workflow_run",
+        "workflow_run_archive",
+        "workflow_run_rename",
+        "workflow_runs",
+        "workflow_save",
+        "write_plan"
+      ],
+      "visible_count": 28,
+      "deferred_count": 0,
+      "hidden_count": 37,
+      "estimated_tokens_before": 9728,
+      "estimated_tokens_after": 4514,
+      "estimated_tokens_saved": 5214
+    },
+    {
+      "ts": 1790008597.9301543,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "llm_request",
+      "message_count": 2,
+      "message_token_estimate": 416,
+      "tool_count": 28,
+      "tool_schema_token_estimate": 4756,
+      "token_estimate": 5172
+    },
+    {
+      "ts": 1790008597.9339437,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "provider_turn_started",
+      "turn": 1,
+      "reason": "initial_investigation",
+      "mutation_generation": 0,
+      "verification_generation": -1,
+      "transition": "",
+      "work_phase": "normal",
+      "budget_zone": "green"
+    },
+    {
+      "ts": 1790008597.9417515,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "model_call_start",
+      "purpose": "coding",
+      "attempt": 1,
+      "streaming": true,
+      "provider_id": "offline",
+      "model_id": "failure-domains",
+      "request_model_id": "failure-domains",
+      "variant": null
+    },
+    {
+      "ts": 1790008597.9625576,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "tool_batch_started",
+      "batch_id": "batch-1",
+      "call_count": 1,
+      "has_write": false,
+      "names": [
+        "bash"
+      ],
+      "parallel_limit": 4
+    },
+    {
+      "ts": 1790008598.9714718,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "tool_schedule_segment",
+      "batch_id": "batch-1",
+      "segment_index": 0,
+      "kind": "sequential_guarded",
+      "call_count": 1,
+      "names": [
+        "bash"
+      ],
+      "duration_ms": 1008.901,
+      "peak_concurrency": 1,
+      "barrier_wait_ms": 0.0,
+      "max_queue_wait_ms": 0.0
+    },
+    {
+      "ts": 1790008598.9715543,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "tool_batch_completed",
+      "batch_id": "batch-1",
+      "mode": "single",
+      "call_count": 1,
+      "wall_ms": 1008.901,
+      "total_call_ms": 1008.678,
+      "peak_concurrency": 1,
+      "parallel_segments": 0,
+      "serial_segments": 1,
+      "barrier_wait_ms": 0.0,
+      "error": {
+        "schema": "nz.public_error.v1",
+        "code": "internal_error",
+        "message": "An internal error occurred.",
+        "retryable": false,
+        "metadata": {}
+      }
+    },
+    {
+      "ts": 1790008598.9748528,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "tool_call",
+      "tool_call_id": "call-1",
+      "index": 0,
+      "name": "bash",
+      "status": "error",
+      "executed": true,
+      "dispatch_failed": true,
+      "command_failed": false,
+      "is_write": false,
+      "input": {
+        "command": "sleep 5",
+        "timeout": 1
+      },
+      "duration_ms": 1008.678,
+      "queue_wait_ms": 0.0,
+      "output_len": 29,
+      "output": "Tool execution failed."
+    },
+    {
+      "ts": 1790008598.9750533,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "tool_failure_diagnostic",
+      "name": "bash",
+      "primary": "",
+      "supporting": [],
+      "repair_targets": []
+    },
+    {
+      "ts": 1790008598.975504,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "step_processor_result",
+      "result": "continue",
+      "blocked": false,
+      "tool_calls": 1
+    },
+    {
+      "ts": 1790008598.9764025,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "model_call_finish",
+      "purpose": "coding",
+      "status": "completed",
+      "attempt": 1,
+      "attempts": 1,
+      "finish_reason": "tool_calls",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "total": 0,
+        "reasoning": 0,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "duration_ms": 1034.635,
+      "cost": null,
+      "cost_source": null,
+      "provider_id": "offline",
+      "model_id": "failure-domains",
+      "request_model_id": "failure-domains",
+      "variant": null
+    },
+    {
+      "ts": 1790008598.9829247,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "provider_turn_settled",
+      "turn": 1,
+      "reason": "initial_investigation",
+      "outcome": "provider_error",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "error",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "ts": 1790008598.9898615,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "workspace_snapshot_created",
+      "boundary": "step-finish",
+      "message_id": "msg-3614320b1b5446be970b79da700d09e4",
+      "snapshot": "snap-44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "ts": 1790008598.9902384,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "workspace_patch_unchanged",
+      "message_id": "msg-3614320b1b5446be970b79da700d09e4",
+      "snapshot": "snap-44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "ts": 1790008598.9964347,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "llm_response",
+      "content_len": 0,
+      "tool_calls": 1,
+      "duration_ms": 1.349,
+      "first_token_ms": null,
+      "attempts": 1,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "reasoning_tokens": 0,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cost": null,
+      "cost_known": false,
+      "cost_source": null,
+      "tools_executed_in_stream": true,
+      "stream_tool_wait_ms": 1033.286,
+      "terminal_signal": null,
+      "terminal_reason": null
+    },
+    {
+      "ts": 1790008599.0036716,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "terminal_content_persisted",
+      "source": "empty",
+      "nonempty": false,
+      "persisted_into_assistant": false
+    },
+    {
+      "ts": 1790008599.0037098,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "run_evidence",
+      "summary": "RunEvidence:\n- tool_failures: 1",
+      "created_files": 0,
+      "modified_files": 0,
+      "expected_files": 0,
+      "verification_results": 0,
+      "tool_failures": 1,
+      "limitations": []
+    },
+    {
+      "ts": 1790008599.0050457,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "auto_memory_pipeline",
+      "status": "ok",
+      "window_message_count": 5,
+      "filtered_message_count": 2,
+      "candidate_count": 0,
+      "saved_count": 0,
+      "saved_names": [],
+      "pending_review_count": 0,
+      "proposal_ids": [],
+      "state_path": "<PYTEST_ROOT>/pytest-32/user-state-test_successful_streamed_tool_1/nz-coder/workspaces/e460a4b1c73f7611ee089112a2afefc3ad01a0c2294e739d49de7ae13c2c7d57/sessions/_artifacts/failure-domains/runtime/memory_state.json"
+    },
+    {
+      "ts": 1790008599.006463,
+      "run_id": "20260922_003637_52ab6af5",
+      "trace_id": "20260922_003637_52ab6af5",
+      "session_id": "failure-domains",
+      "agent_id": "agent-b108d31e",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "run_end",
+      "status": "error",
+      "message_count": 5,
+      "runtime": {
+        "profile": "main",
+        "control_plane": "declared-agent-graph",
+        "active_agent": "failure-domains",
+        "admitted": false,
+        "admitted_capabilities": [],
+        "admission_violations": [],
+        "structured_output": {},
+        "turn_count": 1,
+        "edits": 0,
+        "last_edit_turn": 0,
+        "mutation_generation": 0,
+        "acceptance_mutation_generation": 0,
+        "diff_generation": -1,
+        "verification_generation": -1,
+        "strict_progress_blocks": 0,
+        "work_phase": "normal",
+        "verification_failures": 0,
+        "package_install_attempts": 0,
+        "emergency_broad_exploration": 0,
+        "work_budget_zone": "green",
+        "has_diff": false,
+        "diff_chars": 0,
+        "tests_modified": false,
+        "wants_tests": false,
+        "forbids_test_changes": false,
+        "requested_paths": [],
+        "broad_tests": 0,
+        "task_complexity": "L0",
+        "acceptance_criteria": [],
+        "plan_generated": false,
+        "replan_count": 0,
+        "provider_calls": 1,
+        "provider_attempts": 1,
+        "provider_calls_by_purpose": {
+          "coding": 1
+        },
+        "provider_calls_by_model": {
+          "offline/failure-domains": 1
+        },
+        "provider_usage": {
+          "input": 0,
+          "output": 0,
+          "total": 0,
+          "reasoning": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        },
+        "provider_usage_by_purpose": {
+          "coding": {
+            "input": 0,
+            "output": 0,
+            "total": 0,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          }
+        },
+        "provider_duration_ms_by_purpose": {
+          "coding": 1034.635
+        },
+        "provider_usage_by_model": {
+          "offline/failure-domains": {
+            "input": 0,
+            "output": 0,
+            "total": 0,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          }
+        },
+        "provider_duration_ms_by_model": {
+          "offline/failure-domains": 1034.635
+        },
+        "provider_cost_usd": 0.0,
+        "provider_cost_usd_by_purpose": {},
+        "provider_cost_usd_by_model": {},
+        "provider_cost_unknown_calls": 1,
+        "provider_cost_sources": {
+          "unknown": 1
+        },
+        "provider_turns_by_reason": {
+          "initial_investigation": 1
+        },
+        "provider_turns_by_outcome": {
+          "provider_error": 1
+        },
+        "provider_turn_records": [
+          {
+            "turn": 1,
+            "reason": "initial_investigation",
+            "outcome": "provider_error",
+            "tool_names": [
+              "bash"
+            ],
+            "finish_reason": "error",
+            "mutation_generation_before": 0,
+            "mutation_generation_after": 0,
+            "mutation_delta": 0,
+            "verification_generation_after": -1
+          }
+        ],
+        "patch_risk": {},
+        "patch_risk_reviewed": false,
+        "tool_observability": {
+          "batches": 1,
+          "calls": 1,
+          "wall_ms": 1008.901,
+          "tool_duration_ms": 1008.678,
+          "peak_concurrency": 1,
+          "parallel_segments": 0,
+          "serial_segments": 1,
+          "barrier_wait_ms": 0.0,
+          "streak_resets": 0
+        },
+        "reflection_status": null,
+        "reflection_summary": null,
+        "evidence": {
+          "created_files": 0,
+          "modified_files": 0,
+          "expected_files": 0,
+          "verification_results": 0,
+          "tool_failures": 1,
+          "limitations": []
+        }
+      },
+      "verification_needed": false,
+      "verification_state": "unverified",
+      "last_verification": null,
+      "environment_blocker": null,
+      "verification_pipeline": {
+        "changed_files": [],
+        "stages": [],
+        "next_required_stage": null
+      }
+    }
+  ],
+  "run_evidence": {
+    "run_id": "20260922_003637_52ab6af5",
+    "task_mode": "discuss",
+    "project_spec": null,
+    "blueprint": null,
+    "created_files": [],
+    "modified_files": [],
+    "expected_files": [],
+    "actual_output_paths": [],
+    "verification_results": [],
+    "verification_evidence": [],
+    "build_results": [],
+    "impact_review": null,
+    "completeness_review": null,
+    "limitations": [],
+    "tool_failures": [
+      {
+        "name": "bash",
+        "status": "error",
+        "preview": "Error: Command timed out (1s)"
+      }
+    ],
+    "child_outcomes": [],
+    "notes": []
+  },
+  "verification": {
+    "verification_needed": false,
+    "verification_state": "unverified",
+    "last_verification": null,
+    "environment_blocker": null,
+    "verification_pipeline": {
+      "changed_files": [],
+      "stages": [],
+      "next_required_stage": null
+    }
+  },
+  "durable": [
+    {
+      "role": "user",
+      "content": "Inspect the command outcome and explain it. Do not modify files.",
+      "_nz_message_id": "msg-c64ad0069cb1567a836033ad48930de5",
+      "_nz_session_id": "failure-domains",
+      "_nz_parts": [
+        {
+          "id": "part-68bbd8f1e2675c2498fdcb6bd085c5d3",
+          "message_id": "msg-c64ad0069cb1567a836033ad48930de5",
+          "type": "text",
+          "text": "Inspect the command outcome and explain it. Do not modify files.",
+          "interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f"
+        }
+      ],
+      "_nz_interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+      "_nz_time": {
+        "created": 1790008597.8988304
+      },
+      "_nz_user_agent": "build",
+      "_nz_user_model": {
+        "provider_id": "offline",
+        "model_id": "failure-domains"
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "_nz_interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+      "_nz_visible": true,
+      "_nz_internal": false,
+      "_nz_authoritative": true,
+      "_nz_mode": "build",
+      "_nz_agent": "build",
+      "_nz_path": {
+        "cwd": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace",
+        "root": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace"
+      },
+      "_nz_message_id": "msg-3614320b1b5446be970b79da700d09e4",
+      "_nz_session_id": "failure-domains",
+      "_nz_parts": [
+        {
+          "id": "part-ca1ab70b9b0650ef8cfd538d1c85efb1",
+          "message_id": "msg-3614320b1b5446be970b79da700d09e4",
+          "type": "step-start",
+          "time": {
+            "start": 1790008597.9183524
+          },
+          "snapshot": "snap-44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-6429c3b3edd0515eb51c7344123c3af9",
+          "message_id": "msg-3614320b1b5446be970b79da700d09e4",
+          "type": "tool",
+          "tool": "bash",
+          "call_id": "call-1",
+          "state": {
+            "status": "error",
+            "input": {
+              "command": "sleep 5",
+              "timeout": 1
+            },
+            "time": {
+              "start": 1790008597.956273,
+              "end": 1790008598.974737
+            },
+            "error": "An internal error occurred.",
+            "interrupted": false
+          },
+          "index": 0,
+          "interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-7d27c51cfce259eb80090cf92e0566c6",
+          "message_id": "msg-3614320b1b5446be970b79da700d09e4",
+          "type": "step-finish",
+          "time": {
+            "start": 1790008597.9183524,
+            "end": 1790008598.990041
+          },
+          "snapshot": "snap-44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "reason": "error",
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "total": 0
+          },
+          "interaction_run_id": "interaction-1f892379e9f24b45b21055e980e4c13f",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        }
+      ],
+      "_nz_time": {
+        "created": 1790008597.9183338,
+        "completed": 1790008598.9900293
+      },
+      "tool_calls": [
+        {
+          "id": "call-1",
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "arguments": {
+              "command": "sleep 5",
+              "timeout": 1
+            }
+          }
+        }
+      ],
+      "_nz_provider_id": "offline",
+      "_nz_provider_instance_id": "",
+      "_nz_model_id": "failure-domains",
+      "_timestamp": 1790008598.9830272,
+      "_nz_error": "An internal error occurred.",
+      "_nz_assistant_error": {
+        "name": "APIError",
+        "data": {
+          "message": "An internal error occurred.",
+          "public_error": {
+            "schema": "nz.public_error.v1",
+            "code": "internal_error",
+            "message": "An internal error occurred.",
+            "retryable": false,
+            "metadata": {
+              "error_type": "RuntimeError"
+            }
+          },
+          "isRetryable": false
+        }
+      },
+      "_nz_finish": "error",
+      "_nz_parent_id": "msg-c64ad0069cb1567a836033ad48930de5"
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call-1",
+      "content": "Error: Command timed out (1s)",
+      "_nz_message_id": "msg-0fafcee8583d51489bb9c43b2b8115ed",
+      "_nz_session_id": "failure-domains",
+      "_nz_parts": [
+        {
+          "id": "part-21aeb6005d4a5435a584347c42112a51",
+          "message_id": "msg-0fafcee8583d51489bb9c43b2b8115ed",
+          "type": "text",
+          "text": "Error: Command timed out (1s)"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "<tool-failure-diagnostic>\nTool `bash` failed. Use the error output as ground truth, inspect the current workspace state, and try a different approach.\n</tool-failure-diagnostic>",
+      "_nz_synthetic": true,
+      "_nz_time": {
+        "created": 1790008598.9750452
+      },
+      "_nz_message_id": "msg-a81cb168a06d51d195653b9488a4ca76",
+      "_nz_session_id": "failure-domains",
+      "_nz_parts": [
+        {
+          "id": "part-937d22b3e2d757228ed58f4ccd20ff9f",
+          "message_id": "msg-a81cb168a06d51d195653b9488a4ca76",
+          "type": "text",
+          "text": "<tool-failure-diagnostic>\nTool `bash` failed. Use the error output as ground truth, inspect the current workspace state, and try a different approach.\n</tool-failure-diagnostic>"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "_nz_finish": "stop",
+      "_nz_time": {
+        "created": 1790008598.9974353,
+        "completed": 1790008598.9974353
+      },
+      "_nz_provider_id": "offline",
+      "_nz_model_id": "failure-domains",
+      "_nz_mode": "build",
+      "_nz_agent": "build",
+      "_nz_path": {
+        "cwd": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace",
+        "root": "<PYTEST_ROOT>/pytest-32/test_successful_streamed_tool_1/workspace"
+      },
+      "_nz_message_id": "msg-4b50a3dfd0b84f269b851171a52e5ee9",
+      "_nz_session_id": "failure-domains",
+      "_nz_parts": [],
+      "_nz_end_state": {
+        "reason": "errored"
+      },
+      "_nz_parent_id": "msg-c64ad0069cb1567a836033ad48930de5"
+    }
+  ]
+}

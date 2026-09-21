@@ -1,0 +1,176 @@
+{
+  "baseline": "4e59fe75032dd32186b73d92b7ad98c955866176",
+  "source_files": {
+    "nz_coder/runtime/execution/services.py": {
+      "sha256": "f585d2dbfdd577c766a9d49e8f1bbb29ac4c04be1643dd7b2d6a90da169240a9",
+      "lines": 536
+    },
+    "nz_coder/runtime/execution/provider_stream.py": {
+      "sha256": "3b93a4129c58add2ea7b86cf9fb3fdbbef9a79273281c2e611cceffd115c1a9a",
+      "lines": 291
+    },
+    "nz_coder/runtime/execution/runner.py": {
+      "sha256": "1296db27802e94ad2c3b6d84b666b350f412134c65117f8aded573299e383e7b",
+      "lines": 2673
+    },
+    "nz_coder/runtime/execution/tool_executor.py": {
+      "sha256": "139d2d8ba608cbd7916a271728700cd08a1469276a49814eab358e4f10a8ed1c",
+      "lines": 619
+    },
+    "nz_coder/runtime/tool_runtime/pipeline.py": {
+      "sha256": "cab08fae1349dd544931d2de722e3897ff9de80d931613c0332059858438144b",
+      "lines": 820
+    },
+    "nz_coder/runtime/tool_runtime/result_projection.py": {
+      "sha256": "2d3bef9bb0ecda55fa5289eb405c6d9872f691d40de794a9b457310e05cf5f6b",
+      "lines": 236
+    },
+    "nz_coder/runtime/tool_runtime/scheduler.py": {
+      "sha256": "88aab564b669a5a3f3bf5c880d1d0229973aeccaec39a136d75bbafa03b70028",
+      "lines": 328
+    },
+    "nz_coder/runtime/tool_runtime/observers.py": {
+      "sha256": "d276a11cfe385d3d663d594f09da660638af5b9cb2cec305155413d0265b757e",
+      "lines": 51
+    },
+    "nz_coder/runtime/adapters/tool.py": {
+      "sha256": "087c4c90ced52de3a3ed4ed3a00bd87102f47357669a578a87b533b4c6f18f28",
+      "lines": 259
+    },
+    "nz_coder/runtime/session/session_processor.py": {
+      "sha256": "662198db0167e50a95c5962279bdca6d655b4b0856272677beb1805960326594",
+      "lines": 884
+    },
+    "nz_coder/runtime/agent/guardrail_runtime.py": {
+      "sha256": "1c316f807c879867eb6a8fea13a3185291a2a7ae54634dccb954c29726a9120f",
+      "lines": 274
+    },
+    "nz_coder/tool_platform/execution.py": {
+      "sha256": "b7c665c7eb30254d6660445d1ecf0277a6872058f13e3ae3b6dfa914a52b7a80",
+      "lines": 61
+    },
+    "nz_coder/tools/bash.py": {
+      "sha256": "0f529b04b96142386935877eac38fc57792283f575944275321aed76637db84c",
+      "lines": 737
+    },
+    "nz_coder/runtime/model_gateway/stream.py": {
+      "sha256": "e9923940883af56414c189c04be78cf048cfd6d40d887ee11247c534368d6521",
+      "lines": 99
+    },
+    "nz_coder/runtime/model_gateway/gateway.py": {
+      "sha256": "e8c18081bdcc71620cdcfa7c25b0ba9833ce3ef21142e1085e4d66e76f07e3f4",
+      "lines": 932
+    },
+    "nz_coder/runtime/verification/hooks.py": {
+      "sha256": "e7b5a25f5428e4aa2a6a05af9e0ff11f07e99693f497dca0572b96800e146eb9",
+      "lines": 1600
+    },
+    "nz_coder/runtime/verification/recovery.py": {
+      "sha256": "f0f5be27dfa64fb776c0deeb7d463d7f452eb551e5407ae06b52e6e3ac5abec7",
+      "lines": 1208
+    }
+  },
+  "historical_Q_final_events": [
+    {
+      "time": 1789999411.8653536,
+      "run_id": "20260921_215821_9da28288",
+      "request_id": 7,
+      "event": "tool_call",
+      "tool_call_id": "call_00_fzaPnK7y1x8RJv5iYMs13002",
+      "index": 0,
+      "name": "bash",
+      "status": "error",
+      "executed": true,
+      "dispatch_failed": true,
+      "command_failed": false,
+      "is_write": false,
+      "input": {
+        "command": "node --test tests/pool.test.cjs tests/batch.test.cjs"
+      },
+      "duration_ms": 120019.697,
+      "queue_wait_ms": 0.0,
+      "output_len": 31,
+      "output": "Error: Command timed out (120s)"
+    },
+    {
+      "time": 1789999411.8658037,
+      "run_id": "20260921_215821_9da28288",
+      "request_id": 7,
+      "event": "step_processor_result",
+      "result": "continue",
+      "blocked": false,
+      "tool_calls": 1
+    },
+    {
+      "time": 1789999411.8663135,
+      "run_id": "20260921_215821_9da28288",
+      "request_id": 7,
+      "event": "model_call_finish",
+      "purpose": "coding",
+      "status": "completed",
+      "attempt": 1,
+      "attempts": 1,
+      "finish_reason": "tool_calls",
+      "usage": {
+        "input": 13855,
+        "output": 51,
+        "total": 20896,
+        "reasoning": 78,
+        "cache_read": 6912,
+        "cache_write": 0
+      },
+      "duration_ms": 121576.823,
+      "cost": null,
+      "cost_source": null,
+      "provider_id": "openai-compatible",
+      "model_id": "deepseek-v4-flash",
+      "request_model_id": "deepseek-v4-flash",
+      "variant": null
+    },
+    {
+      "time": 1789999411.8680172,
+      "run_id": "20260921_215821_9da28288",
+      "request_id": 7,
+      "event": "provider_turn_settled",
+      "turn": 7,
+      "reason": "verification",
+      "outcome": "provider_error",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "error",
+      "mutation_generation_before": 4,
+      "mutation_generation_after": 4,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    }
+  ],
+  "root_cause": {
+    "throwing_frame": "baseline nz_coder/runtime/model_gateway/stream.py:67 (idle), :65 (hard)",
+    "exception": "TimeoutError",
+    "callback_threw": false,
+    "bridge_outcome": "continue",
+    "chain": [
+      "real Bash ToolOutput timed_out=true exit=null",
+      "ToolExecutor canonical result dispatch_failed=true executed=true",
+      "ProductionToolRuntime -> SessionProcessor -> hooks -> recovery -> continue",
+      "stream iterator resumes after yield; old idle/hard timers include local consumer wait",
+      "TimeoutError",
+      "Gateway side_effect_committed -> completed plus private stream_error",
+      "provider_stream._settle_stream_tools -> post_tool_stream_error and synthetic RuntimeError",
+      "Runner error finalization; no next main request"
+    ],
+    "minimal_conditions": [
+      "streamed tool finish callback",
+      "local consumer duration exceeds Provider idle/hard threshold",
+      "iterator resumes to drain remaining stream/EOF"
+    ],
+    "excluded_candidates": [
+      "ToolExecutionResult failure flags do not themselves raise",
+      "guardrail/after_result/recovery/checkpoint all settle before the timeout",
+      "StreamToolExecutionFailed is absent in the timeout reproduction"
+    ],
+    "historical_limit": "Original Q private stack and effective idle setting were not recorded. This proves a deterministic Core bug reproducing the sequence, not recovery of the lost historical exception."
+  },
+  "paid_model_requests": 0
+}

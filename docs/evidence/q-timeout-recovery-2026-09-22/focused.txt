@@ -1,0 +1,21 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+.........F......                                                         [100%]
+=================================== FAILURES ===================================
+_______________ test_streamed_verification_timeout_never_passes ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d89a3aedc50>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-29/test_streamed_verification_tim0')
+
+    def test_streamed_verification_timeout_never_passes(monkeypatch, tmp_path):
+        capture = _run(monkeypatch, tmp_path, idle=0.2, verification=True)
+        assert len(capture['requests']) == 3, capture['exceptions']
+        bash_tools = [t for t in capture['tools'] if t['name'] == 'bash']
+        assert bash_tools[0]['metadata']['timed_out']
+        state = capture['state']
+>       assert state['verification_generation'] != state['mutation_generation']
+E       assert 1 != 1
+
+tests/runtime/test_streamed_tool_failure_domains.py:255: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_streamed_verification_timeout_never_passes
+1 failed, 15 passed in 10.08s

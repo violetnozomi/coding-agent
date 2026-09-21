@@ -1,0 +1,24 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+.........F.....                                                          [100%]
+=================================== FAILURES ===================================
+________________ test_verification_success_requires_real_rerun _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x79631eb417f0>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-24/test_verification_success_requ0')
+
+    def test_verification_success_requires_real_rerun(monkeypatch, tmp_path):
+        capture = _run(monkeypatch, tmp_path, idle=0.2, verification=True, rerun=True)
+        assert len(capture['requests']) == 2, capture['exceptions']
+        assert capture['tools'][0]['metadata']['timed_out']
+        second = capture['tools'][1]
+        assert second['executed'] and not second['dispatch_failed'] and not second['command_failed']
+        assert second['metadata']['exit'] == 0
+        assert '1 passed' in second['output']
+        state = capture['state']
+>       assert state['verification_generation'] == state['mutation_generation']
+E       assert -1 == 0
+
+tests/runtime/test_streamed_tool_failure_domains.py:258: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_verification_success_requires_real_rerun
+1 failed, 14 passed in 7.11s

@@ -1,0 +1,33 @@
+Traceback (most recent call last):
+  File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", line 113, in observe_iterator
+    yield from original_iterator(*args, **kwargs)
+  File "<REPO>/nz_coder/runtime/model_gateway/stream.py", line 93, in iter_stream_with_timeouts
+    raise value
+  File "<REPO>/nz_coder/runtime/model_gateway/stream.py", line 43, in consume
+    for item in stream:
+                ^^^^^^
+  File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", line 82, in stream
+    raise ConnectionError('controlled Provider transport failure')
+ConnectionError: controlled Provider transport failure
+
+Traceback (most recent call last):
+  File "<REPO>/nz_coder/runtime/model_gateway/gateway.py", line 733, in complete_stream_sync
+    for chunk in iter_stream_with_timeouts(
+                 ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        stream,
+        ^^^^^^^
+    ...<2 lines>...
+        cancelled=(cancel_event.is_set if cancel_event is not None else None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", line 113, in observe_iterator
+    yield from original_iterator(*args, **kwargs)
+  File "<REPO>/nz_coder/runtime/model_gateway/stream.py", line 93, in iter_stream_with_timeouts
+    raise value
+  File "<REPO>/nz_coder/runtime/model_gateway/stream.py", line 43, in consume
+    for item in stream:
+                ^^^^^^
+  File "<REPO>/tests/runtime/test_streamed_tool_failure_domains.py", line 82, in stream
+    raise ConnectionError('controlled Provider transport failure')
+ConnectionError: controlled Provider transport failure

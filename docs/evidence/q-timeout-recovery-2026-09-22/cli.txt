@@ -1,0 +1,25 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+NZ-Coder terminal coding agent
+
+Usage: nz-coder [COMMAND] [OPTIONS]
+
+Interactive:
+  nz-coder                         Start the full-screen coding assistant
+  nz-coder attach [URL]            Attach to a daemon Session
+
+Headless:
+  nz-coder run --prompt TEXT       Run one non-interactive task
+  nz-coder serve                   Start the loopback HTTP Session service
+  nz-coder daemon                  Manage the persistent local service
+
+Configuration:
+  nz-coder init                    Create workspace configuration
+  nz-coder doctor                  Check credentials, LSP, MCP, and terminal
+  nz-coder config show             Show effective configuration
+  nz-coder models list             List available models
+  nz-coder models select PROVIDER/MODEL  Select a model
+
+  nz-coder migrate-state            Inspect/migrate legacy runtime state
+
+More: nz-coder mcp --help | swebench --help | extensions --help
+Inside the terminal use /help, /model, /mode, or Ctrl+K.

@@ -82,6 +82,12 @@ def iter_stream_with_timeouts(
                 try:
                     yield value
                 finally:
+                    # The producer waits for this item to be consumed. Local
+                    # callbacks (including streamed tools) therefore own this
+                    # interval; it is not Provider idle or transport time.
+                    consumer_seconds = time.monotonic() - last_activity
+                    started += consumer_seconds
+                    last_activity += consumer_seconds
                     consumed.set()
             elif kind == "error":
                 raise value

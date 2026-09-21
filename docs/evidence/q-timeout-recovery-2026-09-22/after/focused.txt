@@ -1,0 +1,33 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+........FF.....                                                          [100%]
+=================================== FAILURES ===================================
+_______________ test_streamed_verification_timeout_never_passes ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x78be24b3be30>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-25/test_streamed_verification_tim0')
+
+    def test_streamed_verification_timeout_never_passes(monkeypatch, tmp_path):
+        capture = _run(monkeypatch, tmp_path, idle=0.2, verification=True)
+>       assert len(capture['requests']) == 2, capture['exceptions']
+E       AssertionError: []
+E       assert 1 == 2
+E        +  where 1 = len([{'max_tokens': 8000, 'messages': [{'content': 'Inspect command outcomes.\n\n## Model-family guidance (InfCode product... -m pytest -q test_wait.py and report the result.', 'role': 'user'}], 'model': 'failure-domains', 'stream': True, ...}])
+
+tests/runtime/test_streamed_tool_failure_domains.py:246: AssertionError
+________________ test_verification_success_requires_real_rerun _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x78be24cc5e10>
+tmp_path = PosixPath('<PYTEST_ROOT>/pytest-25/test_verification_success_requ0')
+
+    def test_verification_success_requires_real_rerun(monkeypatch, tmp_path):
+        capture = _run(monkeypatch, tmp_path, idle=0.2, verification=True, rerun=True)
+>       assert len(capture['requests']) == 2, capture['exceptions']
+E       AssertionError: []
+E       assert 1 == 2
+E        +  where 1 = len([{'max_tokens': 8000, 'messages': [{'content': 'Inspect command outcomes.\n\n## Model-family guidance (InfCode product... -m pytest -q test_wait.py and report the result.', 'role': 'user'}], 'model': 'failure-domains', 'stream': True, ...}])
+
+tests/runtime/test_streamed_tool_failure_domains.py:258: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_streamed_verification_timeout_never_passes
+FAILED tests/runtime/test_streamed_tool_failure_domains.py::test_verification_success_requires_real_rerun
+2 failed, 13 passed in 4.70s
