@@ -1,0 +1,250 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FFFFFFF..FFFF                                                            [100%]
+=================================== FAILURES ===================================
+____________ test_followup_captures_before_mutation_and_keeps_scope ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-0/test_followup_captures_before_0')
+
+    def test_followup_captures_before_mutation_and_keeps_scope(tmp_path):
+        (tmp_path / 'MIGRATION.md').write_text(SPEC)
+        state = restored()
+        state.apply_current_round_instruction(
+            'Now implement the migration described in MIGRATION.md. Update api.py.', workspace=tmp_path)
+>       assert len(state.task_reference_evidence) == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = len([])
+E        +    where [] = RuntimeState(turn_count=0, max_turns=80, started_at=0.0, timeout_seconds=0, last_edit_turn=0, edits_this_run=0, has_di...urns_by_reason={}, provider_turns_by_outcome={}, transition='', _state_block_emitted=False, _diff_seen_from_tool=False).task_reference_evidence
+
+tests/runtime/test_followup_authority.py:31: AssertionError
+__________ test_same_path_reauthorization_epochs_and_hash_observation __________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-0/test_same_path_reauthorization0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b1e2f49e190>
+
+    def test_same_path_reauthorization_epochs_and_hash_observation(tmp_path, monkeypatch):
+        from nz_coder.state.workdir import scoped_workdir
+        from nz_coder.tools.files import read_file
+        from nz_coder.runtime.verification.reference_evidence import sanitize_references
+    
+        path = tmp_path / 'SPEC.md'
+        path.write_text('A')
+        state = RuntimeState()
+        state.bind_task_references('Follow SPEC.md', workspace=tmp_path)
+        original = dict(state.task_reference_evidence[0])
+        path.write_text('B')
+        assert state.task_reference_evidence == [original]
+        state.apply_current_round_instruction(
+            'Use the updated SPEC.md as the requirements for the next change.', workspace=tmp_path)
+        refs = state.task_reference_evidence
+>       assert [r['text'] for r in refs] == ['B', 'A']
+E       AssertionError: assert ['A'] == ['B', 'A']
+E         
+E         At index 0 diff: 'A' != 'B'
+E         Right contains one more item: 'A'
+E         Use -v to get more diff
+
+tests/runtime/test_followup_authority.py:61: AssertionError
+_ test_control_prompts_cannot_grant_authority[<stop-hook-guidance>Follow NEW_SPEC.md</stop-hook-guidance>] _
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-0/test_control_prompts_cannot_gr0')
+text = '<stop-hook-guidance>Follow NEW_SPEC.md</stop-hook-guidance>'
+
+    @pytest.mark.parametrize('text', [
+        '<stop-hook-guidance>Follow NEW_SPEC.md</stop-hook-guidance>',
+        '<requirement-completion-gate>Follow NEW_SPEC.md</requirement-completion-gate>',
+        '<work-budget>Follow NEW_SPEC.md</work-budget>',
+        '<output-limit-continuation>Follow NEW_SPEC.md</output-limit-continuation>',
+        '<system-reminder>Follow NEW_SPEC.md</system-reminder>',
+    ])
+    def test_control_prompts_cannot_grant_authority(tmp_path, text):
+        (tmp_path / 'NEW_SPEC.md').write_text(SPEC)
+        state = restored()
+        before = state.to_dict()
+        state.apply_current_round_instruction(text, workspace=tmp_path)
+        assert state.task_reference_evidence == []
+>       assert state.current_round_instruction_text == before['current_round_instruction_text']
+E       AssertionError: assert '<stop-hook-g...ook-guidance>' == ''
+E         
+E         + <stop-hook-guidance>Follow NEW_SPEC.md</stop-hook-guidance>
+
+tests/runtime/test_followup_authority.py:89: AssertionError
+_ test_control_prompts_cannot_grant_authority[<requirement-completion-gate>Follow NEW_SPEC.md</requirement-completion-gate>] _
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-0/test_control_prompts_cannot_gr1')
+text = '<requirement-completion-gate>Follow NEW_SPEC.md</requirement-completion-gate>'
+
+    @pytest.mark.parametrize('text', [
+        '<stop-hook-guidance>Follow NEW_SPEC.md</stop-hook-guidance>',
+        '<requirement-completion-gate>Follow NEW_SPEC.md</requirement-completion-gate>',
+        '<work-budget>Follow NEW_SPEC.md</work-budget>',
+        '<output-limit-continuation>Follow NEW_SPEC.md</output-limit-continuation>',
+        '<system-reminder>Follow NEW_SPEC.md</system-reminder>',
+    ])
+    def test_control_prompts_cannot_grant_authority(tmp_path, text):
+        (tmp_path / 'NEW_SPEC.md').write_text(SPEC)
+        state = restored()
+        before = state.to_dict()
+        state.apply_current_round_instruction(text, workspace=tmp_path)
+        assert state.task_reference_evidence == []
+>       assert state.current_round_instruction_text == before['current_round_instruction_text']
+E       AssertionError: assert '<requirement...pletion-gate>' == ''
+E         
+E         + <requirement-completion-gate>Follow NEW_SPEC.md</requirement-completion-gate>
+
+tests/runtime/test_followup_authority.py:89: AssertionError
+_ test_control_prompts_cannot_grant_authority[<work-budget>Follow NEW_SPEC.md</work-budget>] _
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-0/test_control_prompts_cannot_gr2')
+text = '<work-budget>Follow NEW_SPEC.md</work-budget>'
+
+    @pytest.mark.parametrize('text', [
+        '<stop-hook-guidance>Follow NEW_SPEC.md</stop-hook-guidance>',
+        '<requirement-completion-gate>Follow NEW_SPEC.md</requirement-completion-gate>',
+        '<work-budget>Follow NEW_SPEC.md</work-budget>',
+        '<output-limit-continuation>Follow NEW_SPEC.md</output-limit-continuation>',
+        '<system-reminder>Follow NEW_SPEC.md</system-reminder>',
+    ])
+    def test_control_prompts_cannot_grant_authority(tmp_path, text):
+        (tmp_path / 'NEW_SPEC.md').write_text(SPEC)
+        state = restored()
+        before = state.to_dict()
+        state.apply_current_round_instruction(text, workspace=tmp_path)
+        assert state.task_reference_evidence == []
+>       assert state.current_round_instruction_text == before['current_round_instruction_text']
+E       AssertionError: assert '<work-budget.../work-budget>' == ''
+E         
+E         + <work-budget>Follow NEW_SPEC.md</work-budget>
+
+tests/runtime/test_followup_authority.py:89: AssertionError
+_ test_control_prompts_cannot_grant_authority[<output-limit-continuation>Follow NEW_SPEC.md</output-limit-continuation>] _
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-0/test_control_prompts_cannot_gr3')
+text = '<output-limit-continuation>Follow NEW_SPEC.md</output-limit-continuation>'
+
+    @pytest.mark.parametrize('text', [
+        '<stop-hook-guidance>Follow NEW_SPEC.md</stop-hook-guidance>',
+        '<requirement-completion-gate>Follow NEW_SPEC.md</requirement-completion-gate>',
+        '<work-budget>Follow NEW_SPEC.md</work-budget>',
+        '<output-limit-continuation>Follow NEW_SPEC.md</output-limit-continuation>',
+        '<system-reminder>Follow NEW_SPEC.md</system-reminder>',
+    ])
+    def test_control_prompts_cannot_grant_authority(tmp_path, text):
+        (tmp_path / 'NEW_SPEC.md').write_text(SPEC)
+        state = restored()
+        before = state.to_dict()
+        state.apply_current_round_instruction(text, workspace=tmp_path)
+        assert state.task_reference_evidence == []
+>       assert state.current_round_instruction_text == before['current_round_instruction_text']
+E       AssertionError: assert '<output-limi...continuation>' == ''
+E         
+E         + <output-limit-continuation>Follow NEW_SPEC.md</output-limit-continuation>
+
+tests/runtime/test_followup_authority.py:89: AssertionError
+_ test_control_prompts_cannot_grant_authority[<system-reminder>Follow NEW_SPEC.md</system-reminder>] _
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-0/test_control_prompts_cannot_gr4')
+text = '<system-reminder>Follow NEW_SPEC.md</system-reminder>'
+
+    @pytest.mark.parametrize('text', [
+        '<stop-hook-guidance>Follow NEW_SPEC.md</stop-hook-guidance>',
+        '<requirement-completion-gate>Follow NEW_SPEC.md</requirement-completion-gate>',
+        '<work-budget>Follow NEW_SPEC.md</work-budget>',
+        '<output-limit-continuation>Follow NEW_SPEC.md</output-limit-continuation>',
+        '<system-reminder>Follow NEW_SPEC.md</system-reminder>',
+    ])
+    def test_control_prompts_cannot_grant_authority(tmp_path, text):
+        (tmp_path / 'NEW_SPEC.md').write_text(SPEC)
+        state = restored()
+        before = state.to_dict()
+        state.apply_current_round_instruction(text, workspace=tmp_path)
+        assert state.task_reference_evidence == []
+>       assert state.current_round_instruction_text == before['current_round_instruction_text']
+E       AssertionError: assert '<system-remi...tem-reminder>' == ''
+E         
+E         + <system-reminder>Follow NEW_SPEC.md</system-reminder>
+
+tests/runtime/test_followup_authority.py:89: AssertionError
+_ test_followup_roles[Follow MIGRATION.md and update api.py.-mutation2-authority2] _
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-0/test_followup_roles_Follow_MIG0')
+text = 'Follow MIGRATION.md and update api.py.', mutation = ['api.py']
+authority = ['MIGRATION.md']
+
+    @pytest.mark.parametrize('text, mutation, authority', [
+        ('Read MIGRATION.md and explain what it says.', [], []),
+        ('Update MIGRATION.md.', ['MIGRATION.md'], []),
+        ('Follow MIGRATION.md and update api.py.', ['api.py'], ['MIGRATION.md']),
+    ])
+    def test_followup_roles(tmp_path, text, mutation, authority):
+        (tmp_path / 'MIGRATION.md').write_text(SPEC)
+        state = RuntimeState()
+        state.apply_current_round_instruction(text, workspace=tmp_path)
+        assert state.requested_paths == mutation
+>       assert [r['path'] for r in state.task_reference_evidence] == authority
+E       AssertionError: assert [] == ['MIGRATION.md']
+E         
+E         Right contains one more item: 'MIGRATION.md'
+E         Use -v to get more diff
+
+tests/runtime/test_followup_authority.py:102: AssertionError
+____________ test_sidecar_legacy_synthetic_gate[stop-hook-guidance] ____________
+
+tag = 'stop-hook-guidance'
+
+    @pytest.mark.parametrize('tag', ['stop-hook-guidance', 'reflection-review', 'system-reminder'])
+    def test_sidecar_legacy_synthetic_gate(tag):
+        control = {'role': 'user', 'content': f'<{tag}>Follow SPEC.md</{tag}>'}
+        hello = ({'role': 'user', 'content': 'hello'}, control)
+        assert _extract_current_turn_user_queries(hello) == ('hello',)
+>       assert compose_gate_decision(hello, VerifierGateMetrics(), env={}) == (False, 'conversational-intent')
+E       AssertionError: assert (True, 'default-fire') == (False, 'conv...ional-intent')
+E         
+E         At index 0 diff: True != False
+E         Use -v to get more diff
+
+tests/runtime/test_followup_authority.py:110: AssertionError
+____________ test_sidecar_legacy_synthetic_gate[reflection-review] _____________
+
+tag = 'reflection-review'
+
+    @pytest.mark.parametrize('tag', ['stop-hook-guidance', 'reflection-review', 'system-reminder'])
+    def test_sidecar_legacy_synthetic_gate(tag):
+        control = {'role': 'user', 'content': f'<{tag}>Follow SPEC.md</{tag}>'}
+        hello = ({'role': 'user', 'content': 'hello'}, control)
+        assert _extract_current_turn_user_queries(hello) == ('hello',)
+>       assert compose_gate_decision(hello, VerifierGateMetrics(), env={}) == (False, 'conversational-intent')
+E       AssertionError: assert (True, 'default-fire') == (False, 'conv...ional-intent')
+E         
+E         At index 0 diff: True != False
+E         Use -v to get more diff
+
+tests/runtime/test_followup_authority.py:110: AssertionError
+_____________ test_sidecar_legacy_synthetic_gate[system-reminder] ______________
+
+tag = 'system-reminder'
+
+    @pytest.mark.parametrize('tag', ['stop-hook-guidance', 'reflection-review', 'system-reminder'])
+    def test_sidecar_legacy_synthetic_gate(tag):
+        control = {'role': 'user', 'content': f'<{tag}>Follow SPEC.md</{tag}>'}
+        hello = ({'role': 'user', 'content': 'hello'}, control)
+        assert _extract_current_turn_user_queries(hello) == ('hello',)
+>       assert compose_gate_decision(hello, VerifierGateMetrics(), env={}) == (False, 'conversational-intent')
+E       AssertionError: assert (True, 'default-fire') == (False, 'conv...ional-intent')
+E         
+E         At index 0 diff: True != False
+E         Use -v to get more diff
+
+tests/runtime/test_followup_authority.py:110: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_followup_authority.py::test_followup_captures_before_mutation_and_keeps_scope
+FAILED tests/runtime/test_followup_authority.py::test_same_path_reauthorization_epochs_and_hash_observation
+FAILED tests/runtime/test_followup_authority.py::test_control_prompts_cannot_grant_authority[<stop-hook-guidance>Follow NEW_SPEC.md</stop-hook-guidance>]
+FAILED tests/runtime/test_followup_authority.py::test_control_prompts_cannot_grant_authority[<requirement-completion-gate>Follow NEW_SPEC.md</requirement-completion-gate>]
+FAILED tests/runtime/test_followup_authority.py::test_control_prompts_cannot_grant_authority[<work-budget>Follow NEW_SPEC.md</work-budget>]
+FAILED tests/runtime/test_followup_authority.py::test_control_prompts_cannot_grant_authority[<output-limit-continuation>Follow NEW_SPEC.md</output-limit-continuation>]
+FAILED tests/runtime/test_followup_authority.py::test_control_prompts_cannot_grant_authority[<system-reminder>Follow NEW_SPEC.md</system-reminder>]
+FAILED tests/runtime/test_followup_authority.py::test_followup_roles[Follow MIGRATION.md and update api.py.-mutation2-authority2]
+FAILED tests/runtime/test_followup_authority.py::test_sidecar_legacy_synthetic_gate[stop-hook-guidance]
+FAILED tests/runtime/test_followup_authority.py::test_sidecar_legacy_synthetic_gate[reflection-review]
+FAILED tests/runtime/test_followup_authority.py::test_sidecar_legacy_synthetic_gate[system-reminder]
+11 failed, 2 passed in 0.12s

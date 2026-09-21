@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 
-from nz_coder.protocol.message_schema import bind_user_context
+from nz_coder.protocol.message_schema import bind_user_context, is_synthetic_user_message
 from nz_coder.runtime.observability.run_evidence import RunEvidence
 from nz_coder.runtime.core.lifecycle_context import (
     LifecycleExecutionContext,
@@ -53,7 +53,18 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         timeout: float,
         resume_activation: bool = False,
         current_round_instruction: str = "",
+        current_user_message: dict | None = None,
     ) -> bool:
+        genuine_followup = (
+            isinstance(current_user_message, dict)
+            and current_user_message.get("role") == "user"
+            and not is_synthetic_user_message(current_user_message)
+            and isinstance(current_user_message.get("content"), str)
+        )
+        if current_user_message is not None and not genuine_followup:
+            current_round_instruction = ""
+        if genuine_followup:
+            current_round_instruction = current_user_message["content"]
         host._runtime_state_path = session_runtime_state_path(host.session_id)
         host.runtime_state.reset(max_turns=max_turns, timeout_seconds=timeout)
         host.runtime_state.set_acceptance_criteria_from_text(task_text)
@@ -62,10 +73,10 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         if current_run_settings().runtime_state_persist:
             restored = host.runtime_state.load(
                 host._runtime_state_path,
-                allow_inactive=resume_activation,
+                allow_inactive=resume_activation or genuine_followup,
             )
             if restored:
-                if resume_activation:
+                if resume_activation or genuine_followup:
                     host.runtime_state.begin_resumed_activation(
                         max_turns=max_turns,
                         timeout_seconds=timeout,
@@ -75,15 +86,10 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
                     host.runtime_state.timeout_seconds = timeout
                 if not host.runtime_state.initial_task_text:
                     host.runtime_state.initial_task_text = task_text
-                if current_round_instruction:
-                    host.runtime_state.apply_current_round_instruction(
-                        current_round_instruction,
-                        workspace=current_workdir(),
-                    )
                 if host.runtime_state.plan_text:
                     host._sp.replace_category("plan", host.runtime_state.plan_text)
         if not restored:
-            if resume_activation:
+            if resume_activation or genuine_followup:
                 # Lost/legacy checkpoint: the workspace may already contain
                 # agent edits. A continuation summary cannot certify originals.
                 host.runtime_state.task_references_bound = True
@@ -94,7 +100,25 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
                 references=[{k: v for k, v in ref.items() if k != "text"}
                             for ref in host.runtime_state.task_reference_evidence],
                 omitted_count=host.runtime_state.task_reference_omitted_count,
-                original_capture_unavailable=bool(resume_activation),
+                original_capture_unavailable=bool(resume_activation or genuine_followup),
+            )
+        if current_round_instruction and (restored or resume_activation or genuine_followup):
+            host.runtime_state.apply_current_round_instruction(
+                current_round_instruction,
+                # Only a canonical genuine user message may create a new
+                # authority epoch.  Legacy continuation callers still need
+                # their round ledger refreshed, but their raw text is not
+                # provenance for a new task reference.
+                workspace=current_workdir(),
+                capture_task_references=genuine_followup,
+                source_message_id=(current_user_message or {}).get("_nz_message_id", ""),
+            )
+            host.tracer.log(
+                "task_reference_authority_extended",
+                authority_epoch=host.runtime_state.task_authority_epoch,
+                references=[{k: v for k, v in ref.items() if k != "text"}
+                            for ref in host.runtime_state.task_reference_evidence],
+                omitted_count=host.runtime_state.task_reference_omitted_count,
             )
         try:
             host.runtime_state.workspace_git_available = (

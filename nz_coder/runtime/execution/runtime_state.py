@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass, field, fields as dataclass_fields
 from pathlib import Path
 
 from nz_coder.runtime.verification.reference_evidence import (
-    capture_references, observe_reference_read, sanitize_references,
+    capture_references, extend_references, observe_reference_read, sanitize_references,
 )
 from nz_coder.runtime.agent.task_policy import (
     detect_task_mode,
@@ -350,6 +350,8 @@ class RuntimeState:
     open_todo_items: int = 0
     task_reference_evidence: list[dict] = field(default_factory=list)
     task_references_bound: bool = False
+    task_authority_epoch: int = 0
+    task_authority_message_id: str = ""
     task_reference_omitted_count: int = 0
     task_contract: dict = field(default_factory=dict)
     requirement_ledger: dict = field(default_factory=dict)
@@ -461,6 +463,8 @@ class RuntimeState:
         self.open_todo_items = 0
         self.task_reference_evidence = []
         self.task_references_bound = False
+        self.task_authority_epoch = 0
+        self.task_authority_message_id = ""
         self.task_reference_omitted_count = 0
         self.task_contract = {}
         self.requirement_ledger = {}
@@ -545,8 +549,19 @@ class RuntimeState:
         limit: int = 5,
         *,
         workspace: str | Path | None = None,
+        source_message_id: str = "",
+        capture_task_references: bool = True,
     ) -> None:
         """Overlay explicit follow-up constraints without replacing task history."""
+        from nz_coder.protocol.message_schema import is_synthetic_user_message
+
+        if not str(text or "").strip() or is_synthetic_user_message({"role": "user", "content": text}):
+            return
+        if workspace is not None and capture_task_references:
+            self.extend_task_references_from_user_instruction(
+                {"role": "user", "content": text, "_nz_message_id": source_message_id},
+                workspace=workspace,
+            )
         self.current_round_instruction_text = str(text or "").strip()[:4000]
         current_criteria = extract_acceptance_criteria(text, limit=limit)
         self.acceptance_criteria = _prioritized_unique(
@@ -724,6 +739,33 @@ class RuntimeState:
         self.task_reference_evidence = [ref.to_dict() for ref in refs]
         self.task_reference_omitted_count = omitted
         self.task_references_bound = True
+
+    def extend_task_references_from_user_instruction(self, message: dict, *, workspace: str | Path) -> None:
+        """Only lifecycle genuine messages may extend authority; never reset initial binding."""
+        from nz_coder.protocol.message_schema import is_synthetic_user_message
+
+        if (not isinstance(message, dict) or message.get("role") != "user"
+                or is_synthetic_user_message(message)):
+            return
+        text = message.get("content")
+        if not isinstance(text, str) or not text.strip():
+            return
+        identity = message.get("_nz_message_id", "")
+        if not isinstance(identity, str) or (identity and not re.fullmatch(r"msg-[A-Za-z0-9_-]{1,128}", identity)):
+            return
+        if identity and (identity == self.task_authority_message_id or any(
+                ref.get("source_message_id") == identity for ref in self.task_reference_evidence)):
+            return
+        if self.task_authority_epoch >= 2**63 - 1:
+            return  # Corrupt/exhausted epoch cannot wrap into historical authority.
+        self.task_authority_epoch += 1
+        refs, omitted = extend_references(
+            self.task_reference_evidence, text, workspace, self.mutation_generation,
+            authority_epoch=self.task_authority_epoch, source_message_id=identity,
+        )
+        self.task_reference_evidence = [ref.to_dict() for ref in refs]
+        self.task_reference_omitted_count += omitted
+        self.task_authority_message_id = identity
 
     def observe_task_reference_read(self, metadata: dict | None) -> None:
         from nz_coder.runtime.process.workdir import current_workdir
@@ -994,6 +1036,8 @@ class RuntimeState:
         # Old snapshots have no original reference evidence. Never recapture
         # today's potentially agent-modified file as an original on resume.
         self.task_reference_evidence = []
+        self.task_authority_epoch = 0
+        self.task_authority_message_id = ""
         self.task_reference_omitted_count = 0
         self.task_references_bound = True
         # Scratch lifecycle state is deliberately not persisted. Restoring a
@@ -1012,7 +1056,14 @@ class RuntimeState:
             )
         self.task_reference_evidence = [ref.to_dict() for ref in
                                         sanitize_references(self.task_reference_evidence)]
-        self.task_reference_omitted_count = min(10000, _nonnegative_int(self.task_reference_omitted_count))
+        self.task_reference_omitted_count = _nonnegative_int(self.task_reference_omitted_count)
+        epoch = self.task_authority_epoch
+        self.task_authority_epoch = max(
+            epoch if type(epoch) is int and 0 <= epoch <= 2**63 - 1 else 0,
+            max((ref["authority_epoch"] for ref in self.task_reference_evidence), default=0),
+        )
+        identity = self.task_authority_message_id
+        self.task_authority_message_id = identity if isinstance(identity, str) and re.fullmatch(r"msg-[A-Za-z0-9_-]{1,128}", identity) else ""
         self.task_references_bound = True
         self._sanitize_restored_control_state()
         self._sanitize_restored_provider_accounting()

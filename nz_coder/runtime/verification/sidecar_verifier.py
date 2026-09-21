@@ -370,7 +370,7 @@ _HISTORY_REFERENCE = re.compile(
 def _transcript_has_tool_use(transcript: tuple[dict[str, Any], ...]) -> bool:
     last_real_user = -1
     for index, message in enumerate(transcript):
-        if message.get("role") == "user" and not message.get("_nz_synthetic"):
+        if message.get("role") == "user" and not is_synthetic_user_message(message):
             last_real_user = index
     return any(
         message.get("role") == "assistant" and bool(message.get("tool_calls"))
@@ -385,8 +385,10 @@ def _is_grounded_history_report(
     """Recognize an explicitly read-only report backed by an earlier tool turn."""
     last_real_user = -1
     for index, message in enumerate(transcript):
-        if message.get("role") == "user" and not message.get("_nz_synthetic"):
+        if message.get("role") == "user" and not is_synthetic_user_message(message):
             last_real_user = index
+    if last_real_user < 0:
+        return False
     prior_tool_evidence = any(
         message.get("role") == "assistant" and bool(message.get("tool_calls"))
         for message in transcript[:last_real_user]
@@ -435,7 +437,7 @@ def compose_gate_decision(
     real_users = [
         _message_text(message).strip()
         for message in transcript
-        if message.get("role") == "user" and not message.get("_nz_synthetic")
+        if message.get("role") == "user" and not is_synthetic_user_message(message)
     ]
     text = real_users[-1] if real_users else ""
     if (

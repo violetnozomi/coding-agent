@@ -70,12 +70,28 @@ class ProductionRunLifecycle:
         task_text = last_user_text(messages)
         resume_activation = is_continuation_activation(messages)
         pure_continuation = is_pure_continuation_activation(messages)
+        # Only a new genuine message after prior Agent history creates round authority.
+        # Pure continuation uses the saved authority, never a summary reconstructed as new.
+        followup = None
+        if not pure_continuation:
+            for index in range(len(messages) - 1, -1, -1):
+                message = messages[index]
+                if (isinstance(message, dict) and message.get("role") == "user"
+                        and not is_synthetic_user_message(message)):
+                    if any(
+                        isinstance(m, dict) and m.get("role") == "assistant"
+                        for m in messages[:index]
+                    ):
+                        followup = message
+                    break
+        authority_kwargs = {"current_user_message": followup} if followup is not None else {}
         state.restored_state = context.prepare_runtime_state(
             task_text,
             max_turns,
             agent_timeout_seconds(),
             resume_activation,
             task_text if resume_activation and not pure_continuation else "",
+            **authority_kwargs,
         )
         policy_task = (
             context.runtime_state.initial_task_text

@@ -1,0 +1,110 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+..........FFF................                                            [100%]
+=================================== FAILURES ===================================
+____________ test_sidecar_legacy_synthetic_gate[stop-hook-guidance] ____________
+
+tag = 'stop-hook-guidance'
+
+    @pytest.mark.parametrize(
+        "tag", ["stop-hook-guidance", "reflection-review", "system-reminder"]
+    )
+    def test_sidecar_legacy_synthetic_gate(tag):
+        control = {"role": "user", "content": f"<{tag}>Follow SPEC.md</{tag}>"}
+        hello = ({"role": "user", "content": "hello"}, control)
+        assert _extract_current_turn_user_queries(hello) == ("hello",)
+        assert compose_gate_decision(hello, VerifierGateMetrics(), env={}) == (
+            False,
+            "conversational-intent",
+        )
+        tool = {
+            "role": "assistant",
+            "tool_calls": [{"id": "read", "function": {"name": "read_file"}}],
+        }
+        assert _transcript_has_tool_use((hello[0], tool, control))
+        # With no genuine user boundary, a legacy prompt cannot turn tool use into prior evidence.
+        report = (
+            "Continue this Session. Do not call tools and do not modify files. "
+            "In one sentence, report the function changed and the exact "
+            "verification result already obtained in the previous turn."
+        )
+        assert _is_grounded_history_report(
+            (tool, {"role": "user", "content": report}), report
+        )
+>       assert not _is_grounded_history_report((tool, control), report)
+E       AssertionError: assert not True
+E        +  where True = _is_grounded_history_report(({'role': 'assistant', 'tool_calls': [{'function': {'name': 'read_file'}, 'id': 'read'}]}, {'content': '<stop-hook-guidance>Follow SPEC.md</stop-hook-guidance>', 'role': 'user'}), 'Continue this Session. Do not call tools and do not modify files. In one sentence, report the function changed and the exact verification result already obtained in the previous turn.')
+
+tests/runtime/test_followup_authority.py:158: AssertionError
+____________ test_sidecar_legacy_synthetic_gate[reflection-review] _____________
+
+tag = 'reflection-review'
+
+    @pytest.mark.parametrize(
+        "tag", ["stop-hook-guidance", "reflection-review", "system-reminder"]
+    )
+    def test_sidecar_legacy_synthetic_gate(tag):
+        control = {"role": "user", "content": f"<{tag}>Follow SPEC.md</{tag}>"}
+        hello = ({"role": "user", "content": "hello"}, control)
+        assert _extract_current_turn_user_queries(hello) == ("hello",)
+        assert compose_gate_decision(hello, VerifierGateMetrics(), env={}) == (
+            False,
+            "conversational-intent",
+        )
+        tool = {
+            "role": "assistant",
+            "tool_calls": [{"id": "read", "function": {"name": "read_file"}}],
+        }
+        assert _transcript_has_tool_use((hello[0], tool, control))
+        # With no genuine user boundary, a legacy prompt cannot turn tool use into prior evidence.
+        report = (
+            "Continue this Session. Do not call tools and do not modify files. "
+            "In one sentence, report the function changed and the exact "
+            "verification result already obtained in the previous turn."
+        )
+        assert _is_grounded_history_report(
+            (tool, {"role": "user", "content": report}), report
+        )
+>       assert not _is_grounded_history_report((tool, control), report)
+E       AssertionError: assert not True
+E        +  where True = _is_grounded_history_report(({'role': 'assistant', 'tool_calls': [{'function': {'name': 'read_file'}, 'id': 'read'}]}, {'content': '<reflection-review>Follow SPEC.md</reflection-review>', 'role': 'user'}), 'Continue this Session. Do not call tools and do not modify files. In one sentence, report the function changed and the exact verification result already obtained in the previous turn.')
+
+tests/runtime/test_followup_authority.py:158: AssertionError
+_____________ test_sidecar_legacy_synthetic_gate[system-reminder] ______________
+
+tag = 'system-reminder'
+
+    @pytest.mark.parametrize(
+        "tag", ["stop-hook-guidance", "reflection-review", "system-reminder"]
+    )
+    def test_sidecar_legacy_synthetic_gate(tag):
+        control = {"role": "user", "content": f"<{tag}>Follow SPEC.md</{tag}>"}
+        hello = ({"role": "user", "content": "hello"}, control)
+        assert _extract_current_turn_user_queries(hello) == ("hello",)
+        assert compose_gate_decision(hello, VerifierGateMetrics(), env={}) == (
+            False,
+            "conversational-intent",
+        )
+        tool = {
+            "role": "assistant",
+            "tool_calls": [{"id": "read", "function": {"name": "read_file"}}],
+        }
+        assert _transcript_has_tool_use((hello[0], tool, control))
+        # With no genuine user boundary, a legacy prompt cannot turn tool use into prior evidence.
+        report = (
+            "Continue this Session. Do not call tools and do not modify files. "
+            "In one sentence, report the function changed and the exact "
+            "verification result already obtained in the previous turn."
+        )
+        assert _is_grounded_history_report(
+            (tool, {"role": "user", "content": report}), report
+        )
+>       assert not _is_grounded_history_report((tool, control), report)
+E       AssertionError: assert not True
+E        +  where True = _is_grounded_history_report(({'role': 'assistant', 'tool_calls': [{'function': {'name': 'read_file'}, 'id': 'read'}]}, {'content': '<system-reminder>Follow SPEC.md</system-reminder>', 'role': 'user'}), 'Continue this Session. Do not call tools and do not modify files. In one sentence, report the function changed and the exact verification result already obtained in the previous turn.')
+
+tests/runtime/test_followup_authority.py:158: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_followup_authority.py::test_sidecar_legacy_synthetic_gate[stop-hook-guidance]
+FAILED tests/runtime/test_followup_authority.py::test_sidecar_legacy_synthetic_gate[reflection-review]
+FAILED tests/runtime/test_followup_authority.py::test_sidecar_legacy_synthetic_gate[system-reminder]
+3 failed, 26 passed in 0.96s

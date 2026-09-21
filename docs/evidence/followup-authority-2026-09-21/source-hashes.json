@@ -1,0 +1,10 @@
+{
+  "nz_coder/protocol/message_schema.py": "93d8bf3f9e43d44a06f3f021345c3d775cd9aebb71eb21cada38f6e1e9fb7cae",
+  "nz_coder/runtime/adapters/lifecycle.py": "b6b31646cb264e9f8792b96de9cfcd57418775fc9a26d3a97bb1a7ee4e483a68",
+  "nz_coder/runtime/agent/task_policy.py": "183e6c6dafeb930098364b5b7c6c976f8bd62cba710d4baf6834985135e14099",
+  "nz_coder/runtime/execution/run_lifecycle.py": "16408db7601a45fab7d6cfc494385fe08b330306f2048a64214772ab8d9b52d3",
+  "nz_coder/runtime/execution/runtime_state.py": "053b6841913e42cf34d5af50daf6fde1d82a19c598440283f84defee31c52f07",
+  "nz_coder/runtime/verification/reference_evidence.py": "ad7235b676d52723a315977b0dbbb6d4f7b5691f7dc34910bdb7e3537dcb1dc5",
+  "nz_coder/runtime/verification/sidecar_verifier.py": "584a89fbc0a3b2c72594eb3d893d9bf1f198c1d63a98a8ff4232483593445f0f",
+  "tests/runtime/test_followup_authority.py": "23d6b34496d6aecfefd089467416b660edaa2e416d562d15b37fd9338e4bb654"
+}

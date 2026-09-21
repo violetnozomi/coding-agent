@@ -614,7 +614,12 @@ def _instruction_scopes(text: str):
             role = match.lastgroup
             if role in {"negated", "negated_reference"}:
                 role = "context"
-            yield role, clause[match.start():end]
+            scope = clause[match.start():end]
+            # Suffix authority stays inside this same verb-governed scope.
+            if (role == "context" and re.match(r"use\b", scope, re.IGNORECASE)
+                    and re.search(r"\bas\s+(?:the\s+)?(?:requirements?|task\s+specification)\b", scope, re.IGNORECASE)):
+                role = "task_reference"
+            yield role, scope
 
 
 def mutation_instruction_scopes(text: str) -> tuple[str, ...]:

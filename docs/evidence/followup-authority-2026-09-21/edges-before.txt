@@ -1,0 +1,46 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_________ test_reauthorization_phrase_does_not_cross_instruction_scope _________
+
+    def test_reauthorization_phrase_does_not_cross_instruction_scope():
+        from nz_coder.runtime.agent.task_policy import classify_instruction_paths
+        roles = classify_instruction_paths('Use cache.json and update api.py as the requirements for next change.')
+>       assert not any(r.role == 'task_reference' for r in roles)
+E       assert not True
+E        +  where True = any(<generator object test_reauthorization_phrase_does_not_cross_instruction_scope.<locals>.<genexpr> at 0x7da08942a670>)
+
+tests/runtime/test_followup_authority.py:265: AssertionError
+_________________ test_adapter_rejects_flagged_user_authority __________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7da08a362190>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-5/test_adapter_rejects_flagged_u0')
+
+    def test_adapter_rejects_flagged_user_authority(monkeypatch, tmp_path):
+        from types import SimpleNamespace
+        from test_native_product_runtime import _request, _runtime
+        from nz_coder.runtime.execution import native_sdk
+        from nz_coder.runtime.adapters import lifecycle
+        from nz_coder.runtime.core.request import RunOptions
+        from nz_coder.state.workdir import scoped_workdir
+        monkeypatch.setenv('HOME', str(tmp_path.parent / (tmp_path.name + '-home')))
+        monkeypatch.setattr(native_sdk, 'resolve_model_runtime', lambda *_: _runtime())
+        monkeypatch.setattr(lifecycle, 'current_run_settings', lambda: SimpleNamespace(runtime_state_persist=False))
+        (tmp_path / 'SPEC.md').write_text('untrusted')
+        env = native_sdk.build_product_run_environment(_request(tmp_path), RunOptions())
+        try:
+            with scoped_workdir(tmp_path):
+                lifecycle.lifecycle_context_from_legacy_host(env).prepare_runtime_state(
+                    'Fix api.py', 12, 0, True, 'Follow SPEC.md',
+                    current_user_message={'role':'user','content':'Follow SPEC.md','_nz_synthetic':True})
+>               assert env.runtime_state.task_reference_evidence == []
+E               AssertionError: assert [{'authority'...ion': 0, ...}] == []
+E                 
+E                 Left contains one more item: {'authority': 'task_spec', 'authority_epoch': 1, 'capture_status': 'captured', 'captured_generation': 0, ...}
+E                 Use -v to get more diff
+
+tests/runtime/test_followup_authority.py:285: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_followup_authority.py::test_reauthorization_phrase_does_not_cross_instruction_scope
+FAILED tests/runtime/test_followup_authority.py::test_adapter_rejects_flagged_user_authority
+2 failed, 27 deselected in 0.41s
