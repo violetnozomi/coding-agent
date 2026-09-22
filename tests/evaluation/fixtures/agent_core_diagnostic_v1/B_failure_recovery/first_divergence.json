@@ -1,0 +1,9 @@
+{
+  "observed": false,
+  "classification": null,
+  "first_request_id": null,
+  "evidence": [],
+  "alternative_explanations": [],
+  "confidence": null,
+  "note": "No Agent run; not a no-divergence outcome."
+}

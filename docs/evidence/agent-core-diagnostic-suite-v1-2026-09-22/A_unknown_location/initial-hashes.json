@@ -1,0 +1,16 @@
+{
+  "README.md": "11717241f513020a7f2b63c58bbc1acdefa9e99663e2ce24ed03ae94c90aba1a",
+  "app/__init__.py": "0556857c71d706021af74ff9d58c60b35598d608765b1cf6e30d19f7efaf54b4",
+  "app/adapters/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "app/adapters/json_sink.py": "89ac6f13c735ce933fc8ea9e8fb874c8bffac3a8cb6ee1834e49ac8e8dde5542",
+  "app/adapters/text_sink.py": "eae8b0e3df9dfb16d29b0ab143208725a77e7bb3459dee411335c589da8a5b45",
+  "app/api.py": "87237860f9ea0f61c0bad510791d95a7920370331a23e6e574a10f48841e128a",
+  "app/cli.py": "a6f3b37cb366e8d0a78195bd980ed79bc834b64309a34371f404327f231a3cf2",
+  "app/events.py": "5e2e6b99dd734db8cd3ca8f9d7934dc7b6d6131b1b5f2e410e66858e5fa4442a",
+  "app/formatting.py": "d04ddd7a9e10edb73cf069f00159f662d3c0423a5df9ab8568f53cfa1bbd1321",
+  "app/service.py": "aa00b3fc91f072d98fa271e09ab700fa73be9b836c53ba4caf26498b082de458",
+  "app/storage.py": "c45f6d5f7f7d31d67ccb5d2f9add0dbb3c8092944e98c0e29b97c970557d7d81",
+  "tests/test_api.py": "9b917ffb51e5d23a242dadda25aacda92a1d61fd31107c25af717abf4e7df494",
+  "tests/test_cli.py": "a2908e5cb088a86836d64ee64baeb49fa17e5b5b78f5b09bb943d7de8787198e",
+  "tests/test_sinks.py": "aadfb947e0639fefe9bd97a476ac2231fb29ffdee93ef0a0bc52f3c6879c3434"
+}

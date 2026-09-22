@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Diagnostic per-request causal facts",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "request_id",
+      "trigger",
+      "work_phase",
+      "finish_reason",
+      "model_visible_messages_path",
+      "acceptance_version",
+      "physical_request_id",
+      "purpose",
+      "remaining_main_budget",
+      "mutation_generation",
+      "verification_generation",
+      "requirement_ledger",
+      "reference_state",
+      "recovery_stall_state",
+      "semantic_review_state",
+      "terminal_state",
+      "provider_usage",
+      "evidence_paths",
+      "tool_calls"
+    ],
+    "properties": {
+      "request_id": {
+        "type": "string"
+      },
+      "trigger": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "work_phase": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "finish_reason": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "model_visible_messages_path": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "acceptance_version": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "physical_request_id": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "purpose": {
+        "enum": [
+          "coding",
+          "semantic_verifier",
+          "stall_sidecar"
+        ]
+      },
+      "remaining_main_budget": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "mutation_generation": {
+        "type": "object",
+        "required": [
+          "before",
+          "after"
+        ]
+      },
+      "verification_generation": {},
+      "requirement_ledger": {
+        "type": "object"
+      },
+      "reference_state": {
+        "type": "object"
+      },
+      "recovery_stall_state": {
+        "type": "object"
+      },
+      "semantic_review_state": {
+        "type": "object"
+      },
+      "terminal_state": {
+        "type": "object"
+      },
+      "provider_usage": {
+        "type": "object",
+        "description": "Raw Provider fields; missing is null, no dollar estimate or cache double counting"
+      },
+      "evidence_paths": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "tool_calls": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "tool_call_id",
+            "name",
+            "raw_arguments",
+            "permission_outcome",
+            "execution_result"
+          ]
+        }
+      }
+    },
+    "additionalProperties": false
+  }
+}

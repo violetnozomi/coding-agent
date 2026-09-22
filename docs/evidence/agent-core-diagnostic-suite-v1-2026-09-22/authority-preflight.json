@@ -1,0 +1,35 @@
+{
+  "instruction": "Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.\n",
+  "roles": [
+    {
+      "path": "CONFIG_SPEC.md",
+      "role": "task_reference",
+      "authority": "task_spec",
+      "required": false
+    },
+    {
+      "path": "configkit/__main__.py",
+      "role": "candidate",
+      "authority": "",
+      "required": false
+    }
+  ],
+  "initial_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+  "task_reference_evidence": [
+    {
+      "path": "CONFIG_SPEC.md",
+      "authority": "task_spec",
+      "source": "initial_user_instruction",
+      "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+      "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+      "complete": true,
+      "captured_generation": 0,
+      "model_observed": false,
+      "capture_status": "captured",
+      "authority_epoch": 0,
+      "source_message_id": ""
+    }
+  ],
+  "omitted_count": 0,
+  "model_read_occurred": false
+}

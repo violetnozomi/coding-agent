@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "observed",
+    "classification",
+    "first_request_id",
+    "evidence",
+    "alternative_explanations",
+    "confidence"
+  ],
+  "properties": {
+    "observed": {
+      "type": "boolean"
+    },
+    "classification": {
+      "enum": [
+        null,
+        "no divergence observed",
+        "task understanding",
+        "repo intelligence",
+        "context/authority",
+        "edit recovery",
+        "permission",
+        "verification",
+        "recovery",
+        "stall",
+        "semantic review",
+        "terminal completion",
+        "Provider",
+        "fixture",
+        "unknown"
+      ]
+    },
+    "first_request_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "evidence": {
+      "type": "array"
+    },
+    "alternative_explanations": {
+      "type": "array"
+    },
+    "confidence": {
+      "enum": [
+        null,
+        "strong",
+        "moderate",
+        "insufficient"
+      ]
+    }
+  }
+}

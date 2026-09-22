@@ -1,0 +1,73 @@
+--- a/README.md
++++ b/README.md
+@@ -3 +3,8 @@
+-Use `python -m app.cli NAME VALUE` to render an event.
++Legacy: `python -m app.cli created 42` prints `created=42`.
++
++Optional correlation ID:
++`handle("created", "42", correlation_id="request-7")`
++adds a correlation_id key. None omits the key; an empty string is retained.
++`python -m app.cli created 42 --correlation-id request-7 --format json`
++prints JSON containing that key; default text ends in ` correlation_id=request-7`.
++Run `python -m pytest -q tests`.
+--- a/app/api.py
++++ b/app/api.py
+@@ -5,2 +5,2 @@
+-def handle(name: str, value: str) -> dict:
+-    return process(Event(name, value))
++def handle(name: str, value: str, correlation_id: str | None = None) -> dict:
++    return process(Event(name, value, correlation_id))
+--- a/app/cli.py
++++ b/app/cli.py
+@@ -4 +4 @@
+-from .storage import render_text
++from .storage import render_json, render_text
+@@ -10,0 +11,2 @@
++    parser.add_argument("--format", choices=["text", "json"], default="text")
++    parser.add_argument("--correlation-id")
+@@ -12 +14,2 @@
+-    print(render_text(handle(args.name, args.value)))
++    record = handle(args.name, args.value, correlation_id=args.correlation_id)
++    print((render_json if args.format == "json" else render_text)(record))
+--- a/app/events.py
++++ b/app/events.py
+@@ -7,0 +8 @@
++    correlation_id: str | None = None
+--- a/app/formatting.py
++++ b/app/formatting.py
+@@ -9 +9,2 @@
+-    return f"{record['name']}={record['value']}"
++    suffix = f" correlation_id={record['correlation_id']}" if "correlation_id" in record else ""
++    return f"{record['name']}={record['value']}" + suffix
+--- a/app/service.py
++++ b/app/service.py
+@@ -5 +5,4 @@
+-    return {"name": event.name, "value": event.value}
++    record = {"name": event.name, "value": event.value}
++    if event.correlation_id is not None:
++        record["correlation_id"] = event.correlation_id
++    return record
+--- a/tests/test_correlation.py
++++ b/tests/test_correlation.py
+@@ -0,0 +1,21 @@
++import json
++
++from app import handle
++from app.adapters.json_sink import write as json_write
++from app.adapters.text_sink import write as text_write
++from app.cli import main
++from app.events import Event
++from app.service import process
++
++
++def test_full_chain():
++    for value in ("id-1", "", "客户"):
++        record = handle("created", "42", correlation_id=value)
++        assert record == process(Event("created", "42", value))
++        assert json.loads(json_write(record))["correlation_id"] == value
++        assert text_write(record) == "created=42 correlation_id=" + value
++
++
++def test_cli_id(capsys):
++    main(["created", "42", "--correlation-id", "abc", "--format", "json"])
++    assert json.loads(capsys.readouterr().out)["correlation_id"] == "abc"

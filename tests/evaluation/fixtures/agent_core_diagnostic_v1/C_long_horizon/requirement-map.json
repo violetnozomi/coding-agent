@@ -1,0 +1,50 @@
+{
+  "v1_read": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "A missing version or version=1 means v1."
+  },
+  "v2_read": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "Both decode to the existing Config(name, host, port, enabled) model."
+  },
+  "v2_write": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "Every new serialization/write must emit only v2"
+  },
+  "migration": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "migrate_file(path, dry_run=False) returns the v2 dictionary and writes v2"
+  },
+  "dry_run": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "dry_run=True returns the same dictionary but leaves source bytes unchanged."
+  },
+  "invalid_config": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "Malformed JSON or a non-object root uses path \"$\", code \"invalid\"."
+  },
+  "validation_paths": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "Validate in this order: version, name, host, port, enabled"
+  },
+  "cli_migrate": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "CLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON."
+  },
+  "cli_invalid_preserves_input": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "Invalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr"
+  },
+  "caller_integration": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "Service export_config(source, destination) writes v2 to destination"
+  },
+  "invalid_write_preserves_destination": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "No validation error may overwrite the input or an existing destination."
+  },
+  "documentation": {
+    "source": "workspace/CONFIG_SPEC.md",
+    "quote": "Update docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,"
+  }
+}

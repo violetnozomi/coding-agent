@@ -1,0 +1,74 @@
+[
+  {
+    "name": "v1_read",
+    "language": "python",
+    "requirement": "v1_read",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nassert loads(json.dumps(v1)) == Config('demo','localhost',8080,False)\nv1['version']=1\nassert loads(json.dumps(v1)).enabled is False\n"
+  },
+  {
+    "name": "v2_read",
+    "language": "python",
+    "requirement": "v2_read",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nassert loads(json.dumps(v2)) == Config('demo','localhost',8080,False)\ndel v2['enabled'];v2['extra']='ignored'\nassert loads(json.dumps(v2)).enabled is True\n"
+  },
+  {
+    "name": "v2_write",
+    "language": "python",
+    "requirement": "v2_write",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nassert json.loads(dumps(Config('demo','localhost',8080,False))) == v2\n"
+  },
+  {
+    "name": "migration",
+    "language": "python",
+    "requirement": "migration",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom configkit.config.migrate import migrate_file\nwith TemporaryDirectory() as td:\n p=Path(td)/'c.json';p.write_text(json.dumps(v1))\n assert migrate_file(p)==v2\n assert json.loads(p.read_text())==v2\n assert migrate_file(p)==v2\n"
+  },
+  {
+    "name": "dry_run",
+    "language": "python",
+    "requirement": "dry_run",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom configkit.config.migrate import migrate_file\nwith TemporaryDirectory() as td:\n p=Path(td)/'c.json';p.write_text(json.dumps(v1,indent=4));before=p.read_bytes()\n assert migrate_file(p,dry_run=True)==v2\n assert p.read_bytes()==before\n"
+  },
+  {
+    "name": "invalid_config",
+    "language": "python",
+    "requirement": "invalid_config",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom configkit.config.errors import ConfigError\nfor raw,path,code in [('oops','$','invalid'),('[]','$','invalid'),('{\"version\":3}','version','unsupported'),('{\"version\":true}','version','unsupported'),('{\"version\":2}','service.name','invalid')]:\n try: loads(raw)\n except ConfigError as e:\n  assert isinstance(e,ValueError)\n  assert e.to_dict()=={'error':'invalid_config','issues':[{'path':path,'code':code}]}\n else: raise AssertionError('invalid accepted')\n"
+  },
+  {
+    "name": "validation_paths",
+    "language": "python",
+    "requirement": "validation_paths",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom configkit.config.errors import ConfigError\nfor field,value,path in [('name',' ','service.name'),('host',None,'service.endpoint.host'),('port',True,'service.endpoint.port'),('port',65536,'service.endpoint.port'),('enabled',1,'enabled')]:\n d=json.loads(json.dumps(v2));target=d if field=='enabled' else d['service'] if field=='name' else d['service']['endpoint'];target[field]=value\n try: loads(json.dumps(d))\n except ConfigError as e: assert e.to_dict()=={'error':'invalid_config','issues':[{'path':path,'code':'invalid'}]}\n else: raise AssertionError('invalid accepted')\n"
+  },
+  {
+    "name": "cli_migrate",
+    "language": "python",
+    "requirement": "cli_migrate",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nimport contextlib,io\nfrom configkit.cli import main\nwith TemporaryDirectory() as td:\n p=Path(td)/'c.json';p.write_text(json.dumps(v1));before=p.read_bytes();out=io.StringIO()\n with contextlib.redirect_stdout(out): assert main(['migrate',str(p),'--dry-run'])==0\n assert json.loads(out.getvalue())==v2 and p.read_bytes()==before\n out=io.StringIO()\n with contextlib.redirect_stdout(out): assert main(['migrate',str(p)])==0\n assert json.loads(out.getvalue())==v2 and json.loads(p.read_text())==v2\n"
+  },
+  {
+    "name": "cli_invalid_preserves_input",
+    "language": "python",
+    "requirement": "cli_invalid_preserves_input",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nimport contextlib,io\nfrom configkit.cli import main\nwith TemporaryDirectory() as td:\n p=Path(td)/'c.json';p.write_text('{\"version\":3}');before=p.read_bytes();err=io.StringIO()\n with contextlib.redirect_stderr(err): assert main(['migrate',str(p)])==2\n assert json.loads(err.getvalue())=={'error':'invalid_config','issues':[{'path':'version','code':'unsupported'}]}\n assert p.read_bytes()==before\n"
+  },
+  {
+    "name": "caller_integration",
+    "language": "python",
+    "requirement": "caller_integration",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom configkit.service import export_config,inspect_config\nfrom configkit.cli import main\nimport contextlib,io\nwith TemporaryDirectory() as td:\n source=Path(td)/'s';dest=Path(td)/'d';source.write_text(json.dumps(v2));before=source.read_bytes()\n expected={'name':'demo','address':'localhost:8080','enabled':False}\n assert export_config(source,dest)==expected\n assert inspect_config(dest)==expected and json.loads(dest.read_text())==v2\n assert source.read_bytes()==before\n out=io.StringIO()\n with contextlib.redirect_stdout(out): assert main(['show',str(dest)])==0\n assert json.loads(out.getvalue())==expected\n"
+  },
+  {
+    "name": "invalid_write_preserves_destination",
+    "language": "python",
+    "requirement": "invalid_write_preserves_destination",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom configkit.store import save\nfrom configkit.config.errors import ConfigError\nwith TemporaryDirectory() as td:\n p=Path(td)/'d';p.write_text('preserve')\n try: save(p,Config('demo','localhost',False))\n except ConfigError: pass\n else: raise AssertionError('invalid write accepted')\n assert p.read_text()=='preserve'\n"
+  },
+  {
+    "name": "documentation",
+    "language": "python",
+    "requirement": "documentation",
+    "code": "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\ns=Path('docs/README.md').read_text()\nfor term in ['v1','v2','--dry-run','migrate','invalid_config','service','endpoint']: assert term in s,term\n"
+  }
+]

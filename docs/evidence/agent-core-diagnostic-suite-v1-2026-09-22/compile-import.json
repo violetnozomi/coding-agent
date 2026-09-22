@@ -1,0 +1,13 @@
+{
+  "label": "compile-import",
+  "argv": [
+    "<USER_HOME>/miniconda3/bin/python",
+    "<REPO>/tests/evaluation/fixtures/offline_exec.py",
+    "<USER_HOME>/miniconda3/bin/python",
+    "-c",
+    "import ast,pathlib; root=pathlib.Path('tests/evaluation/fixtures/agent_core_diagnostic_v1'); files=list(root.rglob('*.py')); [compile(p.read_text(),str(p),'exec') for p in files]; print(str(len(files))+' Python files compiled without writing caches')"
+  ],
+  "exit": 0,
+  "stdout": "50 Python files compiled without writing caches\n",
+  "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+}

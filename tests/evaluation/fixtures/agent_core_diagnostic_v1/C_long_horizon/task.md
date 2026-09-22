@@ -1,0 +1,1 @@
+Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.

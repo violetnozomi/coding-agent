@@ -1,0 +1,56 @@
+[
+  {
+    "name": "public_api",
+    "language": "python",
+    "requirement": "public_api",
+    "code": "from app import handle\nassert handle('created', '42', correlation_id='cid') == {'name':'created','value':'42','correlation_id':'cid'}"
+  },
+  {
+    "name": "event_service_indirect",
+    "language": "python",
+    "requirement": "event_service_indirect",
+    "code": "from app.events import Event\nfrom app.service import process\nassert process(Event('x','1',correlation_id='indirect'))['correlation_id'] == 'indirect'"
+  },
+  {
+    "name": "json_sink",
+    "language": "python",
+    "requirement": "json_sink",
+    "code": "import json\nfrom app import handle\nfrom app.adapters.json_sink import write\nassert json.loads(write(handle('x','1',correlation_id='c'))) == {'name':'x','value':'1','correlation_id':'c'}"
+  },
+  {
+    "name": "text_sink",
+    "language": "python",
+    "requirement": "text_sink",
+    "code": "from app import handle\nfrom app.adapters.text_sink import write\nassert write(handle('x','1',correlation_id='c')) == 'x=1 correlation_id=c'"
+  },
+  {
+    "name": "legacy_compatibility",
+    "language": "python",
+    "requirement": "legacy_compatibility",
+    "code": "from app import handle\nfrom app.adapters.text_sink import write\nassert handle('x','1') == {'name':'x','value':'1'}\nassert write(handle('x','1')) == 'x=1'"
+  },
+  {
+    "name": "empty_and_none",
+    "language": "python",
+    "requirement": "empty_and_none",
+    "code": "from app import handle\nassert handle('x','1',correlation_id='')['correlation_id'] == ''\nassert 'correlation_id' not in handle('x','1',correlation_id=None)"
+  },
+  {
+    "name": "cli_text",
+    "language": "python",
+    "requirement": "cli_text",
+    "code": "import contextlib,io\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n assert main(['x','1','--correlation-id','cli']) == 0\nassert s.getvalue().strip() == 'x=1 correlation_id=cli'"
+  },
+  {
+    "name": "cli_json",
+    "language": "python",
+    "requirement": "cli_json",
+    "code": "import contextlib,io,json\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n main(['x','1','--format','json','--correlation-id','cli'])\nassert json.loads(s.getvalue()) == {'name':'x','value':'1','correlation_id':'cli'}"
+  },
+  {
+    "name": "documentation",
+    "language": "python",
+    "requirement": "documentation",
+    "code": "from pathlib import Path\ns=Path('README.md').read_text()\nassert '--correlation-id' in s and 'handle(' in s and 'correlation_id=' in s"
+  }
+]

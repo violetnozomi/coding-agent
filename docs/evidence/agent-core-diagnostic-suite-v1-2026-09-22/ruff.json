@@ -1,0 +1,15 @@
+{
+  "label": "ruff",
+  "argv": [
+    "<USER_HOME>/miniconda3/bin/python",
+    "-m",
+    "ruff",
+    "check",
+    "<REPO>/tests/evaluation/fixtures/agent_core_diagnostic_v1",
+    "tests/evaluation/test_agent_core_diagnostic_v1.py",
+    "<REPO>/docs/evidence/agent-core-diagnostic-suite-v1-2026-09-22/verify.py"
+  ],
+  "exit": 0,
+  "stdout": "All checks passed!\n",
+  "stderr": ""
+}

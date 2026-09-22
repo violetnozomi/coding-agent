@@ -1,0 +1,38 @@
+{
+  "normal_success": {
+    "source": "task.md",
+    "quote": "Success and failure records retain the existing shape and expose the actual attempts count"
+  },
+  "retryable_failure": {
+    "source": "task.md",
+    "quote": "Retry only errors whose retryable property is exactly true."
+  },
+  "non_retryable": {
+    "source": "task.md",
+    "quote": "Retry only errors whose retryable property is exactly true."
+  },
+  "exhaustion": {
+    "source": "task.md",
+    "quote": "exhaustion exposes the final error object unchanged."
+  },
+  "fifo_fairness": {
+    "source": "task.md",
+    "quote": "Keep FIFO first attempts; after a failed attempt put a retry at the tail"
+  },
+  "new_work_not_starved": {
+    "source": "task.md",
+    "quote": "including work enqueued by the worker"
+  },
+  "legacy_compatibility": {
+    "source": "task.md",
+    "quote": "and legacy jobs without a policy"
+  },
+  "invalid_policy": {
+    "source": "task.md",
+    "quote": "Invalid maxAttempts must reject with RangeError before that job is enqueued or invoked."
+  },
+  "documentation": {
+    "source": "task.md",
+    "quote": "Update README with the retry policy and fairness example"
+  }
+}

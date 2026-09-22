@@ -1,0 +1,515 @@
+{
+  "id": "A_unknown_location",
+  "initial_project": {
+    "argv": [
+      "<USER_HOME>/miniconda3/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests"
+    ],
+    "exit": 0,
+    "timed_out": false,
+    "timeout_seconds": 30,
+    "stdout": "...                                                                      [100%]\n3 passed in 0.01s\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "initial_acceptance": {
+    "checks": [
+      {
+        "name": "public_api",
+        "requirement": "public_api",
+        "passed": false,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nassert handle('created', '42', correlation_id='cid') == {'name':'created','value':'42','correlation_id':'cid'}"
+        ],
+        "exit": 1,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 2, in <module>\n    assert handle('created', '42', correlation_id='cid') == {'name':'created','value':'42','correlation_id':'cid'}\n           ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: handle() got an unexpected keyword argument 'correlation_id'\n"
+      },
+      {
+        "name": "event_service_indirect",
+        "requirement": "event_service_indirect",
+        "passed": false,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app.events import Event\nfrom app.service import process\nassert process(Event('x','1',correlation_id='indirect'))['correlation_id'] == 'indirect'"
+        ],
+        "exit": 1,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 3, in <module>\n    assert process(Event('x','1',correlation_id='indirect'))['correlation_id'] == 'indirect'\n                   ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: Event.__init__() got an unexpected keyword argument 'correlation_id'\n"
+      },
+      {
+        "name": "json_sink",
+        "requirement": "json_sink",
+        "passed": false,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "import json\nfrom app import handle\nfrom app.adapters.json_sink import write\nassert json.loads(write(handle('x','1',correlation_id='c'))) == {'name':'x','value':'1','correlation_id':'c'}"
+        ],
+        "exit": 1,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n    assert json.loads(write(handle('x','1',correlation_id='c'))) == {'name':'x','value':'1','correlation_id':'c'}\n                            ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: handle() got an unexpected keyword argument 'correlation_id'\n"
+      },
+      {
+        "name": "text_sink",
+        "requirement": "text_sink",
+        "passed": false,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nfrom app.adapters.text_sink import write\nassert write(handle('x','1',correlation_id='c')) == 'x=1 correlation_id=c'"
+        ],
+        "exit": 1,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 3, in <module>\n    assert write(handle('x','1',correlation_id='c')) == 'x=1 correlation_id=c'\n                 ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: handle() got an unexpected keyword argument 'correlation_id'\n"
+      },
+      {
+        "name": "legacy_compatibility",
+        "requirement": "legacy_compatibility",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nfrom app.adapters.text_sink import write\nassert handle('x','1') == {'name':'x','value':'1'}\nassert write(handle('x','1')) == 'x=1'"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "empty_and_none",
+        "requirement": "empty_and_none",
+        "passed": false,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nassert handle('x','1',correlation_id='')['correlation_id'] == ''\nassert 'correlation_id' not in handle('x','1',correlation_id=None)"
+        ],
+        "exit": 1,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 2, in <module>\n    assert handle('x','1',correlation_id='')['correlation_id'] == ''\n           ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: handle() got an unexpected keyword argument 'correlation_id'\n"
+      },
+      {
+        "name": "cli_text",
+        "requirement": "cli_text",
+        "passed": false,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "import contextlib,io\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n assert main(['x','1','--correlation-id','cli']) == 0\nassert s.getvalue().strip() == 'x=1 correlation_id=cli'"
+        ],
+        "exit": 2,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nusage: -c [-h] name value\n-c: error: unrecognized arguments: --correlation-id cli\n"
+      },
+      {
+        "name": "cli_json",
+        "requirement": "cli_json",
+        "passed": false,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "import contextlib,io,json\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n main(['x','1','--format','json','--correlation-id','cli'])\nassert json.loads(s.getvalue()) == {'name':'x','value':'1','correlation_id':'cli'}"
+        ],
+        "exit": 2,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nusage: -c [-h] name value\n-c: error: unrecognized arguments: --format json --correlation-id cli\n"
+      },
+      {
+        "name": "documentation",
+        "requirement": "documentation",
+        "passed": false,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from pathlib import Path\ns=Path('README.md').read_text()\nassert '--correlation-id' in s and 'handle(' in s and 'correlation_id=' in s"
+        ],
+        "exit": 1,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 3, in <module>\n    assert '--correlation-id' in s and 'handle(' in s and 'correlation_id=' in s\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+      }
+    ],
+    "passed": 1,
+    "total": 9,
+    "summary": "1/9 passed",
+    "exit": 1
+  },
+  "oracle_project": {
+    "argv": [
+      "<USER_HOME>/miniconda3/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests"
+    ],
+    "exit": 0,
+    "timed_out": false,
+    "timeout_seconds": 30,
+    "stdout": ".....                                                                    [100%]\n5 passed in 0.01s\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "oracle_acceptance": {
+    "checks": [
+      {
+        "name": "public_api",
+        "requirement": "public_api",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nassert handle('created', '42', correlation_id='cid') == {'name':'created','value':'42','correlation_id':'cid'}"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "event_service_indirect",
+        "requirement": "event_service_indirect",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app.events import Event\nfrom app.service import process\nassert process(Event('x','1',correlation_id='indirect'))['correlation_id'] == 'indirect'"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "json_sink",
+        "requirement": "json_sink",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "import json\nfrom app import handle\nfrom app.adapters.json_sink import write\nassert json.loads(write(handle('x','1',correlation_id='c'))) == {'name':'x','value':'1','correlation_id':'c'}"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "text_sink",
+        "requirement": "text_sink",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nfrom app.adapters.text_sink import write\nassert write(handle('x','1',correlation_id='c')) == 'x=1 correlation_id=c'"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "legacy_compatibility",
+        "requirement": "legacy_compatibility",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nfrom app.adapters.text_sink import write\nassert handle('x','1') == {'name':'x','value':'1'}\nassert write(handle('x','1')) == 'x=1'"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "empty_and_none",
+        "requirement": "empty_and_none",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nassert handle('x','1',correlation_id='')['correlation_id'] == ''\nassert 'correlation_id' not in handle('x','1',correlation_id=None)"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "cli_text",
+        "requirement": "cli_text",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "import contextlib,io\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n assert main(['x','1','--correlation-id','cli']) == 0\nassert s.getvalue().strip() == 'x=1 correlation_id=cli'"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "cli_json",
+        "requirement": "cli_json",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "import contextlib,io,json\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n main(['x','1','--format','json','--correlation-id','cli'])\nassert json.loads(s.getvalue()) == {'name':'x','value':'1','correlation_id':'cli'}"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "documentation",
+        "requirement": "documentation",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from pathlib import Path\ns=Path('README.md').read_text()\nassert '--correlation-id' in s and 'handle(' in s and 'correlation_id=' in s"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      }
+    ],
+    "passed": 9,
+    "total": 9,
+    "summary": "9/9 passed",
+    "exit": 0
+  },
+  "repeat_project": {
+    "argv": [
+      "<USER_HOME>/miniconda3/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests"
+    ],
+    "exit": 0,
+    "timed_out": false,
+    "timeout_seconds": 30,
+    "stdout": ".....                                                                    [100%]\n5 passed in 0.01s\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "repeat_acceptance": {
+    "checks": [
+      {
+        "name": "public_api",
+        "requirement": "public_api",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nassert handle('created', '42', correlation_id='cid') == {'name':'created','value':'42','correlation_id':'cid'}"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "event_service_indirect",
+        "requirement": "event_service_indirect",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app.events import Event\nfrom app.service import process\nassert process(Event('x','1',correlation_id='indirect'))['correlation_id'] == 'indirect'"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "json_sink",
+        "requirement": "json_sink",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "import json\nfrom app import handle\nfrom app.adapters.json_sink import write\nassert json.loads(write(handle('x','1',correlation_id='c'))) == {'name':'x','value':'1','correlation_id':'c'}"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "text_sink",
+        "requirement": "text_sink",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nfrom app.adapters.text_sink import write\nassert write(handle('x','1',correlation_id='c')) == 'x=1 correlation_id=c'"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "legacy_compatibility",
+        "requirement": "legacy_compatibility",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nfrom app.adapters.text_sink import write\nassert handle('x','1') == {'name':'x','value':'1'}\nassert write(handle('x','1')) == 'x=1'"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "empty_and_none",
+        "requirement": "empty_and_none",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from app import handle\nassert handle('x','1',correlation_id='')['correlation_id'] == ''\nassert 'correlation_id' not in handle('x','1',correlation_id=None)"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "cli_text",
+        "requirement": "cli_text",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "import contextlib,io\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n assert main(['x','1','--correlation-id','cli']) == 0\nassert s.getvalue().strip() == 'x=1 correlation_id=cli'"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "cli_json",
+        "requirement": "cli_json",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "import contextlib,io,json\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n main(['x','1','--format','json','--correlation-id','cli'])\nassert json.loads(s.getvalue()) == {'name':'x','value':'1','correlation_id':'cli'}"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      },
+      {
+        "name": "documentation",
+        "requirement": "documentation",
+        "passed": true,
+        "argv": [
+          "<USER_HOME>/miniconda3/bin/python",
+          "-c",
+          "from pathlib import Path\ns=Path('README.md').read_text()\nassert '--correlation-id' in s and 'handle(' in s and 'correlation_id=' in s"
+        ],
+        "exit": 0,
+        "timed_out": false,
+        "timeout_seconds": 8,
+        "stdout": "",
+        "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+      }
+    ],
+    "passed": 9,
+    "total": 9,
+    "summary": "9/9 passed",
+    "exit": 0
+  },
+  "initial_hashes": {
+    "README.md": "11717241f513020a7f2b63c58bbc1acdefa9e99663e2ce24ed03ae94c90aba1a",
+    "app/__init__.py": "0556857c71d706021af74ff9d58c60b35598d608765b1cf6e30d19f7efaf54b4",
+    "app/adapters/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/adapters/json_sink.py": "89ac6f13c735ce933fc8ea9e8fb874c8bffac3a8cb6ee1834e49ac8e8dde5542",
+    "app/adapters/text_sink.py": "eae8b0e3df9dfb16d29b0ab143208725a77e7bb3459dee411335c589da8a5b45",
+    "app/api.py": "87237860f9ea0f61c0bad510791d95a7920370331a23e6e574a10f48841e128a",
+    "app/cli.py": "a6f3b37cb366e8d0a78195bd980ed79bc834b64309a34371f404327f231a3cf2",
+    "app/events.py": "5e2e6b99dd734db8cd3ca8f9d7934dc7b6d6131b1b5f2e410e66858e5fa4442a",
+    "app/formatting.py": "d04ddd7a9e10edb73cf069f00159f662d3c0423a5df9ab8568f53cfa1bbd1321",
+    "app/service.py": "aa00b3fc91f072d98fa271e09ab700fa73be9b836c53ba4caf26498b082de458",
+    "app/storage.py": "c45f6d5f7f7d31d67ccb5d2f9add0dbb3c8092944e98c0e29b97c970557d7d81",
+    "tests/test_api.py": "9b917ffb51e5d23a242dadda25aacda92a1d61fd31107c25af717abf4e7df494",
+    "tests/test_cli.py": "a2908e5cb088a86836d64ee64baeb49fa17e5b5b78f5b09bb943d7de8787198e",
+    "tests/test_sinks.py": "aadfb947e0639fefe9bd97a476ac2231fb29ffdee93ef0a0bc52f3c6879c3434"
+  },
+  "oracle_hashes": {
+    "README.md": "7b3e4f50156e9087b6e9d61f372db999d30769d1d776eec6650fb8c2cd0d1c18",
+    "app/__init__.py": "0556857c71d706021af74ff9d58c60b35598d608765b1cf6e30d19f7efaf54b4",
+    "app/adapters/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/adapters/json_sink.py": "89ac6f13c735ce933fc8ea9e8fb874c8bffac3a8cb6ee1834e49ac8e8dde5542",
+    "app/adapters/text_sink.py": "eae8b0e3df9dfb16d29b0ab143208725a77e7bb3459dee411335c589da8a5b45",
+    "app/api.py": "eda2d6eb9af45596427aef13f8f050df17488e24c7351b1154204d54d5d21cd9",
+    "app/cli.py": "5b76cbcc3da4d727dfa4ff8af1fc368304e902d0137b4cbd74a344a1a32d0073",
+    "app/events.py": "27a08d00db9aada63630c90617b04c76f0122e0cac20593915d3323f216e87cb",
+    "app/formatting.py": "39dbf2fc7edf14f1a2eee54d035640ddf1b8b48cc6234cc8f27aa852ae92b438",
+    "app/service.py": "660a747a33c0698f8a3f68ca038236fb286306af5ecb216c0a8b32db04bd7789",
+    "app/storage.py": "c45f6d5f7f7d31d67ccb5d2f9add0dbb3c8092944e98c0e29b97c970557d7d81",
+    "tests/test_api.py": "9b917ffb51e5d23a242dadda25aacda92a1d61fd31107c25af717abf4e7df494",
+    "tests/test_cli.py": "a2908e5cb088a86836d64ee64baeb49fa17e5b5b78f5b09bb943d7de8787198e",
+    "tests/test_correlation.py": "700330176df481b38674eee909ca7ef0d1bfc73ea6a1586c715d0441ea8b7101",
+    "tests/test_sinks.py": "aadfb947e0639fefe9bd97a476ac2231fb29ffdee93ef0a0bc52f3c6879c3434"
+  },
+  "deterministic_rebuild": true,
+  "paid_model_requests": 0
+}

@@ -1,0 +1,15 @@
+{
+  "label": "suite-validation",
+  "argv": [
+    "<USER_HOME>/miniconda3/bin/python",
+    "<REPO>/tests/evaluation/fixtures/offline_exec.py",
+    "<USER_HOME>/miniconda3/bin/python",
+    "<REPO>/tests/evaluation/fixtures/agent_core_diagnostic_v1/validate.py",
+    "validate",
+    "all",
+    "<REPO>/docs/evidence/agent-core-diagnostic-suite-v1-2026-09-22"
+  ],
+  "exit": 0,
+  "stdout": "A_unknown_location 1/9 passed -> 9/9 passed\nB_failure_recovery 3/9 passed -> 9/9 passed\nC_long_horizon 1/12 passed -> 12/12 passed\n",
+  "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+}

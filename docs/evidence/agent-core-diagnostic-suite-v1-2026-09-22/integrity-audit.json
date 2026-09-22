@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "baseline": "f6cfa381fed47d9a82fd4e11a20c440a72b1512d",
+  "production_files": 376,
+  "historical_evidence_files": 2510,
+  "changed_old_files": [],
+  "scanned_files": 135,
+  "scan_failures": [],
+  "paid_model_requests": 0,
+  "agent_runs": 0,
+  "production_changes": false,
+  "limits": "Finite secret patterns; no model requests/responses exist in this offline suite."
+}

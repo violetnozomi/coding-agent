@@ -1,0 +1,143 @@
+{
+  "checks": [
+    {
+      "name": "public_api",
+      "requirement": "public_api",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "from app import handle\nassert handle('created', '42', correlation_id='cid') == {'name':'created','value':'42','correlation_id':'cid'}"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "event_service_indirect",
+      "requirement": "event_service_indirect",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "from app.events import Event\nfrom app.service import process\nassert process(Event('x','1',correlation_id='indirect'))['correlation_id'] == 'indirect'"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "json_sink",
+      "requirement": "json_sink",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom app import handle\nfrom app.adapters.json_sink import write\nassert json.loads(write(handle('x','1',correlation_id='c'))) == {'name':'x','value':'1','correlation_id':'c'}"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "text_sink",
+      "requirement": "text_sink",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "from app import handle\nfrom app.adapters.text_sink import write\nassert write(handle('x','1',correlation_id='c')) == 'x=1 correlation_id=c'"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "legacy_compatibility",
+      "requirement": "legacy_compatibility",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "from app import handle\nfrom app.adapters.text_sink import write\nassert handle('x','1') == {'name':'x','value':'1'}\nassert write(handle('x','1')) == 'x=1'"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "empty_and_none",
+      "requirement": "empty_and_none",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "from app import handle\nassert handle('x','1',correlation_id='')['correlation_id'] == ''\nassert 'correlation_id' not in handle('x','1',correlation_id=None)"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "cli_text",
+      "requirement": "cli_text",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import contextlib,io\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n assert main(['x','1','--correlation-id','cli']) == 0\nassert s.getvalue().strip() == 'x=1 correlation_id=cli'"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "cli_json",
+      "requirement": "cli_json",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import contextlib,io,json\nfrom app.cli import main\ns=io.StringIO()\nwith contextlib.redirect_stdout(s):\n main(['x','1','--format','json','--correlation-id','cli'])\nassert json.loads(s.getvalue()) == {'name':'x','value':'1','correlation_id':'cli'}"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "documentation",
+      "requirement": "documentation",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "from pathlib import Path\ns=Path('README.md').read_text()\nassert '--correlation-id' in s and 'handle(' in s and 'correlation_id=' in s"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    }
+  ],
+  "passed": 9,
+  "total": 9,
+  "summary": "9/9 passed",
+  "exit": 0
+}

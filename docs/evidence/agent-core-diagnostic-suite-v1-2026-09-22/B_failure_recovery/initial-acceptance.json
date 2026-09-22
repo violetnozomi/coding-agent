@@ -1,0 +1,143 @@
+{
+  "checks": [
+    {
+      "name": "normal_success",
+      "requirement": "normal_success",
+      "passed": true,
+      "argv": [
+        "node",
+        "-e",
+        "const assert=require('node:assert/strict'); const {schedule,Queue,RetryableError,summarize}=require(process.cwd()+'/index.cjs');\nconst guard=setTimeout(()=>{console.error('acceptance completion guard expired');process.exit(1);},2000);\n(async()=>{\nconst r=await schedule([{id:'a',payload:4,maxAttempts:3}], x=>x*2); assert.deepEqual(r,[{id:'a',ok:true,value:8,attempts:1}]);\n})().then(()=>clearTimeout(guard),e=>{clearTimeout(guard);console.error(e);process.exitCode=1;});\n"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "retryable_failure",
+      "requirement": "retryable_failure",
+      "passed": false,
+      "argv": [
+        "node",
+        "-e",
+        "const assert=require('node:assert/strict'); const {schedule,Queue,RetryableError,summarize}=require(process.cwd()+'/index.cjs');\nconst guard=setTimeout(()=>{console.error('acceptance completion guard expired');process.exit(1);},2000);\n(async()=>{\nlet n=0; const r=await schedule([{id:'a',payload:4,maxAttempts:3}],()=>{if(++n<3)throw new RetryableError('again'); return 'ok';}); assert.equal(r[0].value,'ok'); assert.equal(r[0].attempts,3);\n})().then(()=>clearTimeout(guard),e=>{clearTimeout(guard);console.error(e);process.exitCode=1;});\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ undefined\n- 'ok'\n    at [eval]:4:140 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: undefined,\n  expected: 'ok',\n  operator: 'strictEqual'\n}\n"
+    },
+    {
+      "name": "non_retryable",
+      "requirement": "non_retryable",
+      "passed": true,
+      "argv": [
+        "node",
+        "-e",
+        "const assert=require('node:assert/strict'); const {schedule,Queue,RetryableError,summarize}=require(process.cwd()+'/index.cjs');\nconst guard=setTimeout(()=>{console.error('acceptance completion guard expired');process.exit(1);},2000);\n(async()=>{\nfor(const retryable of [false,undefined,1,'true']) {let n=0; const e=Object.assign(new Error('stop'),{retryable}); const r=await schedule([{id:1,payload:0,maxAttempts:4}],()=>{n++;throw e;}); assert.equal(n,1);assert.equal(r[0].error,e);assert.equal(r[0].attempts,1);}\n})().then(()=>clearTimeout(guard),e=>{clearTimeout(guard);console.error(e);process.exitCode=1;});\n"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "exhaustion",
+      "requirement": "exhaustion",
+      "passed": false,
+      "argv": [
+        "node",
+        "-e",
+        "const assert=require('node:assert/strict'); const {schedule,Queue,RetryableError,summarize}=require(process.cwd()+'/index.cjs');\nconst guard=setTimeout(()=>{console.error('acceptance completion guard expired');process.exit(1);},2000);\n(async()=>{\nlet n=0,last; const r=await schedule([{id:1,payload:0,maxAttempts:3}],()=>{last=new RetryableError(String(++n));throw last;});assert.equal(n,3);assert.equal(r[0].error,last);assert.equal(r[0].ok,false);assert.equal(r[0].attempts,3);assert.equal(summarize(r).attempts,3);\n})().then(()=>clearTimeout(guard),e=>{clearTimeout(guard);console.error(e);process.exitCode=1;});\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 3\n\n    at [eval]:4:134 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: 1,\n  expected: 3,\n  operator: 'strictEqual'\n}\n"
+    },
+    {
+      "name": "fifo_fairness",
+      "requirement": "fifo_fairness",
+      "passed": false,
+      "argv": [
+        "node",
+        "-e",
+        "const assert=require('node:assert/strict'); const {schedule,Queue,RetryableError,summarize}=require(process.cwd()+'/index.cjs');\nconst guard=setTimeout(()=>{console.error('acceptance completion guard expired');process.exit(1);},2000);\n(async()=>{\nconst seen=[], counts={};const r=await schedule(['a','b','c'].map(id=>({id,payload:id,maxAttempts:3})),x=>{seen.push(x);counts[x]=(counts[x]||0)+1;if(x!=='c'&&counts[x]<3)throw new RetryableError('again');return x;});assert.deepEqual(seen,['a','b','c','a','b','a','b']);assert.deepEqual(r.map(x=>x.id),['a','b','c']);assert.deepEqual(r.map(x=>x.attempts),[3,3,1]);\n})().then(()=>clearTimeout(guard),e=>{clearTimeout(guard);console.error(e);process.exitCode=1;});\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'a',\n    'b',\n    'c',\n-   'a',\n-   'b',\n-   'a',\n-   'b'\n  ]\n    at [eval]:4:225 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [Array],\n  expected: [Array],\n  operator: 'deepStrictEqual'\n}\n"
+    },
+    {
+      "name": "new_work_not_starved",
+      "requirement": "new_work_not_starved",
+      "passed": false,
+      "argv": [
+        "node",
+        "-e",
+        "const assert=require('node:assert/strict'); const {schedule,Queue,RetryableError,summarize}=require(process.cwd()+'/index.cjs');\nconst guard=setTimeout(()=>{console.error('acceptance completion guard expired');process.exit(1);},2000);\n(async()=>{\nconst q=new Queue();q.enqueue({id:'a',payload:'a',maxAttempts:2});q.enqueue({id:'b',payload:'b'});const seen=[];const r=await q.run(x=>{seen.push(x);if(seen.length===1){q.enqueue({id:'c',payload:'c'});throw new RetryableError('again');}return x;});assert.deepEqual(seen,['a','b','c','a']);assert.deepEqual(r.map(x=>x.id),['a','b','c']);\n})().then(()=>clearTimeout(guard),e=>{clearTimeout(guard);console.error(e);process.exitCode=1;});\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'a',\n    'b',\n    'c',\n-   'a'\n  ]\n    at [eval]:4:256 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [Array],\n  expected: [Array],\n  operator: 'deepStrictEqual'\n}\n"
+    },
+    {
+      "name": "legacy_compatibility",
+      "requirement": "legacy_compatibility",
+      "passed": true,
+      "argv": [
+        "node",
+        "-e",
+        "const assert=require('node:assert/strict'); const {schedule,Queue,RetryableError,summarize}=require(process.cwd()+'/index.cjs');\nconst guard=setTimeout(()=>{console.error('acceptance completion guard expired');process.exit(1);},2000);\n(async()=>{\nconst e=new RetryableError('legacy');let n=0;const r=await schedule([{id:1,payload:'x'}], x=>{assert.equal(x,'x');n++;throw e;});assert.equal(n,1);assert.deepEqual(r,[{id:1,ok:false,error:e,attempts:1}]);assert.deepEqual(await schedule([],()=>0),[]);\n})().then(()=>clearTimeout(guard),e=>{clearTimeout(guard);console.error(e);process.exitCode=1;});\n"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "invalid_policy",
+      "requirement": "invalid_policy",
+      "passed": false,
+      "argv": [
+        "node",
+        "-e",
+        "const assert=require('node:assert/strict'); const {schedule,Queue,RetryableError,summarize}=require(process.cwd()+'/index.cjs');\nconst guard=setTimeout(()=>{console.error('acceptance completion guard expired');process.exit(1);},2000);\n(async()=>{\nfor(const value of [0,-1,1.5,'2',null,NaN,Infinity]) {const q=new Queue();assert.throws(()=>q.enqueue({id:1,payload:0,maxAttempts:value}),RangeError);let invoked=false;assert.deepEqual(await q.run(()=>{invoked=true;}),[]);assert.equal(invoked,false);}\n})().then(()=>clearTimeout(guard),e=>{clearTimeout(guard);console.error(e);process.exitCode=1;});\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nAssertionError [ERR_ASSERTION]: Missing expected exception (RangeError).\n    at [eval]:4:82\n    at [eval]:5:3\n    at Script.runInThisContext (node:vm:122:12)\n    at Object.runInThisContext (node:vm:298:38)\n    at node:internal/process/execution:82:21\n    at [eval]-wrapper:6:24\n    at runScript (node:internal/process/execution:81:62)\n    at evalScript (node:internal/process/execution:103:10)\n    at node:internal/main/eval_string:30:3 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: undefined,\n  expected: [Function: RangeError],\n  operator: 'throws'\n}\n"
+    },
+    {
+      "name": "documentation",
+      "requirement": "documentation",
+      "passed": false,
+      "argv": [
+        "node",
+        "-e",
+        "const assert=require('node:assert/strict'); const {schedule,Queue,RetryableError,summarize}=require(process.cwd()+'/index.cjs');\nconst guard=setTimeout(()=>{console.error('acceptance completion guard expired');process.exit(1);},2000);\n(async()=>{\nconst s=require('node:fs').readFileSync('README.md','utf8');for(const term of ['maxAttempts','retryable','attempts','RangeError'])assert.ok(s.includes(term),term);assert.match(s,/tail|FIFO|fairness/i);\n})().then(()=>clearTimeout(guard),e=>{clearTimeout(guard);console.error(e);process.exitCode=1;});\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nAssertionError [ERR_ASSERTION]: maxAttempts\n    at [eval]:4:138\n    at [eval]:5:3\n    at Script.runInThisContext (node:vm:122:12)\n    at Object.runInThisContext (node:vm:298:38)\n    at node:internal/process/execution:82:21\n    at [eval]-wrapper:6:24\n    at runScript (node:internal/process/execution:81:62)\n    at evalScript (node:internal/process/execution:103:10)\n    at node:internal/main/eval_string:30:3 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: false,\n  expected: true,\n  operator: '=='\n}\n"
+    }
+  ],
+  "passed": 3,
+  "total": 9,
+  "summary": "3/9 passed",
+  "exit": 1
+}

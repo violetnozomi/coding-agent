@@ -1,0 +1,132 @@
+--- a/configkit/cli.py
++++ b/configkit/cli.py
+@@ -5,0 +6 @@
++from .config.errors import ConfigError
+@@ -10,2 +11,6 @@
+-    parser.add_argument("command", choices=sorted(COMMANDS))
+-    parser.add_argument("path")
++    commands = parser.add_subparsers(dest="command", required=True)
++    for name in sorted(COMMANDS):
++        command = commands.add_parser(name)
++        command.add_argument("path")
++        if name == "migrate":
++            command.add_argument("--dry-run", action="store_true")
+@@ -15,2 +20,2 @@
+-    except ValueError as exc:
+-        print(str(exc), file=sys.stderr)
++    except ConfigError as exc:
++        print(json.dumps(exc.to_dict()), file=sys.stderr)
+--- a/configkit/commands/migrate.py
++++ b/configkit/commands/migrate.py
+@@ -5 +5 @@
+-    return migrate_file(args.path)
++    return migrate_file(args.path, dry_run=args.dry_run)
+--- a/configkit/config/errors.py
++++ b/configkit/config/errors.py
+@@ -2 +2,6 @@
+-    pass
++    def __init__(self, path, code="invalid"):
++        self.path, self.code = path, code
++        super().__init__(f"{path}: {code}")
++
++    def to_dict(self):
++        return {"error": "invalid_config", "issues": [{"path": self.path, "code": self.code}]}
+--- a/configkit/config/parser.py
++++ b/configkit/config/parser.py
+@@ -3,0 +4 @@
++from .errors import ConfigError
+@@ -9,3 +10,20 @@
+-    data = json.loads(text)
+-    validate(data)
+-    return Config(data["name"], data["host"], data["port"], data.get("enabled", DEFAULT_ENABLED))
++    try:
++        data = json.loads(text)
++    except (ValueError, TypeError) as exc:
++        raise ConfigError("$") from exc
++    if not isinstance(data, dict):
++        raise ConfigError("$")
++    version = data.get("version", 1)
++    if type(version) is not int or version not in (1, 2):
++        raise ConfigError("version", "unsupported")
++    if version == 2:
++        service = data.get("service")
++        service = service if isinstance(service, dict) else {}
++        endpoint = service.get("endpoint")
++        endpoint = endpoint if isinstance(endpoint, dict) else {}
++        flat = {"name": service.get("name"), "host": endpoint.get("host"),
++                "port": endpoint.get("port"), "enabled": data.get("enabled", DEFAULT_ENABLED)}
++    else:
++        flat = data
++    validate(flat, "service." if version == 2 else "")
++    return Config(flat["name"], flat["host"], flat["port"], flat.get("enabled", DEFAULT_ENABLED))
+--- a/configkit/config/validation.py
++++ b/configkit/config/validation.py
+@@ -4 +4 @@
+-def validate(data):
++def validate(data, prefix=""):
+@@ -7 +7,2 @@
+-            raise ConfigError(f"invalid {key}")
++            path = prefix + ("endpoint." if prefix and key == "host" else "") + key
++            raise ConfigError(path)
+@@ -10 +11 @@
+-        raise ConfigError("invalid port")
++        raise ConfigError(prefix + ("endpoint." if prefix else "") + "port")
+@@ -12 +13 @@
+-        raise ConfigError("invalid enabled")
++        raise ConfigError("enabled")
+--- a/configkit/config/writer.py
++++ b/configkit/config/writer.py
+@@ -1,0 +2,2 @@
++
++from .validation import validate
+@@ -5 +7,3 @@
+-    return {"name": config.name, "host": config.host, "port": config.port, "enabled": config.enabled}
++    validate({"name": config.name, "host": config.host, "port": config.port, "enabled": config.enabled})
++    return {"version": 2, "service": {"name": config.name,
++            "endpoint": {"host": config.host, "port": config.port}}, "enabled": config.enabled}
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -3,3 +3,11 @@
+-Read a JSON object containing name, host, port and optional enabled.
+-Use python -m configkit show config.json to print a summary.
+-The service exports configurations to a new path.
++v1: {"name":"demo","host":"localhost","port":8080,"enabled":true}
++v2: {"version":2,"service":{"name":"demo","endpoint":{"host":"localhost","port":8080}},"enabled":true}
++
++Both read into Config. All new writes use v2. enabled defaults to true.
++python -m configkit migrate config.json writes v2; add --dry-run to preview
++the identical object without changing bytes. python -m configkit show config.json
++keeps the legacy summary. export_config leaves its source unchanged.
++Errors exit 2 on CLI, with stderr:
++{"error":"invalid_config","issues":[{"path":"service.endpoint.port","code":"invalid"}]}.
++ConfigError remains a ValueError. Invalid input never overwrites files.
++Run python -m pytest -q tests.
+--- a/tests/test_migration.py
++++ b/tests/test_migration.py
+@@ -0,0 +1,26 @@
++import json
++import pytest
++from configkit import Config, dumps, loads
++from configkit.config.errors import ConfigError
++from configkit.config.migrate import migrate_file
++
++
++def test_v2():
++    data = {"version": 2, "service": {"name": "demo", "endpoint": {"host": "local", "port": 80}}}
++    assert loads(json.dumps(data)) == Config("demo", "local", 80)
++    assert json.loads(dumps(Config("demo", "local", 80)))["version"] == 2
++
++
++def test_dry_run(tmp_path):
++    path = tmp_path / "c.json"
++    path.write_text('{"name":"demo","host":"local","port":80}')
++    before = path.read_bytes()
++    assert migrate_file(path, dry_run=True)["version"] == 2
++    assert path.read_bytes() == before
++    assert migrate_file(path) == migrate_file(path)
++
++
++def test_error():
++    with pytest.raises(ConfigError) as caught:
++        loads('{"version":2,"service":{"name":"demo","endpoint":{"host":"local","port":false}}}')
++    assert caught.value.to_dict() == {"error":"invalid_config","issues":[{"path":"service.endpoint.port","code":"invalid"}]}

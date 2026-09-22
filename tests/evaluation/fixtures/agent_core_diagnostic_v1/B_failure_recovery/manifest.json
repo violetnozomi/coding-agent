@@ -1,0 +1,31 @@
+{
+  "id": "B_failure_recovery",
+  "diagnostic_target": [
+    "failure_evidence",
+    "targeted_repair",
+    "fair_retry",
+    "verification_binding"
+  ],
+  "task_file": "task.md",
+  "acceptance_command": "python ../validate.py acceptance B_failure_recovery WORKSPACE",
+  "project_test_command": [
+    "node",
+    "--test",
+    "tests/queue.test.cjs",
+    "tests/scheduler.test.cjs"
+  ],
+  "network_required": false,
+  "expected_initial_acceptance": "3/9",
+  "expected_oracle_acceptance": "9/9",
+  "required_artifacts": [
+    "per-job policy",
+    "retry classification",
+    "FIFO tail rescheduling",
+    "actual attempts and error identity",
+    "dynamic enqueue fairness",
+    "README",
+    "tests"
+  ],
+  "authoritative_references": [],
+  "notes": "Single worker queue; no bounded-concurrency pool, cancellation, timing races or wall-clock backoff. Failure-driven behavior is possible, not forced."
+}

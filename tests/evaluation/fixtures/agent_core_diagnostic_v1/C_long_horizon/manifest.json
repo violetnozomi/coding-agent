@@ -1,0 +1,38 @@
+{
+  "id": "C_long_horizon",
+  "diagnostic_target": [
+    "multi_obligation",
+    "authority_context",
+    "verification_generation",
+    "semantic_closure"
+  ],
+  "task_file": "task.md",
+  "acceptance_command": "python ../validate.py acceptance C_long_horizon WORKSPACE",
+  "project_test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+  ],
+  "network_required": false,
+  "expected_initial_acceptance": "1/12",
+  "expected_oracle_acceptance": "12/12",
+  "required_artifacts": [
+    "v2 read",
+    "v2-only write",
+    "v1 compatibility",
+    "structured validation",
+    "migration",
+    "CLI dry-run",
+    "consumer export",
+    "docs examples",
+    "project tests"
+  ],
+  "authoritative_references": [
+    "CONFIG_SPEC.md"
+  ],
+  "notes": "18 purposeful Python modules; six business-file oracle edits plus tests/docs. Existing migration and consumers must integrate without mandatory edits to every module."
+}

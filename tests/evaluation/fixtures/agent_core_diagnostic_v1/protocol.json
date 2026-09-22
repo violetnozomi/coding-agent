@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "phase": "offline_fixture_preparation",
+  "paid_model_requests": 0,
+  "agent_execution_enabled": false,
+  "authorization": "New explicit authorization required for main and naturally triggered auxiliary requests",
+  "future_order": [
+    "A_unknown_location",
+    "B_failure_recovery",
+    "C_long_horizon"
+  ],
+  "samples_per_task": 1,
+  "resample": false,
+  "independent_acceptance_feedback_to_agent": false,
+  "provider_runner": "Reuse historical NativeSDKRunner/run-nz + capture/project; no paid launcher included in this suite",
+  "historical_capture": "docs/evidence/q-post-stream-timeout-real-retest-2026-09-22/capture.py",
+  "historical_projection": "docs/evidence/q-post-stream-timeout-real-retest-2026-09-22/project.py",
+  "permissions": {
+    "style": "workspace-scoped file tools and explicit local argv allowlist plus production built-in guards",
+    "allowed_tools": "Existing normal read/search/repo-intelligence/edit tools, no evaluator root access",
+    "bash_allowed_argv_patterns": [
+      "python|python3 -m pytest [-q] tests[/RELATIVE_TEST]",
+      "node --test tests/queue.test.cjs tests/scheduler.test.cjs",
+      "python|python3 -m app.cli NAME VALUE [--correlation-id ID] [--format text|json]",
+      "python|python3 -m configkit show|migrate WORKSPACE_RELATIVE_PATH [--dry-run]",
+      "node cli.cjs PAYLOAD...",
+      "git status --short",
+      "git diff [--stat]"
+    ],
+    "constraints": [
+      "No shell operators/substitutions/redirections",
+      "Paths must resolve inside workspace",
+      "No evaluator-only files",
+      "No external network/install/credentials",
+      "A shell permission denial is logged separately from command failure"
+    ],
+    "future_wiring": "Translate patterns to argv checks and validate in the separately authorized run preflight; never bypass production guards"
+  },
+  "network": "Existing offline_exec inherited AF_INET/AF_INET6 denial, no Provider forwarding this phase",
+  "capture": {
+    "boundary": "settled mutation batch",
+    "snapshot": "validate.snapshot read-only hashes before/copy/after",
+    "acceptance": "validate.acceptance on per-check disposable copies",
+    "tool_result": "canonical metadata including timeout, exit, cancellation, dispatch/command failure",
+    "authority": [
+      "original hash",
+      "source",
+      "authority_epoch",
+      "complete",
+      "model_observed",
+      "omitted count"
+    ],
+    "usage": "Provider raw fields; separate main/aux IDs; cost unknown unless provider billing exposed"
+  },
+  "future_budget": "Freeze model/caps/settings per future authorization before any run; no paid budget assigned or consumed now",
+  "stop": "Freeze each sample. At deterministic Core divergence stop remaining tasks if no causal value; design offline RED separately. Never patch mid-run."
+}

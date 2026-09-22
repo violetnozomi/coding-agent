@@ -1,0 +1,188 @@
+{
+  "checks": [
+    {
+      "name": "v1_read",
+      "requirement": "v1_read",
+      "passed": true,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nassert loads(json.dumps(v1)) == Config('demo','localhost',8080,False)\nv1['version']=1\nassert loads(json.dumps(v1)).enabled is False\n"
+      ],
+      "exit": 0,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    {
+      "name": "v2_read",
+      "requirement": "v2_read",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nassert loads(json.dumps(v2)) == Config('demo','localhost',8080,False)\ndel v2['enabled'];v2['extra']='ignored'\nassert loads(json.dumps(v2)).enabled is True\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 5, in <module>\n    assert loads(json.dumps(v2)) == Config('demo','localhost',8080,False)\n           ~~~~~^^^^^^^^^^^^^^^^\n  File \"<WORKSPACE>/configkit/config/parser.py\", line 10, in loads\n    validate(data)\n    ~~~~~~~~^^^^^^\n  File \"<WORKSPACE>/configkit/config/validation.py\", line 7, in validate\n    raise ConfigError(f\"invalid {key}\")\nconfigkit.config.errors.ConfigError: invalid name\n"
+    },
+    {
+      "name": "v2_write",
+      "requirement": "v2_write",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nassert json.loads(dumps(Config('demo','localhost',8080,False))) == v2\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 5, in <module>\n    assert json.loads(dumps(Config('demo','localhost',8080,False))) == v2\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+    },
+    {
+      "name": "migration",
+      "requirement": "migration",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom configkit.config.migrate import migrate_file\nwith TemporaryDirectory() as td:\n p=Path(td)/'c.json';p.write_text(json.dumps(v1))\n assert migrate_file(p)==v2\n assert json.loads(p.read_text())==v2\n assert migrate_file(p)==v2\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 10, in <module>\n    assert migrate_file(p)==v2\n           ^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+    },
+    {
+      "name": "dry_run",
+      "requirement": "dry_run",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom configkit.config.migrate import migrate_file\nwith TemporaryDirectory() as td:\n p=Path(td)/'c.json';p.write_text(json.dumps(v1,indent=4));before=p.read_bytes()\n assert migrate_file(p,dry_run=True)==v2\n assert p.read_bytes()==before\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 10, in <module>\n    assert migrate_file(p,dry_run=True)==v2\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+    },
+    {
+      "name": "invalid_config",
+      "requirement": "invalid_config",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom configkit.config.errors import ConfigError\nfor raw,path,code in [('oops','$','invalid'),('[]','$','invalid'),('{\"version\":3}','version','unsupported'),('{\"version\":true}','version','unsupported'),('{\"version\":2}','service.name','invalid')]:\n try: loads(raw)\n except ConfigError as e:\n  assert isinstance(e,ValueError)\n  assert e.to_dict()=={'error':'invalid_config','issues':[{'path':path,'code':code}]}\n else: raise AssertionError('invalid accepted')\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    try: loads(raw)\n         ~~~~~^^^^^\n  File \"<WORKSPACE>/configkit/config/parser.py\", line 9, in loads\n    data = json.loads(text)\n  File \"<USER_HOME>/miniconda3/lib/python3.13/json/__init__.py\", line 352, in loads\n    return _default_decoder.decode(s)\n           ~~~~~~~~~~~~~~~~~~~~~~~^^^\n  File \"<USER_HOME>/miniconda3/lib/python3.13/json/decoder.py\", line 345, in decode\n    obj, end = self.raw_decode(s, idx=_w(s, 0).end())\n               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<USER_HOME>/miniconda3/lib/python3.13/json/decoder.py\", line 363, in raw_decode\n    raise JSONDecodeError(\"Expecting value\", s, err.value) from None\njson.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)\n"
+    },
+    {
+      "name": "validation_paths",
+      "requirement": "validation_paths",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom configkit.config.errors import ConfigError\nfor field,value,path in [('name',' ','service.name'),('host',None,'service.endpoint.host'),('port',True,'service.endpoint.port'),('port',65536,'service.endpoint.port'),('enabled',1,'enabled')]:\n d=json.loads(json.dumps(v2));target=d if field=='enabled' else d['service'] if field=='name' else d['service']['endpoint'];target[field]=value\n try: loads(json.dumps(d))\n except ConfigError as e: assert e.to_dict()=={'error':'invalid_config','issues':[{'path':path,'code':'invalid'}]}\n else: raise AssertionError('invalid accepted')\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 8, in <module>\n    try: loads(json.dumps(d))\n         ~~~~~^^^^^^^^^^^^^^^\n  File \"<WORKSPACE>/configkit/config/parser.py\", line 10, in loads\n    validate(data)\n    ~~~~~~~~^^^^^^\n  File \"<WORKSPACE>/configkit/config/validation.py\", line 7, in validate\n    raise ConfigError(f\"invalid {key}\")\nconfigkit.config.errors.ConfigError: invalid name\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"<string>\", line 9, in <module>\n    except ConfigError as e: assert e.to_dict()=={'error':'invalid_config','issues':[{'path':path,'code':'invalid'}]}\n                                    ^^^^^^^^^\nAttributeError: 'ConfigError' object has no attribute 'to_dict'\n"
+    },
+    {
+      "name": "cli_migrate",
+      "requirement": "cli_migrate",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nimport contextlib,io\nfrom configkit.cli import main\nwith TemporaryDirectory() as td:\n p=Path(td)/'c.json';p.write_text(json.dumps(v1));before=p.read_bytes();out=io.StringIO()\n with contextlib.redirect_stdout(out): assert main(['migrate',str(p),'--dry-run'])==0\n assert json.loads(out.getvalue())==v2 and p.read_bytes()==before\n out=io.StringIO()\n with contextlib.redirect_stdout(out): assert main(['migrate',str(p)])==0\n assert json.loads(out.getvalue())==v2 and json.loads(p.read_text())==v2\n"
+      ],
+      "exit": 2,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nusage: -c [-h] {migrate,show} path\n-c: error: unrecognized arguments: --dry-run\n"
+    },
+    {
+      "name": "cli_invalid_preserves_input",
+      "requirement": "cli_invalid_preserves_input",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nimport contextlib,io\nfrom configkit.cli import main\nwith TemporaryDirectory() as td:\n p=Path(td)/'c.json';p.write_text('{\"version\":3}');before=p.read_bytes();err=io.StringIO()\n with contextlib.redirect_stderr(err): assert main(['migrate',str(p)])==2\n assert json.loads(err.getvalue())=={'error':'invalid_config','issues':[{'path':'version','code':'unsupported'}]}\n assert p.read_bytes()==before\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n    assert json.loads(err.getvalue())=={'error':'invalid_config','issues':[{'path':'version','code':'unsupported'}]}\n           ~~~~~~~~~~^^^^^^^^^^^^^^^^\n  File \"<USER_HOME>/miniconda3/lib/python3.13/json/__init__.py\", line 352, in loads\n    return _default_decoder.decode(s)\n           ~~~~~~~~~~~~~~~~~~~~~~~^^^\n  File \"<USER_HOME>/miniconda3/lib/python3.13/json/decoder.py\", line 345, in decode\n    obj, end = self.raw_decode(s, idx=_w(s, 0).end())\n               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<USER_HOME>/miniconda3/lib/python3.13/json/decoder.py\", line 363, in raw_decode\n    raise JSONDecodeError(\"Expecting value\", s, err.value) from None\njson.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)\n"
+    },
+    {
+      "name": "caller_integration",
+      "requirement": "caller_integration",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom configkit.service import export_config,inspect_config\nfrom configkit.cli import main\nimport contextlib,io\nwith TemporaryDirectory() as td:\n source=Path(td)/'s';dest=Path(td)/'d';source.write_text(json.dumps(v2));before=source.read_bytes()\n expected={'name':'demo','address':'localhost:8080','enabled':False}\n assert export_config(source,dest)==expected\n assert inspect_config(dest)==expected and json.loads(dest.read_text())==v2\n assert source.read_bytes()==before\n out=io.StringIO()\n with contextlib.redirect_stdout(out): assert main(['show',str(dest)])==0\n assert json.loads(out.getvalue())==expected\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 13, in <module>\n    assert export_config(source,dest)==expected\n           ~~~~~~~~~~~~~^^^^^^^^^^^^^\n  File \"<WORKSPACE>/configkit/service.py\", line 10, in export_config\n    config = load(source)\n  File \"<WORKSPACE>/configkit/store.py\", line 7, in load\n    return loads(config_path(path).read_text())\n  File \"<WORKSPACE>/configkit/config/parser.py\", line 10, in loads\n    validate(data)\n    ~~~~~~~~^^^^^^\n  File \"<WORKSPACE>/configkit/config/validation.py\", line 7, in validate\n    raise ConfigError(f\"invalid {key}\")\nconfigkit.config.errors.ConfigError: invalid name\n"
+    },
+    {
+      "name": "invalid_write_preserves_destination",
+      "requirement": "invalid_write_preserves_destination",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom configkit.store import save\nfrom configkit.config.errors import ConfigError\nwith TemporaryDirectory() as td:\n p=Path(td)/'d';p.write_text('preserve')\n try: save(p,Config('demo','localhost',False))\n except ConfigError: pass\n else: raise AssertionError('invalid write accepted')\n assert p.read_text()=='preserve'\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 13, in <module>\n    else: raise AssertionError('invalid write accepted')\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: invalid write accepted\n"
+    },
+    {
+      "name": "documentation",
+      "requirement": "documentation",
+      "passed": false,
+      "argv": [
+        "<USER_HOME>/miniconda3/bin/python",
+        "-c",
+        "import json\nfrom configkit import Config, loads, dumps\nv1={'name':'demo','host':'localhost','port':8080,'enabled':False}\nv2={'version':2,'service':{'name':'demo','endpoint':{'host':'localhost','port':8080}},'enabled':False}\nfrom pathlib import Path\ns=Path('docs/README.md').read_text()\nfor term in ['v1','v2','--dry-run','migrate','invalid_config','service','endpoint']: assert term in s,term\n"
+      ],
+      "exit": 1,
+      "timed_out": false,
+      "timeout_seconds": 8,
+      "stdout": "",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    for term in ['v1','v2','--dry-run','migrate','invalid_config','service','endpoint']: assert term in s,term\n                                                                                                ^^^^^^^^^\nAssertionError: v1\n"
+    }
+  ],
+  "passed": 1,
+  "total": 12,
+  "summary": "1/12 passed",
+  "exit": 1
+}

@@ -1,0 +1,15 @@
+{
+  "recording": "retrospective command index for final publication checks",
+  "checks": [
+    {
+      "command": "python docs/evidence/agent-core-diagnostic-suite-v1-2026-09-22/audit.py",
+      "exit": 0,
+      "result": "2886 source/history hashes unchanged; privacy scan passed"
+    },
+    {
+      "command": "python -m ruff check tests/evaluation/fixtures/agent_core_diagnostic_v1 tests/evaluation/test_agent_core_diagnostic_v1.py docs/evidence/agent-core-diagnostic-suite-v1-2026-09-22/verify.py docs/evidence/agent-core-diagnostic-suite-v1-2026-09-22/audit.py",
+      "exit": 0,
+      "stdout": "All checks passed!"
+    }
+  ]
+}

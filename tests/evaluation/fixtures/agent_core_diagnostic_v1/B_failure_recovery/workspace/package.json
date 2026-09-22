@@ -1,0 +1,1 @@
+{"name":"local-retry-queue","private":true,"scripts":{"test":"node --test tests/queue.test.cjs tests/scheduler.test.cjs"}}

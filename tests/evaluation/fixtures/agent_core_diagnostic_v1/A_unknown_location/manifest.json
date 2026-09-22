@@ -1,0 +1,33 @@
+{
+  "id": "A_unknown_location",
+  "diagnostic_target": [
+    "repo_intelligence",
+    "caller_propagation",
+    "terminal_closure"
+  ],
+  "task_file": "task.md",
+  "acceptance_command": "python ../validate.py acceptance A_unknown_location WORKSPACE",
+  "project_test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+  ],
+  "network_required": false,
+  "expected_initial_acceptance": "1/9",
+  "expected_oracle_acceptance": "9/9",
+  "required_artifacts": [
+    "public API",
+    "event model",
+    "service propagation",
+    "JSON and text sink behavior",
+    "CLI",
+    "README example",
+    "project tests"
+  ],
+  "authoritative_references": [],
+  "notes": "Artifacts are evaluator obligations, not required file edits or model hints; implementation may choose different module boundaries."
+}

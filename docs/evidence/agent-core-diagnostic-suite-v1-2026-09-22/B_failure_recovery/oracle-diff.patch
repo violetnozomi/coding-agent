@@ -1,0 +1,96 @@
+--- a/README.md
++++ b/README.md
+@@ -3,4 +3,11 @@
+-schedule(jobs, worker) invokes a worker with each payload.
+-Jobs have id and payload. Results preserve submission order and contain
+-id, ok, value (success) or error (failure), and attempts.
+-Queue.enqueue and Queue.run support work added during execution.
++schedule(jobs, worker) and Queue.enqueue(job)/run(worker) accept jobs with id,
++payload and optional maxAttempts. The worker receives only payload.
++maxAttempts is a positive integer including the first attempt, default 1;
++invalid values raise RangeError before enqueue/invoke.
++Only errors with retryable === true retry. On failure append the retry at the
++tail behind queued work, including jobs enqueued by the worker.
++Fairness example: A fails once, B is queued: order A, B, A. Results remain A, B.
++Success records: {id, ok:true, value, attempts}. Failure: {id, ok:false, error, attempts}.
++Exhaustion retains the final error object and actual attempts; old jobs run once.
++Use RetryableError for retryable failures. summarize reports summed attempts.
++Run node --test tests/queue.test.cjs tests/scheduler.test.cjs.
+--- a/lib/policy.cjs
++++ b/lib/policy.cjs
+@@ -0,0 +1,9 @@
++function maxAttempts(job) {
++  const limit = job.maxAttempts === undefined ? 1 : job.maxAttempts;
++  if (!Number.isInteger(limit) || limit < 1) throw new RangeError('maxAttempts must be a positive integer');
++  return limit;
++}
++function retry(result, limit) {
++  return !result.ok && result.error?.retryable === true && result.attempts < limit;
++}
++module.exports = { maxAttempts, retry };
+--- a/lib/queue.cjs
++++ b/lib/queue.cjs
+@@ -1,0 +2 @@
++const { maxAttempts, retry } = require('./policy.cjs');
+@@ -4 +5,4 @@
+-  enqueue(job) { this.pending.push({ job, index: this.count++ }); }
++  enqueue(job) {
++    const limit = maxAttempts(job);
++    this.pending.push({ job, limit, attempts: 0, index: this.count++ });
++  }
+@@ -8,2 +12,4 @@
+-      const { job, index } = this.pending.shift();
+-      results[index] = await invoke(worker, job);
++      const entry = this.pending.shift();
++      const result = await invoke(worker, entry.job, ++entry.attempts);
++      if (retry(result, entry.limit)) this.pending.push(entry);
++      else results[entry.index] = result;
+--- a/lib/worker.cjs
++++ b/lib/worker.cjs
+@@ -1,3 +1,3 @@
+-async function invoke(worker, job) {
+-  try { return { id: job.id, ok: true, value: await worker(job.payload), attempts: 1 }; }
+-  catch (error) { return { id: job.id, ok: false, error, attempts: 1 }; }
++async function invoke(worker, job, attempts = 1) {
++  try { return { id: job.id, ok: true, value: await worker(job.payload), attempts }; }
++  catch (error) { return { id: job.id, ok: false, error, attempts }; }
+--- a/tests/queue.test.cjs
++++ b/tests/queue.test.cjs
+@@ -3 +3 @@
+-const { Queue } = require('../index.cjs');
++const { Queue, RetryableError } = require('../index.cjs');
+@@ -10,0 +11,16 @@
++test('FIFO and retry fairness', {timeout:1000}, async () => {
++  const q = new Queue(); q.enqueue({id:'a',payload:'a',maxAttempts:2}); q.enqueue({id:'b',payload:'b'});
++  const seen = [];
++  const result = await q.run(x => {
++    seen.push(x);
++    if (x === 'a' && seen.length === 1) throw new RetryableError('again');
++    return x;
++  });
++  assert.deepEqual(seen, ['a','b','a']);
++  assert.deepEqual(result.map(x=>x.attempts), [2,1]);
++  assert.deepEqual(result.map(x=>x.id), ['a','b']);
++});
++test('invalid policy never enqueues', () => {
++  const q = new Queue();
++  assert.throws(()=>q.enqueue({id:'bad',payload:1,maxAttempts:0}), RangeError);
++});
+--- a/tests/scheduler.test.cjs
++++ b/tests/scheduler.test.cjs
+@@ -3,2 +3,2 @@
+-const { schedule, summarize } = require('../index.cjs');
+-test('failure identity and metrics', {timeout:1000}, async () => {
++const { schedule, summarize, RetryableError } = require('../index.cjs');
++test('legacy failure identity and metrics', {timeout:1000}, async () => {
+@@ -7 +7 @@
+-  assert.equal(results[0].error, error);
++  assert.equal(results[0].error,error);
+@@ -9,0 +10,7 @@
++test('exhaustion retains final error', {timeout:1000}, async () => {
++  let final; let count=0;
++  const result=await schedule([{id:'a',payload:1,maxAttempts:3}],()=>{
++    final=new RetryableError(String(++count)); throw final;
++  });
++  assert.equal(result[0].error,final); assert.equal(result[0].attempts,3);
++});
