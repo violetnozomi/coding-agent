@@ -1,0 +1,26 @@
+{
+  "nz_commit": "265b3a30284c7c8ca6042ef0faae7e17e48d1d39",
+  "production_baseline": "45db8e38a8de58d404b6601a47b2fe5b518f248a",
+  "tasks": [
+    {
+      "id": "Q",
+      "title": "Bounded async worker pool, failure drain and cancellation",
+      "prompt": "Repair lib/pool.cjs and its batch consumer according to REQUIREMENTS.md. Implement bounded concurrency, stable result ordering, failure draining and AbortSignal cancellation without breaking the public API. Add meaningful tests and update README.md. Run node --test tests/pool.test.cjs tests/batch.test.cjs and report the actual result and remaining limitations.",
+      "initial_hashes": {
+        "README.md": "a576bf215be3580dba11ec2a347696a27706f8bf3d4ec455f3069c7e6afc4a38",
+        "REQUIREMENTS.md": "7a3e48a4e3e7cdcaedb59bdc1e3b524597a1764f00bfaab23a70a1d7ecff9bed",
+        "index.cjs": "d381c6f7be04252e280c53926eeb0b4fdd9621cf183a05f81f14791fb19738b5",
+        "lib/batch.cjs": "f6393c69e7c484b9e329df5d22b28bd0df353764313b557b31241c89a33bc3f5",
+        "lib/pool.cjs": "c5980f6446b09bb993bb2da8deaf122838e6c2f95976d55903ce473a864d3ed3",
+        "package.json": "5f99124db57570f6d19ecf5c35ab29326ab192f73d7836392c63844846d0a3a6",
+        "tests/batch.test.cjs": "bdc64f08c76b71e43cc3c13b8f97de5d63e689a93bb4be850080b508c3075bfa",
+        "tests/pool.test.cjs": "494aa2cbefb471dff9421bf67101410ccf2942ecb186d74a42edeee98b139862"
+      },
+      "historical_baseline": "complex-paired-2026-09-20/Q/nzcoder and post-authority-real-retest-2026-09-21/Q/nzcoder"
+    }
+  ],
+  "main_cap": 24,
+  "auxiliary_cap": 8,
+  "infcodex_requests": 0,
+  "one_real_run": true
+}

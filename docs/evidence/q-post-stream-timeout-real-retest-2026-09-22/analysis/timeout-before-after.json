@@ -1,0 +1,15 @@
+{
+  "before": {
+    "main": 7,
+    "auxiliary": 0,
+    "acceptance": "6/7",
+    "terminal": "error",
+    "timeout": true,
+    "next_request_after_timeout": false,
+    "review_calls": 0
+  },
+  "after": {
+    "observed": false
+  },
+  "conclusion": "No timeout this sample; real-model recovery hypothesis not directly exercised."
+}

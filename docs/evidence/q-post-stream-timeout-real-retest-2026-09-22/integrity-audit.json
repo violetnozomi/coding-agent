@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "checks": {
+    "source": {
+      "count": 376,
+      "changed": []
+    },
+    "historical": {
+      "count": 1185,
+      "changed": []
+    }
+  },
+  "frozen_files": 115,
+  "scanned_files": 141,
+  "failures": [],
+  "main_requests": 12,
+  "auxiliary_requests": 1,
+  "cost": "unknown",
+  "production_changes": false,
+  "limitation": "Pattern scans do not prove absence of every unknown secret."
+}

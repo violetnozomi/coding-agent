@@ -1,0 +1,24 @@
+[
+  {
+    "time": 1790043107.436258,
+    "run_id": "20260922_101020_91b31379",
+    "request_id": 13,
+    "event": "terminal_boundary_settled",
+    "boundary": "natural_completion",
+    "decision": "finalize",
+    "status": "completed",
+    "reason": "semantic_review_and_ledger_satisfied",
+    "completed_turns": 12,
+    "nominal_turns": 24,
+    "hard_cap": 24,
+    "contract_executed": true,
+    "contract_required": true,
+    "contract_passed": true,
+    "mutation_generation": 5,
+    "unresolved_requirements": [],
+    "semantic_review_pending_before": true,
+    "semantic_review_pending_after": false,
+    "semantic_review_generation": 5,
+    "early_tool_completion_candidate": false
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "strong": [
+    "Independent 7/7 and public 25/25 pass",
+    "README read at main 2 and changed at main 6",
+    "Exact declared Node test executed by Runtime at final boundary, G5/VG5",
+    "Natural semantic accept and completed; no post-review mutation"
+  ],
+  "moderate": [
+    "Current trajectory differs from historical Q-B; stochastic trajectory does not isolate the stream fix"
+  ],
+  "insufficient": [
+    "No real timeout recovery observation",
+    "No review_run_evidence interface observation",
+    "No general success-rate or efficiency conclusion"
+  ],
+  "new_deterministic_core_bug": false,
+  "production_modified": false
+}

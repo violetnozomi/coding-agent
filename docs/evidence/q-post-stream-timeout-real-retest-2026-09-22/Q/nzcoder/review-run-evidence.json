@@ -1,0 +1,8 @@
+{
+  "observed": false,
+  "calls": [],
+  "invalid_argument_attempts": null,
+  "same_generation_duplicates": null,
+  "new_evidence_reviews": null,
+  "interpretation": "No calls. Interface behavior remained unobserved; zero calls do not prove removal of guessing."
+}

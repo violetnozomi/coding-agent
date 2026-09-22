@@ -1,0 +1,31 @@
+{
+  "baseline_A": {
+    "main": 16,
+    "auxiliary": 1,
+    "acceptance": "7/7",
+    "terminal": "completed",
+    "review_calls": 3,
+    "review_dispatch_failures": 0,
+    "note": "Three internal evidence-field trials, not three outer dispatch failures"
+  },
+  "baseline_B": {
+    "main": 7,
+    "auxiliary": 0,
+    "acceptance": "6/7",
+    "terminal": "error",
+    "timeout": true,
+    "next_request_after_timeout": false,
+    "review_calls": 0
+  },
+  "current": {
+    "main": 12,
+    "auxiliary": 1,
+    "acceptance": "7/7",
+    "terminal": "completed",
+    "timeout": false,
+    "review_calls": 0,
+    "classification": "Q-C",
+    "permission_denials": 3
+  },
+  "comparison": "Q-only longitudinal historical comparison; no InfCodeX or other task rerun"
+}

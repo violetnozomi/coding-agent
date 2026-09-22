@@ -1,0 +1,362 @@
+{
+  "per_request": [
+    {
+      "label": "main-1",
+      "request_id": 1,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 7869,
+        "completion_tokens": 112,
+        "total_tokens": 7981,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 9
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 7869
+      },
+      "duration_ms": 830.370675001177,
+      "http_status": 200,
+      "physical_attempt": 1,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-2",
+      "request_id": 2,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 8440,
+        "completion_tokens": 199,
+        "total_tokens": 8639,
+        "prompt_tokens_details": {
+          "cached_tokens": 7808
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 23
+        },
+        "prompt_cache_hit_tokens": 7808,
+        "prompt_cache_miss_tokens": 632
+      },
+      "duration_ms": 1037.0985529953032,
+      "http_status": 200,
+      "physical_attempt": 2,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-3",
+      "request_id": 3,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 9099,
+        "completion_tokens": 105,
+        "total_tokens": 9204,
+        "prompt_tokens_details": {
+          "cached_tokens": 8320
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 8320,
+        "prompt_cache_miss_tokens": 779
+      },
+      "duration_ms": 1138.5396420009783,
+      "http_status": 200,
+      "physical_attempt": 3,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-4",
+      "request_id": 4,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 9647,
+        "completion_tokens": 10204,
+        "total_tokens": 19851,
+        "prompt_tokens_details": {
+          "cached_tokens": 9088
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 9025
+        },
+        "prompt_cache_hit_tokens": 9088,
+        "prompt_cache_miss_tokens": 559
+      },
+      "duration_ms": 39748.937584001396,
+      "http_status": 200,
+      "physical_attempt": 4,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-5",
+      "request_id": 5,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 12764,
+        "completion_tokens": 3120,
+        "total_tokens": 15884,
+        "prompt_tokens_details": {
+          "cached_tokens": 5248
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 55
+        },
+        "prompt_cache_hit_tokens": 5248,
+        "prompt_cache_miss_tokens": 7516
+      },
+      "duration_ms": 16504.2670959956,
+      "http_status": 200,
+      "physical_attempt": 5,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-6",
+      "request_id": 6,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 18145,
+        "completion_tokens": 724,
+        "total_tokens": 18869,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 42
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 11233
+      },
+      "duration_ms": 3460.423812000954,
+      "http_status": 200,
+      "physical_attempt": 6,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-7",
+      "request_id": 7,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 16683,
+        "completion_tokens": 88,
+        "total_tokens": 16771,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 29
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 9771
+      },
+      "duration_ms": 935.0349029991776,
+      "http_status": 200,
+      "physical_attempt": 7,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-8",
+      "request_id": 8,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 16509,
+        "completion_tokens": 757,
+        "total_tokens": 17266,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 679
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 9597
+      },
+      "duration_ms": 4606.540699998732,
+      "http_status": 200,
+      "physical_attempt": 8,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-9",
+      "request_id": 9,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 16666,
+        "completion_tokens": 87,
+        "total_tokens": 16753,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 47
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 9754
+      },
+      "duration_ms": 1418.4775320027256,
+      "http_status": 200,
+      "physical_attempt": 9,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-10",
+      "request_id": 10,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 16722,
+        "completion_tokens": 257,
+        "total_tokens": 16979,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 183
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 9810
+      },
+      "duration_ms": 2080.8598679941497,
+      "http_status": 200,
+      "physical_attempt": 10,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-11",
+      "request_id": 11,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 17452,
+        "completion_tokens": 620,
+        "total_tokens": 18072,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 579
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 10540
+      },
+      "duration_ms": 4000.8250980026787,
+      "http_status": 200,
+      "physical_attempt": 11,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "main-12",
+      "request_id": 12,
+      "purpose": "coding",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 17509,
+        "completion_tokens": 716,
+        "total_tokens": 18225,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 95
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 10597
+      },
+      "duration_ms": 3604.090767003072,
+      "http_status": 200,
+      "physical_attempt": 12,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    },
+    {
+      "label": "verifier-1",
+      "request_id": 13,
+      "purpose": "verifier",
+      "provider": "openai-compatible",
+      "model": "deepseek-v4-flash",
+      "raw_provider_usage": {
+        "prompt_tokens": 11243,
+        "completion_tokens": 389,
+        "total_tokens": 11632,
+        "prompt_tokens_details": {
+          "cached_tokens": 1024
+        },
+        "prompt_cache_hit_tokens": 1024,
+        "prompt_cache_miss_tokens": 10219
+      },
+      "duration_ms": 3252.308371003892,
+      "http_status": 200,
+      "physical_attempt": 1,
+      "cost": null,
+      "cost_source": "Provider did not expose billing data",
+      "cache_rule": "cache input is part of prompt; not added again"
+    }
+  ],
+  "totals": {
+    "main": {
+      "requests": 12,
+      "usage_available": 12,
+      "prompt_tokens": 167505,
+      "completion_tokens": 16989,
+      "total_tokens": 184494,
+      "prompt_cache_hit_tokens": 78848,
+      "prompt_cache_miss_tokens": 88657
+    },
+    "auxiliary": {
+      "requests": 1,
+      "usage_available": 1,
+      "prompt_tokens": 11243,
+      "completion_tokens": 389,
+      "total_tokens": 11632,
+      "prompt_cache_hit_tokens": 1024,
+      "prompt_cache_miss_tokens": 10219
+    }
+  },
+  "cost": null,
+  "cost_source": "not exposed",
+  "cost_display": "cost unknown"
+}

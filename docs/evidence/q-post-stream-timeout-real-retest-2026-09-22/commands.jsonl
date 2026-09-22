@@ -1,0 +1,6 @@
+{"argv":["python","docs/evidence/q-post-stream-timeout-real-retest-2026-09-22/run-batch.py","Q"],"exit_code":0,"note":"One authorized run: 12 main + 1 verifier; no repeat","recording":"retrospective execution index"}
+{"argv":["python","docs/evidence/q-post-stream-timeout-real-retest-2026-09-22/project.py","Q"],"exit_code":0,"note":"Offline acceptance across four distinct file versions and causal projection","recording":"retrospective execution index"}
+{"argv":["python","docs/evidence/q-post-stream-timeout-real-retest-2026-09-22/trajectory.py","Q"],"exit_code":0,"recording":"retrospective execution index"}
+{"argv":["python","docs/evidence/q-post-stream-timeout-real-retest-2026-09-22/report.py"],"exit_code":0,"recording":"retrospective execution index"}
+{"argv":["python","docs/evidence/q-post-stream-timeout-real-retest-2026-09-22/freeze.py","Q"],"exit_code":0,"note":"115 run artifacts frozen","recording":"retrospective execution index"}
+{"argv":["python","docs/evidence/q-post-stream-timeout-real-retest-2026-09-22/audit.py"],"exit_code":0,"note":"376 production and 1185 historical files unchanged; 115 frozen run artifacts verified; privacy scan passed","recording":"retrospective execution index"}

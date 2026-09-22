@@ -1,0 +1,564 @@
+--- a/README.md
++++ b/README.md
+@@ -1,2 +1,63 @@
+ # Delivery pool
+-Exports mapLimit and processBatch. Current implementation is sequential.
++
++Bounded-concurrency helpers exported from `index.cjs`: `mapLimit` (from
++`lib/pool.cjs`) and `processBatch` (from `lib/batch.cjs`). Node built-ins only.
++
++## `mapLimit(items, limit, worker, options?)`
++
++Returns a `Promise` of results in **input order**.
++
++- `items`: array (never mutated).
++- `limit`: positive integer, maximum workers in flight at any moment.
++- `worker(item, index, signal)`: may be sync or async, may throw synchronously.
++- `options.signal`: optional `AbortSignal` passed through to the worker.
++
++### Concurrency
++
++Workers are started as soon as a slot frees up — the pool does not wait for a
++whole batch to finish before starting the next item, and each item is started
++exactly once. The number of in-flight workers never exceeds `limit`.
++
++### Ordering and falsy results
++
++Results are placed at their input index, so completion order does not matter.
++Falsy results (`0`, `''`, `false`, `null`, `undefined`, `NaN`) are recorded as-is
++and are never overwritten.
++
++### Validation
++
++Invalid arguments reject with a `TypeError` **before any worker runs**, including
++for empty input: non-array `items`, non-positive/non-integer `limit`, or a
++non-callable `worker`.
++
++### Failure draining
++
++Once a worker rejects (or throws synchronously), no new work is started. All
++already-started workers are allowed to settle, and then the promise rejects with
++the **first observed** worker error, preserving object identity. Rejection
++handlers are attached immediately, so secondary failures never surface as
++unhandled rejections.
++
++### Cancellation
++
++- If `signal` is already aborted, no work starts and the promise rejects with
++  `signal.reason` (identity preserved, including non-Error reasons). This also
++  takes precedence over the empty-input rule.
++- If abort arrives mid-run, scheduling stops, in-flight workers are drained, and
++  the promise rejects with the abort reason that was observed first.
++- In-flight work is *not* force-stopped: an uncooperative worker is waited on
++  rather than pretended to be cancelled. No delays or polling are used as
++  correctness machinery.
++- Abort listeners installed by `mapLimit` are removed after settlement.
++- Empty input resolves `[]` when not aborted.
++
++## `processBatch(records, send, options?)`
++
++Maps `records` through `send(record, index, signal)` with bounded concurrency and
++returns `{id, value}` records in input order.
++
++- `options.concurrency`: default `2`; must be a positive integer.
++- `options.signal`: forwarded to `mapLimit`, enabling the cancellation semantics
++  above.
++- Each record is sent **at most once**, and a rejection (worker or abort) is
++  propagated unchanged.
+--- a/lib/batch.cjs
++++ b/lib/batch.cjs
+@@ -1,5 +1,29 @@
++'use strict';
++
+ const {mapLimit} = require('./pool.cjs');
+-async function processBatch(records, send, options = {}) {
+-  return mapLimit(records, 2, async record => ({id: record.id, value: await send(record)}));
++
++const DEFAULT_CONCURRENCY = 2;
++
++/**
++ * Sends every record at most once with bounded concurrency and returns
++ * `{id, value}` records in input order.
++ *
++ * @param {Array<{id: any}>} records
++ * @param {(record: any, index: number, signal: AbortSignal|undefined) => any} send
++ * @param {{concurrency?: number, signal?: AbortSignal}} [options]
++ * @returns {Promise<Array<{id: any, value: any}>>}
++ */
++function processBatch(records, send, options = {}) {
++  const settings = options === null || typeof options !== 'object' ? {} : options;
++  const concurrency =
++    settings.concurrency === undefined ? DEFAULT_CONCURRENCY : settings.concurrency;
++
++  return mapLimit(
++    records,
++    concurrency,
++    async (record, index, signal) => ({id: record.id, value: await send(record, index, signal)}),
++    {signal: settings.signal},
++  );
+ }
++
+ module.exports = {processBatch};
+--- a/lib/pool.cjs
++++ b/lib/pool.cjs
+@@ -1,6 +1,125 @@
++'use strict';
++
++/**
++ * Bounded-concurrency map with stable ordering, failure draining and
++ * AbortSignal cancellation.
++ *
++ * @param {Array} items input items (never mutated)
++ * @param {number} limit positive integer, max workers in flight
++ * @param {(item: any, index: number, signal: AbortSignal|undefined) => any} worker
++ * @param {{signal?: AbortSignal}} [options]
++ * @returns {Promise<Array>} results in input order
++ */
++function validateArguments(items, limit, worker) {
++  if (!Array.isArray(items)) {
++    throw new TypeError('mapLimit: items must be an array');
++  }
++  if (!Number.isInteger(limit) || limit <= 0) {
++    throw new TypeError('mapLimit: limit must be a positive integer');
++  }
++  if (typeof worker !== 'function') {
++    throw new TypeError('mapLimit: worker must be a function');
++  }
++}
++
++function readSignal(options) {
++  if (options === null || typeof options !== 'object') return undefined;
++  return options.signal;
++}
++
+ async function mapLimit(items, limit, worker, options = {}) {
+-  const results = [];
+-  for (let i = 0; i < items.length; i++) results.push(await worker(items[i], i));
+-  return results;
++  // Validate before any worker can run, including for empty input.
++  validateArguments(items, limit, worker);
++
++  const signal = readSignal(options);
++  const total = items.length;
++
++  // Abort wins over "empty input resolves []".
++  if (signal && signal.aborted) {
++    // Preserve identity of the reason, including falsy/non-Error values.
++    throw signal.reason;
++  }
++
++  if (total === 0) return [];
++
++  const results = new Array(total);
++
++  return new Promise((resolve, reject) => {
++    let nextIndex = 0;
++    let inFlight = 0;
++    let finished = false;
++    let failed = false;
++    let failureReason;
++
++    const canListen = Boolean(signal) && typeof signal.addEventListener === 'function';
++
++    function onAbort() {
++      if (finished || failed) return;
++      // First observed failure/abort wins.
++      failed = true;
++      failureReason = signal.reason;
++      // Stop scheduling; in-flight work is drained before settling.
++      schedule();
++    }
++
++    const cleanup = () => {
++      if (canListen) signal.removeEventListener('abort', onAbort);
++    };
++
++    const finish = () => {
++      if (finished) return;
++      finished = true;
++      cleanup();
++      if (failed) reject(failureReason);
++      else resolve(results);
++    };
++
++    const recordFailure = (reason) => {
++      if (failed) return;
++      failed = true;
++      failureReason = reason;
++    };
++
++    function schedule() {
++      if (finished) return;
++      // Fill every available slot; never exceed `limit`.
++      while (!failed && inFlight < limit && nextIndex < total) {
++        start(nextIndex++);
++      }
++      if (failed) {
++        if (inFlight === 0) finish();
++        return;
++      }
++      if (nextIndex >= total && inFlight === 0) finish();
++    }
++
++    function start(index) {
++      inFlight += 1;
++      let outcome;
++      try {
++        outcome = worker(items[index], index, signal);
++      } catch (error) {
++        settle(index, error, true);
++        return;
++      }
++      // Handlers are attached immediately so secondary failures can never
++      // surface as unhandled rejections.
++      Promise.resolve(outcome).then(
++        (value) => settle(index, value, false),
++        (error) => settle(index, error, true),
++      );
++    }
++
++    function settle(index, value, isFailure) {
++      inFlight -= 1;
++      if (isFailure) recordFailure(value);
++      else results[index] = value;
++      schedule();
++    }
++
++    if (canListen) signal.addEventListener('abort', onAbort);
++    schedule();
++  });
+ }
++
+ module.exports = {mapLimit};
+--- a/tests/batch.test.cjs
++++ b/tests/batch.test.cjs
+@@ -1,7 +1,107 @@
++'use strict';
++
+ const test = require('node:test');
+ const assert = require('node:assert/strict');
+ const {processBatch} = require('../index.cjs');
++
++const tick = () => new Promise((resolve) => setImmediate(resolve));
++
+ test('batch maps ids', async () => {
+-  assert.deepEqual(await processBatch([{id:'a'}, {id:'b'}], async x => x.id),
+-    [{id:'a',value:'a'}, {id:'b',value:'b'}]);
++  assert.deepEqual(await processBatch([{id: 'a'}, {id: 'b'}], async (x) => x.id), [
++    {id: 'a', value: 'a'},
++    {id: 'b', value: 'b'},
++  ]);
+ });
++
++test('processBatch preserves input order for out-of-order completion', async () => {
++  const records = [{id: 'a'}, {id: 'b'}, {id: 'c'}];
++  const delays = {a: 30, b: 1, c: 10};
++  const result = await processBatch(records, async (record) => {
++    await new Promise((resolve) => setTimeout(resolve, delays[record.id]));
++    return record.id.toUpperCase();
++  });
++  assert.deepEqual(result, [
++    {id: 'a', value: 'A'},
++    {id: 'b', value: 'B'},
++    {id: 'c', value: 'C'},
++  ]);
++});
++
++test('default concurrency is 2', async () => {
++  let inFlight = 0;
++  let peak = 0;
++  await processBatch([{id: 1}, {id: 2}, {id: 3}, {id: 4}], async (record) => {
++    inFlight += 1;
++    peak = Math.max(peak, inFlight);
++    await tick();
++    inFlight -= 1;
++    return record.id;
++  });
++  assert.equal(peak, 2);
++});
++
++test('options.concurrency bounds in-flight sends', async () => {
++  let inFlight = 0;
++  let peak = 0;
++  await processBatch([{id: 1}, {id: 2}, {id: 3}, {id: 4}, {id: 5}], async (record) => {
++    inFlight += 1;
++    peak = Math.max(peak, inFlight);
++    await tick();
++    inFlight -= 1;
++    return record.id;
++  }, {concurrency: 4});
++  assert.equal(peak, 4);
++});
++
++test('sends each record at most once', async () => {
++  const records = [{id: 'a'}, {id: 'b'}, {id: 'c'}];
++  const calls = records.map(() => 0);
++  await processBatch(records, (record, index) => {
++    calls[index] += 1;
++    return record.id;
++  });
++  assert.deepEqual(calls, [1, 1, 1]);
++});
++
++test('propagates send rejection', async () => {
++  const boom = new Error('send failed');
++  await assert.rejects(
++    () => processBatch([{id: 'a'}, {id: 'b'}], async () => { throw boom; }),
++    (error) => error === boom,
++  );
++});
++
++test('propagates cancellation via options.signal', async () => {
++  const controller = new AbortController();
++  const reason = new Error('cancelled');
++  controller.abort(reason);
++  let calls = 0;
++  await assert.rejects(
++    () => processBatch([{id: 'a'}], () => { calls += 1; return 'x'; }, {signal: controller.signal}),
++    (error) => error === reason,
++  );
++  assert.equal(calls, 0);
++});
++
++test('send receives the signal and each record at most once on mid-run abort', async () => {
++  const controller = new AbortController();
++  const reason = new Error('mid');
++  const sent = [];
++  const seenSignals = [];
++
++  const promise = processBatch(
++    [{id: 1}, {id: 2}, {id: 3}, {id: 4}],
++    async (record, index, signal) => {
++      seenSignals.push(signal);
++      sent.push(record.id);
++      await new Promise((resolve) => setTimeout(resolve, 10));
++      return record.id;
++    },
++    {concurrency: 2, signal: controller.signal},
++  );
++
++  setTimeout(() => controller.abort(reason), 5);
++  await assert.rejects(() => promise, (error) => error === reason);
++  assert.deepEqual(sent, [1, 2]);
++  assert.ok(seenSignals.every((signal) => signal === controller.signal));
++});
+--- a/tests/pool.test.cjs
++++ b/tests/pool.test.cjs
+@@ -1,7 +1,214 @@
++'use strict';
++
+ const test = require('node:test');
+ const assert = require('node:assert/strict');
+ const {mapLimit} = require('../index.cjs');
++
++const tick = () => new Promise((resolve) => setImmediate(resolve));
++
+ test('maps values and preserves falsy results', async () => {
+-  assert.deepEqual(await mapLimit([1, 2], 2, x => x - 1), [0, 1]);
+-});
+-test('empty input', async () => assert.deepEqual(await mapLimit([], 2, x => x), []));
++  assert.deepEqual(await mapLimit([1, 2], 2, (x) => x - 1), [0, 1]);
++});
++
++test('empty input', async () => {
++  assert.deepEqual(await mapLimit([], 2, (x) => x), []);
++});
++
++test('empty input still validates arguments', async () => {
++  await assert.rejects(() => mapLimit([], 0, () => 1), TypeError);
++  await assert.rejects(() => mapLimit([], -1, () => 1), TypeError);
++  await assert.rejects(() => mapLimit('nope', 2, () => 1), TypeError);
++  await assert.rejects(() => mapLimit([], 2, 'nope'), TypeError);
++  await assert.rejects(() => mapLimit([], 2.5, () => 1), TypeError);
++});
++
++test('validates before invoking any worker', async () => {
++  let called = 0;
++  await assert.rejects(
++    () =>
++      mapLimit([1, 2], 0, () => {
++        called += 1;
++        return 1;
++      }),
++    TypeError,
++  );
++  assert.equal(called, 0);
++});
++
++test('results are in input order even when completion order differs', async () => {
++  const delays = [30, 1, 20, 2];
++  const results = await mapLimit([0, 1, 2, 3], 2, async (index) => {
++    await new Promise((resolve) => setTimeout(resolve, delays[index]));
++    return `v${index}`;
++  });
++  assert.deepEqual(results, ['v0', 'v1', 'v2', 'v3']);
++});
++
++test('does not mutate the input array', async () => {
++  const items = [3, 1, 2];
++  const copy = items.slice();
++  await mapLimit(items, 2, (x) => x * 2);
++  assert.deepEqual(items, copy);
++});
++
++test('never exceeds the concurrency limit and fills available slots', async () => {
++  let inFlight = 0;
++  let peak = 0;
++  const started = [];
++  const results = await mapLimit([1, 2, 3, 4, 5, 6], 3, async (item) => {
++    inFlight += 1;
++    peak = Math.max(peak, inFlight);
++    started.push(item);
++    if (started.length === 3) {
++      // All three initial slots must be started before any of them finish.
++      assert.deepEqual(started.slice(0, 3), [1, 2, 3]);
++    }
++    await tick();
++    inFlight -= 1;
++    return item * 10;
++  });
++  assert.equal(peak, 3);
++  assert.deepEqual(results, [10, 20, 30, 40, 50, 60]);
++});
++
++test('starts each item exactly once', async () => {
++  const seen = [];
++  await mapLimit([1, 2, 3, 4], 2, (item) => {
++    seen.push(item);
++    return item;
++  });
++  assert.deepEqual(seen.slice().sort((a, b) => a - b), [1, 2, 3, 4]);
++});
++
++test('worker receives item, index and signal', async () => {
++  const controller = new AbortController();
++  const observed = [];
++  await mapLimit(['a', 'b'], 1, (item, index, signal) => {
++    observed.push([item, index, signal]);
++    return item;
++  }, {signal: controller.signal});
++  assert.deepEqual(observed.map(([item, index]) => [item, index]), [['a', 0], ['b', 1]]);
++  assert.equal(observed[0][2], controller.signal);
++});
++
++test('supports synchronous workers and synchronous throws', async () => {
++  assert.deepEqual(await mapLimit([1, 2], 2, (x) => x + 1), [2, 3]);
++  const boom = new Error('sync');
++  await assert.rejects(() => mapLimit([1], 1, () => { throw boom; }), (error) => error === boom);
++});
++
++test('drains in-flight work and rejects with the first observed error', async () => {
++  const first = new Error('first');
++  const second = new Error('second');
++  const settled = [];
++  let started = 0;
++
++  await assert.rejects(
++    () =>
++      mapLimit([0, 1, 2, 3], 2, async (index) => {
++        started += 1;
++        if (index === 0) {
++          await tick();
++          throw first;
++        }
++        if (index === 1) {
++          await new Promise((resolve) => setTimeout(resolve, 20));
++          throw second;
++        }
++        settled.push(index);
++        return index;
++      }),
++    (error) => error === first,
++  );
++
++  // Item 0 failed first, so items 2 and 3 must never be started.
++  assert.equal(started, 2);
++  assert.deepEqual(settled, []);
++});
++
++test('secondary failures do not cause unhandled rejections', async () => {
++  const unhandled = [];
++  const onUnhandled = (reason) => unhandled.push(reason);
++  process.on('unhandledRejection', onUnhandled);
++  try {
++    const first = new Error('first');
++    await assert.rejects(
++      () => mapLimit([0, 1], 2, async (index) => {
++        await tick();
++        throw index === 0 ? first : new Error('secondary');
++      }),
++      (error) => error === first,
++    );
++    await new Promise((resolve) => setTimeout(resolve, 20));
++  } finally {
++    process.removeListener('unhandledRejection', onUnhandled);
++  }
++  assert.deepEqual(unhandled, []);
++});
++
++test('already-aborted signal starts no work and rejects with the reason', async () => {
++  const controller = new AbortController();
++  const reason = new Error('cancelled');
++  controller.abort(reason);
++  let called = 0;
++  await assert.rejects(
++    () => mapLimit([1, 2], 2, (x) => { called += 1; return x; }, {signal: controller.signal}),
++    (error) => error === reason,
++  );
++  assert.equal(called, 0);
++});
++
++test('already-aborted signal preserves a non-Error reason', async () => {
++  const controller = new AbortController();
++  controller.abort('stop');
++  await assert.rejects(
++    () => mapLimit([1], 1, (x) => x, {signal: controller.signal}),
++    (error) => error === 'stop',
++  );
++});
++
++test('already-aborted signal wins over empty input', async () => {
++  const controller = new AbortController();
++  controller.abort(42);
++  await assert.rejects(
++    () => mapLimit([], 2, (x) => x, {signal: controller.signal}),
++    (error) => error === 42,
++  );
++});
++
++test('mid-run abort stops scheduling, drains in-flight work and rejects', async () => {
++  const controller = new AbortController();
++  const reason = new Error('mid-run');
++  const completed = [];
++  let started = 0;
++
++  const promise = mapLimit([0, 1, 2, 3, 4], 2, async (index) => {
++    started += 1;
++    await new Promise((resolve) => setTimeout(resolve, 10));
++    completed.push(index);
++    return index;
++  }, {signal: controller.signal});
++
++  setTimeout(() => controller.abort(reason), 5);
++
++  await assert.rejects(() => promise, (error) => error === reason);
++  assert.equal(started, 2);
++  assert.deepEqual(completed.slice().sort((a, b) => a - b), [0, 1]);
++});
++
++test('no abort listener is left installed after settlement', async () => {
++  const controller = new AbortController();
++  const {signal} = controller;
++  const original = signal.removeEventListener.bind(signal);
++  let removed = 0;
++  signal.removeEventListener = (...args) => {
++    removed += 1;
++    return original(...args);
++  };
++  try {
++    await mapLimit([1, 2, 3], 3, (x) => x, {signal});
++    assert.equal(removed, 1);
++  } finally {
++    delete signal.removeEventListener;
++  }
++});

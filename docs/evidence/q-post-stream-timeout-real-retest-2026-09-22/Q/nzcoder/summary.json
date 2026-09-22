@@ -1,0 +1,45 @@
+{
+  "case": "Q",
+  "side": "nzcoder",
+  "requests": 13,
+  "responses": 13,
+  "usage": {
+    "main": {
+      "requests": 12,
+      "usage_available": 12,
+      "prompt_tokens": 167505,
+      "completion_tokens": 16989,
+      "total_tokens": 184494,
+      "prompt_cache_hit_tokens": 78848,
+      "prompt_cache_miss_tokens": 88657
+    },
+    "auxiliary": {
+      "requests": 1,
+      "usage_available": 1,
+      "prompt_tokens": 11243,
+      "completion_tokens": 389,
+      "total_tokens": 11632,
+      "prompt_cache_hit_tokens": 1024,
+      "prompt_cache_miss_tokens": 10219
+    }
+  },
+  "terminal": "completed",
+  "acceptance_passed": true,
+  "checks": {
+    "public": {
+      "exit_code": 0,
+      "tail": "926239ms)\n✔ default concurrency is 2 (0.389834ms)\n✔ options.concurrency bounds in-flight sends (0.328824ms)\n✔ sends each record at most once (0.139067ms)\n✔ propagates send rejection (0.258759ms)\n✔ propagates cancellation via options.signal (0.100132ms)\n✔ send receives the signal and each record at most once on mid-run abort (10.509133ms)\n✔ maps values and preserves falsy results (0.828481ms)\n✔ empty input (0.074159ms)\n✔ empty input still validates arguments (0.765986ms)\n✔ validates before invoking any worker (0.098073ms)\n✔ results are in input order even when completion order differs (29.620717ms)\n✔ does not mutate the input array (0.12069ms)\n✔ never exceeds the concurrency limit and fills available slots (0.334301ms)\n✔ starts each item exactly once (0.12078ms)\n✔ worker receives item, index and signal (0.14374ms)\n✔ supports synchronous workers and synchronous throws (0.170037ms)\n✔ drains in-flight work and rejects with the first observed error (20.504981ms)\n✔ secondary failures do not cause unhandled rejections (20.400034ms)\n✔ already-aborted signal starts no work and rejects with the reason (0.145611ms)\n✔ already-aborted signal preserves a non-Error reason (0.071557ms)\n✔ already-aborted signal wins over empty input (0.074619ms)\n✔ mid-run abort stops scheduling, drains in-flight work and rejects (10.765939ms)\n✔ no abort listener is left installed after settlement (0.116631ms)\nℹ tests 25\nℹ suites 0\nℹ pass 25\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 115.987427\n"
+    },
+    "independent": {
+      "exit_code": 0,
+      "tail": "✔ fills capacity, refills freed slots and preserves order and ownership (2.31782ms)\n✔ first failure stops scheduling and drains secondary failures (0.385876ms)\n✔ abort drains in-flight, forwards signal and removes listeners (3.539744ms)\n✔ pre-abort, empty validation and sync throw identity (0.522547ms)\n✔ first observed failure wins over later abort (0.724664ms)\n✔ batch forwards concurrency and abort (0.40461ms)\n✔ documents drain and cancellation (0.154742ms)\nℹ tests 7\nℹ suites 0\nℹ pass 7\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 36.570119\n"
+    }
+  },
+  "process": {
+    "exit_code": 0,
+    "elapsed_s": 87.90735893999954,
+    "harness_timeout": false
+  },
+  "tool_executions": 22,
+  "normalization_notes": "reference missing structured statuses not synthesized; runtime-owned NZ tools separate from model tools"
+}

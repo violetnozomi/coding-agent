@@ -1,0 +1,17 @@
+{
+  "old_Q_A": {
+    "acceptance": "7/7",
+    "terminal": "completed",
+    "main": 16,
+    "auxiliary": 1,
+    "review_calls": 3
+  },
+  "old_Q_B": {
+    "acceptance": "6/7",
+    "terminal": "error",
+    "main": 7,
+    "auxiliary": 0,
+    "review_calls": 0
+  },
+  "current_config": "copied recent Q exact task/workspace/provider settings; Core is 265b3a3"
+}

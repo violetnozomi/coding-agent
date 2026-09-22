@@ -1,0 +1,38 @@
+[
+  {
+    "tool": "bash",
+    "input": {
+      "command": "find . -type f -not -path './node_modules/*' -not -path './.git/*' | head -50; echo '---'; ls -la"
+    },
+    "allowed": false
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "node --test tests/pool.test.cjs tests/batch.test.cjs 2>&1 | tail -40"
+    },
+    "allowed": true
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "git diff --stat"
+    },
+    "allowed": false
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "git status --porcelain"
+    },
+    "allowed": false
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "node --test tests/pool.test.cjs tests/batch.test.cjs",
+      "_nz_runtime_contract": true
+    },
+    "allowed": true
+  }
+]

@@ -1,0 +1,15 @@
+{
+  "before": {
+    "main": 16,
+    "auxiliary": 1,
+    "acceptance": "7/7",
+    "terminal": "completed",
+    "review_calls": 3,
+    "review_dispatch_failures": 0,
+    "note": "Three internal evidence-field trials, not three outer dispatch failures"
+  },
+  "after": {
+    "observed": false
+  },
+  "conclusion": "Semantic verifier ran, but review_run_evidence did not; tool-interface efficiency not observed."
+}

@@ -1,0 +1,45 @@
+{
+  "case": "Q",
+  "task_text": "Repair lib/pool.cjs and its batch consumer according to REQUIREMENTS.md. Implement bounded concurrency, stable result ordering, failure draining and AbortSignal cancellation without breaking the public API. Add meaningful tests and update README.md. Run node --test tests/pool.test.cjs tests/batch.test.cjs and report the actual result and remaining limitations.",
+  "task_sha256": "1ad017e2d5d33aed5764fb94a540d43cf7b3cfa1bb580a6cb326bbea872ca468",
+  "initial_hashes": {
+    "index.cjs": "d381c6f7be04252e280c53926eeb0b4fdd9621cf183a05f81f14791fb19738b5",
+    "REQUIREMENTS.md": "7a3e48a4e3e7cdcaedb59bdc1e3b524597a1764f00bfaab23a70a1d7ecff9bed",
+    "README.md": "a576bf215be3580dba11ec2a347696a27706f8bf3d4ec455f3069c7e6afc4a38",
+    "package.json": "5f99124db57570f6d19ecf5c35ab29326ab192f73d7836392c63844846d0a3a6",
+    "lib/pool.cjs": "c5980f6446b09bb993bb2da8deaf122838e6c2f95976d55903ce473a864d3ed3",
+    "lib/batch.cjs": "f6393c69e7c484b9e329df5d22b28bd0df353764313b557b31241c89a33bc3f5",
+    "tests/pool.test.cjs": "494aa2cbefb471dff9421bf67101410ccf2942ecb186d74a42edeee98b139862",
+    "tests/batch.test.cjs": "bdc64f08c76b71e43cc3c13b8f97de5d63e689a93bb4be850080b508c3075bfa"
+  },
+  "requirements_sha256": "7a3e48a4e3e7cdcaedb59bdc1e3b524597a1764f00bfaab23a70a1d7ecff9bed",
+  "historical_initial_git": {
+    "head": "41242f6ee14b0e80e09e3272ac198d99c60f036f"
+  },
+  "provider": "openai-compatible",
+  "endpoint": "https://api.deepseek.com",
+  "historical_main_config": {
+    "model": "deepseek-v4-flash",
+    "stream": true,
+    "max_tokens": 64000
+  },
+  "new_main_config_expected": {
+    "model": "deepseek-v4-flash",
+    "stream": true,
+    "max_tokens": 64000
+  },
+  "config_equivalence": "same as recent Q except production source at 265b3a3 with stream deadline fix; new isolated paths/session metadata",
+  "permission": "identical run-nz callback and existing built-in guards",
+  "network": "seccomp non-Unix socket denial; only chat/completions forwarding through UDS; not filesystem hermetic",
+  "nominal_main_cap": 24,
+  "physical_main_cap": 24,
+  "physical_auxiliary_cap": 8,
+  "retry_counting": "each physical attempt consumes purpose cap",
+  "acceptance_path": "docs/evidence/complex-paired-preflight-2026-09-20/acceptance/Q.cjs",
+  "acceptance_sha256": "13944255a081968732ad570dcff58873996689fbe9e4f9433297bf18393a1f54",
+  "baseline": "265b3a30284c7c8ca6042ef0faae7e17e48d1d39",
+  "head": "265b3a30284c7c8ca6042ef0faae7e17e48d1d39",
+  "origin_main": "265b3a30284c7c8ca6042ef0faae7e17e48d1d39",
+  "initial_worktree": "clean",
+  "stream_sha256": "e9923940883af56414c189c04be78cf048cfd6d40d887ee11247c534368d6521"
+}
