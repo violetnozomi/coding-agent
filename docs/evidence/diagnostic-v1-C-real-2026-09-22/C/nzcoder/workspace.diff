@@ -1,0 +1,584 @@
+--- a/_scratch_check.py
++++ b/_scratch_check.py
+@@ -0,0 +1,43 @@
++import json
++
++from configkit import loads
++from configkit.config.errors import ConfigError
++from configkit.cli import main
++from configkit.config.migrate import migrate_file
++from configkit.service import export_config, inspect_config
++
++v1 = '{"name":"demo","host":"localhost","port":8080,"enabled":true}'
++v2 = '{"version":2,"service":{"name":"demo","endpoint":{"host":"localhost","port":8080}},"enabled":true}'
++print(loads(v1), loads(v2))
++print(loads('{"name":"demo","host":"localhost","port":8080}'))
++print(loads('{"name":"demo","host":"localhost","port":8080,"zzz":1,"service":{"name":"x"}}'))
++
++
++def err(t):
++    try:
++        loads(t)
++        return "NO ERROR"
++    except ConfigError as e:
++        return e.to_dict()
++
++
++cases = [
++    '{"version":3,"name":"demo","host":"h","port":1}',
++    '{"name":"  ","host":"h","port":1}',
++    '{"name":"d","host":"","port":1}',
++    '{"name":"d","host":"h","port":0}',
++    '{"name":"d","host":"h","port":65536}',
++    '{"name":"d","host":"h","port":True}',
++    '{"name":"d","host":"h","port":1,"enabled":"yes"}',
++    '{"name":"d","host":"h"}',
++    '{"version":2,"service":{"name":"d","endpoint":{"host":"h"}}}',
++    '{"version":2,"service":{"endpoint":{"host":"h","port":1}}}',
++    '{"version":2,"service":{"name":"d"}}',
++    '{"version":2}',
++    '[]',
++    'not json',
++    '{"name":"d","host":"h","port":1,"version":true}',
++    '{"name":"d","host":"h","port":1,"version":"2"}',
++]
++for c in cases:
++    print(c, "->", err(c))
+--- a/configkit/cli.py
++++ b/configkit/cli.py
+@@ -3,15 +3,25 @@
+ import sys
+ 
+ from .commands import COMMANDS
++from .config.errors import ConfigError
++
++
++def build_parser():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("command", choices=sorted(COMMANDS))
++    parser.add_argument("path")
++    parser.add_argument("--dry-run", action="store_true", dest="dry_run")
++    return parser
+ 
+ 
+ def main(argv=None):
+-    parser = argparse.ArgumentParser()
+-    parser.add_argument("command", choices=sorted(COMMANDS))
+-    parser.add_argument("path")
++    parser = build_parser()
+     args = parser.parse_args(argv)
+     try:
+         print(json.dumps(COMMANDS[args.command](args)))
++    except ConfigError as exc:
++        print(json.dumps(exc.to_dict()), file=sys.stderr)
++        return 2
+     except ValueError as exc:
+         print(str(exc), file=sys.stderr)
+         return 2
+--- a/configkit/commands/migrate.py
++++ b/configkit/commands/migrate.py
+@@ -2,4 +2,4 @@
+ 
+ 
+ def execute(args):
+-    return migrate_file(args.path)
++    return migrate_file(args.path, dry_run=getattr(args, "dry_run", False))
+--- a/configkit/config/errors.py
++++ b/configkit/config/errors.py
+@@ -1,2 +1,11 @@
+ class ConfigError(ValueError):
+-    pass
++    """A configuration problem, identified by a JSON path and a machine code."""
++
++    def __init__(self, path, code="invalid"):
++        self.path = path
++        self.code = code
++        self.issues = [{"path": path, "code": code}]
++        super().__init__(f"{path}: {code}")
++
++    def to_dict(self):
++        return {"error": "invalid_config", "issues": [dict(issue) for issue in self.issues]}
+--- a/configkit/config/parser.py
++++ b/configkit/config/parser.py
+@@ -1,11 +1,14 @@
+ import json
+ 
+-from .defaults import DEFAULT_ENABLED
++from .errors import ConfigError
+ from .model import Config
+ from .validation import validate
+ 
+ 
+ def loads(text):
+-    data = json.loads(text)
+-    validate(data)
+-    return Config(data["name"], data["host"], data["port"], data.get("enabled", DEFAULT_ENABLED))
++    try:
++        data = json.loads(text)
++    except ValueError:
++        raise ConfigError("$", "invalid") from None
++    values = validate(data)
++    return Config(values["name"], values["host"], values["port"], values["enabled"])
+--- a/configkit/config/validation.py
++++ b/configkit/config/validation.py
+@@ -1,12 +1,77 @@
++from .defaults import DEFAULT_ENABLED
+ from .errors import ConfigError
++
++V1 = 1
++V2 = 2
++
++
++def _mapping(value, path):
++    if not isinstance(value, dict):
++        raise ConfigError(path, "invalid")
++    return value
++
++
++def _value(mapping, key, path):
++    if key not in mapping:
++        raise ConfigError(path, "invalid")
++    return mapping[key]
++
++
++def _check_str(value, path):
++    if not isinstance(value, str) or not value.strip():
++        raise ConfigError(path, "invalid")
++
++
++def _check_port(value, path):
++    if type(value) is not int or not 1 <= value <= 65535:
++        raise ConfigError(path, "invalid")
++
++
++def _check_enabled(data):
++    enabled = data.get("enabled", DEFAULT_ENABLED)
++    if type(enabled) is not bool:
++        raise ConfigError("enabled", "invalid")
++    return enabled
++
++
++def version_of(data):
++    """Return the configuration version, raising on an unsupported value."""
++    version = data.get("version", V1)
++    if isinstance(version, bool) or type(version) is not int or version not in (V1, V2):
++        raise ConfigError("version", "unsupported")
++    return version
+ 
+ 
+ def validate(data):
+-    for key in ("name", "host"):
+-        if not isinstance(data.get(key), str) or not data[key].strip():
+-            raise ConfigError(f"invalid {key}")
+-    port = data.get("port")
+-    if type(port) is not int or not 1 <= port <= 65535:
+-        raise ConfigError("invalid port")
+-    if type(data.get("enabled", True)) is not bool:
+-        raise ConfigError("invalid enabled")
++    """Validate a v1 or v2 mapping and return the decoded field values.
++
++    Checks run in the required order (version, name, host, port, enabled) and
++    only the first problem is reported, using the leaf path of the input shape.
++    """
++    if not isinstance(data, dict):
++        raise ConfigError("$", "invalid")
++
++    version = version_of(data)
++
++    if version == V2:
++        service = _mapping(data.get("service"), "service.name")
++        name = _value(service, "name", "service.name")
++        _check_str(name, "service.name")
++
++        endpoint = _mapping(service.get("endpoint"), "service.endpoint.host")
++        host = _value(endpoint, "host", "service.endpoint.host")
++        _check_str(host, "service.endpoint.host")
++
++        port = _value(endpoint, "port", "service.endpoint.port")
++        _check_port(port, "service.endpoint.port")
++    else:
++        name = _value(data, "name", "name")
++        _check_str(name, "name")
++
++        host = _value(data, "host", "host")
++        _check_str(host, "host")
++
++        port = _value(data, "port", "port")
++        _check_port(port, "port")
++
++    return {"name": name, "host": host, "port": port, "enabled": _check_enabled(data)}
+--- a/configkit/config/writer.py
++++ b/configkit/config/writer.py
+@@ -2,7 +2,15 @@
+ 
+ 
+ def to_dict(config):
+-    return {"name": config.name, "host": config.host, "port": config.port, "enabled": config.enabled}
++    """Serialize a config using only the v2 representation."""
++    return {
++        "version": 2,
++        "service": {
++            "name": config.name,
++            "endpoint": {"host": config.host, "port": config.port},
++        },
++        "enabled": config.enabled,
++    }
+ 
+ 
+ def dumps(config):
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -1,5 +1,74 @@
+ # Configkit
+ 
+-Read a JSON object containing name, host, port and optional enabled.
+-Use python -m configkit show config.json to print a summary.
+-The service exports configurations to a new path.
++Configkit reads a service configuration from JSON, summarizes it, migrates it to
++the v2 representation, and exports it to a new path.
++
++## Representations
++
++v1 (missing `version` or `version: 1`):
++
++```json
++{"name": "demo", "host": "localhost", "port": 8080, "enabled": true}
++```
++
++v2:
++
++```json
++{
++  "version": 2,
++  "service": {"name": "demo", "endpoint": {"host": "localhost", "port": 8080}},
++  "enabled": true
++}
++```
++
++Both decode to `Config(name, host, port, enabled)`. `enabled` may be absent and
++then defaults to `true`. Unknown extra fields are ignored. Every new write emits
++only v2, so no top-level `name`, `host` or `port` keys are produced.
++
++## Usage
++
++Show a summary (accepts v1 or v2 input):
++
++```console
++$ python -m configkit show config.json
++{"name": "demo", "address": "localhost:8080", "enabled": true}
++```
++
++Migrate a file in place to v2 and print the resulting JSON:
++
++```console
++$ python -m configkit migrate config.json
++{"enabled": true, "service": {"endpoint": {"host": "localhost", "port": 8080}, "name": "demo"}, "version": 2}
++```
++
++Preview the migration without touching the file (`--dry-run` prints the v2 JSON
++and leaves the source bytes unchanged):
++
++```console
++$ python -m configkit migrate config.json --dry-run
++{"enabled": true, "service": {"endpoint": {"host": "localhost", "port": 8080}, "name": "demo"}, "version": 2}
++```
++
++Migrating twice has the same semantic result, and `service.export_config(source,
++destination)` writes v2 to the destination while never changing the source.
++
++## Validation and errors
++
++Validation runs in the order version, name, host, port, enabled and reports only
++the first problem. `name` and `host` must be nonempty, non-whitespace strings;
++`port` must be an integer in 1..65535 (booleans are rejected); `enabled` must be
++a boolean. Unsupported versions report the `version` path with code
++`unsupported`; other problems use the leaf path of the input shape (`name`,
++`host`, `port`, `enabled` for v1; `service.name`, `service.endpoint.host`,
++`service.endpoint.port` for v2). Malformed JSON or a non-object root reports
++path `"$"`. Invalid input exits with status 2, prints the error dictionary as
++JSON to stderr, and never modifies the input or an existing destination:
++
++```console
++$ python -m configkit migrate config.json; echo "exit=$?"
++{"error": "invalid_config", "issues": [{"path": "port", "code": "invalid"}]}
++exit=2
++```
++
++Failures raise `ConfigError`, a `ValueError` subclass whose `to_dict()` is
++exactly `{"error": "invalid_config", "issues": [{"path": "...", "code": "..."}]}`.
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -1,5 +1,8 @@
+ import json
+ from configkit.cli import main
++
++
++V1 = '{"name":"demo","host":"localhost","port":80}'
+ 
+ 
+ def test_show(tmp_path, capsys):
+@@ -7,3 +10,45 @@
+     path.write_text('{"name":"demo","host":"localhost","port":80}')
+     assert main(["show", str(path)]) == 0
+     assert json.loads(capsys.readouterr().out)["address"] == "localhost:80"
++
++
++def test_show_accepts_v2(tmp_path, capsys):
++    path = tmp_path / "config.json"
++    path.write_text('{"version":2,"service":{"name":"demo","endpoint":{"host":"localhost","port":80}}}')
++    assert main(["show", str(path)]) == 0
++    assert json.loads(capsys.readouterr().out) == {"name": "demo", "address": "localhost:80", "enabled": True}
++
++
++def test_migrate_prints_v2_and_writes_v2(tmp_path, capsys):
++    path = tmp_path / "config.json"
++    path.write_text(V1)
++    assert main(["migrate", str(path)]) == 0
++    printed = json.loads(capsys.readouterr().out)
++    assert printed["version"] == 2
++    assert json.loads(path.read_text()) == printed
++
++
++def test_migrate_dry_run_prints_v2_without_writing(tmp_path, capsys):
++    path = tmp_path / "config.json"
++    path.write_text(V1)
++    before = path.read_bytes()
++    assert main(["migrate", str(path), "--dry-run"]) == 0
++    assert json.loads(capsys.readouterr().out)["version"] == 2
++    assert path.read_bytes() == before
++
++
++def test_invalid_config_exits_2_with_error_json_and_no_write(tmp_path, capsys):
++    path = tmp_path / "config.json"
++    path.write_text('{"name":"demo","host":"h","port":0}')
++    before = path.read_bytes()
++    assert main(["migrate", str(path)]) == 2
++    err = json.loads(capsys.readouterr().err)
++    assert err == {"error": "invalid_config", "issues": [{"path": "port", "code": "invalid"}]}
++    assert path.read_bytes() == before
++
++
++def test_unsupported_version_via_cli(tmp_path, capsys):
++    path = tmp_path / "config.json"
++    path.write_text('{"version":9,"name":"demo","host":"h","port":1}')
++    assert main(["show", str(path)]) == 2
++    assert json.loads(capsys.readouterr().err)["issues"] == [{"path": "version", "code": "unsupported"}]
+--- a/tests/test_migrate.py
++++ b/tests/test_migrate.py
+@@ -0,0 +1,75 @@
++import json
++import pytest
++from configkit.config.errors import ConfigError
++from configkit.config.migrate import migrate_file
++
++V1 = '{"name":"demo","host":"localhost","port":8080,"enabled":true}'
++
++
++def test_migrate_writes_v2_and_returns_dict(tmp_path):
++    path = tmp_path / "config.json"
++    path.write_text(V1)
++    result = migrate_file(str(path))
++    assert result == {
++        "version": 2,
++        "service": {"name": "demo", "endpoint": {"host": "localhost", "port": 8080}},
++        "enabled": True,
++    }
++    assert json.loads(path.read_text()) == result
++
++
++def test_repeated_migration_is_semantically_stable(tmp_path):
++    path = tmp_path / "config.json"
++    path.write_text(V1)
++    first = migrate_file(str(path))
++    second = migrate_file(str(path))
++    assert first == second
++    assert json.loads(path.read_text()) == second
++
++
++def test_dry_run_leaves_source_bytes_unchanged(tmp_path):
++    path = tmp_path / "config.json"
++    path.write_text(V1)
++    before = path.read_bytes()
++    result = migrate_file(str(path), dry_run=True)
++    assert result["version"] == 2
++    assert path.read_bytes() == before
++
++
++def test_migrate_accepts_v2_input(tmp_path):
++    path = tmp_path / "config.json"
++    path.write_text('{"version":2,"service":{"name":"d","endpoint":{"host":"h","port":1}}}')
++    assert migrate_file(str(path)) == {
++        "version": 2,
++        "service": {"name": "d", "endpoint": {"host": "h", "port": 1}},
++        "enabled": True,
++    }
++
++
++def test_invalid_config_does_not_touch_file(tmp_path):
++    path = tmp_path / "config.json"
++    path.write_text('{"name":"demo","host":"h","port":0}')
++    before = path.read_bytes()
++    with pytest.raises(ConfigError):
++        migrate_file(str(path))
++    assert path.read_bytes() == before
++
++
++def test_invalid_config_migration_creates_nothing(tmp_path):
++    source, dest = tmp_path / "source.json", tmp_path / "dest.json"
++    source.write_text('not json')
++    with pytest.raises(ConfigError):
++        migrate_file(str(source))
++    assert not dest.exists()
++    assert source.read_text() == "not json"
++
++
++def test_invalid_config_does_not_create_destination(tmp_path):
++    from configkit.service import export_config
++
++    source, dest = tmp_path / "source.json", tmp_path / "dest.json"
++    source.write_text('{"name":"demo","host":"h","port":0}')
++    with pytest.raises(ConfigError):
++        export_config(source, dest)
++    assert not dest.exists()
++    assert source.read_text() == '{"name":"demo","host":"h","port":0}'
+--- a/tests/test_parser.py
++++ b/tests/test_parser.py
+@@ -1,5 +1,10 @@
+ import pytest
+ from configkit import Config, loads
++from configkit.config.errors import ConfigError
++
++
++V1 = '{"name":"demo","host":"localhost","port":8080,"enabled":true}'
++V2 = '{"version":2,"service":{"name":"demo","endpoint":{"host":"localhost","port":8080}},"enabled":true}'
+ 
+ 
+ def test_v1():
+@@ -9,3 +14,64 @@
+ def test_bad_port():
+     with pytest.raises(ValueError):
+         loads('{"name":"demo","host":"localhost","port":0}')
++
++
++def test_v1_and_v2_decode_identically():
++    assert loads(V1) == loads(V2) == Config("demo", "localhost", 8080, True)
++
++
++def test_missing_version_is_v1():
++    assert loads('{"name":"demo","host":"localhost","port":8080}') == Config("demo", "localhost", 8080)
++
++
++def test_enabled_defaults_to_true():
++    assert loads('{"name":"demo","host":"localhost","port":8080}').enabled is True
++    assert loads('{"version":2,"service":{"name":"d","endpoint":{"host":"h","port":1}}}').enabled is True
++
++
++def test_unknown_fields_are_ignored():
++    assert loads('{"name":"d","host":"h","port":1,"zzz":1}') == Config("d", "h", 1)
++    assert loads('{"version":2,"service":{"name":"d","endpoint":{"host":"h","port":1},"extra":2},"other":{}}') == Config("d", "h", 1)
++
++
++@pytest.mark.parametrize(
++    "text,path,code",
++    [
++        ('{"version":3,"name":"demo","host":"h","port":1}', "version", "unsupported"),
++        ('{"version":true,"name":"demo","host":"h","port":1}', "version", "unsupported"),
++        ('{"name":"  ","host":"h","port":1}', "name", "invalid"),
++        ('{"name":5,"host":"h","port":1}', "name", "invalid"),
++        ('{"host":"h","port":1}', "name", "invalid"),
++        ('{"name":"d","host":"","port":1}', "host", "invalid"),
++        ('{"name":"d","host":"h"}', "port", "invalid"),
++        ('{"name":"d","host":"h","port":65536}', "port", "invalid"),
++        ('{"name":"d","host":"h","port":true}', "port", "invalid"),
++        ('{"name":"d","host":"h","port":1,"enabled":"yes"}', "enabled", "invalid"),
++        ('{"version":2}', "service.name", "invalid"),
++        ('{"version":2,"service":{"endpoint":{"host":"h","port":1}}}', "service.name", "invalid"),
++        ('{"version":2,"service":{"name":"d"}}', "service.endpoint.host", "invalid"),
++        ('{"version":2,"service":{"name":"  ","endpoint":{"host":"h","port":1}}}', "service.name", "invalid"),
++        ('{"version":2,"service":{"name":"d","endpoint":{"host":"h"}}}', "service.endpoint.port", "invalid"),
++        ('{"version":2,"service":{"name":"d","endpoint":{"host":"h","port":0}}}', "service.endpoint.port", "invalid"),
++        ('{"version":2,"service":{"name":"d","endpoint":{"host":"h","port":1}},"enabled":1}', "enabled", "invalid"),
++        ('[]', "$", "invalid"),
++        ('not json', "$", "invalid"),
++    ],
++)
++def test_error_shape(text, path, code):
++    with pytest.raises(ConfigError) as info:
++        loads(text)
++    assert isinstance(info.value, ValueError)
++    assert info.value.to_dict() == {"error": "invalid_config", "issues": [{"path": path, "code": code}]}
++
++
++def test_only_first_problem_is_reported():
++    with pytest.raises(ConfigError) as info:
++        loads('{"name":"","host":"","port":0,"enabled":"x"}')
++    assert info.value.to_dict()["issues"] == [{"path": "name", "code": "invalid"}]
++    with pytest.raises(ConfigError) as info:
++        loads('{"name":"d","host":"","port":0,"enabled":"x"}')
++    assert info.value.to_dict()["issues"] == [{"path": "host", "code": "invalid"}]
++    with pytest.raises(ConfigError) as info:
++        loads('{"name":"d","host":"h","port":0,"enabled":"x"}')
++    assert info.value.to_dict()["issues"] == [{"path": "port", "code": "invalid"}]
+--- a/tests/test_service.py
++++ b/tests/test_service.py
+@@ -9,3 +9,33 @@
+     assert export_config(source, dest) == inspect_config(source)
+     assert inspect_config(dest)["address"] == "localhost:8080"
+     assert source.read_bytes() == before
++
++
++def test_export_writes_v2(tmp_path):
++    source, dest = tmp_path / "source.json", tmp_path / "dest.json"
++    source.write_text('{"name":"demo","host":"localhost","port":8080}')
++    before = source.read_bytes()
++    summary = export_config(source, dest)
++    assert summary == {"name": "demo", "address": "localhost:8080", "enabled": True}
++    data = json.loads(dest.read_text())
++    assert data["version"] == 2
++    assert data["service"]["name"] == "demo"
++    assert data["service"]["endpoint"] == {"host": "localhost", "port": 8080}
++    assert "name" not in data and "host" not in data and "port" not in data
++    assert source.read_bytes() == before
++
++
++def test_export_accepts_v2_source(tmp_path):
++    source, dest = tmp_path / "source.json", tmp_path / "dest.json"
++    source.write_text('{"version":2,"service":{"name":"demo","endpoint":{"host":"h","port":9}}}')
++    before = source.read_bytes()
++    assert export_config(source, dest) == {"name": "demo", "address": "h:9", "enabled": True}
++    assert inspect_config(dest)["name"] == "demo"
++    assert source.read_bytes() == before
++
++
++def test_inspect_v2_and_v1_agree(tmp_path):
++    v1, v2 = tmp_path / "v1.json", tmp_path / "v2.json"
++    v1.write_text('{"name":"demo","host":"localhost","port":8080}')
++    v2.write_text('{"version":2,"service":{"name":"demo","endpoint":{"host":"localhost","port":8080}}}')
++    assert inspect_config(v1) == inspect_config(v2)
+--- a/tests/test_writer.py
++++ b/tests/test_writer.py
+@@ -1,6 +1,24 @@
+ from configkit import Config, dumps, loads
++import json
+ 
+ 
+ def test_roundtrip():
+     config = Config("demo", "localhost", 1234, False)
+     assert loads(dumps(config)) == config
++
++
++def test_dumps_emits_v2_only():
++    data = json.loads(dumps(Config("demo", "localhost", 1234, False)))
++    assert data == {
++        "version": 2,
++        "service": {"name": "demo", "endpoint": {"host": "localhost", "port": 1234}},
++        "enabled": False,
++    }
++    assert "name" not in data and "host" not in data and "port" not in data
++
++
++def test_v1_input_is_read_but_never_written_back_as_v1():
++    config = loads('{"name":"demo","host":"localhost","port":80}')
++    data = json.loads(dumps(config))
++    assert data["version"] == 2
++    assert "name" not in data

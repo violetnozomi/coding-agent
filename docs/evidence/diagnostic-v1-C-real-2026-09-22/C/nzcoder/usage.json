@@ -1,0 +1,645 @@
+{
+  "per_request": [
+    {
+      "request_id": 1,
+      "purpose": "coding",
+      "ordinal": 1,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 7976,
+        "completion_tokens": 133,
+        "total_tokens": 8109,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 7976
+      },
+      "duration_ms": 796.8120139994426,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 2,
+      "purpose": "coding",
+      "ordinal": 2,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 8843,
+        "completion_tokens": 44,
+        "total_tokens": 8887,
+        "prompt_tokens_details": {
+          "cached_tokens": 7936
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 7936,
+        "prompt_cache_miss_tokens": 907
+      },
+      "duration_ms": 794.9132590001682,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 3,
+      "purpose": "coding",
+      "ordinal": 3,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 8903,
+        "completion_tokens": 79,
+        "total_tokens": 8982,
+        "prompt_tokens_details": {
+          "cached_tokens": 8704
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 26
+        },
+        "prompt_cache_hit_tokens": 8704,
+        "prompt_cache_miss_tokens": 199
+      },
+      "duration_ms": 531.8075160030276,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 4,
+      "purpose": "coding",
+      "ordinal": 4,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 9170,
+        "completion_tokens": 283,
+        "total_tokens": 9453,
+        "prompt_tokens_details": {
+          "cached_tokens": 8832
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 7
+        },
+        "prompt_cache_hit_tokens": 8832,
+        "prompt_cache_miss_tokens": 338
+      },
+      "duration_ms": 1384.917539995513,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 5,
+      "purpose": "coding",
+      "ordinal": 5,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 10470,
+        "completion_tokens": 306,
+        "total_tokens": 10776,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 3558
+      },
+      "duration_ms": 1140.4502030054573,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 6,
+      "purpose": "coding",
+      "ordinal": 6,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 11882,
+        "completion_tokens": 168,
+        "total_tokens": 12050,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 4970
+      },
+      "duration_ms": 1083.3576459990581,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 7,
+      "purpose": "coding",
+      "ordinal": 7,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 12747,
+        "completion_tokens": 3257,
+        "total_tokens": 16004,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 3184
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 5835
+      },
+      "duration_ms": 12238.383988995338,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 8,
+      "purpose": "coding",
+      "ordinal": 8,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 13374,
+        "completion_tokens": 7079,
+        "total_tokens": 20453,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 5995
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 6462
+      },
+      "duration_ms": 25345.975593998446,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 9,
+      "purpose": "coding",
+      "ordinal": 9,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 19641,
+        "completion_tokens": 573,
+        "total_tokens": 20214,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 259
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 12729
+      },
+      "duration_ms": 2605.1696720096515,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 10,
+      "purpose": "coding",
+      "ordinal": 10,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 16626,
+        "completion_tokens": 407,
+        "total_tokens": 17033,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 321
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 9714
+      },
+      "duration_ms": 2216.5336040052352,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 11,
+      "purpose": "coding",
+      "ordinal": 11,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 15748,
+        "completion_tokens": 734,
+        "total_tokens": 16482,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 196
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 8836
+      },
+      "duration_ms": 2855.2235429961,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 12,
+      "purpose": "coding",
+      "ordinal": 12,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 16302,
+        "completion_tokens": 599,
+        "total_tokens": 16901,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 75
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 9390
+      },
+      "duration_ms": 2328.0038439988857,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 13,
+      "purpose": "coding",
+      "ordinal": 13,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 18614,
+        "completion_tokens": 56,
+        "total_tokens": 18670,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 14
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 11702
+      },
+      "duration_ms": 1272.146614996018,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 14,
+      "purpose": "coding",
+      "ordinal": 14,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 17580,
+        "completion_tokens": 109,
+        "total_tokens": 17689,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 58
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 10668
+      },
+      "duration_ms": 961.3825660053408,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 15,
+      "purpose": "coding",
+      "ordinal": 15,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 17658,
+        "completion_tokens": 4810,
+        "total_tokens": 22468,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 1045
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 10746
+      },
+      "duration_ms": 51035.31012800522,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 16,
+      "purpose": "coding",
+      "ordinal": 16,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 21495,
+        "completion_tokens": 3782,
+        "total_tokens": 25277,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 14583
+      },
+      "duration_ms": 43356.31743900012,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 17,
+      "purpose": "coding",
+      "ordinal": 17,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 30527,
+        "completion_tokens": 136,
+        "total_tokens": 30663,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 85
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 23615
+      },
+      "duration_ms": 1601.4055190025829,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 18,
+      "purpose": "coding",
+      "ordinal": 18,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 26150,
+        "completion_tokens": 1088,
+        "total_tokens": 27238,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 979
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 19238
+      },
+      "duration_ms": 5662.490750008146,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 19,
+      "purpose": "coding",
+      "ordinal": 19,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 27458,
+        "completion_tokens": 705,
+        "total_tokens": 28163,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 566
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 20546
+      },
+      "duration_ms": 3724.3059199972777,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 20,
+      "purpose": "coding",
+      "ordinal": 20,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 28426,
+        "completion_tokens": 702,
+        "total_tokens": 29128,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 267
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 21514
+      },
+      "duration_ms": 3248.0880560033256,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 21,
+      "purpose": "coding",
+      "ordinal": 21,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 31681,
+        "completion_tokens": 134,
+        "total_tokens": 31815,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 83
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 24769
+      },
+      "duration_ms": 1474.3166659900453,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 22,
+      "purpose": "coding",
+      "ordinal": 22,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 28841,
+        "completion_tokens": 879,
+        "total_tokens": 29720,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 79
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 21929
+      },
+      "duration_ms": 3797.3672579973936,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 23,
+      "purpose": "coding",
+      "ordinal": 23,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 30754,
+        "completion_tokens": 144,
+        "total_tokens": 30898,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 101
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 23842
+      },
+      "duration_ms": 1805.1378959935391,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 24,
+      "purpose": "verifier",
+      "ordinal": 1,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 10472,
+        "completion_tokens": 278,
+        "total_tokens": 10750,
+        "prompt_tokens_details": {
+          "cached_tokens": 1024
+        },
+        "prompt_cache_hit_tokens": 1024,
+        "prompt_cache_miss_tokens": 9448
+      },
+      "duration_ms": 2108.503757001017,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 25,
+      "purpose": "coding",
+      "ordinal": 24,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 31231,
+        "completion_tokens": 1490,
+        "total_tokens": 32721,
+        "prompt_tokens_details": {
+          "cached_tokens": 6912
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 547
+        },
+        "prompt_cache_hit_tokens": 6912,
+        "prompt_cache_miss_tokens": 24319
+      },
+      "duration_ms": 6721.443567003007,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    },
+    {
+      "request_id": 26,
+      "purpose": "verifier",
+      "ordinal": 2,
+      "model": "deepseek-v4-flash",
+      "provider": "openai-compatible",
+      "raw_provider_usage": {
+        "prompt_tokens": 11692,
+        "completion_tokens": 295,
+        "total_tokens": 11987,
+        "prompt_tokens_details": {
+          "cached_tokens": 1920
+        },
+        "prompt_cache_hit_tokens": 1920,
+        "prompt_cache_miss_tokens": 9772
+      },
+      "duration_ms": 2066.9869230041513,
+      "http_status": 200,
+      "cost": null,
+      "cost_source": "Provider billing not exposed"
+    }
+  ],
+  "totals": {
+    "main": {
+      "requests": 24,
+      "usage_available": 24,
+      "prompt_tokens": 462097,
+      "completion_tokens": 27697,
+      "total_tokens": 489794,
+      "prompt_cache_hit_tokens": 163712,
+      "prompt_cache_miss_tokens": 298385
+    },
+    "auxiliary": {
+      "requests": 2,
+      "usage_available": 2,
+      "prompt_tokens": 22164,
+      "completion_tokens": 573,
+      "total_tokens": 22737,
+      "prompt_cache_hit_tokens": 2944,
+      "prompt_cache_miss_tokens": 19220
+    }
+  },
+  "cost": null,
+  "cost_display": "cost unknown",
+  "cache_rule": "already part of prompt, not added twice"
+}

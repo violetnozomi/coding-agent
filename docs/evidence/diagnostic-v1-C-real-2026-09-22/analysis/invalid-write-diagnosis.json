@@ -1,0 +1,23 @@
+{
+  "scope": "additional offline diagnosis, not changed acceptance and never model-visible",
+  "execution": {
+    "argv": [
+      "<USER_HOME>/miniconda3/bin/python",
+      "-c",
+      "import json\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom configkit import Config\nfrom configkit.store import save\nwith TemporaryDirectory() as td:\n p=Path(td)/\"existing.json\";p.write_text(\"keep-original-bytes\")\n before=p.read_text();error=None\n try: save(p,Config(\"demo\",\"localhost\",False))\n except Exception as exc: error=type(exc).__name__\n after=p.read_text()\n print(json.dumps({\"exception\":error,\"before\":before,\"after\":after,\"unchanged\":before==after}))\n"
+    ],
+    "exit": 0,
+    "timed_out": false,
+    "timeout_seconds": 8,
+    "stdout": "{\"exception\": null, \"before\": \"keep-original-bytes\", \"after\": \"{\\\"enabled\\\": true, \\\"service\\\": {\\\"endpoint\\\": {\\\"host\\\": \\\"localhost\\\", \\\"port\\\": false}, \\\"name\\\": \\\"demo\\\"}, \\\"version\\\": 2}\\n\", \"unchanged\": false}\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "observation": {
+    "exception": null,
+    "before": "keep-original-bytes",
+    "after": "{\"enabled\": true, \"service\": {\"endpoint\": {\"host\": \"localhost\", \"port\": false}, \"name\": \"demo\"}, \"version\": 2}\n",
+    "unchanged": false
+  },
+  "cause": "store.save calls dumps before write, but dumps/to_dict never validate a directly constructed Config. Invalid bool port is serialized and overwrites destination.",
+  "domain": "business implementation; no Runtime rollback participated"
+}

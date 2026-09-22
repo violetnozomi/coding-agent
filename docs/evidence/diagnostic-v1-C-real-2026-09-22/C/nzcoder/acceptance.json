@@ -1,0 +1,59 @@
+{
+  "passed": false,
+  "behavioral_only": true,
+  "checks": {
+    "public": {
+      "exit_code": 0,
+      "stdout": "..............................................                           [100%]\n46 passed in 0.04s\n",
+      "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+    },
+    "independent": {
+      "exit_code": 1,
+      "stdout": "11/12 passed",
+      "stderr": ""
+    }
+  },
+  "changed_files": [
+    "_scratch_check.py",
+    "configkit/cli.py",
+    "configkit/commands/migrate.py",
+    "configkit/config/errors.py",
+    "configkit/config/parser.py",
+    "configkit/config/validation.py",
+    "configkit/config/writer.py",
+    "docs/README.md",
+    "tests/test_cli.py",
+    "tests/test_migrate.py",
+    "tests/test_parser.py",
+    "tests/test_service.py",
+    "tests/test_writer.py"
+  ],
+  "source_hashes": {
+    "CONFIG_SPEC.md": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+    "_scratch_check.py": "d7f82c82a83d86bc1ffde75ce387af921f94c21cd77ef96429d6acad106133b0",
+    "configkit/__init__.py": "825870478fe32a4388f3994fa117d5ad60d9489a68c7ec1c470a5067042aac98",
+    "configkit/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+    "configkit/cli.py": "7383f8ead2dcb279ea338599861d4a916542fb3f49bdbb4dfc8ecfda44f0b58b",
+    "configkit/commands/__init__.py": "c904cf1d6883419c031d62bc2e5cf096a8f3c548942584a4c6ac964ab11b726a",
+    "configkit/commands/migrate.py": "179604d5440add012b7f398dd322ad42612c4547d8060342081178ffbc2013e8",
+    "configkit/commands/show.py": "65810ce8b0e0171e123934023b4237c5819a8df86bf5dce8e3dbb58ce3791c7f",
+    "configkit/config/__init__.py": "35147556d8819627b112a8844bc2059cd90203632b40889f8aaf7196e67b9d50",
+    "configkit/config/defaults.py": "82434ed5102553f222817395241e2ac02eb017c6b12694cce553bdb1419773bf",
+    "configkit/config/errors.py": "f87902f2fe92738e051f94542059ac42b04d667a15958e74589bdd870e527bf4",
+    "configkit/config/migrate.py": "9174188adc4030dd710a858790f4ab413ece926014e1f424a8e58febcb5abf34",
+    "configkit/config/model.py": "0e5b4bf18e84a391be3b5085080f9cd3d334891b38b69dd85745c5703af346b8",
+    "configkit/config/parser.py": "408dc3d2d80319439676e43087afcd805cf4ad44289e4e12d0e46491db496885",
+    "configkit/config/validation.py": "c4e11858c445e0f248a607dee58e4c0b41b5dba64608e6ab10443cb50d7a184f",
+    "configkit/config/writer.py": "7016b7fc44e95a4aadf5c87a64e541d8d370d2caf25460e847a178e83d445252",
+    "configkit/paths.py": "86214eabf88294e47b73f7b0aac40cb0b0fd4241be601c6e10450e8d20e0f67e",
+    "configkit/report.py": "373f0693596c5517bc8c0bb5c48396026b989ab61f4f087b35d9e0987f33e543",
+    "configkit/service.py": "de793303ad30702cedc9c5e90932806c50d83b1aa87ba186ef4a669ea2877ded",
+    "configkit/store.py": "b1e73666c0c2de2dd8f2b007c19ab5529975c4de46ef7cab0bd20b0cde8a826c",
+    "docs/README.md": "825b2c72be1795108aa5fcbcec98320dc9ea27e17124369a4632935400121a13",
+    "tests/test_cli.py": "048e2f767c40bb9d7f5cc12ba50a9cf3b6d010222558ca9dad0115d4559535e5",
+    "tests/test_migrate.py": "bb7a6024425b9a15f728e88a237c5346ad11f123d2b9d3e92320499cf06a1c70",
+    "tests/test_parser.py": "882e24f2835370f9c1ea5142182182c23679cf9f3e75feb82cc315788a1747a4",
+    "tests/test_service.py": "d8147199e171c254a3a640545f833da0f608a3644521df910441f21d0b6e0341",
+    "tests/test_writer.py": "944069a6fb28a454d21c611353b1a4a0049448934a95eaceb0665222fcd7f8aa"
+  }
+}

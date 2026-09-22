@@ -1,0 +1,7 @@
+{
+  "user_approval_source": "latest user confirmation",
+  "capture_settlement_test": "passed",
+  "production_unchanged": true,
+  "launch_scope": "one C only",
+  "paid_requests_before_launch": 0
+}

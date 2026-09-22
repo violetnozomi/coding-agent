@@ -1,0 +1,9 @@
+{
+  "preflight/V0-acceptance.json": "61e936b3b4b4054218eae0ede9cd2da8978aaddb583b179490f56c2d60233339",
+  "preflight/V0-project-tests.json": "e1491c246e648623f781757f8b876291ff4036abd6cb203f8f87926502f9a1f7",
+  "preflight/authority.json": "dfb41ea29e45a4a342e91ef403f8d7f63288c8099a273b8d6328219efad1f4ec",
+  "preflight/config.json": "19850f5e1b6de7869be1166e1edaf4e65f9dc1c4f9aaf7a47259a66a17d93f72",
+  "preflight/fixture-hashes.json": "c2525ed1a0476e9c28d41ce79a4047930d269f06cb62bb65ad383bee96649c14",
+  "preflight/source-hashes.json": "f0be231c3635e83357dbcf62c2f432bd719431498c03cd03eaf2fede3b642ff6",
+  "preflight/user-obligations.json": "f775504763e6b7ea256fdb2b0c3b15e14e2b5d9060f303b5bbcff91758fba42e"
+}

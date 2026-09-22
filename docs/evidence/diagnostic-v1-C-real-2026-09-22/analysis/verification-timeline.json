@@ -1,0 +1,2171 @@
+[
+  {
+    "request_id": 1,
+    "before": {
+      "mutation_generation": 0,
+      "acceptance_mutation_generation": 0,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 0,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": false,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "9efbfd424ad2a281d6ebc1afeec748f95aea33e94cb4b190cd626941ba2668bf",
+      "task_reference_omitted_count": 0
+    },
+    "after": {
+      "mutation_generation": 0,
+      "acceptance_mutation_generation": 0,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 0,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "commands": [
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "find . -type f -name \"*.py\" -o -name \"*.md\" -o -name \"*.toml\" -o -name \"*.cfg\" -o -name \"*.ini\" | grep -v \".git/\" | sort"
+        },
+        "output": "Denied by user",
+        "executed": false,
+        "dispatch_failed": true,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 1.92,
+        "queue_wait_ms": 0.0,
+        "permission_denied": true,
+        "title": "",
+        "metadata": {},
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 1,
+        "origin_request_id": 1
+      }
+    ]
+  },
+  {
+    "request_id": 2,
+    "before": {
+      "mutation_generation": 0,
+      "acceptance_mutation_generation": 0,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 0,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "after": {
+      "mutation_generation": 0,
+      "acceptance_mutation_generation": 0,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 0,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "commands": [
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "ls -R --ignore=.git ."
+        },
+        "output": "Denied by user",
+        "executed": false,
+        "dispatch_failed": true,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 0.251,
+        "queue_wait_ms": 0.0,
+        "permission_denied": true,
+        "title": "",
+        "metadata": {},
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 2,
+        "origin_request_id": 2
+      }
+    ]
+  },
+  {
+    "request_id": 10,
+    "before": {
+      "mutation_generation": 6,
+      "acceptance_mutation_generation": 6,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 6,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "after": {
+      "mutation_generation": 6,
+      "acceptance_mutation_generation": 6,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 6,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "commands": [
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "python -m pytest -q tests 2>&1 | tail -20"
+        },
+        "output": ".....                                                                    [100%]\n5 passed in 0.01s",
+        "executed": true,
+        "dispatch_failed": false,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 174.441,
+        "queue_wait_ms": 0.0,
+        "permission_denied": false,
+        "title": "python -m pytest -q tests 2>&1 | tail -20",
+        "metadata": {
+          "output": ".....                                                                    [100%]\n5 passed in 0.01s",
+          "exit": 0,
+          "description": "python -m pytest -q tests 2>&1 | tail -20",
+          "workdir": "/tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace",
+          "shell_kind": "bash",
+          "truncated": false,
+          "total_output_bytes": 98,
+          "retained_output_bytes": 98,
+          "output_limit_exceeded": false,
+          "output_incomplete": false,
+          "executed_command": "python -m pytest -q tests 2>&1 | tail -20",
+          "requested_command": "python -m pytest -q tests 2>&1 | tail -20",
+          "strict_output_filter_removed": false,
+          "strict_pythonpath_injected": false,
+          "pythonpath_root": ""
+        },
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 10,
+        "origin_request_id": 10
+      },
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "git status --short; git diff --stat"
+        },
+        "output": "Denied by user",
+        "executed": false,
+        "dispatch_failed": true,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 0.331,
+        "queue_wait_ms": 0.087,
+        "permission_denied": true,
+        "title": "",
+        "metadata": {},
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 10,
+        "origin_request_id": 10
+      }
+    ]
+  },
+  {
+    "request_id": 11,
+    "before": {
+      "mutation_generation": 6,
+      "acceptance_mutation_generation": 6,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 6,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "after": {
+      "mutation_generation": 6,
+      "acceptance_mutation_generation": 6,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 6,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "commands": [
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "cd /tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace && python - <<'EOF'\nimport json, pathlib, tempfile\nfrom configkit import Config, loads, dumps\nfrom configkit.config.errors import ConfigError\nfrom configkit.config.migrate import migrate_file\nfrom configkit.service import export_config, inspect_config\nfrom configkit.cli import main\n\nv1 = '{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}'\nv2 = '{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}'\nprint(loads(v1), loads(v2))\n# missing version, missing enabled\nprint(loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}'))\n# unknown extra fields\nprint(loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"zzz\":1,\"service\":{\"name\":\"x\"}}'))\n\ndef err(t):\n    try:\n        loads(t)\n        return \"NO ERROR\"\n    except ConfigError as e:\n        return e.to_dict()\n\ncases = [\n '{\"version\":3,\"name\":\"demo\",\"host\":\"h\",\"port\":1}',\n '{\"name\":\"  \",\"host\":\"h\",\"port\":1}',\n '{\"name\":\"d\",\"host\":\"\",\"port\":1}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":0}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":65536}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":True}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"enabled\":\"yes\"}',\n '{\"name\":\"d\",\"host\":\"h\"}',\n '{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\"}}}',\n '{\"version\":2,\"service\":{\"endpoint\":{\"host\":\"h\",\"port\":1}}}',\n '{\"version\":2,\"service\":{\"name\":\"d\"}}',\n '{\"version\":2}',\n '[]',\n 'not json',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"version\":true}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"version\":\"2\"}',\n]\nfor c in cases:\n    print(c, \"->\", err(c))\nEOF"
+        },
+        "output": "Denied by user",
+        "executed": false,
+        "dispatch_failed": true,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 1.654,
+        "queue_wait_ms": 0.0,
+        "permission_denied": true,
+        "title": "",
+        "metadata": {},
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 11,
+        "origin_request_id": 11
+      }
+    ]
+  },
+  {
+    "request_id": 13,
+    "before": {
+      "mutation_generation": 7,
+      "acceptance_mutation_generation": 7,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 7,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "after": {
+      "mutation_generation": 7,
+      "acceptance_mutation_generation": 7,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 7,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "commands": [
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "python _scratch_check.py"
+        },
+        "output": "Denied by user",
+        "executed": false,
+        "dispatch_failed": true,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 0.233,
+        "queue_wait_ms": 0.0,
+        "permission_denied": true,
+        "title": "",
+        "metadata": {},
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 13,
+        "origin_request_id": 13
+      }
+    ]
+  },
+  {
+    "request_id": 14,
+    "before": {
+      "mutation_generation": 7,
+      "acceptance_mutation_generation": 7,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 7,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "after": {
+      "mutation_generation": 7,
+      "acceptance_mutation_generation": 7,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 7,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "commands": [
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "python -m pytest -q tests 2>&1 | tail -5"
+        },
+        "output": ".....                                                                    [100%]\n5 passed in 0.01s",
+        "executed": true,
+        "dispatch_failed": false,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 172.108,
+        "queue_wait_ms": 0.0,
+        "permission_denied": false,
+        "title": "python -m pytest -q tests 2>&1 | tail -5",
+        "metadata": {
+          "output": ".....                                                                    [100%]\n5 passed in 0.01s",
+          "exit": 0,
+          "description": "python -m pytest -q tests 2>&1 | tail -5",
+          "workdir": "/tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace",
+          "shell_kind": "bash",
+          "truncated": false,
+          "total_output_bytes": 98,
+          "retained_output_bytes": 98,
+          "output_limit_exceeded": false,
+          "output_incomplete": false,
+          "executed_command": "python -m pytest -q tests 2>&1 | tail -5",
+          "requested_command": "python -m pytest -q tests 2>&1 | tail -5",
+          "strict_output_filter_removed": false,
+          "strict_pythonpath_injected": false,
+          "pythonpath_root": ""
+        },
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 14,
+        "origin_request_id": 14
+      }
+    ]
+  },
+  {
+    "request_id": 17,
+    "before": {
+      "mutation_generation": 8,
+      "acceptance_mutation_generation": 8,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "green",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 8,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "after": {
+      "mutation_generation": 8,
+      "acceptance_mutation_generation": 8,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "widespread_test_regression",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "yellow",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 8,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "commands": [
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "python -m pytest -q tests 2>&1 | tail -30"
+        },
+        "output": "Command exited with code 1\n('{\"name\":\"d\",\"host\":\"h\",\"port\":True}', \"port\", \"invalid\"),\n            ('{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"enabled\":\"yes\"}', \"enabled\", \"invalid\"),\n            ('{\"version\":2}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"endpoint\":{\"host\":\"h\",\"port\":1}}}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\"}}', \"service.endpoint.host\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"  \",\"endpoint\":{\"host\":\"h\",\"port\":1}}}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\"}}}', \"service.endpoint.port\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":0}}}', \"service.endpoint.port\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}},\"enabled\":1}', \"enabled\", \"invalid\"),\n            ('[]', \"$\", \"invalid\"),\n            ('not json', \"$\", \"invalid\"),\n        ],\n    )\n    def test_error_shape(text, path, code):\n        with pytest.raises(ConfigError) as info:\n            loads(text)\n        assert isinstance(info.value, ValueError)\n>       assert info.value.to_dict() == {\"error\": \"invalid_config\", \"issues\": [{\"path\": path, \"code\": code}]}\nE       AssertionError: assert {'error': 'in...'path': '$'}]} == {'error': 'in...th': 'port'}]}\nE         \nE         Omitting 1 identical items, use -vv to show\nE         Differing items:\nE         {'issues': [{'code': 'invalid', 'path': '$'}]} != {'issues': [{'code': 'invalid', 'path': 'port'}]}\nE         Use -v to get more diff\n\ntests/test_parser.py:65: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_migrate.py::test_invalid_config_does_not_create_destination\nFAILED tests/test_parser.py::test_error_shape[{\"name\":\"d\",\"host\":\"h\",\"port\":True}-port-invalid]\n2 failed, 43 passed in 0.05s",
+        "executed": true,
+        "dispatch_failed": false,
+        "command_failed": true,
+        "is_write": false,
+        "duration_ms": 361.653,
+        "queue_wait_ms": 0.0,
+        "permission_denied": false,
+        "title": "python -m pytest -q tests 2>&1 | tail -30",
+        "metadata": {
+          "output": "Command exited with code 1\n('{\"name\":\"d\",\"host\":\"h\",\"port\":True}', \"port\", \"invalid\"),\n            ('{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"enabled\":\"yes\"}', \"enabled\", \"invalid\"),\n            ('{\"version\":2}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"endpoint\":{\"host\":\"h\",\"port\":1}}}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\"}}', \"service.endpoint.host\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"  \",\"endpoint\":{\"host\":\"h\",\"port\":1}}}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\"}}}', \"service.endpoint.port\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":0}}}', \"service.endpoint.port\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}},\"enabled\":1}', \"enabled\", \"invalid\"),\n            ('[]', \"$\", \"invalid\"),\n            ('not json', \"$\", \"invalid\"),\n        ],\n    )\n    def test_error_shape(text, path, code):\n        with pytest.raises(ConfigError) as info:\n            loads(text)\n        assert isinstance(info.value, ValueError)\n>       assert info.value.to_dict() == {\"error\": \"invalid_config\", \"issues\": [{\"path\": path, \"code\": code}]}\nE       AssertionError: assert {'error': 'in...'path': '$'}]} == {'error': 'in...th': 'port'}]}\nE         \nE         Omitting 1 identical items, use -vv to show\nE         Differing items:\nE         {'issues': [{'code': 'invalid', 'path': '$'}]} != {'issues': [{'code': 'invalid', 'path': 'port'}]}\nE         Use -v to get more diff\n\ntests/test_parser.py:65: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_migrate.py::test_invalid_config_does_not_create_destination\nFAILED tests/test_parser.py::test_error_shape[{\"name\":\"d\",\"host\":\"h\",\"port\":True}-port-invalid]\n2 failed, 43 passed in 0.05s",
+          "exit": 1,
+          "description": "python -m pytest -q tests 2>&1 | tail -30",
+          "workdir": "/tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace",
+          "shell_kind": "bash",
+          "truncated": false,
+          "total_output_bytes": 1912,
+          "retained_output_bytes": 1912,
+          "output_limit_exceeded": false,
+          "output_incomplete": false,
+          "executed_command": "python -m pytest -q tests 2>&1 | tail -30",
+          "requested_command": "python -m pytest -q tests 2>&1 | tail -30",
+          "strict_output_filter_removed": false,
+          "strict_pythonpath_injected": false,
+          "pythonpath_root": ""
+        },
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 17,
+        "origin_request_id": 17
+      },
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "python -m py_compile configkit/config/errors.py",
+          "_nz_runtime_verification_stage": "static"
+        },
+        "output": "Denied by user",
+        "executed": false,
+        "dispatch_failed": true,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 0.298,
+        "queue_wait_ms": 0.0,
+        "permission_denied": true,
+        "title": "",
+        "metadata": {},
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 17,
+        "origin_request_id": 17
+      }
+    ]
+  },
+  {
+    "request_id": 21,
+    "before": {
+      "mutation_generation": 10,
+      "acceptance_mutation_generation": 10,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "widespread_test_regression",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "yellow",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 10,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "after": {
+      "mutation_generation": 10,
+      "acceptance_mutation_generation": 10,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "normal",
+      "primary_recovery_classification": "import_or_package_layout",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "orange",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 10,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "commands": [
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "python -m pytest -q tests 2>&1 | tail -20"
+        },
+        "output": "..............................................                           [100%]\n46 passed in 0.03s",
+        "executed": true,
+        "dispatch_failed": false,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 196.796,
+        "queue_wait_ms": 0.0,
+        "permission_denied": false,
+        "title": "python -m pytest -q tests 2>&1 | tail -20",
+        "metadata": {
+          "output": "..............................................                           [100%]\n46 passed in 0.03s",
+          "exit": 0,
+          "description": "python -m pytest -q tests 2>&1 | tail -20",
+          "workdir": "/tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace",
+          "shell_kind": "bash",
+          "truncated": false,
+          "total_output_bytes": 99,
+          "retained_output_bytes": 99,
+          "output_limit_exceeded": false,
+          "output_incomplete": false,
+          "executed_command": "python -m pytest -q tests 2>&1 | tail -20",
+          "requested_command": "python -m pytest -q tests 2>&1 | tail -20",
+          "strict_output_filter_removed": false,
+          "strict_pythonpath_injected": false,
+          "pythonpath_root": ""
+        },
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 21,
+        "origin_request_id": 21
+      },
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+          "_nz_runtime_verification_stage": "targeted"
+        },
+        "output": "Command exited with code 4\nERROR: found no collectors for /tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace/tests/test_migrate.py::test_invalid_config_does_not_create_destination\n\n============================= test session starts ==============================\nplatform linux -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0\nrootdir: /tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace\nplugins: anyio-4.10.0\ncollected 0 items / 1 error\n\n==================================== ERRORS ====================================\n____________________ ERROR collecting tests/test_migrate.py ____________________\nImportError while importing test module '/tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace/tests/test_migrate.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\n<USER_HOME>/miniconda3/lib/python3.13/importlib/__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests/test_migrate.py:3: in <module>\n    from configkit.config.errors import ConfigError\nE   ModuleNotFoundError: No module named 'configkit'\n=========================== short test summary info ============================\nERROR tests/test_migrate.py\n=============================== 1 error in 0.01s ===============================",
+        "executed": true,
+        "dispatch_failed": false,
+        "command_failed": true,
+        "is_write": false,
+        "duration_ms": 178.939,
+        "queue_wait_ms": 0.0,
+        "permission_denied": false,
+        "title": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+        "metadata": {
+          "output": "Command exited with code 4\nERROR: found no collectors for /tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace/tests/test_migrate.py::test_invalid_config_does_not_create_destination\n\n============================= test session starts ==============================\nplatform linux -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0\nrootdir: /tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace\nplugins: anyio-4.10.0\ncollected 0 items / 1 error\n\n==================================== ERRORS ====================================\n____________________ ERROR collecting tests/test_migrate.py ____________________\nImportError while importing test module '/tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace/tests/test_migrate.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\n<USER_HOME>/miniconda3/lib/python3.13/importlib/__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests/test_migrate.py:3: in <module>\n    from configkit.config.errors import ConfigError\nE   ModuleNotFoundError: No module named 'configkit'\n=========================== short test summary info ============================\nERROR tests/test_migrate.py\n=============================== 1 error in 0.01s ===============================",
+          "exit": 4,
+          "description": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+          "workdir": "/tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace",
+          "shell_kind": "bash",
+          "truncated": false,
+          "total_output_bytes": 1315,
+          "retained_output_bytes": 1315,
+          "output_limit_exceeded": false,
+          "output_incomplete": false,
+          "executed_command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+          "requested_command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+          "strict_output_filter_removed": false,
+          "strict_pythonpath_injected": false,
+          "pythonpath_root": ""
+        },
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 21,
+        "origin_request_id": 21
+      }
+    ]
+  },
+  {
+    "request_id": 23,
+    "before": {
+      "mutation_generation": 11,
+      "acceptance_mutation_generation": 10,
+      "verification_generation": -1,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": -1,
+        "attempts": 0,
+        "passed": null,
+        "output": "",
+        "source": "",
+        "zone": ""
+      },
+      "work_phase": "closure_repair",
+      "primary_recovery_classification": "import_or_package_layout",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "orange",
+      "completion_review_generation": -1,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "pending",
+            "evidence": [],
+            "mutation_generation": 0
+          }
+        ],
+        "latest_generation": 10,
+        "latest_verification_generation": -1
+      },
+      "unresolved_ids": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "after": {
+      "mutation_generation": 11,
+      "acceptance_mutation_generation": 10,
+      "verification_generation": 11,
+      "verification_contract": {
+        "command": "python -m pytest -q tests",
+        "targets": [
+          "tests"
+        ],
+        "attempted_generation": 10,
+        "attempts": 1,
+        "passed": true,
+        "output": "..............................................                           [100%]\n46 passed in 0.02s",
+        "source": "model",
+        "zone": ""
+      },
+      "work_phase": "closure_repair",
+      "primary_recovery_classification": "import_or_package_layout",
+      "supporting_recovery_classifications": [],
+      "recovery_repair_targets": [],
+      "budget_pressure_zone": "orange",
+      "completion_review_generation": 11,
+      "requirement_ledger": {
+        "items": [
+          {
+            "requirement": {
+              "id": "R1",
+              "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+              "kind": "behavior",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "satisfied",
+            "evidence": [
+              {
+                "type": "verification_passed",
+                "path": null,
+                "command": "python -m pytest -q tests",
+                "generation": 10,
+                "fingerprint": null
+              }
+            ],
+            "mutation_generation": 10
+          },
+          {
+            "requirement": {
+              "id": "R2",
+              "description": "Preserve the requested compatibility guarantees.",
+              "kind": "compatibility",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [
+                "semantic_review"
+              ],
+              "artifact_operations": []
+            },
+            "status": "candidate",
+            "evidence": [
+              {
+                "type": "verification_passed",
+                "path": null,
+                "command": "python -m pytest -q tests",
+                "generation": 10,
+                "fingerprint": null
+              }
+            ],
+            "mutation_generation": 10
+          },
+          {
+            "requirement": {
+              "id": "R3",
+              "description": "Pass the exact acceptance command: python -m pytest -q tests",
+              "kind": "verification",
+              "expected_artifacts": [],
+              "satisfaction_mode": "semantic",
+              "depends_on": [],
+              "required_evidence": [],
+              "artifact_operations": []
+            },
+            "status": "satisfied",
+            "evidence": [
+              {
+                "type": "verification_passed",
+                "path": null,
+                "command": "python -m pytest -q tests",
+                "generation": 10,
+                "fingerprint": null
+              }
+            ],
+            "mutation_generation": 10
+          }
+        ],
+        "latest_generation": 10,
+        "latest_verification_generation": 10
+      },
+      "unresolved_ids": [
+        "R2"
+      ],
+      "task_reference_evidence": [
+        {
+          "path": "CONFIG_SPEC.md",
+          "authority": "task_spec",
+          "source": "initial_user_instruction",
+          "content_hash": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+          "text": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required; no network is involved.\n\n## Representations\nv1 is {\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}.\nA missing version or version=1 means v1.\nv2 is {\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}.\nBoth decode to the existing Config(name, host, port, enabled) model. enabled may\nbe absent and then defaults to true. Unknown extra fields are ignored.\nEvery new serialization/write must emit only v2 (no top-level name/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.\nValidate in this order: version, name, host, port, enabled, and report only the\nfirst problem. Unsupported versions produce path \"version\", code \"unsupported\".\nMissing/invalid values or missing nested containers produce code \"invalid\" and\nthe corresponding leaf path: v1 name/host/port/enabled or v2 service.name,\nservice.endpoint.host, service.endpoint.port, enabled.\nMalformed JSON or a non-object root uses path \"$\", code \"invalid\".\nRaise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating migration has identical semantic output.\ndry_run=True returns the same dictionary but leaves source bytes unchanged.\nCLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.\npython -m configkit show PATH keeps its current summary JSON for either version.\nInvalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr\nand does not change files. Successful commands exit 0.\nService export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.\n\n## Delivery\nUpdate docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,\nand the invalid_config error shape. Add meaningful tests without dropping old\ncompatibility coverage. Run python -m pytest -q tests after implementation.\nReport actual test results and remaining limitations.\n",
+          "complete": true,
+          "captured_generation": 0,
+          "model_observed": true,
+          "capture_status": "captured",
+          "authority_epoch": 0,
+          "source_message_id": ""
+        }
+      ],
+      "reference_digest": "177189fb71d30a3eec732aec2519b51344fdfbd572f3a74d1c500c213399921a",
+      "task_reference_omitted_count": 0
+    },
+    "commands": [
+      {
+        "name": "bash",
+        "tool_input": {
+          "command": "python -m pytest -q tests"
+        },
+        "output": "..............................................                           [100%]\n46 passed in 0.02s",
+        "executed": true,
+        "dispatch_failed": false,
+        "command_failed": false,
+        "is_write": false,
+        "duration_ms": 196.978,
+        "queue_wait_ms": 0.0,
+        "permission_denied": false,
+        "title": "python -m pytest -q tests",
+        "metadata": {
+          "output": "..............................................                           [100%]\n46 passed in 0.02s",
+          "exit": 0,
+          "description": "python -m pytest -q tests",
+          "workdir": "/tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace",
+          "shell_kind": "bash",
+          "truncated": false,
+          "total_output_bytes": 99,
+          "retained_output_bytes": 99,
+          "output_limit_exceeded": false,
+          "output_incomplete": false,
+          "executed_command": "python -m pytest -q tests",
+          "requested_command": "python -m pytest -q tests",
+          "strict_output_filter_removed": false,
+          "strict_pythonpath_injected": false,
+          "pythonpath_root": ""
+        },
+        "attachments": [],
+        "category": "command",
+        "recorded_capture_request_id": 23,
+        "origin_request_id": 23
+      }
+    ]
+  }
+]

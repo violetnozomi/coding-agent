@@ -1,0 +1,18 @@
+{
+  "user_message": "\u786e\u8ba4",
+  "scope": "exactly one C_long_horizon NZ run",
+  "main_cap": 24,
+  "auxiliary_cap": 8,
+  "auxiliary": "production natural calls only",
+  "retries_count": true,
+  "excluded": [
+    "A",
+    "B",
+    "M",
+    "Q",
+    "S",
+    "InfCodeX",
+    "second C"
+  ],
+  "granted": true
+}

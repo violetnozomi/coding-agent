@@ -1,0 +1,31 @@
+{
+  "workspace": {
+    "CONFIG_SPEC.md": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+    "configkit/__init__.py": "825870478fe32a4388f3994fa117d5ad60d9489a68c7ec1c470a5067042aac98",
+    "configkit/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+    "configkit/cli.py": "2d280423cfe7b525ad87e72e2a0e4a86a861364e53fc4023162ff8de381c5f5c",
+    "configkit/commands/__init__.py": "c904cf1d6883419c031d62bc2e5cf096a8f3c548942584a4c6ac964ab11b726a",
+    "configkit/commands/migrate.py": "816958ed218106d2e4824cde4415f970264bfde516df42ab303e703f7c8c2a98",
+    "configkit/commands/show.py": "65810ce8b0e0171e123934023b4237c5819a8df86bf5dce8e3dbb58ce3791c7f",
+    "configkit/config/__init__.py": "35147556d8819627b112a8844bc2059cd90203632b40889f8aaf7196e67b9d50",
+    "configkit/config/defaults.py": "82434ed5102553f222817395241e2ac02eb017c6b12694cce553bdb1419773bf",
+    "configkit/config/errors.py": "b3ccfc05544c7c0286eccb9c8c02ab29769dc49d93596743de6c1f1c5c8b8d58",
+    "configkit/config/migrate.py": "9174188adc4030dd710a858790f4ab413ece926014e1f424a8e58febcb5abf34",
+    "configkit/config/model.py": "0e5b4bf18e84a391be3b5085080f9cd3d334891b38b69dd85745c5703af346b8",
+    "configkit/config/parser.py": "f81ab4312f768562764e0a19d3d447a46ec765965746bc95f45e42696bd72a06",
+    "configkit/config/validation.py": "00c12d338497f47e9cee39f9d1520346553b60857d87c2cc7b83fa83368c1d02",
+    "configkit/config/writer.py": "a6f493512c841dedcbd95dbd3e4db5cc93b68b7a728b4b64653e74f1692c5c08",
+    "configkit/paths.py": "86214eabf88294e47b73f7b0aac40cb0b0fd4241be601c6e10450e8d20e0f67e",
+    "configkit/report.py": "373f0693596c5517bc8c0bb5c48396026b989ab61f4f087b35d9e0987f33e543",
+    "configkit/service.py": "de793303ad30702cedc9c5e90932806c50d83b1aa87ba186ef4a669ea2877ded",
+    "configkit/store.py": "b1e73666c0c2de2dd8f2b007c19ab5529975c4de46ef7cab0bd20b0cde8a826c",
+    "docs/README.md": "e95d7f58056c1ba2bcc3019feb4e67a8666e1697fff2a42cc41070ea5ad371fe",
+    "tests/test_cli.py": "748587f89a2fd11994a6f59d06a3db4a2fc02503d688be1081daa1344d0c26eb",
+    "tests/test_parser.py": "e006ee99fc22d9e30bf476081310dd08a4de202ee9c8ff76423e196c536aad32",
+    "tests/test_service.py": "f53d539e9574ce6e7694ce6a1e14259afb31488519f4d1633e64a0da276300e0",
+    "tests/test_writer.py": "75e9d287c8dd3d7c73a5de6829486f0835dbb7ec29874905f57a2ac1fbe06a72"
+  },
+  "task_sha256": "f874b818d6adbbee60823a7fc8bc279b45bbd84535b559c354c8e83c6e01e843",
+  "spec_sha256": "0864cefb5fa0ce39152909de2b65b6a1248f7948f1eb97d3fa1d8aba0e1dee1f",
+  "acceptance_sha256": "eeab5bc46adc2f831f13aa5d7b38cfdc9a2d1638cd82f3af7c4da26b38b9d52c"
+}

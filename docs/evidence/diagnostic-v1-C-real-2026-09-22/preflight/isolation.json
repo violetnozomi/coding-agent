@@ -1,0 +1,28 @@
+{
+  "file_count": 24,
+  "only_workspace_materialized": true,
+  "safe_workspace_access": [
+    {
+      "kind": "absolute_evaluator",
+      "denied": true,
+      "exception": "WorkspacePathError"
+    },
+    {
+      "kind": "absolute_evaluator",
+      "denied": true,
+      "exception": "WorkspacePathError"
+    },
+    {
+      "kind": "traversal",
+      "denied": true,
+      "exception": "WorkspacePathError"
+    },
+    {
+      "kind": "traversal",
+      "denied": true,
+      "exception": "WorkspacePathError"
+    }
+  ],
+  "network": "existing inherited seccomp non-Unix denial",
+  "limitations": "Not an OS filesystem jail. Production workspace policy and unchanged Bash guards remain enforced. Stop on successful evaluator access."
+}

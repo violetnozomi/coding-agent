@@ -1,0 +1,308 @@
+{
+  "scope": "evaluator-only; never injected into Provider context",
+  "completion_dimensions": [
+    "behavioral_acceptance",
+    "project_test_obligation",
+    "test_addition_obligation",
+    "documentation_obligation",
+    "final_report_obligation",
+    "runtime_terminal_state"
+  ],
+  "obligations": [
+    {
+      "id": "v1_read",
+      "source": "CONFIG_SPEC.md",
+      "quote": "A missing version or version=1 means v1.",
+      "kind": "compatibility",
+      "acceptance_checks": [
+        "v1_read"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "v2_read",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Both decode to the existing Config(name, host, port, enabled) model.",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "v2_read"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "v2_write",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Every new serialization/write must emit only v2",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "v2_write"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "migration",
+      "source": "CONFIG_SPEC.md",
+      "quote": "migrate_file(path, dry_run=False) returns the v2 dictionary and writes v2",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "migration"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "dry_run",
+      "source": "CONFIG_SPEC.md",
+      "quote": "dry_run=True returns the same dictionary but leaves source bytes unchanged.",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "dry_run"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "invalid_config",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Malformed JSON or a non-object root uses path \"$\", code \"invalid\".",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "invalid_config"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "validation_paths",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Validate in this order: version, name, host, port, enabled",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "validation_paths"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "cli_migrate",
+      "source": "CONFIG_SPEC.md",
+      "quote": "CLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "cli_migrate"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "cli_invalid_preserves_input",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Invalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "cli_invalid_preserves_input"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "caller_integration",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Service export_config(source, destination) writes v2 to destination",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "caller_integration"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "invalid_write_preserves_destination",
+      "source": "CONFIG_SPEC.md",
+      "quote": "No validation error may overwrite the input or an existing destination.",
+      "kind": "behavior",
+      "acceptance_checks": [
+        "invalid_write_preserves_destination"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "documentation",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Update docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,",
+      "kind": "docs",
+      "acceptance_checks": [
+        "documentation"
+      ],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "spec_immutable",
+      "source": "CONFIG_SPEC.md",
+      "quote": "CONFIG_SPEC.md is the task authority and\nmust not be edited.",
+      "kind": "artifact",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "enabled_default",
+      "source": "CONFIG_SPEC.md",
+      "quote": "enabled may\nbe absent and then defaults to true.",
+      "kind": "behavior",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "unknown_fields",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Unknown extra fields are ignored.",
+      "kind": "compatibility",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "config_construction",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Existing Config construction and v1 read tests work.",
+      "kind": "compatibility",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "validation_types",
+      "source": "CONFIG_SPEC.md",
+      "quote": "name and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.",
+      "kind": "behavior",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "validation_order_first_only",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Validate in this order: version, name, host, port, enabled, and report only the\nfirst problem.",
+      "kind": "behavior",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "unsupported_version",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Unsupported versions produce path \"version\", code \"unsupported\".",
+      "kind": "behavior",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "config_error_shape",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Raise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.",
+      "kind": "behavior",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "migration_idempotence",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Repeating migration has identical semantic output.",
+      "kind": "behavior",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "cli_show",
+      "source": "CONFIG_SPEC.md",
+      "quote": "python -m configkit show PATH keeps its current summary JSON for either version.",
+      "kind": "compatibility",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "cli_success_exit",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Successful commands exit 0.",
+      "kind": "behavior",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "export_preservation",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Service export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.",
+      "kind": "behavior",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "docs_error_shape",
+      "source": "CONFIG_SPEC.md",
+      "quote": "and the invalid_config error shape.",
+      "kind": "docs",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "meaningful_tests",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Add meaningful tests",
+      "kind": "tests",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "old_test_coverage",
+      "source": "CONFIG_SPEC.md",
+      "quote": "without dropping old\ncompatibility coverage.",
+      "kind": "compatibility",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "exact_project_verification",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Run python -m pytest -q tests after implementation.",
+      "kind": "verification",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "actual_test_report",
+      "source": "CONFIG_SPEC.md",
+      "quote": "Report actual test results",
+      "kind": "reporting",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    },
+    {
+      "id": "remaining_limitations",
+      "source": "CONFIG_SPEC.md",
+      "quote": "and remaining limitations.",
+      "kind": "reporting",
+      "acceptance_checks": [],
+      "status": "unknown",
+      "evidence": []
+    }
+  ],
+  "note": "Checks are partial witnesses, not proof of every quoted obligation. Empty mappings need separate audit."
+}

@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "baseline": "391e12d8e17f397476094cba8828c33b6b07e172",
+  "source_files_unchanged": 376,
+  "suite_frozen_files_unchanged": 136,
+  "old_tracked_evidence_diff": false,
+  "frozen_run_files": 277,
+  "scanned_files": 338,
+  "main_requests": 24,
+  "auxiliary_requests": 2,
+  "extra_samples": 0,
+  "provider_errors": 0,
+  "initial_task_byte_exact": true,
+  "settled_versions": 7,
+  "spec_unchanged": true,
+  "production_changes": false,
+  "privacy_findings": [],
+  "cost": "unknown",
+  "limitation": "Pattern-based scans cannot prove absence of every unknown secret; network isolation is not filesystem hermeticity."
+}

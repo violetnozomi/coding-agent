@@ -1,0 +1,13 @@
+{
+  "classification": "C-MODEL-INCOMPLETE",
+  "behavioral_acceptance": "11/12",
+  "project_test_obligation": "pass: exact current command 46 passed",
+  "test_addition_obligation": "pass",
+  "documentation_obligation": "pass",
+  "final_report_obligation": "pass for actual test result and limitations",
+  "runtime_terminal_state": "completed",
+  "full_task_complete": false,
+  "runtime_tracked": "R1 broad behavior, R2 compatibility, R3 exact command; no distinct direct-save validation/no-clobber obligation.",
+  "evaluator_observed": "Explicit write-safety gap survives; tests/reviewer missed it.",
+  "core_candidate": "TaskContract granularity and semantic coverage could miss obligations, but this run does not prove deterministic extraction/control-flow corruption. Build separate offline RED before any Core patch."
+}

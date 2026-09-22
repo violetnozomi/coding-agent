@@ -1,0 +1,820 @@
+[
+  {
+    "version": "V0",
+    "generation": 0,
+    "first_observed_before_request": 0,
+    "changed_files": [],
+    "acceptance": "1/12 passed",
+    "project_test_exit": 0,
+    "project_test_output": ".....                                                                    [100%]\n5 passed in 0.01s\n",
+    "verification_generation_at_observation": -1,
+    "tests_audit": {
+      "tests_hashes": {
+        "tests/test_cli.py": "748587f89a2fd11994a6f59d06a3db4a2fc02503d688be1081daa1344d0c26eb",
+        "tests/test_parser.py": "e006ee99fc22d9e30bf476081310dd08a4de202ee9c8ff76423e196c536aad32",
+        "tests/test_service.py": "f53d539e9574ce6e7694ce6a1e14259afb31488519f4d1633e64a0da276300e0",
+        "tests/test_writer.py": "75e9d287c8dd3d7c73a5de6829486f0835dbb7ec29874905f57a2ac1fbe06a72"
+      },
+      "tests_added": [],
+      "tests_removed": [],
+      "tests_modified": [],
+      "original_test_files_byte_preserved": true,
+      "test_functions": {
+        "tests/test_cli.py": [
+          {
+            "name": "test_show",
+            "line": 5,
+            "text": "def test_show(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out)[\"address\"] == \"localhost:80\""
+          }
+        ],
+        "tests/test_parser.py": [
+          {
+            "name": "test_v1",
+            "line": 5,
+            "text": "def test_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_bad_port",
+            "line": 9,
+            "text": "def test_bad_port():\n    with pytest.raises(ValueError):\n        loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":0}')"
+          }
+        ],
+        "tests/test_service.py": [
+          {
+            "name": "test_export",
+            "line": 5,
+            "text": "def test_export(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text(json.dumps({\"name\":\"demo\", \"host\":\"localhost\", \"port\":8080}))\n    before = source.read_bytes()\n    assert export_config(source, dest) == inspect_config(source)\n    assert inspect_config(dest)[\"address\"] == \"localhost:8080\"\n    assert source.read_bytes() == before"
+          }
+        ],
+        "tests/test_writer.py": [
+          {
+            "name": "test_roundtrip",
+            "line": 4,
+            "text": "def test_roundtrip():\n    config = Config(\"demo\", \"localhost\", 1234, False)\n    assert loads(dumps(config)) == config"
+          }
+        ]
+      },
+      "meaningful_tests_obligation": "fail",
+      "note": "Function bodies support separate evaluator content audit; changed file does not itself prove meaning.",
+      "reason": "No added tests at this version"
+    },
+    "spec_unchanged": true
+  },
+  {
+    "version": "V1",
+    "generation": 4,
+    "first_observed_before_request": 9,
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/parser.py",
+      "configkit/config/validation.py",
+      "configkit/config/writer.py"
+    ],
+    "acceptance": "8/12 passed",
+    "project_test_exit": 0,
+    "project_test_output": ".....                                                                    [100%]\n5 passed in 0.01s\n",
+    "verification_generation_at_observation": -1,
+    "tests_audit": {
+      "tests_hashes": {
+        "tests/test_cli.py": "748587f89a2fd11994a6f59d06a3db4a2fc02503d688be1081daa1344d0c26eb",
+        "tests/test_parser.py": "e006ee99fc22d9e30bf476081310dd08a4de202ee9c8ff76423e196c536aad32",
+        "tests/test_service.py": "f53d539e9574ce6e7694ce6a1e14259afb31488519f4d1633e64a0da276300e0",
+        "tests/test_writer.py": "75e9d287c8dd3d7c73a5de6829486f0835dbb7ec29874905f57a2ac1fbe06a72"
+      },
+      "tests_added": [],
+      "tests_removed": [],
+      "tests_modified": [],
+      "original_test_files_byte_preserved": true,
+      "test_functions": {
+        "tests/test_cli.py": [
+          {
+            "name": "test_show",
+            "line": 5,
+            "text": "def test_show(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out)[\"address\"] == \"localhost:80\""
+          }
+        ],
+        "tests/test_parser.py": [
+          {
+            "name": "test_v1",
+            "line": 5,
+            "text": "def test_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_bad_port",
+            "line": 9,
+            "text": "def test_bad_port():\n    with pytest.raises(ValueError):\n        loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":0}')"
+          }
+        ],
+        "tests/test_service.py": [
+          {
+            "name": "test_export",
+            "line": 5,
+            "text": "def test_export(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text(json.dumps({\"name\":\"demo\", \"host\":\"localhost\", \"port\":8080}))\n    before = source.read_bytes()\n    assert export_config(source, dest) == inspect_config(source)\n    assert inspect_config(dest)[\"address\"] == \"localhost:8080\"\n    assert source.read_bytes() == before"
+          }
+        ],
+        "tests/test_writer.py": [
+          {
+            "name": "test_roundtrip",
+            "line": 4,
+            "text": "def test_roundtrip():\n    config = Config(\"demo\", \"localhost\", 1234, False)\n    assert loads(dumps(config)) == config"
+          }
+        ]
+      },
+      "meaningful_tests_obligation": "fail",
+      "note": "Function bodies support separate evaluator content audit; changed file does not itself prove meaning.",
+      "reason": "No added tests at this version"
+    },
+    "spec_unchanged": true
+  },
+  {
+    "version": "V2",
+    "generation": 6,
+    "first_observed_before_request": 10,
+    "changed_files": [
+      "configkit/cli.py",
+      "configkit/commands/migrate.py"
+    ],
+    "acceptance": "10/12 passed",
+    "project_test_exit": 0,
+    "project_test_output": ".....                                                                    [100%]\n5 passed in 0.01s\n",
+    "verification_generation_at_observation": -1,
+    "tests_audit": {
+      "tests_hashes": {
+        "tests/test_cli.py": "748587f89a2fd11994a6f59d06a3db4a2fc02503d688be1081daa1344d0c26eb",
+        "tests/test_parser.py": "e006ee99fc22d9e30bf476081310dd08a4de202ee9c8ff76423e196c536aad32",
+        "tests/test_service.py": "f53d539e9574ce6e7694ce6a1e14259afb31488519f4d1633e64a0da276300e0",
+        "tests/test_writer.py": "75e9d287c8dd3d7c73a5de6829486f0835dbb7ec29874905f57a2ac1fbe06a72"
+      },
+      "tests_added": [],
+      "tests_removed": [],
+      "tests_modified": [],
+      "original_test_files_byte_preserved": true,
+      "test_functions": {
+        "tests/test_cli.py": [
+          {
+            "name": "test_show",
+            "line": 5,
+            "text": "def test_show(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out)[\"address\"] == \"localhost:80\""
+          }
+        ],
+        "tests/test_parser.py": [
+          {
+            "name": "test_v1",
+            "line": 5,
+            "text": "def test_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_bad_port",
+            "line": 9,
+            "text": "def test_bad_port():\n    with pytest.raises(ValueError):\n        loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":0}')"
+          }
+        ],
+        "tests/test_service.py": [
+          {
+            "name": "test_export",
+            "line": 5,
+            "text": "def test_export(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text(json.dumps({\"name\":\"demo\", \"host\":\"localhost\", \"port\":8080}))\n    before = source.read_bytes()\n    assert export_config(source, dest) == inspect_config(source)\n    assert inspect_config(dest)[\"address\"] == \"localhost:8080\"\n    assert source.read_bytes() == before"
+          }
+        ],
+        "tests/test_writer.py": [
+          {
+            "name": "test_roundtrip",
+            "line": 4,
+            "text": "def test_roundtrip():\n    config = Config(\"demo\", \"localhost\", 1234, False)\n    assert loads(dumps(config)) == config"
+          }
+        ]
+      },
+      "meaningful_tests_obligation": "fail",
+      "note": "Function bodies support separate evaluator content audit; changed file does not itself prove meaning.",
+      "reason": "No added tests at this version"
+    },
+    "spec_unchanged": true
+  },
+  {
+    "version": "V3",
+    "generation": 7,
+    "first_observed_before_request": 13,
+    "changed_files": [
+      "_scratch_check.py"
+    ],
+    "acceptance": "10/12 passed",
+    "project_test_exit": 0,
+    "project_test_output": ".....                                                                    [100%]\n5 passed in 0.01s\n",
+    "verification_generation_at_observation": -1,
+    "tests_audit": {
+      "tests_hashes": {
+        "tests/test_cli.py": "748587f89a2fd11994a6f59d06a3db4a2fc02503d688be1081daa1344d0c26eb",
+        "tests/test_parser.py": "e006ee99fc22d9e30bf476081310dd08a4de202ee9c8ff76423e196c536aad32",
+        "tests/test_service.py": "f53d539e9574ce6e7694ce6a1e14259afb31488519f4d1633e64a0da276300e0",
+        "tests/test_writer.py": "75e9d287c8dd3d7c73a5de6829486f0835dbb7ec29874905f57a2ac1fbe06a72"
+      },
+      "tests_added": [],
+      "tests_removed": [],
+      "tests_modified": [],
+      "original_test_files_byte_preserved": true,
+      "test_functions": {
+        "tests/test_cli.py": [
+          {
+            "name": "test_show",
+            "line": 5,
+            "text": "def test_show(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out)[\"address\"] == \"localhost:80\""
+          }
+        ],
+        "tests/test_parser.py": [
+          {
+            "name": "test_v1",
+            "line": 5,
+            "text": "def test_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_bad_port",
+            "line": 9,
+            "text": "def test_bad_port():\n    with pytest.raises(ValueError):\n        loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":0}')"
+          }
+        ],
+        "tests/test_service.py": [
+          {
+            "name": "test_export",
+            "line": 5,
+            "text": "def test_export(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text(json.dumps({\"name\":\"demo\", \"host\":\"localhost\", \"port\":8080}))\n    before = source.read_bytes()\n    assert export_config(source, dest) == inspect_config(source)\n    assert inspect_config(dest)[\"address\"] == \"localhost:8080\"\n    assert source.read_bytes() == before"
+          }
+        ],
+        "tests/test_writer.py": [
+          {
+            "name": "test_roundtrip",
+            "line": 4,
+            "text": "def test_roundtrip():\n    config = Config(\"demo\", \"localhost\", 1234, False)\n    assert loads(dumps(config)) == config"
+          }
+        ]
+      },
+      "meaningful_tests_obligation": "fail",
+      "note": "Function bodies support separate evaluator content audit; changed file does not itself prove meaning.",
+      "reason": "No added tests at this version"
+    },
+    "spec_unchanged": true
+  },
+  {
+    "version": "V4",
+    "generation": 8,
+    "first_observed_before_request": 17,
+    "changed_files": [
+      "tests/test_cli.py",
+      "tests/test_migrate.py",
+      "tests/test_parser.py",
+      "tests/test_service.py",
+      "tests/test_writer.py"
+    ],
+    "acceptance": "10/12 passed",
+    "project_test_exit": 1,
+    "project_test_output": "...........F..............F..................                            [100%]\n=================================== FAILURES ===================================\n_______________ test_invalid_config_does_not_create_destination ________________\n\ntmp_path = PosixPath('<PROCESS_HOME>/pytest-of-pyh/pytest-0/test_invalid_config_does_not_c0')\n\n    def test_invalid_config_does_not_create_destination(tmp_path):\n        source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n        source.write_text('not json')\n        with pytest.raises(ConfigError):\n>           migrate_file(str(dest))\n\ntests/test_migrate.py:62: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nconfigkit/config/migrate.py:6: in migrate_file\n    config = load(path)\n             ^^^^^^^^^^\nconfigkit/store.py:7: in load\n    return loads(config_path(path).read_text())\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n<USER_HOME>/miniconda3/lib/python3.13/pathlib/_local.py:546: in read_text\n    return PathBase.read_text(self, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n<USER_HOME>/miniconda3/lib/python3.13/pathlib/_abc.py:632: in read_text\n    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nself = PosixPath('<PROCESS_HOME>/pytest-of-pyh/pytest-0/test_invalid_config_does_not_c0/dest.json')\nmode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None\n\n    def open(self, mode='r', buffering=-1, encoding=None,\n             errors=None, newline=None):\n        \"\"\"\n        Open the file pointed to by this path and return a file object, as\n        the built-in open() function does.\n        \"\"\"\n        if \"b\" not in mode:\n            encoding = io.text_encoding(encoding)\n>       return io.open(self, mode, buffering, encoding, errors, newline)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE       FileNotFoundError: [Errno 2] No such file or directory: '<PROCESS_HOME>/pytest-of-pyh/pytest-0/test_invalid_config_does_not_c0/dest.json'\n\n<USER_HOME>/miniconda3/lib/python3.13/pathlib/_local.py:537: FileNotFoundError\n______ test_error_shape[{\"name\":\"d\",\"host\":\"h\",\"port\":True}-port-invalid] ______\n\ntext = '{\"name\":\"d\",\"host\":\"h\",\"port\":True}', path = 'port', code = 'invalid'\n\n    @pytest.mark.parametrize(\n        \"text,path,code\",\n        [\n            ('{\"version\":3,\"name\":\"demo\",\"host\":\"h\",\"port\":1}', \"version\", \"unsupported\"),\n            ('{\"version\":true,\"name\":\"demo\",\"host\":\"h\",\"port\":1}', \"version\", \"unsupported\"),\n            ('{\"name\":\"  \",\"host\":\"h\",\"port\":1}', \"name\", \"invalid\"),\n            ('{\"name\":5,\"host\":\"h\",\"port\":1}', \"name\", \"invalid\"),\n            ('{\"host\":\"h\",\"port\":1}', \"name\", \"invalid\"),\n            ('{\"name\":\"d\",\"host\":\"\",\"port\":1}', \"host\", \"invalid\"),\n            ('{\"name\":\"d\",\"host\":\"h\"}', \"port\", \"invalid\"),\n            ('{\"name\":\"d\",\"host\":\"h\",\"port\":65536}', \"port\", \"invalid\"),\n            ('{\"name\":\"d\",\"host\":\"h\",\"port\":True}', \"port\", \"invalid\"),\n            ('{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"enabled\":\"yes\"}', \"enabled\", \"invalid\"),\n            ('{\"version\":2}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"endpoint\":{\"host\":\"h\",\"port\":1}}}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\"}}', \"service.endpoint.host\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"  \",\"endpoint\":{\"host\":\"h\",\"port\":1}}}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\"}}}', \"service.endpoint.port\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":0}}}', \"service.endpoint.port\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}},\"enabled\":1}', \"enabled\", \"invalid\"),\n            ('[]', \"$\", \"invalid\"),\n            ('not json', \"$\", \"invalid\"),\n        ],\n    )\n    def test_error_shape(text, path, code):\n        with pytest.raises(ConfigError) as info:\n            loads(text)\n        assert isinstance(info.value, ValueError)\n>       assert info.value.to_dict() == {\"error\": \"invalid_config\", \"issues\": [{\"path\": path, \"code\": code}]}\nE       AssertionError: assert {'error': 'in...'path': '$'}]} == {'error': 'in...th': 'port'}]}\nE         \nE         Omitting 1 identical items, use -vv to show\nE         Differing items:\nE         {'issues': [{'code': 'invalid', 'path': '$'}]} != {'issues': [{'code': 'invalid', 'path': 'port'}]}\nE         Use -v to get more diff\n\ntests/test_parser.py:65: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_migrate.py::test_invalid_config_does_not_create_destination\nFAILED tests/test_parser.py::test_error_shape[{\"name\":\"d\",\"host\":\"h\",\"port\":True}-port-invalid]\n2 failed, 43 passed in 0.05s\n",
+    "verification_generation_at_observation": -1,
+    "tests_audit": {
+      "tests_hashes": {
+        "tests/test_cli.py": "048e2f767c40bb9d7f5cc12ba50a9cf3b6d010222558ca9dad0115d4559535e5",
+        "tests/test_migrate.py": "d5b65c9f820bf70213e600816e298412c0dc043659aaa02f731d94fd66cb8c4a",
+        "tests/test_parser.py": "ed881118c881c69716d7cb2ee715a2ea4b2ff35cd6cdb10f12ed111dc2f873ca",
+        "tests/test_service.py": "d8147199e171c254a3a640545f833da0f608a3644521df910441f21d0b6e0341",
+        "tests/test_writer.py": "944069a6fb28a454d21c611353b1a4a0049448934a95eaceb0665222fcd7f8aa"
+      },
+      "tests_added": [
+        "tests/test_migrate.py"
+      ],
+      "tests_removed": [],
+      "tests_modified": [
+        "tests/test_cli.py",
+        "tests/test_parser.py",
+        "tests/test_service.py",
+        "tests/test_writer.py"
+      ],
+      "original_test_files_byte_preserved": false,
+      "test_functions": {
+        "tests/test_cli.py": [
+          {
+            "name": "test_show",
+            "line": 8,
+            "text": "def test_show(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out)[\"address\"] == \"localhost:80\""
+          },
+          {
+            "name": "test_show_accepts_v2",
+            "line": 15,
+            "text": "def test_show_accepts_v2(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":80}}}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out) == {\"name\": \"demo\", \"address\": \"localhost:80\", \"enabled\": True}"
+          },
+          {
+            "name": "test_migrate_prints_v2_and_writes_v2",
+            "line": 22,
+            "text": "def test_migrate_prints_v2_and_writes_v2(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    assert main([\"migrate\", str(path)]) == 0\n    printed = json.loads(capsys.readouterr().out)\n    assert printed[\"version\"] == 2\n    assert json.loads(path.read_text()) == printed"
+          },
+          {
+            "name": "test_migrate_dry_run_prints_v2_without_writing",
+            "line": 31,
+            "text": "def test_migrate_dry_run_prints_v2_without_writing(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    before = path.read_bytes()\n    assert main([\"migrate\", str(path), \"--dry-run\"]) == 0\n    assert json.loads(capsys.readouterr().out)[\"version\"] == 2\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_invalid_config_exits_2_with_error_json_and_no_write",
+            "line": 40,
+            "text": "def test_invalid_config_exits_2_with_error_json_and_no_write(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"h\",\"port\":0}')\n    before = path.read_bytes()\n    assert main([\"migrate\", str(path)]) == 2\n    err = json.loads(capsys.readouterr().err)\n    assert err == {\"error\": \"invalid_config\", \"issues\": [{\"path\": \"port\", \"code\": \"invalid\"}]}\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_unsupported_version_via_cli",
+            "line": 50,
+            "text": "def test_unsupported_version_via_cli(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"version\":9,\"name\":\"demo\",\"host\":\"h\",\"port\":1}')\n    assert main([\"show\", str(path)]) == 2\n    assert json.loads(capsys.readouterr().err)[\"issues\"] == [{\"path\": \"version\", \"code\": \"unsupported\"}]"
+          }
+        ],
+        "tests/test_migrate.py": [
+          {
+            "name": "test_migrate_writes_v2_and_returns_dict",
+            "line": 9,
+            "text": "def test_migrate_writes_v2_and_returns_dict(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    result = migrate_file(str(path))\n    assert result == {\n        \"version\": 2,\n        \"service\": {\"name\": \"demo\", \"endpoint\": {\"host\": \"localhost\", \"port\": 8080}},\n        \"enabled\": True,\n    }\n    assert json.loads(path.read_text()) == result"
+          },
+          {
+            "name": "test_repeated_migration_is_semantically_stable",
+            "line": 21,
+            "text": "def test_repeated_migration_is_semantically_stable(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    first = migrate_file(str(path))\n    second = migrate_file(str(path))\n    assert first == second\n    assert json.loads(path.read_text()) == second"
+          },
+          {
+            "name": "test_dry_run_leaves_source_bytes_unchanged",
+            "line": 30,
+            "text": "def test_dry_run_leaves_source_bytes_unchanged(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    before = path.read_bytes()\n    result = migrate_file(str(path), dry_run=True)\n    assert result[\"version\"] == 2\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_migrate_accepts_v2_input",
+            "line": 39,
+            "text": "def test_migrate_accepts_v2_input(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}}}')\n    assert migrate_file(str(path)) == {\n        \"version\": 2,\n        \"service\": {\"name\": \"d\", \"endpoint\": {\"host\": \"h\", \"port\": 1}},\n        \"enabled\": True,\n    }"
+          },
+          {
+            "name": "test_invalid_config_does_not_touch_file",
+            "line": 49,
+            "text": "def test_invalid_config_does_not_touch_file(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"h\",\"port\":0}')\n    before = path.read_bytes()\n    with pytest.raises(ConfigError):\n        migrate_file(str(path))\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_invalid_config_does_not_create_destination",
+            "line": 58,
+            "text": "def test_invalid_config_does_not_create_destination(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('not json')\n    with pytest.raises(ConfigError):\n        migrate_file(str(dest))\n    assert not dest.exists()\n    assert source.read_text() == \"not json\""
+          }
+        ],
+        "tests/test_parser.py": [
+          {
+            "name": "test_v1",
+            "line": 10,
+            "text": "def test_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_bad_port",
+            "line": 14,
+            "text": "def test_bad_port():\n    with pytest.raises(ValueError):\n        loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":0}')"
+          },
+          {
+            "name": "test_v1_and_v2_decode_identically",
+            "line": 19,
+            "text": "def test_v1_and_v2_decode_identically():\n    assert loads(V1) == loads(V2) == Config(\"demo\", \"localhost\", 8080, True)"
+          },
+          {
+            "name": "test_missing_version_is_v1",
+            "line": 23,
+            "text": "def test_missing_version_is_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_enabled_defaults_to_true",
+            "line": 27,
+            "text": "def test_enabled_defaults_to_true():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}').enabled is True\n    assert loads('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}}}').enabled is True"
+          },
+          {
+            "name": "test_unknown_fields_are_ignored",
+            "line": 32,
+            "text": "def test_unknown_fields_are_ignored():\n    assert loads('{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"zzz\":1}') == Config(\"d\", \"h\", 1)\n    assert loads('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1},\"extra\":2},\"other\":{}}') == Config(\"d\", \"h\", 1)"
+          },
+          {
+            "name": "test_error_shape",
+            "line": 61,
+            "text": "def test_error_shape(text, path, code):\n    with pytest.raises(ConfigError) as info:\n        loads(text)\n    assert isinstance(info.value, ValueError)\n    assert info.value.to_dict() == {\"error\": \"invalid_config\", \"issues\": [{\"path\": path, \"code\": code}]}"
+          },
+          {
+            "name": "test_only_first_problem_is_reported",
+            "line": 68,
+            "text": "def test_only_first_problem_is_reported():\n    with pytest.raises(ConfigError) as info:\n        loads('{\"name\":\"\",\"host\":\"\",\"port\":0,\"enabled\":\"x\"}')\n    assert info.value.to_dict()[\"issues\"] == [{\"path\": \"name\", \"code\": \"invalid\"}]\n    with pytest.raises(ConfigError) as info:\n        loads('{\"name\":\"d\",\"host\":\"\",\"port\":0,\"enabled\":\"x\"}')\n    assert info.value.to_dict()[\"issues\"] == [{\"path\": \"host\", \"code\": \"invalid\"}]\n    with pytest.raises(ConfigError) as info:\n        loads('{\"name\":\"d\",\"host\":\"h\",\"port\":0,\"enabled\":\"x\"}')\n    assert info.value.to_dict()[\"issues\"] == [{\"path\": \"port\", \"code\": \"invalid\"}]"
+          }
+        ],
+        "tests/test_service.py": [
+          {
+            "name": "test_export",
+            "line": 5,
+            "text": "def test_export(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text(json.dumps({\"name\":\"demo\", \"host\":\"localhost\", \"port\":8080}))\n    before = source.read_bytes()\n    assert export_config(source, dest) == inspect_config(source)\n    assert inspect_config(dest)[\"address\"] == \"localhost:8080\"\n    assert source.read_bytes() == before"
+          },
+          {
+            "name": "test_export_writes_v2",
+            "line": 14,
+            "text": "def test_export_writes_v2(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}')\n    before = source.read_bytes()\n    summary = export_config(source, dest)\n    assert summary == {\"name\": \"demo\", \"address\": \"localhost:8080\", \"enabled\": True}\n    data = json.loads(dest.read_text())\n    assert data[\"version\"] == 2\n    assert data[\"service\"][\"name\"] == \"demo\"\n    assert data[\"service\"][\"endpoint\"] == {\"host\": \"localhost\", \"port\": 8080}\n    assert \"name\" not in data and \"host\" not in data and \"port\" not in data\n    assert source.read_bytes() == before"
+          },
+          {
+            "name": "test_export_accepts_v2_source",
+            "line": 28,
+            "text": "def test_export_accepts_v2_source(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"h\",\"port\":9}}}')\n    before = source.read_bytes()\n    assert export_config(source, dest) == {\"name\": \"demo\", \"address\": \"h:9\", \"enabled\": True}\n    assert inspect_config(dest)[\"name\"] == \"demo\"\n    assert source.read_bytes() == before"
+          },
+          {
+            "name": "test_inspect_v2_and_v1_agree",
+            "line": 37,
+            "text": "def test_inspect_v2_and_v1_agree(tmp_path):\n    v1, v2 = tmp_path / \"v1.json\", tmp_path / \"v2.json\"\n    v1.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}')\n    v2.write_text('{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}}}')\n    assert inspect_config(v1) == inspect_config(v2)"
+          }
+        ],
+        "tests/test_writer.py": [
+          {
+            "name": "test_roundtrip",
+            "line": 5,
+            "text": "def test_roundtrip():\n    config = Config(\"demo\", \"localhost\", 1234, False)\n    assert loads(dumps(config)) == config"
+          },
+          {
+            "name": "test_dumps_emits_v2_only",
+            "line": 10,
+            "text": "def test_dumps_emits_v2_only():\n    data = json.loads(dumps(Config(\"demo\", \"localhost\", 1234, False)))\n    assert data == {\n        \"version\": 2,\n        \"service\": {\"name\": \"demo\", \"endpoint\": {\"host\": \"localhost\", \"port\": 1234}},\n        \"enabled\": False,\n    }\n    assert \"name\" not in data and \"host\" not in data and \"port\" not in data"
+          },
+          {
+            "name": "test_v1_input_is_read_but_never_written_back_as_v1",
+            "line": 20,
+            "text": "def test_v1_input_is_read_but_never_written_back_as_v1():\n    config = loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    data = json.loads(dumps(config))\n    assert data[\"version\"] == 2\n    assert \"name\" not in data"
+          }
+        ]
+      },
+      "meaningful_tests_obligation": "pass",
+      "note": "Function bodies support separate evaluator content audit; changed file does not itself prove meaning.",
+      "reason": "Manual source audit of added assertion bodies; early V4 has two test-authoring errors"
+    },
+    "spec_unchanged": true
+  },
+  {
+    "version": "V5",
+    "generation": 10,
+    "first_observed_before_request": 21,
+    "changed_files": [
+      "tests/test_migrate.py",
+      "tests/test_parser.py"
+    ],
+    "acceptance": "10/12 passed",
+    "project_test_exit": 0,
+    "project_test_output": "..............................................                           [100%]\n46 passed in 0.04s\n",
+    "verification_generation_at_observation": -1,
+    "tests_audit": {
+      "tests_hashes": {
+        "tests/test_cli.py": "048e2f767c40bb9d7f5cc12ba50a9cf3b6d010222558ca9dad0115d4559535e5",
+        "tests/test_migrate.py": "bb7a6024425b9a15f728e88a237c5346ad11f123d2b9d3e92320499cf06a1c70",
+        "tests/test_parser.py": "882e24f2835370f9c1ea5142182182c23679cf9f3e75feb82cc315788a1747a4",
+        "tests/test_service.py": "d8147199e171c254a3a640545f833da0f608a3644521df910441f21d0b6e0341",
+        "tests/test_writer.py": "944069a6fb28a454d21c611353b1a4a0049448934a95eaceb0665222fcd7f8aa"
+      },
+      "tests_added": [
+        "tests/test_migrate.py"
+      ],
+      "tests_removed": [],
+      "tests_modified": [
+        "tests/test_cli.py",
+        "tests/test_parser.py",
+        "tests/test_service.py",
+        "tests/test_writer.py"
+      ],
+      "original_test_files_byte_preserved": false,
+      "test_functions": {
+        "tests/test_cli.py": [
+          {
+            "name": "test_show",
+            "line": 8,
+            "text": "def test_show(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out)[\"address\"] == \"localhost:80\""
+          },
+          {
+            "name": "test_show_accepts_v2",
+            "line": 15,
+            "text": "def test_show_accepts_v2(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":80}}}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out) == {\"name\": \"demo\", \"address\": \"localhost:80\", \"enabled\": True}"
+          },
+          {
+            "name": "test_migrate_prints_v2_and_writes_v2",
+            "line": 22,
+            "text": "def test_migrate_prints_v2_and_writes_v2(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    assert main([\"migrate\", str(path)]) == 0\n    printed = json.loads(capsys.readouterr().out)\n    assert printed[\"version\"] == 2\n    assert json.loads(path.read_text()) == printed"
+          },
+          {
+            "name": "test_migrate_dry_run_prints_v2_without_writing",
+            "line": 31,
+            "text": "def test_migrate_dry_run_prints_v2_without_writing(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    before = path.read_bytes()\n    assert main([\"migrate\", str(path), \"--dry-run\"]) == 0\n    assert json.loads(capsys.readouterr().out)[\"version\"] == 2\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_invalid_config_exits_2_with_error_json_and_no_write",
+            "line": 40,
+            "text": "def test_invalid_config_exits_2_with_error_json_and_no_write(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"h\",\"port\":0}')\n    before = path.read_bytes()\n    assert main([\"migrate\", str(path)]) == 2\n    err = json.loads(capsys.readouterr().err)\n    assert err == {\"error\": \"invalid_config\", \"issues\": [{\"path\": \"port\", \"code\": \"invalid\"}]}\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_unsupported_version_via_cli",
+            "line": 50,
+            "text": "def test_unsupported_version_via_cli(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"version\":9,\"name\":\"demo\",\"host\":\"h\",\"port\":1}')\n    assert main([\"show\", str(path)]) == 2\n    assert json.loads(capsys.readouterr().err)[\"issues\"] == [{\"path\": \"version\", \"code\": \"unsupported\"}]"
+          }
+        ],
+        "tests/test_migrate.py": [
+          {
+            "name": "test_migrate_writes_v2_and_returns_dict",
+            "line": 9,
+            "text": "def test_migrate_writes_v2_and_returns_dict(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    result = migrate_file(str(path))\n    assert result == {\n        \"version\": 2,\n        \"service\": {\"name\": \"demo\", \"endpoint\": {\"host\": \"localhost\", \"port\": 8080}},\n        \"enabled\": True,\n    }\n    assert json.loads(path.read_text()) == result"
+          },
+          {
+            "name": "test_repeated_migration_is_semantically_stable",
+            "line": 21,
+            "text": "def test_repeated_migration_is_semantically_stable(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    first = migrate_file(str(path))\n    second = migrate_file(str(path))\n    assert first == second\n    assert json.loads(path.read_text()) == second"
+          },
+          {
+            "name": "test_dry_run_leaves_source_bytes_unchanged",
+            "line": 30,
+            "text": "def test_dry_run_leaves_source_bytes_unchanged(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    before = path.read_bytes()\n    result = migrate_file(str(path), dry_run=True)\n    assert result[\"version\"] == 2\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_migrate_accepts_v2_input",
+            "line": 39,
+            "text": "def test_migrate_accepts_v2_input(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}}}')\n    assert migrate_file(str(path)) == {\n        \"version\": 2,\n        \"service\": {\"name\": \"d\", \"endpoint\": {\"host\": \"h\", \"port\": 1}},\n        \"enabled\": True,\n    }"
+          },
+          {
+            "name": "test_invalid_config_does_not_touch_file",
+            "line": 49,
+            "text": "def test_invalid_config_does_not_touch_file(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"h\",\"port\":0}')\n    before = path.read_bytes()\n    with pytest.raises(ConfigError):\n        migrate_file(str(path))\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_invalid_config_migration_creates_nothing",
+            "line": 58,
+            "text": "def test_invalid_config_migration_creates_nothing(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('not json')\n    with pytest.raises(ConfigError):\n        migrate_file(str(source))\n    assert not dest.exists()\n    assert source.read_text() == \"not json\""
+          },
+          {
+            "name": "test_invalid_config_does_not_create_destination",
+            "line": 67,
+            "text": "def test_invalid_config_does_not_create_destination(tmp_path):\n    from configkit.service import export_config\n\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('{\"name\":\"demo\",\"host\":\"h\",\"port\":0}')\n    with pytest.raises(ConfigError):\n        export_config(source, dest)\n    assert not dest.exists()\n    assert source.read_text() == '{\"name\":\"demo\",\"host\":\"h\",\"port\":0}'"
+          }
+        ],
+        "tests/test_parser.py": [
+          {
+            "name": "test_v1",
+            "line": 10,
+            "text": "def test_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_bad_port",
+            "line": 14,
+            "text": "def test_bad_port():\n    with pytest.raises(ValueError):\n        loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":0}')"
+          },
+          {
+            "name": "test_v1_and_v2_decode_identically",
+            "line": 19,
+            "text": "def test_v1_and_v2_decode_identically():\n    assert loads(V1) == loads(V2) == Config(\"demo\", \"localhost\", 8080, True)"
+          },
+          {
+            "name": "test_missing_version_is_v1",
+            "line": 23,
+            "text": "def test_missing_version_is_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_enabled_defaults_to_true",
+            "line": 27,
+            "text": "def test_enabled_defaults_to_true():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}').enabled is True\n    assert loads('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}}}').enabled is True"
+          },
+          {
+            "name": "test_unknown_fields_are_ignored",
+            "line": 32,
+            "text": "def test_unknown_fields_are_ignored():\n    assert loads('{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"zzz\":1}') == Config(\"d\", \"h\", 1)\n    assert loads('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1},\"extra\":2},\"other\":{}}') == Config(\"d\", \"h\", 1)"
+          },
+          {
+            "name": "test_error_shape",
+            "line": 61,
+            "text": "def test_error_shape(text, path, code):\n    with pytest.raises(ConfigError) as info:\n        loads(text)\n    assert isinstance(info.value, ValueError)\n    assert info.value.to_dict() == {\"error\": \"invalid_config\", \"issues\": [{\"path\": path, \"code\": code}]}"
+          },
+          {
+            "name": "test_only_first_problem_is_reported",
+            "line": 68,
+            "text": "def test_only_first_problem_is_reported():\n    with pytest.raises(ConfigError) as info:\n        loads('{\"name\":\"\",\"host\":\"\",\"port\":0,\"enabled\":\"x\"}')\n    assert info.value.to_dict()[\"issues\"] == [{\"path\": \"name\", \"code\": \"invalid\"}]\n    with pytest.raises(ConfigError) as info:\n        loads('{\"name\":\"d\",\"host\":\"\",\"port\":0,\"enabled\":\"x\"}')\n    assert info.value.to_dict()[\"issues\"] == [{\"path\": \"host\", \"code\": \"invalid\"}]\n    with pytest.raises(ConfigError) as info:\n        loads('{\"name\":\"d\",\"host\":\"h\",\"port\":0,\"enabled\":\"x\"}')\n    assert info.value.to_dict()[\"issues\"] == [{\"path\": \"port\", \"code\": \"invalid\"}]"
+          }
+        ],
+        "tests/test_service.py": [
+          {
+            "name": "test_export",
+            "line": 5,
+            "text": "def test_export(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text(json.dumps({\"name\":\"demo\", \"host\":\"localhost\", \"port\":8080}))\n    before = source.read_bytes()\n    assert export_config(source, dest) == inspect_config(source)\n    assert inspect_config(dest)[\"address\"] == \"localhost:8080\"\n    assert source.read_bytes() == before"
+          },
+          {
+            "name": "test_export_writes_v2",
+            "line": 14,
+            "text": "def test_export_writes_v2(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}')\n    before = source.read_bytes()\n    summary = export_config(source, dest)\n    assert summary == {\"name\": \"demo\", \"address\": \"localhost:8080\", \"enabled\": True}\n    data = json.loads(dest.read_text())\n    assert data[\"version\"] == 2\n    assert data[\"service\"][\"name\"] == \"demo\"\n    assert data[\"service\"][\"endpoint\"] == {\"host\": \"localhost\", \"port\": 8080}\n    assert \"name\" not in data and \"host\" not in data and \"port\" not in data\n    assert source.read_bytes() == before"
+          },
+          {
+            "name": "test_export_accepts_v2_source",
+            "line": 28,
+            "text": "def test_export_accepts_v2_source(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"h\",\"port\":9}}}')\n    before = source.read_bytes()\n    assert export_config(source, dest) == {\"name\": \"demo\", \"address\": \"h:9\", \"enabled\": True}\n    assert inspect_config(dest)[\"name\"] == \"demo\"\n    assert source.read_bytes() == before"
+          },
+          {
+            "name": "test_inspect_v2_and_v1_agree",
+            "line": 37,
+            "text": "def test_inspect_v2_and_v1_agree(tmp_path):\n    v1, v2 = tmp_path / \"v1.json\", tmp_path / \"v2.json\"\n    v1.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}')\n    v2.write_text('{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}}}')\n    assert inspect_config(v1) == inspect_config(v2)"
+          }
+        ],
+        "tests/test_writer.py": [
+          {
+            "name": "test_roundtrip",
+            "line": 5,
+            "text": "def test_roundtrip():\n    config = Config(\"demo\", \"localhost\", 1234, False)\n    assert loads(dumps(config)) == config"
+          },
+          {
+            "name": "test_dumps_emits_v2_only",
+            "line": 10,
+            "text": "def test_dumps_emits_v2_only():\n    data = json.loads(dumps(Config(\"demo\", \"localhost\", 1234, False)))\n    assert data == {\n        \"version\": 2,\n        \"service\": {\"name\": \"demo\", \"endpoint\": {\"host\": \"localhost\", \"port\": 1234}},\n        \"enabled\": False,\n    }\n    assert \"name\" not in data and \"host\" not in data and \"port\" not in data"
+          },
+          {
+            "name": "test_v1_input_is_read_but_never_written_back_as_v1",
+            "line": 20,
+            "text": "def test_v1_input_is_read_but_never_written_back_as_v1():\n    config = loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    data = json.loads(dumps(config))\n    assert data[\"version\"] == 2\n    assert \"name\" not in data"
+          }
+        ]
+      },
+      "meaningful_tests_obligation": "pass",
+      "note": "Function bodies support separate evaluator content audit; changed file does not itself prove meaning.",
+      "reason": "Manual source audit of added assertion bodies; early V4 has two test-authoring errors"
+    },
+    "spec_unchanged": true
+  },
+  {
+    "version": "V6",
+    "generation": 11,
+    "first_observed_before_request": 23,
+    "changed_files": [
+      "docs/README.md"
+    ],
+    "acceptance": "11/12 passed",
+    "project_test_exit": 0,
+    "project_test_output": "..............................................                           [100%]\n46 passed in 0.04s\n",
+    "verification_generation_at_observation": -1,
+    "tests_audit": {
+      "tests_hashes": {
+        "tests/test_cli.py": "048e2f767c40bb9d7f5cc12ba50a9cf3b6d010222558ca9dad0115d4559535e5",
+        "tests/test_migrate.py": "bb7a6024425b9a15f728e88a237c5346ad11f123d2b9d3e92320499cf06a1c70",
+        "tests/test_parser.py": "882e24f2835370f9c1ea5142182182c23679cf9f3e75feb82cc315788a1747a4",
+        "tests/test_service.py": "d8147199e171c254a3a640545f833da0f608a3644521df910441f21d0b6e0341",
+        "tests/test_writer.py": "944069a6fb28a454d21c611353b1a4a0049448934a95eaceb0665222fcd7f8aa"
+      },
+      "tests_added": [
+        "tests/test_migrate.py"
+      ],
+      "tests_removed": [],
+      "tests_modified": [
+        "tests/test_cli.py",
+        "tests/test_parser.py",
+        "tests/test_service.py",
+        "tests/test_writer.py"
+      ],
+      "original_test_files_byte_preserved": false,
+      "test_functions": {
+        "tests/test_cli.py": [
+          {
+            "name": "test_show",
+            "line": 8,
+            "text": "def test_show(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out)[\"address\"] == \"localhost:80\""
+          },
+          {
+            "name": "test_show_accepts_v2",
+            "line": 15,
+            "text": "def test_show_accepts_v2(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":80}}}')\n    assert main([\"show\", str(path)]) == 0\n    assert json.loads(capsys.readouterr().out) == {\"name\": \"demo\", \"address\": \"localhost:80\", \"enabled\": True}"
+          },
+          {
+            "name": "test_migrate_prints_v2_and_writes_v2",
+            "line": 22,
+            "text": "def test_migrate_prints_v2_and_writes_v2(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    assert main([\"migrate\", str(path)]) == 0\n    printed = json.loads(capsys.readouterr().out)\n    assert printed[\"version\"] == 2\n    assert json.loads(path.read_text()) == printed"
+          },
+          {
+            "name": "test_migrate_dry_run_prints_v2_without_writing",
+            "line": 31,
+            "text": "def test_migrate_dry_run_prints_v2_without_writing(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    before = path.read_bytes()\n    assert main([\"migrate\", str(path), \"--dry-run\"]) == 0\n    assert json.loads(capsys.readouterr().out)[\"version\"] == 2\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_invalid_config_exits_2_with_error_json_and_no_write",
+            "line": 40,
+            "text": "def test_invalid_config_exits_2_with_error_json_and_no_write(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"h\",\"port\":0}')\n    before = path.read_bytes()\n    assert main([\"migrate\", str(path)]) == 2\n    err = json.loads(capsys.readouterr().err)\n    assert err == {\"error\": \"invalid_config\", \"issues\": [{\"path\": \"port\", \"code\": \"invalid\"}]}\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_unsupported_version_via_cli",
+            "line": 50,
+            "text": "def test_unsupported_version_via_cli(tmp_path, capsys):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"version\":9,\"name\":\"demo\",\"host\":\"h\",\"port\":1}')\n    assert main([\"show\", str(path)]) == 2\n    assert json.loads(capsys.readouterr().err)[\"issues\"] == [{\"path\": \"version\", \"code\": \"unsupported\"}]"
+          }
+        ],
+        "tests/test_migrate.py": [
+          {
+            "name": "test_migrate_writes_v2_and_returns_dict",
+            "line": 9,
+            "text": "def test_migrate_writes_v2_and_returns_dict(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    result = migrate_file(str(path))\n    assert result == {\n        \"version\": 2,\n        \"service\": {\"name\": \"demo\", \"endpoint\": {\"host\": \"localhost\", \"port\": 8080}},\n        \"enabled\": True,\n    }\n    assert json.loads(path.read_text()) == result"
+          },
+          {
+            "name": "test_repeated_migration_is_semantically_stable",
+            "line": 21,
+            "text": "def test_repeated_migration_is_semantically_stable(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    first = migrate_file(str(path))\n    second = migrate_file(str(path))\n    assert first == second\n    assert json.loads(path.read_text()) == second"
+          },
+          {
+            "name": "test_dry_run_leaves_source_bytes_unchanged",
+            "line": 30,
+            "text": "def test_dry_run_leaves_source_bytes_unchanged(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text(V1)\n    before = path.read_bytes()\n    result = migrate_file(str(path), dry_run=True)\n    assert result[\"version\"] == 2\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_migrate_accepts_v2_input",
+            "line": 39,
+            "text": "def test_migrate_accepts_v2_input(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}}}')\n    assert migrate_file(str(path)) == {\n        \"version\": 2,\n        \"service\": {\"name\": \"d\", \"endpoint\": {\"host\": \"h\", \"port\": 1}},\n        \"enabled\": True,\n    }"
+          },
+          {
+            "name": "test_invalid_config_does_not_touch_file",
+            "line": 49,
+            "text": "def test_invalid_config_does_not_touch_file(tmp_path):\n    path = tmp_path / \"config.json\"\n    path.write_text('{\"name\":\"demo\",\"host\":\"h\",\"port\":0}')\n    before = path.read_bytes()\n    with pytest.raises(ConfigError):\n        migrate_file(str(path))\n    assert path.read_bytes() == before"
+          },
+          {
+            "name": "test_invalid_config_migration_creates_nothing",
+            "line": 58,
+            "text": "def test_invalid_config_migration_creates_nothing(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('not json')\n    with pytest.raises(ConfigError):\n        migrate_file(str(source))\n    assert not dest.exists()\n    assert source.read_text() == \"not json\""
+          },
+          {
+            "name": "test_invalid_config_does_not_create_destination",
+            "line": 67,
+            "text": "def test_invalid_config_does_not_create_destination(tmp_path):\n    from configkit.service import export_config\n\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('{\"name\":\"demo\",\"host\":\"h\",\"port\":0}')\n    with pytest.raises(ConfigError):\n        export_config(source, dest)\n    assert not dest.exists()\n    assert source.read_text() == '{\"name\":\"demo\",\"host\":\"h\",\"port\":0}'"
+          }
+        ],
+        "tests/test_parser.py": [
+          {
+            "name": "test_v1",
+            "line": 10,
+            "text": "def test_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_bad_port",
+            "line": 14,
+            "text": "def test_bad_port():\n    with pytest.raises(ValueError):\n        loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":0}')"
+          },
+          {
+            "name": "test_v1_and_v2_decode_identically",
+            "line": 19,
+            "text": "def test_v1_and_v2_decode_identically():\n    assert loads(V1) == loads(V2) == Config(\"demo\", \"localhost\", 8080, True)"
+          },
+          {
+            "name": "test_missing_version_is_v1",
+            "line": 23,
+            "text": "def test_missing_version_is_v1():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)"
+          },
+          {
+            "name": "test_enabled_defaults_to_true",
+            "line": 27,
+            "text": "def test_enabled_defaults_to_true():\n    assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}').enabled is True\n    assert loads('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}}}').enabled is True"
+          },
+          {
+            "name": "test_unknown_fields_are_ignored",
+            "line": 32,
+            "text": "def test_unknown_fields_are_ignored():\n    assert loads('{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"zzz\":1}') == Config(\"d\", \"h\", 1)\n    assert loads('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1},\"extra\":2},\"other\":{}}') == Config(\"d\", \"h\", 1)"
+          },
+          {
+            "name": "test_error_shape",
+            "line": 61,
+            "text": "def test_error_shape(text, path, code):\n    with pytest.raises(ConfigError) as info:\n        loads(text)\n    assert isinstance(info.value, ValueError)\n    assert info.value.to_dict() == {\"error\": \"invalid_config\", \"issues\": [{\"path\": path, \"code\": code}]}"
+          },
+          {
+            "name": "test_only_first_problem_is_reported",
+            "line": 68,
+            "text": "def test_only_first_problem_is_reported():\n    with pytest.raises(ConfigError) as info:\n        loads('{\"name\":\"\",\"host\":\"\",\"port\":0,\"enabled\":\"x\"}')\n    assert info.value.to_dict()[\"issues\"] == [{\"path\": \"name\", \"code\": \"invalid\"}]\n    with pytest.raises(ConfigError) as info:\n        loads('{\"name\":\"d\",\"host\":\"\",\"port\":0,\"enabled\":\"x\"}')\n    assert info.value.to_dict()[\"issues\"] == [{\"path\": \"host\", \"code\": \"invalid\"}]\n    with pytest.raises(ConfigError) as info:\n        loads('{\"name\":\"d\",\"host\":\"h\",\"port\":0,\"enabled\":\"x\"}')\n    assert info.value.to_dict()[\"issues\"] == [{\"path\": \"port\", \"code\": \"invalid\"}]"
+          }
+        ],
+        "tests/test_service.py": [
+          {
+            "name": "test_export",
+            "line": 5,
+            "text": "def test_export(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text(json.dumps({\"name\":\"demo\", \"host\":\"localhost\", \"port\":8080}))\n    before = source.read_bytes()\n    assert export_config(source, dest) == inspect_config(source)\n    assert inspect_config(dest)[\"address\"] == \"localhost:8080\"\n    assert source.read_bytes() == before"
+          },
+          {
+            "name": "test_export_writes_v2",
+            "line": 14,
+            "text": "def test_export_writes_v2(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}')\n    before = source.read_bytes()\n    summary = export_config(source, dest)\n    assert summary == {\"name\": \"demo\", \"address\": \"localhost:8080\", \"enabled\": True}\n    data = json.loads(dest.read_text())\n    assert data[\"version\"] == 2\n    assert data[\"service\"][\"name\"] == \"demo\"\n    assert data[\"service\"][\"endpoint\"] == {\"host\": \"localhost\", \"port\": 8080}\n    assert \"name\" not in data and \"host\" not in data and \"port\" not in data\n    assert source.read_bytes() == before"
+          },
+          {
+            "name": "test_export_accepts_v2_source",
+            "line": 28,
+            "text": "def test_export_accepts_v2_source(tmp_path):\n    source, dest = tmp_path / \"source.json\", tmp_path / \"dest.json\"\n    source.write_text('{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"h\",\"port\":9}}}')\n    before = source.read_bytes()\n    assert export_config(source, dest) == {\"name\": \"demo\", \"address\": \"h:9\", \"enabled\": True}\n    assert inspect_config(dest)[\"name\"] == \"demo\"\n    assert source.read_bytes() == before"
+          },
+          {
+            "name": "test_inspect_v2_and_v1_agree",
+            "line": 37,
+            "text": "def test_inspect_v2_and_v1_agree(tmp_path):\n    v1, v2 = tmp_path / \"v1.json\", tmp_path / \"v2.json\"\n    v1.write_text('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}')\n    v2.write_text('{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}}}')\n    assert inspect_config(v1) == inspect_config(v2)"
+          }
+        ],
+        "tests/test_writer.py": [
+          {
+            "name": "test_roundtrip",
+            "line": 5,
+            "text": "def test_roundtrip():\n    config = Config(\"demo\", \"localhost\", 1234, False)\n    assert loads(dumps(config)) == config"
+          },
+          {
+            "name": "test_dumps_emits_v2_only",
+            "line": 10,
+            "text": "def test_dumps_emits_v2_only():\n    data = json.loads(dumps(Config(\"demo\", \"localhost\", 1234, False)))\n    assert data == {\n        \"version\": 2,\n        \"service\": {\"name\": \"demo\", \"endpoint\": {\"host\": \"localhost\", \"port\": 1234}},\n        \"enabled\": False,\n    }\n    assert \"name\" not in data and \"host\" not in data and \"port\" not in data"
+          },
+          {
+            "name": "test_v1_input_is_read_but_never_written_back_as_v1",
+            "line": 20,
+            "text": "def test_v1_input_is_read_but_never_written_back_as_v1():\n    config = loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":80}')\n    data = json.loads(dumps(config))\n    assert data[\"version\"] == 2\n    assert \"name\" not in data"
+          }
+        ]
+      },
+      "meaningful_tests_obligation": "pass",
+      "note": "Function bodies support separate evaluator content audit; changed file does not itself prove meaning.",
+      "reason": "Manual source audit of added assertion bodies; early V4 has two test-authoring errors"
+    },
+    "spec_unchanged": true
+  }
+]

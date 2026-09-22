@@ -1,0 +1,12 @@
+{"command": "python tests/evaluation/fixtures/offline_exec.py python docs/evidence/diagnostic-v1-C-real-2026-09-22/preflight.py", "exit": 0, "kind": "offline", "result": "V0 5 project tests; 1/12 external acceptance"}
+{"command": "python tests/evaluation/fixtures/offline_exec.py python docs/evidence/diagnostic-v1-C-real-2026-09-22/prepare-run.py", "exit": 0, "kind": "offline", "result": "isolation checks, C-only fixture materialization"}
+{"command": "inline offline capture snapshot check", "exit": 0, "kind": "offline", "result": "active write did not create stable version; settled snapshot copied"}
+{"command": "python docs/evidence/diagnostic-v1-C-real-2026-09-22/run-batch.py C", "exit": 0, "kind": "one authorized real run", "result": "24 main + 2 auxiliary; no rerun"}
+{"command": "python docs/evidence/diagnostic-v1-C-real-2026-09-22/project-C.py", "exit": 0, "kind": "offline", "result": "7 settled versions independently checked"}
+{"command": "python docs/evidence/diagnostic-v1-C-real-2026-09-22/obligation-audit.py", "exit": 0, "kind": "offline", "result": "test/report audit, separate invalid-write diagnosis"}
+{"command": "python docs/evidence/diagnostic-v1-C-real-2026-09-22/report.py", "exit": 0, "kind": "offline"}
+{"command": "python docs/evidence/diagnostic-v1-C-real-2026-09-22/freeze.py C", "exit": 0, "result": "277 frozen artifacts"}
+{"command": "python docs/evidence/diagnostic-v1-C-real-2026-09-22/audit.py", "exit": 0, "note": "Final pass; initial audit assertions adapted to existing production context injection, nonstream auxiliary responses and renamed nonsecret approval metadata"}
+{"command": "in-memory compile of new evidence Python scripts", "exit": 0, "files": 11}
+{"command": "git diff --cached --check", "exit": 2, "reason": "Only raw frozen workspace.diff unified-diff blank context lines flagged"}
+{"command": "git diff --cached --check excluding the frozen workspace.diff payload", "exit": 0}

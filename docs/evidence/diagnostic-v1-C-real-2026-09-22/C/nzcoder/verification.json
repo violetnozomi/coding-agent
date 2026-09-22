@@ -1,0 +1,1522 @@
+[
+  {
+    "time": 1790049489.851337,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 8,
+    "event": "verification_needed",
+    "reason": "write_file changed files"
+  },
+  {
+    "time": 1790049489.8720586,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 8,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049489.8744109,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 8,
+    "event": "verification_needed",
+    "reason": "write_file changed files"
+  },
+  {
+    "time": 1790049489.8983452,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 8,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049489.9007344,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 8,
+    "event": "verification_needed",
+    "reason": "write_file changed files"
+  },
+  {
+    "time": 1790049489.9311922,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 8,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py",
+      "configkit/config/parser.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/parser.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test candidate for configkit/config/parser.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049489.9335396,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 8,
+    "event": "verification_needed",
+    "reason": "write_file changed files"
+  },
+  {
+    "time": 1790049489.9592264,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 8,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py",
+      "configkit/config/parser.py",
+      "configkit/config/writer.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/parser.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/writer.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test candidate for configkit/config/parser.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test candidate for configkit/config/writer.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049492.9761395,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 9,
+    "event": "verification_needed",
+    "reason": "write_file changed files"
+  },
+  {
+    "time": 1790049493.015049,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 9,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py",
+      "configkit/config/parser.py",
+      "configkit/config/writer.py",
+      "configkit/cli.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/parser.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/writer.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/cli.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test candidate for configkit/config/parser.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test candidate for configkit/config/writer.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049493.0176365,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 9,
+    "event": "verification_needed",
+    "reason": "write_file changed files"
+  },
+  {
+    "time": 1790049493.060894,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 9,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py",
+      "configkit/config/parser.py",
+      "configkit/config/writer.py",
+      "configkit/cli.py",
+      "configkit/commands/migrate.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/parser.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/writer.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/cli.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/commands/migrate.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test candidate for configkit/config/parser.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test candidate for configkit/config/writer.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049495.7788568,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 10,
+    "event": "verification_result_ignored",
+    "command": "python -m pytest -q tests 2>&1 | tail -20",
+    "reason": "shell operator can hide a failed verification segment"
+  },
+  {
+    "time": 1790049502.7082894,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 12,
+    "event": "verification_needed",
+    "reason": "write_file changed files"
+  },
+  {
+    "time": 1790049502.7534242,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 12,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py",
+      "configkit/config/parser.py",
+      "configkit/config/writer.py",
+      "configkit/cli.py",
+      "configkit/commands/migrate.py",
+      "_scratch_check.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/parser.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/writer.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/cli.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/commands/migrate.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile _scratch_check.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test candidate for configkit/config/parser.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test candidate for configkit/config/writer.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049505.6102684,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 14,
+    "event": "verification_result_ignored",
+    "command": "python -m pytest -q tests 2>&1 | tail -5",
+    "reason": "shell operator can hide a failed verification segment"
+  },
+  {
+    "time": 1790049609.6624138,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 16,
+    "event": "verification_needed",
+    "reason": "write_files_batch changed files"
+  },
+  {
+    "time": 1790049609.709489,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 16,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py",
+      "configkit/config/parser.py",
+      "configkit/config/writer.py",
+      "configkit/cli.py",
+      "configkit/commands/migrate.py",
+      "_scratch_check.py",
+      "tests/test_parser.py",
+      "tests/test_writer.py",
+      "tests/test_service.py",
+      "tests/test_migrate.py",
+      "tests/test_cli.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/parser.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/writer.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/cli.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/commands/migrate.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile _scratch_check.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test candidate for configkit/config/parser.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test candidate for configkit/config/writer.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049612.17541,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 17,
+    "event": "verification_stage_result",
+    "stage": "regression",
+    "status": "failed",
+    "command": "python -m pytest -q tests '2>' '&' 1",
+    "verification_needed": true
+  },
+  {
+    "time": 1790049612.1754928,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 17,
+    "event": "verification_result",
+    "command": "python -m pytest -q tests 2>&1 | tail -30",
+    "stage": "regression",
+    "status": "failed",
+    "output": "Command exited with code 1\n('{\"name\":\"d\",\"host\":\"h\",\"port\":True}', \"port\", \"invalid\"),\n            ('{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"enabled\":\"yes\"}', \"enabled\", \"invalid\"),\n            ('{\"version\":2}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"endpoint\":{\"host\":\"h\",\"port\":1}}}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\"}}', \"service.endpoint.host\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"  \",\"endpoint\":{\"host\":\"h\",\"port\":1}}}', \"service.name\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\"}}}', \"service.endpoint.port\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":0}}}', \"service.endpoint.port\", \"invalid\"),\n            ('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}},\"enabled\":1}', \"enabled\", \"invalid\"),\n            ('[]', \"$\", \"invalid\"),\n            ('not json', \"$\", \"invalid\"),\n        ],\n    )\n    def test_error_shape(text, path, code):\n        with pytest.raises(ConfigError) as info:\n            loads(text)\n        assert isinstance(info.value, ValueError)\n>       assert info.value.to_dict() == {\"error\": \"invalid_config\", \"issues\": [{\"path\": path, \"code\": code}]}\nE       AssertionError: assert {'error': 'in...'path': '$'}]} == {'error': 'in...th': 'port'}]}\nE         \nE         Omitting 1 identical items, use -vv to show\nE         Differing items:\nE         {'issues': [{'code': 'invalid', 'path': '$'}]} != {'issues': [{'code': 'invalid', 'path': 'port'}]}\nE         Use -v to get more diff\n\ntests/test_parser.py:65: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_migrate.py::test_invalid_config_does_not_create_destination\nFAILED tests/test_parser.py::test_error_shape[{\"name\":\"d\",\"host\":\"h\",\"port\":True}-port-invalid]\n2 failed, 43 passed in 0.05s"
+  },
+  {
+    "time": 1790049612.2147863,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 17,
+    "event": "verification_scheduler_decision",
+    "zone": "yellow",
+    "kind": "stage",
+    "stage": "static",
+    "command_fingerprint": "caaac351f4c4",
+    "mutation_generation": 8,
+    "reason": "yellow budget uses the cheapest required evidence"
+  },
+  {
+    "time": 1790049612.242368,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 17,
+    "event": "verification_stage_executed",
+    "stage": "static",
+    "command": "python -m py_compile configkit/config/errors.py",
+    "mutation_generation": 8,
+    "passed": false,
+    "output_len": 14
+  },
+  {
+    "time": 1790049618.0922527,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 18,
+    "event": "verification_scheduler_decision",
+    "zone": "yellow",
+    "kind": "none",
+    "stage": "",
+    "command_fingerprint": "",
+    "mutation_generation": 0,
+    "reason": ""
+  },
+  {
+    "time": 1790049621.987528,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 19,
+    "event": "verification_scheduler_decision",
+    "zone": "yellow",
+    "kind": "none",
+    "stage": "",
+    "command_fingerprint": "",
+    "mutation_generation": 0,
+    "reason": ""
+  },
+  {
+    "time": 1790049625.5466886,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 20,
+    "event": "verification_needed",
+    "reason": "edit_file changed files"
+  },
+  {
+    "time": 1790049625.5967596,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 20,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py",
+      "configkit/config/parser.py",
+      "configkit/config/writer.py",
+      "configkit/cli.py",
+      "configkit/commands/migrate.py",
+      "_scratch_check.py",
+      "tests/test_parser.py",
+      "tests/test_writer.py",
+      "tests/test_service.py",
+      "tests/test_migrate.py",
+      "tests/test_cli.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/parser.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/writer.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/cli.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/commands/migrate.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile _scratch_check.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+            "reason": "previously failing targeted verification",
+            "required": true,
+            "automation_provenance": "failure_evidence",
+            "status": "pending"
+          },
+          {
+            "command": "pytest tests/test_parser.py::test_error_shape",
+            "reason": "previously failing targeted verification",
+            "required": true,
+            "automation_provenance": "failure_evidence",
+            "status": "pending"
+          },
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test candidate for configkit/config/parser.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test candidate for configkit/config/writer.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_migrate.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049625.6012483,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 20,
+    "event": "verification_needed",
+    "reason": "edit_file changed files"
+  },
+  {
+    "time": 1790049625.608499,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 20,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py",
+      "configkit/config/parser.py",
+      "configkit/config/writer.py",
+      "configkit/cli.py",
+      "configkit/commands/migrate.py",
+      "_scratch_check.py",
+      "tests/test_parser.py",
+      "tests/test_writer.py",
+      "tests/test_service.py",
+      "tests/test_migrate.py",
+      "tests/test_cli.py"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/parser.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/writer.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/cli.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/commands/migrate.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile _scratch_check.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+            "reason": "previously failing targeted verification",
+            "required": true,
+            "automation_provenance": "failure_evidence",
+            "status": "pending"
+          },
+          {
+            "command": "pytest tests/test_parser.py::test_error_shape",
+            "reason": "previously failing targeted verification",
+            "required": true,
+            "automation_provenance": "failure_evidence",
+            "status": "pending"
+          },
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test candidate for configkit/config/parser.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test candidate for configkit/config/writer.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_migrate.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049625.7993753,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 20,
+    "event": "verification_scheduler_decision",
+    "zone": "yellow",
+    "kind": "none",
+    "stage": "",
+    "command_fingerprint": "",
+    "mutation_generation": 0,
+    "reason": ""
+  },
+  {
+    "time": 1790049627.6779222,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 21,
+    "event": "verification_result_ignored",
+    "command": "python -m pytest -q tests 2>&1 | tail -20",
+    "reason": "shell operator can hide a failed verification segment"
+  },
+  {
+    "time": 1790049627.7120035,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 21,
+    "event": "verification_scheduler_decision",
+    "zone": "orange",
+    "kind": "stage",
+    "stage": "targeted",
+    "command_fingerprint": "69aec472b617",
+    "mutation_generation": 10,
+    "reason": "orange budget verifies affected behavior"
+  },
+  {
+    "time": 1790049627.9195614,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 21,
+    "event": "verification_stage_result",
+    "stage": "targeted",
+    "status": "failed",
+    "command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+    "verification_needed": true
+  },
+  {
+    "time": 1790049627.9196143,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 21,
+    "event": "verification_result",
+    "command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+    "stage": "targeted",
+    "status": "failed",
+    "output": "Command exited with code 4\nERROR: found no collectors for /tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace/tests/test_migrate.py::test_invalid_config_does_not_create_destination\n\n============================= test session starts ==============================\nplatform linux -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0\nrootdir: /tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace\nplugins: anyio-4.10.0\ncollected 0 items / 1 error\n\n==================================== ERRORS ====================================\n____________________ ERROR collecting tests/test_migrate.py ____________________\nImportError while importing test module '/tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace/tests/test_migrate.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\n<USER_HOME>/miniconda3/lib/python3.13/importlib/__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests/test_migrate.py:3: in <module>\n    from configkit.config.errors import ConfigError\nE   ModuleNotFoundError: No module named 'configkit'\n=========================== short test summary info ============================\nERROR tests/test_migrate.py\n=============================== 1 error in 0.01s ==============================="
+  },
+  {
+    "time": 1790049627.9333587,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 21,
+    "event": "verification_stage_executed",
+    "stage": "targeted",
+    "command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+    "mutation_generation": 10,
+    "passed": false,
+    "output_len": 1341
+  },
+  {
+    "time": 1790049634.4356112,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 22,
+    "event": "verification_needed",
+    "reason": "write_file changed files"
+  },
+  {
+    "time": 1790049634.4876974,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 22,
+    "event": "verification_pipeline_planned",
+    "changed_files": [
+      "configkit/config/errors.py",
+      "configkit/config/validation.py",
+      "configkit/config/parser.py",
+      "configkit/config/writer.py",
+      "configkit/cli.py",
+      "configkit/commands/migrate.py",
+      "_scratch_check.py",
+      "tests/test_parser.py",
+      "tests/test_writer.py",
+      "tests/test_service.py",
+      "tests/test_migrate.py",
+      "tests/test_cli.py",
+      "docs/README.md"
+    ],
+    "stages": [
+      {
+        "name": "static",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "python -m py_compile configkit/config/errors.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/validation.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/parser.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/config/writer.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/cli.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile configkit/commands/migrate.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          },
+          {
+            "command": "python -m py_compile _scratch_check.py",
+            "reason": "changed Python source file sanity check",
+            "required": true,
+            "status": "pending"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "targeted",
+        "required": true,
+        "evidence_required": false,
+        "status": "pending",
+        "commands": [
+          {
+            "command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+            "reason": "previously failing targeted verification",
+            "required": true,
+            "automation_provenance": "failure_evidence",
+            "status": "pending"
+          },
+          {
+            "command": "pytest tests/test_parser.py::test_error_shape",
+            "reason": "previously failing targeted verification",
+            "required": true,
+            "automation_provenance": "failure_evidence",
+            "status": "pending"
+          },
+          {
+            "command": "pytest tests/test_parser.py",
+            "reason": "related test candidate for configkit/config/parser.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_writer.py",
+            "reason": "related test candidate for configkit/config/writer.py",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_cli.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_migrate.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          },
+          {
+            "command": "pytest tests/test_service.py",
+            "reason": "related test from module+identity-call-graph",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      },
+      {
+        "name": "regression",
+        "required": false,
+        "evidence_required": false,
+        "status": "optional",
+        "commands": [
+          {
+            "command": "pytest",
+            "reason": "broad Python test runner",
+            "required": false,
+            "status": "not_run"
+          }
+        ],
+        "observed": []
+      }
+    ]
+  },
+  {
+    "time": 1790049634.5991764,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 22,
+    "event": "verification_scheduler_decision",
+    "zone": "orange",
+    "kind": "none",
+    "stage": "",
+    "command_fingerprint": "",
+    "mutation_generation": 0,
+    "reason": ""
+  },
+  {
+    "time": 1790049636.819395,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 23,
+    "event": "verification_stage_result",
+    "stage": "regression",
+    "status": "passed",
+    "command": "python -m pytest -q tests",
+    "verification_needed": true
+  },
+  {
+    "time": 1790049636.8194475,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 23,
+    "event": "verification_result",
+    "command": "python -m pytest -q tests",
+    "stage": "regression",
+    "status": "passed",
+    "output": "..............................................                           [100%]\n46 passed in 0.02s"
+  },
+  {
+    "time": 1790049636.822052,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 23,
+    "event": "verification_stage_result",
+    "stage": "static",
+    "status": "passed",
+    "command": "python -m pytest -q tests",
+    "verification_needed": true
+  },
+  {
+    "time": 1790049636.8221111,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 23,
+    "event": "verification_stage_result",
+    "stage": "targeted",
+    "status": "passed",
+    "command": "python -m pytest -q tests",
+    "verification_needed": false
+  },
+  {
+    "time": 1790049636.822154,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 23,
+    "event": "verification_contract_accepted",
+    "command": "python -m pytest -q tests",
+    "required_stages": [
+      "static",
+      "targeted"
+    ]
+  },
+  {
+    "time": 1790049636.858309,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 23,
+    "event": "verification_scheduler_decision",
+    "zone": "red",
+    "kind": "none",
+    "stage": "",
+    "command_fingerprint": "",
+    "mutation_generation": 0,
+    "reason": ""
+  },
+  {
+    "time": 1790049645.8799615,
+    "run_id": "20260922_115725_13e87783",
+    "request_id": 25,
+    "event": "verification_scheduler_decision",
+    "zone": "red",
+    "kind": "none",
+    "stage": "",
+    "command_fingerprint": "",
+    "mutation_generation": 0,
+    "reason": ""
+  }
+]

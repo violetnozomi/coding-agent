@@ -1,0 +1,39 @@
+{
+  "first_divergence": {
+    "classification": "obligation_tracking",
+    "first_main_request": 8,
+    "first_stable_version": "V1",
+    "domain": "model/business implementation omission; not proven deterministic Core mechanism",
+    "observation": "First writer rewrite emits v2 but does not validate Config before serialization. Direct invalid saves remain accepted through final.",
+    "why_meaningful": "The omission survives all later edits and causes the only final frozen acceptance failure; this is not the expected V0 failure.",
+    "evidence": [
+      "C/nzcoder/workspace-versions/v001/configkit/config/writer.py",
+      "C/nzcoder/versions.json",
+      "analysis/invalid-write-diagnosis.json"
+    ],
+    "alternative_explanations": [
+      "Agent may interpret validation as input parsing only; CONFIG_SPEC validation section has no explicit save signature, but frozen acceptance and current user obligation explicitly cover Config validation/no-clobber.",
+      "At V1 the implementation was still in progress; omission becomes confirmed final mismatch only when no repair follows and completion is accepted."
+    ],
+    "confidence": {
+      "persistent_behavioral_omission": "strong",
+      "earliest_internal_misunderstanding": "insufficient",
+      "deterministic_Core_root_cause": "insufficient"
+    },
+    "earlier_events": "Permission denials at #1/#2 are separately recorded; safe list_directory alternative used. They do not establish this omission.",
+    "normal_recovery": "#16 generated two incorrect tests; #17 failure visible at #18; #20 corrected JSON True->true and nonexistent-path test; #21 green. No production source correction occurred in this recovery."
+  },
+  "new_deterministic_Core_bug_proven": false,
+  "normal_test_failure_visible_in_next_request": true,
+  "failure_request": 17,
+  "next_request": 18,
+  "semantic_review": [
+    "verifier-1 revise is irrelevant comparison/clarification text; no code mutation afterward",
+    "verifier-2 accepts with original authority visible but misses invalid direct write"
+  ],
+  "destructive_review": false,
+  "review_run_evidence": "unobserved",
+  "compaction": "not observed",
+  "timeout": "not observed",
+  "next_action": "Stop. If pursuing obligation modeling, first build a separate deterministic offline regression. No extra real sample and no production patch here."
+}

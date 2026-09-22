@@ -1,0 +1,88 @@
+[
+  {
+    "tool": "bash",
+    "input": {
+      "command": "find . -type f -name \"*.py\" -o -name \"*.md\" -o -name \"*.toml\" -o -name \"*.cfg\" -o -name \"*.ini\" | grep -v \".git/\" | sort"
+    },
+    "allowed": false
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "ls -R --ignore=.git ."
+    },
+    "allowed": false
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "python -m pytest -q tests 2>&1 | tail -20"
+    },
+    "allowed": true
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "git status --short; git diff --stat"
+    },
+    "allowed": false
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "cd /tmp/diagnostic-v1-C-real-20260922/C/nzcoder/workspace && python - <<'EOF'\nimport json, pathlib, tempfile\nfrom configkit import Config, loads, dumps\nfrom configkit.config.errors import ConfigError\nfrom configkit.config.migrate import migrate_file\nfrom configkit.service import export_config, inspect_config\nfrom configkit.cli import main\n\nv1 = '{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"enabled\":true}'\nv2 = '{\"version\":2,\"service\":{\"name\":\"demo\",\"endpoint\":{\"host\":\"localhost\",\"port\":8080}},\"enabled\":true}'\nprint(loads(v1), loads(v2))\n# missing version, missing enabled\nprint(loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}'))\n# unknown extra fields\nprint(loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"zzz\":1,\"service\":{\"name\":\"x\"}}'))\n\ndef err(t):\n    try:\n        loads(t)\n        return \"NO ERROR\"\n    except ConfigError as e:\n        return e.to_dict()\n\ncases = [\n '{\"version\":3,\"name\":\"demo\",\"host\":\"h\",\"port\":1}',\n '{\"name\":\"  \",\"host\":\"h\",\"port\":1}',\n '{\"name\":\"d\",\"host\":\"\",\"port\":1}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":0}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":65536}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":True}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"enabled\":\"yes\"}',\n '{\"name\":\"d\",\"host\":\"h\"}',\n '{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\"}}}',\n '{\"version\":2,\"service\":{\"endpoint\":{\"host\":\"h\",\"port\":1}}}',\n '{\"version\":2,\"service\":{\"name\":\"d\"}}',\n '{\"version\":2}',\n '[]',\n 'not json',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"version\":true}',\n '{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"version\":\"2\"}',\n]\nfor c in cases:\n    print(c, \"->\", err(c))\nEOF"
+    },
+    "allowed": false
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "python _scratch_check.py"
+    },
+    "allowed": false
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "python -m pytest -q tests 2>&1 | tail -5"
+    },
+    "allowed": true
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "python -m pytest -q tests 2>&1 | tail -30"
+    },
+    "allowed": true
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "python -m py_compile configkit/config/errors.py",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "allowed": false
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "python -m pytest -q tests 2>&1 | tail -20"
+    },
+    "allowed": true
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "pytest tests/test_migrate.py::test_invalid_config_does_not_create_destination",
+      "_nz_runtime_verification_stage": "targeted"
+    },
+    "allowed": true
+  },
+  {
+    "tool": "bash",
+    "input": {
+      "command": "python -m pytest -q tests"
+    },
+    "allowed": true
+  }
+]
