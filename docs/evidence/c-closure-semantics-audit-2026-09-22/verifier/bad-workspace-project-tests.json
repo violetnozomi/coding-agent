@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "<USER_HOME>/miniconda3/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+  ],
+  "exit": 0,
+  "timed_out": false,
+  "timeout_seconds": 30,
+  "stdout": "..............................................                           [100%]\n46 passed in 0.07s\n",
+  "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+}

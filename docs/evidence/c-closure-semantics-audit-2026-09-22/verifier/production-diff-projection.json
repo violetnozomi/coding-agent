@@ -1,0 +1,7 @@
+{
+  "diff": "Change set: closure-audit\nWorkspace: <WORKSPACE>\n\n## parser.py\n--- a/parser.py\n+++ b/parser.py\n@@ -1 +1 @@\n-old = 0\n+PARSER_SENTINEL = 1\n\n## writer.py\n--- a/writer.py\n+++ b/writer.py\n@@ -1 +1 @@\n-old = 0\n+WRITER_SENTINEL = 2",
+  "hints": {
+    "parser.py": "## parser.py\n--- a/parser.py\n+++ b/parser.py\n@@ -1 +1 @@\n-old = 0\n+PARSER_SENTINEL = 1\n\n",
+    "writer.py": "## writer.py\n--- a/writer.py\n+++ b/writer.py\n@@ -1 +1 @@\n-old = 0\n+WRITER_SENTINEL = 2"
+  }
+}

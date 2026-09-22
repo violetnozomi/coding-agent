@@ -1,0 +1,72 @@
+{
+  "rejected": {
+    "items": [
+      {
+        "requirement": {
+          "id": "R1",
+          "description": "Implement all required behavior.",
+          "kind": "compatibility",
+          "expected_artifacts": [],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": [
+            "semantic_review"
+          ],
+          "artifact_operations": []
+        },
+        "status": "candidate",
+        "evidence": [
+          {
+            "type": "verification_passed",
+            "path": null,
+            "command": "python -m pytest -q tests",
+            "generation": 1,
+            "fingerprint": null
+          }
+        ],
+        "mutation_generation": 1
+      }
+    ],
+    "latest_generation": 1,
+    "latest_verification_generation": 1
+  },
+  "accepted": {
+    "items": [
+      {
+        "requirement": {
+          "id": "R1",
+          "description": "Implement all required behavior.",
+          "kind": "compatibility",
+          "expected_artifacts": [],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": [
+            "semantic_review"
+          ],
+          "artifact_operations": []
+        },
+        "status": "satisfied",
+        "evidence": [
+          {
+            "type": "verification_passed",
+            "path": null,
+            "command": "python -m pytest -q tests",
+            "generation": 1,
+            "fingerprint": null
+          },
+          {
+            "type": "semantic_review_passed",
+            "path": null,
+            "command": null,
+            "generation": 1,
+            "fingerprint": "revised-report"
+          }
+        ],
+        "mutation_generation": 1
+      }
+    ],
+    "latest_generation": 1,
+    "latest_verification_generation": 1
+  },
+  "scope": "controlled verdict transition; no claim a model must accept or detect the defect"
+}

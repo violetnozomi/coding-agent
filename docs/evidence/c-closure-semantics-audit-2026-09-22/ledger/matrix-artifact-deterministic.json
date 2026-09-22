@@ -1,0 +1,64 @@
+{
+  "before": {
+    "items": [
+      {
+        "requirement": {
+          "id": "R1",
+          "description": "Implement all required behavior.",
+          "kind": "artifact",
+          "expected_artifacts": [
+            "api.py"
+          ],
+          "satisfaction_mode": "deterministic",
+          "depends_on": [],
+          "required_evidence": [],
+          "artifact_operations": []
+        },
+        "status": "satisfied",
+        "evidence": [
+          {
+            "type": "file_changed",
+            "path": "api.py",
+            "command": null,
+            "generation": 1,
+            "fingerprint": null
+          }
+        ],
+        "mutation_generation": 1
+      }
+    ],
+    "latest_generation": 1,
+    "latest_verification_generation": -1
+  },
+  "after": {
+    "items": [
+      {
+        "requirement": {
+          "id": "R1",
+          "description": "Implement all required behavior.",
+          "kind": "artifact",
+          "expected_artifacts": [
+            "api.py"
+          ],
+          "satisfaction_mode": "deterministic",
+          "depends_on": [],
+          "required_evidence": [],
+          "artifact_operations": []
+        },
+        "status": "satisfied",
+        "evidence": [
+          {
+            "type": "file_changed",
+            "path": "api.py",
+            "command": null,
+            "generation": 1,
+            "fingerprint": null
+          }
+        ],
+        "mutation_generation": 1
+      }
+    ],
+    "latest_generation": 1,
+    "latest_verification_generation": 1
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "before": {
+    "items": [
+      {
+        "requirement": {
+          "id": "R1",
+          "description": "Implement all required behavior.",
+          "kind": "test",
+          "expected_artifacts": [
+            "tests/test_api.py"
+          ],
+          "satisfaction_mode": "mixed",
+          "depends_on": [],
+          "required_evidence": [],
+          "artifact_operations": []
+        },
+        "status": "candidate",
+        "evidence": [
+          {
+            "type": "test_added",
+            "path": "tests/test_api.py",
+            "command": null,
+            "generation": 1,
+            "fingerprint": null
+          }
+        ],
+        "mutation_generation": 1
+      }
+    ],
+    "latest_generation": 1,
+    "latest_verification_generation": -1
+  },
+  "after": {
+    "items": [
+      {
+        "requirement": {
+          "id": "R1",
+          "description": "Implement all required behavior.",
+          "kind": "test",
+          "expected_artifacts": [
+            "tests/test_api.py"
+          ],
+          "satisfaction_mode": "mixed",
+          "depends_on": [],
+          "required_evidence": [],
+          "artifact_operations": []
+        },
+        "status": "satisfied",
+        "evidence": [
+          {
+            "type": "test_added",
+            "path": "tests/test_api.py",
+            "command": null,
+            "generation": 1,
+            "fingerprint": null
+          },
+          {
+            "type": "verification_passed",
+            "path": null,
+            "command": "python -m pytest -q tests",
+            "generation": 1,
+            "fingerprint": null
+          }
+        ],
+        "mutation_generation": 1
+      }
+    ],
+    "latest_generation": 1,
+    "latest_verification_generation": 1
+  }
+}

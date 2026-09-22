@@ -1,0 +1,35 @@
+{
+  "historical_events": [
+    {
+      "ts": 1790049445.2002838,
+      "run_id": "20260922_115725_13e87783",
+      "trace_id": "20260922_115725_13e87783",
+      "session_id": "paid-C",
+      "agent_id": "agent-6e074e82",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "task_contract_bootstrapped",
+      "requirement_count": 3,
+      "acceptance_count": 1,
+      "artifact_count": 0
+    }
+  ],
+  "classification": "A1",
+  "planner_request_observed": false,
+  "origin": "ProductRunEnvironment._maybe_generate_plan -> derive_task_contract -> TaskContract.from_dict -> RuntimeState.set_task_contract",
+  "controlled_cases": [
+    "disabled",
+    "unavailable",
+    "coarse",
+    "detailed"
+  ],
+  "detailed_contract_preserved": true,
+  "planner_context_source": "_call_planning_llm uses task, mode, acceptance criteria and exact command; no retained spec body",
+  "test_change_requested_by_classifier": false,
+  "mutation_scopes": [
+    "Implement the configuration migration "
+  ],
+  "spec_clauses_extracted": false,
+  "reason": "Reference scope contains including ... tests and documentation; it is not a mutation scope. Test-change regex does not recognize that general inclusion phrase. No spec-body clause extraction exists."
+}

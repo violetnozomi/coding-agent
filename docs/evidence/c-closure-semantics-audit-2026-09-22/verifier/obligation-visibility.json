@@ -1,0 +1,7 @@
+{
+  "authority": "complete",
+  "typed_inventory": "R1/R2/R3 only",
+  "fine_grained_inventory": null,
+  "evaluator_ledger": "not injected",
+  "diff": "bounded and incorrectly attributed on baseline"
+}

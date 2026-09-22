@@ -1,0 +1,56 @@
+[
+  {
+    "verifier": 1,
+    "full_original_spec": true,
+    "no_overwrite_clause_visible": true,
+    "current_user_equals_original_task": true,
+    "writer_file_section": "- configkit/config/writer.py: (diff evidence omitted: budget exhausted)",
+    "writer_body_somewhere_in_packet": true,
+    "unchanged_store_body_present": false,
+    "structured_runtime_requirement_count": 3,
+    "clause_inventory_present": false,
+    "full_ledger_status_evidence_list_projected": false,
+    "projection": "Requirement descriptions/required evidence and exact verification output; not the complete ledger object",
+    "odd_previous_output_phrase_in_input": false,
+    "synthetic_role_labels": 5,
+    "diff_omissions": [
+      "- configkit/config/errors.py: (diff evidence omitted: budget exhausted)",
+      "- configkit/config/parser.py: (diff evidence omitted: budget exhausted)",
+      "- configkit/config/validation.py: (diff evidence omitted: budget exhausted)",
+      "- configkit/config/writer.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_cli.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_migrate.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_parser.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_service.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_writer.py: (diff evidence omitted: budget exhausted)",
+      "- docs/README.md: (diff evidence omitted: budget exhausted)"
+    ]
+  },
+  {
+    "verifier": 2,
+    "full_original_spec": true,
+    "no_overwrite_clause_visible": true,
+    "current_user_equals_original_task": true,
+    "writer_file_section": "- configkit/config/writer.py: (diff evidence omitted: budget exhausted)",
+    "writer_body_somewhere_in_packet": true,
+    "unchanged_store_body_present": false,
+    "structured_runtime_requirement_count": 3,
+    "clause_inventory_present": false,
+    "full_ledger_status_evidence_list_projected": false,
+    "projection": "Requirement descriptions/required evidence and exact verification output; not the complete ledger object",
+    "odd_previous_output_phrase_in_input": true,
+    "synthetic_role_labels": 6,
+    "diff_omissions": [
+      "- configkit/config/errors.py: (diff evidence omitted: budget exhausted)",
+      "- configkit/config/parser.py: (diff evidence omitted: budget exhausted)",
+      "- configkit/config/validation.py: (diff evidence omitted: budget exhausted)",
+      "- configkit/config/writer.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_cli.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_migrate.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_parser.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_service.py: (diff evidence omitted: budget exhausted)",
+      "- tests/test_writer.py: (diff evidence omitted: budget exhausted)",
+      "- docs/README.md: (diff evidence omitted: budget exhausted)"
+    ]
+  }
+]

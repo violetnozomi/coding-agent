@@ -1,0 +1,13 @@
+{
+  "baseline": "e5cea83009d7ebf0e37991e4cd854c0f68de4a8f",
+  "historical_evidence_unchanged": true,
+  "changed_production": [
+    "nz_coder/runtime/verification/sidecar_verifier.py"
+  ],
+  "paid_model_requests": 0,
+  "real_samples": 0,
+  "dependencies_installed": false,
+  "network": "all test subprocesses under existing offline_exec seccomp; controlled planner has no client",
+  "known_bad_workspace": "46 passed; 11/12; original hashes unchanged",
+  "privacy": "JSON forbidden-field scan, exact credential match scan and personal-path scan passed"
+}

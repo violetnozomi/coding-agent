@@ -1,0 +1,17 @@
+{
+  "authority_complete": true,
+  "authority_model_observed": true,
+  "verifier_saw_full_authority": true,
+  "project_tests_passed": 46,
+  "independent_acceptance": "11/12",
+  "failed_behavior": "invalid_write_preserves_destination",
+  "runtime_contract_requirements": [
+    "R1",
+    "R2",
+    "R3"
+  ],
+  "runtime_terminal": "completed",
+  "semantic_final_verdict": "accept",
+  "source": "docs/evidence/diagnostic-v1-C-real-2026-09-22/C/nzcoder",
+  "note": "historical observations, not altered by the offline projection fix"
+}

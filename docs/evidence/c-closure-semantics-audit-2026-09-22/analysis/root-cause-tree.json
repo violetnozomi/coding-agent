@@ -1,0 +1,46 @@
+{
+  "contract_extraction": {
+    "status": "by_design",
+    "evidence": [
+      "A259 conservative zero-call fallback",
+      "four production bootstrap tests",
+      "historical task_contract_bootstrapped"
+    ],
+    "limitation": "coarse coverage; no spec-body extraction"
+  },
+  "ledger_semantic_closure": {
+    "status": "contract semantics underspecified outside tested rules",
+    "evidence": [
+      "mode matrix",
+      "A257/A264",
+      "required_evidence owns review requirement"
+    ],
+    "bug_proven": false
+  },
+  "verification_authority": {
+    "status": "by_design",
+    "evidence": [
+      "exact user command matches VerificationContract",
+      "semantic certification explicitly says execution only"
+    ],
+    "limitation": "broad behavior status overstates empirical semantic proof"
+  },
+  "verifier_context": {
+    "status": "proven_gap",
+    "evidence": [
+      "before/focused-tests.txt",
+      "ChangeTracker headings are not diff --git",
+      "historical repeated diff and writer omission"
+    ],
+    "fix": "single per-file section boundary"
+  },
+  "verifier_model_judgment": {
+    "status": "unknown causal contribution",
+    "evidence": [
+      "full original spec present",
+      "final accept despite unchanged defect",
+      "no real calls in this audit"
+    ],
+    "limitation": "corrected context does not guarantee revise"
+  }
+}

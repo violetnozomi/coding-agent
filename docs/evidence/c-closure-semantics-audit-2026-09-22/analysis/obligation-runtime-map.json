@@ -1,0 +1,491 @@
+{
+  "v1_read": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "A missing version or version=1 means v1.",
+    "runtime_requirement_ids": [
+      "R1",
+      "R2"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [
+      "semantic_review_passed"
+    ],
+    "independent_checks": [
+      "v1_read"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "v2_read": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Both decode to the existing Config(name, host, port, enabled) model.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "v2_read"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "v2_write": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Every new serialization/write must emit only v2",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "v2_write"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "migration": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "migrate_file(path, dry_run=False) returns the v2 dictionary and writes v2",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "migration"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "dry_run": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "dry_run=True returns the same dictionary but leaves source bytes unchanged.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "dry_run"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "invalid_config": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Malformed JSON or a non-object root uses path \"$\", code \"invalid\".",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "invalid_config"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "validation_paths": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Validate in this order: version, name, host, port, enabled",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "validation_paths"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "cli_migrate": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "CLI: python -m configkit migrate PATH [--dry-run] prints that v2 JSON.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "cli_migrate"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "cli_invalid_preserves_input": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Invalid config: CLI exits 2, prints the ConfigError dictionary as JSON to stderr",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "cli_invalid_preserves_input"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "caller_integration": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Service export_config(source, destination) writes v2 to destination",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "caller_integration"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "invalid_write_preserves_destination": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "No validation error may overwrite the input or an existing destination.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "invalid_write_preserves_destination"
+    ],
+    "evaluator_status": "fail",
+    "runtime_final_status": "satisfied"
+  },
+  "documentation": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Update docs/README.md with v1/v2 JSON examples, migrate and --dry-run usage,",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [
+      "documentation"
+    ],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "spec_immutable": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "CONFIG_SPEC.md is the task authority and\nmust not be edited.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "enabled_default": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "enabled may\nbe absent and then defaults to true.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "unknown_fields": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Unknown extra fields are ignored.",
+    "runtime_requirement_ids": [
+      "R1",
+      "R2"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [
+      "semantic_review_passed"
+    ],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "config_construction": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Existing Config construction and v1 read tests work.",
+    "runtime_requirement_ids": [
+      "R1",
+      "R2"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [
+      "semantic_review_passed"
+    ],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "validation_types": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "name and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, excluding bool; enabled must be bool.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "uncertain",
+    "runtime_final_status": "satisfied"
+  },
+  "validation_order_first_only": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Validate in this order: version, name, host, port, enabled, and report only the\nfirst problem.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "uncertain",
+    "runtime_final_status": "satisfied"
+  },
+  "unsupported_version": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Unsupported versions produce path \"version\", code \"unsupported\".",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "config_error_shape": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Raise ConfigError, still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "uncertain",
+    "runtime_final_status": "satisfied"
+  },
+  "migration_idempotence": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Repeating migration has identical semantic output.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "cli_show": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "python -m configkit show PATH keeps its current summary JSON for either version.",
+    "runtime_requirement_ids": [
+      "R1",
+      "R2"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [
+      "semantic_review_passed"
+    ],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "cli_success_exit": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Successful commands exit 0.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "export_preservation": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Service export_config(source, destination) writes v2 to destination, never\nchanges source, and returns the existing summary.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "docs_error_shape": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "and the invalid_config error shape.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "meaningful_tests": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Add meaningful tests",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "old_test_coverage": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "without dropping old\ncompatibility coverage.",
+    "runtime_requirement_ids": [
+      "R1",
+      "R2"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [
+      "semantic_review_passed"
+    ],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "exact_project_verification": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Run python -m pytest -q tests after implementation.",
+    "runtime_requirement_ids": [
+      "R3"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "actual_test_report": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "Report actual test results",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  },
+  "remaining_limitations": {
+    "authority_source": "CONFIG_SPEC.md",
+    "quote": "and remaining limitations.",
+    "runtime_requirement_ids": [
+      "R1"
+    ],
+    "mapping_scope": "retrospective broad semantic coverage, not a host-extracted clause",
+    "deterministic_evidence": [
+      "verification_passed"
+    ],
+    "semantic_evidence": [],
+    "independent_checks": [],
+    "evaluator_status": "pass",
+    "runtime_final_status": "satisfied"
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "items": [
+    {
+      "requirement": {
+        "id": "R1",
+        "description": "Implement the requested behavior: Implement the configuration migration described in CONFIG_SPEC.md throughout this package, including its CLI, existing consumers, tests and documentation. Preserve the compatibility and dry-run guarantees in that specification. Run python -m pytest -q tests and report the actual result and remaining limitations.",
+        "kind": "behavior",
+        "expected_artifacts": [],
+        "satisfaction_mode": "semantic",
+        "depends_on": [],
+        "required_evidence": [],
+        "artifact_operations": []
+      },
+      "status": "satisfied",
+      "evidence": [
+        {
+          "type": "verification_passed",
+          "path": null,
+          "command": "python -m pytest -q tests",
+          "generation": 10,
+          "fingerprint": null
+        }
+      ],
+      "mutation_generation": 10
+    },
+    {
+      "requirement": {
+        "id": "R2",
+        "description": "Preserve the requested compatibility guarantees.",
+        "kind": "compatibility",
+        "expected_artifacts": [],
+        "satisfaction_mode": "semantic",
+        "depends_on": [],
+        "required_evidence": [
+          "semantic_review"
+        ],
+        "artifact_operations": []
+      },
+      "status": "satisfied",
+      "evidence": [
+        {
+          "type": "verification_passed",
+          "path": null,
+          "command": "python -m pytest -q tests",
+          "generation": 10,
+          "fingerprint": null
+        },
+        {
+          "type": "semantic_review_passed",
+          "path": null,
+          "command": null,
+          "generation": 10,
+          "fingerprint": "verifier_ok:compatibility"
+        }
+      ],
+      "mutation_generation": 10
+    },
+    {
+      "requirement": {
+        "id": "R3",
+        "description": "Pass the exact acceptance command: python -m pytest -q tests",
+        "kind": "verification",
+        "expected_artifacts": [],
+        "satisfaction_mode": "semantic",
+        "depends_on": [],
+        "required_evidence": [],
+        "artifact_operations": []
+      },
+      "status": "satisfied",
+      "evidence": [
+        {
+          "type": "verification_passed",
+          "path": null,
+          "command": "python -m pytest -q tests",
+          "generation": 10,
+          "fingerprint": null
+        }
+      ],
+      "mutation_generation": 10
+    }
+  ],
+  "latest_generation": 10,
+  "latest_verification_generation": 10
+}

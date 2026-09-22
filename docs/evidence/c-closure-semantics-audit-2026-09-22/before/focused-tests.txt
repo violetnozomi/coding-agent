@@ -1,0 +1,102 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+...............FF.FF                                                     [100%]
+=================================== FAILURES ===================================
+__________ test_production_change_tracker_diff_is_attributed_per_file __________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-49/test_production_change_tracker0')
+
+    def test_production_change_tracker_diff_is_attributed_per_file(tmp_path):
+        from nz_coder.state.changes import ChangeTracker
+        from nz_coder.state.workdir import scoped_workdir
+        from nz_coder.runtime.verification.sidecar_verifier import (
+            _bounded_diff_hints, _compatibility_delta_evidence,
+            build_verifier_context, build_verifier_user_message,
+        )
+        with scoped_workdir(tmp_path):
+            tracker = ChangeTracker("closure-audit", change_dir=tmp_path / ".changes")
+            for path, text in [("parser.py", "PARSER_SENTINEL = 1\n"),
+                               ("writer.py", "WRITER_SENTINEL = 2\n")]:
+                tracker.record_before(path, True, "old = 0\n")
+                (tmp_path / path).write_text(text)
+                tracker.record_after(path, True, text)
+            diff = tracker.render_current_diff()
+            hints = _bounded_diff_hints(diff, tracker.current_changed_paths())
+        record("verifier/production-diff-projection.json", {"diff": diff.replace(str(tmp_path), "<WORKSPACE>"),
+               "hints": {k: v.replace(str(tmp_path), "<WORKSPACE>") for k, v in hints.items()}})
+>       assert "WRITER_SENTINEL" not in hints["parser.py"]
+E       AssertionError: assert 'WRITER_SENTINEL' not in 'Change set:...SENTINEL = 2'
+E
+E         'WRITER_SENTINEL' is contained here:
+E           -old = 0
+E           +WRITER_SENTINEL = 2
+
+tests/runtime/test_c_closure_audit.py:195: AssertionError
+________ test_c_frozen_diff_projection_does_not_repeat_entire_changeset ________
+
+    def test_c_frozen_diff_projection_does_not_repeat_entire_changeset():
+        from nz_coder.runtime.verification.sidecar_verifier import _bounded_diff_hints, _rank_semantic_paths
+        state = json.loads((HISTORY / "final-state.json").read_text())["state"]
+        diff = (HISTORY / "workspace.diff").read_text()
+        paths = _rank_semantic_paths(state["changed_files"], state)
+        hints = _bounded_diff_hints(diff, paths, max_each=5000, max_total=12000)
+        record("verifier/c-diff-hints.json", hints)
+>       assert "configkit/config/writer.py" in hints
+E       assert 'configkit/config/writer.py' in {'_scratch_check.py': '--- a/_scratch_check.py\n+++ b/_scratch_check.py\n@@ -0,0 +1,43 @@\n+import json\n+\n+from conf...rgument("--dry-run", action="store_true", dest="dry_run")\n+    return parser\n \n \n def main(\n... [diff truncated]'}
+
+tests/runtime/test_c_closure_audit.py:215: AssertionError
+______ test_diff_formats_keep_file_boundaries_and_literal_markdown[plain] ______
+
+style = 'plain'
+
+    @pytest.mark.parametrize("style", ["git", "plain", "tracker"])
+    def test_diff_formats_keep_file_boundaries_and_literal_markdown(style):
+        from nz_coder.runtime.verification.sidecar_verifier import _bounded_diff_hints
+        first = "--- a/first.md\n+++ b/first.md\n@@ -1 +1 @@\n-old\n+## fake.py\n"
+        second = "--- a/second.py\n+++ b/second.py\n@@ -1 +1 @@\n-old\n+SECOND_SENTINEL\n"
+        if style == "git":
+            first = "diff --git a/first.md b/first.md\n" + first
+            second = "diff --git a/second.py b/second.py\n" + second
+        if style == "tracker":
+            first = "## first.md\n" + first
+            second = "## second.py\n" + second
+        hints = _bounded_diff_hints(first + second, ["first.md", "second.py"])
+>       assert "SECOND_SENTINEL" not in hints["first.md"]
+E       AssertionError: assert 'SECOND_SENTINEL' not in '--- a/first...D_SENTINEL\n'
+E
+E         'SECOND_SENTINEL' is contained here:
+E            @@
+E           -old
+E           +SECOND_SENTINEL
+
+tests/runtime/test_c_closure_audit.py:233: AssertionError
+_____ test_diff_formats_keep_file_boundaries_and_literal_markdown[tracker] _____
+
+style = 'tracker'
+
+    @pytest.mark.parametrize("style", ["git", "plain", "tracker"])
+    def test_diff_formats_keep_file_boundaries_and_literal_markdown(style):
+        from nz_coder.runtime.verification.sidecar_verifier import _bounded_diff_hints
+        first = "--- a/first.md\n+++ b/first.md\n@@ -1 +1 @@\n-old\n+## fake.py\n"
+        second = "--- a/second.py\n+++ b/second.py\n@@ -1 +1 @@\n-old\n+SECOND_SENTINEL\n"
+        if style == "git":
+            first = "diff --git a/first.md b/first.md\n" + first
+            second = "diff --git a/second.py b/second.py\n" + second
+        if style == "tracker":
+            first = "## first.md\n" + first
+            second = "## second.py\n" + second
+        hints = _bounded_diff_hints(first + second, ["first.md", "second.py"])
+>       assert "SECOND_SENTINEL" not in hints["first.md"]
+E       AssertionError: assert 'SECOND_SENTINEL' not in '## first.md...D_SENTINEL\n'
+E
+E         'SECOND_SENTINEL' is contained here:
+E            @@
+E           -old
+E           +SECOND_SENTINEL
+
+tests/runtime/test_c_closure_audit.py:233: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_c_closure_audit.py::test_production_change_tracker_diff_is_attributed_per_file
+FAILED tests/runtime/test_c_closure_audit.py::test_c_frozen_diff_projection_does_not_repeat_entire_changeset
+FAILED tests/runtime/test_c_closure_audit.py::test_diff_formats_keep_file_boundaries_and_literal_markdown[plain]
+FAILED tests/runtime/test_c_closure_audit.py::test_diff_formats_keep_file_boundaries_and_literal_markdown[tracker]
+4 failed, 16 passed in 1.13s

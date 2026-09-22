@@ -861,6 +861,20 @@ def _diff_sections(diff: str) -> list[str]:
     text = str(diff or "")
     starts = [match.start() for match in re.finditer(r"(?m)^diff --git ", text)]
     if not starts:
+        # ChangeTracker.render_current_diff emits Markdown file headings and
+        # difflib headers, not Git's extended header. Treating that entire
+        # changeset as one section repeats unrelated files under each path and
+        # spends the evidence budget before later files can be reviewed.
+        starts = [match.start() for match in re.finditer(
+            r"(?m)^## [^\n]+\n(?=--- a/|\(no changes\))", text,
+        )]
+    if not starts:
+        # Also accept concatenated plain unified diffs. Require both headers;
+        # a Markdown heading inside a changed/context line is not a boundary.
+        starts = [match.start() for match in re.finditer(
+            r"(?m)^--- [^\n]+\n(?=\+\+\+ )", text,
+        )]
+    if not starts:
         return [text] if text else []
     return [
         text[start:(starts[index + 1] if index + 1 < len(starts) else len(text))]
