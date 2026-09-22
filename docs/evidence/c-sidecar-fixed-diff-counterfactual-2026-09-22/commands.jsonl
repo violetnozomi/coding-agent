@@ -1,0 +1,9 @@
+{"command": "git rev-parse HEAD && git rev-parse origin/main && git status --short", "exit": 0, "result": "ac47114 both; clean"}
+{"command": "python tests/evaluation/fixtures/offline_exec.py python docs/evidence/c-sidecar-fixed-diff-counterfactual-2026-09-22/experiment.py build", "exit": 0, "result": "OLD byte equal; isolated delta; project 46 passed; independent 11/12 expected; no model request"}
+{"command": "ruff check docs/evidence/c-sidecar-fixed-diff-counterfactual-2026-09-22/experiment.py", "exit": 0, "result": "All checks passed"}
+{"command": "python -m py_compile docs/evidence/c-sidecar-fixed-diff-counterfactual-2026-09-22/experiment.py", "exit": 0}
+{"command": "python docs/evidence/c-sidecar-fixed-diff-counterfactual-2026-09-22/experiment.py send-once", "exit": 0, "physical_requests": 1, "http_status": 200, "verdict": "accept", "retries": 0}
+{"command": "ruff check docs/evidence/c-sidecar-fixed-diff-counterfactual-2026-09-22/experiment.py docs/evidence/c-sidecar-fixed-diff-counterfactual-2026-09-22/verify.py", "exit": 0, "result": "All checks passed"}
+{"command": "python tests/evaluation/fixtures/offline_exec.py python docs/evidence/c-sidecar-fixed-diff-counterfactual-2026-09-22/verify.py", "exit": 0, "result": "Packet isolation, one request, immutable 3332 source/history files, privacy and hashes pass"}
+{"command": "git diff --cached --check", "exit": 2, "reason": "16 exact visible-prompt unified-diff blank context lines contain one space; retained byte-exact"}
+{"command": "git diff --cached --check -- . ':!docs/evidence/c-sidecar-fixed-diff-counterfactual-2026-09-22/packets/request-visible-user.txt'", "exit": 0}

@@ -1,0 +1,23 @@
+{
+  "provider": "openai-compatible",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-v4-flash",
+  "max_tokens": 1024,
+  "stream": false,
+  "tool_choice": {
+    "type": "function",
+    "function": {
+      "name": "emit_sidecar_verdict"
+    }
+  },
+  "thinking": {
+    "type": "disabled"
+  },
+  "physical_cap": 1,
+  "transport_retries": 0,
+  "sdk_used": false,
+  "redirects": false,
+  "transport": "same historical httpx direct POST; no retrying SDK/Gateway",
+  "timeout_seconds": 180,
+  "connect_timeout_seconds": 30
+}

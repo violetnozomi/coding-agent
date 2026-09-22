@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "historical_files_and_source_verified": 3332,
+  "production_source_changed": false,
+  "historical_evidence_changed": false,
+  "packet_delta_only_file_edits": true,
+  "old_byte_equivalent": true,
+  "physical_requests": 1,
+  "main_requests": 0,
+  "verifier_requests": 1,
+  "retries": 0,
+  "credentials_scan": "pass",
+  "private_reasoning_field_scan": "pass",
+  "personal_path_scan": "pass",
+  "cost": "unknown"
+}

@@ -1,0 +1,10 @@
+{
+  "path": "configkit/config/writer.py",
+  "hint": "tracked change; run diff contains 483 changed line(s)\n## configkit/config/writer.py\n--- a/configkit/config/writer.py\n+++ b/configkit/config/writer.py\n@@ -2,7 +2,15 @@\n \n \n def to_dict(config):\n-    return {\"name\": config.name, \"host\": config.host, \"port\": config.port, \"enabled\": config.enabled}\n+    \"\"\"Serialize a config using only the v2 representation.\"\"\"\n+    return {\n+        \"version\": 2,\n+        \"service\": {\n+            \"name\": config.name,\n+            \"endpoint\": {\"host\": config.host, \"port\": config.port},\n+        },\n+        \"enabled\": config.enabled,\n+    }\n \n \n def dumps(config):\n\n",
+  "hint_length": 602,
+  "hint_sha256": "0e5c7a90181d120f964afeb994bbbd007939165bcca6c8a55dd1bc5fbdf90b99",
+  "position_in_user_message": 17317,
+  "truncated": false,
+  "omitted": false,
+  "independently_attributed": true
+}

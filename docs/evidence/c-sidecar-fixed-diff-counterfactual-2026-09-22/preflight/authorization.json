@@ -1,0 +1,11 @@
+{
+  "authorized": true,
+  "authorization_source": "current user instruction",
+  "scope": "exactly one real semantic verifier Provider request",
+  "main_model_requests_allowed": 0,
+  "semantic_verifier_requests_allowed": 1,
+  "planner_requests_allowed": 0,
+  "infcodex_requests_allowed": 0,
+  "embedding_requests_allowed": 0,
+  "automatic_retry_allowed": false
+}

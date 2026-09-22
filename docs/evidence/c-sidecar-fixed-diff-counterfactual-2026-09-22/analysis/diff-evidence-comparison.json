@@ -1,0 +1,28 @@
+{
+  "old": {
+    "sections": 13,
+    "total_chars": 12760,
+    "duplicated_chars": 6953,
+    "duplication_metric": "repeated identical lines after first occurrence, within rendered FILE EDITS section",
+    "writer_own_section": false,
+    "writer_omitted_marker": true,
+    "omitted_markers": 10,
+    "budget": {
+      "max_total_hint_chars": 12000,
+      "max_each_hint_chars": 8000
+    }
+  },
+  "fixed": {
+    "sections": 13,
+    "total_chars": 12514,
+    "duplicated_chars": 1220,
+    "duplication_metric": "repeated identical lines after first occurrence, within rendered FILE EDITS section",
+    "writer_own_section": true,
+    "writer_omitted_marker": false,
+    "omitted_markers": 4,
+    "budget": {
+      "max_total_hint_chars": 12000,
+      "max_each_hint_chars": 8000
+    }
+  }
+}

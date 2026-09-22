@@ -1,0 +1,76 @@
+{
+  "old_matches_historical_verifier2_bytes": true,
+  "unchanged": {
+    "system_prompt": {
+      "old_sha256": "52394062dc41a474a0756897cb79f4f7f2914617a72e6f17eb950662842e227a",
+      "fixed_sha256": "52394062dc41a474a0756897cb79f4f7f2914617a72e6f17eb950662842e227a",
+      "equal": true
+    },
+    "user_task": {
+      "old_sha256": "f874b818d6adbbee60823a7fc8bc279b45bbd84535b559c354c8e83c6e01e843",
+      "fixed_sha256": "f874b818d6adbbee60823a7fc8bc279b45bbd84535b559c354c8e83c6e01e843",
+      "equal": true
+    },
+    "authority": {
+      "old_sha256": "960c169c6e6813e653c94e8411428ab12c3458f5032d46fb6733315311508f54",
+      "fixed_sha256": "960c169c6e6813e653c94e8411428ab12c3458f5032d46fb6733315311508f54",
+      "equal": true
+    },
+    "reference_digest": {
+      "old_sha256": "fdc3de4b3fa2113b17b990567f38f8da768e8f0e660b6af5cff18b907931ad27",
+      "fixed_sha256": "fdc3de4b3fa2113b17b990567f38f8da768e8f0e660b6af5cff18b907931ad27",
+      "equal": true
+    },
+    "transcript": {
+      "old_sha256": "e462750b0e4c7a736e1d1f2234497615a22867d72b4f451e5fb101c54aca7ccf",
+      "fixed_sha256": "e462750b0e4c7a736e1d1f2234497615a22867d72b4f451e5fb101c54aca7ccf",
+      "equal": true
+    },
+    "final_assistant_text": {
+      "old_sha256": "97860b03a17bebb178d20fd461dfa5ea53384afa1518ab1123eaa53b39c5862d",
+      "fixed_sha256": "97860b03a17bebb178d20fd461dfa5ea53384afa1518ab1123eaa53b39c5862d",
+      "equal": true
+    },
+    "additional_criteria": {
+      "old_sha256": "29c3251672512003e619912aa7215197777975ddbf17e3997cd1f16713c34bc7",
+      "fixed_sha256": "29c3251672512003e619912aa7215197777975ddbf17e3997cd1f16713c34bc7",
+      "equal": true
+    },
+    "runtime_contract": {
+      "old_sha256": "e6e9f7538f5b4a262e8085c3453f5a2ce85641f5d2731ac35d11619ad255accd",
+      "fixed_sha256": "e6e9f7538f5b4a262e8085c3453f5a2ce85641f5d2731ac35d11619ad255accd",
+      "equal": true
+    },
+    "runtime_ledger": {
+      "old_sha256": "a57380db5281b6d537e2f5cb162df010888d87074e9527608e6aceb585118da0",
+      "fixed_sha256": "a57380db5281b6d537e2f5cb162df010888d87074e9527608e6aceb585118da0",
+      "equal": true
+    },
+    "verification": {
+      "old_sha256": "f2290fa33a49a9f32297a38f2db48eb20b26d1bde0b65212e3c1ce453bf6c8e0",
+      "fixed_sha256": "f2290fa33a49a9f32297a38f2db48eb20b26d1bde0b65212e3c1ce453bf6c8e0",
+      "equal": true
+    },
+    "tool_schema": {
+      "old_sha256": "6af3c3c155afe84cdf0fc0da1c3e1a3b2de8584a533698ee2943e3dcf16142b2",
+      "fixed_sha256": "6af3c3c155afe84cdf0fc0da1c3e1a3b2de8584a533698ee2943e3dcf16142b2",
+      "equal": true
+    },
+    "provider_model_config": {
+      "old_sha256": "d317f47abb9351194d943d6f53522c3b95982f69dbf82ad83d99dd74123dc1b9",
+      "fixed_sha256": "d317f47abb9351194d943d6f53522c3b95982f69dbf82ad83d99dd74123dc1b9",
+      "equal": true
+    },
+    "diff_source": {
+      "old_sha256": "cd6d9db08d85cf67085f827400e658320fa5b5c249b0eb70369f997a43c63480",
+      "fixed_sha256": "cd6d9db08d85cf67085f827400e658320fa5b5c249b0eb70369f997a43c63480",
+      "equal": true
+    }
+  },
+  "allowed_change": "file_edit_summary and rendered FILE EDITS section only",
+  "old_user_sha256": "4c4fab7da3ae896ca6f16c7dad5f6e930b2185385ca5dd566f0dd1950b0bf6cb",
+  "fixed_user_sha256": "8881abdfcb027b51e92957f18eddd298704ad6cb424a34552b354af3bf0aa85a",
+  "all_other_rendered_sections_equal": true,
+  "current_hook_additional_criteria_would_change": true,
+  "control": "Historical additional criteria deliberately retained to isolate file-edit projection; not a full current-hook replay"
+}

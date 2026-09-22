@@ -1,0 +1,19 @@
+{
+  "provider": "openai-compatible",
+  "model": "deepseek-v4-flash",
+  "raw_usage": {
+    "prompt_tokens": 11785,
+    "completion_tokens": 201,
+    "total_tokens": 11986,
+    "prompt_tokens_details": {
+      "cached_tokens": 3584
+    },
+    "prompt_cache_hit_tokens": 3584,
+    "prompt_cache_miss_tokens": 8201
+  },
+  "duration_seconds": 1.383935534991906,
+  "attempts": 1,
+  "retries": 0,
+  "cost": null,
+  "cost_source": "not exposed by Provider"
+}
