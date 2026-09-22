@@ -1,0 +1,5 @@
+.....................                                                    [100%]
+21 passed in 2.91s
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+
+exit=0

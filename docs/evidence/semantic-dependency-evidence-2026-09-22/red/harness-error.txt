@@ -1,0 +1,33 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+EE                                                                       [100%]
+==================================== ERRORS ====================================
+_____ ERROR at setup of test_generic_main_and_sidecar_dependency_boundary ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7855a7227360>
+
+    @pytest.fixture(autouse=True)
+    def no_models(monkeypatch):
+        def forbidden(*args, **kwargs):
+            raise AssertionError('Provider/embedding forbidden in dependency audit')
+        monkeypatch.setattr(RepoIntelligenceService, 'configure_semantic', forbidden)
+>       monkeypatch.setattr(sidecar, 'run_sidecar_verifier', forbidden)
+E       AttributeError: <module 'nz_coder.runtime.verification.sidecar_verifier' from '<HOME>/nzcoder/nz_coder/runtime/verification/sidecar_verifier.py'> has no attribute 'run_sidecar_verifier'
+
+tests/runtime/test_semantic_dependency_evidence.py:36: AttributeError
+_____________ ERROR at setup of test_frozen_c_dependency_boundary ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7855a828e190>
+
+    @pytest.fixture(autouse=True)
+    def no_models(monkeypatch):
+        def forbidden(*args, **kwargs):
+            raise AssertionError('Provider/embedding forbidden in dependency audit')
+        monkeypatch.setattr(RepoIntelligenceService, 'configure_semantic', forbidden)
+>       monkeypatch.setattr(sidecar, 'run_sidecar_verifier', forbidden)
+E       AttributeError: <module 'nz_coder.runtime.verification.sidecar_verifier' from '<HOME>/nzcoder/nz_coder/runtime/verification/sidecar_verifier.py'> has no attribute 'run_sidecar_verifier'
+
+tests/runtime/test_semantic_dependency_evidence.py:36: AttributeError
+=========================== short test summary info ============================
+ERROR tests/runtime/test_semantic_dependency_evidence.py::test_generic_main_and_sidecar_dependency_boundary
+ERROR tests/runtime/test_semantic_dependency_evidence.py::test_frozen_c_dependency_boundary
+2 errors in 0.15s

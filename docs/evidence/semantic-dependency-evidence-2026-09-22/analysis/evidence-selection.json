@@ -1,0 +1,68 @@
+{
+  "items": [
+    {
+      "path": "configkit/config/migrate.py",
+      "symbol": "migrate_file",
+      "relation": "direct_caller",
+      "source_changed": false,
+      "freshness": "indexed",
+      "source_hash": "9174188adc4030dd710a858790f4ab413ece926014e1f424a8e58febcb5abf34",
+      "snippet_hash": "fdf40555389d9b9bb26f3d7c1a27c362b2e7556095da048c120d6d5a6d36064b",
+      "line": 5,
+      "end_line": 9,
+      "included": true,
+      "reason": "high-confidence direct structural caller",
+      "truncated": false,
+      "repo_generation": 1
+    },
+    {
+      "path": "configkit/store.py",
+      "symbol": "load",
+      "relation": "direct_caller",
+      "source_changed": false,
+      "freshness": "indexed",
+      "source_hash": "b1e73666c0c2de2dd8f2b007c19ab5529975c4de46ef7cab0bd20b0cde8a826c",
+      "snippet_hash": "ae8f51cc5e9614b1117cfa484b3d898e4027240064e5e8ef8a28808e8dcb1ab2",
+      "line": 6,
+      "end_line": 7,
+      "included": true,
+      "reason": "high-confidence direct structural caller",
+      "truncated": false,
+      "repo_generation": 1
+    },
+    {
+      "path": "configkit/store.py",
+      "symbol": "save",
+      "relation": "direct_caller",
+      "source_changed": false,
+      "freshness": "indexed",
+      "source_hash": "b1e73666c0c2de2dd8f2b007c19ab5529975c4de46ef7cab0bd20b0cde8a826c",
+      "snippet_hash": "36dfa7a45b7da30d6876efae3d208fc21bd04bf5aafb2213f00c6e0c53647014",
+      "line": 10,
+      "end_line": 12,
+      "included": true,
+      "reason": "high-confidence direct structural caller",
+      "truncated": false,
+      "repo_generation": 1
+    }
+  ],
+  "trace": {
+    "query_attempted": true,
+    "repo_status": "ready",
+    "repo_generation": 1,
+    "changed_path_count": 13,
+    "candidate_count": 3,
+    "included_count": 3,
+    "omitted_count": 0,
+    "included_locators": [
+      "configkit/config/migrate.py:migrate_file",
+      "configkit/store.py:load",
+      "configkit/store.py:save"
+    ],
+    "total_chars": 889,
+    "digest": "86cce2b6ed2a5330284d72da74baad6132bab6e336cd4f93ac8969483d34f5d4",
+    "fallback_reason": "",
+    "scope_truncated": false,
+    "query_ms": 138.756
+  }
+}

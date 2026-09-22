@@ -1,0 +1,2 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+Frozen C: 46 passed; 11/12 as expected. Current hook packet delta: only supporting channel. No Provider.

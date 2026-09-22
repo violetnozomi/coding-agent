@@ -1238,6 +1238,7 @@ def test_sidecar_hook_builds_live_evidence_traces_and_maps_verdict():
     assert hook.stats["fire_count"] == 1
     assert hook.stats["verdict_counts"]["revise"] == 1
     assert [event for event, _payload in tracer.events] == [
+        "sidecar_dependency_evidence",
         "sidecar_gate_decision",
         "sidecar_started",
         "sidecar_finished",
@@ -1595,7 +1596,9 @@ def test_sidecar_defers_to_pending_strict_verification_without_provider_call():
     assert hook.stats["fire_count"] == 0
     assert hook.stats["skip_count"] == 1
     assert hook.stats["last_gate_reason"] == "deterministic-verification-pending"
-    assert [name for name, _payload in events] == ["sidecar_gate_decision"]
+    assert [name for name, _payload in events] == [
+        "sidecar_dependency_evidence", "sidecar_gate_decision",
+    ]
 
 
 def test_sidecar_receives_strict_environment_blocker_authority(tmp_path):

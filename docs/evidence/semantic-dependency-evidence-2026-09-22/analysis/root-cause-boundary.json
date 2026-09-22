@@ -1,0 +1,10 @@
+{
+  "historical_model_implementation_omission": true,
+  "old_diff_attribution_bug": true,
+  "diff_attribution_fix_sufficient": false,
+  "sidecar_unchanged_dependency_gap": "proven",
+  "gap_fixed": true,
+  "gap_proven_as_unique_false_accept_cause": false,
+  "reviewer_future_behavior": "unobserved",
+  "classification": "DEP-EVIDENCE-FIXED"
+}

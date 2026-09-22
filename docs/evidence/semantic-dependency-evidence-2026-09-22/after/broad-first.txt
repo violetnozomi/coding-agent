@@ -1,0 +1,61 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+........................................................................ [  4%]
+........................................................................ [  8%]
+........................................................................ [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 20%]
+........................................................................ [ 25%]
+........................................................................ [ 29%]
+........................................................................ [ 33%]
+........................................................................ [ 37%]
+........................................................................ [ 41%]
+........................................................................ [ 45%]
+........................................................................ [ 50%]
+........................................................................ [ 54%]
+........................................................................ [ 58%]
+........................................................................ [ 62%]
+........................................................................ [ 66%]
+........................................................................ [ 70%]
+........................................................................ [ 75%]
+.........................................s....s......................... [ 79%]
+................ss......s............................................... [ 83%]
+.......................s.....ss..........ss.s........................... [ 87%]
+........................................................................ [ 91%]
+...............................................................F........ [ 95%]
+......................................................................   [100%]
+=================================== FAILURES ===================================
+_______ test_explicit_fork_compat_rebuilds_inherited_workspace_registry ________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-59/test_explicit_fork_compat_rebu0')
+
+    def test_explicit_fork_compat_rebuilds_inherited_workspace_registry(tmp_path) -> None:
+        from nz_coder.intelligence.service import (
+            acquire_repo_intelligence,
+            release_repo_intelligence,
+        )
+
+        parent_service = acquire_repo_intelligence(tmp_path, interval=0.02, max_files=100)
+        parent_service.wait_ready(timeout=5)
+        receive, send = multiprocessing.get_context("fork").Pipe(duplex=False)
+        process = multiprocessing.get_context("fork").Process(
+            target=_fork_acquire_worker, args=(str(tmp_path), send),
+        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"This process .* is multi-threaded, use of fork.*",
+                category=DeprecationWarning,
+            )
+            process.start()
+        send.close()
+
+        assert receive.poll(8)
+>       assert receive.recv() is True
+E       assert False is True
+E        +  where False = recv()
+E        +    where recv = <multiprocessing.connection.Connection object at 0x767f98d057b0>.recv
+
+tests/test_repo_intelligence_service.py:427: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_repo_intelligence_service.py::test_explicit_fork_compat_rebuilds_inherited_workspace_registry
+1 failed, 1714 passed, 11 skipped in 482.35s (0:08:02)

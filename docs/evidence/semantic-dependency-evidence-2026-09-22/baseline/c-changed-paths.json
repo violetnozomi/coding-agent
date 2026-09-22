@@ -1,0 +1,15 @@
+[
+  "_scratch_check.py",
+  "configkit/cli.py",
+  "configkit/commands/migrate.py",
+  "configkit/config/errors.py",
+  "configkit/config/parser.py",
+  "configkit/config/validation.py",
+  "configkit/config/writer.py",
+  "docs/README.md",
+  "tests/test_cli.py",
+  "tests/test_migrate.py",
+  "tests/test_parser.py",
+  "tests/test_service.py",
+  "tests/test_writer.py"
+]

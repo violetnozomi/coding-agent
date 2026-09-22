@@ -1,0 +1,57 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+______________ test_generic_main_and_sidecar_dependency_boundary _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-55/test_generic_main_and_sidecar_0')
+
+    def test_generic_main_and_sidecar_dependency_boundary(tmp_path):
+        paths, diff = generic(tmp_path)
+        service = RepoIntelligenceService(tmp_path)
+        try:
+            service.prewarm().result(timeout=30)
+            decision = RepoRetrievalPolicy(hot_path_ms=500).decide('Review current changes', service=service,
+                            strategy='auto-context', changed_paths=tuple(paths))
+            assert 'store.py:save' in decision.prompt_block
+            context, text, _, events = packet(tmp_path, service, paths, diff)
+            record('generic-fixture.json', {'main': decision.prompt_block, 'sidecar': text,
+                     'context': dataclasses.asdict(context), 'events': events})
+            assert 'def encode(value):' in text
+>           assert 'def save(path, value):' in text
+E           AssertionError: assert 'def save(path, value):' in '=== USER REQUEST (CURRENT TURN) ===\nUpdate encoding\n\n=== AUTHORITATIVE TASK REFERENCES ===\n\nRuntime-retained ori...e `reason` becomes a synthetic user follow-up the main agent will see as a review finding, not genuine user authority.'
+
+tests/runtime/test_semantic_dependency_evidence.py:73: AssertionError
+______________________ test_frozen_c_dependency_boundary _______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-55/test_frozen_c_dependency_bound0')
+
+    def test_frozen_c_dependency_boundary(tmp_path):
+        workspace = tmp_path / 'workspace'
+        shutil.copytree(HISTORY / 'final-files', workspace)
+        historical = json.loads((CF / 'packets/historical-verifier2-summary.json').read_text())
+        state = historical['runtime_state']
+        diff = json.loads((CF / 'packets/native-diff-source.json').read_text())['text']
+        paths = state['changed_files']
+        service = RepoIntelligenceService(workspace)
+        try:
+            service.prewarm().result(timeout=30)
+            scope = service.changed_scope(changed_paths=paths, max_depth=1, node_limit=20,
+                           limit=20, confidence_threshold=.85, wait_budget_ms=0)
+            assert 'configkit/store.py:save' in scope['direct_callers']
+            decision = RepoRetrievalPolicy(hot_path_ms=500, token_budget=1500).decide(
+                           'Review current changes', service=service, strategy='auto-context', changed_paths=tuple(paths))
+            assert 'configkit/store.py:save' in decision.prompt_block
+            context, text, _, events = packet(workspace, service, paths, diff, state,
+                           historical['transcript'], historical['final_assistant_text'])
+            record('c-repo-scope.json', {'state': dataclasses.asdict(service.state), 'scope': scope,
+                                       'main_prompt': decision.prompt_block})
+            record('c-sidecar-context.json', {'context': dataclasses.asdict(context), 'packet': text, 'events': events})
+            assert 'def to_dict(config):' in dict(context.file_edit_summary)['configkit/config/writer.py']
+>           assert 'def save(path, config):' in text
+E           AssertionError: assert 'def save(path, config):' in '=== USER REQUEST (CURRENT TURN) ===\nImplement the configuration migration described in CONFIG_SPEC.md throughout thi...e `reason` becomes a synthetic user follow-up the main agent will see as a review finding, not genuine user authority.'
+
+tests/runtime/test_semantic_dependency_evidence.py:104: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_semantic_dependency_evidence.py::test_generic_main_and_sidecar_dependency_boundary
+FAILED tests/runtime/test_semantic_dependency_evidence.py::test_frozen_c_dependency_boundary
+2 failed in 0.58s

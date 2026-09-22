@@ -1,0 +1,13 @@
+{
+  "head": "07a294ccc5cc3780ffdb03beedf0101068b2792d",
+  "origin_main": "07a294ccc5cc3780ffdb03beedf0101068b2792d",
+  "initial_clean": true,
+  "hashes": {
+    "nz_coder/runtime/verification/sidecar_verifier.py": "ad191c52804e153402aa31f6ee054570e57a2b907cec62327782df5532e132a5",
+    "nz_coder/intelligence/retrieval_policy.py": "b7abb1891cc61f90b254cebe9ae0cd1538fd0126f73846265ce16929ec63f466",
+    "nz_coder/intelligence/service.py": "0935099260a91e5348b2bbc92066ba76c4b7ae5c37745a81d96f35caa8c35c23",
+    "nz_coder/intelligence/repository_graph.py": "57e395ce5c50c38e336f92ecfd9558b5b44be6d7bd42e85874b66ec51ce13d8c",
+    "nz_coder/runtime/conversation/prompt_builder.py": "72e277c6d37dae11b029dc7cb556608ea513cd824ef9b0e14910134c951e0366",
+    "nz_coder/runtime/execution/loop.py": "3a6d16be348c8c7c832cdc3e74e6b068455545443aa7b1a7c2236bf0224badde"
+  }
+}

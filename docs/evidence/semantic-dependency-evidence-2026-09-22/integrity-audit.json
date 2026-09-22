@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "unchanged_historical_and_production_files": 3362,
+  "production_files_allowed": [
+    "nz_coder/runtime/verification/dependency_evidence.py",
+    "nz_coder/runtime/verification/sidecar_verifier.py"
+  ],
+  "historical_evidence_changed": false,
+  "main_requests": 0,
+  "verifier_requests": 0,
+  "planner_requests": 0,
+  "embedding_requests": 0,
+  "infcodex_requests": 0,
+  "network_guard": "all replay/tests via existing seccomp IPv4/IPv6 denial; focused Provider entry points forbidden",
+  "credentials_scan": "pass",
+  "private_reasoning_fields": "absent",
+  "personal_paths": "absent",
+  "no_evaluator_truth_in_packet": true
+}

@@ -1,0 +1,13 @@
+{
+  "generic": {
+    "main_caller_visible": true,
+    "sidecar_body_visible": false
+  },
+  "C": {
+    "main_caller_visible": true,
+    "writer_diff_visible": true,
+    "sidecar_store_body_visible": false
+  },
+  "red_result": "2 failed at missing caller-body assertions",
+  "harness_error": "initial nonexistent guard symbol; corrected before recording RED; see harness-error.txt"
+}

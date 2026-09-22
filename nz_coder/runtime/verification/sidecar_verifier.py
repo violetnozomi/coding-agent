@@ -141,6 +141,8 @@ class VerifierContext:
     additional_criteria: str = ""
     authoritative_references: tuple[RetainedTaskReference, ...] = ()
     omitted_reference_count: int = 0
+    supporting_repository_evidence: str = ""
+    supporting_repository_digest: str = ""
 
 
 @dataclass(frozen=True)
@@ -226,6 +228,8 @@ def build_verifier_context(
     additional_criteria: str = "",
     authoritative_references=(),
     omitted_reference_count: int = 0,
+    supporting_repository_evidence: str = "",
+    supporting_repository_digest: str = "",
 ) -> VerifierContext:
     """Build the last-turn query, rolling transcript, and actual edit evidence."""
     filtered = [dict(message) for message in transcript if message.get("role") != "system"]
@@ -246,6 +250,8 @@ def build_verifier_context(
         additional_criteria=str(additional_criteria or ""),
         authoritative_references=sanitize_references(authoritative_references),
         omitted_reference_count=omitted_reference_count,
+        supporting_repository_evidence=supporting_repository_evidence,
+        supporting_repository_digest=supporting_repository_digest,
     )
 
 
@@ -313,6 +319,8 @@ def build_verifier_user_message(context: VerifierContext) -> str:
             "(no file edits — text-only response, OR the agent did not actually "
             "edit anything despite claiming it did)"
         )
+    if context.supporting_repository_evidence:
+        sections.extend(("", context.supporting_repository_evidence))
     sections.extend((
         "",
         "=== MAIN AGENT FINAL TEXT (the answer the agent is delivering) ===",
@@ -1545,6 +1553,7 @@ class SidecarVerifierHook:
             context.current_turn_user_queries,
             reference_digest(context.authoritative_references, context.omitted_reference_count),
             context.file_edit_summary,
+            context.supporting_repository_digest,
             str(state.get("current_round_instruction_text") or ""),
             contract,
             metrics.risky_shell_ops,
@@ -1678,6 +1687,20 @@ class SidecarVerifierHook:
                 "DETERMINISTIC COMPATIBILITY RISK (must be resolved before "
                 "acceptance):\n" + compatibility_risk
             )
+        from nz_coder.runtime.verification.dependency_evidence import collect_dependency_evidence
+
+        dependency, dependency_trace = collect_dependency_evidence(
+            getattr(self._loop, "repo_intelligence", None),
+            getattr(self._loop, "workdir", None), paths,
+            authority_paths=[ref.path for ref in sanitize_references(
+                state.get("task_reference_evidence", []))],
+        )
+        tracer = getattr(self._loop, "tracer", None)
+        if tracer is not None:
+            try:
+                tracer.log("sidecar_dependency_evidence", **dependency_trace)
+            except Exception:
+                pass
         verifier_context = build_verifier_context(
             context.transcript,
             context.last_assistant_text,
@@ -1685,6 +1708,8 @@ class SidecarVerifierHook:
             authoritative_references=state.get("task_reference_evidence", []),
             omitted_reference_count=state.get("task_reference_omitted_count", 0),
             additional_criteria="\n".join(str(item) for item in criteria if str(item).strip()),
+            supporting_repository_evidence=dependency.text,
+            supporting_repository_digest=dependency.digest,
         )
         metrics = VerifierGateMetrics(
             risky_shell_ops=max(

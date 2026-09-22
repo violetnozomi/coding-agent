@@ -1,0 +1,88 @@
+{
+  "changed_source": [
+    "configkit/config/writer.py"
+  ],
+  "changed_symbols": [
+    "err",
+    "build_parser",
+    "main",
+    "execute",
+    "ConfigError",
+    "__init__",
+    "to_dict",
+    "loads",
+    "_mapping",
+    "_value",
+    "_check_str",
+    "_check_port",
+    "_check_enabled",
+    "version_of",
+    "validate",
+    "to_dict",
+    "dumps",
+    "test_show",
+    "test_show_accepts_v2",
+    "test_migrate_prints_v2_and_writes_v2"
+  ],
+  "repo_direct_callers": [
+    "configkit/config/migrate.py:migrate_file",
+    "configkit/store.py:load",
+    "configkit/store.py:save"
+  ],
+  "repo_impacted_callers": [
+    "configkit/config/migrate.py:migrate_file",
+    "configkit/store.py:load",
+    "configkit/store.py:save"
+  ],
+  "selected_supporting_evidence": [
+    {
+      "path": "configkit/config/migrate.py",
+      "symbol": "migrate_file",
+      "relation": "direct_caller",
+      "source_changed": false,
+      "freshness": "indexed",
+      "source_hash": "9174188adc4030dd710a858790f4ab413ece926014e1f424a8e58febcb5abf34",
+      "snippet_hash": "fdf40555389d9b9bb26f3d7c1a27c362b2e7556095da048c120d6d5a6d36064b",
+      "line": 5,
+      "end_line": 9,
+      "included": true,
+      "reason": "high-confidence direct structural caller",
+      "truncated": false,
+      "repo_generation": 1
+    },
+    {
+      "path": "configkit/store.py",
+      "symbol": "load",
+      "relation": "direct_caller",
+      "source_changed": false,
+      "freshness": "indexed",
+      "source_hash": "b1e73666c0c2de2dd8f2b007c19ab5529975c4de46ef7cab0bd20b0cde8a826c",
+      "snippet_hash": "ae8f51cc5e9614b1117cfa484b3d898e4027240064e5e8ef8a28808e8dcb1ab2",
+      "line": 6,
+      "end_line": 7,
+      "included": true,
+      "reason": "high-confidence direct structural caller",
+      "truncated": false,
+      "repo_generation": 1
+    },
+    {
+      "path": "configkit/store.py",
+      "symbol": "save",
+      "relation": "direct_caller",
+      "source_changed": false,
+      "freshness": "indexed",
+      "source_hash": "b1e73666c0c2de2dd8f2b007c19ab5529975c4de46ef7cab0bd20b0cde8a826c",
+      "snippet_hash": "36dfa7a45b7da30d6876efae3d208fc21bd04bf5aafb2213f00c6e0c53647014",
+      "line": 10,
+      "end_line": 12,
+      "included": true,
+      "reason": "high-confidence direct structural caller",
+      "truncated": false,
+      "repo_generation": 1
+    }
+  ],
+  "store_save_selected": true,
+  "selection_reason": "high-confidence direct structural caller",
+  "source_current_hash": "b1e73666c0c2de2dd8f2b007c19ab5529975c4de46ef7cab0bd20b0cde8a826c",
+  "hidden_evaluator_data_used": false
+}

@@ -1,0 +1,11 @@
+{
+  "all_preexisting_context_fields_identical": true,
+  "full_original_spec": true,
+  "writer_diff_unchanged": true,
+  "store_labeled_unchanged": true,
+  "verification_fact_unchanged": true,
+  "evaluator_truth_not_in_packet": true,
+  "supporting_chars": 889,
+  "independent_budget": 4000,
+  "provider_requests": 0
+}
