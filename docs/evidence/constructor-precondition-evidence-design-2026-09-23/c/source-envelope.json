@@ -1,0 +1,15 @@
+{
+  "E0": {
+    "text": "class Config:\n    name: str\n    host: str\n    port: int\n    enabled: bool = True"
+  },
+  "E1": {
+    "start_line": 4,
+    "end_line": 9,
+    "chars": 105,
+    "truncated": false,
+    "text": "@dataclass(frozen=True)\nclass Config:\n    name: str\n    host: str\n    port: int\n    enabled: bool = True\n"
+  },
+  "recommended": "E1",
+  "writer_chars": 390,
+  "store_chars": 259
+}

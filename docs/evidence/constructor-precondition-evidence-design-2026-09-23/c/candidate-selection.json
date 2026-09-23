@@ -1,0 +1,19 @@
+{
+  "route_A": {
+    "status": "supported-partial",
+    "candidates": [
+      "configkit/config/model.py:Config"
+    ],
+    "basis": "existing parser-to-class structural relation plus unchanged class definition",
+    "c_specific": false
+  },
+  "route_B": {
+    "status": "unsupported-for-type-proof",
+    "basis": "call graph has save/dumps and parser/Config but no general argument type/dataflow edge"
+  },
+  "route_C": {
+    "status": "unsupported",
+    "basis": "no production authority-text symbol resolver; no NLP selector added"
+  },
+  "selection_policy": "high-confidence direct structural class relation, unchanged implementation, bounded deterministic order"
+}

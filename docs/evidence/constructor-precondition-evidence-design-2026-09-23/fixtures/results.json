@@ -1,0 +1,145 @@
+{
+  "dataclass-no-validation": {
+    "classes": [
+      "Payload"
+    ],
+    "selected": [
+      "Payload"
+    ],
+    "envelopes": [
+      {
+        "start_line": 2,
+        "end_line": 4,
+        "chars": 41,
+        "truncated": false,
+        "text": "@dataclass\nclass Payload:\n    value: int\n"
+      }
+    ],
+    "decorator_preserved": true,
+    "tests_are_implementation": true
+  },
+  "dataclass-post-init": {
+    "classes": [
+      "Payload"
+    ],
+    "selected": [
+      "Payload"
+    ],
+    "envelopes": [
+      {
+        "start_line": 2,
+        "end_line": 6,
+        "chars": 127,
+        "truncated": false,
+        "text": "@dataclass(frozen=True)\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n"
+      }
+    ],
+    "decorator_preserved": true,
+    "tests_are_implementation": true
+  },
+  "validating-init": {
+    "classes": [
+      "Payload"
+    ],
+    "selected": [
+      "Payload"
+    ],
+    "envelopes": [
+      {
+        "start_line": 1,
+        "end_line": 4,
+        "chars": 97,
+        "truncated": false,
+        "text": "class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n"
+      }
+    ],
+    "decorator_preserved": false,
+    "tests_are_implementation": true
+  },
+  "unrelated-class": {
+    "classes": [
+      "Other"
+    ],
+    "selected": [
+      "Other"
+    ],
+    "envelopes": [
+      {
+        "start_line": 1,
+        "end_line": 2,
+        "chars": 22,
+        "truncated": false,
+        "text": "class Other:\n    pass\n"
+      }
+    ],
+    "decorator_preserved": true,
+    "tests_are_implementation": true
+  },
+  "many-classes": {
+    "classes": [
+      "Payload0",
+      "Payload1",
+      "Payload2",
+      "Payload3",
+      "Payload4",
+      "Payload5",
+      "Payload6",
+      "Payload7"
+    ],
+    "selected": [
+      "Payload0",
+      "Payload1"
+    ],
+    "envelopes": [
+      {
+        "start_line": 1,
+        "end_line": 2,
+        "chars": 31,
+        "truncated": false,
+        "text": "class Payload0:\n    value: int\n"
+      },
+      {
+        "start_line": 4,
+        "end_line": 5,
+        "chars": 31,
+        "truncated": false,
+        "text": "class Payload1:\n    value: int\n"
+      }
+    ],
+    "decorator_preserved": false,
+    "tests_are_implementation": true
+  },
+  "unresolved-dynamic": {
+    "classes": [
+      "Placeholder"
+    ],
+    "selected": [
+      "Placeholder"
+    ],
+    "envelopes": [
+      {
+        "start_line": 1,
+        "end_line": 2,
+        "chars": 28,
+        "truncated": false,
+        "text": "class Placeholder:\n    pass\n"
+      }
+    ],
+    "decorator_preserved": true,
+    "tests_are_implementation": true
+  },
+  "tests-only": {
+    "classes": [],
+    "selected": [],
+    "envelopes": [],
+    "decorator_preserved": true,
+    "tests_are_implementation": false
+  },
+  "budget": {
+    "max_symbols": 2,
+    "max_chars_each": 1400,
+    "max_total_chars": 2400,
+    "many_classes_selected": 2,
+    "deterministic_order": true
+  }
+}

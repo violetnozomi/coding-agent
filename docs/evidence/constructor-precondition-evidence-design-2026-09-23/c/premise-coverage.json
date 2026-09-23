@@ -1,0 +1,9 @@
+{
+  "P1": "present-explicitly",
+  "P2": "closed-by-source-envelope-in-V1-design-only",
+  "P3": "present-inferable",
+  "P4": "present-explicitly",
+  "P5": "ambiguous",
+  "p2_evidence": "E1 preserves @dataclass(frozen=True), class fields, __init__/__post_init__ when present",
+  "reviewer_called": false
+}

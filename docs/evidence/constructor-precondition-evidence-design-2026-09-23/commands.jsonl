@@ -1,0 +1,4 @@
+{"command":"git rev-parse HEAD && git rev-parse origin/main","result":"6ce79194b17ef874dae5c55175d5c5423cd32d5d / 6ce79194b17ef874dae5c55175d5c5423cd32d5d"}
+{"command":"python tests/evaluation/fixtures/offline_exec.py python docs/evidence/constructor-precondition-evidence-design-2026-09-23/audit.py","result":"PASS; IPv4/IPv6 denied; existing graph/class-envelope audit; provider-free"}
+{"command":"python -m ruff check docs/evidence/constructor-precondition-evidence-design-2026-09-23","result":"PASS"}
+{"command":"python -m compileall -q docs/evidence/constructor-precondition-evidence-design-2026-09-23","result":"PASS"}

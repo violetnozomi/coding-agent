@@ -1,0 +1,7 @@
+{
+  "classification": "PRECOND-DESIGN: EXISTING-GRAPH-SUFFICIENT",
+  "route_A": "usable",
+  "route_B": "partial",
+  "route_C": "unsupported",
+  "production_changed": false
+}

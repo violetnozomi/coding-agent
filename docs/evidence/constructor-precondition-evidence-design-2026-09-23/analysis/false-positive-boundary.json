@@ -1,0 +1,8 @@
+{
+  "unrelated_class": "budgeted/relationship-filtered",
+  "many_classes": "max 2 deterministic",
+  "dynamic": "omit",
+  "tests_only": "not implementation evidence",
+  "self_validating": "retain __post_init__",
+  "explicit_init": "retain __init__"
+}

@@ -1,0 +1,7 @@
+{
+  "existing_graph_has_class_relation": true,
+  "selection_projection_gap": true,
+  "new_graph_required": false,
+  "constructor_semantics_fully_modeled": false,
+  "production_changed": false
+}
