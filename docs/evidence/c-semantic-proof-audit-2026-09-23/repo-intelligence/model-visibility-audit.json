@@ -1,0 +1,14 @@
+{
+  "model_path": "configkit/config/model.py",
+  "visible_in_cf_c2_packet": false,
+  "visible_in_v1_only": true,
+  "graph_relations": {
+    "parser_to_config": true,
+    "direct_model_constructors_in_tests": true,
+    "writer_parameter_type_to_config": false,
+    "constructor_precondition": false,
+    "invalid_state_dataflow": false
+  },
+  "interpretation": "The structural graph locates callers and callees but does not encode that a Config object may be independently constructed with an invalid port before writer/save.",
+  "production_changed": false
+}

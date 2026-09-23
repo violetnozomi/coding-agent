@@ -1,0 +1,7 @@
+{
+  "classification": "PROOF-AUDIT: MIXED",
+  "evidence_incomplete": true,
+  "reviewer_positive_inference_exceeded_packet": true,
+  "minimum_missing": "constructor/precondition evidence for independently constructed invalid Config",
+  "v1_is_offline_synthetic": true
+}

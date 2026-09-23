@@ -1,0 +1,32 @@
+[
+  {
+    "id": "P1",
+    "premise": "Authority requires invalid write preservation",
+    "status": "present-explicitly",
+    "packet_support": "AUTHORITATIVE TASK REFERENCES / CONFIG_SPEC"
+  },
+  {
+    "id": "P2",
+    "premise": "Invalid Config can exist independently of parser validation",
+    "status": "absent",
+    "packet_support": "CONFIG_SPEC says existing construction; no model.py or constructor semantics in CF-C2"
+  },
+  {
+    "id": "P3",
+    "premise": "writer.dumps accepts invalid Config without validation",
+    "status": "present-inferable",
+    "packet_support": "writer.py changed diff shows field serialization; no invalid-object witness"
+  },
+  {
+    "id": "P4",
+    "premise": "store.save writes dumps output to destination",
+    "status": "present-explicitly",
+    "packet_support": "store.py:save supporting section"
+  },
+  {
+    "id": "P5",
+    "premise": "direct store.save is an existing compatible write surface",
+    "status": "ambiguous",
+    "packet_support": "store.save source plus Existing Config construction authority; no explicit direct-save scenario"
+  }
+]

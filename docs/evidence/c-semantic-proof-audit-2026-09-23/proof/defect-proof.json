@@ -1,0 +1,50 @@
+{
+  "authority": {
+    "no_overwrite": "No validation error may overwrite the input or an existing destination.",
+    "port": "port must be an integer 1..65535, excluding bool",
+    "construction": "Existing Config construction and v1 read tests work.",
+    "decode": "Both decode to `Config(name, host, port, enabled)`.",
+    "exact_source_contexts": {
+      "no_overwrite": "still a ValueError subclass, with to_dict() exactly:\n{\"error\":\"invalid_config\",\"issues\":[{\"path\":\"...\",\"code\":\"...\"}]}.\nNo validation error may overwrite the input or an existing destination.\n\n## Migration and CLI\nmigrate_file(path, dry_run=False) returns the v2 dictionary and writes v2 to\nthat file. Repeating",
+      "port": "# Configuration migration contract\n\nImplement v2 while retaining v1 reads. CONFIG_SPEC.md is the task authority and\nmust not be edited. All behavior below is required;",
+      "construction": "me/host/port).\nExisting consumers, show, and service.export_config must accept either input\nversion, preserving values. Existing Config construction and v1 read tests work.\n\n## Validation\nname and host must be nonempty strings (whitespace-only is invalid); port must\nbe an integer 1..65535, e"
+    }
+  },
+  "counterexample": {
+    "construction": {
+      "succeeded": true,
+      "type": "Config",
+      "dataclass": true,
+      "post_init_source": false,
+      "custom_init_source": false,
+      "generated_dataclass_init": true
+    },
+    "serialization": {
+      "succeeded": true,
+      "json": "{\"enabled\": true, \"service\": {\"endpoint\": {\"host\": \"localhost\", \"port\": false}, \"name\": \"demo\"}, \"version\": 2}\n",
+      "port_json_token": "\"port\": false"
+    },
+    "save": {
+      "succeeded": true,
+      "error": null,
+      "before_sha256": "11866ce6d2ef8a8d75e9b1b609336e468e18d43c248fe5903a2c04bb76b4d703",
+      "after_sha256": "81dbba3b9c3b2216182882a3573c00e6fbc587d93f743d3316ef1e65cdda8520",
+      "destination_changed": true,
+      "after": "{\"enabled\": true, \"service\": {\"endpoint\": {\"host\": \"localhost\", \"port\": false}, \"name\": \"demo\"}, \"version\": 2}\n"
+    },
+    "migration_path": {
+      "error": {
+        "type": "ConfigError",
+        "message": "service.endpoint.port: invalid"
+      },
+      "input_preserved": true
+    }
+  },
+  "proof_edges": [
+    "Config() accepts invalid port",
+    "writer.dumps reads fields without validation",
+    "store.save writes dumps output",
+    "existing destination bytes change",
+    "migrate_file is separately parser-first"
+  ]
+}

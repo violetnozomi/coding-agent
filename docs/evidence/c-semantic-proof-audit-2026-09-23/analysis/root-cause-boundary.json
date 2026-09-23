@@ -1,0 +1,9 @@
+{
+  "known_business_defect_proven": true,
+  "cf_c2_packet_proof_complete": false,
+  "missing_premise": "P2",
+  "reviewer_reasoning_local_validity": true,
+  "reviewer_global_inference_unsupported": true,
+  "unique_cause": false,
+  "production_changed": false
+}

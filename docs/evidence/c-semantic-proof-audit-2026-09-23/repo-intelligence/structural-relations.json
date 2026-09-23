@@ -1,0 +1,1591 @@
+{
+  "state": {
+    "status": "ready",
+    "generation": 1,
+    "call_edges": 211
+  },
+  "scope_direct": [
+    "_scratch_check.py:err",
+    "configkit/config/migrate.py:migrate_file",
+    "configkit/store.py:load",
+    "configkit/store.py:save",
+    "tests/test_parser.py:test_bad_port",
+    "tests/test_parser.py:test_enabled_defaults_to_true",
+    "tests/test_parser.py:test_error_shape",
+    "tests/test_parser.py:test_missing_version_is_v1",
+    "tests/test_parser.py:test_only_first_problem_is_reported",
+    "tests/test_parser.py:test_unknown_fields_are_ignored",
+    "tests/test_parser.py:test_v1",
+    "tests/test_parser.py:test_v1_and_v2_decode_identically",
+    "tests/test_writer.py:test_dumps_emits_v2_only",
+    "tests/test_writer.py:test_roundtrip",
+    "tests/test_writer.py:test_v1_input_is_read_but_never_written_back_as_v1"
+  ],
+  "scope_transitive": [
+    "symbol:_scratch_check.py::_scratch_check.err::function",
+    "symbol:configkit/commands/migrate.py::configkit.commands.migrate.execute::function",
+    "symbol:configkit/config/migrate.py::configkit.config.migrate.migrate_file::function",
+    "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+    "symbol:configkit/config/validation.py::configkit.config.validation.validate::function",
+    "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+    "symbol:configkit/service.py::configkit.service.export_config::function",
+    "symbol:configkit/service.py::configkit.service.inspect_config::function",
+    "symbol:configkit/store.py::configkit.store.load::function",
+    "symbol:configkit/store.py::configkit.store.save::function",
+    "symbol:tests/test_migrate.py::tests.test_migrate.test_dry_run_leaves_source_bytes_unchanged::function",
+    "symbol:tests/test_migrate.py::tests.test_migrate.test_invalid_config_does_not_touch_file::function",
+    "symbol:tests/test_migrate.py::tests.test_migrate.test_invalid_config_migration_creates_nothing::function",
+    "symbol:tests/test_migrate.py::tests.test_migrate.test_migrate_accepts_v2_input::function",
+    "symbol:tests/test_migrate.py::tests.test_migrate.test_migrate_writes_v2_and_returns_dict::function",
+    "symbol:tests/test_migrate.py::tests.test_migrate.test_repeated_migration_is_semantically_stable::function",
+    "symbol:tests/test_parser.py::tests.test_parser.test_bad_port::function",
+    "symbol:tests/test_parser.py::tests.test_parser.test_enabled_defaults_to_true::function",
+    "symbol:tests/test_parser.py::tests.test_parser.test_error_shape::function",
+    "symbol:tests/test_parser.py::tests.test_parser.test_missing_version_is_v1::function",
+    "symbol:tests/test_parser.py::tests.test_parser.test_only_first_problem_is_reported::function",
+    "symbol:tests/test_parser.py::tests.test_parser.test_unknown_fields_are_ignored::function",
+    "symbol:tests/test_parser.py::tests.test_parser.test_v1::function",
+    "symbol:tests/test_parser.py::tests.test_parser.test_v1_and_v2_decode_identically::function",
+    "symbol:tests/test_writer.py::tests.test_writer.test_dumps_emits_v2_only::function",
+    "symbol:tests/test_writer.py::tests.test_writer.test_roundtrip::function",
+    "symbol:tests/test_writer.py::tests.test_writer.test_v1_input_is_read_but_never_written_back_as_v1::function"
+  ],
+  "scope_changed_symbols": [
+    "to_dict",
+    "dumps",
+    "loads",
+    "_mapping",
+    "_value",
+    "_check_str",
+    "_check_port",
+    "_check_enabled",
+    "version_of",
+    "validate"
+  ],
+  "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function": {
+    "definition": {
+      "symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+      "name": "dumps",
+      "qualified_name": "configkit.config.writer.dumps",
+      "kind": "function",
+      "path": "configkit/config/writer.py",
+      "file_path": "configkit/config/writer.py",
+      "module_id": "module:configkit",
+      "language": "python",
+      "line": 16,
+      "end_line": 17,
+      "signature": "def dumps(config)",
+      "exported": true,
+      "confidence": 0.99,
+      "source": "python-ast",
+      "capability_tier": "ast-native"
+    },
+    "callers": [
+      {
+        "caller": "save",
+        "callee": "dumps",
+        "path": "configkit/store.py",
+        "call_site_file": "configkit/store.py",
+        "line": 11,
+        "caller_symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+        "callee_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_roundtrip",
+        "callee": "dumps",
+        "path": "tests/test_writer.py",
+        "call_site_file": "tests/test_writer.py",
+        "line": 7,
+        "caller_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_roundtrip::function",
+        "callee_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_dumps_emits_v2_only",
+        "callee": "dumps",
+        "path": "tests/test_writer.py",
+        "call_site_file": "tests/test_writer.py",
+        "line": 11,
+        "caller_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_dumps_emits_v2_only::function",
+        "callee_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_v1_input_is_read_but_never_written_back_as_v1",
+        "callee": "dumps",
+        "path": "tests/test_writer.py",
+        "call_site_file": "tests/test_writer.py",
+        "line": 22,
+        "caller_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_v1_input_is_read_but_never_written_back_as_v1::function",
+        "callee_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      }
+    ],
+    "callees": [
+      {
+        "caller": "dumps",
+        "callee": "dumps",
+        "path": "configkit/config/writer.py",
+        "call_site_file": "configkit/config/writer.py",
+        "line": 17,
+        "caller_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "callee_symbol_id": null,
+        "unresolved_target": {
+          "raw_name": "dumps",
+          "qualifier": "json",
+          "candidates": [
+            "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function"
+          ],
+          "confidence": 0.4
+        },
+        "qualifier": "json",
+        "resolution_kind": "heuristic-candidates",
+        "confidence": 0.4,
+        "source": "python-ast"
+      },
+      {
+        "caller": "dumps",
+        "callee": "to_dict",
+        "path": "configkit/config/writer.py",
+        "call_site_file": "configkit/config/writer.py",
+        "line": 17,
+        "caller_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "callee_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.to_dict::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "exact-same-module",
+        "confidence": 0.99,
+        "source": "python-ast"
+      }
+    ],
+    "imports": [
+      {
+        "module": "json",
+        "binding": "json",
+        "imported_name": null,
+        "alias": null,
+        "line": 1,
+        "kind": "import",
+        "confidence": 1.0
+      }
+    ],
+    "references": [
+      {
+        "source_file": "configkit/store.py",
+        "source_symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+        "raw_name": "dumps",
+        "target_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "qualifier": "",
+        "line": 11,
+        "column": 14,
+        "context": "encoded = dumps(config)",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function"
+        ],
+        "path": "configkit/store.py",
+        "name": "dumps",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_writer.py",
+        "source_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_roundtrip::function",
+        "raw_name": "dumps",
+        "target_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "qualifier": "",
+        "line": 7,
+        "column": 17,
+        "context": "assert loads(dumps(config)) == config",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function"
+        ],
+        "path": "tests/test_writer.py",
+        "name": "dumps",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_writer.py",
+        "source_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_dumps_emits_v2_only::function",
+        "raw_name": "dumps",
+        "target_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "qualifier": "",
+        "line": 11,
+        "column": 22,
+        "context": "data = json.loads(dumps(Config(\"demo\", \"localhost\", 1234, False)))",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function"
+        ],
+        "path": "tests/test_writer.py",
+        "name": "dumps",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_writer.py",
+        "source_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_v1_input_is_read_but_never_written_back_as_v1::function",
+        "raw_name": "dumps",
+        "target_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "qualifier": "",
+        "line": 22,
+        "column": 22,
+        "context": "data = json.loads(dumps(config))",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function"
+        ],
+        "path": "tests/test_writer.py",
+        "name": "dumps",
+        "unresolved_target": null
+      }
+    ],
+    "confidence_score": 0.4,
+    "source": "persistent-identity-code-index"
+  },
+  "symbol:configkit/config/writer.py::configkit.config.writer.to_dict::function": {
+    "definition": {
+      "symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.to_dict::function",
+      "name": "to_dict",
+      "qualified_name": "configkit.config.writer.to_dict",
+      "kind": "function",
+      "path": "configkit/config/writer.py",
+      "file_path": "configkit/config/writer.py",
+      "module_id": "module:configkit",
+      "language": "python",
+      "line": 4,
+      "end_line": 13,
+      "signature": "def to_dict(config)",
+      "exported": true,
+      "confidence": 0.99,
+      "source": "python-ast",
+      "capability_tier": "ast-native"
+    },
+    "callers": [
+      {
+        "caller": "migrate_file",
+        "callee": "to_dict",
+        "path": "configkit/config/migrate.py",
+        "call_site_file": "configkit/config/migrate.py",
+        "line": 9,
+        "caller_symbol_id": "symbol:configkit/config/migrate.py::configkit.config.migrate.migrate_file::function",
+        "callee_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.to_dict::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      },
+      {
+        "caller": "dumps",
+        "callee": "to_dict",
+        "path": "configkit/config/writer.py",
+        "call_site_file": "configkit/config/writer.py",
+        "line": 17,
+        "caller_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "callee_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.to_dict::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "exact-same-module",
+        "confidence": 0.99,
+        "source": "python-ast"
+      }
+    ],
+    "callees": [],
+    "imports": [
+      {
+        "module": "json",
+        "binding": "json",
+        "imported_name": null,
+        "alias": null,
+        "line": 1,
+        "kind": "import",
+        "confidence": 1.0
+      }
+    ],
+    "references": [
+      {
+        "source_file": "configkit/config/migrate.py",
+        "source_symbol_id": "symbol:configkit/config/migrate.py::configkit.config.migrate.migrate_file::function",
+        "raw_name": "to_dict",
+        "target_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.to_dict::function",
+        "qualifier": "",
+        "line": 9,
+        "column": 11,
+        "context": "return to_dict(config)",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/errors.py::configkit.config.errors.ConfigError.to_dict::method",
+          "symbol:configkit/config/writer.py::configkit.config.writer.to_dict::function"
+        ],
+        "path": "configkit/config/migrate.py",
+        "name": "to_dict",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "configkit/config/writer.py",
+        "source_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "raw_name": "to_dict",
+        "target_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.to_dict::function",
+        "qualifier": "",
+        "line": 17,
+        "column": 22,
+        "context": "return json.dumps(to_dict(config), sort_keys=True) + \"\\n\"",
+        "resolution_kind": "exact-same-module",
+        "confidence": 0.99,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/errors.py::configkit.config.errors.ConfigError.to_dict::method",
+          "symbol:configkit/config/writer.py::configkit.config.writer.to_dict::function"
+        ],
+        "path": "configkit/config/writer.py",
+        "name": "to_dict",
+        "unresolved_target": null
+      }
+    ],
+    "confidence_score": 0.98,
+    "source": "persistent-identity-code-index"
+  },
+  "symbol:configkit/config/parser.py::configkit.config.parser.loads::function": {
+    "definition": {
+      "symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+      "name": "loads",
+      "qualified_name": "configkit.config.parser.loads",
+      "kind": "function",
+      "path": "configkit/config/parser.py",
+      "file_path": "configkit/config/parser.py",
+      "module_id": "module:configkit",
+      "language": "python",
+      "line": 8,
+      "end_line": 14,
+      "signature": "def loads(text)",
+      "exported": true,
+      "confidence": 0.99,
+      "source": "python-ast",
+      "capability_tier": "ast-native"
+    },
+    "callers": [
+      {
+        "caller": "err",
+        "callee": "loads",
+        "path": "_scratch_check.py",
+        "call_site_file": "_scratch_check.py",
+        "line": 18,
+        "caller_symbol_id": "symbol:_scratch_check.py::_scratch_check.err::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "load",
+        "callee": "loads",
+        "path": "configkit/store.py",
+        "call_site_file": "configkit/store.py",
+        "line": 7,
+        "caller_symbol_id": "symbol:configkit/store.py::configkit.store.load::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_v1",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 11,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_bad_port",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 16,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_bad_port::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_v1_and_v2_decode_identically",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 20,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1_and_v2_decode_identically::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_v1_and_v2_decode_identically",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 20,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1_and_v2_decode_identically::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_missing_version_is_v1",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 24,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_missing_version_is_v1::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_enabled_defaults_to_true",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 28,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_enabled_defaults_to_true::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_enabled_defaults_to_true",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 29,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_enabled_defaults_to_true::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_unknown_fields_are_ignored",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 33,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_unknown_fields_are_ignored::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_unknown_fields_are_ignored",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 34,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_unknown_fields_are_ignored::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_error_shape",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 63,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_error_shape::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_only_first_problem_is_reported",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 70,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_only_first_problem_is_reported::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_only_first_problem_is_reported",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 73,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_only_first_problem_is_reported::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_only_first_problem_is_reported",
+        "callee": "loads",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 76,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_only_first_problem_is_reported::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_roundtrip",
+        "callee": "loads",
+        "path": "tests/test_writer.py",
+        "call_site_file": "tests/test_writer.py",
+        "line": 7,
+        "caller_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_roundtrip::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_v1_input_is_read_but_never_written_back_as_v1",
+        "callee": "loads",
+        "path": "tests/test_writer.py",
+        "call_site_file": "tests/test_writer.py",
+        "line": 21,
+        "caller_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_v1_input_is_read_but_never_written_back_as_v1::function",
+        "callee_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      }
+    ],
+    "callees": [
+      {
+        "caller": "loads",
+        "callee": "loads",
+        "path": "configkit/config/parser.py",
+        "call_site_file": "configkit/config/parser.py",
+        "line": 10,
+        "caller_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "callee_symbol_id": null,
+        "unresolved_target": {
+          "raw_name": "loads",
+          "qualifier": "json",
+          "candidates": [
+            "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+          ],
+          "confidence": 0.4
+        },
+        "qualifier": "json",
+        "resolution_kind": "heuristic-candidates",
+        "confidence": 0.4,
+        "source": "python-ast"
+      },
+      {
+        "caller": "loads",
+        "callee": "ConfigError",
+        "path": "configkit/config/parser.py",
+        "call_site_file": "configkit/config/parser.py",
+        "line": 12,
+        "caller_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "callee_symbol_id": "symbol:configkit/config/errors.py::configkit.config.errors.ConfigError::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      },
+      {
+        "caller": "loads",
+        "callee": "validate",
+        "path": "configkit/config/parser.py",
+        "call_site_file": "configkit/config/parser.py",
+        "line": 13,
+        "caller_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "callee_symbol_id": "symbol:configkit/config/validation.py::configkit.config.validation.validate::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      },
+      {
+        "caller": "loads",
+        "callee": "Config",
+        "path": "configkit/config/parser.py",
+        "call_site_file": "configkit/config/parser.py",
+        "line": 14,
+        "caller_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      }
+    ],
+    "imports": [
+      {
+        "module": "json",
+        "binding": "json",
+        "imported_name": null,
+        "alias": null,
+        "line": 1,
+        "kind": "import",
+        "confidence": 1.0
+      },
+      {
+        "module": ".errors",
+        "binding": "ConfigError",
+        "imported_name": "ConfigError",
+        "alias": null,
+        "line": 3,
+        "kind": "from-import",
+        "confidence": 1.0
+      },
+      {
+        "module": ".model",
+        "binding": "Config",
+        "imported_name": "Config",
+        "alias": null,
+        "line": 4,
+        "kind": "from-import",
+        "confidence": 1.0
+      },
+      {
+        "module": ".validation",
+        "binding": "validate",
+        "imported_name": "validate",
+        "alias": null,
+        "line": 5,
+        "kind": "from-import",
+        "confidence": 1.0
+      }
+    ],
+    "references": [
+      {
+        "source_file": "_scratch_check.py",
+        "source_symbol_id": null,
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 11,
+        "column": 6,
+        "context": "print(loads(v1), loads(v2))",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "_scratch_check.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "_scratch_check.py",
+        "source_symbol_id": null,
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 11,
+        "column": 17,
+        "context": "print(loads(v1), loads(v2))",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "_scratch_check.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "_scratch_check.py",
+        "source_symbol_id": null,
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 12,
+        "column": 6,
+        "context": "print(loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}'))",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "_scratch_check.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "_scratch_check.py",
+        "source_symbol_id": null,
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 13,
+        "column": 6,
+        "context": "print(loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080,\"zzz\":1,\"service\":{\"name\":\"x\"}}'))",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "_scratch_check.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "_scratch_check.py",
+        "source_symbol_id": "symbol:_scratch_check.py::_scratch_check.err::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 18,
+        "column": 8,
+        "context": "loads(t)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "_scratch_check.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "configkit/store.py",
+        "source_symbol_id": "symbol:configkit/store.py::configkit.store.load::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 7,
+        "column": 11,
+        "context": "return loads(config_path(path).read_text())",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "configkit/store.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 11,
+        "column": 11,
+        "context": "assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_bad_port::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 16,
+        "column": 8,
+        "context": "loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":0}')",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1_and_v2_decode_identically::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 20,
+        "column": 11,
+        "context": "assert loads(V1) == loads(V2) == Config(\"demo\", \"localhost\", 8080, True)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1_and_v2_decode_identically::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 20,
+        "column": 24,
+        "context": "assert loads(V1) == loads(V2) == Config(\"demo\", \"localhost\", 8080, True)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_missing_version_is_v1::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 24,
+        "column": 11,
+        "context": "assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_enabled_defaults_to_true::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 28,
+        "column": 11,
+        "context": "assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}').enabled is True",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_enabled_defaults_to_true::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 29,
+        "column": 11,
+        "context": "assert loads('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1}}}').enabled is True",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_unknown_fields_are_ignored::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 33,
+        "column": 11,
+        "context": "assert loads('{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"zzz\":1}') == Config(\"d\", \"h\", 1)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_unknown_fields_are_ignored::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 34,
+        "column": 11,
+        "context": "assert loads('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1},\"extra\":2},\"other\":{}}') == Config(\"d\", \"h\", 1)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_error_shape::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 63,
+        "column": 8,
+        "context": "loads(text)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_only_first_problem_is_reported::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 70,
+        "column": 8,
+        "context": "loads('{\"name\":\"\",\"host\":\"\",\"port\":0,\"enabled\":\"x\"}')",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_only_first_problem_is_reported::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 73,
+        "column": 8,
+        "context": "loads('{\"name\":\"d\",\"host\":\"\",\"port\":0,\"enabled\":\"x\"}')",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_only_first_problem_is_reported::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 76,
+        "column": 8,
+        "context": "loads('{\"name\":\"d\",\"host\":\"h\",\"port\":0,\"enabled\":\"x\"}')",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "loads",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_writer.py",
+        "source_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_roundtrip::function",
+        "raw_name": "loads",
+        "target_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "qualifier": "",
+        "line": 7,
+        "column": 11,
+        "context": "assert loads(dumps(config)) == config",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/parser.py::configkit.config.parser.loads::function"
+        ],
+        "path": "tests/test_writer.py",
+        "name": "loads",
+        "unresolved_target": null
+      }
+    ],
+    "confidence_score": 0.4,
+    "source": "persistent-identity-code-index"
+  },
+  "symbol:configkit/store.py::configkit.store.save::function": {
+    "definition": {
+      "symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+      "name": "save",
+      "qualified_name": "configkit.store.save",
+      "kind": "function",
+      "path": "configkit/store.py",
+      "file_path": "configkit/store.py",
+      "module_id": "module:configkit",
+      "language": "python",
+      "line": 10,
+      "end_line": 12,
+      "signature": "def save(path, config)",
+      "exported": true,
+      "confidence": 0.99,
+      "source": "python-ast",
+      "capability_tier": "ast-native"
+    },
+    "callers": [
+      {
+        "caller": "migrate_file",
+        "callee": "save",
+        "path": "configkit/config/migrate.py",
+        "call_site_file": "configkit/config/migrate.py",
+        "line": 8,
+        "caller_symbol_id": "symbol:configkit/config/migrate.py::configkit.config.migrate.migrate_file::function",
+        "callee_symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      },
+      {
+        "caller": "export_config",
+        "callee": "save",
+        "path": "configkit/service.py",
+        "call_site_file": "configkit/service.py",
+        "line": 11,
+        "caller_symbol_id": "symbol:configkit/service.py::configkit.service.export_config::function",
+        "callee_symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      }
+    ],
+    "callees": [
+      {
+        "caller": "save",
+        "callee": "dumps",
+        "path": "configkit/store.py",
+        "call_site_file": "configkit/store.py",
+        "line": 11,
+        "caller_symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+        "callee_symbol_id": "symbol:configkit/config/writer.py::configkit.config.writer.dumps::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      },
+      {
+        "caller": "save",
+        "callee": "write_text",
+        "path": "configkit/store.py",
+        "call_site_file": "configkit/store.py",
+        "line": 12,
+        "caller_symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+        "callee_symbol_id": null,
+        "unresolved_target": {
+          "raw_name": "write_text",
+          "qualifier": "",
+          "candidates": [],
+          "confidence": 0.2
+        },
+        "qualifier": "",
+        "resolution_kind": "unresolved",
+        "confidence": 0.2,
+        "source": "python-ast"
+      },
+      {
+        "caller": "save",
+        "callee": "config_path",
+        "path": "configkit/store.py",
+        "call_site_file": "configkit/store.py",
+        "line": 12,
+        "caller_symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+        "callee_symbol_id": "symbol:configkit/paths.py::configkit.paths.config_path::function",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      }
+    ],
+    "imports": [
+      {
+        "module": ".config.parser",
+        "binding": "loads",
+        "imported_name": "loads",
+        "alias": null,
+        "line": 1,
+        "kind": "from-import",
+        "confidence": 1.0
+      },
+      {
+        "module": ".config.writer",
+        "binding": "dumps",
+        "imported_name": "dumps",
+        "alias": null,
+        "line": 2,
+        "kind": "from-import",
+        "confidence": 1.0
+      },
+      {
+        "module": ".paths",
+        "binding": "config_path",
+        "imported_name": "config_path",
+        "alias": null,
+        "line": 3,
+        "kind": "from-import",
+        "confidence": 1.0
+      }
+    ],
+    "references": [
+      {
+        "source_file": "configkit/config/migrate.py",
+        "source_symbol_id": "symbol:configkit/config/migrate.py::configkit.config.migrate.migrate_file::function",
+        "raw_name": "save",
+        "target_symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+        "qualifier": "",
+        "line": 8,
+        "column": 8,
+        "context": "save(path, config)",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/store.py::configkit.store.save::function"
+        ],
+        "path": "configkit/config/migrate.py",
+        "name": "save",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "configkit/service.py",
+        "source_symbol_id": "symbol:configkit/service.py::configkit.service.export_config::function",
+        "raw_name": "save",
+        "target_symbol_id": "symbol:configkit/store.py::configkit.store.save::function",
+        "qualifier": "",
+        "line": 11,
+        "column": 4,
+        "context": "save(destination, config)",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/store.py::configkit.store.save::function"
+        ],
+        "path": "configkit/service.py",
+        "name": "save",
+        "unresolved_target": null
+      }
+    ],
+    "confidence_score": 0.2,
+    "source": "persistent-identity-code-index"
+  },
+  "symbol:configkit/config/model.py::configkit.config.model.Config::class": {
+    "definition": {
+      "symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+      "name": "Config",
+      "qualified_name": "configkit.config.model.Config",
+      "kind": "class",
+      "path": "configkit/config/model.py",
+      "file_path": "configkit/config/model.py",
+      "module_id": "module:configkit",
+      "language": "python",
+      "line": 5,
+      "end_line": 9,
+      "signature": "class Config",
+      "exported": true,
+      "confidence": 0.99,
+      "source": "python-ast",
+      "capability_tier": "ast-native"
+    },
+    "callers": [
+      {
+        "caller": "loads",
+        "callee": "Config",
+        "path": "configkit/config/parser.py",
+        "call_site_file": "configkit/config/parser.py",
+        "line": 14,
+        "caller_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_v1",
+        "callee": "Config",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 11,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1::function",
+        "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_v1_and_v2_decode_identically",
+        "callee": "Config",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 20,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1_and_v2_decode_identically::function",
+        "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_missing_version_is_v1",
+        "callee": "Config",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 24,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_missing_version_is_v1::function",
+        "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_unknown_fields_are_ignored",
+        "callee": "Config",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 33,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_unknown_fields_are_ignored::function",
+        "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_unknown_fields_are_ignored",
+        "callee": "Config",
+        "path": "tests/test_parser.py",
+        "call_site_file": "tests/test_parser.py",
+        "line": 34,
+        "caller_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_unknown_fields_are_ignored::function",
+        "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_roundtrip",
+        "callee": "Config",
+        "path": "tests/test_writer.py",
+        "call_site_file": "tests/test_writer.py",
+        "line": 6,
+        "caller_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_roundtrip::function",
+        "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      },
+      {
+        "caller": "test_dumps_emits_v2_only",
+        "callee": "Config",
+        "path": "tests/test_writer.py",
+        "call_site_file": "tests/test_writer.py",
+        "line": 11,
+        "caller_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_dumps_emits_v2_only::function",
+        "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast"
+      }
+    ],
+    "callees": [],
+    "imports": [
+      {
+        "module": "dataclasses",
+        "binding": "dataclass",
+        "imported_name": "dataclass",
+        "alias": null,
+        "line": 1,
+        "kind": "from-import",
+        "confidence": 1.0
+      }
+    ],
+    "references": [
+      {
+        "source_file": "configkit/config/parser.py",
+        "source_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+        "raw_name": "Config",
+        "target_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "qualifier": "",
+        "line": 14,
+        "column": 11,
+        "context": "return Config(values[\"name\"], values[\"host\"], values[\"port\"], values[\"enabled\"])",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/model.py::configkit.config.model.Config::class"
+        ],
+        "path": "configkit/config/parser.py",
+        "name": "Config",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1::function",
+        "raw_name": "Config",
+        "target_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "qualifier": "",
+        "line": 11,
+        "column": 70,
+        "context": "assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/model.py::configkit.config.model.Config::class"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "Config",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_v1_and_v2_decode_identically::function",
+        "raw_name": "Config",
+        "target_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "qualifier": "",
+        "line": 20,
+        "column": 37,
+        "context": "assert loads(V1) == loads(V2) == Config(\"demo\", \"localhost\", 8080, True)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/model.py::configkit.config.model.Config::class"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "Config",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_missing_version_is_v1::function",
+        "raw_name": "Config",
+        "target_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "qualifier": "",
+        "line": 24,
+        "column": 70,
+        "context": "assert loads('{\"name\":\"demo\",\"host\":\"localhost\",\"port\":8080}') == Config(\"demo\", \"localhost\", 8080)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/model.py::configkit.config.model.Config::class"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "Config",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_unknown_fields_are_ignored::function",
+        "raw_name": "Config",
+        "target_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "qualifier": "",
+        "line": 33,
+        "column": 64,
+        "context": "assert loads('{\"name\":\"d\",\"host\":\"h\",\"port\":1,\"zzz\":1}') == Config(\"d\", \"h\", 1)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/model.py::configkit.config.model.Config::class"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "Config",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_parser.py",
+        "source_symbol_id": "symbol:tests/test_parser.py::tests.test_parser.test_unknown_fields_are_ignored::function",
+        "raw_name": "Config",
+        "target_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "qualifier": "",
+        "line": 34,
+        "column": 114,
+        "context": "assert loads('{\"version\":2,\"service\":{\"name\":\"d\",\"endpoint\":{\"host\":\"h\",\"port\":1},\"extra\":2},\"other\":{}}') == Config(\"d\", \"h\", 1)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/model.py::configkit.config.model.Config::class"
+        ],
+        "path": "tests/test_parser.py",
+        "name": "Config",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_writer.py",
+        "source_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_roundtrip::function",
+        "raw_name": "Config",
+        "target_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "qualifier": "",
+        "line": 6,
+        "column": 13,
+        "context": "config = Config(\"demo\", \"localhost\", 1234, False)",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/model.py::configkit.config.model.Config::class"
+        ],
+        "path": "tests/test_writer.py",
+        "name": "Config",
+        "unresolved_target": null
+      },
+      {
+        "source_file": "tests/test_writer.py",
+        "source_symbol_id": "symbol:tests/test_writer.py::tests.test_writer.test_dumps_emits_v2_only::function",
+        "raw_name": "Config",
+        "target_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+        "qualifier": "",
+        "line": 11,
+        "column": 28,
+        "context": "data = json.loads(dumps(Config(\"demo\", \"localhost\", 1234, False)))",
+        "resolution_kind": "unique-repository-symbol",
+        "confidence": 0.8,
+        "source": "python-ast",
+        "candidates": [
+          "symbol:configkit/config/model.py::configkit.config.model.Config::class"
+        ],
+        "path": "tests/test_writer.py",
+        "name": "Config",
+        "unresolved_target": null
+      }
+    ],
+    "confidence_score": 0.8,
+    "source": "persistent-identity-code-index"
+  }
+}

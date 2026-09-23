@@ -1,0 +1,13 @@
+{
+  "formalization": [
+    "migrate_file -> load",
+    "load -> validate",
+    "validation failure -> no save",
+    "therefore no overwrite"
+  ],
+  "migration_local_validity": true,
+  "global_claim": "all invalid writes safe",
+  "global_claim_supported": false,
+  "illegal_generalization": "yes: migration-path proof was promoted to all write surfaces",
+  "cause_class": "packet_missing_P2 plus reviewer unsupported global inference"
+}

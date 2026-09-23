@@ -1,0 +1,17 @@
+{
+  "baseline": "949f867892ab4dad56f5914ecad4276be5e99757",
+  "origin_main": "949f867892ab4dad56f5914ecad4276be5e99757",
+  "provider_requests": 0,
+  "main_requests": 0,
+  "planner_requests": 0,
+  "embedding_requests": 0,
+  "infcodex_requests": 0,
+  "production_source_changed": false,
+  "frozen_c_workspace_changed": false,
+  "prior_evidence_changed": false,
+  "hidden_evaluator_leaked": false,
+  "counterexample_reproduced": true,
+  "migration_preserves_input": true,
+  "classification": "PROOF-AUDIT: MIXED",
+  "files_hashed": 22
+}
