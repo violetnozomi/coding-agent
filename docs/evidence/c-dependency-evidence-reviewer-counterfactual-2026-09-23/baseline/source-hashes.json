@@ -1,0 +1,9 @@
+{
+  "head": "ce93e9c4f97dd6492e5f6fcdf9d54ecd1b8bc5ec",
+  "origin_main": "ce93e9c4f97dd6492e5f6fcdf9d54ecd1b8bc5ec",
+  "worktree_clean": true,
+  "files": {
+    "nz_coder/runtime/verification/sidecar_verifier.py": "953587c4692a3e854b51268085a8aafb920c13db37b1fb45f251ff67cd2524e7",
+    "nz_coder/runtime/verification/dependency_evidence.py": "092afc360f0e0ea66bac6de987d433b177a7150187f4bcb08bab3058d6d24ad1"
+  }
+}

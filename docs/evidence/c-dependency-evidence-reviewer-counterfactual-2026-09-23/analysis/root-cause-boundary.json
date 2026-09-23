@@ -1,0 +1,11 @@
+{
+  "historical_model_implementation_omission": true,
+  "old_diff_attribution_bug": true,
+  "diff_attribution_fix_sufficient": false,
+  "bounded_dependency_evidence_delivered": true,
+  "reviewer_still_accepts_known_bad_implementation": true,
+  "missing_dependency_evidence_unique_cause": false,
+  "remaining_cause": "unresolved between evidence topology beyond selected direct callers and semantic reviewer judgment",
+  "task_contract_or_ledger_changed": false,
+  "next_step": "offline evidence-sufficiency and semantic-proof audit; no immediate Core patch"
+}

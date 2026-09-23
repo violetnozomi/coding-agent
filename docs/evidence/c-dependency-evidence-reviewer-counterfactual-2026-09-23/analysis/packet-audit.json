@@ -1,0 +1,10 @@
+{
+  "authority_clause_present": true,
+  "bool_clause_present": true,
+  "writer_diff_present": true,
+  "store_save_present": true,
+  "verification_46_passed_present": true,
+  "hidden_evaluator_name_absent": true,
+  "acceptance_ratio_absent": true,
+  "oracle_absent": true
+}

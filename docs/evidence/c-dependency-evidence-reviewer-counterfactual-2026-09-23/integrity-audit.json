@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "classification": "CF-C2: ACCEPT",
+  "historical_files_checked": 3406,
+  "production_source_changed": false,
+  "frozen_c_workspace_unchanged": true,
+  "historical_evidence_unchanged": true,
+  "hidden_evaluator_leakage": false,
+  "physical_requests": 1,
+  "main_requests": 0,
+  "planner_requests": 0,
+  "embedding_requests": 0,
+  "infcodex_requests": 0,
+  "retries": 0,
+  "cost": "unknown",
+  "private_reasoning_fields": "absent"
+}

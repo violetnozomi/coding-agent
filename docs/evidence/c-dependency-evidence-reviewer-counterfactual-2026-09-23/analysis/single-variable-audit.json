@@ -1,0 +1,15 @@
+{
+  "baseline_request_sha256": "edf0e62c054aa16b79d13db6560e258af7897909458bc064688ab8ece537275b",
+  "counterfactual_request_sha256": "7c3b9cddcbc0bda2b5379463826b9b7fd76e420dfa61b16aea19dbdce20c5121",
+  "system_message_equal": true,
+  "model_equal": true,
+  "tool_schema_equal": true,
+  "thinking_equal": true,
+  "max_tokens_equal": true,
+  "transcript_authority_verification_final_answer_criteria_equal": true,
+  "file_edit_evidence_equal": true,
+  "expected_delta": "supporting_repository_evidence absent -> current production-generated bounded section",
+  "dependency_digest": "86cce2b6ed2a5330284d72da74baad6132bab6e336cd4f93ac8969483d34f5d4",
+  "dependency_chars": 889,
+  "clean": true
+}

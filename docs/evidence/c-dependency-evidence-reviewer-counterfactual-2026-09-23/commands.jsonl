@@ -1,0 +1,5 @@
+{"command":"git rev-parse HEAD; git rev-parse origin/main; git status --short","result":"ce93e9c4f97dd6492e5f6fcdf9d54ecd1b8bc5ec / equal / clean","network":false}
+{"command":"python docs/evidence/c-dependency-evidence-reviewer-counterfactual-2026-09-23/replay.py build","result":"BUILD PASS; no Provider request","network":false}
+{"command":"python -m ruff check replay.py","result":"All checks passed","network":false}
+{"command":"python replay.py send-once","result":"First two local preflight capture errors before network; then exactly one HTTP 200 physical request, verifier_ok accept, retries 0","network":true,"physical_requests":1}
+{"command":"python docs/evidence/c-dependency-evidence-reviewer-counterfactual-2026-09-23/verify.py","result":"PASS: 3406 historical files unchanged; one request, privacy, source and packet checks passed","network":false}

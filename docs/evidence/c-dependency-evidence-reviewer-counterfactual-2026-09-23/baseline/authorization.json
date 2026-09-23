@@ -1,0 +1,10 @@
+{
+  "authorized": true,
+  "source": "current user instruction",
+  "physical_requests": 1,
+  "main": 0,
+  "planner": 0,
+  "embedding": 0,
+  "infcodex": 0,
+  "retry": false
+}

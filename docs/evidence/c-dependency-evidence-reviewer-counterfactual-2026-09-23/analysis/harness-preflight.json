@@ -1,0 +1,14 @@
+{
+  "network_requests_before_final_send": 0,
+  "failures": [
+    {
+      "type": "local_capture_bug",
+      "detail": "Path.open returned file object; write_text called before network"
+    },
+    {
+      "type": "launch_marker_already_exists",
+      "detail": "first preflight launch marker correctly blocked second pre-network start"
+    }
+  ],
+  "authorization_consumed": false
+}
