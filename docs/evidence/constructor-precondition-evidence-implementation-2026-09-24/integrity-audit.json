@@ -1,0 +1,14 @@
+{
+  "production_diff": 0,
+  "paid_requests": 0,
+  "main_requests": 0,
+  "semantic_verifier_requests": 0,
+  "planner_requests": 0,
+  "embeddings": 0,
+  "infcodex_requests": 0,
+  "frozen_C_modified": false,
+  "new_AST_or_graph": false,
+  "network_guard": "existing offline_exec; IPv4/IPv6 denied",
+  "broad_regression": "not run: production unchanged",
+  "production_green": "not claimed"
+}

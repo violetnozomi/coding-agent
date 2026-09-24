@@ -1,0 +1,10 @@
+{
+  "source": "@decorator(\n    validate=True,\n    frozen=True,\n)\nclass Payload:\n    value: int\n",
+  "previous_envelope": {
+    "start_line": 5,
+    "end_line": 6,
+    "chars": 30,
+    "truncated": false,
+    "text": "class Payload:\n    value: int\n"
+  }
+}

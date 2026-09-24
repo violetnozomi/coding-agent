@@ -1,0 +1,72 @@
+{
+  "source": "from model import Payload, AuditMarker\ndef decode(value):\n    AuditMarker()\n    return Payload()\n",
+  "candidates": [
+    {
+      "definition": {
+        "symbol_id": "symbol:model.py::model.AuditMarker::class",
+        "name": "AuditMarker",
+        "qualified_name": "model.AuditMarker",
+        "kind": "class",
+        "path": "model.py",
+        "file_path": "model.py",
+        "module_id": "module:model.py",
+        "language": "python",
+        "line": 3,
+        "end_line": 4,
+        "signature": "class AuditMarker",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      },
+      "edge": {
+        "caller": "decode",
+        "callee": "AuditMarker",
+        "path": "factory.py",
+        "call_site_file": "factory.py",
+        "line": 3,
+        "caller_symbol_id": "symbol:factory.py::factory.decode::function",
+        "callee_symbol_id": "symbol:model.py::model.AuditMarker::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      }
+    },
+    {
+      "definition": {
+        "symbol_id": "symbol:model.py::model.Payload::class",
+        "name": "Payload",
+        "qualified_name": "model.Payload",
+        "kind": "class",
+        "path": "model.py",
+        "file_path": "model.py",
+        "module_id": "module:model.py",
+        "language": "python",
+        "line": 1,
+        "end_line": 2,
+        "signature": "class Payload",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      },
+      "edge": {
+        "caller": "decode",
+        "callee": "Payload",
+        "path": "factory.py",
+        "call_site_file": "factory.py",
+        "line": 4,
+        "caller_symbol_id": "symbol:factory.py::factory.decode::function",
+        "callee_symbol_id": "symbol:model.py::model.Payload::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast"
+      }
+    }
+  ],
+  "relevance_filter_exists": false
+}

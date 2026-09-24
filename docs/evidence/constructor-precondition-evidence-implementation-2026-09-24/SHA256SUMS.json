@@ -1,0 +1,19 @@
+{
+  "PLAN.md": "2c545670f95a3d74b5fdf999564461398a6c61d2cd098721690c05991573a6c3",
+  "README.md": "290783311748473e933a8cedd64f27a358fa1fd8bcbad6c0f4464303f19bbbba",
+  "after/existing-dependency-tests.txt": "b27c57f2950048b2c86570195c96b4f84b70490f24c80b0c0d2371ec9306b9d5",
+  "after/observation-tests.txt": "8ca0efc7bcf6b1286109286e28c62df8a8c38a6b5d723244f9249404b4fbc059",
+  "analysis/multiline-counterexample.json": "3d05b0dfddd90b322a3acaf9d45a03bea30e2960dcf8f1815d1cb899f785ee88",
+  "analysis/premise-coverage.json": "cab37202eec565eaa5f8b72f5d089b3d7068a823d0aa32082593afb2c376fdde",
+  "analysis/relevance-counterexample.json": "f8f66a3984c7ab9d1214baa7b16b0c232e12595d57a62166f4e43295908c5edb",
+  "analysis/root-cause-boundary.json": "7e0723daf6328c78c6ccf02a100d1f7a4386fb000ec3a590605222655c60f5d5",
+  "analysis/truncation-counterexample.json": "79f7855899d67dd02bf307bee36d766b037dad1899f64afe57f8f59fa3832774",
+  "baseline/source-hashes.json": "350c7e1737d352c8d9733dd7e6553a58629dc413d16c00ba85de168291fb84b5",
+  "commands.jsonl": "a329384d3a9b61b4f96c82498e6b0f2cb8ba1d3fa7594d63d9f0e1dbe0184ec7",
+  "integrity-audit.json": "7c1348a1bd7e4358ff46b082e30c2665e359e2e6ce9bb5b0e58d8effa7492228",
+  "red/c-packet.json": "0db327860faff468a11837ae174e444aae28aab4cf1944bf2ee1390244e7d163",
+  "red/focused-tests.txt": "bddea66246bf855421e123471f9c0583d07d0f1421ef6a4fac0c7ff77fb1cc44",
+  "red/generic-packet.json": "122a7245a94f754394a4b3d23eb7340e6cdaea60419cb1db5a5d1e839ef736e9",
+  "test_preconditions.py": "89bc0ad44fe4c59132248452ffd03ab870ea9b543f64ed99b5857f5e4c15639a",
+  "verify.py": "608cdd9ba013b57bf4516de1d81f48b724d1abe9c3a40fa89952c255e8294887"
+}

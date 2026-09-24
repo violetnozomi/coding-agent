@@ -1,0 +1,10 @@
+{
+  "classification": "PRECOND-EVIDENCE: DESIGN-NOT-IMPLEMENTABLE",
+  "scope": "current semantic relevance contract is not demonstrated by Route A predicates",
+  "natural_c_class_edge_proven": true,
+  "generic_and_c_red": true,
+  "new_graph_required_proven": false,
+  "production_changed": false,
+  "reviewer_behavior": "unobserved",
+  "next_step": "resolve unrelated-class relevance contract before implementation"
+}

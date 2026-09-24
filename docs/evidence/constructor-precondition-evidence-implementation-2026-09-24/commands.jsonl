@@ -1,0 +1,5 @@
+{"command": "git rev-parse HEAD; git rev-parse origin/main; git status --short", "result": "baseline matches; clean"}
+{"command": "offline_exec pytest test_preconditions.py", "result": "2 failed, 3 passed; genuine baseline RED preserved"}
+{"command": "offline_exec pytest test_preconditions.py -k \"not packet_red\"", "result": "3 passed, 2 deselected"}
+{"command": "offline_exec pytest tests/runtime/test_semantic_dependency_evidence.py", "result": "32 passed"}
+{"command": "ruff check test_preconditions.py", "result": "passed"}

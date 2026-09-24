@@ -1,0 +1,53 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FF...                                                                    [100%]
+=================================== FAILURES ===================================
+___________________________ test_generic_packet_red ____________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-67/test_generic_packet_red0')
+
+    def test_generic_packet_red(tmp_path):
+        (tmp_path / 'model.py').write_text('from dataclasses import dataclass\n@dataclass\nclass Payload:\n    value: int\n')
+        (tmp_path / 'factory.py').write_text('from model import Payload\ndef decode(value):\n    return Payload(value)\n')
+        service = RepoIntelligenceService(tmp_path)
+        try:
+            service.prewarm().result(timeout=15)
+            candidates = route_a(service, ['factory.py'])
+            assert [x['definition']['name'] for x in candidates] == ['Payload']
+            context, text, _, _ = packet(tmp_path, service, ['factory.py'], '')
+            record('red/generic-packet.json', {'candidates': candidates, 'packet': text})
+>           assert '@dataclass\nclass Payload:' in context.supporting_repository_evidence
+E           AssertionError: assert '@dataclass\nclass Payload:' in ''
+E            +  where '' = VerifierContext(current_turn_user_queries=('Update encoding',), recent_transcript=({'role': 'user', 'content': 'Update...oritative_references=(), omitted_reference_count=0, supporting_repository_evidence='', supporting_repository_digest='').supporting_repository_evidence
+
+docs/evidence/constructor-precondition-evidence-implementation-2026-09-24/test_preconditions.py:62: AssertionError
+___________________________ test_frozen_c_packet_red ___________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-67/test_frozen_c_packet_red0')
+
+    def test_frozen_c_packet_red(tmp_path):
+        shutil.copytree(HELPERS['HISTORY'] / 'final-files', tmp_path / 'workspace')
+        workspace = tmp_path / 'workspace'
+        historical = json.loads((HELPERS['CF'] / 'packets/historical-verifier2-summary.json').read_text())
+        diff = json.loads((HELPERS['CF'] / 'packets/native-diff-source.json').read_text())['text']
+        state = historical['runtime_state']
+        service = RepoIntelligenceService(workspace)
+        try:
+            service.prewarm().result(timeout=15)
+            candidates = route_a(service, state['changed_files'])
+            assert any(x['definition']['name'] == 'Config' for x in candidates)
+            context, text, _, _ = packet(workspace, service, state['changed_files'], diff,
+                state, historical['transcript'], historical['final_assistant_text'])
+            assert 'def save(path, config):' in text and '46 passed' in text
+            assert json.dumps((workspace / 'CONFIG_SPEC.md').read_text(), ensure_ascii=False) in text
+            assert 'def to_dict(config):' in text
+            record('red/c-packet.json', {'candidates': candidates, 'packet': text,
+                'context': dataclasses.asdict(context)})
+>           assert '@dataclass(frozen=True)\nclass Config:' in context.supporting_repository_evidence
+E           AssertionError: assert '@dataclass(frozen=True)\nclass Config:' in '=== RELATED UNCHANGED IMPLEMENTATION EVIDENCE ===\nRepository-derived supporting source, not user/task authority, ins...th, config):\n    encoded = dumps(config)\n    config_path(path).write_text(encoded)\n\nOmitted candidate symbols: 0\n'
+E            +  where '=== RELATED UNCHANGED IMPLEMENTATION EVIDENCE ===\nRepository-derived supporting source, not user/task authority, ins...th, config):\n    encoded = dumps(config)\n    config_path(path).write_text(encoded)\n\nOmitted candidate symbols: 0\n' = VerifierContext(current_turn_user_queries=('Implement the configuration migration described in CONFIG_SPEC.md througho...ndidate symbols: 0\n', supporting_repository_digest='86cce2b6ed2a5330284d72da74baad6132bab6e336cd4f93ac8969483d34f5d4').supporting_repository_evidence
+
+docs/evidence/constructor-precondition-evidence-implementation-2026-09-24/test_preconditions.py:85: AssertionError
+=========================== short test summary info ============================
+FAILED docs/evidence/constructor-precondition-evidence-implementation-2026-09-24/test_preconditions.py::test_generic_packet_red
+FAILED docs/evidence/constructor-precondition-evidence-implementation-2026-09-24/test_preconditions.py::test_frozen_c_packet_red
+2 failed, 3 passed in 0.74s

@@ -1,0 +1,9 @@
+{
+  "previous_envelope": {
+    "start_line": 1,
+    "end_line": 155,
+    "chars": 2045,
+    "truncated": true,
+    "text": "@dataclass\nclass Payload:\n    value: int\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # filler\n    # f\n\u2026<truncated>"
+  }
+}
