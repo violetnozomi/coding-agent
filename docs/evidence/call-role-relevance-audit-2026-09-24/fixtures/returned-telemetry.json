@@ -1,0 +1,280 @@
+{
+  "source": "from model import Payload, AuditMarker, Validator, PayloadA, PayloadB, TelemetryMarker\nimport factory\ndef wrap(*args, **kwargs):\n    return None\ndef changed():\n    return TelemetryMarker()\n",
+  "expected": [
+    [
+      "TelemetryMarker",
+      "returned"
+    ]
+  ],
+  "calls": [
+    {
+      "raw": {
+        "caller_symbol_id": "symbol:subject.py::subject.changed::function",
+        "caller_name": "changed",
+        "raw_name": "TelemetryMarker",
+        "qualifier": "",
+        "call_site_file": "subject.py",
+        "line": 6,
+        "confidence": 0.98,
+        "source": "python-ast"
+      },
+      "proposed_usage_role": "returned",
+      "column": 11,
+      "direct_parent": "Return",
+      "persisted_edge": {
+        "id": 1,
+        "path": "subject.py",
+        "caller_symbol_id": "symbol:subject.py::subject.changed::function",
+        "caller_name": "changed",
+        "raw_name": "TelemetryMarker",
+        "qualifier": "",
+        "callee_symbol_id": "symbol:model.py::model.TelemetryMarker::class",
+        "line": 6,
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "candidates_json": "[\"symbol:model.py::model.TelemetryMarker::class\"]"
+      },
+      "target": {
+        "symbol_id": "symbol:model.py::model.TelemetryMarker::class",
+        "name": "TelemetryMarker",
+        "qualified_name": "model.TelemetryMarker",
+        "kind": "class",
+        "path": "model.py",
+        "file_path": "model.py",
+        "module_id": "module:model.py",
+        "language": "python",
+        "line": 16,
+        "end_line": 17,
+        "signature": "class TelemetryMarker",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      },
+      "candidate_eligible": true,
+      "caller_context": {
+        "symbol": "symbol:subject.py::subject.changed::function",
+        "symbol_id": "symbol:subject.py::subject.changed::function",
+        "qualified_name": "subject.changed",
+        "definition": {
+          "symbol_id": "symbol:subject.py::subject.changed::function",
+          "name": "changed",
+          "qualified_name": "subject.changed",
+          "kind": "function",
+          "path": "subject.py",
+          "file_path": "subject.py",
+          "module_id": "module:subject.py",
+          "language": "python",
+          "line": 5,
+          "end_line": 6,
+          "signature": "def changed()",
+          "exported": true,
+          "confidence": 0.99,
+          "source": "python-ast",
+          "capability_tier": "ast-native"
+        },
+        "definitions": [
+          {
+            "symbol_id": "symbol:subject.py::subject.changed::function",
+            "name": "changed",
+            "qualified_name": "subject.changed",
+            "kind": "function",
+            "path": "subject.py",
+            "file_path": "subject.py",
+            "module_id": "module:subject.py",
+            "language": "python",
+            "line": 5,
+            "end_line": 6,
+            "signature": "def changed()",
+            "exported": true,
+            "confidence": 0.99,
+            "source": "python-ast",
+            "capability_tier": "ast-native"
+          }
+        ],
+        "ambiguous": false,
+        "alternatives": [],
+        "module": "module:subject.py",
+        "signature": "def changed()",
+        "references": [],
+        "callers": [],
+        "callees": [
+          {
+            "caller": "changed",
+            "callee": "TelemetryMarker",
+            "path": "subject.py",
+            "call_site_file": "subject.py",
+            "line": 6,
+            "caller_symbol_id": "symbol:subject.py::subject.changed::function",
+            "callee_symbol_id": "symbol:model.py::model.TelemetryMarker::class",
+            "unresolved_target": null,
+            "qualifier": "",
+            "resolution_kind": "imported-binding",
+            "confidence": 0.98,
+            "source": "python-ast"
+          }
+        ],
+        "imports": [
+          {
+            "module": "model",
+            "binding": "Payload",
+            "imported_name": "Payload",
+            "alias": null,
+            "line": 1,
+            "kind": "from-import",
+            "confidence": 1.0
+          },
+          {
+            "module": "model",
+            "binding": "AuditMarker",
+            "imported_name": "AuditMarker",
+            "alias": null,
+            "line": 1,
+            "kind": "from-import",
+            "confidence": 1.0
+          },
+          {
+            "module": "model",
+            "binding": "Validator",
+            "imported_name": "Validator",
+            "alias": null,
+            "line": 1,
+            "kind": "from-import",
+            "confidence": 1.0
+          },
+          {
+            "module": "model",
+            "binding": "PayloadA",
+            "imported_name": "PayloadA",
+            "alias": null,
+            "line": 1,
+            "kind": "from-import",
+            "confidence": 1.0
+          },
+          {
+            "module": "model",
+            "binding": "PayloadB",
+            "imported_name": "PayloadB",
+            "alias": null,
+            "line": 1,
+            "kind": "from-import",
+            "confidence": 1.0
+          },
+          {
+            "module": "model",
+            "binding": "TelemetryMarker",
+            "imported_name": "TelemetryMarker",
+            "alias": null,
+            "line": 1,
+            "kind": "from-import",
+            "confidence": 1.0
+          },
+          {
+            "module": "factory",
+            "binding": "factory",
+            "imported_name": null,
+            "alias": null,
+            "line": 2,
+            "kind": "import",
+            "confidence": 1.0
+          }
+        ],
+        "exports": [
+          {
+            "symbol_id": "symbol:subject.py::subject.changed::function",
+            "name": "changed",
+            "qualified_name": "subject.changed",
+            "kind": "function",
+            "path": "subject.py",
+            "file_path": "subject.py",
+            "module_id": "module:subject.py",
+            "language": "python",
+            "line": 5,
+            "end_line": 6,
+            "signature": "def changed()",
+            "exported": true,
+            "confidence": 0.99,
+            "source": "python-ast",
+            "capability_tier": "ast-native"
+          }
+        ],
+        "related_tests": [],
+        "changed": false,
+        "freshness": "indexed",
+        "confidence": "structural",
+        "confidence_score": 0.98,
+        "source": "persistent-identity-code-index",
+        "capsule_version": 3,
+        "warnings": [],
+        "cache_hit": false,
+        "query_ms": 2.856
+      }
+    }
+  ],
+  "scope": {
+    "changed": [
+      "subject.py"
+    ],
+    "changed_files": [
+      "subject.py"
+    ],
+    "modules": [
+      "subject.py"
+    ],
+    "module_ids": [
+      "module:subject.py"
+    ],
+    "changed_symbols": [
+      "wrap",
+      "changed"
+    ],
+    "changed_symbol_ids": [
+      "symbol:subject.py::subject.wrap::function",
+      "symbol:subject.py::subject.changed::function"
+    ],
+    "direct_callers": [],
+    "impacted_callers": [],
+    "transitive_callers": [],
+    "transitive_edges": [],
+    "dependent_modules": [],
+    "dependent_module_ids": [],
+    "related": [],
+    "related_tests": [],
+    "public_api_exposure": [
+      "symbol:subject.py::subject.wrap::function",
+      "symbol:subject.py::subject.changed::function"
+    ],
+    "risk": "medium",
+    "truncated": false,
+    "budget": {
+      "max_depth": 1,
+      "node_limit": 100,
+      "time_budget_ms": 100.0,
+      "confidence_threshold": 0.0
+    },
+    "confidence": 0.99,
+    "freshness": "indexed",
+    "generation": 1,
+    "source": "module+identity-call-graph",
+    "capsule_version": 3,
+    "cache_hit": false,
+    "query_ms": 0.735
+  },
+  "sqlite_columns": [
+    "id",
+    "path",
+    "caller_symbol_id",
+    "caller_name",
+    "raw_name",
+    "qualifier",
+    "callee_symbol_id",
+    "line",
+    "resolution_kind",
+    "confidence",
+    "source",
+    "candidates_json"
+  ],
+  "schema_version": 3,
+  "snapshot_has_role": false
+}

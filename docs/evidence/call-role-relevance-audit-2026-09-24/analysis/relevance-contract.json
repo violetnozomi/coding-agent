@@ -1,0 +1,12 @@
+{
+  "proposed_eligibility": [
+    "resolved class",
+    "unchanged implementation",
+    "confidence >= .85",
+    "trusted returned role",
+    "changed caller"
+  ],
+  "semantic_relevance_proven": false,
+  "trigger_policy_proven": false,
+  "yielded_in_v1": false
+}

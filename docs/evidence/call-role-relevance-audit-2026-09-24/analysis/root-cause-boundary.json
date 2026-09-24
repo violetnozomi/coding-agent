@@ -1,0 +1,15 @@
+{
+  "classification": "CALL-ROLE: MIXED",
+  "local_role_feasible": true,
+  "metadata_feasibility": "STRUCTURAL-METADATA-SUFFICIENT",
+  "parent_context_lost_at": "RawCallRecord emission",
+  "second_parser_required": false,
+  "new_graph_required": false,
+  "semantic_trigger_missing": true,
+  "production_fix": false,
+  "envelope_blockers": [
+    "complete multiline decorators",
+    "unsafe truncation must omit"
+  ],
+  "reviewer_result": "unobserved"
+}

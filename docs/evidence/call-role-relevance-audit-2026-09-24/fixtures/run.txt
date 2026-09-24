@@ -1,0 +1,2 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+PASS: 18 production analyzer/index fixtures + frozen C replay; role is proposed, not persisted

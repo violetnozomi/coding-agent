@@ -1,0 +1,2 @@
+All checks passed!
+In-memory compile: audit.py and verify.py PASS

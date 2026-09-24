@@ -1,0 +1,8 @@
+{
+  "witnesses": [
+    "fixtures/assigned.json",
+    "fixtures/argument.json",
+    "fixtures/yielded.json"
+  ],
+  "reason": "assigned then returned, wrapped value and yield excluded from returned-only v1; no value propagation"
+}

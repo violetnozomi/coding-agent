@@ -1,0 +1,4 @@
+{"command": "git rev-parse HEAD; git rev-parse origin/main; git status --short", "result": "baseline matches, clean"}
+{"command": "python tests/evaluation/fixtures/offline_exec.py python docs/evidence/call-role-relevance-audit-2026-09-24/audit.py", "result": "18 generic cases + C pass"}
+{"command": "python -m ruff check docs/evidence/call-role-relevance-audit-2026-09-24", "result": "see static-checks.txt"}
+{"command": "python tests/evaluation/fixtures/offline_exec.py python docs/evidence/call-role-relevance-audit-2026-09-24/verify.py", "result": "see verification.txt"}

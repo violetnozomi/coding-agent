@@ -1,0 +1,6 @@
+{
+  "Python AST-native": "18 local fixtures + C proven",
+  "Tree-sitter JS/TS/Go": "unobserved; default unknown",
+  "lexical": "unknown; no inferred role",
+  "LSP": "resolves target not usage; preserve original role or unknown"
+}

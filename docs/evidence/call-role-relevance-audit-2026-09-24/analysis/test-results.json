@@ -1,0 +1,7 @@
+{
+  "generic_cases": 18,
+  "c_replay": "pass",
+  "production_metadata_modified": false,
+  "classification": "CALL-ROLE: MIXED",
+  "metadata_feasibility": "STRUCTURAL-METADATA-SUFFICIENT"
+}

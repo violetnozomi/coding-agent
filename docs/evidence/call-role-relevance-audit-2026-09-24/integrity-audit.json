@@ -1,0 +1,15 @@
+{
+  "baseline": "4695b46d89cce8366eaaf7941448bc972c476953",
+  "paid_requests": 0,
+  "main_requests": 0,
+  "semantic_verifier_requests": 0,
+  "planner_requests": 0,
+  "embedding_requests": 0,
+  "InfCodeX_requests": 0,
+  "production_diff": 0,
+  "frozen_workspace": "disposable copy only",
+  "schema_diff": 0,
+  "network": "IPv4/IPv6 denied by offline_exec; no Provider invoked",
+  "prototype": "in-memory proposed role at production RawCallRecord emission, not persisted",
+  "source_envelope": "not implemented"
+}

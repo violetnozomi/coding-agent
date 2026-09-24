@@ -1,0 +1,15 @@
+{
+  "roles": [
+    "returned",
+    "yielded",
+    "assigned",
+    "discarded",
+    "argument",
+    "condition",
+    "unknown"
+  ],
+  "scope": "Python AST-native concrete Call immediate structural use",
+  "not_dataflow": true,
+  "wrapped_expressions": "unknown",
+  "yield_from": "unknown"
+}

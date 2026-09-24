@@ -1,0 +1,13 @@
+{
+  "current_schema": 3,
+  "proposed_schema": 4,
+  "RawCallRecord": "append usage_role default unknown",
+  "CallEdge": "append usage_role default unknown",
+  "calls": "usage_role TEXT NOT NULL DEFAULT unknown",
+  "migration": "existing disposable-cache rebuild; next scan parses unchanged files anew",
+  "incremental": "_replace recomputes rows and advances generation",
+  "API": "additive default; propagate _row_edge/_edge_dict/callers/callees/snapshot",
+  "LSP": "preserve role; resolution source overwrite must not erase role provenance",
+  "cache": "service generation-keyed; later evidence digest must include projected role",
+  "implemented": false
+}

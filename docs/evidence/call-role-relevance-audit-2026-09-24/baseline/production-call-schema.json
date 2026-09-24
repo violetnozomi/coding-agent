@@ -1,0 +1,28 @@
+{
+  "version": 3,
+  "columns": [
+    "id",
+    "path",
+    "caller_symbol_id",
+    "caller_name",
+    "raw_name",
+    "qualifier",
+    "callee_symbol_id",
+    "line",
+    "resolution_kind",
+    "confidence",
+    "source",
+    "candidates_json"
+  ],
+  "RawCallRecord": [
+    "caller_symbol_id",
+    "caller_name",
+    "raw_name",
+    "qualifier",
+    "call_site_file",
+    "line",
+    "confidence",
+    "source"
+  ],
+  "snapshot_has_role": false
+}

@@ -1,0 +1,2 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+PASS: hashes, all production/history bytes, nested node roles, C proposal and no persisted role

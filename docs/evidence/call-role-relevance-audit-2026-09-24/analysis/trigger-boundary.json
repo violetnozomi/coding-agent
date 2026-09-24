@@ -1,0 +1,9 @@
+{
+  "semantic_pending": "semantic ledger pending only, not boundary classifier",
+  "changed_scope.risk": "structural edge/module/public-symbol impact",
+  "public_api_exposure": "exported changed symbols",
+  "persistent_data_deletion": "narrow category, not exhaustive serialization/persistence signal",
+  "collector_trigger": "Sidecar _evidence + changed paths + ready index",
+  "deterministic_serialization_persistence_classifier_found": false,
+  "missing": "explicit constructor-context eligibility/trigger policy distinct from desired semantic relevance"
+}

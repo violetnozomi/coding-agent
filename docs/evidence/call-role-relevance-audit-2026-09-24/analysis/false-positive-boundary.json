@@ -1,0 +1,5 @@
+{
+  "witness": "fixtures/returned-telemetry.json",
+  "candidate_selected": true,
+  "reason": "returned class role does not imply serialization or persistence obligation"
+}
