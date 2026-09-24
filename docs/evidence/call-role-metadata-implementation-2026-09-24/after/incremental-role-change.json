@@ -1,0 +1,260 @@
+{
+  "before": {
+    "symbol": "decode",
+    "symbol_id": "symbol:subject.py::subject.decode::function",
+    "qualified_name": "subject.decode",
+    "definition": {
+      "symbol_id": "symbol:subject.py::subject.decode::function",
+      "name": "decode",
+      "qualified_name": "subject.decode",
+      "kind": "function",
+      "path": "subject.py",
+      "file_path": "subject.py",
+      "module_id": "module:subject.py",
+      "language": "python",
+      "line": 2,
+      "end_line": 4,
+      "signature": "def decode()",
+      "exported": true,
+      "confidence": 0.99,
+      "source": "python-ast",
+      "capability_tier": "ast-native"
+    },
+    "definitions": [
+      {
+        "symbol_id": "symbol:subject.py::subject.decode::function",
+        "name": "decode",
+        "qualified_name": "subject.decode",
+        "kind": "function",
+        "path": "subject.py",
+        "file_path": "subject.py",
+        "module_id": "module:subject.py",
+        "language": "python",
+        "line": 2,
+        "end_line": 4,
+        "signature": "def decode()",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      }
+    ],
+    "ambiguous": false,
+    "alternatives": [],
+    "module": "module:subject.py",
+    "signature": "def decode()",
+    "references": [],
+    "callers": [],
+    "callees": [
+      {
+        "caller": "decode",
+        "callee": "AuditMarker",
+        "path": "subject.py",
+        "call_site_file": "subject.py",
+        "line": 3,
+        "caller_symbol_id": "symbol:subject.py::subject.decode::function",
+        "callee_symbol_id": "symbol:model.py::model.AuditMarker::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "usage_role": "discarded"
+      },
+      {
+        "caller": "decode",
+        "callee": "Payload",
+        "path": "subject.py",
+        "call_site_file": "subject.py",
+        "line": 4,
+        "caller_symbol_id": "symbol:subject.py::subject.decode::function",
+        "callee_symbol_id": "symbol:model.py::model.Payload::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "usage_role": "returned"
+      },
+      {
+        "caller": "decode",
+        "callee": "Payload",
+        "path": "subject.py",
+        "call_site_file": "subject.py",
+        "line": 4,
+        "caller_symbol_id": "symbol:subject.py::subject.decode::function",
+        "callee_symbol_id": "symbol:model.py::model.Payload::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "usage_role": "argument"
+      }
+    ],
+    "imports": [
+      {
+        "module": "model",
+        "binding": "Payload",
+        "imported_name": "Payload",
+        "alias": null,
+        "line": 1,
+        "kind": "from-import",
+        "confidence": 1.0
+      },
+      {
+        "module": "model",
+        "binding": "AuditMarker",
+        "imported_name": "AuditMarker",
+        "alias": null,
+        "line": 1,
+        "kind": "from-import",
+        "confidence": 1.0
+      }
+    ],
+    "exports": [
+      {
+        "symbol_id": "symbol:subject.py::subject.decode::function",
+        "name": "decode",
+        "qualified_name": "subject.decode",
+        "kind": "function",
+        "path": "subject.py",
+        "file_path": "subject.py",
+        "module_id": "module:subject.py",
+        "language": "python",
+        "line": 2,
+        "end_line": 4,
+        "signature": "def decode()",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      }
+    ],
+    "related_tests": [],
+    "changed": false,
+    "freshness": "indexed",
+    "confidence": "structural",
+    "confidence_score": 0.98,
+    "source": "persistent-identity-code-index",
+    "capsule_version": 3,
+    "warnings": [],
+    "cache_hit": false,
+    "query_ms": 2.534
+  },
+  "after": {
+    "symbol": "decode",
+    "symbol_id": "symbol:subject.py::subject.decode::function",
+    "qualified_name": "subject.decode",
+    "definition": {
+      "symbol_id": "symbol:subject.py::subject.decode::function",
+      "name": "decode",
+      "qualified_name": "subject.decode",
+      "kind": "function",
+      "path": "subject.py",
+      "file_path": "subject.py",
+      "module_id": "module:subject.py",
+      "language": "python",
+      "line": 2,
+      "end_line": 3,
+      "signature": "def decode()",
+      "exported": true,
+      "confidence": 0.99,
+      "source": "python-ast",
+      "capability_tier": "ast-native"
+    },
+    "definitions": [
+      {
+        "symbol_id": "symbol:subject.py::subject.decode::function",
+        "name": "decode",
+        "qualified_name": "subject.decode",
+        "kind": "function",
+        "path": "subject.py",
+        "file_path": "subject.py",
+        "module_id": "module:subject.py",
+        "language": "python",
+        "line": 2,
+        "end_line": 3,
+        "signature": "def decode()",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      }
+    ],
+    "ambiguous": false,
+    "alternatives": [],
+    "module": "module:subject.py",
+    "signature": "def decode()",
+    "references": [],
+    "callers": [],
+    "callees": [
+      {
+        "caller": "decode",
+        "callee": "AuditMarker",
+        "path": "subject.py",
+        "call_site_file": "subject.py",
+        "line": 3,
+        "caller_symbol_id": "symbol:subject.py::subject.decode::function",
+        "callee_symbol_id": "symbol:model.py::model.AuditMarker::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "confidence": 0.98,
+        "source": "python-ast",
+        "usage_role": "returned"
+      }
+    ],
+    "imports": [
+      {
+        "module": "model",
+        "binding": "Payload",
+        "imported_name": "Payload",
+        "alias": null,
+        "line": 1,
+        "kind": "from-import",
+        "confidence": 1.0
+      },
+      {
+        "module": "model",
+        "binding": "AuditMarker",
+        "imported_name": "AuditMarker",
+        "alias": null,
+        "line": 1,
+        "kind": "from-import",
+        "confidence": 1.0
+      }
+    ],
+    "exports": [
+      {
+        "symbol_id": "symbol:subject.py::subject.decode::function",
+        "name": "decode",
+        "qualified_name": "subject.decode",
+        "kind": "function",
+        "path": "subject.py",
+        "file_path": "subject.py",
+        "module_id": "module:subject.py",
+        "language": "python",
+        "line": 2,
+        "end_line": 3,
+        "signature": "def decode()",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      }
+    ],
+    "related_tests": [],
+    "changed": false,
+    "freshness": "indexed",
+    "confidence": "structural",
+    "confidence_score": 0.98,
+    "source": "persistent-identity-code-index",
+    "capsule_version": 3,
+    "warnings": [],
+    "cache_hit": false,
+    "query_ms": 2.65
+  },
+  "before_generation": 1,
+  "after_generation": 2
+}

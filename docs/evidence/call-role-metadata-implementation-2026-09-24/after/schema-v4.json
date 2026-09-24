@@ -1,0 +1,109 @@
+{
+  "version": 4,
+  "columns": [
+    {
+      "cid": 0,
+      "name": "id",
+      "type": "INTEGER",
+      "notnull": 0,
+      "default": null,
+      "pk": 1
+    },
+    {
+      "cid": 1,
+      "name": "path",
+      "type": "TEXT",
+      "notnull": 1,
+      "default": null,
+      "pk": 0
+    },
+    {
+      "cid": 2,
+      "name": "caller_symbol_id",
+      "type": "TEXT",
+      "notnull": 1,
+      "default": null,
+      "pk": 0
+    },
+    {
+      "cid": 3,
+      "name": "caller_name",
+      "type": "TEXT",
+      "notnull": 1,
+      "default": null,
+      "pk": 0
+    },
+    {
+      "cid": 4,
+      "name": "raw_name",
+      "type": "TEXT",
+      "notnull": 1,
+      "default": null,
+      "pk": 0
+    },
+    {
+      "cid": 5,
+      "name": "qualifier",
+      "type": "TEXT",
+      "notnull": 1,
+      "default": "''",
+      "pk": 0
+    },
+    {
+      "cid": 6,
+      "name": "callee_symbol_id",
+      "type": "TEXT",
+      "notnull": 0,
+      "default": null,
+      "pk": 0
+    },
+    {
+      "cid": 7,
+      "name": "line",
+      "type": "INTEGER",
+      "notnull": 1,
+      "default": null,
+      "pk": 0
+    },
+    {
+      "cid": 8,
+      "name": "resolution_kind",
+      "type": "TEXT",
+      "notnull": 1,
+      "default": "'unresolved'",
+      "pk": 0
+    },
+    {
+      "cid": 9,
+      "name": "confidence",
+      "type": "REAL",
+      "notnull": 1,
+      "default": null,
+      "pk": 0
+    },
+    {
+      "cid": 10,
+      "name": "source",
+      "type": "TEXT",
+      "notnull": 1,
+      "default": null,
+      "pk": 0
+    },
+    {
+      "cid": 11,
+      "name": "candidates_json",
+      "type": "TEXT",
+      "notnull": 1,
+      "default": "'[]'",
+      "pk": 0
+    },
+    {
+      "cid": 12,
+      "name": "usage_role",
+      "type": "TEXT",
+      "notnull": 1,
+      "default": "'unknown'",
+      "pk": 0
+    }
+  ]
+}

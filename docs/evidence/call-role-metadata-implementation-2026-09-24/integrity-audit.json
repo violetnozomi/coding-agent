@@ -1,0 +1,21 @@
+{
+  "baseline": "64a6bba2983f363b14ebb1a936d3715ef87ff2a5",
+  "production_files": [
+    "nz_coder/intelligence/analyzers.py",
+    "nz_coder/intelligence/code_index.py"
+  ],
+  "paid_requests": 0,
+  "main_requests": 0,
+  "semantic_verifier_requests": 0,
+  "planner_requests": 0,
+  "embedding_requests": 0,
+  "InfCodeX_requests": 0,
+  "network_guard": "offline_exec denies IPv4/IPv6 sockets in all pytest runs",
+  "Sidecar_diff": 0,
+  "constructor_collector": false,
+  "relevance_selector": false,
+  "trigger": false,
+  "frozen_C_modified": false,
+  "historical_evidence_modified": false,
+  "source_execution_for_metadata": false
+}

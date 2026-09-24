@@ -1,0 +1,44 @@
+[
+  {
+    "caller": "decode",
+    "callee": "AuditMarker",
+    "path": "subject.py",
+    "line": 3,
+    "confidence": 0.98,
+    "source": "python-ast",
+    "caller_symbol_id": "symbol:subject.py::subject.decode::function",
+    "callee_symbol_id": "symbol:model.py::model.AuditMarker::class",
+    "unresolved_target": null,
+    "qualifier": "",
+    "resolution_kind": "imported-binding",
+    "usage_role": "discarded"
+  },
+  {
+    "caller": "decode",
+    "callee": "Payload",
+    "path": "subject.py",
+    "line": 4,
+    "confidence": 0.98,
+    "source": "python-ast",
+    "caller_symbol_id": "symbol:subject.py::subject.decode::function",
+    "callee_symbol_id": "symbol:model.py::model.Payload::class",
+    "unresolved_target": null,
+    "qualifier": "",
+    "resolution_kind": "imported-binding",
+    "usage_role": "returned"
+  },
+  {
+    "caller": "decode",
+    "callee": "Payload",
+    "path": "subject.py",
+    "line": 4,
+    "confidence": 0.98,
+    "source": "python-ast",
+    "caller_symbol_id": "symbol:subject.py::subject.decode::function",
+    "callee_symbol_id": "symbol:model.py::model.Payload::class",
+    "unresolved_target": null,
+    "qualifier": "",
+    "resolution_kind": "imported-binding",
+    "usage_role": "argument"
+  }
+]

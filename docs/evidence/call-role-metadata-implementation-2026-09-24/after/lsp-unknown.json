@@ -1,0 +1,35 @@
+{
+  "before": {
+    "caller": "entry",
+    "callee": "missing",
+    "path": "caller.py",
+    "line": 2,
+    "confidence": 0.2,
+    "source": "python-ast",
+    "caller_symbol_id": "symbol:caller.py::caller.entry::function",
+    "callee_symbol_id": null,
+    "unresolved_target": {
+      "raw_name": "missing",
+      "qualifier": "",
+      "candidates": [],
+      "confidence": 0.2
+    },
+    "qualifier": "",
+    "resolution_kind": "unresolved",
+    "usage_role": "unknown"
+  },
+  "after": {
+    "caller": "entry",
+    "callee": "resolved",
+    "path": "caller.py",
+    "line": 2,
+    "confidence": 0.9,
+    "source": "lsp-definition",
+    "caller_symbol_id": "symbol:caller.py::caller.entry::function",
+    "callee_symbol_id": "symbol:target.py::target.resolved::function",
+    "unresolved_target": null,
+    "qualifier": "",
+    "resolution_kind": "lsp-definition",
+    "usage_role": "unknown"
+  }
+}

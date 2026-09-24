@@ -1,0 +1,22 @@
+{
+  "cold": {
+    "scanned": 2,
+    "indexed": 2,
+    "reused": 0,
+    "removed": 0,
+    "omitted": 0,
+    "generation": 1,
+    "calls_resolved": 3,
+    "references_resolved": 3
+  },
+  "warm": {
+    "scanned": 2,
+    "indexed": 0,
+    "reused": 2,
+    "removed": 0,
+    "omitted": 0,
+    "generation": 1,
+    "calls_resolved": 0,
+    "references_resolved": 0
+  }
+}

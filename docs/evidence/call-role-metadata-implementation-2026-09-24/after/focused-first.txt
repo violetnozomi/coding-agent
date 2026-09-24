@@ -1,0 +1,25 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+................................F.....                                   [100%]
+=================================== FAILURES ===================================
+________________________ test_incremental_service_cache ________________________
+
+indexed = (PosixPath('/tmp/pytest-of-pyh/pytest-72/test_incremental_service_cache0'), <nz_coder.intelligence.code_index.PersistentCodeIndex object at 0x7dd383e4fc50>)
+
+    def test_incremental_service_cache(indexed):
+        root, _ = indexed
+        service = RepoIntelligenceService(root)
+        try:
+            service.prewarm().result(timeout=15)
+            before = service.symbol_context('decode')
+            assert service.symbol_context('decode')['cache_hit']
+            (root / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    return AuditMarker()\n')
+            service._apply_incremental(('subject.py',), 20)
+            after = service.symbol_context('decode')
+>           assert after['generation'] > before['generation'] and not after['cache_hit']
+                   ^^^^^^^^^^^^^^^^^^^
+E           KeyError: 'generation'
+
+tests/test_call_usage_role.py:144: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_call_usage_role.py::test_incremental_service_cache - KeyErr...
+1 failed, 37 passed in 0.84s

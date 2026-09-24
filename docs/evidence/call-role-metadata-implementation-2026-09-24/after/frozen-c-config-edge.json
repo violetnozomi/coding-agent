@@ -1,0 +1,15 @@
+{
+  "caller": "loads",
+  "callee": "Config",
+  "path": "configkit/config/parser.py",
+  "call_site_file": "configkit/config/parser.py",
+  "line": 14,
+  "caller_symbol_id": "symbol:configkit/config/parser.py::configkit.config.parser.loads::function",
+  "callee_symbol_id": "symbol:configkit/config/model.py::configkit.config.model.Config::class",
+  "unresolved_target": null,
+  "qualifier": "",
+  "resolution_kind": "imported-binding",
+  "confidence": 0.98,
+  "source": "python-ast",
+  "usage_role": "returned"
+}

@@ -1,0 +1,12 @@
+{
+  "first": "1784 passed, 11 skipped; audit SIGINT was sent; not unassisted final verification",
+  "second": "terminated after >220 seconds with diagnostic stack and unfinished fake-loop test",
+  "current_isolated": "same fake-loop test exceeded 75s; terminated",
+  "clean_baseline_isolated": "same test exceeded 75s; timeout exit 124",
+  "remaining_suite": "excludes only test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget",
+  "attribution": "long wait also reproduced at baseline; stall failure did not reproduce in either isolated recheck; exact suite interaction unproven",
+  "remaining_suite_result": "1 failed, 1785 passed, 11 skipped, 1 deselected",
+  "remaining_suite_failure": "test_provider_stall_sidecar_cancel_retires_gateway_poll",
+  "current_stall_isolated": "1 passed",
+  "baseline_stall_isolated": "1 passed"
+}

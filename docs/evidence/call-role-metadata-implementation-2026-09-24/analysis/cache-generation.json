@@ -1,0 +1,7 @@
+{
+  "index_version": 4,
+  "incremental_change": "discarded -> returned for same caller/target identity",
+  "generation_increases": true,
+  "service_query_cache": "generation-keyed; verified miss and new role",
+  "semantic_review_cache": "unchanged"
+}

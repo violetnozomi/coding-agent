@@ -74,6 +74,7 @@ class RawCallRecord:
     line: int
     confidence: float
     source: str
+    usage_role: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -357,10 +358,37 @@ class PythonAstAnalyzer:
         class DirectCallVisitor(ast.NodeVisitor):
             def __init__(self, root: ast.AST) -> None:
                 self.root = root
-                self.items: list[ast.Call] = []
+                self.items: list[tuple[ast.Call, str]] = []
+                self._stack: list[ast.AST] = []
+
+            def visit(self, node: ast.AST):
+                self._stack.append(node)
+                try:
+                    return super().visit(node)
+                finally:
+                    self._stack.pop()
+
+            def _usage_role(self, node: ast.Call) -> str:
+                """Immediate syntactic use, never ancestor or variable value flow."""
+                parent = self._stack[-2] if len(self._stack) > 1 else None
+                if isinstance(parent, ast.Return) and parent.value is node:
+                    return "returned"
+                if isinstance(parent, ast.Yield) and parent.value is node:
+                    return "yielded"
+                if isinstance(parent, ast.Expr) and parent.value is node:
+                    return "discarded"
+                if isinstance(parent, (ast.Assign, ast.AnnAssign, ast.NamedExpr)) and parent.value is node:
+                    return "assigned"
+                if isinstance(parent, ast.Call) and any(arg is node for arg in parent.args):
+                    return "argument"
+                if isinstance(parent, ast.keyword) and parent.value is node:
+                    return "argument"
+                if isinstance(parent, (ast.If, ast.While, ast.IfExp, ast.Assert)) and parent.test is node:
+                    return "condition"
+                return "unknown"
 
             def visit_Call(self, node: ast.Call) -> None:
-                self.items.append(node)
+                self.items.append((node, self._usage_role(node)))
                 self.generic_visit(node)
 
             def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -382,7 +410,7 @@ class PythonAstAnalyzer:
                 continue
             visitor = DirectCallVisitor(node)
             visitor.visit(node)
-            for call in visitor.items:
+            for call, usage_role in visitor.items:
                 parts = _attribute_parts(call.func)
                 if not parts:
                     continue
@@ -395,6 +423,7 @@ class PythonAstAnalyzer:
                     line=int(call.lineno),
                     confidence=0.98,
                     source="python-ast",
+                    usage_role=usage_role,
                 ))
 
         return AnalysisResult(

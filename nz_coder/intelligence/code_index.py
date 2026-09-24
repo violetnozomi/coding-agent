@@ -40,7 +40,7 @@ def is_excluded_directory(name: str) -> bool:
     return name in EXCLUDED_DIRS
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 # Compatibility hook: analyzers share this stdlib module object and historical
 # tests/extensions patch ``code_index.ast.parse`` to observe AST cache reuse.
 ast = _ast
@@ -207,6 +207,7 @@ class CallEdge:
     unresolved_target: UnresolvedCallTarget | None = None
     qualifier: str = ""
     resolution_kind: str = "unresolved"
+    usage_role: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -253,6 +254,7 @@ class ProcessStep:
     call_site_file: str | None = None
     resolution_kind: str = ""
     confidence: float = 1.0
+    usage_role: str = "unknown"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -358,7 +360,7 @@ class PersistentCodeIndex:
         version = int(connection.execute("PRAGMA user_version").fetchone()[0])
         if 0 < version < SCHEMA_VERSION:
             # This database is a disposable derived cache.  A schema rebuild is
-            # safer than preserving name-only edges as if they were identities.
+            # safer than reusing edges without newly derived metadata.
             connection.executescript(
                 "DROP TABLE IF EXISTS calls; DROP TABLE IF EXISTS refs; "
                 "DROP TABLE IF EXISTS imports; DROP TABLE IF EXISTS symbols; "
@@ -431,7 +433,8 @@ class PersistentCodeIndex:
                 resolution_kind TEXT NOT NULL DEFAULT 'unresolved',
                 confidence REAL NOT NULL,
                 source TEXT NOT NULL,
-                candidates_json TEXT NOT NULL DEFAULT '[]'
+                candidates_json TEXT NOT NULL DEFAULT '[]',
+                usage_role TEXT NOT NULL DEFAULT 'unknown'
             );
             CREATE TABLE IF NOT EXISTS metadata (
                 key TEXT PRIMARY KEY,
@@ -604,12 +607,13 @@ class PersistentCodeIndex:
         )
         connection.executemany(
             "INSERT INTO calls(path, caller_symbol_id, caller_name, raw_name, qualifier, "
-            "callee_symbol_id, line, resolution_kind, confidence, source, candidates_json) "
-            "VALUES (?, ?, ?, ?, ?, NULL, ?, 'unresolved', ?, ?, '[]')",
+            "callee_symbol_id, line, resolution_kind, confidence, source, candidates_json, usage_role) "
+            "VALUES (?, ?, ?, ?, ?, NULL, ?, 'unresolved', ?, ?, '[]', ?)",
             [
                 (
                     item.call_site_file, item.caller_symbol_id, item.caller_name,
                     item.raw_name, item.qualifier, item.line, item.confidence, item.source,
+                    item.usage_role,
                 )
                 for item in analysis.calls
             ],
@@ -1190,6 +1194,7 @@ class PersistentCodeIndex:
             int(row["line"]), float(row["confidence"]), row["source"],
             row["caller_symbol_id"], row["callee_symbol_id"], unresolved,
             row["qualifier"], row["resolution_kind"],
+            row["usage_role"],
         )
 
     @staticmethod
@@ -1408,6 +1413,7 @@ class PersistentCodeIndex:
             "unresolved_target": unresolved, "qualifier": edge.qualifier,
             "resolution_kind": edge.resolution_kind,
             "confidence": edge.confidence, "source": edge.source,
+            "usage_role": edge.usage_role,
         }
 
     def symbol_context(
@@ -1771,6 +1777,7 @@ class PersistentCodeIndex:
                                 int(target["line"]), call_site_file=edge.path,
                                 resolution_kind=edge.resolution_kind,
                                 confidence=edge.confidence,
+                                usage_role=edge.usage_role,
                             ))
                     queue.append((edge.callee_symbol_id, depth + 1))
                 elif edge.callee_symbol_id:
@@ -1783,6 +1790,7 @@ class PersistentCodeIndex:
                     int(target["line"]) if target else edge.line,
                     call_site_file=edge.path, resolution_kind=edge.resolution_kind,
                     confidence=edge.confidence,
+                    usage_role=edge.usage_role,
                 ))
         incoming = [self._edge_dict(item) for item in self.callers(entry_id, limit)]
         visited.update(

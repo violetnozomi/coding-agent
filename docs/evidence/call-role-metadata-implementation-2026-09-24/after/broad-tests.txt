@@ -1,0 +1,75 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+........................................................................ [  4%]
+........................................................................ [  8%]
+........................................................................ [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 20%]
+........................................................................ [ 24%]
+........................................................................ [ 28%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 40%]
+........................................................................ [ 44%]
+........................................................................ [ 48%]
+........................................................................ [ 52%]
+........................................................................ [ 56%]
+........................................................................ [ 60%]
+........................................................................ [ 64%]
+.........F.............................................................. [ 68%]
+........................................................................ [ 72%]
+...........................................s....s....................... [ 76%]
+..................ss......s............................................. [ 80%]
+.........................s.....ss..........ss.s......................... [ 84%]
+........................................................................ [ 88%]
+........................................................................ [ 92%]
+........................................................................ [ 96%]
+.....................................................................    [100%]
+=================================== FAILURES ===================================
+___________ test_provider_stall_sidecar_cancel_retires_gateway_poll ____________
+
+    def test_provider_stall_sidecar_cancel_retires_gateway_poll():
+        """Terminal settlement must not leave L2 usage for the next run."""
+        import threading
+    
+        from nz_coder.loop import AgentLoop
+    
+        started = threading.Event()
+        release = threading.Event()
+        fake = FakeClient([])
+    
+        def blocking_create(**_kwargs):
+            started.set()
+            release.wait(timeout=2)
+            return FakeResponse(FakeMessage("late"))
+    
+        fake.chat.completions.create = blocking_create
+        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
+        cancel_event = threading.Event()
+        outcome = {}
+        worker = threading.Thread(
+            target=lambda: outcome.setdefault(
+                "verdict",
+                agent._provider_stall_sidecar("signal", cancel_event),
+            )
+        )
+        worker.start()
+        assert started.wait(timeout=1)
+        cancel_event.set()
+        worker.join(timeout=1)
+        release.set()
+    
+        assert not worker.is_alive()
+        assert outcome["verdict"]["trace"] == "cancelled"
+>       assert agent.runtime_state.provider_calls_by_purpose == {
+            "stall_sidecar": 1,
+        }
+E       AssertionError: assert {} == {'stall_sidecar': 1}
+E         
+E         Right contains 1 more item:
+E         {'stall_sidecar': 1}
+E         Use -v to get more diff
+
+tests/test_loop_fake.py:4041: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_loop_fake.py::test_provider_stall_sidecar_cancel_retires_gateway_poll
+1 failed, 1785 passed, 11 skipped, 1 deselected in 117.74s (0:01:57)

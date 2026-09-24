@@ -1,0 +1,18 @@
+{
+  "classification": "CALL-ROLE-METADATA-FIXED",
+  "source": "existing Python AST",
+  "second_parser": false,
+  "new_graph": false,
+  "dataflow": false,
+  "C_specific": false,
+  "Sidecar_changed": false,
+  "constructor_evidence": false,
+  "relevance_selector": false,
+  "trigger": false,
+  "reviewer": "unobserved",
+  "remaining": [
+    "relevance/trigger contract",
+    "complete decorator envelope",
+    "unsafe truncation omission"
+  ]
+}

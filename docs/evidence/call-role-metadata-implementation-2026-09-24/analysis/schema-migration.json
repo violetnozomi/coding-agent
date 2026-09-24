@@ -1,0 +1,9 @@
+{
+  "before": 3,
+  "after": 4,
+  "policy": "existing disposable derived-table rebuild",
+  "test": "test_v3_cache_rebuild_and_warm_reuse",
+  "unchanged_source_reparsed": true,
+  "warm_reused": 2,
+  "warm_indexed": 0
+}

@@ -1,0 +1,686 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FFFFFFFFFFFFFFFFFFFFFFEEEEEEEEFEEFFFFF                                   [100%]
+==================================== ERRORS ====================================
+_______________ ERROR at setup of test_role_api_surfaces[sqlite] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_role_api_surfaces_sqlite_0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+_____________ ERROR at setup of test_role_api_surfaces[file_calls] _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_role_api_surfaces_file_ca0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+______________ ERROR at setup of test_role_api_surfaces[callers] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_role_api_surfaces_callers0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+______________ ERROR at setup of test_role_api_surfaces[callees] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_role_api_surfaces_callees0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+______________ ERROR at setup of test_role_api_surfaces[snapshot] ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_role_api_surfaces_snapsho0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+_____________ ERROR at setup of test_role_api_surfaces[edge_dict] ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_role_api_surfaces_edge_di0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+___________ ERROR at setup of test_role_api_surfaces[symbol_context] ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_role_api_surfaces_symbol_0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+__________ ERROR at setup of test_role_api_surfaces[process_context] ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_role_api_surfaces_process0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+____________ ERROR at setup of test_v3_cache_rebuild_and_warm_reuse ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_v3_cache_rebuild_and_warm0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+_______________ ERROR at setup of test_incremental_service_cache _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_incremental_service_cache0')
+
+    @pytest.fixture
+    def indexed(tmp_path):
+        (tmp_path / 'model.py').write_text('class Payload:\n    pass\nclass AuditMarker:\n    pass\n')
+        (tmp_path / 'subject.py').write_text('from model import Payload, AuditMarker\ndef decode():\n    AuditMarker()\n    return Payload(Payload())\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:76: TypeError
+=================================== FAILURES ===================================
+__________________ test_ast_roles[return Payload()-expected0] __________________
+
+body = 'return Payload()', expected = ['returned']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46bd1480>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+___________________ test_ast_roles[AuditMarker()-expected1] ____________________
+
+body = 'AuditMarker()', expected = ['discarded']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46bd1220>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+___________ test_ast_roles[return Payload(AuditMarker())-expected2] ____________
+
+body = 'return Payload(AuditMarker())', expected = ['returned', 'argument']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46c10b90>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+_____________ test_ast_roles[return Payload(Payload())-expected3] ______________
+
+body = 'return Payload(Payload())', expected = ['returned', 'argument']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46c30270>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+______ test_ast_roles[payload = Payload()\n    return payload-expected4] _______
+
+body = 'payload = Payload()\n    return payload', expected = ['assigned']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46c307c0>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+____ test_ast_roles[marker = AuditMarker()\n    return Payload()-expected5] ____
+
+body = 'marker = AuditMarker()\n    return Payload()'
+expected = ['assigned', 'returned']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46bd9750>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+__________________ test_ast_roles[yield Payload()-expected6] ___________________
+
+body = 'yield Payload()', expected = ['yielded']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46bd9150>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+_____ test_ast_roles[if Validator():\n        return Payload()-expected7] ______
+
+body = 'if Validator():\n        return Payload()'
+expected = ['condition', 'returned']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46c3c500>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+_________ test_ast_roles[while Validator():\n        break-expected8] __________
+
+body = 'while Validator():\n        break', expected = ['condition']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46c3c050>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+___________ test_ast_roles[return 1 if Validator() else 2-expected9] ___________
+
+body = 'return 1 if Validator() else 2', expected = ['condition']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46c2cad0>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+________________ test_ast_roles[assert Validator()-expected10] _________________
+
+body = 'assert Validator()', expected = ['condition']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46c2d630>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+______________ test_ast_roles[return wrap(Payload())-expected11] _______________
+
+body = 'return wrap(Payload())', expected = ['returned', 'argument']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46c175f0>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+___________ test_ast_roles[return wrap(value=Payload())-expected12] ____________
+
+body = 'return wrap(value=Payload())', expected = ['returned', 'argument']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46a881d0>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+_ test_ast_roles[if flag:\n        return Payload()\n    return AuditMarker()-expected13] _
+
+body = 'if flag:\n        return Payload()\n    return AuditMarker()'
+expected = ['returned', 'returned']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46a88050>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+_____________ test_ast_roles[return unknown_factory()-expected14] ______________
+
+body = 'return unknown_factory()', expected = ['returned']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46a501b0>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+______________ test_ast_roles[return factory.build()-expected15] _______________
+
+body = 'return factory.build()', expected = ['returned']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46a50470>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+_________ test_ast_roles[return Payload() or AuditMarker()-expected16] _________
+
+body = 'return Payload() or AuditMarker()', expected = ['unknown', 'unknown']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46bfca50>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+___ test_ast_roles[if Payload() and AuditMarker():\n        pass-expected17] ___
+
+body = 'if Payload() and AuditMarker():\n        pass'
+expected = ['unknown', 'unknown']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46bfddb0>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+_______________ test_ast_roles[yield from Payload()-expected18] ________________
+
+body = 'yield from Payload()', expected = ['unknown']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46baa180>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+______________ test_ast_roles[return (x := Payload())-expected19] ______________
+
+body = 'return (x := Payload())', expected = ['assigned']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46c0ced0>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+_______________ test_ast_roles[x: object = Payload()-expected20] _______________
+
+body = 'x: object = Payload()', expected = ['assigned']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46a4c050>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+________________ test_ast_roles[return [Payload()]-expected21] _________________
+
+body = 'return [Payload()]', expected = ['unknown']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x764d46a797f0>
+
+    @pytest.mark.parametrize('body,expected', CASES)
+    def test_ast_roles(body, expected, monkeypatch):
+        original = ast.parse
+        counts = []
+        def parse(*a, **kw):
+            counts.append(1)
+            return original(*a, **kw)
+        monkeypatch.setattr(ast, 'parse', parse)
+        calls = analyze('def decode(flag=False):\n    ' + body + '\n').calls
+>       assert [c.usage_role for c in calls] == expected
+                ^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:67: AttributeError
+________________________ test_positional_compatibility _________________________
+
+    def test_positional_compatibility():
+>       assert RawCallRecord('id', 'f', 'x', '', 'a.py', 1, .9, 'test').usage_role == 'unknown'
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:111: AttributeError
+______________ test_lsp_preserves_role[return missing()-returned] ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_lsp_preserves_role_return0')
+expression = 'return missing()', expected = 'returned'
+
+    @pytest.mark.parametrize('expression,expected', [('return missing()', 'returned'), ('return [missing()]', 'unknown')])
+    def test_lsp_preserves_role(tmp_path, expression, expected):
+        (tmp_path / 'caller.py').write_text('def entry():\n    ' + expression + '\n')
+        (tmp_path / 'target.py').write_text('def resolved():\n    pass\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:158: TypeError
+_____________ test_lsp_preserves_role[return [missing()]-unknown] ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_lsp_preserves_role_return1')
+expression = 'return [missing()]', expected = 'unknown'
+
+    @pytest.mark.parametrize('expression,expected', [('return missing()', 'returned'), ('return [missing()]', 'unknown')])
+    def test_lsp_preserves_role(tmp_path, expression, expected):
+        (tmp_path / 'caller.py').write_text('def entry():\n    ' + expression + '\n')
+        (tmp_path / 'target.py').write_text('def resolved():\n    pass\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:158: TypeError
+_________________________ test_other_analyzers_unknown _________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_other_analyzers_unknown0')
+
+    def test_other_analyzers_unknown(tmp_path):
+        source = 'function entry() { return missing(); }'
+        result = LexicalFallbackAnalyzer().analyze_file(path=tmp_path / 'a.js', relative='a.js', source=source, language='javascript')
+>       assert result.calls and all(c.usage_role == 'unknown' for c in result.calls)
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_call_usage_role.py:172: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <tuple_iterator object at 0x764d46a65f90>
+
+>   assert result.calls and all(c.usage_role == 'unknown' for c in result.calls)
+                                ^^^^^^^^^^^^
+E   AttributeError: 'RawCallRecord' object has no attribute 'usage_role'
+
+tests/test_call_usage_role.py:172: AttributeError
+______________ test_role_does_not_resolve_type_or_execute_source _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_role_does_not_resolve_typ0')
+
+    def test_role_does_not_resolve_type_or_execute_source(tmp_path):
+        (tmp_path / 'factory.py').write_text('def build():\n    return None\n')
+        (tmp_path / 'subject.py').write_text('import factory\nraise RuntimeError("MUST NOT EXECUTE")\ndef run():\n    mystery()\n    return factory.build()\n')
+        index = PersistentCodeIndex(tmp_path)
+>       index.scan(tmp_path)
+E       TypeError: PersistentCodeIndex.scan() missing 1 required keyword-only argument: 'max_files'
+
+tests/test_call_usage_role.py:184: TypeError
+________________________ test_frozen_c_production_roles ________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-70/test_frozen_c_production_roles0')
+
+    def test_frozen_c_production_roles(tmp_path):
+        history = ROOT / 'docs/evidence/diagnostic-v1-C-real-2026-09-22/C/nzcoder'
+        cf = ROOT / 'docs/evidence/c-sidecar-fixed-diff-counterfactual-2026-09-22'
+        workspace = tmp_path / 'workspace'
+        shutil.copytree(history / 'final-files', workspace, ignore=shutil.ignore_patterns('.nz-coder', '__pycache__'))
+        paths = json.loads((cf / 'packets/historical-verifier2-summary.json').read_text())['runtime_state']['changed_files']
+        service = RepoIntelligenceService(workspace)
+        try:
+            service.prewarm().result(timeout=15)
+            scope = service.changed_scope(changed_paths=paths, limit=100, wait_budget_ms=0)
+            edges = [e for identity in scope['changed_symbol_ids'] for e in service.symbol_context(identity, limit=100)['callees']]
+            # Only assertion names C; production query uses historical changed identities.
+            config = next(e for e in edges if e['callee'] == 'Config')
+>           assert config['usage_role'] == 'returned'
+                   ^^^^^^^^^^^^^^^^^^^^
+E           KeyError: 'usage_role'
+
+tests/test_call_usage_role.py:204: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_call_usage_role.py::test_ast_roles[return Payload()-expected0]
+FAILED tests/test_call_usage_role.py::test_ast_roles[AuditMarker()-expected1]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return Payload(AuditMarker())-expected2]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return Payload(Payload())-expected3]
+FAILED tests/test_call_usage_role.py::test_ast_roles[payload = Payload()\n    return payload-expected4]
+FAILED tests/test_call_usage_role.py::test_ast_roles[marker = AuditMarker()\n    return Payload()-expected5]
+FAILED tests/test_call_usage_role.py::test_ast_roles[yield Payload()-expected6]
+FAILED tests/test_call_usage_role.py::test_ast_roles[if Validator():\n        return Payload()-expected7]
+FAILED tests/test_call_usage_role.py::test_ast_roles[while Validator():\n        break-expected8]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return 1 if Validator() else 2-expected9]
+FAILED tests/test_call_usage_role.py::test_ast_roles[assert Validator()-expected10]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return wrap(Payload())-expected11]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return wrap(value=Payload())-expected12]
+FAILED tests/test_call_usage_role.py::test_ast_roles[if flag:\n        return Payload()\n    return AuditMarker()-expected13]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return unknown_factory()-expected14]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return factory.build()-expected15]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return Payload() or AuditMarker()-expected16]
+FAILED tests/test_call_usage_role.py::test_ast_roles[if Payload() and AuditMarker():\n        pass-expected17]
+FAILED tests/test_call_usage_role.py::test_ast_roles[yield from Payload()-expected18]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return (x := Payload())-expected19]
+FAILED tests/test_call_usage_role.py::test_ast_roles[x: object = Payload()-expected20]
+FAILED tests/test_call_usage_role.py::test_ast_roles[return [Payload()]-expected21]
+FAILED tests/test_call_usage_role.py::test_positional_compatibility - Attribu...
+FAILED tests/test_call_usage_role.py::test_lsp_preserves_role[return missing()-returned]
+FAILED tests/test_call_usage_role.py::test_lsp_preserves_role[return [missing()]-unknown]
+FAILED tests/test_call_usage_role.py::test_other_analyzers_unknown - Attribut...
+FAILED tests/test_call_usage_role.py::test_role_does_not_resolve_type_or_execute_source
+FAILED tests/test_call_usage_role.py::test_frozen_c_production_roles - KeyErr...
+ERROR tests/test_call_usage_role.py::test_role_api_surfaces[sqlite] - TypeErr...
+ERROR tests/test_call_usage_role.py::test_role_api_surfaces[file_calls] - Typ...
+ERROR tests/test_call_usage_role.py::test_role_api_surfaces[callers] - TypeEr...
+ERROR tests/test_call_usage_role.py::test_role_api_surfaces[callees] - TypeEr...
+ERROR tests/test_call_usage_role.py::test_role_api_surfaces[snapshot] - TypeE...
+ERROR tests/test_call_usage_role.py::test_role_api_surfaces[edge_dict] - Type...
+ERROR tests/test_call_usage_role.py::test_role_api_surfaces[symbol_context]
+ERROR tests/test_call_usage_role.py::test_role_api_surfaces[process_context]
+ERROR tests/test_call_usage_role.py::test_v3_cache_rebuild_and_warm_reuse - T...
+ERROR tests/test_call_usage_role.py::test_incremental_service_cache - TypeErr...
+28 failed, 10 errors in 0.84s
