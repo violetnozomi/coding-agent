@@ -1,0 +1,9 @@
+{
+  "classification": "ROLE-PROVENANCE: CALLER-CAPABILITY-SUFFICIENT",
+  "edge_source_sufficient": false,
+  "same_snapshot_caller_file_and_symbol_required": true,
+  "current_builtin_schema": 4,
+  "LSP_fixture": "provenance/lsp-resolved.json",
+  "explicit_field_required_now": false,
+  "future_field_if": "mixed role producers or standalone edges without caller provenance"
+}

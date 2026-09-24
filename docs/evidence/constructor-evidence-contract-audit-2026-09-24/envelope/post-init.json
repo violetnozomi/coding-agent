@@ -1,0 +1,43 @@
+{
+  "source": "@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0:\n            raise ValueError\n",
+  "definition": {
+    "symbol_id": "symbol:records.py::records.Payload::class",
+    "name": "Payload",
+    "qualified_name": "records.Payload",
+    "kind": "class",
+    "path": "records.py",
+    "file_path": "records.py",
+    "module_id": "module:records.py",
+    "language": "python",
+    "line": 2,
+    "end_line": 6,
+    "signature": "class Payload",
+    "exported": true,
+    "confidence": 0.99,
+    "source": "python-ast",
+    "capability_tier": "ast-native"
+  },
+  "view": {
+    "included": true,
+    "reason": "complete_source_span",
+    "text": "@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0:\n            raise ValueError\n",
+    "block": "Path: records.py\nSymbol: symbol:records.py::records.Payload::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-6\nSource:\n@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0:\n            raise ValueError\n",
+    "span": {
+      "class_line": 2,
+      "end_line": 6,
+      "proposed_start_line": 1,
+      "decorators": [
+        {
+          "line": 1,
+          "end_line": 1,
+          "column": 1
+        }
+      ],
+      "persisted": false,
+      "origin": "original-python-ast-symbol-emission"
+    },
+    "full_source_hash": "fbeb416b05b874f0485d9ca5279f45946584d9822d96afa1ab8b39863893ec40",
+    "envelope_hash": "fbeb416b05b874f0485d9ca5279f45946584d9822d96afa1ab8b39863893ec40",
+    "rendered_chars": 301
+  }
+}

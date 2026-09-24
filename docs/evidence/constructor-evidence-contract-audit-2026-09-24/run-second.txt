@@ -1,0 +1,12 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+Traceback (most recent call last):
+  File "/home/pyh/nzcoder/docs/evidence/constructor-evidence-contract-audit-2026-09-24/audit.py", line 362, in <module>
+    main()
+    ~~~~^^
+  File "/home/pyh/nzcoder/docs/evidence/constructor-evidence-contract-audit-2026-09-24/audit.py", line 355, in main
+    relevance(); envelopes(); provenance(); budgets(); frozen_c(); security()
+                                            ~~~~~~~^^
+  File "/home/pyh/nzcoder/docs/evidence/constructor-evidence-contract-audit-2026-09-24/audit.py", line 302, in budgets
+    if name == 'large': assert not two['selected']
+                               ^^^^^^^^^^^^^^^^^^^
+AssertionError

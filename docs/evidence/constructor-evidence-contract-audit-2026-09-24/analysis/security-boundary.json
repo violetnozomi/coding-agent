@@ -1,0 +1,11 @@
+{
+  "reader": "production WorkspaceFileAccess",
+  "rejected": [
+    "../outside.py",
+    "link.py",
+    "big.py"
+  ],
+  "policy": "existing dependency _safe_source excludes tests/docs/evidence/oracle/etc.",
+  "source_execution": false,
+  "note": "decorators and validators in envelope fixtures are undefined; parsing succeeds without execution"
+}

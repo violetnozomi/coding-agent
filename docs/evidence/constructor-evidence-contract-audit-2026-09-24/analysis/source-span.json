@@ -1,0 +1,16 @@
+{
+  "classification": "SOURCE-ENVELOPE: METADATA-ENRICHMENT-REQUIRED",
+  "AST_available": [
+    "ClassDef.lineno",
+    "ClassDef.end_lineno",
+    "decorator_list[].lineno",
+    "decorator_list[].end_lineno",
+    "decorator_list[].col_offset"
+  ],
+  "current_persisted_start": "class keyword only",
+  "future_field": "source_start_line (nullable, certified)",
+  "parenthesized_expression_start": "omit when @ prefix cannot be certified at original AST coordinate",
+  "second_parse": false,
+  "source_regex": false,
+  "backward_scan": false
+}

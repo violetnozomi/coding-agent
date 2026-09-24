@@ -1,0 +1,37 @@
+{
+  "source": "class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n",
+  "definition": {
+    "symbol_id": "symbol:records.py::records.Payload::class",
+    "name": "Payload",
+    "qualified_name": "records.Payload",
+    "kind": "class",
+    "path": "records.py",
+    "file_path": "records.py",
+    "module_id": "module:records.py",
+    "language": "python",
+    "line": 1,
+    "end_line": 4,
+    "signature": "class Payload",
+    "exported": true,
+    "confidence": 0.99,
+    "source": "python-ast",
+    "capability_tier": "ast-native"
+  },
+  "view": {
+    "included": true,
+    "reason": "complete_source_span",
+    "text": "class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n",
+    "block": "Path: records.py\nSymbol: symbol:records.py::records.Payload::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-4\nSource:\nclass Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n",
+    "span": {
+      "class_line": 1,
+      "end_line": 4,
+      "proposed_start_line": 1,
+      "decorators": [],
+      "persisted": false,
+      "origin": "original-python-ast-symbol-emission"
+    },
+    "full_source_hash": "1473a860ccb8859e34b1a3fa1af0dafd6e596aee67a524c1e2ff7c6bc5a6d0a1",
+    "envelope_hash": "1473a860ccb8859e34b1a3fa1af0dafd6e596aee67a524c1e2ff7c6bc5a6d0a1",
+    "rendered_chars": 272
+  }
+}

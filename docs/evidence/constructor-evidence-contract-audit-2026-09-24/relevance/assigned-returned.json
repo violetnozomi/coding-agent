@@ -1,0 +1,12 @@
+{
+  "fixture": "from records import Payload, TelemetryMarker, AuditMarker, Wrapper\ndef changed(flag=False):\n    obj = Payload()\n    return obj\n",
+  "candidates": [],
+  "budget": {
+    "selected": [],
+    "decisions": [],
+    "rendered_chars": 196,
+    "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\n\nOmitted candidate symbols: 0\n",
+    "omitted_count": 0
+  },
+  "semantic_relevance_claimed": false
+}

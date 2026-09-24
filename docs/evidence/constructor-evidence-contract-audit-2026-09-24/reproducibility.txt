@@ -1,0 +1,2 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+PASS: 6 real-graph policy fixtures; 10 AST-envelope cases; 6 budget cases; LSP/current-source trust; frozen C; source safety

@@ -1,0 +1,38 @@
+{
+  "source": "@(\n    decorator\n)\nclass Payload:\n    value: int\n",
+  "definition": {
+    "symbol_id": "symbol:records.py::records.Payload::class",
+    "name": "Payload",
+    "qualified_name": "records.Payload",
+    "kind": "class",
+    "path": "records.py",
+    "file_path": "records.py",
+    "module_id": "module:records.py",
+    "language": "python",
+    "line": 4,
+    "end_line": 5,
+    "signature": "class Payload",
+    "exported": true,
+    "confidence": 0.99,
+    "source": "python-ast",
+    "capability_tier": "ast-native"
+  },
+  "view": {
+    "included": false,
+    "reason": "decorator_start_unproven",
+    "span": {
+      "class_line": 4,
+      "end_line": 5,
+      "proposed_start_line": 2,
+      "decorators": [
+        {
+          "line": 2,
+          "end_line": 2,
+          "column": 4
+        }
+      ],
+      "persisted": false,
+      "origin": "original-python-ast-symbol-emission"
+    }
+  }
+}

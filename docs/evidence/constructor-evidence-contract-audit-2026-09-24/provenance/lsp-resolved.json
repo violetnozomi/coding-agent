@@ -1,0 +1,80 @@
+{
+  "returned": {
+    "caller": "changed",
+    "callee": "Resolved",
+    "path": "a.py",
+    "line": 2,
+    "confidence": 0.9,
+    "source": "lsp-definition",
+    "caller_symbol_id": "symbol:a.py::a.changed::function",
+    "callee_symbol_id": "symbol:target.py::target.Resolved::class",
+    "unresolved_target": null,
+    "qualifier": "",
+    "resolution_kind": "lsp-definition",
+    "usage_role": "returned"
+  },
+  "unknown": {
+    "caller": "unknown",
+    "callee": "Resolved",
+    "path": "a.py",
+    "line": 4,
+    "confidence": 0.9,
+    "source": "lsp-definition",
+    "caller_symbol_id": "symbol:a.py::a.unknown::function",
+    "callee_symbol_id": "symbol:target.py::target.Resolved::class",
+    "unresolved_target": null,
+    "qualifier": "",
+    "resolution_kind": "lsp-definition",
+    "usage_role": "unknown"
+  },
+  "caller_file": {
+    "path": "a.py",
+    "language": "python",
+    "fingerprint": [
+      1790267689444659761,
+      88
+    ],
+    "symbols": [
+      {
+        "kind": "function",
+        "name": "changed",
+        "qualified_name": "a.changed",
+        "line": 1,
+        "end_line": 2,
+        "signature": "def changed(factory)",
+        "symbol_id": "symbol:a.py::a.changed::function",
+        "file_path": "a.py",
+        "module_id": "module:a.py",
+        "language": "python",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      },
+      {
+        "kind": "function",
+        "name": "unknown",
+        "qualified_name": "a.unknown",
+        "line": 3,
+        "end_line": 4,
+        "signature": "def unknown(factory)",
+        "symbol_id": "symbol:a.py::a.unknown::function",
+        "file_path": "a.py",
+        "module_id": "module:a.py",
+        "language": "python",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      }
+    ],
+    "parse_error": "",
+    "module_id": "module:a.py",
+    "capability_tier": "ast-native",
+    "confidence": 0.99,
+    "source": "python-ast",
+    "imports": []
+  },
+  "trusted_after_lsp": true,
+  "unknown_not_promoted": true
+}

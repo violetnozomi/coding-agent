@@ -1,0 +1,124 @@
+{
+  "fixture": "from records import Payload, TelemetryMarker, AuditMarker, Wrapper\ndef changed(flag=False):\n    return Payload()\n",
+  "candidates": [
+    {
+      "path": "records.py",
+      "symbol_id": "symbol:records.py::records.Payload::class",
+      "symbol": "Payload",
+      "edge": {
+        "caller": "changed",
+        "callee": "Payload",
+        "path": "changed.py",
+        "line": 3,
+        "confidence": 0.98,
+        "source": "python-ast",
+        "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+        "callee_symbol_id": "symbol:records.py::records.Payload::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "usage_role": "returned"
+      },
+      "definition": {
+        "kind": "class",
+        "name": "Payload",
+        "qualified_name": "records.Payload",
+        "line": 3,
+        "end_line": 4,
+        "signature": "class Payload",
+        "symbol_id": "symbol:records.py::records.Payload::class",
+        "file_path": "records.py",
+        "module_id": "module:records.py",
+        "language": "python",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      },
+      "role_provenance": {
+        "source": "python-ast",
+        "capability": "ast-native",
+        "basis": "same-snapshot caller file and symbol"
+      },
+      "generation": 1
+    }
+  ],
+  "budget": {
+    "selected": [
+      {
+        "path": "records.py",
+        "symbol_id": "symbol:records.py::records.Payload::class",
+        "symbol": "Payload",
+        "edge": {
+          "caller": "changed",
+          "callee": "Payload",
+          "path": "changed.py",
+          "line": 3,
+          "confidence": 0.98,
+          "source": "python-ast",
+          "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+          "callee_symbol_id": "symbol:records.py::records.Payload::class",
+          "unresolved_target": null,
+          "qualifier": "",
+          "resolution_kind": "imported-binding",
+          "usage_role": "returned"
+        },
+        "definition": {
+          "kind": "class",
+          "name": "Payload",
+          "qualified_name": "records.Payload",
+          "line": 3,
+          "end_line": 4,
+          "signature": "class Payload",
+          "symbol_id": "symbol:records.py::records.Payload::class",
+          "file_path": "records.py",
+          "module_id": "module:records.py",
+          "language": "python",
+          "exported": true,
+          "confidence": 0.99,
+          "source": "python-ast",
+          "capability_tier": "ast-native"
+        },
+        "role_provenance": {
+          "source": "python-ast",
+          "capability": "ast-native",
+          "basis": "same-snapshot caller file and symbol"
+        },
+        "generation": 1,
+        "envelope": {
+          "included": true,
+          "reason": "complete_source_span",
+          "text": "@dataclass\nclass Payload:\n    value: int = 0\n",
+          "block": "Path: records.py\nSymbol: symbol:records.py::records.Payload::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 2-4\nSource:\n@dataclass\nclass Payload:\n    value: int = 0\n",
+          "span": {
+            "class_line": 3,
+            "end_line": 4,
+            "proposed_start_line": 2,
+            "decorators": [
+              {
+                "line": 2,
+                "end_line": 2,
+                "column": 1
+              }
+            ],
+            "persisted": false,
+            "origin": "original-python-ast-symbol-emission"
+          },
+          "full_source_hash": "868b2f909101b8a05db27d9e6dcb5f99d7b55a59382760368d3a9aeb8fbaaf83",
+          "envelope_hash": "24a9808e2453c40d0ddf6cef430e7c95b58a68cfff92ca8ef36178c06f0a327b",
+          "rendered_chars": 220
+        }
+      }
+    ],
+    "decisions": [
+      {
+        "symbol_id": "symbol:records.py::records.Payload::class",
+        "reason": "complete_source_span"
+      }
+    ],
+    "rendered_chars": 416,
+    "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Payload::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 2-4\nSource:\n@dataclass\nclass Payload:\n    value: int = 0\n\nOmitted candidate symbols: 0\n",
+    "omitted_count": 0
+  },
+  "semantic_relevance_claimed": false
+}

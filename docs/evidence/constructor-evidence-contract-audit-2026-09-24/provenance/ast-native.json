@@ -1,0 +1,22 @@
+{
+  "edge": {
+    "caller": "changed",
+    "callee": "factory",
+    "path": "a.py",
+    "line": 2,
+    "confidence": 0.2,
+    "source": "python-ast",
+    "caller_symbol_id": "symbol:a.py::a.changed::function",
+    "callee_symbol_id": null,
+    "unresolved_target": {
+      "raw_name": "factory",
+      "qualifier": "",
+      "candidates": [],
+      "confidence": 0.2
+    },
+    "qualifier": "",
+    "resolution_kind": "unresolved",
+    "usage_role": "returned"
+  },
+  "trusted": true
+}

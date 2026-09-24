@@ -1,0 +1,8 @@
+{
+  "T1_character_slice": "UNSAFE",
+  "T2_whole_envelope": "recommended include-or-omit",
+  "T3_method_selection": "deferred/unproven",
+  "large_class_fixture": "envelope/large-class.json",
+  "omission_reason": "envelope_exceeds_budget",
+  "semantic_validation_claim": false
+}

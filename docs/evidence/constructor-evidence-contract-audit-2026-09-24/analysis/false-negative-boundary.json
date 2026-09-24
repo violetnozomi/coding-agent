@@ -1,0 +1,13 @@
+{
+  "known": [
+    "assigned then returned",
+    "class inside returned wrapper argument",
+    "unresolved/dynamic",
+    "non-Python role unknown",
+    "large whole class",
+    "uncertified decorator start",
+    "budget-displaced class"
+  ],
+  "not_dataflow": true,
+  "no_recall_estimate": true
+}

@@ -1,0 +1,118 @@
+{
+  "fixture": "from records import Payload, TelemetryMarker, AuditMarker, Wrapper\ndef changed(flag=False):\n    return Wrapper(Payload())\n",
+  "candidates": [
+    {
+      "path": "records.py",
+      "symbol_id": "symbol:records.py::records.Wrapper::class",
+      "symbol": "Wrapper",
+      "edge": {
+        "caller": "changed",
+        "callee": "Wrapper",
+        "path": "changed.py",
+        "line": 3,
+        "confidence": 0.98,
+        "source": "python-ast",
+        "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+        "callee_symbol_id": "symbol:records.py::records.Wrapper::class",
+        "unresolved_target": null,
+        "qualifier": "",
+        "resolution_kind": "imported-binding",
+        "usage_role": "returned"
+      },
+      "definition": {
+        "kind": "class",
+        "name": "Wrapper",
+        "qualified_name": "records.Wrapper",
+        "line": 9,
+        "end_line": 10,
+        "signature": "class Wrapper",
+        "symbol_id": "symbol:records.py::records.Wrapper::class",
+        "file_path": "records.py",
+        "module_id": "module:records.py",
+        "language": "python",
+        "exported": true,
+        "confidence": 0.99,
+        "source": "python-ast",
+        "capability_tier": "ast-native"
+      },
+      "role_provenance": {
+        "source": "python-ast",
+        "capability": "ast-native",
+        "basis": "same-snapshot caller file and symbol"
+      },
+      "generation": 1
+    }
+  ],
+  "budget": {
+    "selected": [
+      {
+        "path": "records.py",
+        "symbol_id": "symbol:records.py::records.Wrapper::class",
+        "symbol": "Wrapper",
+        "edge": {
+          "caller": "changed",
+          "callee": "Wrapper",
+          "path": "changed.py",
+          "line": 3,
+          "confidence": 0.98,
+          "source": "python-ast",
+          "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+          "callee_symbol_id": "symbol:records.py::records.Wrapper::class",
+          "unresolved_target": null,
+          "qualifier": "",
+          "resolution_kind": "imported-binding",
+          "usage_role": "returned"
+        },
+        "definition": {
+          "kind": "class",
+          "name": "Wrapper",
+          "qualified_name": "records.Wrapper",
+          "line": 9,
+          "end_line": 10,
+          "signature": "class Wrapper",
+          "symbol_id": "symbol:records.py::records.Wrapper::class",
+          "file_path": "records.py",
+          "module_id": "module:records.py",
+          "language": "python",
+          "exported": true,
+          "confidence": 0.99,
+          "source": "python-ast",
+          "capability_tier": "ast-native"
+        },
+        "role_provenance": {
+          "source": "python-ast",
+          "capability": "ast-native",
+          "basis": "same-snapshot caller file and symbol"
+        },
+        "generation": 1,
+        "envelope": {
+          "included": true,
+          "reason": "complete_source_span",
+          "text": "class Wrapper:\n    pass\n",
+          "block": "Path: records.py\nSymbol: symbol:records.py::records.Wrapper::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 9-10\nSource:\nclass Wrapper:\n    pass\n",
+          "span": {
+            "class_line": 9,
+            "end_line": 10,
+            "proposed_start_line": 9,
+            "decorators": [],
+            "persisted": false,
+            "origin": "original-python-ast-symbol-emission"
+          },
+          "full_source_hash": "868b2f909101b8a05db27d9e6dcb5f99d7b55a59382760368d3a9aeb8fbaaf83",
+          "envelope_hash": "880a28d3a723f172b8348b2940d94b2d57d7d66c1f437ac2efbbc8b54057dbc1",
+          "rendered_chars": 200
+        }
+      }
+    ],
+    "decisions": [
+      {
+        "symbol_id": "symbol:records.py::records.Wrapper::class",
+        "reason": "complete_source_span"
+      }
+    ],
+    "rendered_chars": 396,
+    "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Wrapper::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 9-10\nSource:\nclass Wrapper:\n    pass\n\nOmitted candidate symbols: 0\n",
+    "omitted_count": 0
+  },
+  "semantic_relevance_claimed": false
+}

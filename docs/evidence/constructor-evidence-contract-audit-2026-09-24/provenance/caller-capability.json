@@ -1,0 +1,8 @@
+{
+  "same_snapshot_required": true,
+  "file_and_owner_python_ast_native": true,
+  "stale_caller_rejected": true,
+  "non_python_lexical_parse_error_wrong_source_rejected": true,
+  "classification": "ROLE-PROVENANCE: CALLER-CAPABILITY-SUFFICIENT",
+  "boundary": "current built-in analyzer, schema v4, unmodified trusted derived cache; no standalone edge inference"
+}

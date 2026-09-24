@@ -1,0 +1,16 @@
+{
+  "overall": "CONSTRUCTOR-EVIDENCE-CONTRACT: READY-FOR-IMPLEMENTATION",
+  "relevance": "RELEVANCE-POLICY: BOUNDED-STRUCTURAL-CONTEXT-ACCEPTABLE",
+  "role_provenance": "ROLE-PROVENANCE: CALLER-CAPABILITY-SUFFICIENT",
+  "source_envelope": "SOURCE-ENVELOPE: METADATA-ENRICHMENT-REQUIRED",
+  "production_implemented": false,
+  "semantic_relevance_proved": false,
+  "reviewer_behavior": "unobserved",
+  "new_semantic_classifier_required": false,
+  "new_graph_required": false,
+  "future_work": [
+    "preserve certified AST source span",
+    "bounded fail-soft projection and cache/trace tests"
+  ],
+  "broad_issues": "historical unfiltered suite outstanding; no causal attribution or fixes here"
+}

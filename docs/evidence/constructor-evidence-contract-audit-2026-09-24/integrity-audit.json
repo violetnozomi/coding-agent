@@ -1,0 +1,23 @@
+{
+  "baseline": "8702e10aa52638a154f8466c10d478c30a576d38",
+  "local_execution_date": "2026-09-25",
+  "directory_date": "2026-09-24 (user requested)",
+  "production_changed": false,
+  "historical_evidence_changed": false,
+  "frozen_C_changed": false,
+  "sidecar_packet_generated": false,
+  "paid_requests": 0,
+  "main_requests": 0,
+  "semantic_verifier_requests": 0,
+  "planner_requests": 0,
+  "embedding_requests": 0,
+  "InfCodeX_requests": 0,
+  "CF_C3_runs": 0,
+  "source_execution": false,
+  "offline_guard": "seccomp IPv4/IPv6 denial; prototype also denies socket transports and provider/embedding imports",
+  "scoped_regressions": "118 passed",
+  "unfiltered_broad": "not rerun; prior issues remain unresolved",
+  "manifest_scope": "all evidence files except SHA256SUMS.json; manifest cannot hash itself",
+  "historical_and_production_files_frozen": 3578,
+  "delivery": "only evidence directory intended for commit; Git push is artifact delivery, not a model/experiment network call"
+}

@@ -1,0 +1,9 @@
+{
+  "relevance_fixtures": 6,
+  "envelope_fixtures": 10,
+  "budget_cases": 6,
+  "LSP_provenance": "pass",
+  "frozen_C": "pass",
+  "source_safety": "pass",
+  "production_changed": false
+}

@@ -1,0 +1,58 @@
+{
+  "schema": 4,
+  "RawCallRecord": [
+    "caller_symbol_id",
+    "caller_name",
+    "raw_name",
+    "qualifier",
+    "call_site_file",
+    "line",
+    "confidence",
+    "source",
+    "usage_role"
+  ],
+  "CallEdge": [
+    "caller",
+    "callee",
+    "path",
+    "line",
+    "confidence",
+    "source",
+    "caller_symbol_id",
+    "callee_symbol_id",
+    "unresolved_target",
+    "qualifier",
+    "resolution_kind",
+    "usage_role"
+  ],
+  "SymbolRecord": [
+    "symbol_id",
+    "name",
+    "qualified_name",
+    "kind",
+    "file_path",
+    "module_id",
+    "language",
+    "line",
+    "end_line",
+    "signature",
+    "exported",
+    "confidence",
+    "source",
+    "capability_tier"
+  ],
+  "FileEntry": [
+    "path",
+    "language",
+    "fingerprint",
+    "symbols",
+    "parse_error",
+    "module_id",
+    "capability_tier",
+    "confidence",
+    "source",
+    "imports"
+  ],
+  "source_start_line_persisted": false,
+  "role_source_field_present": false
+}

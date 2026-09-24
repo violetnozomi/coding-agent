@@ -1,0 +1,918 @@
+{
+  "per_symbol": 1400,
+  "total": 2400,
+  "max_symbols": 2,
+  "counting": "rendered block headers/source plus section/footer",
+  "cases": {
+    "short": {
+      "max_one": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 3,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 3,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "c0f52f6410410e1156a5f88d050bdaea24180624a3187913f2684e6b36da7a4a",
+              "envelope_hash": "c0f52f6410410e1156a5f88d050bdaea24180624a3187913f2684e6b36da7a4a",
+              "rendered_chars": 215
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          }
+        ],
+        "rendered_chars": 411,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n\nOmitted candidate symbols: 0\n",
+        "omitted_count": 0
+      },
+      "max_two": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 3,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 3,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "c0f52f6410410e1156a5f88d050bdaea24180624a3187913f2684e6b36da7a4a",
+              "envelope_hash": "c0f52f6410410e1156a5f88d050bdaea24180624a3187913f2684e6b36da7a4a",
+              "rendered_chars": 215
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          }
+        ],
+        "rendered_chars": 411,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n\nOmitted candidate symbols: 0\n",
+        "omitted_count": 0
+      }
+    },
+    "medium": {
+      "max_one": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 41,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-41\nSource:\nclass Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 41,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "709842d85e822543404090a8209d6e8deb489e60fcc52b132bdcf4a6de1a0f43",
+              "envelope_hash": "709842d85e822543404090a8209d6e8deb489e60fcc52b132bdcf4a6de1a0f43",
+              "rendered_chars": 748
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          }
+        ],
+        "rendered_chars": 944,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-41\nSource:\nclass Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n\nOmitted candidate symbols: 0\n",
+        "omitted_count": 0
+      },
+      "max_two": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 41,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-41\nSource:\nclass Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 41,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "709842d85e822543404090a8209d6e8deb489e60fcc52b132bdcf4a6de1a0f43",
+              "envelope_hash": "709842d85e822543404090a8209d6e8deb489e60fcc52b132bdcf4a6de1a0f43",
+              "rendered_chars": 748
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          }
+        ],
+        "rendered_chars": 944,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-41\nSource:\nclass Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n\nOmitted candidate symbols: 0\n",
+        "omitted_count": 0
+      }
+    },
+    "large": {
+      "max_one": {
+        "selected": [],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "envelope_exceeds_budget"
+          }
+        ],
+        "rendered_chars": 196,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\n\nOmitted candidate symbols: 1\n",
+        "omitted_count": 1
+      },
+      "max_two": {
+        "selected": [],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "envelope_exceeds_budget"
+          }
+        ],
+        "rendered_chars": 196,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\n\nOmitted candidate symbols: 1\n",
+        "omitted_count": 1
+      }
+    },
+    "two": {
+      "max_one": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 3,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 3,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "036508b060090c73680b84006ac7cc2525aa45ced1303e6950c8c2c6ff91c867",
+              "envelope_hash": "c0f52f6410410e1156a5f88d050bdaea24180624a3187913f2684e6b36da7a4a",
+              "rendered_chars": 215
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item1::class",
+            "reason": "symbol_budget"
+          }
+        ],
+        "rendered_chars": 411,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n\nOmitted candidate symbols: 1\n",
+        "omitted_count": 1
+      },
+      "max_two": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 3,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 3,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "036508b060090c73680b84006ac7cc2525aa45ced1303e6950c8c2c6ff91c867",
+              "envelope_hash": "c0f52f6410410e1156a5f88d050bdaea24180624a3187913f2684e6b36da7a4a",
+              "rendered_chars": 215
+            }
+          },
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item1::class",
+            "symbol": "Item1",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item1",
+              "path": "changed.py",
+              "line": 6,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item1::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item1",
+              "qualified_name": "records.Item1",
+              "line": 4,
+              "end_line": 6,
+              "signature": "class Item1",
+              "symbol_id": "symbol:records.py::records.Item1::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item1:\n    value: int\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item1::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 4-6\nSource:\nclass Item1:\n    value: int\n    tail: int\n",
+              "span": {
+                "class_line": 4,
+                "end_line": 6,
+                "proposed_start_line": 4,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "036508b060090c73680b84006ac7cc2525aa45ced1303e6950c8c2c6ff91c867",
+              "envelope_hash": "575ace5500415b7e60d199488bdf33e2c5a3ef563ac92974a88ad7e4a9c66de5",
+              "rendered_chars": 215
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item1::class",
+            "reason": "complete_source_span"
+          }
+        ],
+        "rendered_chars": 627,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n\nPath: records.py\nSymbol: symbol:records.py::records.Item1::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 4-6\nSource:\nclass Item1:\n    value: int\n    tail: int\n\nOmitted candidate symbols: 0\n",
+        "omitted_count": 0
+      }
+    },
+    "two-medium": {
+      "max_one": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 73,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-73\nSource:\nclass Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 73,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "732c562ed3224397bf9712ffbdda943f63540090a60e599b6e1a10f843a4b699",
+              "envelope_hash": "5f99cd5efa6cc3af8e62b72403c3211e481ccba8687f59a12f8acf1cc4e0c293",
+              "rendered_chars": 1196
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item1::class",
+            "reason": "symbol_budget"
+          }
+        ],
+        "rendered_chars": 1392,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-73\nSource:\nclass Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n\nOmitted candidate symbols: 1\n",
+        "omitted_count": 1
+      },
+      "max_two": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 73,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-73\nSource:\nclass Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 73,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "732c562ed3224397bf9712ffbdda943f63540090a60e599b6e1a10f843a4b699",
+              "envelope_hash": "5f99cd5efa6cc3af8e62b72403c3211e481ccba8687f59a12f8acf1cc4e0c293",
+              "rendered_chars": 1196
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item1::class",
+            "reason": "total_budget"
+          }
+        ],
+        "rendered_chars": 1392,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-73\nSource:\nclass Item0:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    tail: int\n\nOmitted candidate symbols: 1\n",
+        "omitted_count": 1
+      }
+    },
+    "five": {
+      "max_one": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 3,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 3,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "d473072fde8bb4a2888560b9934ea565454800f5c23fbb9f083daa2e0ea39053",
+              "envelope_hash": "c0f52f6410410e1156a5f88d050bdaea24180624a3187913f2684e6b36da7a4a",
+              "rendered_chars": 215
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item1::class",
+            "reason": "symbol_budget"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item2::class",
+            "reason": "symbol_budget"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item3::class",
+            "reason": "symbol_budget"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item4::class",
+            "reason": "symbol_budget"
+          }
+        ],
+        "rendered_chars": 411,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n\nOmitted candidate symbols: 4\n",
+        "omitted_count": 4
+      },
+      "max_two": {
+        "selected": [
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "symbol": "Item0",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item0",
+              "path": "changed.py",
+              "line": 4,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item0::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item0",
+              "qualified_name": "records.Item0",
+              "line": 1,
+              "end_line": 3,
+              "signature": "class Item0",
+              "symbol_id": "symbol:records.py::records.Item0::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item0:\n    value: int\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n",
+              "span": {
+                "class_line": 1,
+                "end_line": 3,
+                "proposed_start_line": 1,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "d473072fde8bb4a2888560b9934ea565454800f5c23fbb9f083daa2e0ea39053",
+              "envelope_hash": "c0f52f6410410e1156a5f88d050bdaea24180624a3187913f2684e6b36da7a4a",
+              "rendered_chars": 215
+            }
+          },
+          {
+            "path": "records.py",
+            "symbol_id": "symbol:records.py::records.Item1::class",
+            "symbol": "Item1",
+            "edge": {
+              "caller": "changed",
+              "callee": "Item1",
+              "path": "changed.py",
+              "line": 6,
+              "confidence": 0.98,
+              "source": "python-ast",
+              "caller_symbol_id": "symbol:changed.py::changed.changed::function",
+              "callee_symbol_id": "symbol:records.py::records.Item1::class",
+              "unresolved_target": null,
+              "qualifier": "",
+              "resolution_kind": "imported-binding",
+              "usage_role": "returned"
+            },
+            "definition": {
+              "kind": "class",
+              "name": "Item1",
+              "qualified_name": "records.Item1",
+              "line": 4,
+              "end_line": 6,
+              "signature": "class Item1",
+              "symbol_id": "symbol:records.py::records.Item1::class",
+              "file_path": "records.py",
+              "module_id": "module:records.py",
+              "language": "python",
+              "exported": true,
+              "confidence": 0.99,
+              "source": "python-ast",
+              "capability_tier": "ast-native"
+            },
+            "role_provenance": {
+              "source": "python-ast",
+              "capability": "ast-native",
+              "basis": "same-snapshot caller file and symbol"
+            },
+            "generation": 1,
+            "envelope": {
+              "included": true,
+              "reason": "complete_source_span",
+              "text": "class Item1:\n    value: int\n    tail: int\n",
+              "block": "Path: records.py\nSymbol: symbol:records.py::records.Item1::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 4-6\nSource:\nclass Item1:\n    value: int\n    tail: int\n",
+              "span": {
+                "class_line": 4,
+                "end_line": 6,
+                "proposed_start_line": 4,
+                "decorators": [],
+                "persisted": false,
+                "origin": "original-python-ast-symbol-emission"
+              },
+              "full_source_hash": "d473072fde8bb4a2888560b9934ea565454800f5c23fbb9f083daa2e0ea39053",
+              "envelope_hash": "575ace5500415b7e60d199488bdf33e2c5a3ef563ac92974a88ad7e4a9c66de5",
+              "rendered_chars": 215
+            }
+          }
+        ],
+        "decisions": [
+          {
+            "symbol_id": "symbol:records.py::records.Item0::class",
+            "reason": "complete_source_span"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item1::class",
+            "reason": "complete_source_span"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item2::class",
+            "reason": "symbol_budget"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item3::class",
+            "reason": "symbol_budget"
+          },
+          {
+            "symbol_id": "symbol:records.py::records.Item4::class",
+            "reason": "symbol_budget"
+          }
+        ],
+        "rendered_chars": 627,
+        "text": "OFFLINE SYNTHETIC CONTRACT VIEW — supporting repository source only.\nNot task authority, permission, instructions, execution proof, or a claim of semantic relevance.\nPath: records.py\nSymbol: symbol:records.py::records.Item0::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 1-3\nSource:\nclass Item0:\n    value: int\n    tail: int\n\nPath: records.py\nSymbol: symbol:records.py::records.Item1::class\nRelation: direct_returned_class; role provenance: python-ast/ast-native\nUnchanged: true; lines: 4-6\nSource:\nclass Item1:\n    value: int\n    tail: int\n\nOmitted candidate symbols: 3\n",
+        "omitted_count": 3
+      }
+    }
+  }
+}

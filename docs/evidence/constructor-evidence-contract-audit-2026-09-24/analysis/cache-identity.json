@@ -1,0 +1,25 @@
+{
+  "design_only": true,
+  "bind": [
+    "path",
+    "symbol_id",
+    "relation",
+    "usage_role",
+    "joined role provenance",
+    "target resolution confidence",
+    "current full source SHA256",
+    "rendered envelope SHA256",
+    "certified source span",
+    "inclusion/omission reason and completeness state",
+    "channel policy version"
+  ],
+  "exclude": [
+    "query duration",
+    "cache_hit",
+    "index bookkeeping generation when semantic evidence unchanged"
+  ],
+  "none_to_available": "miss",
+  "source_change": "miss",
+  "identical_semantic_evidence": "stable",
+  "not_implemented": true
+}

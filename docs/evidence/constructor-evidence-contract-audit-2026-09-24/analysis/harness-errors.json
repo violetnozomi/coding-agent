@@ -1,0 +1,9 @@
+{
+  "run-first.txt": "SymbolEntry.file_path incorrectly addressed as path; corrected harness",
+  "run-second.txt": "large fixture trailing comments outside ClassDef.end_lineno; add actual tail member",
+  "run-third.txt": "two-medium fixture still fit total budget",
+  "run-fourth.txt": "diagnostic confirmed 1056/1058-char blocks; increase generic fixture to exercise total limit",
+  "run-fifth.txt": "passed before added network/import guards and capability negative checks",
+  "run-final.txt": "passed with guards and extra negative checks",
+  "production_red_claimed": false
+}

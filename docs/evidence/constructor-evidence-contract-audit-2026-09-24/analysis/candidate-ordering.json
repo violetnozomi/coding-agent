@@ -1,0 +1,14 @@
+{
+  "dedup": "target symbol_id",
+  "order": [
+    "relative path lexical",
+    "symbol_id lexical"
+  ],
+  "semantic_ranking": false,
+  "risk": "irrelevant early returned class can displace useful later class",
+  "bounds": {
+    "max_symbols": 2,
+    "per_rendered_block_chars": 1400,
+    "total_rendered_chars": 2400
+  }
+}
