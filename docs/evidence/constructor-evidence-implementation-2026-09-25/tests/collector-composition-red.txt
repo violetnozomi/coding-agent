@@ -1,0 +1,933 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF                                      [100%]
+=================================== FAILURES ===================================
+_______________ test_generic_selection[return Payload()-names0] ________________
+
+repo = <function repo.<locals>.build at 0x7d50b485d1c0>
+body = 'return Payload()', names = ['Payload']
+
+    @pytest.mark.parametrize('body,names', [
+        ('return Payload()', ['Payload']),
+        ('return TelemetryMarker()', ['TelemetryMarker']),
+        ('AuditMarker()\n    return Payload()', ['Payload']),
+        ('return Wrapper(Payload())', ['Wrapper']),
+        ('obj = Payload()\n    return obj', []),
+        ('yield Payload()', []),
+        ('return unresolved()', []),
+    ])
+    def test_generic_selection(repo, body, names):
+        service = repo(MODEL, body)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b493e7b0>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+___________ test_generic_selection[return TelemetryMarker()-names1] ____________
+
+repo = <function repo.<locals>.build at 0x7d50b485fd80>
+body = 'return TelemetryMarker()', names = ['TelemetryMarker']
+
+    @pytest.mark.parametrize('body,names', [
+        ('return Payload()', ['Payload']),
+        ('return TelemetryMarker()', ['TelemetryMarker']),
+        ('AuditMarker()\n    return Payload()', ['Payload']),
+        ('return Wrapper(Payload())', ['Wrapper']),
+        ('obj = Payload()\n    return obj', []),
+        ('yield Payload()', []),
+        ('return unresolved()', []),
+    ])
+    def test_generic_selection(repo, body, names):
+        service = repo(MODEL, body)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b47fead0>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+______ test_generic_selection[AuditMarker()\n    return Payload()-names2] ______
+
+repo = <function repo.<locals>.build at 0x7d50b485f740>
+body = 'AuditMarker()\n    return Payload()', names = ['Payload']
+
+    @pytest.mark.parametrize('body,names', [
+        ('return Payload()', ['Payload']),
+        ('return TelemetryMarker()', ['TelemetryMarker']),
+        ('AuditMarker()\n    return Payload()', ['Payload']),
+        ('return Wrapper(Payload())', ['Wrapper']),
+        ('obj = Payload()\n    return obj', []),
+        ('yield Payload()', []),
+        ('return unresolved()', []),
+    ])
+    def test_generic_selection(repo, body, names):
+        service = repo(MODEL, body)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b47ffc50>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+___________ test_generic_selection[return Wrapper(Payload())-names3] ___________
+
+repo = <function repo.<locals>.build at 0x7d50b485e980>
+body = 'return Wrapper(Payload())', names = ['Wrapper']
+
+    @pytest.mark.parametrize('body,names', [
+        ('return Payload()', ['Payload']),
+        ('return TelemetryMarker()', ['TelemetryMarker']),
+        ('AuditMarker()\n    return Payload()', ['Payload']),
+        ('return Wrapper(Payload())', ['Wrapper']),
+        ('obj = Payload()\n    return obj', []),
+        ('yield Payload()', []),
+        ('return unresolved()', []),
+    ])
+    def test_generic_selection(repo, body, names):
+        service = repo(MODEL, body)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b4678640>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+________ test_generic_selection[obj = Payload()\n    return obj-names4] ________
+
+repo = <function repo.<locals>.build at 0x7d50b485fc40>
+body = 'obj = Payload()\n    return obj', names = []
+
+    @pytest.mark.parametrize('body,names', [
+        ('return Payload()', ['Payload']),
+        ('return TelemetryMarker()', ['TelemetryMarker']),
+        ('AuditMarker()\n    return Payload()', ['Payload']),
+        ('return Wrapper(Payload())', ['Wrapper']),
+        ('obj = Payload()\n    return obj', []),
+        ('yield Payload()', []),
+        ('return unresolved()', []),
+    ])
+    def test_generic_selection(repo, body, names):
+        service = repo(MODEL, body)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b4679f30>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+________________ test_generic_selection[yield Payload()-names5] ________________
+
+repo = <function repo.<locals>.build at 0x7d50b485fec0>
+body = 'yield Payload()', names = []
+
+    @pytest.mark.parametrize('body,names', [
+        ('return Payload()', ['Payload']),
+        ('return TelemetryMarker()', ['TelemetryMarker']),
+        ('AuditMarker()\n    return Payload()', ['Payload']),
+        ('return Wrapper(Payload())', ['Wrapper']),
+        ('obj = Payload()\n    return obj', []),
+        ('yield Payload()', []),
+        ('return unresolved()', []),
+    ])
+    def test_generic_selection(repo, body, names):
+        service = repo(MODEL, body)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469c170>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+______________ test_generic_selection[return unresolved()-names6] ______________
+
+repo = <function repo.<locals>.build at 0x7d50b485f2e0>
+body = 'return unresolved()', names = []
+
+    @pytest.mark.parametrize('body,names', [
+        ('return Payload()', ['Payload']),
+        ('return TelemetryMarker()', ['TelemetryMarker']),
+        ('AuditMarker()\n    return Payload()', ['Payload']),
+        ('return Wrapper(Payload())', ['Wrapper']),
+        ('obj = Payload()\n    return obj', []),
+        ('yield Payload()', []),
+        ('return unresolved()', []),
+    ])
+    def test_generic_selection(repo, body, names):
+        service = repo(MODEL, body)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469d910>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_ test_whole_envelope[@decorator(\n    frozen=True,\n)\nclass Payload:\n    value: int\n-True] _
+
+repo = <function repo.<locals>.build at 0x7d50b469a980>
+source = '@decorator(\n    frozen=True,\n)\nclass Payload:\n    value: int\n'
+visible = True
+
+    @pytest.mark.parametrize('source,visible', [
+        ('@decorator(\n    frozen=True,\n)\nclass Payload:\n    value: int\n', True),
+        ('@first\n@second()\nclass Payload:\n    value: int\n', True),
+        ('@(\n    decorator\n)\nclass Payload:\n    value: int\n', False),
+        ('@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n', True),
+        ('class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n', True),
+        ('class Payload:\n    value: int\n'+'    # padding\n'*130+'    def __post_init__(self):\n        raise ValueError\n', False),
+    ])
+    def test_whole_envelope(repo, source, visible):
+        service = repo(source)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469da30>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_ test_whole_envelope[@first\n@second()\nclass Payload:\n    value: int\n-True] _
+
+repo = <function repo.<locals>.build at 0x7d50b4699300>
+source = '@first\n@second()\nclass Payload:\n    value: int\n', visible = True
+
+    @pytest.mark.parametrize('source,visible', [
+        ('@decorator(\n    frozen=True,\n)\nclass Payload:\n    value: int\n', True),
+        ('@first\n@second()\nclass Payload:\n    value: int\n', True),
+        ('@(\n    decorator\n)\nclass Payload:\n    value: int\n', False),
+        ('@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n', True),
+        ('class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n', True),
+        ('class Payload:\n    value: int\n'+'    # padding\n'*130+'    def __post_init__(self):\n        raise ValueError\n', False),
+    ])
+    def test_whole_envelope(repo, source, visible):
+        service = repo(source)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469dc70>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_ test_whole_envelope[@(\n    decorator\n)\nclass Payload:\n    value: int\n-False] _
+
+repo = <function repo.<locals>.build at 0x7d50b4699940>
+source = '@(\n    decorator\n)\nclass Payload:\n    value: int\n'
+visible = False
+
+    @pytest.mark.parametrize('source,visible', [
+        ('@decorator(\n    frozen=True,\n)\nclass Payload:\n    value: int\n', True),
+        ('@first\n@second()\nclass Payload:\n    value: int\n', True),
+        ('@(\n    decorator\n)\nclass Payload:\n    value: int\n', False),
+        ('@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n', True),
+        ('class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n', True),
+        ('class Payload:\n    value: int\n'+'    # padding\n'*130+'    def __post_init__(self):\n        raise ValueError\n', False),
+    ])
+    def test_whole_envelope(repo, source, visible):
+        service = repo(source)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469deb0>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_ test_whole_envelope[@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n-True] _
+
+repo = <function repo.<locals>.build at 0x7d50b469b9c0>
+source = '@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n'
+visible = True
+
+    @pytest.mark.parametrize('source,visible', [
+        ('@decorator(\n    frozen=True,\n)\nclass Payload:\n    value: int\n', True),
+        ('@first\n@second()\nclass Payload:\n    value: int\n', True),
+        ('@(\n    decorator\n)\nclass Payload:\n    value: int\n', False),
+        ('@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n', True),
+        ('class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n', True),
+        ('class Payload:\n    value: int\n'+'    # padding\n'*130+'    def __post_init__(self):\n        raise ValueError\n', False),
+    ])
+    def test_whole_envelope(repo, source, visible):
+        service = repo(source)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469c4d0>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_ test_whole_envelope[class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n-True] _
+
+repo = <function repo.<locals>.build at 0x7d50b469a840>
+source = 'class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n'
+visible = True
+
+    @pytest.mark.parametrize('source,visible', [
+        ('@decorator(\n    frozen=True,\n)\nclass Payload:\n    value: int\n', True),
+        ('@first\n@second()\nclass Payload:\n    value: int\n', True),
+        ('@(\n    decorator\n)\nclass Payload:\n    value: int\n', False),
+        ('@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n', True),
+        ('class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n', True),
+        ('class Payload:\n    value: int\n'+'    # padding\n'*130+'    def __post_init__(self):\n        raise ValueError\n', False),
+    ])
+    def test_whole_envelope(repo, source, visible):
+        service = repo(source)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469e330>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_ test_whole_envelope[class Payload:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    def __post_init__(self):\n        raise ValueError\n-False] _
+
+repo = <function repo.<locals>.build at 0x7d50b4699800>
+source = 'class Payload:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padd...\n    # padding\n    # padding\n    # padding\n    # padding\n    def __post_init__(self):\n        raise ValueError\n'
+visible = False
+
+    @pytest.mark.parametrize('source,visible', [
+        ('@decorator(\n    frozen=True,\n)\nclass Payload:\n    value: int\n', True),
+        ('@first\n@second()\nclass Payload:\n    value: int\n', True),
+        ('@(\n    decorator\n)\nclass Payload:\n    value: int\n', False),
+        ('@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n', True),
+        ('class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n', True),
+        ('class Payload:\n    value: int\n'+'    # padding\n'*130+'    def __post_init__(self):\n        raise ValueError\n', False),
+    ])
+    def test_whole_envelope(repo, source, visible):
+        service = repo(source)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469d250>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_________________________ test_many_budget_and_digest __________________________
+
+repo = <function repo.<locals>.build at 0x7d50b4698ea0>
+
+    def test_many_budget_and_digest(repo):
+        service = repo(''.join(f'class K{i}:\n    pass\n' for i in range(5)), 'return Payload()')
+        (service.workspace/'factory.py').write_text('from objects import K0,K1,K2,K3,K4\ndef make(flag):\n'+''.join(f'    if flag=={i}: return K{i}()\n' for i in range(5)))
+        service.prewarm().result(timeout=15)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469e690>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+___________________ test_forbidden_sources[tests/objects.py] ___________________
+
+repo = <function repo.<locals>.build at 0x7d50b46984a0>
+path = 'tests/objects.py'
+
+    @pytest.mark.parametrize('path', ['tests/objects.py','docs/objects.py','evidence/objects.py','oracle/objects.py','acceptance/objects.py','vendor/objects.py'])
+    def test_forbidden_sources(repo, path):
+        service = repo(model=path)
+>       assert not collect(service)[0].text
+                   ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b4833bf0>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+___________________ test_forbidden_sources[docs/objects.py] ____________________
+
+repo = <function repo.<locals>.build at 0x7d50b4698860>
+path = 'docs/objects.py'
+
+    @pytest.mark.parametrize('path', ['tests/objects.py','docs/objects.py','evidence/objects.py','oracle/objects.py','acceptance/objects.py','vendor/objects.py'])
+    def test_forbidden_sources(repo, path):
+        service = repo(model=path)
+>       assert not collect(service)[0].text
+                   ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469e0f0>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_________________ test_forbidden_sources[evidence/objects.py] __________________
+
+repo = <function repo.<locals>.build at 0x7d50b4699760>
+path = 'evidence/objects.py'
+
+    @pytest.mark.parametrize('path', ['tests/objects.py','docs/objects.py','evidence/objects.py','oracle/objects.py','acceptance/objects.py','vendor/objects.py'])
+    def test_forbidden_sources(repo, path):
+        service = repo(model=path)
+>       assert not collect(service)[0].text
+                   ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469e450>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+__________________ test_forbidden_sources[oracle/objects.py] ___________________
+
+repo = <function repo.<locals>.build at 0x7d50b46980e0>
+path = 'oracle/objects.py'
+
+    @pytest.mark.parametrize('path', ['tests/objects.py','docs/objects.py','evidence/objects.py','oracle/objects.py','acceptance/objects.py','vendor/objects.py'])
+    def test_forbidden_sources(repo, path):
+        service = repo(model=path)
+>       assert not collect(service)[0].text
+                   ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469e7b0>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+________________ test_forbidden_sources[acceptance/objects.py] _________________
+
+repo = <function repo.<locals>.build at 0x7d50b46999e0>
+path = 'acceptance/objects.py'
+
+    @pytest.mark.parametrize('path', ['tests/objects.py','docs/objects.py','evidence/objects.py','oracle/objects.py','acceptance/objects.py','vendor/objects.py'])
+    def test_forbidden_sources(repo, path):
+        service = repo(model=path)
+>       assert not collect(service)[0].text
+                   ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469e210>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+__________________ test_forbidden_sources[vendor/objects.py] ___________________
+
+repo = <function repo.<locals>.build at 0x7d50b4698f40>
+path = 'vendor/objects.py'
+
+    @pytest.mark.parametrize('path', ['tests/objects.py','docs/objects.py','evidence/objects.py','oracle/objects.py','acceptance/objects.py','vendor/objects.py'])
+    def test_forbidden_sources(repo, path):
+        service = repo(model=path)
+>       assert not collect(service)[0].text
+                   ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469c4d0>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_________________________ test_changed_authority_stale _________________________
+
+repo = <function repo.<locals>.build at 0x7d50b485f920>
+
+    def test_changed_authority_stale(repo):
+        service = repo()
+>       assert not collect(service, ('factory.py','objects.py'))[0].text
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:118: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b48331d0>
+paths = ('factory.py', 'objects.py'), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+____________________________ test_unavailable[cold] ____________________________
+
+repo = <function repo.<locals>.build at 0x7d50b469b880>, status = 'cold'
+
+    @pytest.mark.parametrize('status', ['cold','building','warming','failed'])
+    def test_unavailable(repo, status):
+        service = repo()
+        service._state = dataclasses.replace(service.state, status=status)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:134: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469da30>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+__________________________ test_unavailable[building] __________________________
+
+repo = <function repo.<locals>.build at 0x7d50b4698360>, status = 'building'
+
+    @pytest.mark.parametrize('status', ['cold','building','warming','failed'])
+    def test_unavailable(repo, status):
+        service = repo()
+        service._state = dataclasses.replace(service.state, status=status)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:134: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469d370>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+__________________________ test_unavailable[warming] ___________________________
+
+repo = <function repo.<locals>.build at 0x7d50b4749f80>, status = 'warming'
+
+    @pytest.mark.parametrize('status', ['cold','building','warming','failed'])
+    def test_unavailable(repo, status):
+        service = repo()
+        service._state = dataclasses.replace(service.state, status=status)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:134: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469d010>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+___________________________ test_unavailable[failed] ___________________________
+
+repo = <function repo.<locals>.build at 0x7d50b474b420>, status = 'failed'
+
+    @pytest.mark.parametrize('status', ['cold','building','warming','failed'])
+    def test_unavailable(repo, status):
+        service = repo()
+        service._state = dataclasses.replace(service.state, status=status)
+>       evidence, trace = collect(service)
+                          ^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:134: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469cef0>
+paths = ('factory.py',), workspace = None, authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+___________________________ test_fail_soft[timeout] ____________________________
+
+repo = <function repo.<locals>.build at 0x7d50b474ba60>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d50b4716f20>
+failure = 'timeout'
+
+    @pytest.mark.parametrize('failure', ['timeout','exception','race'])
+    def test_fail_soft(repo, monkeypatch, failure):
+>       from nz_coder.runtime.verification import constructor_evidence as mod
+E       ImportError: cannot import name 'constructor_evidence' from 'nz_coder.runtime.verification' (/home/pyh/nzcoder/nz_coder/runtime/verification/__init__.py)
+
+tests/runtime/test_constructor_evidence.py:140: ImportError
+__________________________ test_fail_soft[exception] ___________________________
+
+repo = <function repo.<locals>.build at 0x7d50b485f740>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d50b486cb40>
+failure = 'exception'
+
+    @pytest.mark.parametrize('failure', ['timeout','exception','race'])
+    def test_fail_soft(repo, monkeypatch, failure):
+>       from nz_coder.runtime.verification import constructor_evidence as mod
+E       ImportError: cannot import name 'constructor_evidence' from 'nz_coder.runtime.verification' (/home/pyh/nzcoder/nz_coder/runtime/verification/__init__.py)
+
+tests/runtime/test_constructor_evidence.py:140: ImportError
+_____________________________ test_fail_soft[race] _____________________________
+
+repo = <function repo.<locals>.build at 0x7d50b4698360>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d50b486e200>
+failure = 'race'
+
+    @pytest.mark.parametrize('failure', ['timeout','exception','race'])
+    def test_fail_soft(repo, monkeypatch, failure):
+>       from nz_coder.runtime.verification import constructor_evidence as mod
+E       ImportError: cannot import name 'constructor_evidence' from 'nz_coder.runtime.verification' (/home/pyh/nzcoder/nz_coder/runtime/verification/__init__.py)
+
+tests/runtime/test_constructor_evidence.py:140: ImportError
+_________________________ test_source_access[symlink] __________________________
+
+repo = <function repo.<locals>.build at 0x7d50b469be20>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_source_access_symlink_0')
+failure = 'symlink'
+
+    @pytest.mark.parametrize('failure', ['symlink','deleted','oversized','binary','workspace-mismatch'])
+    def test_source_access(repo, tmp_path, failure):
+        service = repo()
+        p = service.workspace/'objects.py'
+        if failure == 'symlink':
+            p.unlink()
+            outside = tmp_path.parent/'external.py'
+            outside.write_text('secret')
+            p.symlink_to(outside)
+        elif failure == 'deleted': p.unlink()
+        elif failure == 'oversized': p.write_text('x'*128001)
+        elif failure == 'binary': p.write_bytes(b'\x00\xff')
+        root = tmp_path.parent if failure == 'workspace-mismatch' else tmp_path
+>       assert not collect(service, workspace=root)[0].text
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:170: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469cef0>
+paths = ('factory.py',)
+workspace = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_source_access_symlink_0')
+authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+_________________________ test_source_access[deleted] __________________________
+
+repo = <function repo.<locals>.build at 0x7d50b469a5c0>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_source_access_deleted_0')
+failure = 'deleted'
+
+    @pytest.mark.parametrize('failure', ['symlink','deleted','oversized','binary','workspace-mismatch'])
+    def test_source_access(repo, tmp_path, failure):
+        service = repo()
+        p = service.workspace/'objects.py'
+        if failure == 'symlink':
+            p.unlink()
+            outside = tmp_path.parent/'external.py'
+            outside.write_text('secret')
+            p.symlink_to(outside)
+        elif failure == 'deleted': p.unlink()
+        elif failure == 'oversized': p.write_text('x'*128001)
+        elif failure == 'binary': p.write_bytes(b'\x00\xff')
+        root = tmp_path.parent if failure == 'workspace-mismatch' else tmp_path
+>       assert not collect(service, workspace=root)[0].text
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:170: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469d370>
+paths = ('factory.py',)
+workspace = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_source_access_deleted_0')
+authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+________________________ test_source_access[oversized] _________________________
+
+repo = <function repo.<locals>.build at 0x7d50b4698860>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_source_access_oversized_0')
+failure = 'oversized'
+
+    @pytest.mark.parametrize('failure', ['symlink','deleted','oversized','binary','workspace-mismatch'])
+    def test_source_access(repo, tmp_path, failure):
+        service = repo()
+        p = service.workspace/'objects.py'
+        if failure == 'symlink':
+            p.unlink()
+            outside = tmp_path.parent/'external.py'
+            outside.write_text('secret')
+            p.symlink_to(outside)
+        elif failure == 'deleted': p.unlink()
+        elif failure == 'oversized': p.write_text('x'*128001)
+        elif failure == 'binary': p.write_bytes(b'\x00\xff')
+        root = tmp_path.parent if failure == 'workspace-mismatch' else tmp_path
+>       assert not collect(service, workspace=root)[0].text
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:170: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469d130>
+paths = ('factory.py',)
+workspace = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_source_access_oversized_0')
+authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+__________________________ test_source_access[binary] __________________________
+
+repo = <function repo.<locals>.build at 0x7d50b469a980>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_source_access_binary_0')
+failure = 'binary'
+
+    @pytest.mark.parametrize('failure', ['symlink','deleted','oversized','binary','workspace-mismatch'])
+    def test_source_access(repo, tmp_path, failure):
+        service = repo()
+        p = service.workspace/'objects.py'
+        if failure == 'symlink':
+            p.unlink()
+            outside = tmp_path.parent/'external.py'
+            outside.write_text('secret')
+            p.symlink_to(outside)
+        elif failure == 'deleted': p.unlink()
+        elif failure == 'oversized': p.write_text('x'*128001)
+        elif failure == 'binary': p.write_bytes(b'\x00\xff')
+        root = tmp_path.parent if failure == 'workspace-mismatch' else tmp_path
+>       assert not collect(service, workspace=root)[0].text
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:170: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469c4d0>
+paths = ('factory.py',)
+workspace = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_source_access_binary_0')
+authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+____________________ test_source_access[workspace-mismatch] ____________________
+
+repo = <function repo.<locals>.build at 0x7d50b469b420>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_source_access_workspace_m0')
+failure = 'workspace-mismatch'
+
+    @pytest.mark.parametrize('failure', ['symlink','deleted','oversized','binary','workspace-mismatch'])
+    def test_source_access(repo, tmp_path, failure):
+        service = repo()
+        p = service.workspace/'objects.py'
+        if failure == 'symlink':
+            p.unlink()
+            outside = tmp_path.parent/'external.py'
+            outside.write_text('secret')
+            p.symlink_to(outside)
+        elif failure == 'deleted': p.unlink()
+        elif failure == 'oversized': p.write_text('x'*128001)
+        elif failure == 'binary': p.write_bytes(b'\x00\xff')
+        root = tmp_path.parent if failure == 'workspace-mismatch' else tmp_path
+>       assert not collect(service, workspace=root)[0].text
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/runtime/test_constructor_evidence.py:170: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+service = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x7d50b469e330>
+paths = ('factory.py',), workspace = PosixPath('/tmp/pytest-of-pyh/pytest-88')
+authorities = ()
+
+    def collect(service, paths=('factory.py',), workspace=None, authorities=()):
+>       from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+E       ModuleNotFoundError: No module named 'nz_coder.runtime.verification.constructor_evidence'
+
+tests/runtime/test_constructor_evidence.py:33: ModuleNotFoundError
+________________________ test_sidecar_composition_cache ________________________
+
+repo = <function repo.<locals>.build at 0x7d50b4748180>
+
+    def test_sidecar_composition_cache(repo):
+        service = repo('@dataclass\nclass Payload:\n    value: int\n')
+        diff='--- a/factory.py\n+++ b/factory.py\n@@ -1 +1 @@\n-old\n+new\n'
+        empty = packet(service.workspace, None, ['factory.py'], diff)
+        current = packet(service.workspace, service, ['factory.py'], diff)
+>       assert '@dataclass\nclass Payload:' in current[1]
+E       AssertionError: assert '@dataclass\nclass Payload:' in '=== USER REQUEST (CURRENT TURN) ===\nUpdate encoding\n\n=== AUTHORITATIVE TASK REFERENCES ===\n\nRuntime-retained ori...e `reason` becomes a synthetic user follow-up the main agent will see as a review finding, not genuine user authority.'
+
+tests/runtime/test_constructor_evidence.py:178: AssertionError
+_____________________________ test_frozen_c_packet _____________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-88/test_frozen_c_packet0')
+
+    def test_frozen_c_packet(tmp_path):
+        root=tmp_path/'workspace'
+        shutil.copytree(HISTORY/'final-files',root)
+        historical=json.loads((CF/'packets/historical-verifier2-summary.json').read_text())
+        state=historical['runtime_state']
+        diff=json.loads((CF/'packets/native-diff-source.json').read_text())['text']
+        service=RepoIntelligenceService(root)
+        try:
+            service.prewarm().result(timeout=15)
+            context,text,key,events=packet(root,service,state['changed_files'],diff,state,historical['transcript'],historical['final_assistant_text'])
+            record('c/packet.json', {'context':dataclasses.asdict(context),'packet':text,'events':events})
+>           assert '@dataclass(frozen=True)\nclass Config:' in text
+E           AssertionError: assert '@dataclass(frozen=True)\nclass Config:' in '=== USER REQUEST (CURRENT TURN) ===\nImplement the configuration migration described in CONFIG_SPEC.md throughout thi...e `reason` becomes a synthetic user follow-up the main agent will see as a review finding, not genuine user authority.'
+
+tests/runtime/test_constructor_evidence.py:195: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_constructor_evidence.py::test_generic_selection[return Payload()-names0]
+FAILED tests/runtime/test_constructor_evidence.py::test_generic_selection[return TelemetryMarker()-names1]
+FAILED tests/runtime/test_constructor_evidence.py::test_generic_selection[AuditMarker()\n    return Payload()-names2]
+FAILED tests/runtime/test_constructor_evidence.py::test_generic_selection[return Wrapper(Payload())-names3]
+FAILED tests/runtime/test_constructor_evidence.py::test_generic_selection[obj = Payload()\n    return obj-names4]
+FAILED tests/runtime/test_constructor_evidence.py::test_generic_selection[yield Payload()-names5]
+FAILED tests/runtime/test_constructor_evidence.py::test_generic_selection[return unresolved()-names6]
+FAILED tests/runtime/test_constructor_evidence.py::test_whole_envelope[@decorator(\n    frozen=True,\n)\nclass Payload:\n    value: int\n-True]
+FAILED tests/runtime/test_constructor_evidence.py::test_whole_envelope[@first\n@second()\nclass Payload:\n    value: int\n-True]
+FAILED tests/runtime/test_constructor_evidence.py::test_whole_envelope[@(\n    decorator\n)\nclass Payload:\n    value: int\n-False]
+FAILED tests/runtime/test_constructor_evidence.py::test_whole_envelope[@dataclass\nclass Payload:\n    value: int\n    def __post_init__(self):\n        if self.value < 0: raise ValueError\n-True]
+FAILED tests/runtime/test_constructor_evidence.py::test_whole_envelope[class Payload:\n    def __init__(self, value):\n        validate(value)\n        self.value = value\n-True]
+FAILED tests/runtime/test_constructor_evidence.py::test_whole_envelope[class Payload:\n    value: int\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    # padding\n    def __post_init__(self):\n        raise ValueError\n-False]
+FAILED tests/runtime/test_constructor_evidence.py::test_many_budget_and_digest
+FAILED tests/runtime/test_constructor_evidence.py::test_forbidden_sources[tests/objects.py]
+FAILED tests/runtime/test_constructor_evidence.py::test_forbidden_sources[docs/objects.py]
+FAILED tests/runtime/test_constructor_evidence.py::test_forbidden_sources[evidence/objects.py]
+FAILED tests/runtime/test_constructor_evidence.py::test_forbidden_sources[oracle/objects.py]
+FAILED tests/runtime/test_constructor_evidence.py::test_forbidden_sources[acceptance/objects.py]
+FAILED tests/runtime/test_constructor_evidence.py::test_forbidden_sources[vendor/objects.py]
+FAILED tests/runtime/test_constructor_evidence.py::test_changed_authority_stale
+FAILED tests/runtime/test_constructor_evidence.py::test_unavailable[cold] - M...
+FAILED tests/runtime/test_constructor_evidence.py::test_unavailable[building]
+FAILED tests/runtime/test_constructor_evidence.py::test_unavailable[warming]
+FAILED tests/runtime/test_constructor_evidence.py::test_unavailable[failed]
+FAILED tests/runtime/test_constructor_evidence.py::test_fail_soft[timeout] - ...
+FAILED tests/runtime/test_constructor_evidence.py::test_fail_soft[exception]
+FAILED tests/runtime/test_constructor_evidence.py::test_fail_soft[race] - Imp...
+FAILED tests/runtime/test_constructor_evidence.py::test_source_access[symlink]
+FAILED tests/runtime/test_constructor_evidence.py::test_source_access[deleted]
+FAILED tests/runtime/test_constructor_evidence.py::test_source_access[oversized]
+FAILED tests/runtime/test_constructor_evidence.py::test_source_access[binary]
+FAILED tests/runtime/test_constructor_evidence.py::test_source_access[workspace-mismatch]
+FAILED tests/runtime/test_constructor_evidence.py::test_sidecar_composition_cache
+FAILED tests/runtime/test_constructor_evidence.py::test_frozen_c_packet - Ass...
+35 failed in 0.80s

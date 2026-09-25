@@ -1,0 +1,1 @@
+Phase 1 metadata RED/GREEN → Phase 2 collector RED/GREEN → Phase 3 composition RED/GREEN → Phase 4 offline packet + regression audit. Zero model calls. No Phase 5 reviewer request. Baseline 8bc90584eedbb696b497e885a8989ac1885c357b; clean and origin/main synchronized.

@@ -1238,6 +1238,7 @@ def test_sidecar_hook_builds_live_evidence_traces_and_maps_verdict():
     assert hook.stats["fire_count"] == 1
     assert hook.stats["verdict_counts"]["revise"] == 1
     assert [event for event, _payload in tracer.events] == [
+        "sidecar_constructor_evidence",
         "sidecar_dependency_evidence",
         "sidecar_gate_decision",
         "sidecar_started",
@@ -1597,6 +1598,7 @@ def test_sidecar_defers_to_pending_strict_verification_without_provider_call():
     assert hook.stats["skip_count"] == 1
     assert hook.stats["last_gate_reason"] == "deterministic-verification-pending"
     assert [name for name, _payload in events] == [
+        "sidecar_constructor_evidence",
         "sidecar_dependency_evidence", "sidecar_gate_decision",
     ]
 

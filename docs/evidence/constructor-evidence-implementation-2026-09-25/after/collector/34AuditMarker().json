@@ -1,0 +1,49 @@
+{
+  "items": [
+    {
+      "path": "objects.py",
+      "symbol_id": "symbol:objects.py::objects.Payload::class",
+      "usage_role": "returned",
+      "role_provenance": "caller-python-ast/ast-native",
+      "confidence": 0.98,
+      "relation": "direct_returned_class",
+      "reason": "included",
+      "source_start_line": 1,
+      "end_line": 2,
+      "source_hash": "e7b14c44fb78d5f7f5ddf602079f41b695d8107e27b654a4ec230c3d472953a3",
+      "envelope_hash": "d99e554987f6f6eaa1f8e1a43ccd5e4df916b89fd5f7bb9cc5fb322795fe407f",
+      "rendered_chars": 239,
+      "symbol": "Payload"
+    }
+  ],
+  "trace": {
+    "query_attempted": true,
+    "repo_status": "ready",
+    "candidate_count": 1,
+    "omitted_count": 0,
+    "included_count": 1,
+    "total_chars": 463,
+    "digest": "731e9a72e9103aa60497806ae3c36c5fe2551f447da4b8fc585602c1c05a6b5e",
+    "included_locators": [
+      "symbol:objects.py::objects.Payload::class"
+    ],
+    "fallback_reason": "",
+    "decisions": [
+      {
+        "path": "objects.py",
+        "symbol_id": "symbol:objects.py::objects.Payload::class",
+        "usage_role": "returned",
+        "role_provenance": "caller-python-ast/ast-native",
+        "confidence": 0.98,
+        "relation": "direct_returned_class",
+        "reason": "included",
+        "source_start_line": 1,
+        "end_line": 2,
+        "source_hash": "e7b14c44fb78d5f7f5ddf602079f41b695d8107e27b654a4ec230c3d472953a3",
+        "envelope_hash": "d99e554987f6f6eaa1f8e1a43ccd5e4df916b89fd5f7bb9cc5fb322795fe407f",
+        "rendered_chars": 239
+      }
+    ],
+    "repo_generation": 1
+  }
+}

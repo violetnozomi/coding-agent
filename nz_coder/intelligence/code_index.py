@@ -40,7 +40,7 @@ def is_excluded_directory(name: str) -> bool:
     return name in EXCLUDED_DIRS
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 # Compatibility hook: analyzers share this stdlib module object and historical
 # tests/extensions patch ``code_index.ast.parse`` to observe AST cache reuse.
 ast = _ast
@@ -119,6 +119,7 @@ class SymbolEntry:
     confidence: float = 0.0
     source: str = ""
     capability_tier: str = CapabilityTier.LEXICAL_FALLBACK.value
+    source_start_line: int | None = None
 
 
 @dataclass(frozen=True)
@@ -393,7 +394,8 @@ class PersistentCodeIndex:
                 exported INTEGER,
                 confidence REAL NOT NULL,
                 source TEXT NOT NULL,
-                capability_tier TEXT NOT NULL
+                capability_tier TEXT NOT NULL,
+                source_start_line INTEGER
             );
             CREATE TABLE IF NOT EXISTS refs (
                 id INTEGER PRIMARY KEY,
@@ -546,7 +548,7 @@ class PersistentCodeIndex:
             record.kind, record.name, record.qualified_name, record.line,
             record.end_line, record.signature, record.symbol_id, record.file_path,
             record.module_id, record.language, record.exported, record.confidence,
-            record.source, record.capability_tier,
+            record.source, record.capability_tier, record.source_start_line,
         )
 
     @staticmethod
@@ -570,13 +572,13 @@ class PersistentCodeIndex:
             ),
         )
         connection.executemany(
-            "INSERT INTO symbols VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO symbols VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     item.symbol_id, item.file_path, item.module_id, item.kind, item.name,
                     item.qualified_name, item.line, item.end_line, item.signature,
                     None if item.exported is None else int(item.exported),
-                    item.confidence, item.source, item.capability_tier,
+                    item.confidence, item.source, item.capability_tier, item.source_start_line,
                 )
                 for item in analysis.symbols
             ],
@@ -1178,7 +1180,7 @@ class PersistentCodeIndex:
             int(row["end_line"]), row["signature"], row["symbol_id"], row["path"],
             row["module_id"], row["language"] if "language" in row.keys() else "",
             None if exported is None else bool(exported), float(row["confidence"]),
-            row["source"], row["capability_tier"],
+            row["source"], row["capability_tier"], row["source_start_line"],
         )
 
     @staticmethod
@@ -1389,6 +1391,7 @@ class PersistentCodeIndex:
             "path": row["path"], "file_path": row["path"],
             "module_id": row["module_id"], "language": row["language"],
             "line": int(row["line"]), "end_line": int(row["end_line"]),
+            "source_start_line": row["source_start_line"],
             "signature": row["signature"],
             "exported": None if exported is None else bool(exported),
             "confidence": float(row["confidence"]), "source": row["source"],

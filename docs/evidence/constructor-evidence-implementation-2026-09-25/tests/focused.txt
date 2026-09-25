@@ -1,0 +1,176 @@
+sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only
+........................................................................ [ 26%]
+........................................................................ [ 52%]
+.........................................................F.....F........ [ 78%]
+..........................................................               [100%]
+=================================== FAILURES ===================================
+________ test_sidecar_hook_builds_live_evidence_traces_and_maps_verdict ________
+
+    def test_sidecar_hook_builds_live_evidence_traces_and_maps_verdict():
+        """Catches a resolved verifier that is never assembled into a live stop hook."""
+        import asyncio
+        from types import SimpleNamespace
+    
+        from nz_coder.runtime.verification.hooks import StopHookContext
+        from nz_coder.runtime.verification.sidecar_verifier import (
+            ResolvedVerifierProvider,
+            create_sidecar_verifier_hook,
+        )
+    
+        class Provider:
+            name = "judge"
+    
+            def create_completion(self, _client, **_kwargs):
+                tool_call = SimpleNamespace(function=SimpleNamespace(
+                    name="emit_sidecar_verdict",
+                    arguments=(
+                        '{"verdict":"revise","reason":"Missing test",'
+                        '"suggestedFix":"Add regression coverage"}'
+                    ),
+                ))
+                return SimpleNamespace(choices=[SimpleNamespace(
+                    message=SimpleNamespace(content="", tool_calls=[tool_call])
+                )])
+    
+        class Tracker:
+            def current_changed_paths(self):
+                return ["a.py", "b.py"]
+    
+            def current_deleted_paths(self):
+                return []
+    
+            def render_current_diff(self):
+                return "--- a/a.py\n+++ b/a.py\n-old\n+new\n--- a/b.py\n+++ b/b.py\n+x\n"
+    
+        class Tracer:
+            def __init__(self):
+                self.events = []
+    
+            def log(self, event, **payload):
+                self.events.append((event, payload))
+    
+        tracer = Tracer()
+        loop = SimpleNamespace(
+            change_tracker=Tracker(),
+            tracer=tracer,
+            _sidecar_risky_shell_ops=0,
+            _sidecar_unattributed_write_ops=0,
+        )
+        hook = create_sidecar_verifier_hook(
+            loop,
+            ResolvedVerifierProvider(
+                provider=Provider(),
+                client=object(),
+                model="judge-model",
+                provider_name="judge",
+                source="inherit-main",
+            ),
+            env={},
+        )
+        context = StopHookContext(
+            transcript=(
+                {"role": "user", "content": "Fix both modules"},
+                {"role": "assistant", "content": "Done"},
+            ),
+            last_assistant_text="Done",
+            runtime_state={"edits_this_run": 2, "turn_count": 4},
+        )
+    
+        decision = asyncio.run(hook(context))
+    
+        assert decision.action == "reanimate"
+        assert "Missing test" in decision.message
+        assert hook.stats["fire_count"] == 1
+        assert hook.stats["verdict_counts"]["revise"] == 1
+>       assert [event for event, _payload in tracer.events] == [
+            "sidecar_dependency_evidence",
+            "sidecar_gate_decision",
+            "sidecar_started",
+            "sidecar_finished",
+        ]
+E       AssertionError: assert ['sidecar_con...car_finished'] == ['sidecar_dep...car_finished']
+E         
+E         At index 0 diff: 'sidecar_constructor_evidence' != 'sidecar_dependency_evidence'
+E         Left contains one more item: 'sidecar_finished'
+E         Use -v to get more diff
+
+tests/test_sidecar_verifier.py:1240: AssertionError
+___ test_sidecar_defers_to_pending_strict_verification_without_provider_call ___
+
+    def test_sidecar_defers_to_pending_strict_verification_without_provider_call():
+        """Strict deterministic verification owns convergence before the judge."""
+        import asyncio
+        from types import SimpleNamespace
+    
+        from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+        from nz_coder.runtime.verification.hooks import StopHookContext
+        from nz_coder.runtime.verification.sidecar_verifier import (
+            ResolvedVerifierProvider,
+            create_sidecar_verifier_hook,
+        )
+    
+        class Provider:
+            name = "judge"
+    
+            def create_completion(self, _client, **_kwargs):
+                raise AssertionError("pending strict verification must run first")
+    
+        events = []
+        hook = create_sidecar_verifier_hook(
+            SimpleNamespace(
+                change_tracker=SimpleNamespace(
+                    current_changed_paths=lambda: ["pkg/parser.py", "tests/test_parser.py"],
+                    current_deleted_paths=lambda: [],
+                    render_current_diff=lambda: (
+                        "--- a/pkg/parser.py\n+++ b/pkg/parser.py\n"
+                        "-old\n+new\n"
+                    ),
+                ),
+                tracer=SimpleNamespace(
+                    log=lambda name, **payload: events.append((name, payload))
+                ),
+                _sidecar_risky_shell_ops=0,
+                _sidecar_unattributed_write_ops=0,
+            ),
+            ResolvedVerifierProvider(
+                Provider(), object(), "judge-model", "judge", "inherit-main"
+            ),
+            env={"KODAX_VERIFIER_ALWAYS": "1"},
+        )
+        context = StopHookContext(
+            transcript=(
+                {"role": "user", "content": "Fix parser"},
+                {"role": "assistant", "content": "Done"},
+            ),
+            last_assistant_text="Done",
+            runtime_state={
+                "edits_this_run": 2,
+                "turn_count": 4,
+                "verification": {
+                    "verification_needed": True,
+                    "verification_state": "failed_repairable",
+                },
+            },
+        )
+    
+        with scoped_runtime_overrides(strict_local_tools=True):
+            decision = asyncio.run(hook(context))
+    
+        assert decision.action == "complete"
+        assert hook.stats["fire_count"] == 0
+        assert hook.stats["skip_count"] == 1
+        assert hook.stats["last_gate_reason"] == "deterministic-verification-pending"
+>       assert [name for name, _payload in events] == [
+            "sidecar_dependency_evidence", "sidecar_gate_decision",
+        ]
+E       AssertionError: assert ['sidecar_con...ate_decision'] == ['sidecar_dep...ate_decision']
+E         
+E         At index 0 diff: 'sidecar_constructor_evidence' != 'sidecar_dependency_evidence'
+E         Left contains one more item: 'sidecar_gate_decision'
+E         Use -v to get more diff
+
+tests/test_sidecar_verifier.py:1599: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_sidecar_verifier.py::test_sidecar_hook_builds_live_evidence_traces_and_maps_verdict
+FAILED tests/test_sidecar_verifier.py::test_sidecar_defers_to_pending_strict_verification_without_provider_call
+2 failed, 272 passed in 5.29s

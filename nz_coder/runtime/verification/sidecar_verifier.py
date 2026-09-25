@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -1695,9 +1696,24 @@ class SidecarVerifierHook:
             authority_paths=[ref.path for ref in sanitize_references(
                 state.get("task_reference_evidence", []))],
         )
+        from nz_coder.runtime.verification.constructor_evidence import collect_constructor_evidence
+
+        constructor, constructor_trace = collect_constructor_evidence(
+            getattr(self._loop, "repo_intelligence", None),
+            getattr(self._loop, "workdir", None), paths,
+            authority_paths=[ref.path for ref in sanitize_references(
+                state.get("task_reference_evidence", []))],
+        )
+        supporting_text = "\n".join(text for text in (dependency.text, constructor.text) if text)
+        supporting_digest = dependency.digest
+        if constructor.digest:
+            supporting_digest = hashlib.sha256(json.dumps(
+                [dependency.digest, constructor.digest], separators=(",", ":")
+            ).encode()).hexdigest()
         tracer = getattr(self._loop, "tracer", None)
         if tracer is not None:
             try:
+                tracer.log("sidecar_constructor_evidence", **constructor_trace)
                 tracer.log("sidecar_dependency_evidence", **dependency_trace)
             except Exception:
                 pass
@@ -1708,8 +1724,8 @@ class SidecarVerifierHook:
             authoritative_references=state.get("task_reference_evidence", []),
             omitted_reference_count=state.get("task_reference_omitted_count", 0),
             additional_criteria="\n".join(str(item) for item in criteria if str(item).strip()),
-            supporting_repository_evidence=dependency.text,
-            supporting_repository_digest=dependency.digest,
+            supporting_repository_evidence=supporting_text,
+            supporting_repository_digest=supporting_digest,
         )
         metrics = VerifierGateMetrics(
             risky_shell_ops=max(

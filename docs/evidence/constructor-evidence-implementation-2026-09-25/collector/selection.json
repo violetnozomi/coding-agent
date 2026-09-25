@@ -1,0 +1,21 @@
+{
+  "route": "resolved direct returned class of changed implementation caller",
+  "confidence": 0.85,
+  "role_trust": "same-snapshot caller file and owner Python/python-ast/ast-native; no parse_error; current fingerprint",
+  "target": "unchanged safe Python AST-native class with certified source_start_line",
+  "sort": [
+    "relative path",
+    "symbol_id"
+  ],
+  "dedup": "target identity",
+  "accepted_false_positive": "returned TelemetryMarker",
+  "unsupported": [
+    "assigned",
+    "yielded",
+    "argument",
+    "unknown",
+    "unresolved",
+    "other-language role"
+  ],
+  "C_special_case": false
+}

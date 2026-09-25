@@ -1,0 +1,15 @@
+{
+  "symbols": 2,
+  "per_rendered_block_chars": 1400,
+  "total_rendered_section_chars": 2400,
+  "reserve_footer_chars": 100,
+  "max_source_bytes": 128000,
+  "changed_path_limit": 32,
+  "returned_target_candidate_limit": 16,
+  "changed_snapshot_edge_limit": 256,
+  "outer_wait_seconds": 0.5,
+  "index_warming": false,
+  "oversize": "whole envelope omit, no slicing",
+  "query_scope": "snapshots of changed paths and bounded target paths only; exact symbol_context(enrich=False) identities",
+  "limitation": "outer timeout bounds caller wait; already-running worker query may finish in background like existing dependency collector"
+}

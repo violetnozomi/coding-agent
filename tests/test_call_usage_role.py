@@ -83,7 +83,7 @@ def test_role_api_surfaces(indexed, api):
     expected = ['discarded', 'returned', 'argument']
     if api == 'sqlite':
         with sqlite3.connect(index.database_path) as db:
-            assert db.execute('PRAGMA user_version').fetchone()[0] == 4
+            assert db.execute('PRAGMA user_version').fetchone()[0] == 5
             rows = db.execute('SELECT usage_role FROM calls ORDER BY id').fetchall()
         actual = [r[0] for r in rows]
     elif api == 'file_calls':

@@ -1,0 +1,27 @@
+{
+  "policy_version": 1,
+  "constructor_digest_fields": [
+    "symbol_id",
+    "path",
+    "usage_role",
+    "role_provenance",
+    "confidence",
+    "relation",
+    "source_hash",
+    "envelope_hash",
+    "source_start_line",
+    "end_line",
+    "include/omit reason",
+    "rendered_chars",
+    "text"
+  ],
+  "composite": "sha256([dependency.digest, constructor.digest]); unchanged dependency digest when constructor digest empty",
+  "tests": [
+    "none to available miss",
+    "identical stable",
+    "housekeeping stable",
+    "current source refresh miss",
+    "oversized omitted source change miss"
+  ],
+  "accepted_key": "existing supporting_repository_digest member; verdict semantics unchanged"
+}

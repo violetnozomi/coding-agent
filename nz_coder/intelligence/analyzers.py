@@ -37,6 +37,7 @@ class SymbolRecord:
     confidence: float
     source: str
     capability_tier: str
+    source_start_line: int | None = None
 
 
 @dataclass(frozen=True)
@@ -237,6 +238,17 @@ class PythonAstAnalyzer:
         owner_class: dict[ast.AST, str] = {}
         symbol_occurrences: dict[str, int] = {}
 
+        def certified_start(node) -> int | None:
+            # Decorator expressions may begin inside a parenthesized @(...).
+            # Certify at the original AST coordinate; never scan back or reparse.
+            starts = [int(node.lineno)]
+            for decorator in node.decorator_list:
+                prefix = lines[decorator.lineno - 1].encode("utf-8")[:decorator.col_offset]
+                if not prefix.endswith(b"@") or prefix[:-1].strip():
+                    return None
+                starts.append(int(decorator.lineno))
+            return min(starts)
+
         def collect(body: list[ast.stmt], prefix: str = "", class_name: str = "") -> None:
             for node in body:
                 if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -276,6 +288,7 @@ class PythonAstAnalyzer:
                     confidence=0.99,
                     source="python-ast",
                     capability_tier=self.capability_tier.value,
+                    source_start_line=certified_start(node),
                 )
                 symbols.append(record)
                 node_symbols[node] = record

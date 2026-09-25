@@ -1,0 +1,49 @@
+{
+  "items": [
+    {
+      "path": "objects.py",
+      "symbol_id": "symbol:objects.py::objects.TelemetryMarker::class",
+      "usage_role": "returned",
+      "role_provenance": "caller-python-ast/ast-native",
+      "confidence": 0.98,
+      "relation": "direct_returned_class",
+      "reason": "included",
+      "source_start_line": 7,
+      "end_line": 8,
+      "source_hash": "e7b14c44fb78d5f7f5ddf602079f41b695d8107e27b654a4ec230c3d472953a3",
+      "envelope_hash": "275a3c0d5a4d6a8cb320816cf0e1fe0d96a27d12c37fdb7664ef9ccde02cc5f8",
+      "rendered_chars": 249,
+      "symbol": "TelemetryMarker"
+    }
+  ],
+  "trace": {
+    "query_attempted": true,
+    "repo_status": "ready",
+    "candidate_count": 1,
+    "omitted_count": 0,
+    "included_count": 1,
+    "total_chars": 473,
+    "digest": "d41a87733eb70d0fa1c4545b4d1251ad04b7e69c87dfdd21569c6a3a12b5a6eb",
+    "included_locators": [
+      "symbol:objects.py::objects.TelemetryMarker::class"
+    ],
+    "fallback_reason": "",
+    "decisions": [
+      {
+        "path": "objects.py",
+        "symbol_id": "symbol:objects.py::objects.TelemetryMarker::class",
+        "usage_role": "returned",
+        "role_provenance": "caller-python-ast/ast-native",
+        "confidence": 0.98,
+        "relation": "direct_returned_class",
+        "reason": "included",
+        "source_start_line": 7,
+        "end_line": 8,
+        "source_hash": "e7b14c44fb78d5f7f5ddf602079f41b695d8107e27b654a4ec230c3d472953a3",
+        "envelope_hash": "275a3c0d5a4d6a8cb320816cf0e1fe0d96a27d12c37fdb7664ef9ccde02cc5f8",
+        "rendered_chars": 249
+      }
+    ],
+    "repo_generation": 1
+  }
+}

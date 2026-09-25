@@ -1,0 +1,15 @@
+{
+  "before": 4,
+  "after": 5,
+  "new_column": "symbols.source_start_line INTEGER nullable",
+  "old_cache": "drop derived tables and reparse unchanged sources",
+  "verified": [
+    "fresh schema",
+    "simulated v4 without column",
+    "rebuild",
+    "warm reuse",
+    "incremental start edit",
+    "snapshot",
+    "symbol_context"
+  ]
+}

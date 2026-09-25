@@ -1,0 +1,25 @@
+{
+  "reader": "WorkspaceFileAccess",
+  "tests": [
+    "symlink",
+    "deleted",
+    "nonregular directory",
+    "oversized",
+    "binary",
+    "workspace mismatch",
+    "tests/docs/evidence/oracle/acceptance/vendor exclusion",
+    "authority path exclusion",
+    "source read race",
+    "current caller/target fingerprints",
+    "generation race",
+    "non-Python",
+    "low confidence",
+    "unknown role",
+    "lexical caller",
+    "timeout",
+    "building/warming/failed/cold"
+  ],
+  "source_import_decorator_execution": false,
+  "network": "all test subprocesses use existing offline_exec seccomp denial; new fixtures forbid verifier and semantic provider configuration",
+  "trace_source_text": false
+}

@@ -1,0 +1,20 @@
+{
+  "reasons": [
+    "uncertified-source-span",
+    "envelope-exceeds-budget",
+    "symbol-budget",
+    "total-budget",
+    "unsafe-or-unavailable-source",
+    "stale-source"
+  ],
+  "fallback": [
+    "index-changed",
+    "edge-budget",
+    "candidate-budget",
+    "stale-caller",
+    "query-timeout",
+    "workspace-mismatch",
+    "not-ready-or-no-changes"
+  ],
+  "partial_class_rendered": false
+}

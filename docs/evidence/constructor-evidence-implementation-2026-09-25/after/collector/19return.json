@@ -1,0 +1,16 @@
+{
+  "items": [],
+  "trace": {
+    "query_attempted": true,
+    "repo_status": "ready",
+    "candidate_count": 0,
+    "omitted_count": 0,
+    "included_count": 0,
+    "total_chars": 0,
+    "digest": "",
+    "included_locators": [],
+    "fallback_reason": "",
+    "decisions": [],
+    "repo_generation": 1
+  }
+}

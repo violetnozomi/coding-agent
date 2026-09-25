@@ -1,0 +1,44 @@
+{
+  "query_attempted": true,
+  "repo_status": "ready",
+  "candidate_count": 2,
+  "omitted_count": 1,
+  "included_count": 1,
+  "total_chars": 1458,
+  "digest": "a74173333b615088e7fd9080cc33e3b3c788b8a6c032e3a8b3031de03a51b0d4",
+  "included_locators": [
+    "symbol:objects.py::objects.Payload::class"
+  ],
+  "fallback_reason": "",
+  "decisions": [
+    {
+      "path": "objects.py",
+      "symbol_id": "symbol:objects.py::objects.Payload::class",
+      "usage_role": "returned",
+      "role_provenance": "caller-python-ast/ast-native",
+      "confidence": 0.98,
+      "relation": "direct_returned_class",
+      "reason": "included",
+      "source_start_line": 1,
+      "end_line": 73,
+      "source_hash": "0f22f7d9f9d4c3271a933ea892ac03fa500e779b83301c8a327bf848d870f7a1",
+      "envelope_hash": "b52223b78f7ac4140145523836610ff8bf7cbc840cc7a01b3179bee6ca2a3136",
+      "rendered_chars": 1234
+    },
+    {
+      "path": "objects.py",
+      "symbol_id": "symbol:objects.py::objects.Wrapper::class",
+      "usage_role": "returned",
+      "role_provenance": "caller-python-ast/ast-native",
+      "confidence": 0.98,
+      "relation": "direct_returned_class",
+      "reason": "total-budget",
+      "source_start_line": 74,
+      "end_line": 146,
+      "source_hash": "0f22f7d9f9d4c3271a933ea892ac03fa500e779b83301c8a327bf848d870f7a1",
+      "envelope_hash": "652e157f47f4c524dddef93ecc906b6bda13bf707126cfeb969c3c83144980b7",
+      "rendered_chars": 1236
+    }
+  ],
+  "repo_generation": 1
+}

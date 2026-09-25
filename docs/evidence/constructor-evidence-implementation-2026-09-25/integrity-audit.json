@@ -1,0 +1,21 @@
+{
+  "paid_requests": 0,
+  "main_requests": 0,
+  "verifier_requests": 0,
+  "planner_requests": 0,
+  "embedding_requests": 0,
+  "InfCodeX_requests": 0,
+  "CF_C3": 0,
+  "production_files": [
+    "analyzers.py",
+    "code_index.py",
+    "constructor_evidence.py",
+    "sidecar_verifier.py"
+  ],
+  "historical_evidence_changed": false,
+  "frozen_workspace_changed": false,
+  "prompt_criteria_changed": false,
+  "dependency_selection_changed": false,
+  "hidden_evaluator_leaked": false,
+  "broad_unfiltered_claim": false
+}

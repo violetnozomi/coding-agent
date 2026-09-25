@@ -1,0 +1,3 @@
+All checks passed!
+In-memory compile passed; git diff --check passed; frozen production/history hash guard passed.
+Staged code diff --check (nz_coder/tests) passed. Whole evidence diff reports original pytest trailing spaces and unified patch context lines; raw logs/patch intentionally preserved, not rewritten.

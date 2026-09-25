@@ -1,0 +1,12 @@
+{
+  "SymbolRecord": "tail default None",
+  "SymbolEntry": "tail default None",
+  "Python": "ClassDef/FunctionDef/AsyncFunctionDef original AST",
+  "start": "minimum certified decorator start or node.lineno",
+  "certificate": "prefix at exact AST byte column equals whitespace + @",
+  "unsupported_parenthesized": "None",
+  "line_end_line_navigation": "unchanged",
+  "second_parse": false,
+  "regex_backscan": false,
+  "other_analyzers": "None"
+}

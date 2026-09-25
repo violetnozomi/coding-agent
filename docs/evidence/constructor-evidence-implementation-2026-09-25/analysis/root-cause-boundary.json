@@ -1,0 +1,14 @@
+{
+  "classification": "CONSTRUCTOR-EVIDENCE-IMPLEMENTED",
+  "production_source_span": true,
+  "existing_graph_only": true,
+  "constructor_channel": true,
+  "semantic_policy_expanded": false,
+  "source_execution": false,
+  "semantic_relevance_proved": false,
+  "reviewer_future_verdict": "unobserved",
+  "CF_C3": 0,
+  "unique_historical_false_accept_cause_proved": false,
+  "P2": "absent -> inferable from current complete class source",
+  "P5": "not newly certified by this channel"
+}

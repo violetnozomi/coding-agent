@@ -1,0 +1,121 @@
+{
+  "items": [
+    {
+      "path": "objects.py",
+      "symbol_id": "symbol:objects.py::objects.K0::class",
+      "usage_role": "returned",
+      "role_provenance": "caller-python-ast/ast-native",
+      "confidence": 0.98,
+      "relation": "direct_returned_class",
+      "reason": "included",
+      "source_start_line": 1,
+      "end_line": 2,
+      "source_hash": "6aceb78f3abadd8c847fd47b47b7d0850623208b871a826db0708d036dc7a03e",
+      "envelope_hash": "202513ca84d86d11919d68d37e6d9a1e868de9a69626e163e85807048e1b1750",
+      "rendered_chars": 223,
+      "symbol": "K0"
+    },
+    {
+      "path": "objects.py",
+      "symbol_id": "symbol:objects.py::objects.K1::class",
+      "usage_role": "returned",
+      "role_provenance": "caller-python-ast/ast-native",
+      "confidence": 0.98,
+      "relation": "direct_returned_class",
+      "reason": "included",
+      "source_start_line": 3,
+      "end_line": 4,
+      "source_hash": "6aceb78f3abadd8c847fd47b47b7d0850623208b871a826db0708d036dc7a03e",
+      "envelope_hash": "f2fc87934035b419625513e17dc163bfef1e58b637b80e28309f90f55a562ee0",
+      "rendered_chars": 223,
+      "symbol": "K1"
+    }
+  ],
+  "trace": {
+    "query_attempted": true,
+    "repo_status": "ready",
+    "candidate_count": 5,
+    "omitted_count": 3,
+    "included_count": 2,
+    "total_chars": 670,
+    "digest": "03a8674c3695802482eb3e57abca0680581928afea07454735fad4f1e2da5d50",
+    "included_locators": [
+      "symbol:objects.py::objects.K0::class",
+      "symbol:objects.py::objects.K1::class"
+    ],
+    "fallback_reason": "",
+    "decisions": [
+      {
+        "path": "objects.py",
+        "symbol_id": "symbol:objects.py::objects.K0::class",
+        "usage_role": "returned",
+        "role_provenance": "caller-python-ast/ast-native",
+        "confidence": 0.98,
+        "relation": "direct_returned_class",
+        "reason": "included",
+        "source_start_line": 1,
+        "end_line": 2,
+        "source_hash": "6aceb78f3abadd8c847fd47b47b7d0850623208b871a826db0708d036dc7a03e",
+        "envelope_hash": "202513ca84d86d11919d68d37e6d9a1e868de9a69626e163e85807048e1b1750",
+        "rendered_chars": 223
+      },
+      {
+        "path": "objects.py",
+        "symbol_id": "symbol:objects.py::objects.K1::class",
+        "usage_role": "returned",
+        "role_provenance": "caller-python-ast/ast-native",
+        "confidence": 0.98,
+        "relation": "direct_returned_class",
+        "reason": "included",
+        "source_start_line": 3,
+        "end_line": 4,
+        "source_hash": "6aceb78f3abadd8c847fd47b47b7d0850623208b871a826db0708d036dc7a03e",
+        "envelope_hash": "f2fc87934035b419625513e17dc163bfef1e58b637b80e28309f90f55a562ee0",
+        "rendered_chars": 223
+      },
+      {
+        "path": "objects.py",
+        "symbol_id": "symbol:objects.py::objects.K2::class",
+        "usage_role": "returned",
+        "role_provenance": "caller-python-ast/ast-native",
+        "confidence": 0.98,
+        "relation": "direct_returned_class",
+        "reason": "symbol-budget",
+        "source_start_line": 5,
+        "end_line": 6,
+        "source_hash": "6aceb78f3abadd8c847fd47b47b7d0850623208b871a826db0708d036dc7a03e",
+        "envelope_hash": "8c84d518537289b7ba669a32a6a2ca36bbe89fef1eaa08732d149f9c83f8dafb",
+        "rendered_chars": 223
+      },
+      {
+        "path": "objects.py",
+        "symbol_id": "symbol:objects.py::objects.K3::class",
+        "usage_role": "returned",
+        "role_provenance": "caller-python-ast/ast-native",
+        "confidence": 0.98,
+        "relation": "direct_returned_class",
+        "reason": "symbol-budget",
+        "source_start_line": 7,
+        "end_line": 8,
+        "source_hash": "6aceb78f3abadd8c847fd47b47b7d0850623208b871a826db0708d036dc7a03e",
+        "envelope_hash": "0f5559463d1696f3ae2ed97454367f069737869d9bd1d04a6e1ab04543c3a814",
+        "rendered_chars": 223
+      },
+      {
+        "path": "objects.py",
+        "symbol_id": "symbol:objects.py::objects.K4::class",
+        "usage_role": "returned",
+        "role_provenance": "caller-python-ast/ast-native",
+        "confidence": 0.98,
+        "relation": "direct_returned_class",
+        "reason": "symbol-budget",
+        "source_start_line": 9,
+        "end_line": 10,
+        "source_hash": "6aceb78f3abadd8c847fd47b47b7d0850623208b871a826db0708d036dc7a03e",
+        "envelope_hash": "159777080f0603b406b4c3047242a23df954c7d3425164e59b52e0aae591410f",
+        "rendered_chars": 224
+      }
+    ],
+    "repo_generation": 2
+  }
+}

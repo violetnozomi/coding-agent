@@ -1,0 +1,10 @@
+{
+  "changed_context_fields": [
+    "supporting_repository_evidence",
+    "supporting_repository_digest"
+  ],
+  "previous_dependency_evidence_prefix_identical": true,
+  "new_section_chars": 552,
+  "full_spec_writer_store_verification_preserved": true,
+  "hidden_acceptance_leak": false
+}
