@@ -246,11 +246,14 @@ def test_oversized_reference_is_explicitly_incomplete(tmp_path):
     ],
 )
 def test_safe_capture_never_reads_outside_or_private(tmp_path, path):
-    outside = tmp_path.parent / "outside.md"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    outside = tmp_path / "outside.md"
     outside.write_text("PRIVATE_SENTINEL")
-    (tmp_path / "escape.md").symlink_to(outside)
+    (workspace / "escape.md").symlink_to(outside)
     state = RuntimeState()
-    state.bind_task_references("Follow " + path, workspace=tmp_path)
+    state.bind_task_references("Follow " + path, workspace=workspace)
+    assert outside.read_text() == "PRIVATE_SENTINEL"
     assert "PRIVATE_SENTINEL" not in json.dumps(state.task_reference_evidence)
     assert all(not r["complete"] for r in state.task_reference_evidence)
 

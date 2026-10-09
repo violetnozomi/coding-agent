@@ -167,22 +167,26 @@ def test_session_rename_persists_and_survives_save(tmp_path):
 
 
 def test_export_is_workspace_bounded_and_atomic(tmp_path):
-    ctx = _context(
-        tmp_path,
-        history=[{"role": "user", "content": "hello"}],
-    )
-    with scoped_workdir(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_bytes(b"EXISTING_SENTINEL")
+    ctx = _context(workspace, history=[{"role": "user", "content": "hello"}])
+    with scoped_workdir(workspace):
         ctx.args = "exports/review.md"
         core.handle_export(ctx)
-        exported = tmp_path / "exports" / "review.md"
-        assert exported.exists()
+        exported = workspace / "exports" / "review.md"
         assert "## User\n\nhello" in exported.read_text(encoding="utf-8")
-
-        ctx.args = "../outside.md"
+        for target in ("../outside.md", "../absent.md"):
+            ctx.args = target
+            core.handle_export(ctx)
+            assert "must stay inside the workspace" in str(ctx.console.messages[-1])
+        (workspace / "escape.md").symlink_to(outside)
+        ctx.args = "escape.md"
         core.handle_export(ctx)
-
-    assert "must stay inside the workspace" in str(ctx.console.messages[-1])
-    assert not (tmp_path.parent / "outside.md").exists()
+        assert "symlinks are not allowed" in str(ctx.console.messages[-1])
+    assert outside.read_bytes() == b"EXISTING_SENTINEL"
+    assert not (tmp_path / "absent.md").exists()
 
 
 def test_copy_uses_osc52_when_terminal_is_available(monkeypatch):
