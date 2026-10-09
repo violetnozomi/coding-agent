@@ -1,0 +1,9 @@
+{
+  "command": "python -m pytest -q",
+  "exit_code": 1,
+  "timeout": false,
+  "elapsed_seconds": 749.38,
+  "max_seconds": 1200,
+  "python": "3.13.12 | packaged by Anaconda, Inc. | (main, Feb 24 2026, 16:13:31) [GCC 14.3.0]",
+  "network": "loopback-only; sanitized environment"
+}

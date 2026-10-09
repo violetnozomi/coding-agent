@@ -1,0 +1,1081 @@
+........................................................................ [  1%]
+.s...................................................................... [  3%]
+........................................................................ [  5%]
+........................................................................ [  6%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+.................................F...................................... [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+....................................................s....s.............. [ 25%]
+...........................ss......s.................................... [ 26%]
+..................................s.....ss..........ss.s................ [ 28%]
+........................................................................ [ 30%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 48%]
+.........................Timeout (0:01:30)!
+Thread 0x00007fa796ffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7977fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7b97fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa797fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7bb7fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7b9ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7bbfff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7baffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7de7fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7dcff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7dd7fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7deffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7df7fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8057fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa7dffff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa804ff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa805ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8067fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa806ffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8077fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa807fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8417fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa829ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8297fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa82b7fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa82affd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa842ffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa840ff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa860ff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8427fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8617fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa843fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa863fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8627fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa862ffd6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 496 in _read_stderr
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8637fe6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 428 in _read_message
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 403 in _read_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8867fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8857fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8a9ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa886ffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8877fe6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 496 in _read_stderr
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa887fff6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 428 in _read_message
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 403 in _read_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8d0ff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8a97fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8eb7fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8aaffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8ab7fe6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 496 in _read_stderr
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8abfff6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 428 in _read_message
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 403 in _read_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8d1ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8d17fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8d2ffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8ebfff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8d3fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8d37fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8e9ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8e97fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9097fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa8eaffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa90affd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa909ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa92cff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa90b7fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa92e7fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa92d7fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa92f7fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa92effd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa94dffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa94cff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa94f7fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa94effd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa94e7fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa96e7fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa94ffff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa96cff96c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 496 in _read_stderr
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa96d7fa6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 428 in _read_message
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 403 in _read_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa990ff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa96effd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa96f7fe6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 496 in _read_stderr
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa96ffff6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 428 in _read_message
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 403 in _read_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa993fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa991ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9927fc6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 496 in _read_stderr
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa992ffd6c0 (most recent call first):
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 428 in _read_message
+  File "/home/pyh/nzcoder/nz_coder/lsp/client.py", line 403 in _read_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9b1ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9b17fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9b0ff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9b37fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9b27fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9d0ff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9b3fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9d27fc6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9d17fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9d3fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9d2ffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9f1ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9f17fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007faa14ff96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9f2ffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007faa157fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa9f3fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+...
+............................................... [ 50%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+.........................................................F......F....... [ 65%]
+..................F..................................................... [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 77%]
+...................................................................Timeout (0:01:30)!
+Thread 0x00007fab797fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/json/__init__.py", line 352 in loads
+  File "/home/pyh/nzcoder/nz_coder/intelligence/code_index.py", line 975 in _resolve_relations
+  File "/home/pyh/nzcoder/nz_coder/intelligence/code_index.py", line 1175 in _resolve_references
+  File "/home/pyh/nzcoder/nz_coder/intelligence/code_index.py", line 708 in scan
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 114 in _build
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 59 in run
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 93 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fab957fa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fab7abfe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fab95ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 130 in watch
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 303 in _native_watch_loop
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fab96ffd6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fab977fe6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fab97fff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fabacbf86c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fabad3f96c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fabadbfa6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fabaefff6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fab79ffb6c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa70e9f06c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fa70a6f46c0 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 90 in _worker
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995 in run
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044 in _bootstrap_inner
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1015 in _bootstrap
+
+Thread 0x00007fabbb602740 (most recent call first):
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1095 in join
+  File "/home/pyh/miniconda3/lib/python3.13/concurrent/futures/thread.py", line 239 in shutdown
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 886 in close
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 1036 in release_repo_intelligence
+  File "/home/pyh/nzcoder/nz_coder/runtime/execution/loop.py", line 1934 in _close_repo_intelligence
+  File "/home/pyh/nzcoder/nz_coder/runtime/execution/loop.py", line 1810 in close
+  File "/home/pyh/nzcoder/nz_coder/runtime/agent/subagent.py", line 391 in _cleanup_subagent_resources
+  File "/home/pyh/nzcoder/nz_coder/runtime/agent/subagent.py", line 421 in _cleanup_subagent_scope
+  File "/home/pyh/nzcoder/nz_coder/runtime/agent/subagent.py", line 2245 in run_subagent
+  File "/home/pyh/nzcoder/tests/test_smoke.py", line 423 in test_subagent_stops_after_configured_turn_budget
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/python.py", line 166 in pytest_pyfunc_call
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/python.py", line 1720 in runtest
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/runner.py", line 179 in pytest_runtest_call
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/runner.py", line 245 in <lambda>
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/runner.py", line 353 in from_call
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/runner.py", line 244 in call_and_report
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/runner.py", line 137 in runtestprotocol
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/runner.py", line 118 in pytest_runtest_protocol
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/main.py", line 396 in pytest_runtestloop
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/main.py", line 372 in _main
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/main.py", line 318 in wrap_session
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/main.py", line 365 in pytest_cmdline_main
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 199 in main
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 223 in console_main
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/pytest/__main__.py", line 9 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 198 in _run_module_as_main
+..... [ 78%]
+.................................F...................................... [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+........................................sssss.........ssssssssssssssssss [ 95%]
+s....................................................................... [ 97%]
+........................................................................ [ 99%]
+.........................................                                [100%]
+=================================== FAILURES ===================================
+_____________ test_paid_money_reference_does_not_block_completion ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fabaff88670>
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-25/test_paid_money_reference_does0')
+
+    def test_paid_money_reference_does_not_block_completion(monkeypatch, tmp_path):
+        fixture = _money(tmp_path)
+        result, state, trace, requests, reviews = _run(
+            monkeypatch, tmp_path, fixture['task'], _money_actions(fixture), label='money-reference')
+        checks = [x['status'] for x in trace if x.get('event') == 'verification_result']
+        assert checks == ['failed', 'passed']
+        assert '6 failed' in str(requests[3]['messages'])
+        assert state['verification_contract']['passed'] is True
+        assert state['verification_generation'] == state['mutation_generation']
+        assert state['verification_contract']['attempted_generation'] == state['acceptance_mutation_generation']
+        for name, expected in fixture['final_hashes'].items():
+            assert hashlib.sha256((tmp_path / name).read_bytes()).hexdigest() == expected, name
+        acceptance_script = Path(__file__).parents[2] / 'docs/evidence/complex-paired-preflight-2026-09-20/acceptance/M.py'
+        checked = subprocess.run([sys.executable, '-m', 'pytest', '-q', '-p', 'no:cacheprovider', str(acceptance_script)],
+            cwd=tmp_path, env={**os.environ, 'PYTHONPATH': str(tmp_path), 'TASK_WORKSPACE': str(tmp_path)},
+            text=True, capture_output=True, timeout=30)
+        evidence = os.environ.get('NZ_SCOPE_EVIDENCE_DIR')
+        if evidence:
+            (Path(evidence) / 'money-reference/independent-acceptance.json').write_text(json.dumps(
+                {'exit_code': checked.returncode, 'stdout': checked.stdout, 'stderr': checked.stderr}, indent=2))
+>       assert checked.returncode == 0, checked.stdout + checked.stderr
+E       AssertionError: Traceback (most recent call last):
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 885, in import_plugin
+E             __import__(importspec)
+E             ~~~~~~~~~~^^^^^^^^^^^^
+E         ModuleNotFoundError: No module named 'nz_review_progress'
+E
+E         The above exception was the direct cause of the following exception:
+E
+E         Traceback (most recent call last):
+E           File "<frozen runpy>", line 198, in _run_module_as_main
+E           File "<frozen runpy>", line 88, in _run_code
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/pytest/__main__.py", line 9, in <module>
+E             raise SystemExit(pytest.console_main())
+E                              ~~~~~~~~~~~~~~~~~~~^^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 223, in console_main
+E             code = main()
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 193, in main
+E             config = _prepareconfig(new_args, plugins)
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 361, in _prepareconfig
+E             config: Config = pluginmanager.hook.pytest_cmdline_parse(
+E                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+E                 pluginmanager=pluginmanager, args=args
+E                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E             )
+E             ^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_hooks.py", line 512, in __call__
+E             return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+E                    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_manager.py", line 120, in _hookexec
+E             return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+E                    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_callers.py", line 167, in _multicall
+E             raise exception
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_callers.py", line 139, in _multicall
+E             teardown.throw(exception)
+E             ~~~~~~~~~~~~~~^^^^^^^^^^^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/helpconfig.py", line 124, in pytest_cmdline_parse
+E             config = yield
+E                      ^^^^^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/pluggy/_callers.py", line 121, in _multicall
+E             res = hook_impl.function(*args)
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 1192, in pytest_cmdline_parse
+E             self.parse(args)
+E             ~~~~~~~~~~^^^^^^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 1548, in parse
+E             self.pluginmanager.consider_env()
+E             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 847, in consider_env
+E             self._import_plugin_specs(os.environ.get("PYTEST_PLUGINS"))
+E             ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 858, in _import_plugin_specs
+E             self.import_plugin(import_spec)
+E             ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 887, in import_plugin
+E             raise ImportError(
+E                 f'Error importing plugin "{modname}": {e.args[0]}'
+E             ).with_traceback(e.__traceback__) from e
+E           File "/home/pyh/miniconda3/lib/python3.13/site-packages/_pytest/config/__init__.py", line 885, in import_plugin
+E             __import__(importspec)
+E             ~~~~~~~~~~^^^^^^^^^^^^
+E         ImportError: Error importing plugin "nz_review_progress": No module named 'nz_review_progress'
+E
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/pyh/miniconda3/bin/python', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '/home/pyh/n...~~~~~^^^^^^^^^^^^\nImportError: Error importing plugin "nz_review_progress": No module named \'nz_review_progress\'\n').returncode
+
+tests/runtime/test_requirement_scope_runtime.py:165: AssertionError
+____________ test_unresolved_call_retains_raw_target_and_candidates ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-25/test_unresolved_call_retains_r0')
+
+    def test_unresolved_call_retains_raw_target_and_candidates(tmp_path) -> None:
+        from nz_coder.intelligence.code_index import PersistentCodeIndex
+
+        (tmp_path / "a.py").write_text("def dispatch(): return 1\n", encoding="utf-8")
+        (tmp_path / "b.py").write_text("def dispatch(): return 2\n", encoding="utf-8")
+        (tmp_path / "main.py").write_text("def run(handler): return handler.dispatch()\n", encoding="utf-8")
+        index = PersistentCodeIndex(tmp_path)
+        index.scan(tmp_path, max_files=20)
+
+        edge = index.file_calls("main.py")[0]
+
+        assert edge.callee_symbol_id is None
+>       assert edge.resolution_kind == "heuristic-candidates"
+E       AssertionError: assert 'lexical-shadowing' == 'heuristic-candidates'
+E
+E         - heuristic-candidates
+E         + lexical-shadowing
+
+tests/test_repo_identity_v3.py:99: AssertionError
+____________ test_bounded_lsp_augmentation_upgrades_unresolved_call ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-25/test_bounded_lsp_augmentation_0')
+
+    def test_bounded_lsp_augmentation_upgrades_unresolved_call(tmp_path) -> None:
+        from nz_coder.intelligence.code_index import (
+            PersistentCodeIndex, ResolvedCallLocation,
+        )
+
+        (tmp_path / "target.py").write_text("def dispatch(): return 1\n", encoding="utf-8")
+        (tmp_path / "other.py").write_text("def dispatch(): return 2\n", encoding="utf-8")
+        (tmp_path / "main.py").write_text(
+            "def run(handler): return handler.dispatch()\n", encoding="utf-8",
+        )
+        index = PersistentCodeIndex(tmp_path)
+        index.scan(tmp_path, max_files=20)
+
+        class Resolver:
+            def resolve(self, request):
+                assert request.file_path == "main.py"
+                return ResolvedCallLocation("target.py", 1, name="dispatch")
+
+        stats = index.augment_call_targets(Resolver(), max_calls=1, time_budget_ms=100)
+        edge = index.file_calls("main.py")[0]
+
+>       assert stats.attempted == stats.resolved == 1
+E       assert 0 == 1
+E        +  where 0 = CallAugmentationStats(attempted=0, resolved=0, failed=0, truncated=False, generation=1, duration_ms=0.352).resolved
+
+tests/test_repo_identity_v3.py:259: AssertionError
+___________ test_reexport_and_unresolved_dynamic_reference_contract ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-25/test_reexport_and_unresolved_d0')
+
+    def test_reexport_and_unresolved_dynamic_reference_contract(tmp_path) -> None:
+        from nz_coder.intelligence.code_index import PersistentCodeIndex
+
+        (tmp_path / "auth").mkdir()
+        (tmp_path / "auth" / "api.py").write_text("def login(): return 1\n", encoding="utf-8")
+        (tmp_path / "auth" / "__init__.py").write_text(
+            "from .api import login\n", encoding="utf-8",
+        )
+        (tmp_path / "main.py").write_text(
+            "from auth import login\n"
+            "def direct(): return login()\n"
+            "def dynamic(handler): return handler.login()\n",
+            encoding="utf-8",
+        )
+        index = PersistentCodeIndex(tmp_path)
+        index.scan(tmp_path, max_files=20)
+
+        login_id = index.symbol_context("login")["symbol_id"]
+        edges = index.file_calls("main.py")
+        references = index.references(login_id)
+
+        assert edges[0].resolution_kind == "re-exported-binding"
+        assert edges[0].callee_symbol_id == login_id
+        assert edges[1].callee_symbol_id is None
+        assert edges[1].unresolved_target.raw_name == "login"
+>       assert edges[1].unresolved_target.candidates == (login_id,)
+E       AssertionError: assert () == ('symbol:auth...n::function',)
+E
+E         Right contains one more item: 'symbol:auth/api.py::auth.api.login::function'
+E         Use -v to get more diff
+
+tests/test_repo_intelligence_closure.py:123: AssertionError
+_______________________ test_index_rebuild_and_transport _______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-25/test_index_rebuild_and_transpo0')
+
+    def test_index_rebuild_and_transport(tmp_path):
+        path = tmp_path / "a.py"
+        path.write_text("@dataclass\nclass Payload:\n    value: int\n")
+        index = PersistentCodeIndex(tmp_path)
+        index.scan(tmp_path, max_files=10)
+        with sqlite3.connect(index.database_path) as db:
+>           assert db.execute("PRAGMA user_version").fetchone()[0] == 5
+E           assert 6 == 5
+
+tests/test_source_start_line.py:55: AssertionError
+=========================== short test summary info ============================
+SKIPPED [1] tests/evaluation/test_paired_runtime_smoke.py:139: opt-in: requires locally built pinned InfCodeX, Node LTS and Linux libseccomp
+SKIPPED [1] tests/security/test_pr2_remaining_regressions.py:140: CREATE_NEW creates target before write on Windows
+SKIPPED [1] tests/security/test_pr2_remaining_regressions.py:250: Windows fdopen follows successful CREATE_NEW
+SKIPPED [1] tests/security/test_project_control_snapshot.py:656: Windows junction semantics
+SKIPPED [1] tests/security/test_project_control_snapshot.py:679: Windows handle semantics
+SKIPPED [1] tests/security/test_protocol_and_lock_limits.py:110: Windows reparse-point contract
+SKIPPED [1] tests/security/test_transaction_recovery.py:189: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_recovery.py:373: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_recovery.py:397: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_track.py:263: Windows native handle semantics
+SKIPPED [1] tests/security/test_transaction_track.py:294: Windows native handle semantics
+SKIPPED [1] tests/security/test_user_runtime_state.py:40: Windows junction semantics
+SKIPPED [1] tests/test_windows_crash_cleanup.py:55: requires native Windows jobs
+SKIPPED [1] tests/test_windows_crash_cleanup.py:68: requires native Windows jobs
+SKIPPED [1] tests/test_windows_crash_cleanup.py:85: requires native Windows jobs
+SKIPPED [1] tests/test_windows_crash_cleanup.py:104: requires native Windows jobs
+SKIPPED [1] tests/test_windows_crash_cleanup.py:138: requires native Windows jobs
+SKIPPED [1] tests/test_windows_native_smoke.py:18: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:51: requires a native Windows host
+SKIPPED [2] tests/test_windows_native_smoke.py:61: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:90: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:118: requires a native Windows host
+SKIPPED [2] tests/test_windows_native_smoke.py:138: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:150: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:226: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:260: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:287: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:325: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:354: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:371: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:388: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:394: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:409: requires a native Windows host
+SKIPPED [1] tests/test_windows_native_smoke.py:416: requires a native Windows host
+FAILED tests/runtime/test_requirement_scope_runtime.py::test_paid_money_reference_does_not_block_completion
+FAILED tests/test_repo_identity_v3.py::test_unresolved_call_retains_raw_target_and_candidates
+FAILED tests/test_repo_identity_v3.py::test_bounded_lsp_augmentation_upgrades_unresolved_call
+FAILED tests/test_repo_intelligence_closure.py::test_reexport_and_unresolved_dynamic_reference_contract
+FAILED tests/test_source_start_line.py::test_index_rebuild_and_transport - as...
+5 failed, 4248 passed, 36 skipped in 745.85s (0:12:25)

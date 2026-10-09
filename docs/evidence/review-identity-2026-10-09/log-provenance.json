@@ -1,0 +1,17 @@
+{
+  "full-suite.txt": {
+    "captured_sha256": "41ec76c0b7335d9d89eff911edff218386695982bc1b7ffd39850833e184d187",
+    "display_normalization": "strip trailing whitespace only",
+    "original": "/home/pyh/.codex/artifacts/nz-review-identity-2026-10-09/raw-full-suite.txt"
+  },
+  "regressions.txt": {
+    "captured_sha256": "81ec25bdfc1c2a27992cddad9cd7ba12bf54479f9f70585b45ae5e93a6f4b518",
+    "display_normalization": "strip trailing whitespace only",
+    "original": "concatenation of named /tmp/nz-*-red/green.txt logs; source section names retained"
+  },
+  "post-full-regressions.txt": {
+    "captured_sha256": "3eeed79458088878e984ab236558efb46299c27afa353096c7a922c7843822f0",
+    "display_normalization": "strip trailing whitespace only",
+    "original": "/home/pyh/.codex/artifacts/nz-review-identity-2026-10-09/raw-post-full-regressions.txt"
+  }
+}
