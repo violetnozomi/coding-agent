@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from nz_coder.evaluation.model_relay import (  # noqa: E402
-    InputAccounting, RelayBinding, RelayLedger, RelayLimits, RelayServer, unknown_input,
+    InputAccounting, RelayBinding, RelayLedger, RelayLimits, RelayServer, unknown_input, empirical_authorization_valid,
 )
 
 BASE = "python@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de"
@@ -381,7 +381,7 @@ def authorization_valid(grant, contract):
             and grant["valid_from"] <= time.time() < grant["valid_until"])
 
 
-def execution_status(directory, counter, *, grant=None, local=False):
+def execution_status(directory, counter, *, grant=None, local=False, input_mode="strict"):
     contract = counter.status()
     isolation_error = None
     try:
@@ -397,6 +397,11 @@ def execution_status(directory, counter, *, grant=None, local=False):
                                                          "completion_includes_reasoning": True}
     technical = isolation and strict and budget and output_contract
     paid = authorization_valid(grant, contract)
+    empirical = (input_mode == "empirical" and paid and empirical_authorization_valid(grant)
+                 and isolation and output_contract and contract.get("service_scope") == "hosted-deepseek"
+                 and "deepseek-v4-flash" in contract["model_scope"]
+                 and grant.get("startup_source_sha256") == sha(Path(__file__))
+                 and grant.get("relay_source_sha256") == sha(ROOT / "nz_coder/evaluation/model_relay.py"))
     blockers = []
     for passed, reason in ((isolation, "isolation_identity_unverified"), (strict, contract.get("reason", "input_contract_unverified")),
                            (budget, "budget_contract_unverified"), (output_contract, "output_contract_unverified"),
@@ -405,8 +410,11 @@ def execution_status(directory, counter, *, grant=None, local=False):
             blockers.append(reason)
     return {"isolation_verified": isolation, "input_contract_verified": strict, "output_contract_verified": output_contract,
             "budget_enforcement_verified": budget, "paid_authorization_valid": paid, "technical_ready": technical,
-            "online_allowed": technical and paid and not local, "online_not_run": True,
-            "contract": contract, "blockers": blockers, "isolation_error": isolation_error}
+            "online_allowed": ((technical and paid and input_mode == "strict") or empirical) and not local, "online_not_run": True,
+            "input_admission_mode": input_mode, "empirical_admission_ready": empirical,
+            "strict_guarantee_relaxed": "reference count is an estimate; in-flight and billing deviation risk accepted" if empirical else None,
+            "contract": contract, "blockers": [] if empirical else blockers, "strict_blockers": blockers,
+            "isolation_error": isolation_error}
 
 
 def local_contract_status():
@@ -422,7 +430,7 @@ unknown_input.status = lambda: {"contract_id": "no-counter", "counter_source_sha
     "evidence_level": "unknown", "strict_input_bound_verified": False, "model_scope": [], "reason": "missing_counter_resources"}
 
 
-def run_formal(directory, output, *, counter, upstream, api_key=None, online=False):
+def run_formal(directory, output, *, counter, upstream, api_key=None, online=False, input_mode="strict", grant=None, units=None):
     """复用已构建包与单一relay；准备固定候选和消费一个裁决均走生产路径。"""
     target = urlsplit(upstream)
     if not online and target.hostname != "127.0.0.1":
@@ -430,10 +438,15 @@ def run_formal(directory, output, *, counter, upstream, api_key=None, online=Fal
     runtime = runtime_identity(directory)
     manifest = json.loads((FROZEN / "manifest.json").read_text())
     output.mkdir(parents=True, exist_ok=False)
-    ledger = RelayLedger(output / "ledger.jsonl", RelayLimits())
+    ledger = RelayLedger(output / "ledger.jsonl", RelayLimits(),
+                         empirical_authorization=grant if input_mode == "empirical" else None)
     rows = []
     try:
         for row in manifest["order"] + [{"unit": "a01", "version": "new"}]:
+            if units is not None and row["unit"] not in units:
+                continue
+            if grant is not None and input_mode == "empirical" and row["unit"] not in grant["scope"]:
+                continue
             if ledger.failed_contracts:
                 break
             unit, version = row["unit"], row["version"]
@@ -462,7 +475,8 @@ def run_formal(directory, output, *, counter, upstream, api_key=None, online=Fal
                                            ("auxiliary", 6 if autonomous else 2, 64000 if autonomous else 1024, not autonomous)):
                 binding = RelayBinding("review-effects-formal", unit, unit, role, cap, "deepseek-v4-flash", limit, deadline, exact)
                 server = RelayServer(case / "sockets" / (role + ".sock"), ledger=ledger, binding=binding,
-                                     upstream=upstream, counter=counter, remote_authorized=online, api_key=api_key)
+                                     upstream=upstream, counter=counter, remote_authorized=online, api_key=api_key,
+                                     trace_directory=case / "provider")
                 thread = threading.Thread(target=server.serve_forever, daemon=True)
                 thread.start()
                 servers.append(server)
@@ -538,6 +552,7 @@ def run_formal(directory, output, *, counter, upstream, api_key=None, online=Fal
         save(output / "formal-results.json", {"units": rows, "physical_attempts": len(ledger.attempts),
             "input_occupied": ledger.input_occupied, "output_occupied": ledger.output_occupied,
             "failed_contracts": ledger.failed_contracts, "remote_provider_requests": len(ledger.attempts) if online else 0,
+            "input_admission_mode": input_mode, "estimated_cost_occupied_cny": ledger.cost_occupied_cny if input_mode == "empirical" else None,
             "driver_sha256": sha(FIXTURES / "review_execution_entry.py"), "runtime_sha256": sha(directory / "runtime.json")})
 
 
@@ -553,6 +568,7 @@ def main():
     parser.add_argument("--output-root", type=Path)
     parser.add_argument("--tokenizer", type=Path)
     parser.add_argument("--authorization", type=Path)
+    parser.add_argument("--input-mode", choices=("strict", "empirical"), default="strict")
     args = parser.parse_args()
     directory = args.artifact_root.resolve()
     if args.action == "prepare-runtime":
@@ -587,15 +603,17 @@ def main():
         from nz_coder.evaluation.deepseek_counting import DeepSeekV41Counter
         counter = DeepSeekV41Counter(args.tokenizer) if args.tokenizer else unknown_input
         grant = json.loads(args.authorization.read_text()) if args.authorization else None
-        ready = execution_status(directory, counter, grant=grant)
+        ready = execution_status(directory, counter, grant=grant, input_mode=args.input_mode)
         print(json.dumps(ready, ensure_ascii=False))
         if args.action == "online":
             if not ready["online_allowed"]:
                 raise SystemExit(2)
             # 通过独立费用/计数/隔离门后才访问密钥；容器永远只持本地假值。
             key = os.environ["NZ_REVIEW_DEEPSEEK_API_KEY"]
+            save((args.output_root or directory / "formal-online").resolve().parent / "online-admission.json", ready)
             run_formal(directory, (args.output_root or directory / "formal-online").resolve(), counter=counter,
-                       upstream="https://api.deepseek.com/v1/chat/completions", api_key=key, online=True)
+                       upstream="https://api.deepseek.com/v1/chat/completions", api_key=key, online=True,
+                       input_mode=args.input_mode, grant=grant)
 
 
 if __name__ == "__main__":

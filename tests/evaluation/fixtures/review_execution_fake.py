@@ -9,10 +9,11 @@ import threading
 class ExecutionFake(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, *, cancel=False):
+    def __init__(self, *, cancel=False, input_counter=None):
         self.requests = []
         self.lock = threading.Lock()
         self.cancel = cancel
+        self.input_counter = input_counter
         super().__init__(("127.0.0.1", 0), _Handler)
 
     def message(self, request):
@@ -88,7 +89,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.server.requests.append(request)
         try:
             message = self.server.message(request)
-            usage = {"prompt_tokens": len(raw), "completion_tokens": 7, "total_tokens": len(raw) + 7}
+            prompt = self.server.input_counter(raw, request).reference_count if self.server.input_counter else len(raw)
+            usage = {"prompt_tokens": prompt, "completion_tokens": 7, "total_tokens": prompt + 7}
             finish = "tool_calls" if message.get("tool_calls") else "stop"
             body = {"id": "local-response", "object": "chat.completion", "model": request["model"], "created": 1,
                     "choices": [{"index": 0, "message": message, "finish_reason": finish}], "usage": usage}

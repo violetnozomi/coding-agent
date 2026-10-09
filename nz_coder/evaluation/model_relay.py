@@ -67,10 +67,32 @@ def unknown_input(_raw: bytes, _payload: dict) -> InputAccounting:
     return InputAccounting(None, "no-validated-provider-tokenizer-or-upper-bound")
 
 
+def empirical_authorization_valid(grant) -> bool:
+    """仅识别本轮宿主授权；不把经验计数升级为严格上界。"""
+    if not isinstance(grant, dict):
+        return False
+    prices = grant.get("prices_cny_per_million", {})
+    numbers = [grant.get("cost_limit"), grant.get("valid_from"), grant.get("valid_until")]
+    numbers += [prices.get(k) for k in ("input", "cached_input", "output")]
+    return (grant.get("purpose") == "review-effects-formal" and grant.get("input_mode") == "empirical"
+            and grant.get("empirical_risk_accepted") is True and grant.get("cost_currency") == "CNY"
+            and bool(grant.get("account")) and bool(grant.get("authorization_text"))
+            and bool(grant.get("contract_id")) and grant.get("model") == "deepseek-v4-flash"
+            and isinstance(grant.get("scope"), list) and bool(grant["scope"])
+            and set(grant["scope"]) <= {"u01", "u02", "u03", "u04", "a01"}
+            and all(type(n) in {int, float} and math.isfinite(n) and n > 0 for n in numbers)
+            and prices["cached_input"] <= prices["input"]
+            and grant["valid_from"] <= time.time() < grant["valid_until"])
+
+
 class RelayLedger:
     """原子预留与追加记录；已有账本拒绝重开，避免重启清零。"""
 
-    def __init__(self, path: Path, limits: RelayLimits, *, clock=time.monotonic):
+    def __init__(self, path: Path, limits: RelayLimits, *, clock=time.monotonic, empirical_authorization=None):
+        if empirical_authorization is not None and not empirical_authorization_valid(empirical_authorization):
+            raise ValueError("invalid_empirical_authorization")
+        self.empirical_authorization = dict(empirical_authorization) if empirical_authorization is not None else None
+        self.cost_occupied_cny = 0.0
         self.path, self.limits, self.clock = path, limits, clock
         self.lock = threading.RLock()
         self.fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -82,10 +104,17 @@ class RelayLedger:
         self.failed_contracts: dict[str, dict] = {}
         self.input_occupied = self.output_occupied = 0
         self.events: list[dict] = []
-        self._record("ledger_created", limits=vars(limits))
+        self._record("ledger_created", limits=vars(limits), input_admission_mode="empirical" if self.empirical_authorization else "strict",
+                     fee_authorization=self.empirical_authorization)
+
+    def _estimated_cost(self, prompt, completion, cached=0):
+        if self.empirical_authorization is None:
+            return 0.0
+        prices = self.empirical_authorization["prices_cny_per_million"]
+        return ((prompt-cached)*prices["input"] + cached*prices["cached_input"] + completion*prices["output"]) / 1_000_000
 
     def _record(self, event, **fields):
-        row = {"event": event, "monotonic": self.clock(), **fields}
+        row = {"event": event, "monotonic": self.clock(), "time_epoch": time.time(), **fields}
         data = (json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n").encode()
         # 账目落盘成功才可转发；失败向上抛出，不能有一次未记账的请求。
         offset = 0
@@ -108,6 +137,8 @@ class RelayLedger:
                 return "prior_attempt_ambiguous"
             if self.clock() >= binding.deadline:
                 return "run_deadline_exhausted"
+            if self.empirical_authorization and not empirical_authorization_valid(self.empirical_authorization):
+                return "empirical_authorization_expired_or_invalid"
             return ""
 
     def reserve(self, binding, nonce, raw, payload, accounting):
@@ -128,9 +159,15 @@ class RelayLedger:
                 reason = "frozen_output_limit_mismatch"
             if not reason and any(k in payload for k in ("url", "base_url", "endpoint", "max_completion_tokens")):
                 reason = "client_target_override_not_allowed"
-            count = accounting.upper_bound
+            empirical = self.empirical_authorization is not None
+            count = accounting.reference_count if empirical else accounting.upper_bound
             digest = hashlib.sha256(raw).hexdigest()
-            if not reason and (not accounting.trusted or accounting.evidence_level not in {"exact", "proven_upper_bound"}
+            if not reason and empirical and (binding.experiment != self.empirical_authorization["purpose"]
+                    or binding.unit not in self.empirical_authorization["scope"]
+                    or binding.model != self.empirical_authorization["model"]
+                    or accounting.contract_id != self.empirical_authorization["contract_id"]):
+                reason = "empirical_authorization_scope_mismatch"
+            if not reason and ((not empirical and (not accounting.trusted or accounting.evidence_level not in {"exact", "proven_upper_bound"}))
                                or not accounting.contract_id or not isinstance(count, int) or isinstance(count, bool) or count < 0):
                 reason = "input_token_bound_unknown"
             if not reason and (accounting.payload_sha256 != digest or json.loads(raw) != payload):
@@ -143,6 +180,9 @@ class RelayLedger:
                 reason = "input_reservation_exhausted"
             if not reason and self.output_occupied + output > self.limits.output_total:
                 reason = "output_reservation_exhausted"
+            cost = self._estimated_cost(count, output) if not reason else 0.0
+            if not reason and empirical and self.cost_occupied_cny + cost > self.empirical_authorization["cost_limit"]:
+                reason = "estimated_fee_reservation_exhausted"
             if reason:
                 self._record("local_rejection", bucket=binding.bucket, reason=reason, usage=None)
                 raise AdmissionDenied(reason)
@@ -153,12 +193,15 @@ class RelayLedger:
                    "input_method": accounting.method, "input_exact": accounting.exact,
                    "evidence_level": accounting.evidence_level, "contract_id": accounting.contract_id,
                    "payload_sha256": digest, "status": "reserved", "usage": None}
+            row.update(input_admission_mode="empirical" if empirical else "strict",
+                       estimated_cost_reserved_cny=cost if empirical else None)
             self._record("admitted", **row)
             self.seen.add(key)
             self.attempts[attempt_id] = row
             self.counts[binding.bucket] = self.counts.get(binding.bucket, 0) + 1
             self.input_occupied += count
             self.output_occupied += output
+            self.cost_occupied_cny += cost
             return attempt_id
 
     def settle(self, attempt_id, *, status, usage=None, ambiguous=False, usage_conflict=False,
@@ -209,7 +252,9 @@ class RelayLedger:
                     if type(value) is int and value >= 0:
                         over_output = max(over_output or 0, value - row["output_reserved"])
             # 有效但超预留是契约被否证，不能伪装成缺失usage并继续发请求。
-            contract_failed = bool(over_input or over_output or usage_conflict)
+            empirical = self.empirical_authorization is not None
+            contract_failed = bool(over_input or over_output or usage_conflict or (empirical and trusted_usage is None))
+            actual_cost = self._estimated_cost(prompt, completion, cached) if trusted_usage is not None and empirical else None
             fields = dict(status=status, usage=trusted_usage, reported_usage=usage,
                           usage_valid=valid, usage_conflict=usage_conflict,
                           conflicting_reports=conflicting_reports,
@@ -218,11 +263,14 @@ class RelayLedger:
                           reservation_retained=trusted_usage is None, ambiguous=ambiguous,
                           contract_failed=contract_failed, contract_id=row["contract_id"],
                           finish_reason=finish_reason, provider_model=provider_model, system_fingerprint=system_fingerprint)
+            fields["estimated_cost_reported_cny"] = actual_cost
             self._record("settled", attempt_id=attempt_id, **fields)
             row.update(fields)
             if trusted_usage is not None:
                 self.input_occupied -= row["input_reserved"] - usage["prompt_tokens"]
                 self.output_occupied -= row["output_reserved"] - usage["completion_tokens"]
+                if empirical:
+                    self.cost_occupied_cny += actual_cost - row["estimated_cost_reserved_cny"]
             else:
                 # 未完成请求不得释放预留；已报告的超额仍须如实增加占用。
                 self.input_occupied += over_input or 0
@@ -311,7 +359,7 @@ class RelayServer(ThreadingMixIn, UnixStreamServer):
 
     def __init__(self, socket_path, *, ledger: RelayLedger, binding: RelayBinding,
                  upstream: str, counter: Callable = unknown_input,
-                 remote_authorized=False, api_key=None):
+                 remote_authorized=False, api_key=None, trace_directory=None):
         target = urlsplit(upstream)
         try:
             local = ipaddress.ip_address(target.hostname or "").is_loopback
@@ -327,6 +375,9 @@ class RelayServer(ThreadingMixIn, UnixStreamServer):
             raise ValueError("bounded monotonic run deadline required")
         self.ledger, self.binding, self.upstream = ledger, binding, upstream
         self.counter, self.api_key = counter, api_key
+        self.trace_directory = trace_directory
+        if trace_directory is not None:
+            trace_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self._handler_slots = threading.BoundedSemaphore(8)
         super().__init__(str(socket_path), _Handler)
         os.chmod(socket_path, 0o600)
@@ -391,7 +442,14 @@ class _Handler(BaseHTTPRequestHandler):
         self._headers_sent = False
         remaining = min(server.ledger.limits.request_seconds, server.binding.deadline - time.monotonic())
         try:
-            status, usage, ambiguous, observation = asyncio.run(asyncio.wait_for(self._forward(raw, payload), max(0.001, remaining)))
+            if server.trace_directory is not None:
+                path = server.trace_directory / (attempt + ".request.json")
+                with path.open("xb") as handle:
+                    os.chmod(path, 0o600)
+                    handle.write(raw)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            status, usage, ambiguous, observation = asyncio.run(asyncio.wait_for(self._forward(raw, payload, attempt), max(0.001, remaining)))
         except TimeoutError:
             status = "request_timeout"
         except (httpx.HTTPError, ConnectionError, OSError, ValueError):
@@ -409,7 +467,7 @@ class _Handler(BaseHTTPRequestHandler):
                     pass
         self.close_connection = True
 
-    async def _forward(self, raw, payload):
+    async def _forward(self, raw, payload, attempt):
         server = self.server
         usage = _Usage(bool(payload.get("stream")))
         status_code = None
@@ -428,10 +486,26 @@ class _Handler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", response.headers.get("content-type", "application/json"))
                     self.end_headers()
                     self._headers_sent = True
-                    async for chunk in response.aiter_bytes():
-                        usage.feed(chunk)
-                        self.wfile.write(chunk)
-                        self.wfile.flush()
+                    path = server.trace_directory / (attempt + ".response.txt") if server.trace_directory else None
+                    handle = path.open("xb") if path else None
+                    if path:
+                        os.chmod(path, 0o600)
+                    recorded_bytes = 0
+                    try:
+                        async for chunk in response.aiter_bytes():
+                            recorded_bytes += len(chunk)
+                            if recorded_bytes > 32 * 1024 * 1024:
+                                raise ValueError("bounded_response_capture_exhausted")
+                            if handle:
+                                handle.write(chunk)
+                                handle.flush()
+                            usage.feed(chunk)
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                    finally:
+                        if handle:
+                            os.fsync(handle.fileno())
+                            handle.close()
 
         async def interruption():
             while True:
