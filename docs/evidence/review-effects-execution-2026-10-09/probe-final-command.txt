@@ -1,0 +1,3 @@
+{"probe": "positive", "status": "completed", "requests": 5}
+{"probe": "cancel", "status": "cancelled", "requests": 4}
+{"probe": "timeout", "status": "deadline_killed", "requests": 12}

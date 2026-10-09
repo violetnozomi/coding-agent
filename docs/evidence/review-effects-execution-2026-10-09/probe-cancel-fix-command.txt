@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "<repository>/scripts/review_effects_execution.py", line 285, in <module>
+    main()
+    ~~~~^^
+  File "<repository>/scripts/review_effects_execution.py", line 273, in main
+    probe(directory, args.probe_id, args.probe_modes)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repository>/scripts/review_effects_execution.py", line 244, in probe
+    assert control_sent and state is None
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

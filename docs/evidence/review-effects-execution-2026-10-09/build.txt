@@ -1,0 +1,59 @@
+Sending build context to Docker daemon  13.23MB
+
+Step 1/4 : FROM python@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
+ ---> 25c5b8011a34
+Step 2/4 : COPY wheels /wheels
+ ---> fc7f1daeaec2
+Step 3/4 : COPY requirements.txt /requirements.txt
+ ---> 2b7cc618fd87
+Step 4/4 : RUN python -m pip install --no-index --require-hashes --no-deps --find-links=/wheels -r /requirements.txt && rm -rf /wheels
+ ---> Running in 1d6c41dc42c0
+Looking in links: /wheels
+Processing /wheels/annotated_types-0.8.0-py3-none-any.whl (from -r /requirements.txt (line 1))
+Processing /wheels/anyio-4.15.1-py3-none-any.whl (from -r /requirements.txt (line 2))
+Processing /wheels/certifi-2026.7.22-py3-none-any.whl (from -r /requirements.txt (line 3))
+Processing /wheels/charset_normalizer-3.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /requirements.txt (line 4))
+Processing /wheels/distro-1.9.0-py3-none-any.whl (from -r /requirements.txt (line 5))
+Processing /wheels/h11-0.16.0-py3-none-any.whl (from -r /requirements.txt (line 6))
+Processing /wheels/httpcore-1.0.9-py3-none-any.whl (from -r /requirements.txt (line 7))
+Processing /wheels/httpx-0.28.1-py3-none-any.whl (from -r /requirements.txt (line 8))
+Processing /wheels/idna-3.20-py3-none-any.whl (from -r /requirements.txt (line 9))
+Processing /wheels/iniconfig-2.3.1-py3-none-any.whl (from -r /requirements.txt (line 10))
+Processing /wheels/jiter-0.17.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /requirements.txt (line 11))
+Processing /wheels/markdown_it_py-4.2.0-py3-none-any.whl (from -r /requirements.txt (line 12))
+Processing /wheels/mdurl-0.1.2-py3-none-any.whl (from -r /requirements.txt (line 13))
+Processing /wheels/openai-2.36.0-py3-none-any.whl (from -r /requirements.txt (line 14))
+Processing /wheels/packaging-26.3-py3-none-any.whl (from -r /requirements.txt (line 15))
+Processing /wheels/pluggy-1.6.0-py3-none-any.whl (from -r /requirements.txt (line 16))
+Processing /wheels/prompt_toolkit-3.0.52-py3-none-any.whl (from -r /requirements.txt (line 17))
+Processing /wheels/pydantic-2.14.0-py3-none-any.whl (from -r /requirements.txt (line 18))
+Processing /wheels/pydantic_core-2.50.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /requirements.txt (line 19))
+Processing /wheels/pygments-2.21.0-py3-none-any.whl (from -r /requirements.txt (line 20))
+Processing /wheels/pytest-9.0.3-py3-none-any.whl (from -r /requirements.txt (line 21))
+Processing /wheels/python_dotenv-1.2.1-py3-none-any.whl (from -r /requirements.txt (line 22))
+Processing /wheels/pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /requirements.txt (line 23))
+Processing /wheels/regex-2026.9.29-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /requirements.txt (line 24))
+Processing /wheels/requests-2.34.2-py3-none-any.whl (from -r /requirements.txt (line 25))
+Processing /wheels/rich-14.2.0-py3-none-any.whl (from -r /requirements.txt (line 26))
+Processing /wheels/sniffio-1.3.1-py3-none-any.whl (from -r /requirements.txt (line 27))
+Processing /wheels/tiktoken-0.12.0-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /requirements.txt (line 28))
+Processing /wheels/tqdm-4.70.1-py3-none-any.whl (from -r /requirements.txt (line 29))
+Processing /wheels/tree_sitter-0.26.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /requirements.txt (line 30))
+Processing /wheels/tree_sitter_go-0.25.0-cp310-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /requirements.txt (line 31))
+Processing /wheels/tree_sitter_javascript-0.25.0-cp310-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /requirements.txt (line 32))
+Processing /wheels/tree_sitter_typescript-0.23.2-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /requirements.txt (line 33))
+Processing /wheels/typing_extensions-4.16.0-py3-none-any.whl (from -r /requirements.txt (line 34))
+Processing /wheels/typing_inspection-0.4.4-py3-none-any.whl (from -r /requirements.txt (line 35))
+Processing /wheels/urllib3-2.8.0-py3-none-any.whl (from -r /requirements.txt (line 36))
+Processing /wheels/watchfiles-1.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /requirements.txt (line 37))
+Processing /wheels/wcwidth-0.9.2-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /requirements.txt (line 38))
+Installing collected packages: wcwidth, watchfiles, urllib3, typing-inspection, typing_extensions, tree-sitter-typescript, tree-sitter-javascript, tree-sitter-go, tree-sitter, tqdm, tiktoken, sniffio, rich, requests, regex, PyYAML, python-dotenv, pytest, Pygments, pydantic_core, pydantic, prompt_toolkit, pluggy, packaging, openai, mdurl, markdown-it-py, jiter, iniconfig, idna, httpx, httpcore, h11, distro, charset-normalizer, certifi, anyio, annotated-types
+Successfully installed PyYAML-6.0.3 Pygments-2.21.0 annotated-types-0.8.0 anyio-4.15.1 certifi-2026.7.22 charset-normalizer-3.5.2 distro-1.9.0 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 idna-3.20 iniconfig-2.3.1 jiter-0.17.0 markdown-it-py-4.2.0 mdurl-0.1.2 openai-2.36.0 packaging-26.3 pluggy-1.6.0 prompt_toolkit-3.0.52 pydantic-2.14.0 pydantic_core-2.50.0 pytest-9.0.3 python-dotenv-1.2.1 regex-2026.9.29 requests-2.34.2 rich-14.2.0 sniffio-1.3.1 tiktoken-0.12.0 tqdm-4.70.1 tree-sitter-0.26.0 tree-sitter-go-0.25.0 tree-sitter-javascript-0.25.0 tree-sitter-typescript-0.23.2 typing-inspection-0.4.4 typing_extensions-4.16.0 urllib3-2.8.0 watchfiles-1.1.1 wcwidth-0.9.2
+[91mWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+[0m ---> Removed intermediate container 1d6c41dc42c0
+ ---> ad95168761bf
+Successfully built ad95168761bf
+Successfully tagged nz-review-runtime:72579d044985
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/

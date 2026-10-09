@@ -1,0 +1,11 @@
+{
+  "isolation_verified": true,
+  "budget_enforcement_verified": false,
+  "paid_authorization_valid": false,
+  "technical_ready": false,
+  "online_not_run": true,
+  "blockers": [
+    "selected DeepSeek model has no validated input tokenizer/upper bound",
+    "missing_paid_authorization"
+  ]
+}

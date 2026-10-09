@@ -1,0 +1,4 @@
+................................s                                        [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/evaluation/test_paired_runtime_smoke.py:139: opt-in: requires locally built pinned InfCodeX, Node LTS and Linux libseccomp
+32 passed, 1 skipped in 27.13s

@@ -1,0 +1,27 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/runtime/nz_coder/runtime/execution/native_sdk.py", line 9, in <module>
+    from nz_coder.runtime.execution.composition import declared_runtime
+  File "/runtime/nz_coder/runtime/execution/composition.py", line 7, in <module>
+    from nz_coder.runtime.agent.admission import AdmittedAgentHandle
+  File "/runtime/nz_coder/runtime/agent/admission.py", line 7, in <module>
+    from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec
+  File "/runtime/nz_coder/runtime/agent/handoffs.py", line 8, in <module>
+    from nz_coder.tools import ToolOutput
+  File "/runtime/nz_coder/tools/__init__.py", line 840, in <module>
+    from . import repo_context  # noqa: F401,E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/runtime/nz_coder/tools/repo_context.py", line 6, in <module>
+    from nz_coder.intelligence.service import workspace_repo_intelligence
+  File "/runtime/nz_coder/intelligence/service.py", line 15, in <module>
+    from nz_coder.intelligence.code_index import (
+  File "/runtime/nz_coder/intelligence/code_index.py", line 16, in <module>
+    from nz_coder.foundation import config
+  File "/runtime/nz_coder/foundation/config.py", line 14, in <module>
+    CONFIG_SNAPSHOT = load_config_snapshot(Path.cwd())
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/runtime/nz_coder/foundation/workspace_trust.py", line 714, in load_config_snapshot
+    _ensure_store_outside_workspace(store.path, root)
+  File "/runtime/nz_coder/foundation/workspace_trust.py", line 978, in _ensure_store_outside_workspace
+    raise ConfigValidationError("Workspace trust store must be outside the workspace")
+nz_coder.foundation.workspace_trust.ConfigValidationError: Workspace trust store must be outside the workspace

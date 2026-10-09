@@ -1,0 +1,126 @@
+{
+  "evidence_baseline": "91bf79826c39733e606f3f694ebbc7970eba1356",
+  "measured_core": {
+    "old": {
+      "source_commit": "cf2ff5cf078559e9843c34614318d80c984b4168",
+      "retained_files": 355,
+      "inventory_raw_sha256": "dab68cb4883d9ce79fd45e5ae9fa70743816fc914af2ca3fc6aa331b9ebe2439"
+    },
+    "new": {
+      "source_commit": "4abbcafae69f2e3b9d162ad73e769913659aca59",
+      "retained_files": 355,
+      "inventory_raw_sha256": "98a2847f6a7dcf2b4e255250006c5722490646e010d4bf421d1f871888c82870"
+    }
+  },
+  "original_manifest_sha256": "ce3533973916c837fdc7e6c9827af9eb3d793e6d5c76684dbb942a8d6612e994",
+  "original_manifest_modified": false,
+  "production_core_modified": false,
+  "fee_authorization": {
+    "valid": false,
+    "scope": null,
+    "account": null,
+    "remote_model_requests": 0
+  },
+  "reference": {
+    "commit": "d3a812379b589597347f5be12d5b68477e577f02",
+    "run": "not_run"
+  },
+  "budget_proposal": {
+    "review_units": 4,
+    "review_physical_per_unit": 2,
+    "review_physical_total": 8,
+    "autonomous_main_physical": 12,
+    "autonomous_auxiliary_physical": 6,
+    "all_auxiliary_physical_request_cap_scope": "autonomous_only; four review units are separate",
+    "global_physical": 26,
+    "input_per_request": 100000,
+    "input_total": 500000,
+    "output_total": 100000,
+    "main_max_tokens": 64000,
+    "review_max_tokens": 1024,
+    "request_seconds": 180,
+    "autonomous_seconds": 900
+  },
+  "local_probe_config": {
+    "model_label": "deepseek-v4-flash",
+    "upstream": "literal loopback fake only",
+    "input_counting": "JSON UTF-8 bytes are fake-service token units ONLY",
+    "output_usage": "fake constant test value 7; not real model efficiency",
+    "main_cap": 12,
+    "auxiliary_cap": 6,
+    "global_cap_per_independent_probe_ledger": 26,
+    "normal_cancel_seconds": 30,
+    "deadline_probe_seconds": 6,
+    "main_max_tokens": 64000,
+    "actual_review_max_tokens": 1024,
+    "real_provider_requests": 0,
+    "selected_attempts": {
+      "positive": "supervisor",
+      "cancel": "final",
+      "timeout": "final"
+    }
+  },
+  "isolation_verified": true,
+  "local_relay_contract_verified": true,
+  "budget_enforcement_verified": false,
+  "paid_authorization_valid": false,
+  "technical_ready": false,
+  "online_not_run": true,
+  "blockers": [
+    "DeepSeek-v4-flash final-input token bound and thinking/output accounting have not been validated; default counter rejects",
+    "missing current model/account/scope/all-auxiliary fee authorization"
+  ],
+  "runtime": {
+    "base_image": "python@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de",
+    "actual_image": "sha256:ad95168761bfd58549057442c026c24cb863a5bf2f3511c8f0bae5c462c49641",
+    "python": "3.12.13",
+    "original_preflight_python": "3.13.12",
+    "both_versions_share_dependencies": true,
+    "official_dependency_source": "https://pypi.org/simple",
+    "locked_wheels": 38,
+    "build_network": "none",
+    "image_or_wheels_committed": false
+  },
+  "formal_initial_hashes": {
+    "u01": {
+      "payment.py": "fc9c190535db5d5101cb420cebf5f9b27ffdb089730a3168a771edd3945c72f1",
+      "tests/test_amount.py": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+    },
+    "u02": {
+      "payment.py": "fc9c190535db5d5101cb420cebf5f9b27ffdb089730a3168a771edd3945c72f1",
+      "tests/test_amount.py": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+    },
+    "u03": {
+      "payment.py": "fc9c190535db5d5101cb420cebf5f9b27ffdb089730a3168a771edd3945c72f1",
+      "tests/test_amount.py": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+    },
+    "u04": {
+      "payment.py": "fc9c190535db5d5101cb420cebf5f9b27ffdb089730a3168a771edd3945c72f1",
+      "tests/test_amount.py": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+    },
+    "a01": {
+      "README.md": "11717241f513020a7f2b63c58bbc1acdefa9e99663e2ce24ed03ae94c90aba1a",
+      "app/__init__.py": "0556857c71d706021af74ff9d58c60b35598d608765b1cf6e30d19f7efaf54b4",
+      "app/adapters/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "app/adapters/json_sink.py": "89ac6f13c735ce933fc8ea9e8fb874c8bffac3a8cb6ee1834e49ac8e8dde5542",
+      "app/adapters/text_sink.py": "eae8b0e3df9dfb16d29b0ab143208725a77e7bb3459dee411335c589da8a5b45",
+      "app/api.py": "87237860f9ea0f61c0bad510791d95a7920370331a23e6e574a10f48841e128a",
+      "app/cli.py": "a6f3b37cb366e8d0a78195bd980ed79bc834b64309a34371f404327f231a3cf2",
+      "app/events.py": "5e2e6b99dd734db8cd3ca8f9d7934dc7b6d6131b1b5f2e410e66858e5fa4442a",
+      "app/formatting.py": "d04ddd7a9e10edb73cf069f00159f662d3c0423a5df9ab8568f53cfa1bbd1321",
+      "app/service.py": "aa00b3fc91f072d98fa271e09ab700fa73be9b836c53ba4caf26498b082de458",
+      "app/storage.py": "c45f6d5f7f7d31d67ccb5d2f9add0dbb3c8092944e98c0e29b97c970557d7d81",
+      "tests/test_api.py": "9b917ffb51e5d23a242dadda25aacda92a1d61fd31107c25af717abf4e7df494",
+      "tests/test_cli.py": "a2908e5cb088a86836d64ee64baeb49fa17e5b5b78f5b09bb943d7de8787198e",
+      "tests/test_sinks.py": "aadfb947e0639fefe9bd97a476ac2231fb29ffdee93ef0a0bc52f3c6879c3434"
+    }
+  },
+  "formal_review_order": [
+    "G/new",
+    "D/old",
+    "G/old",
+    "D/new"
+  ],
+  "formal_autonomous": "A_unknown_location; not_run",
+  "coverage": "Linux actual new-Core NativeSDKRunner, AgentRunner, ToolExecutor, Bash Python child, current pytest and auxiliary Judge. Old Core real isolated imports only. No Windows or real-model effect claims."
+}

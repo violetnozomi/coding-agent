@@ -1,0 +1,25 @@
+{
+  "isolation_verified": true,
+  "runtime_sha256": "80b31e82150388055543cfe4bbaf83fa75fefe3b305560d1fda1e8fd54ca8736",
+  "receipts": {
+    "positive": {
+      "case": "probe-positive-supervisor",
+      "receipt_sha256": "bf9b913ae5abaa2414a36f708232757d334ca07a1fd15caa1d98855eca227418",
+      "ledger_sha256": "52cfba38c6f6e34e5189c5092813a7a83f9937f46f7b10992e00b4a4cae94293",
+      "inspect_sha256": "75a93edbb192e2b8b153382967e171ae4dd11288479bde222b27ec68580fe308"
+    },
+    "cancel": {
+      "case": "probe-cancel-final",
+      "receipt_sha256": "6c6c7690c1a5799174b88889caef6343b000c163862d622fdb005395b8ce4b68",
+      "ledger_sha256": "73dcdccd842e0fd4782a7e59a88247271edb4f2263a4987ed3a56459b2b9e64d",
+      "inspect_sha256": "2339823f53a91d1ad61dac84d28f37c486304ffa78cc3e8f04c18fb7261aad29"
+    },
+    "timeout": {
+      "case": "probe-timeout-final",
+      "receipt_sha256": "46344575f38f2b2868a518406e0718d0d0a0083bd25764b5b18d9d5387f4ce5a",
+      "ledger_sha256": "b56025646d04de8796bbe7af608e1aa2dd28897dcbcbe7c160a34de078257018",
+      "inspect_sha256": "9c7700ac09643c81b31c7406295a1956b2e8fe158371aeaeb8f37477aec706b2"
+    }
+  },
+  "real_provider_requests": 0
+}

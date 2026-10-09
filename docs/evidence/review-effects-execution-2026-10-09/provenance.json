@@ -1,0 +1,513 @@
+[
+  {
+    "raw_path": "<artifact-root>/runtime.json",
+    "raw_sha256": "80b31e82150388055543cfe4bbaf83fa75fefe3b305560d1fda1e8fd54ca8736",
+    "public_path": "runtime.json",
+    "public_sha256": "80b31e82150388055543cfe4bbaf83fa75fefe3b305560d1fda1e8fd54ca8736",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/readiness.json",
+    "raw_sha256": "69d2fcade1872b43d6b2efb2edde52c8d803f0b930aaad3fb07f3a39c2c0df86",
+    "public_path": "readiness.json",
+    "public_sha256": "512eab3e71fe107fa18fd325cf1b8c7d8ad5ace5d0bd15929d824586c936d844",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/online-refusal.json",
+    "raw_sha256": "69d2fcade1872b43d6b2efb2edde52c8d803f0b930aaad3fb07f3a39c2c0df86",
+    "public_path": "online-refusal.json",
+    "public_sha256": "512eab3e71fe107fa18fd325cf1b8c7d8ad5ace5d0bd15929d824586c936d844",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/isolation-verified.json",
+    "raw_sha256": "e58860d6223d09ebbf4b3ef80264dcd5d2823b1dd22b3089a2d98f09501bf6b3",
+    "public_path": "isolation-verified.json",
+    "public_sha256": "e58860d6223d09ebbf4b3ef80264dcd5d2823b1dd22b3089a2d98f09501bf6b3",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/related-tests.txt",
+    "raw_sha256": "fea5133d4a9c87363e5e620bbe3afc7be03d117bcd7093859b7350cc2344475e",
+    "public_path": "related-tests.txt",
+    "public_sha256": "fea5133d4a9c87363e5e620bbe3afc7be03d117bcd7093859b7350cc2344475e",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/static-check-final.txt",
+    "raw_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "public_path": "static-check-final.txt",
+    "public_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/isolation-verification.txt",
+    "raw_sha256": "8637bbe5ae88e6d3901d8a3d7cc5f88d4005023934d66c0eac1f261783aeb230",
+    "public_path": "isolation-verification.txt",
+    "public_sha256": "8637bbe5ae88e6d3901d8a3d7cc5f88d4005023934d66c0eac1f261783aeb230",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/runtime-prepare.txt",
+    "raw_sha256": "36af3de43f93b401612c7cb712ed6d920cd1f6115d1b0c8357dee5646a9fe8c6",
+    "public_path": "runtime-prepare.txt",
+    "public_sha256": "36af3de43f93b401612c7cb712ed6d920cd1f6115d1b0c8357dee5646a9fe8c6",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/build.txt",
+    "raw_sha256": "06e6977a2fc685bf71a87c044a4d7142ee19442218f2163ce24ebe4de5e4fa75",
+    "public_path": "build.txt",
+    "public_sha256": "70227bdf863f535fae5cde4b97fcc48ef127dcff124c005231cb2c608f2079ec",
+    "derivation": "remove private host paths and reasoning keys; trim final blank lines in public copy only"
+  },
+  {
+    "raw_path": "<artifact-root>/old-runtime-import.txt",
+    "raw_sha256": "40e7b20e77fec53199be1d5441d16c226f094f111f1eb94dbe1c1ddfa88ef696",
+    "public_path": "old-runtime-import.txt",
+    "public_sha256": "40e7b20e77fec53199be1d5441d16c226f094f111f1eb94dbe1c1ddfa88ef696",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/old-runtime-import-cwd-fixed.txt",
+    "raw_sha256": "7b39a9c83df308a190b3f2c51a0d9ccb0ffd86d9c14864c9388d57ae5b390c7b",
+    "public_path": "old-runtime-import-cwd-fixed.txt",
+    "public_sha256": "7b39a9c83df308a190b3f2c51a0d9ccb0ffd86d9c14864c9388d57ae5b390c7b",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/old-runtime-import-command.json",
+    "raw_sha256": "25a4523069fc6111d95316eb8181cb12505f143b8d1bd49d84c8414356ba76aa",
+    "public_path": "old-runtime-import-command.json",
+    "public_sha256": "d0ae4f8c04e45db3a55649bb230d0092e5472e2f20a7b5c0255e03cd7e89d97c",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-command.txt",
+    "raw_sha256": "450ed73ba096a71bf2c005b0abe975e8105c742eebbd0d68633f21be657ac6b1",
+    "public_path": "probe-command.txt",
+    "public_sha256": "f8d0714da3d6629467aa490a69157ca189d9cbf0f53649a77f33140986aebeae",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-role-fix-command.txt",
+    "raw_sha256": "97e8410ca00b057364fb189827ec9a61bff3395bb80acf22bf9d0e01e2a13bd7",
+    "public_path": "probe-role-fix-command.txt",
+    "public_sha256": "d6c2b6d927a1a19d749d0c18b27d24f1294dde899c5845d726bf4682cd648d5f",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-fix-command.txt",
+    "raw_sha256": "e1505056529a1a9660c0e8ab5c3c8042e0c96e28cb9a57f1e46b5581824b33ee",
+    "public_path": "probe-cancel-fix-command.txt",
+    "public_sha256": "325b8e14a08c79af0630489dac397242acb115d91eba78aa4fba25d0e962fa3c",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-final-command.txt",
+    "raw_sha256": "e677390902fa37903af42da4b2b5e9abc93781fedbb23906fa8fd35635dfb19f",
+    "public_path": "probe-final-command.txt",
+    "public_sha256": "e677390902fa37903af42da4b2b5e9abc93781fedbb23906fa8fd35635dfb19f",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-write-check-command.txt",
+    "raw_sha256": "11609e9b27f243714c113823e7795844dbbe41954525aee7e6ba1349de3b0850",
+    "public_path": "probe-write-check-command.txt",
+    "public_sha256": "11609e9b27f243714c113823e7795844dbbe41954525aee7e6ba1349de3b0850",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-supervisor-command.txt",
+    "raw_sha256": "11609e9b27f243714c113823e7795844dbbe41954525aee7e6ba1349de3b0850",
+    "public_path": "probe-supervisor-command.txt",
+    "public_sha256": "11609e9b27f243714c113823e7795844dbbe41954525aee7e6ba1349de3b0850",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/dependency-download.txt",
+    "raw_sha256": "e0f5e1d9fb37e38d1342e0ac9ae987561ffd32968b0902c1be6e02a49f3b2b5d",
+    "public_path": "dependency-download.txt",
+    "public_sha256": "97cb67b5ef82fa27b1ac0ddb696ab0196d8ff1b7684c080f707c0d52f7f41e2e",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/ledger.jsonl",
+    "raw_sha256": "52cfba38c6f6e34e5189c5092813a7a83f9937f46f7b10992e00b4a4cae94293",
+    "public_path": "positive/ledger.jsonl",
+    "public_sha256": "52cfba38c6f6e34e5189c5092813a7a83f9937f46f7b10992e00b4a4cae94293",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/fake-requests.json",
+    "raw_sha256": "143b9de482a0e10c62a5a99109237c32d13ca88d1df5058f7a667bd16054b626",
+    "public_path": "positive/fake-requests.json",
+    "public_sha256": "51d5655d855a2370db572490be91850998ed26aae0c30e298c3d67ccd22c7672",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/stdout.txt",
+    "raw_sha256": "db3924222f56388ea0160489c42900927b0ba651c03962a8c5b3ab98bc4418c1",
+    "public_path": "positive/stdout.txt",
+    "public_sha256": "db3924222f56388ea0160489c42900927b0ba651c03962a8c5b3ab98bc4418c1",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/stderr.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "positive/stderr.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/receipt.json",
+    "raw_sha256": "bf9b913ae5abaa2414a36f708232757d334ca07a1fd15caa1d98855eca227418",
+    "public_path": "positive/receipt.json",
+    "public_sha256": "bf9b913ae5abaa2414a36f708232757d334ca07a1fd15caa1d98855eca227418",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/launch.json",
+    "raw_sha256": "ba6fb804f7e22c04bc6532b47b2a0f00c99e9c8abf0e66de1d2b31908dabc058",
+    "public_path": "positive/launch.json",
+    "public_sha256": "beedba5b8023f485e57fdc09d2e49502ee7236179a21b50a574d99b1e42e893b",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/result/result.json",
+    "raw_sha256": "ad9d87281442126c9a995320dd71f925ed5164ed01d2703bc506402964a5436a",
+    "public_path": "positive/result.json",
+    "public_sha256": "712c395f64618e38354555c97b923283a7826b1cb0a674040a3e38bd914ee5b6",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/result/runtime.jsonl",
+    "raw_sha256": "263f8374c9ff53ada18990cb495124198876c0fc9458505f584720cd7b1b1b7d",
+    "public_path": "positive/runtime.jsonl",
+    "public_sha256": "263f8374c9ff53ada18990cb495124198876c0fc9458505f584720cd7b1b1b7d",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/result/state.json",
+    "raw_sha256": "3a7f5f512f37d0b79c3688d3056fc56f2c6c971bf2c6c7c3a28a04ec413e3d1d",
+    "public_path": "positive/state.json",
+    "public_sha256": "892a7498643ddd1b53c8cb3a84b8c1a9cdef7c58f4b20850ecf50620c7a1b6d6",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/result/permissions.jsonl",
+    "raw_sha256": "1c1402593ede9922eaf3f328696879c24025ad18ebe7f80e1c0027260664351e",
+    "public_path": "positive/permissions.jsonl",
+    "public_sha256": "1c1402593ede9922eaf3f328696879c24025ad18ebe7f80e1c0027260664351e",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-supervisor/container-inspect.json",
+    "raw_sha256": "75a93edbb192e2b8b153382967e171ae4dd11288479bde222b27ec68580fe308",
+    "public_path": "positive/container-inspect.json",
+    "public_sha256": "c70178909c4bcd390636a3ae35c5a65c7a5a9fa7c42c171b4f79ca7d181a93ae",
+    "derivation": "remove private host paths and reasoning keys; selected Docker fields"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/ledger.jsonl",
+    "raw_sha256": "73dcdccd842e0fd4782a7e59a88247271edb4f2263a4987ed3a56459b2b9e64d",
+    "public_path": "cancel/ledger.jsonl",
+    "public_sha256": "73dcdccd842e0fd4782a7e59a88247271edb4f2263a4987ed3a56459b2b9e64d",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/fake-requests.json",
+    "raw_sha256": "2da70f9c4edc746312e07f6e4c5b58461f796c52b69cef0fe83872e257d88bef",
+    "public_path": "cancel/fake-requests.json",
+    "public_sha256": "2da70f9c4edc746312e07f6e4c5b58461f796c52b69cef0fe83872e257d88bef",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/stdout.txt",
+    "raw_sha256": "dc104f65c20586c90b371d5298854383cf892b59b0a733e6165f85075af6b3ba",
+    "public_path": "cancel/stdout.txt",
+    "public_sha256": "dc104f65c20586c90b371d5298854383cf892b59b0a733e6165f85075af6b3ba",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/stderr.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "cancel/stderr.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/receipt.json",
+    "raw_sha256": "6c6c7690c1a5799174b88889caef6343b000c163862d622fdb005395b8ce4b68",
+    "public_path": "cancel/receipt.json",
+    "public_sha256": "6c6c7690c1a5799174b88889caef6343b000c163862d622fdb005395b8ce4b68",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/launch.json",
+    "raw_sha256": "88f4886234f434e935184a464aa0e23140989193dfcec392857eba6d52a69637",
+    "public_path": "cancel/launch.json",
+    "public_sha256": "ae269106e6b64d56f40d222a0c5a4fb91121165ce1ebfdb96b9c8bed8cb38101",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/result/result.json",
+    "raw_sha256": "9a910dc5949e9712d35ac8b792b35841c481587c737eee45e7561ed4803e9e63",
+    "public_path": "cancel/result.json",
+    "public_sha256": "d79f0f40c96c7cca54226e7e22c74a22b451d6b6305145e47c999a21f01a92a2",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/result/runtime.jsonl",
+    "raw_sha256": "df9103fdc1caf11c4aa09ddaea69ffae9fcd40d453bdd8c97898051774cba01b",
+    "public_path": "cancel/runtime.jsonl",
+    "public_sha256": "df9103fdc1caf11c4aa09ddaea69ffae9fcd40d453bdd8c97898051774cba01b",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/result/state.json",
+    "raw_sha256": "1efec9644c7f305116453cab1ebda7b27119e560366b90a9e9081b97156eb145",
+    "public_path": "cancel/state.json",
+    "public_sha256": "f8eb2875860adb7c5431230bdfd80d865ebe9f81020839d9ec03b583d14cf5d9",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/result/permissions.jsonl",
+    "raw_sha256": "14c08177980cd4e372891e9ced0ad783c0625c9bd36cf4f3966ae3fe7a05da85",
+    "public_path": "cancel/permissions.jsonl",
+    "public_sha256": "14c08177980cd4e372891e9ced0ad783c0625c9bd36cf4f3966ae3fe7a05da85",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-final/container-inspect.json",
+    "raw_sha256": "2339823f53a91d1ad61dac84d28f37c486304ffa78cc3e8f04c18fb7261aad29",
+    "public_path": "cancel/container-inspect.json",
+    "public_sha256": "e3812f561224acb6edceab033c20dc615f5a8f168302c2e87820d49e5f4fbd85",
+    "derivation": "remove private host paths and reasoning keys; selected Docker fields"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-timeout-final/ledger.jsonl",
+    "raw_sha256": "b56025646d04de8796bbe7af608e1aa2dd28897dcbcbe7c160a34de078257018",
+    "public_path": "timeout/ledger.jsonl",
+    "public_sha256": "b56025646d04de8796bbe7af608e1aa2dd28897dcbcbe7c160a34de078257018",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-timeout-final/fake-requests.json",
+    "raw_sha256": "777714bf464cbad6eaf3c9c7fb4d1e54771ca25a481148c81b6f699ee10cabc9",
+    "public_path": "timeout/fake-requests.json",
+    "public_sha256": "777714bf464cbad6eaf3c9c7fb4d1e54771ca25a481148c81b6f699ee10cabc9",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-timeout-final/stdout.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "timeout/stdout.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-timeout-final/stderr.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "timeout/stderr.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-timeout-final/receipt.json",
+    "raw_sha256": "46344575f38f2b2868a518406e0718d0d0a0083bd25764b5b18d9d5387f4ce5a",
+    "public_path": "timeout/receipt.json",
+    "public_sha256": "46344575f38f2b2868a518406e0718d0d0a0083bd25764b5b18d9d5387f4ce5a",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-timeout-final/launch.json",
+    "raw_sha256": "646c15b7a165914f65c5f447429aac8f16245271534d34e9b3b04442d7a27c3a",
+    "public_path": "timeout/launch.json",
+    "public_sha256": "8bf6a1b83c5f91d27bb329bda304df9fc159147cce474c6c658c74c0711bf31e",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-timeout-final/result/permissions.jsonl",
+    "raw_sha256": "14c08177980cd4e372891e9ced0ad783c0625c9bd36cf4f3966ae3fe7a05da85",
+    "public_path": "timeout/permissions.jsonl",
+    "public_sha256": "14c08177980cd4e372891e9ced0ad783c0625c9bd36cf4f3966ae3fe7a05da85",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-timeout-final/container-inspect.json",
+    "raw_sha256": "9c7700ac09643c81b31c7406295a1956b2e8fe158371aeaeb8f37477aec706b2",
+    "public_path": "timeout/container-inspect.json",
+    "public_sha256": "0352b53a428295c0ed709cfb738804d01b5c904c7521d6fd6d1bd5904b0660b3",
+    "derivation": "remove private host paths and reasoning keys; selected Docker fields"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive/ledger.jsonl",
+    "raw_sha256": "d34c3fb230d0bb29c5c72f5cbcae5c5b484aa37659d785d16b4138f066402eab",
+    "public_path": "attempts/probe-positive/ledger.jsonl",
+    "public_sha256": "d34c3fb230d0bb29c5c72f5cbcae5c5b484aa37659d785d16b4138f066402eab",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive/fake-requests.json",
+    "raw_sha256": "eac4469b8a33286b31a2cd33bf7ebec389e2eae1c1928978ea67728c52dc3c1e",
+    "public_path": "attempts/probe-positive/fake-requests.json",
+    "public_sha256": "578331db32030a58bfbf20997466e51a58956eff7588af1861e9d765955852fd",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive/stdout.txt",
+    "raw_sha256": "64315c49c279c39144d603e4657b46e5ba527c6e0b5940cdcb1ec8122b6d2296",
+    "public_path": "attempts/probe-positive/stdout.txt",
+    "public_sha256": "64315c49c279c39144d603e4657b46e5ba527c6e0b5940cdcb1ec8122b6d2296",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive/stderr.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "attempts/probe-positive/stderr.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-role-fix/ledger.jsonl",
+    "raw_sha256": "4b761ddaaab7dfd358cca6973e7bc88540dc054934ef1c5a6c4f434be5a6dc40",
+    "public_path": "attempts/probe-positive-role-fix/ledger.jsonl",
+    "public_sha256": "4b761ddaaab7dfd358cca6973e7bc88540dc054934ef1c5a6c4f434be5a6dc40",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-role-fix/fake-requests.json",
+    "raw_sha256": "74ff757a9887e55affd450125db8a1e9a24f5a9554b10d655fd3416ef6ed5a68",
+    "public_path": "attempts/probe-positive-role-fix/fake-requests.json",
+    "public_sha256": "863343a6ec3792d3849ec072b010664c95f8dea64fcba8b836b1313428820284",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-role-fix/stdout.txt",
+    "raw_sha256": "db3924222f56388ea0160489c42900927b0ba651c03962a8c5b3ab98bc4418c1",
+    "public_path": "attempts/probe-positive-role-fix/stdout.txt",
+    "public_sha256": "db3924222f56388ea0160489c42900927b0ba651c03962a8c5b3ab98bc4418c1",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-role-fix/stderr.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "attempts/probe-positive-role-fix/stderr.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-role-fix/ledger.jsonl",
+    "raw_sha256": "919d9d417556951a716f58245d7037b7edf6baa7998acfcd1e2b27aa2bdb7c72",
+    "public_path": "attempts/probe-cancel-role-fix/ledger.jsonl",
+    "public_sha256": "919d9d417556951a716f58245d7037b7edf6baa7998acfcd1e2b27aa2bdb7c72",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-role-fix/fake-requests.json",
+    "raw_sha256": "2da70f9c4edc746312e07f6e4c5b58461f796c52b69cef0fe83872e257d88bef",
+    "public_path": "attempts/probe-cancel-role-fix/fake-requests.json",
+    "public_sha256": "2da70f9c4edc746312e07f6e4c5b58461f796c52b69cef0fe83872e257d88bef",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-role-fix/stdout.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "attempts/probe-cancel-role-fix/stdout.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-role-fix/stderr.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "attempts/probe-cancel-role-fix/stderr.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-cancel-fix/ledger.jsonl",
+    "raw_sha256": "bf88e0f0fb96badf8d13572c71710dfd00b89ec51950118b56ddf0e51c5972e3",
+    "public_path": "attempts/probe-cancel-cancel-fix/ledger.jsonl",
+    "public_sha256": "bf88e0f0fb96badf8d13572c71710dfd00b89ec51950118b56ddf0e51c5972e3",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-cancel-fix/fake-requests.json",
+    "raw_sha256": "2da70f9c4edc746312e07f6e4c5b58461f796c52b69cef0fe83872e257d88bef",
+    "public_path": "attempts/probe-cancel-cancel-fix/fake-requests.json",
+    "public_sha256": "2da70f9c4edc746312e07f6e4c5b58461f796c52b69cef0fe83872e257d88bef",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-cancel-fix/stdout.txt",
+    "raw_sha256": "dc104f65c20586c90b371d5298854383cf892b59b0a733e6165f85075af6b3ba",
+    "public_path": "attempts/probe-cancel-cancel-fix/stdout.txt",
+    "public_sha256": "dc104f65c20586c90b371d5298854383cf892b59b0a733e6165f85075af6b3ba",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-cancel-cancel-fix/stderr.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "attempts/probe-cancel-cancel-fix/stderr.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-final/ledger.jsonl",
+    "raw_sha256": "5b2b36cacc35dddee42556e4c8f93df4d6b5e5e4ba33bb8de98c4661dfd9a59d",
+    "public_path": "attempts/probe-positive-final/ledger.jsonl",
+    "public_sha256": "5b2b36cacc35dddee42556e4c8f93df4d6b5e5e4ba33bb8de98c4661dfd9a59d",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-final/fake-requests.json",
+    "raw_sha256": "74ff757a9887e55affd450125db8a1e9a24f5a9554b10d655fd3416ef6ed5a68",
+    "public_path": "attempts/probe-positive-final/fake-requests.json",
+    "public_sha256": "863343a6ec3792d3849ec072b010664c95f8dea64fcba8b836b1313428820284",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-final/stdout.txt",
+    "raw_sha256": "db3924222f56388ea0160489c42900927b0ba651c03962a8c5b3ab98bc4418c1",
+    "public_path": "attempts/probe-positive-final/stdout.txt",
+    "public_sha256": "db3924222f56388ea0160489c42900927b0ba651c03962a8c5b3ab98bc4418c1",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-final/stderr.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "attempts/probe-positive-final/stderr.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-write-check/ledger.jsonl",
+    "raw_sha256": "ef09a21f6035a6a51c5a3dbe3140ad8d76b49e4419bf8e21490a43be1410fafc",
+    "public_path": "attempts/probe-positive-write-check/ledger.jsonl",
+    "public_sha256": "ef09a21f6035a6a51c5a3dbe3140ad8d76b49e4419bf8e21490a43be1410fafc",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-write-check/fake-requests.json",
+    "raw_sha256": "143b9de482a0e10c62a5a99109237c32d13ca88d1df5058f7a667bd16054b626",
+    "public_path": "attempts/probe-positive-write-check/fake-requests.json",
+    "public_sha256": "51d5655d855a2370db572490be91850998ed26aae0c30e298c3d67ccd22c7672",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-write-check/stdout.txt",
+    "raw_sha256": "db3924222f56388ea0160489c42900927b0ba651c03962a8c5b3ab98bc4418c1",
+    "public_path": "attempts/probe-positive-write-check/stdout.txt",
+    "public_sha256": "db3924222f56388ea0160489c42900927b0ba651c03962a8c5b3ab98bc4418c1",
+    "derivation": "remove private host paths and reasoning keys"
+  },
+  {
+    "raw_path": "<artifact-root>/probe-positive-write-check/stderr.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "public_path": "attempts/probe-positive-write-check/stderr.txt",
+    "public_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "derivation": "remove private host paths and reasoning keys"
+  }
+]

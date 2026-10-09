@@ -1,0 +1,2 @@
+PASS: frozen inputs, G/D acceptance, four production packets, actual request fields, not_run/null semantics, redaction and hashes
+{"runtime_prepared": true, "image": "sha256:ad95168761bfd58549057442c026c24cb863a5bf2f3511c8f0bae5c462c49641", "real_model_requests": 0}

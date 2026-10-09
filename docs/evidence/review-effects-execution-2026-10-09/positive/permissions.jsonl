@@ -1,0 +1,2 @@
+{"tool": "bash", "input": {"command": "python boundary_probe.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest -q tests"}, "allowed": true}

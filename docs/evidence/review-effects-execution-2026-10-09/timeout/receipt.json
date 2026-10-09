@@ -1,0 +1,65 @@
+{
+  "mode": "timeout",
+  "probe_id": "final",
+  "driver_sha256": "46aab942fd0385f3f184f83061374dbf7c27dd8d3f10e7aede645d9423a92d53",
+  "exit_code": 137,
+  "runtime_result": null,
+  "elapsed": 7.194061222999153,
+  "timed_out": true,
+  "descendant_writes_stopped": true,
+  "late_requests": 0,
+  "fake_upstream_requests": 12,
+  "physical_attempts": 12,
+  "occupied_input": 31451,
+  "occupied_output": 84,
+  "sentinels_unchanged": true,
+  "host_config": {
+    "NetworkMode": "none",
+    "ReadonlyRootfs": true,
+    "CapDrop": [
+      "ALL"
+    ],
+    "Privileged": false,
+    "PidMode": "",
+    "IpcMode": "private",
+    "CgroupnsMode": "private"
+  },
+  "mounts": [
+    {
+      "destination": "/tmp",
+      "writable": true
+    },
+    {
+      "destination": "/input",
+      "writable": false
+    },
+    {
+      "destination": "/model",
+      "writable": false
+    },
+    {
+      "destination": "/result",
+      "writable": true
+    },
+    {
+      "destination": "/control",
+      "writable": false
+    },
+    {
+      "destination": "/runtime",
+      "writable": false
+    },
+    {
+      "destination": "/driver",
+      "writable": false
+    },
+    {
+      "destination": "/workspace",
+      "writable": true
+    },
+    {
+      "destination": "/home/agent",
+      "writable": true
+    }
+  ]
+}
