@@ -197,3 +197,36 @@ def test_capture_schema_includes_required_causal_fields():
     assert set(schema["items"]["required"]) == set(schema["items"]["properties"])
     assert {"purpose", "tool_calls", "provider_usage", "mutation_generation", "reference_state"} <= set(schema["items"]["required"])
     assert "permission_outcome" in schema["items"]["properties"]["tool_calls"]["items"]["required"]
+
+
+def test_isolated_node_uses_explicit_trusted_runtime(tmp_path, monkeypatch):
+    import shutil
+    node = shutil.which("node")
+    assert node, "Node prerequisite missing in Node coverage job"
+    install = tmp_path / "trusted-runtime"
+    install.mkdir()
+    selected = install / "node"
+    selected.symlink_to(Path(node).resolve())
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setenv("NZ_DIAGNOSTIC_NODE", str(selected))
+    result = suite.execute(["node", "-e", "console.log(require('node:test') ? process.argv[0] : 'bad')"], workspace)
+    assert result["exit"] == 0
+    assert result["argv"][0] == str(selected.resolve())
+
+
+def test_missing_node_is_environment_blocked(tmp_path, monkeypatch):
+    monkeypatch.setenv("NZ_DIAGNOSTIC_NODE", str(tmp_path / "missing-node"))
+    result = suite.execute(["node", "-e", "throw Error('must not run')"], tmp_path)
+    assert result["exit"] is None
+    assert result["status"] == "environment_blocked"
+
+
+def test_workspace_node_is_not_a_trusted_runtime(tmp_path, monkeypatch):
+    malicious = tmp_path / "node"
+    malicious.write_text("#!/bin/sh\ntouch should-not-exist\n")
+    malicious.chmod(0o755)
+    monkeypatch.setenv("NZ_DIAGNOSTIC_NODE", str(malicious))
+    result = suite.execute(["node", "-e", "0"], tmp_path)
+    assert result["status"] == "environment_blocked"
+    assert not (tmp_path / "should-not-exist").exists()

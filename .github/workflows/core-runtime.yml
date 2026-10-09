@@ -19,8 +19,13 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
       - name: Install product and development tools
         run: python -m pip install -e '.[dev]' build
+      - name: Check isolated Node prerequisite
+        run: python -m pytest -q tests/evaluation/test_agent_core_diagnostic_v1.py -k isolated_node
       - name: Compile runtime
         run: python -m compileall -q nz_coder
       - name: Run complete Python test suite

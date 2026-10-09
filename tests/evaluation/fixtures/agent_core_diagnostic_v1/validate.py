@@ -66,6 +66,35 @@ def apply_oracle(task, workspace):
         shutil.copyfile(overlay / relative, target)
 
 
+def _trusted_node(workspace, env):
+    """只采用工作区外的安装路径，并在同一隔离环境验证所需能力。"""
+    configured = os.environ.get("NZ_DIAGNOSTIC_NODE")
+    candidates = [Path(configured)] if configured else [
+        Path(directory) / "node" for directory in os.get_exec_path()
+        if Path(directory).is_absolute()
+    ]
+    root = Path(workspace).resolve()
+    for candidate in candidates:
+        if not candidate.is_absolute():
+            continue
+        node = candidate.resolve()
+        if node == root or root in node.parents or root in candidate.absolute().parents:
+            continue
+        if not node.is_file() or not os.access(node, os.X_OK):
+            continue
+        try:
+            probe = subprocess.run(
+                [sys.executable, str(OFFLINE), str(node), "-e",
+                 "if (+process.versions.node.split('.')[0] < 18) process.exit(2); require('node:test');"],
+                cwd=workspace, env=env, capture_output=True, timeout=3,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if probe.returncode == 0:
+            return str(node)
+    raise RuntimeError("Node prerequisite unavailable: trusted Node with node:test required")
+
+
 def execute(argv, workspace, timeout=CHECK_TIMEOUT):
     """No inherited secrets; inherited kernel network denial; bounded process group."""
     if timeout <= 0 or timeout > PROJECT_TIMEOUT:
@@ -77,6 +106,14 @@ def execute(argv, workspace, timeout=CHECK_TIMEOUT):
                "PYTHONPATH": str(workspace), "PYTHONDONTWRITEBYTECODE": "1",
                "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "PYTHONHASHSEED": "0",
                "NO_COLOR": "1"}
+        if argv and argv[0] == "node":
+            try:
+                argv[0] = _trusted_node(workspace, env)
+                env["PATH"] = str(Path(argv[0]).parent) + os.pathsep + env["PATH"]
+            except RuntimeError as exc:
+                return {"argv": argv, "exit": None, "status": "environment_blocked",
+                        "timed_out": False, "timeout_seconds": timeout,
+                        "stdout": "", "stderr": str(exc)}
         proc = subprocess.Popen([sys.executable, str(OFFLINE), *argv], cwd=workspace,
                                 env=env, text=True, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, start_new_session=True)
