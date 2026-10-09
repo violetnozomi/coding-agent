@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import ast
 import hashlib
 import json
 import os
@@ -891,6 +892,51 @@ def _diff_sections(diff: str) -> list[str]:
     ]
 
 
+def _diff_path(value: str, *, prefixed: bool = True) -> str:
+    """只解码 header 路径；保留大小写、前导点和路径中的空格。"""
+    value = value.split("\t", 1)[0]
+    if value.startswith('"'):
+        try:
+            quoted = value
+            value = ast.literal_eval(quoted)
+            if re.search(r"\\[0-7]{3}", quoted):
+                value = value.encode("latin-1").decode("utf-8")
+        except (ValueError, SyntaxError, UnicodeError):
+            return ""
+    if not isinstance(value, str) or value == "/dev/null":
+        return ""
+    return value[2:] if prefixed and value.startswith(("a/", "b/")) else value
+
+
+def _diff_by_path(diff: str) -> dict[str, str]:
+    """所有审查消费者共享精确归属；同路径的冲突 section 明确省略。"""
+    result: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for section in _diff_sections(diff):
+        header = section.split("\n@@", 1)[0].splitlines()
+        paths = {
+            _diff_path(line[4:]) for line in header
+            if line.startswith(("--- ", "+++ "))
+        }
+        if not paths:
+            paths = {
+                _diff_path(line.split(" ", 2)[2], prefixed=False)
+                for line in header if line.startswith(("rename from ", "rename to "))
+            }
+        if not paths and header and header[0].startswith("diff --git "):
+            raw = header[0][11:]
+            # 有引号的 Git header 由 tokenizer 划分，原文交给同一个解码器。
+            tokens = re.findall(r'"(?:[^"\\]|\\.)*"|[^ ]+', raw)
+            if len(tokens) == 2:
+                paths = {_diff_path(value) for value in tokens}
+        for path in paths - {""}:
+            if path in result:
+                ambiguous.add(path)
+            else:
+                result[path] = section
+    return {path: text for path, text in result.items() if path not in ambiguous}
+
+
 def _compatibility_delta_evidence(
     diff: str,
     paths: list[str],
@@ -898,7 +944,7 @@ def _compatibility_delta_evidence(
     max_total: int = 10000,
 ) -> str:
     """Extract compact before/after deltas that can invalidate compatibility."""
-    sections = _diff_sections(diff)
+    sections = _diff_by_path(diff)
     if not sections:
         return ""
     blocks: list[str] = []
@@ -914,13 +960,7 @@ def _compatibility_delta_evidence(
         is_docs = lowered.endswith((".md", ".rst", ".txt"))
         if is_docs or lowered.endswith((".jsonl", ".log", ".trace")):
             continue
-        section = next(
-            (
-                item for item in sections
-                if f"a/{normalized}" in item or f"b/{normalized}" in item
-            ),
-            "",
-        )
+        section = sections.get(normalized, "")
         if not section:
             continue
         selected: list[str] = []
@@ -961,7 +1001,7 @@ def _broad_compatibility_relaxation(
     paths: list[str],
 ) -> str:
     """Detect a legacy guard relaxed by a field-wide rather than input gate."""
-    sections = _diff_sections(diff)
+    sections = _diff_by_path(diff)
     for path in paths:
         normalized = str(path).replace("\\", "/")
         lowered = normalized.casefold()
@@ -972,13 +1012,7 @@ def _broad_compatibility_relaxation(
             or lowered.endswith((".md", ".rst", ".txt", ".jsonl", ".log"))
         ):
             continue
-        section = next(
-            (
-                item for item in sections
-                if f"a/{normalized}" in item or f"b/{normalized}" in item
-            ),
-            "",
-        )
+        section = sections.get(normalized, "")
         if not section:
             continue
         removed = [
@@ -1225,7 +1259,7 @@ def _wrapped_sequence_step_risk(
     compatibility_context: str = "",
 ) -> str:
     """Detect step filtering that resets at a newly introduced wrap point."""
-    sections = _diff_sections(diff)
+    sections = _diff_by_path(diff)
     normalized_context = str(compatibility_context or "").casefold()
     endpoint_alias_required = bool(
         re.search(r"\b0\s*(?:/|and)\s*7\b", normalized_context)
@@ -1244,13 +1278,7 @@ def _wrapped_sequence_step_risk(
             or lowered.endswith((".md", ".rst", ".txt", ".jsonl", ".log"))
         ):
             continue
-        section = next(
-            (
-                item for item in sections
-                if f"a/{normalized}" in item or f"b/{normalized}" in item
-            ),
-            "",
-        )
+        section = sections.get(normalized, "")
         if not section:
             continue
         added_text = "\n".join(
@@ -1416,20 +1444,12 @@ def _bounded_diff_hints(
     text = str(diff or "")
     if not text.strip() or not paths:
         return {}
-    sections = _diff_sections(text)
+    sections = _diff_by_path(text)
     result: dict[str, str] = {}
     remaining = max_total
     for path in paths:
         normalized = str(path).replace("\\", "/")
-        selected = next(
-            (
-                section for section in sections
-                if f"a/{normalized}" in section
-                or f"b/{normalized}" in section
-                or normalized in "\n".join(section.splitlines()[:4])
-            ),
-            sections[0] if len(paths) == 1 else "",
-        )
+        selected = sections.get(normalized, "")
         if not selected or remaining <= 0:
             continue
         limit = min(max_each, remaining)
@@ -1459,21 +1479,14 @@ def _nearby_source_context(
         return {}
     if not root.is_dir():
         return {}
-    sections = _diff_sections(diff)
+    sections = _diff_by_path(diff)
     result: dict[str, str] = {}
     remaining = max_total
     for path in paths:
         if remaining <= 0:
             break
         normalized = str(path).replace("\\", "/")
-        selected = next(
-            (
-                section for section in sections
-                if f"+++ b/{normalized}" in section
-                or normalized in "\n".join(section.splitlines()[:4])
-            ),
-            sections[0] if len(paths) == 1 else "",
-        )
+        selected = sections.get(normalized, "")
         match = re.search(
             r"(?m)^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@",
             selected,
