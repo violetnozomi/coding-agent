@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -16,11 +17,12 @@ import tarfile
 import threading
 import time
 import zipfile
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from nz_coder.evaluation.model_relay import (  # noqa: E402
-    InputAccounting, RelayBinding, RelayLedger, RelayLimits, RelayServer,
+    InputAccounting, RelayBinding, RelayLedger, RelayLimits, RelayServer, unknown_input,
 )
 
 BASE = "python@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de"
@@ -102,12 +104,14 @@ def prepare_runtime(directory):
     print(json.dumps({"runtime_prepared": True, "image": image, "real_model_requests": 0}))
 
 
-def launch_argv(directory, case, *, image):
+def launch_argv(directory, case, *, image, version="new"):
+    if version not in VERSIONS:
+        raise ValueError("unknown frozen Core version")
     name = "nz-review-" + case.name
     command = ["docker", "run", "--name", name, "--init", "--network=none", "--read-only", "--cap-drop=ALL",
                "--security-opt=no-new-privileges", "--ipc=private", "--cgroupns=private", "--pids-limit=128",
                "--memory=512m", "--user=1001:1001", "--workdir=/workspace", "--label", "nz-review-case=" + case.name]
-    for source, target, readonly in ((directory / "code-new", "/runtime", True), (case / "driver", "/driver", True),
+    for source, target, readonly in ((directory / ("code-" + version), "/runtime", True), (case / "driver", "/driver", True),
                                    (case / "workspace", "/workspace", False), (case / "home", "/home/agent", False),
                                    (case / "tmp", "/tmp", False), (case / "input", "/input", True),
                                    (case / "sockets", "/model", True), (case / "result", "/result", False),
@@ -120,7 +124,8 @@ def launch_argv(directory, case, *, image):
 
 
 def local_counter(raw, _request):
-    return InputAccounting(len(raw), "local-fake-json-byte-tokens-only", trusted=True, exact=True)
+    return InputAccounting(len(raw), "local-fake-json-byte-tokens-only", trusted=True, exact=True, evidence_level="exact",
+                           contract_id="local-fake-v1", payload_sha256=hashlib.sha256(raw).hexdigest())
 
 
 def probe(directory, probe_id, modes):
@@ -324,15 +329,230 @@ def verify(directory, selected):
     print(json.dumps({"isolation_verified": True, "real_provider_requests": 0}))
 
 
+def runtime_identity(directory):
+    runtime = json.loads((directory / "runtime.json").read_text())
+    if runtime["versions"] != VERSIONS or sha(FROZEN / "manifest.json") != runtime["original_manifest_sha256"]:
+        raise ValueError("frozen_identity_mismatch")
+    for label, commit in VERSIONS.items():
+        inventory = json.loads((directory / ("code-" + label + "-hashes.json")).read_text())
+        actual = {str(p.relative_to(directory / ("code-" + label))): sha(p)
+                  for p in (directory / ("code-" + label)).rglob("*") if p.is_file()}
+        if inventory["source_commit"] != commit or actual != inventory["files"]:
+            raise ValueError("runtime_source_mismatch:" + label)
+    if docker("image", "inspect", runtime["image"], "--format", "{{.Id}}").stdout.strip() != runtime["image"]:
+        raise ValueError("runtime_image_missing")
+    return runtime
+
+
+def isolation_status(directory):
+    runtime_identity(directory)
+    verified = json.loads((directory / "isolation-verified.json").read_text())
+    if (verified["isolation_verified"] is not True or set(verified["receipts"]) != {"positive", "cancel", "timeout"}
+            or sha(directory / "runtime.json") != verified["runtime_sha256"]):
+        return False
+    for row in verified["receipts"].values():
+        case = directory / row["case"]
+        receipt = json.loads((case / "receipt.json").read_text())
+        if any(sha(case / name) != row[field] for name, field in
+               (("receipt.json", "receipt_sha256"), ("ledger.jsonl", "ledger_sha256"), ("container-inspect.json", "inspect_sha256"))):
+            return False
+        # 旧回执绑定当时实际挂载的driver；新增正式driver由其自己的容器回执核验。
+        baseline_driver = subprocess.check_output(["git", "show", "604ece0599bbea1381d683eab1d375def3151425:tests/evaluation/fixtures/review_execution_entry.py"], cwd=ROOT)
+        if sha(case / "driver/entry.py") != receipt["driver_sha256"] or receipt["driver_sha256"] != hashlib.sha256(baseline_driver).hexdigest():
+            return False
+    return True
+
+
+def authorization_valid(grant, contract):
+    """授权是独立宿主输入，不能以ready字段替代范围、时效及冻结身份。"""
+    if grant is None:
+        return False
+    cost_limit = grant.get("cost_limit")
+    return (grant.get("purpose") == "review-effects-formal" and bool(grant.get("account"))
+            and bool(grant.get("authorization_text")) and type(cost_limit) in {int, float}
+            and math.isfinite(cost_limit) and cost_limit > 0
+            and grant.get("manifest_sha256") == sha(FROZEN / "manifest.json")
+            and grant.get("contract_id") == contract["contract_id"]
+            and grant.get("counter_source_sha256") == contract["counter_source_sha256"]
+            and grant.get("model") == "deepseek-v4-flash"
+            and grant.get("endpoint") == "https://api.deepseek.com/v1/chat/completions"
+            and grant.get("bounds") == vars(RelayLimits())
+            and type(grant.get("valid_from")) in {int, float} and type(grant.get("valid_until")) in {int, float}
+            and grant["valid_from"] <= time.time() < grant["valid_until"])
+
+
+def execution_status(directory, counter, *, grant=None, local=False):
+    contract = counter.status()
+    isolation_error = None
+    try:
+        isolation = isolation_status(directory)
+    except (FileNotFoundError, ValueError, subprocess.CalledProcessError) as exc:
+        isolation, isolation_error = False, str(exc)
+    strict = (contract["evidence_level"] in {"exact", "proven_upper_bound"}
+              and contract["strict_input_bound_verified"] and "deepseek-v4-flash" in contract["model_scope"]
+              and (local or contract.get("service_scope") == "hosted-deepseek"))
+    # 准入和结算使用同一实现；超预留否证时该账本立即终止实验，不能用status重开。
+    budget = strict and sha(ROOT / "nz_coder/evaluation/model_relay.py") == contract.get("relay_source_sha256")
+    output_contract = contract.get("output_contract") == {"main": 64000, "review": 1024, "total": 100000,
+                                                         "completion_includes_reasoning": True}
+    technical = isolation and strict and budget and output_contract
+    paid = authorization_valid(grant, contract)
+    blockers = []
+    for passed, reason in ((isolation, "isolation_identity_unverified"), (strict, contract.get("reason", "input_contract_unverified")),
+                           (budget, "budget_contract_unverified"), (output_contract, "output_contract_unverified"),
+                           (paid, "missing_or_inapplicable_paid_authorization")):
+        if not passed:
+            blockers.append(reason)
+    return {"isolation_verified": isolation, "input_contract_verified": strict, "output_contract_verified": output_contract,
+            "budget_enforcement_verified": budget, "paid_authorization_valid": paid, "technical_ready": technical,
+            "online_allowed": technical and paid and not local, "online_not_run": True,
+            "contract": contract, "blockers": blockers, "isolation_error": isolation_error}
+
+
+def local_contract_status():
+    return {"contract_id": "local-fake-v1", "counter_source_sha256": sha(Path(__file__)),
+            "relay_source_sha256": sha(ROOT / "nz_coder/evaluation/model_relay.py"),
+            "evidence_level": "exact", "strict_input_bound_verified": True,
+            "model_scope": ["deepseek-v4-flash"], "service_scope": "loopback-fake-only",
+            "output_contract": {"main": 64000, "review": 1024, "total": 100000, "completion_includes_reasoning": True}}
+
+
+local_counter.status = local_contract_status
+unknown_input.status = lambda: {"contract_id": "no-counter", "counter_source_sha256": sha(ROOT / "nz_coder/evaluation/model_relay.py"),
+    "evidence_level": "unknown", "strict_input_bound_verified": False, "model_scope": [], "reason": "missing_counter_resources"}
+
+
+def run_formal(directory, output, *, counter, upstream, api_key=None, online=False):
+    """复用已构建包与单一relay；准备固定候选和消费一个裁决均走生产路径。"""
+    target = urlsplit(upstream)
+    if not online and target.hostname != "127.0.0.1":
+        raise PermissionError("formal offline run requires literal loopback upstream")
+    runtime = runtime_identity(directory)
+    manifest = json.loads((FROZEN / "manifest.json").read_text())
+    output.mkdir(parents=True, exist_ok=False)
+    ledger = RelayLedger(output / "ledger.jsonl", RelayLimits())
+    rows = []
+    try:
+        for row in manifest["order"] + [{"unit": "a01", "version": "new"}]:
+            if ledger.failed_contracts:
+                break
+            unit, version = row["unit"], row["version"]
+            case = output / unit
+            for name in ("driver", "workspace", "home", "tmp", "input", "sockets", "result", "control"):
+                (case / name).mkdir(parents=True)
+            shutil.copyfile(FIXTURES / "review_execution_entry.py", case / "driver/entry.py")
+            autonomous = unit == "a01"
+            source = FROZEN / ("prepared/autonomous/initial" if autonomous else "prepared/gate/initial")
+            shutil.copytree(source, case / "workspace", dirs_exist_ok=True)
+            expected = manifest["autonomous" if autonomous else "gate"]["initial_hashes"]
+            assert {name: sha(case / "workspace" / name) for name in expected} == expected
+            spec = {"task": manifest["autonomous" if autonomous else "gate"]["task"],
+                    "bash_commands": ["python -m pytest -q tests"]}
+            if not autonomous:
+                candidate = "candidate-01" if row["candidate"] == "G" else "candidate-02"
+                initial = (source / "payment.py").read_text()
+                new = (FROZEN / "prepared/gate" / candidate / "payment.py").read_text()
+                # 精确替换来自冻结候选；不挂评分器、标签、隐藏验收或另一候选。
+                spec.update(mode="review", old_text=initial, new_text=new,
+                            neutral_report=manifest["gate"]["neutral_report"])
+            save(case / "input/run.json", spec)
+            deadline = time.monotonic() + 900
+            servers, threads = [], []
+            for role, cap, limit, exact in (("main", 12 if autonomous else 0, 64000, True),
+                                           ("auxiliary", 6 if autonomous else 2, 64000 if autonomous else 1024, not autonomous)):
+                binding = RelayBinding("review-effects-formal", unit, unit, role, cap, "deepseek-v4-flash", limit, deadline, exact)
+                server = RelayServer(case / "sockets" / (role + ".sock"), ledger=ledger, binding=binding,
+                                     upstream=upstream, counter=counter, remote_authorized=online, api_key=api_key)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                servers.append(server)
+                threads.append(thread)
+            name = "nz-review-" + case.name
+            assert name not in docker("ps", "-a", "--format", "{{.Names}}").stdout.splitlines(), "retain existing container"
+            argv = launch_argv(directory, case, image=runtime["image"], version=version)
+            env = {"PATH": os.environ["PATH"], "HOME": str(Path.home()), "LANG": "C.UTF-8"}
+            try:
+                # 先create并核对实际挂载，再start，避免请求早于代码身份检查。
+                created = docker("create", *argv[2:], timeout=20)
+                inspected = json.loads(docker("inspect", created.stdout.strip()).stdout)[0]
+                hc = inspected["HostConfig"]
+                assert inspected["Image"] == runtime["image"] and inspected["Config"]["User"] == "1001:1001"
+                assert hc["NetworkMode"] == "none" and hc["ReadonlyRootfs"] and hc["CapDrop"] == ["ALL"]
+                assert not hc["Privileged"] and "no-new-privileges" in hc["SecurityOpt"]
+                mounted = {m["Destination"]: (m["Source"], m["RW"]) for m in inspected["Mounts"]}
+                expected_mounts = {"/runtime": (str(directory / ("code-" + version)), False),
+                    **{target: (str(case / source), writable) for source, target, writable in
+                       (("driver", "/driver", False), ("workspace", "/workspace", True),
+                        ("home", "/home/agent", True), ("tmp", "/tmp", True), ("input", "/input", False),
+                        ("sockets", "/model", False), ("result", "/result", True), ("control", "/control", False))}}
+                assert mounted == expected_mounts
+                save(case / "container-inspect.json", inspected)
+                save(case / "launch.json", {"argv": argv, "version": version, "source_commit": VERSIONS[version],
+                    "driver_sha256": sha(case / "driver/entry.py"), "initial_hashes": expected,
+                    "startup_source_sha256": sha(Path(__file__)), "counter_contract": counter.status()})
+                with (case / "stdout.txt").open("w") as stdout, (case / "stderr.txt").open("w") as stderr:
+                    process = subprocess.Popen(["docker", "start", "-a", name], env=env, stdout=stdout, stderr=stderr)
+                    try:
+                        while process.poll() is None:
+                            if time.monotonic() >= deadline or ledger.failed_contracts:
+                                ledger.cancel(unit)
+                                docker("kill", name)
+                                break
+                            threading.Event().wait(0.02)
+                        process.wait(timeout=5)
+                    finally:
+                        if process.poll() is None:
+                            ledger.cancel(unit)
+                            docker("kill", name)
+                            process.wait(timeout=5)
+                final_inspect = json.loads(docker("inspect", name).stdout)[0]
+                save(case / "container-final.json", final_inspect)
+                assert not final_inspect["State"]["Running"]
+                assert final_inspect["State"]["ExitCode"] == 0, (case, (case / "stderr.txt").read_text())
+                if not autonomous:
+                    expected_candidate = manifest["gate"]["candidate_hashes"][row["candidate"]]
+                    assert {n: sha(case / "workspace" / n) for n in expected_candidate} == expected_candidate
+                    decision = json.loads((case / "result/review.json").read_text())
+                    assert decision.get("packet") and decision.get("stats")
+                calls = [r for r in ledger.attempts.values() if r["unit"] == unit]
+                if unit == "u03":
+                    assert not calls and decision["stats"]["last_trace"] == "deterministic_compatibility_guard"
+                rows.append({"unit": unit, "version": version, "source_commit": VERSIONS[version],
+                             "requests": len(calls), "preparation_requests": len(json.loads((case / "result/preparation-requests.json").read_text())),
+                             "exit_code": final_inspect["State"]["ExitCode"], "review_stats": decision["stats"] if not autonomous else None,
+                             "runtime_status": json.loads((case / "result/result.json").read_text())["status"] if autonomous else "review_boundary"})
+                print(json.dumps(rows[-1]), flush=True)
+            finally:
+                for server in servers:
+                    server.shutdown()
+                    server.server_close()
+                for thread in threads:
+                    thread.join(2)
+                if name in docker("ps", "-a", "--format", "{{.Names}}").stdout.splitlines():
+                    if docker("inspect", name, "--format", "{{.State.Running}}").stdout.strip() == "true":
+                        ledger.cancel(unit)
+                        docker("kill", name)
+                    docker("rm", name)
+    finally:
+        ledger.close()
+        save(output / "formal-results.json", {"units": rows, "physical_attempts": len(ledger.attempts),
+            "input_occupied": ledger.input_occupied, "output_occupied": ledger.output_occupied,
+            "failed_contracts": ledger.failed_contracts, "remote_provider_requests": len(ledger.attempts) if online else 0,
+            "driver_sha256": sha(FIXTURES / "review_execution_entry.py"), "runtime_sha256": sha(directory / "runtime.json")})
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("prepare-runtime", "probe", "verify", "status", "online"))
+    parser.add_argument("action", choices=("prepare-runtime", "probe", "verify", "status", "online", "formal-local"))
     parser.add_argument("--artifact-root", type=Path, required=True)
     parser.add_argument("--probe-id", default="initial")
     parser.add_argument("--probe-modes", nargs="+", choices=("positive", "cancel", "timeout"), default=("positive", "cancel", "timeout"))
     parser.add_argument("--positive-probe-id")
     parser.add_argument("--cancel-probe-id")
     parser.add_argument("--timeout-probe-id")
+    parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--tokenizer", type=Path)
+    parser.add_argument("--authorization", type=Path)
     args = parser.parse_args()
     directory = args.artifact_root.resolve()
     if args.action == "prepare-runtime":
@@ -343,30 +563,39 @@ def main():
         probe(directory, args.probe_id, args.probe_modes)
     elif args.action == "verify":
         verify(directory, {mode: getattr(args, mode + "_probe_id") or args.probe_id for mode in ("positive", "cancel", "timeout")})
+    elif args.action == "formal-local":
+        spec = importlib.util.spec_from_file_location("formal_fake", FIXTURES / "review_execution_fake.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        fake = module.FormalFake()
+        thread = threading.Thread(target=fake.serve_forever, daemon=True)
+        thread.start()
+        output = (args.output_root or directory / "formal-local").resolve()
+        try:
+            status = execution_status(directory, local_counter, local=True)
+            save(output.parent / (output.name + "-status.json"), status)
+            if not status["technical_ready"]:
+                raise SystemExit(2)
+            run_formal(directory, output, counter=local_counter,
+                       upstream=f"http://127.0.0.1:{fake.server_port}/v1/chat/completions")
+        finally:
+            fake.shutdown()
+            fake.server_close()
+            thread.join(2)
+            save(output.parent / (output.name + "-fake-requests.json"), fake.requests)
     else:
-        verified_path = directory / "isolation-verified.json"
-        isolation = False
-        if verified_path.exists():
-            verified = json.loads(verified_path.read_text())
-            isolation = verified["isolation_verified"] and sha(directory / "runtime.json") == verified["runtime_sha256"]
-            for row in verified["receipts"].values():
-                case = directory / row["case"]
-                isolation = isolation and sha(case / "receipt.json") == row["receipt_sha256"] \
-                    and sha(case / "ledger.jsonl") == row["ledger_sha256"] \
-                    and sha(case / "container-inspect.json") == row["inspect_sha256"] \
-                    and sha(case / "driver/entry.py") == sha(FIXTURES / "review_execution_entry.py")
-            runtime = json.loads((directory / "runtime.json").read_text())
-            isolation = isolation and sha(FROZEN / "manifest.json") == runtime["original_manifest_sha256"]
-            for label in VERSIONS:
-                inventory = json.loads((directory / ("code-" + label + "-hashes.json")).read_text())["files"]
-                isolation = isolation and all(sha(directory / ("code-" + label) / name) == value for name, value in inventory.items())
-        ready = {"isolation_verified": isolation,
-                 "budget_enforcement_verified": False, "paid_authorization_valid": False,
-                 "technical_ready": False, "online_not_run": True,
-                 "blockers": ["selected DeepSeek model has no validated input tokenizer/upper bound", "missing_paid_authorization"]}
-        print(json.dumps(ready))
+        from nz_coder.evaluation.deepseek_counting import DeepSeekV41Counter
+        counter = DeepSeekV41Counter(args.tokenizer) if args.tokenizer else unknown_input
+        grant = json.loads(args.authorization.read_text()) if args.authorization else None
+        ready = execution_status(directory, counter, grant=grant)
+        print(json.dumps(ready, ensure_ascii=False))
         if args.action == "online":
-            raise SystemExit(2)
+            if not ready["online_allowed"]:
+                raise SystemExit(2)
+            # 通过独立费用/计数/隔离门后才访问密钥；容器永远只持本地假值。
+            key = os.environ["NZ_REVIEW_DEEPSEEK_API_KEY"]
+            run_formal(directory, (args.output_root or directory / "formal-online").resolve(), counter=counter,
+                       upstream="https://api.deepseek.com/v1/chat/completions", api_key=key, online=True)
 
 
 if __name__ == "__main__":

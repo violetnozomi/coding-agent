@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import hashlib
 import socket
 import threading
 import time
@@ -20,7 +21,8 @@ from nz_coder.evaluation.model_relay import (
 
 def fake_count(raw, _payload):
     # 假服务的token定义就是JSON字节数；不得用于DeepSeek或线上效率结论。
-    return InputAccounting(len(raw), "local-fake-json-byte-tokens", trusted=True, exact=True)
+    return InputAccounting(len(raw), "local-fake-json-byte-tokens", trusted=True, exact=True, evidence_level="exact",
+                           contract_id="local-fake-v1", payload_sha256=hashlib.sha256(raw).hexdigest())
 
 
 class FakeService:
@@ -59,13 +61,31 @@ class FakeService:
                     usage["completion_tokens_details"] = "invalid"
                 if fake.mode == "float_total":
                     usage["total_tokens"] = float(usage["total_tokens"])
+                if fake.mode == "over_input":
+                    usage.update(prompt_tokens=150, completion_tokens=7, total_tokens=157)
+                if fake.mode == "over_output":
+                    usage.update(completion_tokens=64001, total_tokens=len(raw) + 64001)
+                if fake.mode == "conflicting_over":
+                    usage.update(prompt_tokens=150, total_tokens=0)
+                if fake.mode == "cache_conflict":
+                    usage["prompt_tokens_details"] = {"cached_tokens": 4}
+                if fake.mode == "scalar_usage":
+                    usage = "invalid"
+                if fake.mode == "length":
+                    body_finish = "length"
+                elif fake.mode == "aborted":
+                    body_finish = "aborted"
+                else:
+                    body_finish = "stop"
                 body = {"id": "local", "object": "chat.completion", "model": request["model"],
                         "choices": [{"index": 0, "message": {"role": "assistant", "content": "local"},
-                                     "finish_reason": "stop"}], "usage": usage}
+                                     "finish_reason": body_finish}], "usage": usage}
                 if request.get("stream"):
                     data = ("data: " + json.dumps({**body, "usage": None}) + "\n\n"
                             + "data: " + json.dumps(body) + "\n\n"
                             + "data: " + json.dumps(body) + "\n\n")
+                    if fake.mode == "decreasing_usage":
+                        data += "data: " + json.dumps({**body, "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}}) + "\n\n"
                     if fake.mode != "cut_stream":
                         data += "data: [DONE]\n\n"
                     raw_response, content_type = data.encode(), "text/event-stream"
@@ -168,7 +188,7 @@ def test_response_loss_is_ambiguous_and_blocks_retry(tmp_path):
         assert len(fake.requests) == 1 and ledger.output_occupied == 64000
 
 
-@pytest.mark.parametrize("mode", ["missing", "invalid", "malformed_details", "float_total"])
+@pytest.mark.parametrize("mode", ["missing", "invalid", "malformed_details", "float_total", "scalar_usage"])
 def test_missing_or_invalid_usage_retains_input_and_output(tmp_path, mode):
     with running(tmp_path, mode=mode) as (fake, ledger, _binding, path):
         assert post(path).status_code == 200
@@ -428,3 +448,134 @@ def test_online_entry_and_help_remain_offline_without_authorization(tmp_path):
         assert not ready["paid_authorization_valid"] and not ready["technical_ready"]
         assert ready["online_not_run"] and not ready["isolation_verified"]
     assert subprocess.run(command + ["--help"], env=environment, capture_output=True, timeout=10).returncode == 0
+
+
+def test_reported_input_over_reservation_stops_followup_before_upstream(tmp_path):
+    def under_count(raw, _payload):
+        return InputAccounting(100, "local-invalid-bound-v1", trusted=True, exact=True, evidence_level="exact",
+                           contract_id="local-fake-v1", payload_sha256=hashlib.sha256(raw).hexdigest())
+
+    with running(tmp_path, mode="over_input", output=1024, limits=RelayLimits(input_total=250), counter=under_count) as (fake, ledger, _binding, path):
+        assert post(path, output=1024).status_code == 200
+        response = post(path, output=1024)
+        assert response.status_code == 429, "150 reported against 100 reserved invalidates the counting contract"
+        assert len(fake.requests) == 1
+        row = next(iter(ledger.attempts.values()))
+        assert row["reported_usage"]["prompt_tokens"] == 150
+        assert row["input_over_reservation"] == 50
+        assert ledger.input_occupied == 150
+
+
+@pytest.mark.parametrize('mode', ['over_input', 'over_output', 'conflicting_over'])
+def test_failed_contract_blocks_other_role_and_counter_waiter(tmp_path, mode):
+    entered, release = threading.Event(), threading.Event()
+    def under_count(raw, payload):
+        return InputAccounting(100, 'local-test-under-reserve', trusted=True, exact=True, evidence_level='exact',
+                               contract_id='local-fake-v1', payload_sha256=hashlib.sha256(raw).hexdigest())
+    def waiting_count(raw, payload):
+        entered.set()
+        assert release.wait(3)
+        return under_count(raw, payload)
+    with running(tmp_path, mode=mode, output=1024, counter=under_count) as (fake, ledger, _binding, path):
+        other = RelayBinding('local-test', 'u02', 'other-run', 'auxiliary', 2, 'local-model', 1024, time.monotonic()+5)
+        relay = RelayServer(tmp_path/'other.sock', ledger=ledger, binding=other,
+                            upstream=f'http://127.0.0.1:{fake.server_port}/v1/chat/completions', counter=waiting_count)
+        thread = threading.Thread(target=relay.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with ThreadPoolExecutor() as pool:
+                waiting = pool.submit(post, tmp_path/'other.sock', output=1024)
+                assert entered.wait(2)
+                assert post(path, output=1024).status_code == 200
+                release.set()
+                response = waiting.result(3)
+                assert response.status_code == 429 and 'accounting_contract_failed' in response.text
+            assert len(fake.requests) == 1 and len(ledger.attempts) == 1
+            row = next(iter(ledger.attempts.values()))
+            assert row['reported_usage'] is not None and row['contract_failed']
+            assert row['usage_valid'] is (mode != 'conflicting_over')
+            assert row['usage'] is None if mode == 'conflicting_over' else row['usage'] is not None
+            assert any(e['event'] == 'accounting_contract_failed' and e['attempt_id'] == row['attempt_id'] for e in ledger.events)
+            with pytest.raises(FileExistsError):
+                RelayLedger(tmp_path/'ledger.jsonl', RelayLimits())
+            assert len(fake.requests) == 1
+        finally:
+            release.set()
+            relay.shutdown()
+            relay.server_close()
+            thread.join(2)
+
+
+@pytest.mark.parametrize('mode', ['cache_conflict', 'length', 'aborted'])
+def test_usage_conflict_and_finish_reason_are_not_zero_or_recounted(tmp_path, mode):
+    with running(tmp_path, mode=mode) as (fake, ledger, _binding, path):
+        assert post(path).status_code == 200
+        row = next(iter(ledger.attempts.values()))
+        assert len(fake.requests) == 1 and row['reported_usage']['completion_tokens'] == 7
+        if mode == 'length':
+            assert row['finish_reason'] == 'length' and ledger.output_occupied == 7
+        else:
+            assert row['usage'] is None and ledger.output_occupied == 64000
+
+
+def test_accounting_payload_hash_and_empirical_label_cannot_bypass_strict_admission(tmp_path):
+    from dataclasses import replace
+    for change, reason in (({'payload_sha256':'wrong'}, 'counted_payload_mismatch'),
+                           ({'evidence_level':'empirically_calibrated'}, 'input_token_bound_unknown')):
+        case = tmp_path/reason
+        case.mkdir()
+        def counter(raw, payload):
+            return replace(fake_count(raw,payload), **change)
+        with running(case, counter=counter) as (fake, _ledger, _binding, path):
+            response = post(path)
+            assert response.status_code == 429 and reason in response.text
+            assert not fake.requests
+
+
+def test_conflicting_cumulative_sse_preserves_reports_and_stops_contract(tmp_path):
+    with running(tmp_path, mode='decreasing_usage', output=1024) as (fake, ledger, _binding, path):
+        assert post(path, output=1024, stream=True).status_code == 200
+        row = next(iter(ledger.attempts.values()))
+        assert row['usage'] is None and row['usage_conflict'] and row['contract_failed']
+        assert row['conflicting_reports'][0]['prompt_tokens'] > row['reported_usage']['prompt_tokens'] == 1
+        assert ledger.output_occupied == 1024
+        assert post(path, output=1024).status_code == 429
+        assert len(fake.requests) == 1
+
+
+def test_contract_failure_keeps_already_sent_other_role_truthful(tmp_path):
+    def under_count(raw, _payload):
+        return InputAccounting(100, 'test-under-bound', trusted=True, exact=True, evidence_level='exact',
+                               contract_id='local-fake-v1', payload_sha256=hashlib.sha256(raw).hexdigest())
+    with running(tmp_path, mode='over_input', output=1024, counter=under_count) as (first, ledger, _binding, path):
+        held = FakeService('hold')
+        upstream = ThreadingHTTPServer(('127.0.0.1',0), held.handler())
+        upstream.daemon_threads = True
+        http_thread = threading.Thread(target=upstream.serve_forever,daemon=True)
+        http_thread.start()
+        binding = RelayBinding('local-test','u02','active-other','auxiliary',2,'local-model',1024,time.monotonic()+5)
+        relay = RelayServer(tmp_path/'active.sock',ledger=ledger,binding=binding,
+                            upstream=f'http://127.0.0.1:{upstream.server_port}/v1/chat/completions',counter=under_count)
+        thread = threading.Thread(target=relay.serve_forever,daemon=True)
+        thread.start()
+        try:
+            with ThreadPoolExecutor() as pool:
+                active = pool.submit(post,tmp_path/'active.sock',output=1024)
+                assert held.started.wait(2), 'the second role really reached the upstream before failure'
+                assert post(path,output=1024).status_code==200
+                assert active.result(3).status_code==502
+            assert len(first.requests)==len(held.requests)==1 and len(ledger.attempts)==2
+            row = next(r for r in ledger.attempts.values() if r['run']=='active-other')
+            assert row['status']=='cancelled_or_disconnected' and row['usage'] is None
+            assert row['reservation_retained'] and row['input_reserved']==100
+            assert ledger.input_occupied==250
+            assert post(tmp_path/'active.sock',output=1024).status_code==429
+            assert len(held.requests)==1
+        finally:
+            held.release.set()
+            relay.shutdown()
+            relay.server_close()
+            thread.join(2)
+            upstream.shutdown()
+            upstream.server_close()
+            http_thread.join(2)

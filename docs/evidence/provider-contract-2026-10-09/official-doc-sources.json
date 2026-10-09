@@ -1,0 +1,44 @@
+[
+  {
+    "url": "https://api-docs.deepseek.com/updates/",
+    "file": "updates_.html",
+    "sha256": "2922113bc4e0e970fa6d3c4065c3cff3ec661a4db03d671cc2310545c5b5bb71",
+    "bytes": 48079
+  },
+  {
+    "url": "https://api-docs.deepseek.com/news/news260910/",
+    "file": "news_news260910_.html",
+    "sha256": "f18dc22d37393381b31c9069996138f45aa7b02b08442d43af7c6c57f587bdce",
+    "bytes": 24438
+  },
+  {
+    "url": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "file": "quick_start_pricing_.html",
+    "sha256": "210f102275ccf1a6542f08a3bc9e4b4c7c83278cb74b35217bffa112df6363b2",
+    "bytes": 23982
+  },
+  {
+    "url": "https://api-docs.deepseek.com/quick_start/token_usage/",
+    "file": "quick_start_token_usage_.html",
+    "sha256": "08bf766935b9ff92aee592c70bdac0908e3f44f1e3e52e93dd7aeafc9925fd1a",
+    "bytes": 22447
+  },
+  {
+    "url": "https://api-docs.deepseek.com/api/create-chat-completion/",
+    "file": "api_create-chat-completion_.html",
+    "sha256": "e7133a7c2a7c2662567cca2e2392b503f97c2fb583009ff85f878744e0a36ba7",
+    "bytes": 142966
+  },
+  {
+    "url": "https://api-docs.deepseek.com/guides/thinking_mode/",
+    "file": "guides_thinking_mode_.html",
+    "sha256": "35350389e59872d3733f7b7f99f5485c6cbc95f1bc2a71a47ba3ecf30bd7a060",
+    "bytes": 113722
+  },
+  {
+    "url": "https://api-docs.deepseek.com/",
+    "file": "firstcall.html",
+    "sha256": "7ce9db1b1cc7e2efafe7cbfd57b9d46d240c20399f7bd87672c7e3a5250ccdd0",
+    "bytes": 48088
+  }
+]

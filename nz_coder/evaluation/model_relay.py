@@ -53,6 +53,10 @@ class InputAccounting:
     method: str
     trusted: bool = False
     exact: bool = False
+    evidence_level: str = "unknown"
+    contract_id: str = ""
+    payload_sha256: str = ""
+    reference_count: int | None = None
 
 
 class AdmissionDenied(Exception):
@@ -75,6 +79,7 @@ class RelayLedger:
         self.seen: set[tuple[str, str]] = set()
         self.cancelled: set[str] = set()
         self.ambiguous: set[str] = set()
+        self.failed_contracts: dict[str, dict] = {}
         self.input_occupied = self.output_occupied = 0
         self.events: list[dict] = []
         self._record("ledger_created", limits=vars(limits))
@@ -94,13 +99,16 @@ class RelayLedger:
             self._record("local_rejection", bucket=binding.bucket, reason=reason, usage=None)
 
     def stopped(self, binding) -> str:
-        if binding.run in self.cancelled:
-            return "run_cancelled"
-        if binding.run in self.ambiguous:
-            return "prior_attempt_ambiguous"
-        if self.clock() >= binding.deadline:
-            return "run_deadline_exhausted"
-        return ""
+        with self.lock:
+            if binding.experiment in self.failed_contracts:
+                return "experiment_accounting_contract_failed"
+            if binding.run in self.cancelled:
+                return "run_cancelled"
+            if binding.run in self.ambiguous:
+                return "prior_attempt_ambiguous"
+            if self.clock() >= binding.deadline:
+                return "run_deadline_exhausted"
+            return ""
 
     def reserve(self, binding, nonce, raw, payload, accounting):
         with self.lock:
@@ -121,8 +129,12 @@ class RelayLedger:
             if not reason and any(k in payload for k in ("url", "base_url", "endpoint", "max_completion_tokens")):
                 reason = "client_target_override_not_allowed"
             count = accounting.upper_bound
-            if not reason and (not accounting.trusted or not isinstance(count, int) or isinstance(count, bool) or count < 0):
+            digest = hashlib.sha256(raw).hexdigest()
+            if not reason and (not accounting.trusted or accounting.evidence_level not in {"exact", "proven_upper_bound"}
+                               or not accounting.contract_id or not isinstance(count, int) or isinstance(count, bool) or count < 0):
                 reason = "input_token_bound_unknown"
+            if not reason and (accounting.payload_sha256 != digest or json.loads(raw) != payload):
+                reason = "counted_payload_mismatch"
             if not reason and count > self.limits.input_per_request:
                 reason = "single_request_input_exhausted"
             if not reason and (len(self.attempts) >= self.limits.requests or self.counts.get(binding.bucket, 0) >= binding.request_cap):
@@ -139,7 +151,8 @@ class RelayLedger:
                    "unit": binding.unit, "run": binding.run, "role": binding.role,
                    "input_reserved": count, "output_reserved": output,
                    "input_method": accounting.method, "input_exact": accounting.exact,
-                   "payload_sha256": hashlib.sha256(raw).hexdigest(), "status": "reserved", "usage": None}
+                   "evidence_level": accounting.evidence_level, "contract_id": accounting.contract_id,
+                   "payload_sha256": digest, "status": "reserved", "usage": None}
             self._record("admitted", **row)
             self.seen.add(key)
             self.attempts[attempt_id] = row
@@ -148,31 +161,77 @@ class RelayLedger:
             self.output_occupied += output
             return attempt_id
 
-    def settle(self, attempt_id, *, status, usage=None, ambiguous=False):
+    def settle(self, attempt_id, *, status, usage=None, ambiguous=False, usage_conflict=False,
+               finish_reason=None, provider_model=None, system_fingerprint=None, conflicting_reports=None):
         with self.lock:
             row = self.attempts[attempt_id]
             if row["status"] != "reserved":
                 raise RuntimeError("attempt already settled")
-            valid = isinstance(usage, dict)
+            valid = isinstance(usage, dict) and not usage_conflict
             if valid:
                 prompt, completion = usage.get("prompt_tokens"), usage.get("completion_tokens")
                 valid = all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in (prompt, completion))
                 total = usage.get("total_tokens")
                 valid = valid and (total is None or (type(total) is int and total == prompt + completion))
                 cached = usage.get("prompt_cache_hit_tokens", 0)
-                details = usage.get("completion_tokens_details") or {}
+                details = usage.get("completion_tokens_details")
+                details = {} if details is None else details
                 valid = valid and isinstance(details, dict)
                 reasoning = details.get("reasoning_tokens", 0) if isinstance(details, dict) else None
                 valid = valid and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in (cached, reasoning))
                 valid = valid and cached <= prompt and reasoning <= completion
-                valid = valid and prompt <= row["input_reserved"] and completion <= row["output_reserved"]
-            trusted_usage = usage if valid and status == "complete" else None
-            self._record("settled", attempt_id=attempt_id, status=status, usage=trusted_usage,
-                         reservation_retained=trusted_usage is None, ambiguous=ambiguous)
-            row.update(status=status, usage=trusted_usage)
+                miss = usage.get("prompt_cache_miss_tokens")
+                if miss is not None:
+                    valid = valid and type(miss) is int and 0 <= miss <= prompt
+                    if "prompt_cache_hit_tokens" in usage:
+                        valid = valid and cached + miss == prompt
+                prompt_details = usage.get("prompt_tokens_details")
+                if prompt_details is not None:
+                    valid = valid and isinstance(prompt_details, dict)
+                    alias = prompt_details.get("cached_tokens") if isinstance(prompt_details, dict) else None
+                    if alias is not None:
+                        valid = valid and type(alias) is int and 0 <= alias <= prompt
+                        if "prompt_cache_hit_tokens" in usage:
+                            valid = valid and alias == cached
+            trusted_usage = usage if valid and status == "complete" and finish_reason not in {"aborted", "error"} else None
+            prompt_claim = usage.get("prompt_tokens") if isinstance(usage, dict) else None
+            completion_claim = usage.get("completion_tokens") if isinstance(usage, dict) else None
+            over_input = max(0, prompt_claim - row["input_reserved"]) if type(prompt_claim) is int and prompt_claim >= 0 else None
+            over_output = max(0, completion_claim - row["output_reserved"]) if type(completion_claim) is int and completion_claim >= 0 else None
+            if conflicting_reports:
+                for report in conflicting_reports:
+                    if not isinstance(report, dict):
+                        continue
+                    value = report.get("prompt_tokens")
+                    if type(value) is int and value >= 0:
+                        over_input = max(over_input or 0, value - row["input_reserved"])
+                    value = report.get("completion_tokens")
+                    if type(value) is int and value >= 0:
+                        over_output = max(over_output or 0, value - row["output_reserved"])
+            # 有效但超预留是契约被否证，不能伪装成缺失usage并继续发请求。
+            contract_failed = bool(over_input or over_output or usage_conflict)
+            fields = dict(status=status, usage=trusted_usage, reported_usage=usage,
+                          usage_valid=valid, usage_conflict=usage_conflict,
+                          conflicting_reports=conflicting_reports,
+                          usage_unknown_reason=None if trusted_usage is not None else ("missing_usage" if usage is None else "invalid_or_unsettled_usage"),
+                          input_over_reservation=over_input, output_over_reservation=over_output,
+                          reservation_retained=trusted_usage is None, ambiguous=ambiguous,
+                          contract_failed=contract_failed, contract_id=row["contract_id"],
+                          finish_reason=finish_reason, provider_model=provider_model, system_fingerprint=system_fingerprint)
+            self._record("settled", attempt_id=attempt_id, **fields)
+            row.update(fields)
             if trusted_usage is not None:
                 self.input_occupied -= row["input_reserved"] - usage["prompt_tokens"]
                 self.output_occupied -= row["output_reserved"] - usage["completion_tokens"]
+            else:
+                # 未完成请求不得释放预留；已报告的超额仍须如实增加占用。
+                self.input_occupied += over_input or 0
+                self.output_occupied += over_output or 0
+            if contract_failed:
+                self.failed_contracts[row["experiment"]] = {"attempt_id": attempt_id, "contract_id": row["contract_id"]}
+                self._record("accounting_contract_failed", experiment=row["experiment"], attempt_id=attempt_id,
+                             contract_id=row["contract_id"], input_over_reservation=over_input,
+                             output_over_reservation=over_output)
             if ambiguous:
                 self.ambiguous.add(row["run"])
 
@@ -191,7 +250,9 @@ class _Usage:
         self.buffer = b""
         self.last = None
         self.invalid = False
+        self.conflicting_reports = None
         self.done = not streaming
+        self.finish_reason = self.provider_model = self.system_fingerprint = None
 
     def feed(self, chunk):
         self.buffer += chunk
@@ -206,23 +267,41 @@ class _Usage:
                 if value == b"[DONE]":
                     self.done = True
                 else:
-                    self._frame(json.loads(value))
+                    self._frame(json.loads(value, parse_constant=lambda _v: None))
 
     def _frame(self, data):
+        if not isinstance(data, dict):
+            raise ValueError("invalid response object")
+        self.provider_model = data.get("model", self.provider_model)
+        self.system_fingerprint = data.get("system_fingerprint", self.system_fingerprint)
+        for choice in data.get("choices", []):
+            if choice.get("finish_reason") is not None:
+                self.finish_reason = choice["finish_reason"]
         usage = data.get("usage")
+        if usage is None:
+            return
         if not isinstance(usage, dict):
+            self.invalid = True
+            self.last = usage
             return
         if self.last is not None:
+            if not isinstance(self.last, dict):
+                self.invalid = True
+                self.conflicting_reports = [self.last, usage]
+                self.last = usage
+                return
             for name in ("prompt_tokens", "completion_tokens"):
                 before, after = self.last.get(name), usage.get(name)
                 if not isinstance(before, int) or not isinstance(after, int) or after < before:
                     self.invalid = True
+                    if self.conflicting_reports is None:
+                        self.conflicting_reports = [self.last, usage]
         self.last = usage
 
     def finish(self):
         if not self.streaming:
-            self._frame(json.loads(self.buffer))
-        return self.last if self.done and not self.invalid else None
+            self._frame(json.loads(self.buffer, parse_constant=lambda _v: None))
+        return self.last
 
 
 class RelayServer(ThreadingMixIn, UnixStreamServer):
@@ -308,17 +387,17 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(400, "invalid_local_request")
             return
         self.connection.settimeout(0.25)
-        status, usage, ambiguous = "transport_error", None, True
+        status, usage, ambiguous, observation = "transport_error", None, True, {}
         self._headers_sent = False
         remaining = min(server.ledger.limits.request_seconds, server.binding.deadline - time.monotonic())
         try:
-            status, usage, ambiguous = asyncio.run(asyncio.wait_for(self._forward(raw, payload), max(0.001, remaining)))
+            status, usage, ambiguous, observation = asyncio.run(asyncio.wait_for(self._forward(raw, payload), max(0.001, remaining)))
         except TimeoutError:
             status = "request_timeout"
         except (httpx.HTTPError, ConnectionError, OSError, ValueError):
             status = "transport_error"
         finally:
-            server.ledger.settle(attempt, status=status, usage=usage, ambiguous=ambiguous)
+            server.ledger.settle(attempt, status=status, usage=usage, ambiguous=ambiguous, **observation)
         if status not in {"complete", "upstream_error"}:
             if not self._headers_sent:
                 self._error(502, status)
@@ -368,12 +447,16 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             done, _ = await asyncio.wait((copy_task, cancel_task), return_when=asyncio.FIRST_COMPLETED)
             if cancel_task in done:
-                return "cancelled_or_disconnected", None, True
+                return "cancelled_or_disconnected", usage.last, True, {"usage_conflict": usage.invalid,
+                                                                       "conflicting_reports": usage.conflicting_reports}
             await copy_task
             if status_code != 200:
-                return "upstream_error", None, False
+                return "upstream_error", usage.finish(), False, {}
             actual = usage.finish()
-            return ("complete", actual, False) if usage.done else ("stream_incomplete", None, True)
+            observation = {"usage_conflict": usage.invalid, "finish_reason": usage.finish_reason,
+                           "conflicting_reports": usage.conflicting_reports,
+                           "provider_model": usage.provider_model, "system_fingerprint": usage.system_fingerprint}
+            return ("complete", actual, False, observation) if usage.done else ("stream_incomplete", actual, True, observation)
         finally:
             for task in (copy_task, cancel_task):
                 task.cancel()

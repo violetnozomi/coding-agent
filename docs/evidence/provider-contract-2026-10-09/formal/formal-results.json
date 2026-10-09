@@ -1,0 +1,101 @@
+{
+  "units": [
+    {
+      "unit": "u01",
+      "version": "new",
+      "source_commit": "4abbcafae69f2e3b9d162ad73e769913659aca59",
+      "requests": 1,
+      "preparation_requests": 3,
+      "exit_code": 0,
+      "review_stats": {
+        "fire_count": 1,
+        "skip_count": 0,
+        "verdict_counts": {
+          "accept": 1,
+          "revise": 0,
+          "blocked": 0
+        },
+        "last_gate_reason": "semantic-contract",
+        "last_trace": "verifier_ok"
+      },
+      "runtime_status": "review_boundary"
+    },
+    {
+      "unit": "u02",
+      "version": "old",
+      "source_commit": "cf2ff5cf078559e9843c34614318d80c984b4168",
+      "requests": 1,
+      "preparation_requests": 3,
+      "exit_code": 0,
+      "review_stats": {
+        "fire_count": 1,
+        "skip_count": 0,
+        "verdict_counts": {
+          "accept": 0,
+          "revise": 1,
+          "blocked": 0
+        },
+        "last_gate_reason": "semantic-contract",
+        "last_trace": "verifier_ok"
+      },
+      "runtime_status": "review_boundary"
+    },
+    {
+      "unit": "u03",
+      "version": "old",
+      "source_commit": "cf2ff5cf078559e9843c34614318d80c984b4168",
+      "requests": 0,
+      "preparation_requests": 3,
+      "exit_code": 0,
+      "review_stats": {
+        "fire_count": 1,
+        "skip_count": 0,
+        "verdict_counts": {
+          "accept": 0,
+          "revise": 1,
+          "blocked": 0
+        },
+        "last_gate_reason": "semantic-contract",
+        "last_trace": "deterministic_compatibility_guard"
+      },
+      "runtime_status": "review_boundary"
+    },
+    {
+      "unit": "u04",
+      "version": "new",
+      "source_commit": "4abbcafae69f2e3b9d162ad73e769913659aca59",
+      "requests": 1,
+      "preparation_requests": 3,
+      "exit_code": 0,
+      "review_stats": {
+        "fire_count": 1,
+        "skip_count": 0,
+        "verdict_counts": {
+          "accept": 0,
+          "revise": 1,
+          "blocked": 0
+        },
+        "last_gate_reason": "semantic-contract",
+        "last_trace": "verifier_ok"
+      },
+      "runtime_status": "review_boundary"
+    },
+    {
+      "unit": "a01",
+      "version": "new",
+      "source_commit": "4abbcafae69f2e3b9d162ad73e769913659aca59",
+      "requests": 11,
+      "preparation_requests": 0,
+      "exit_code": 0,
+      "review_stats": null,
+      "runtime_status": "error"
+    }
+  ],
+  "physical_attempts": 14,
+  "input_occupied": 481483,
+  "output_occupied": 98,
+  "failed_contracts": {},
+  "remote_provider_requests": 0,
+  "driver_sha256": "79f36d66c9f9662effa00d26050e80229b2aa9779249ef36144676cc6a486ea1",
+  "runtime_sha256": "80b31e82150388055543cfe4bbaf83fa75fefe3b305560d1fda1e8fd54ca8736"
+}

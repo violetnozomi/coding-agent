@@ -1,0 +1,22 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____ test_reported_input_over_reservation_stops_followup_before_upstream ______
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-1/test_reported_input_over_reser0')
+
+    def test_reported_input_over_reservation_stops_followup_before_upstream(tmp_path):
+        def under_count(_raw, _payload):
+            return InputAccounting(100, "local-invalid-bound-v1", trusted=True, exact=True)
+
+        with running(tmp_path, mode="over_input", output=1024, limits=RelayLimits(input_total=250), counter=under_count) as (fake, ledger, _binding, path):
+            assert post(path, output=1024).status_code == 200
+            response = post(path, output=1024)
+>           assert response.status_code == 429, "150 reported against 100 reserved invalidates the counting contract"
+E           AssertionError: 150 reported against 100 reserved invalidates the counting contract
+E           assert 200 == 429
+E            +  where 200 = <Response [200 OK]>.status_code
+
+tests/evaluation/test_model_relay.py:444: AssertionError
+=========================== short test summary info ============================
+FAILED tests/evaluation/test_model_relay.py::test_reported_input_over_reservation_stops_followup_before_upstream
+1 failed in 0.66s

@@ -1,0 +1,31 @@
+{
+  "status": "proposal_only_not_authorized_not_run",
+  "remote_requests_this_phase": 0,
+  "goal": "quantify limited request-shape error, not prove a universal API input upper bound",
+  "strict_evidence_first": "seek provider attestation of hosted V4.1 tokenizer/encoder revision, conversion defaults, full template and hidden overhead scope",
+  "separate_authorization_required": true,
+  "physical_request_cap": 3,
+  "automatic_retries": 0,
+  "tool_execution": false,
+  "model": "deepseek-v4-flash",
+  "output_per_request_cap": 256,
+  "total_output_cap": 768,
+  "requests": [
+    {"case": "no_tools", "thinking": "disabled", "shape": "small frozen Chinese/code/Unicode text with system and user roles"},
+    {"case": "real_review_schema", "thinking": "disabled", "shape": "actual emit_sidecar_verdict schema and forced choice; record protocol response only"},
+    {"case": "tool_result_history", "thinking": "enabled", "shape": "small frozen paired tool call/result history including required reasoning_content; no tool execution"}
+  ],
+  "before_execution": [
+    "freeze and independently review all three exact payload hashes and sizes",
+    "bind current official service mapping, output settings, credentials account and deadline",
+    "obtain independent finite fee authorization and account-side spending control; an unproven counter cannot be the only fee safeguard",
+    "accept that input token and fee estimates are not the original strict guarantee",
+    "one attempt per case, stop on transport/usage conflict, no request to confirm missing usage"
+  ],
+  "after_execution": [
+    "record observable model/fingerprint and one final cumulative usage per physical request",
+    "keep failures, missing data and deltas; do not repeat until counts match",
+    "even three exact matches remain empirical support only",
+    "empirical formal execution requires explicit acceptance of the changed input/fee boundary; current strict mode remains blocked"
+  ]
+}

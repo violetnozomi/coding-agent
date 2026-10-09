@@ -46,6 +46,37 @@ class ExecutionFake(ThreadingHTTPServer):
             "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}]}
 
 
+class FormalFake(ExecutionFake):
+    """正式入口的离线协议检查；A仅检查接入，不预填功能补丁。"""
+
+    def message(self, request):
+        names = [t.get("function", {}).get("name") for t in request.get("tools", [])]
+        transcript = request["messages"]
+        if names == ["emit_sidecar_verdict"]:
+            text = str(transcript)
+            if "payment.py" in text:
+                assert "passed-current-generation" in text
+                good = "+    if value < 0 and not allow_refund:" in text
+                verdict = "accept" if good else "revise"
+                reason = "Local protocol check of actual payment.py diff and current test evidence."
+            else:
+                verdict, reason = "blocked", "Offline protocol run did not implement the requested correlation ID feature."
+            name, arguments = "emit_sidecar_verdict", {"verdict": verdict, "reason": reason}
+        else:
+            results = [m for m in transcript if m.get("role") == "tool"]
+            if not results:
+                name, arguments = "read_file", {"path": "app/api.py"}
+            elif not any("pytest" in str(m.get("tool_calls")) for m in transcript):
+                assert "handle" in str(results)
+                name, arguments = "bash", {"command": "python -m pytest -q tests"}
+            else:
+                assert "passed" in str(results)
+                return {"role": "assistant", "content": "Offline protocol only: read app/api.py and ran the existing tests. The requested feature is not implemented. External live model authorization is unavailable."}
+        assert name in names
+        return {"role": "assistant", "content": None, "tool_calls": [{"id": "formal-" + str(len(self.requests)),
+                "type": "function", "function": {"name": name, "arguments": json.dumps(arguments)}}]}
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass

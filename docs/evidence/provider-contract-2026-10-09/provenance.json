@@ -1,0 +1,409 @@
+{
+  "private_artifact_root": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09",
+  "origins": {
+    "over-reservation-before.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/over-reservation-before.txt",
+      "raw_sha256": "8df5756a3b9261594d97b206b83e1280c627e5ff6a2a1333e4b14fa638310881",
+      "published_sha256": "1171a100b69349bed5d0a4a83777a8f06e4c13b21d5e2837ba98f5f10c95626b",
+      "publication_transform": "trim trailing whitespace only; private raw log unchanged"
+    },
+    "over-reservation-before-corrected.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/over-reservation-before-corrected.txt",
+      "raw_sha256": "e7198f94ffe79c846c281e2eaa8a466c86bfb845074cc8afce5d54e9f43e7d70",
+      "published_sha256": "67dba4d951cba9e64f64d9ddc2998e05902462dd28b2a9fecb18d61bf1974523",
+      "publication_transform": "trim trailing whitespace only; private raw log unchanged"
+    },
+    "final-tests-v2.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/final-tests-v2.txt",
+      "raw_sha256": "e6fd61c42d0f331c92db72006ac20de4db5e8a9c947f3ceb7a27143aaed3d57d",
+      "published_sha256": "e6fd61c42d0f331c92db72006ac20de4db5e8a9c947f3ceb7a27143aaed3d57d"
+    },
+    "smoke-boundary-tests-corrected.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/smoke-boundary-tests-corrected.txt",
+      "raw_sha256": "d2ce9539fa4f47fb6b7fd9dd622e07783107ce3b338fec58cdaddb0ecd0ef6bf",
+      "published_sha256": "d2ce9539fa4f47fb6b7fd9dd622e07783107ce3b338fec58cdaddb0ecd0ef6bf"
+    },
+    "official-encoding-tests.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/official-encoding-tests.txt",
+      "raw_sha256": "5522cce22101220e114287342b2c13f33c5c28bc9f18f78d4cacbdec478dd54e",
+      "published_sha256": "5522cce22101220e114287342b2c13f33c5c28bc9f18f78d4cacbdec478dd54e"
+    },
+    "ruff.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/ruff.txt",
+      "raw_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "published_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "status.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/status.json",
+      "raw_sha256": "b9bdd0cf32e583ec4a7be75e55d3cff14b399b37187db2ef33bcc3cfe42bb982",
+      "published_sha256": "b9bdd0cf32e583ec4a7be75e55d3cff14b399b37187db2ef33bcc3cfe42bb982"
+    },
+    "online-refusal.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/online-refusal.json",
+      "raw_sha256": "b9bdd0cf32e583ec4a7be75e55d3cff14b399b37187db2ef33bcc3cfe42bb982",
+      "published_sha256": "b9bdd0cf32e583ec4a7be75e55d3cff14b399b37187db2ef33bcc3cfe42bb982"
+    },
+    "online-refusal-stderr.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/online-refusal-stderr.txt",
+      "raw_sha256": "c51188971d38b8b68e8ba6fa7824c8c18c958e73c3f7ba4e9ff3bc7e7dbf91f2",
+      "published_sha256": "c51188971d38b8b68e8ba6fa7824c8c18c958e73c3f7ba4e9ff3bc7e7dbf91f2"
+    },
+    "independent-acceptance.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/independent-acceptance.json",
+      "raw_sha256": "3499f599d1277301c341ece40c5947840863e61ee0b46529536506d611470abd",
+      "published_sha256": "3499f599d1277301c341ece40c5947840863e61ee0b46529536506d611470abd"
+    },
+    "formal/formal-results.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/formal-results.json",
+      "raw_sha256": "eeaed1c3af4e547686f4b2da334361ff4b4f82c32deae8a3dd530e4bd2965ce5",
+      "published_sha256": "eeaed1c3af4e547686f4b2da334361ff4b4f82c32deae8a3dd530e4bd2965ce5"
+    },
+    "formal/ledger.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/ledger.jsonl",
+      "raw_sha256": "c5210cbfa3dbcf3bf6059a8fcc857fe0b39a461d668fde9aa8d88ac5d4abfa68",
+      "published_sha256": "c5210cbfa3dbcf3bf6059a8fcc857fe0b39a461d668fde9aa8d88ac5d4abfa68"
+    },
+    "formal/raw-provider-requests.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified-fake-requests.json",
+      "raw_sha256": "5b865228e1ec5614c5c124707cf9d090a6801f3a2fdd1b86a43f5ff69c739b76",
+      "published_sha256": "5b865228e1ec5614c5c124707cf9d090a6801f3a2fdd1b86a43f5ff69c739b76"
+    },
+    "formal/status.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified-status.json",
+      "raw_sha256": "3058aa961a9255062cc622b407b3dd4e45e2c5308d3c3872fb0687bd351de8d7",
+      "published_sha256": "3058aa961a9255062cc622b407b3dd4e45e2c5308d3c3872fb0687bd351de8d7"
+    },
+    "formal/u01/launch.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/launch.json",
+      "raw_sha256": "57ab892a9cb35a873f12b7f274bb9c7da548beefbeb25c68462b981895f3a3dd",
+      "published_sha256": "57ab892a9cb35a873f12b7f274bb9c7da548beefbeb25c68462b981895f3a3dd"
+    },
+    "formal/u01/container-inspect.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/container-inspect.json",
+      "raw_sha256": "5827a4e5896448db93f6f62e90eefc21f3927321e705bc894ddeab37a1cf2c36",
+      "published_sha256": "5827a4e5896448db93f6f62e90eefc21f3927321e705bc894ddeab37a1cf2c36"
+    },
+    "formal/u01/container-final.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/container-final.json",
+      "raw_sha256": "d9927ad7cf6a14794ab9515455b103b911bd636b84a109a0bd8483203e144b81",
+      "published_sha256": "d9927ad7cf6a14794ab9515455b103b911bd636b84a109a0bd8483203e144b81"
+    },
+    "formal/u01/stdout.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/stdout.txt",
+      "raw_sha256": "1baba40271ea2f4b22610ec7f411e265b70cc4c6a6fb6c3adab3075644af27fe",
+      "published_sha256": "1baba40271ea2f4b22610ec7f411e265b70cc4c6a6fb6c3adab3075644af27fe"
+    },
+    "formal/u01/stderr.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/stderr.txt",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "published_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "formal/u01/result/review.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/result/review.json",
+      "raw_sha256": "cee7006c00370079b94de505a01f290184c724c1dadd9b763a13ff174e07e8a6",
+      "published_sha256": "cee7006c00370079b94de505a01f290184c724c1dadd9b763a13ff174e07e8a6"
+    },
+    "formal/u01/result/state.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/result/state.json",
+      "raw_sha256": "a5bc25b461471b1b9d38c408d2201427e2aae1793a32971611cc4ddc5bdac2b0",
+      "published_sha256": "a5bc25b461471b1b9d38c408d2201427e2aae1793a32971611cc4ddc5bdac2b0"
+    },
+    "formal/u01/result/preparation-requests.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/result/preparation-requests.json",
+      "raw_sha256": "922595cff8b4536cdc208f9369889119b3d759b5a4a9e1d3e3b7d046be5fabbb",
+      "published_sha256": "922595cff8b4536cdc208f9369889119b3d759b5a4a9e1d3e3b7d046be5fabbb"
+    },
+    "formal/u01/result/runtime.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/result/runtime.jsonl",
+      "raw_sha256": "e109d83e3fff348e154d8a585cf3b1ad5bfccee36dff775e0475fda00427c755",
+      "published_sha256": "e109d83e3fff348e154d8a585cf3b1ad5bfccee36dff775e0475fda00427c755"
+    },
+    "formal/u01/result/permissions.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/result/permissions.jsonl",
+      "raw_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4",
+      "published_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4"
+    },
+    "formal/u01/final/payment.py": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/workspace/payment.py",
+      "raw_sha256": "fac25d7a951a53f68d05052a9c196a427f08bc89ca2076f847af509b9c370b33",
+      "published_sha256": "fac25d7a951a53f68d05052a9c196a427f08bc89ca2076f847af509b9c370b33"
+    },
+    "formal/u01/final/tests/test_amount.py": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u01/workspace/tests/test_amount.py",
+      "raw_sha256": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855",
+      "published_sha256": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+    },
+    "formal/u02/launch.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/launch.json",
+      "raw_sha256": "f3a7028ab7c56314df92cf1b2088bce3e25c92d5385650877f2beaaf0ed7ca40",
+      "published_sha256": "f3a7028ab7c56314df92cf1b2088bce3e25c92d5385650877f2beaaf0ed7ca40"
+    },
+    "formal/u02/container-inspect.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/container-inspect.json",
+      "raw_sha256": "24075df1e610fba4195423259cfbe09efd9412cdb9e9527ff06c5078672ceb52",
+      "published_sha256": "24075df1e610fba4195423259cfbe09efd9412cdb9e9527ff06c5078672ceb52"
+    },
+    "formal/u02/container-final.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/container-final.json",
+      "raw_sha256": "5be0b38500405ed921694fa53a4261c2e9255ed3061307cdb87e2221c75bbb6f",
+      "published_sha256": "5be0b38500405ed921694fa53a4261c2e9255ed3061307cdb87e2221c75bbb6f"
+    },
+    "formal/u02/stdout.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/stdout.txt",
+      "raw_sha256": "1baba40271ea2f4b22610ec7f411e265b70cc4c6a6fb6c3adab3075644af27fe",
+      "published_sha256": "1baba40271ea2f4b22610ec7f411e265b70cc4c6a6fb6c3adab3075644af27fe"
+    },
+    "formal/u02/stderr.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/stderr.txt",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "published_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "formal/u02/result/review.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/result/review.json",
+      "raw_sha256": "f2b0a2671f4f65c46309d099b890d1058f7caef5e9503cc50399256398f2ae77",
+      "published_sha256": "f2b0a2671f4f65c46309d099b890d1058f7caef5e9503cc50399256398f2ae77"
+    },
+    "formal/u02/result/state.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/result/state.json",
+      "raw_sha256": "317ea593c0e31dcfe3565e3d01297706c3ffce774c56cb8d111b466969717d91",
+      "published_sha256": "317ea593c0e31dcfe3565e3d01297706c3ffce774c56cb8d111b466969717d91"
+    },
+    "formal/u02/result/preparation-requests.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/result/preparation-requests.json",
+      "raw_sha256": "3929aaaa6f3a191617f0d668660fe5eded9ffdc9fcbc54587dea61ec6db056ee",
+      "published_sha256": "3929aaaa6f3a191617f0d668660fe5eded9ffdc9fcbc54587dea61ec6db056ee"
+    },
+    "formal/u02/result/runtime.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/result/runtime.jsonl",
+      "raw_sha256": "455509a56d3c176fc036dbe9dd26640447a63dc2d81d03b4fc55502c9a53f882",
+      "published_sha256": "455509a56d3c176fc036dbe9dd26640447a63dc2d81d03b4fc55502c9a53f882"
+    },
+    "formal/u02/result/permissions.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/result/permissions.jsonl",
+      "raw_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4",
+      "published_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4"
+    },
+    "formal/u02/final/payment.py": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/workspace/payment.py",
+      "raw_sha256": "5937d92cccd919312f3d99f80586d4676bd97baf11c1f13e15e80b64de9493a1",
+      "published_sha256": "5937d92cccd919312f3d99f80586d4676bd97baf11c1f13e15e80b64de9493a1"
+    },
+    "formal/u02/final/tests/test_amount.py": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u02/workspace/tests/test_amount.py",
+      "raw_sha256": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855",
+      "published_sha256": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+    },
+    "formal/u03/launch.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/launch.json",
+      "raw_sha256": "dabc6308b6f461c5eb20c836f6707f47f734bec144631f6a0da4f4b27bc47740",
+      "published_sha256": "dabc6308b6f461c5eb20c836f6707f47f734bec144631f6a0da4f4b27bc47740"
+    },
+    "formal/u03/container-inspect.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/container-inspect.json",
+      "raw_sha256": "185ff13bddae5d53fe45a96f3cd37b9c7650b9101223f872085e27b067817cfd",
+      "published_sha256": "185ff13bddae5d53fe45a96f3cd37b9c7650b9101223f872085e27b067817cfd"
+    },
+    "formal/u03/container-final.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/container-final.json",
+      "raw_sha256": "e9597aad8db15ba79c6a768b5799923ae9938f5684a811ea00dc97706d1db39b",
+      "published_sha256": "e9597aad8db15ba79c6a768b5799923ae9938f5684a811ea00dc97706d1db39b"
+    },
+    "formal/u03/stdout.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/stdout.txt",
+      "raw_sha256": "1baba40271ea2f4b22610ec7f411e265b70cc4c6a6fb6c3adab3075644af27fe",
+      "published_sha256": "1baba40271ea2f4b22610ec7f411e265b70cc4c6a6fb6c3adab3075644af27fe"
+    },
+    "formal/u03/stderr.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/stderr.txt",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "published_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "formal/u03/result/review.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/result/review.json",
+      "raw_sha256": "d0434a41e91b7b334f39bb2b53789a43a378d2dff1cbe067db5cee57c46419fa",
+      "published_sha256": "d0434a41e91b7b334f39bb2b53789a43a378d2dff1cbe067db5cee57c46419fa"
+    },
+    "formal/u03/result/state.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/result/state.json",
+      "raw_sha256": "95e0d087b2625834d4bf82fb32164f25a2db5dd6666286b3d7a5d7290fb613df",
+      "published_sha256": "95e0d087b2625834d4bf82fb32164f25a2db5dd6666286b3d7a5d7290fb613df"
+    },
+    "formal/u03/result/preparation-requests.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/result/preparation-requests.json",
+      "raw_sha256": "69ae41a40472beef3eea515980c0eb2fdf7935c89cd2783795b28cb23ec04782",
+      "published_sha256": "69ae41a40472beef3eea515980c0eb2fdf7935c89cd2783795b28cb23ec04782"
+    },
+    "formal/u03/result/runtime.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/result/runtime.jsonl",
+      "raw_sha256": "66db3c0c9f6d5291783de24b4c803228f5b0856f28522f0409cf8d9b4dc94a3e",
+      "published_sha256": "66db3c0c9f6d5291783de24b4c803228f5b0856f28522f0409cf8d9b4dc94a3e"
+    },
+    "formal/u03/result/permissions.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/result/permissions.jsonl",
+      "raw_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4",
+      "published_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4"
+    },
+    "formal/u03/final/payment.py": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/workspace/payment.py",
+      "raw_sha256": "fac25d7a951a53f68d05052a9c196a427f08bc89ca2076f847af509b9c370b33",
+      "published_sha256": "fac25d7a951a53f68d05052a9c196a427f08bc89ca2076f847af509b9c370b33"
+    },
+    "formal/u03/final/tests/test_amount.py": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u03/workspace/tests/test_amount.py",
+      "raw_sha256": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855",
+      "published_sha256": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+    },
+    "formal/u04/launch.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/launch.json",
+      "raw_sha256": "6e62551fc85329572cbb6bccb20bdc0e39d77218d32a19cf091f657ee529d550",
+      "published_sha256": "6e62551fc85329572cbb6bccb20bdc0e39d77218d32a19cf091f657ee529d550"
+    },
+    "formal/u04/container-inspect.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/container-inspect.json",
+      "raw_sha256": "418c15afa3ea9344476913f2839606e41f3793e8da50b57f731c62611bed3f89",
+      "published_sha256": "418c15afa3ea9344476913f2839606e41f3793e8da50b57f731c62611bed3f89"
+    },
+    "formal/u04/container-final.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/container-final.json",
+      "raw_sha256": "9916894cb46b73d5dfd2e419b4d9572521b810cffe437d536cc0a78e419ba0ba",
+      "published_sha256": "9916894cb46b73d5dfd2e419b4d9572521b810cffe437d536cc0a78e419ba0ba"
+    },
+    "formal/u04/stdout.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/stdout.txt",
+      "raw_sha256": "1baba40271ea2f4b22610ec7f411e265b70cc4c6a6fb6c3adab3075644af27fe",
+      "published_sha256": "1baba40271ea2f4b22610ec7f411e265b70cc4c6a6fb6c3adab3075644af27fe"
+    },
+    "formal/u04/stderr.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/stderr.txt",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "published_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "formal/u04/result/review.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/result/review.json",
+      "raw_sha256": "24688dbb75bb713bc376957c23c3ba3f82cd4349f34659743629998f7f843f27",
+      "published_sha256": "24688dbb75bb713bc376957c23c3ba3f82cd4349f34659743629998f7f843f27"
+    },
+    "formal/u04/result/state.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/result/state.json",
+      "raw_sha256": "c62d09af54310ab76f0c27682723abdc9b784e0fbdeed6c9e78f6035cf924c69",
+      "published_sha256": "c62d09af54310ab76f0c27682723abdc9b784e0fbdeed6c9e78f6035cf924c69"
+    },
+    "formal/u04/result/preparation-requests.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/result/preparation-requests.json",
+      "raw_sha256": "7366e70684f217472ebd5d86e83950b85f52044926a624ef55e0c90e5d47afd8",
+      "published_sha256": "7366e70684f217472ebd5d86e83950b85f52044926a624ef55e0c90e5d47afd8"
+    },
+    "formal/u04/result/runtime.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/result/runtime.jsonl",
+      "raw_sha256": "e37258858f7656b9c8ebf35611c1042091a21114e939abcab4463d5c6e340523",
+      "published_sha256": "e37258858f7656b9c8ebf35611c1042091a21114e939abcab4463d5c6e340523"
+    },
+    "formal/u04/result/permissions.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/result/permissions.jsonl",
+      "raw_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4",
+      "published_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4"
+    },
+    "formal/u04/final/payment.py": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/workspace/payment.py",
+      "raw_sha256": "5937d92cccd919312f3d99f80586d4676bd97baf11c1f13e15e80b64de9493a1",
+      "published_sha256": "5937d92cccd919312f3d99f80586d4676bd97baf11c1f13e15e80b64de9493a1"
+    },
+    "formal/u04/final/tests/test_amount.py": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/u04/workspace/tests/test_amount.py",
+      "raw_sha256": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855",
+      "published_sha256": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+    },
+    "formal/a01/launch.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/launch.json",
+      "raw_sha256": "a7b9dcd80c6a1888a66e6867034bc20190b07cdeb4797d4f3566ca44c9d5e5e2",
+      "published_sha256": "a7b9dcd80c6a1888a66e6867034bc20190b07cdeb4797d4f3566ca44c9d5e5e2"
+    },
+    "formal/a01/container-inspect.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/container-inspect.json",
+      "raw_sha256": "38dc704d63d804287283fc45856207c705fbdce0c52be1cca648bc7721cd0d0b",
+      "published_sha256": "38dc704d63d804287283fc45856207c705fbdce0c52be1cca648bc7721cd0d0b"
+    },
+    "formal/a01/container-final.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/container-final.json",
+      "raw_sha256": "c9f37b5a91153d4f999c546a9a9681b35ed3289a1a549940bc985618cddb529c",
+      "published_sha256": "c9f37b5a91153d4f999c546a9a9681b35ed3289a1a549940bc985618cddb529c"
+    },
+    "formal/a01/stdout.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/stdout.txt",
+      "raw_sha256": "b0eb177a3429ee43f8a4df030ec67c72cc8fcecdcbe57c0446880609839f84e0",
+      "published_sha256": "b0eb177a3429ee43f8a4df030ec67c72cc8fcecdcbe57c0446880609839f84e0"
+    },
+    "formal/a01/stderr.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/stderr.txt",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "published_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "formal/a01/result/state.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/result/state.json",
+      "raw_sha256": "18463d8dc5a35aa3de4551435193ffe5ce53c0bcf433f6c6f2f4da61a255ee22",
+      "published_sha256": "18463d8dc5a35aa3de4551435193ffe5ce53c0bcf433f6c6f2f4da61a255ee22"
+    },
+    "formal/a01/result/preparation-requests.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/result/preparation-requests.json",
+      "raw_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "published_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "formal/a01/result/runtime.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/result/runtime.jsonl",
+      "raw_sha256": "e2f3b38bcc83739a5b2b03ef39ef335c1875148898d12badb6cdd2219d0db2b0",
+      "published_sha256": "e2f3b38bcc83739a5b2b03ef39ef335c1875148898d12badb6cdd2219d0db2b0"
+    },
+    "formal/a01/result/result.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/result/result.json",
+      "raw_sha256": "2389a4af0210ce790464b5824872b169f47962a718adbb669928b53f2b1b7e5c",
+      "published_sha256": "2389a4af0210ce790464b5824872b169f47962a718adbb669928b53f2b1b7e5c"
+    },
+    "formal/a01/result/permissions.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/result/permissions.jsonl",
+      "raw_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4",
+      "published_sha256": "6b8c2bde7aad1549039a547a92e412ae2a22ea3d7105b22dc3052af02295bce4"
+    },
+    "formal/a01/final/app/api.py": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/formal-verified/a01/workspace/app/api.py",
+      "raw_sha256": "87237860f9ea0f61c0bad510791d95a7920370331a23e6e574a10f48841e128a",
+      "published_sha256": "87237860f9ea0f61c0bad510791d95a7920370331a23e6e574a10f48841e128a"
+    },
+    "official-doc-sources.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/official/doc-sources.json",
+      "raw_sha256": "a780eeba3b1ee1e41b28c067b325857e7a2f013078097cde11901ad87f067c14",
+      "published_sha256": "a780eeba3b1ee1e41b28c067b325857e7a2f013078097cde11901ad87f067c14"
+    },
+    "over-reservation-comparison.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/over-reservation-comparison.json",
+      "raw_sha256": "6f18f9470bd4ab75caf799ec7d6f3f0cbdf57813995430f02e8cc4e91d908c1a",
+      "published_sha256": "6f18f9470bd4ab75caf799ec7d6f3f0cbdf57813995430f02e8cc4e91d908c1a"
+    },
+    "over-reservation-before/ledger.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/over-reservation-before/ledger.jsonl",
+      "raw_sha256": "753f426020d461e59e3d7b57ce3ff1e91f821ba67e4342d61f778c17e697cc96",
+      "published_sha256": "753f426020d461e59e3d7b57ce3ff1e91f821ba67e4342d61f778c17e697cc96"
+    },
+    "over-reservation-before/result.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/over-reservation-before/result.json",
+      "raw_sha256": "62824bee81faab1a99f68f07421baa4d6b48c6eda19cd130e09a3de3a679ff34",
+      "published_sha256": "62824bee81faab1a99f68f07421baa4d6b48c6eda19cd130e09a3de3a679ff34"
+    },
+    "over-reservation-after/ledger.jsonl": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/over-reservation-after/ledger.jsonl",
+      "raw_sha256": "9e2d1872f523b8a0fd3e1d655659a7543ce63bc2f4b0e7eb5402965046c0438e",
+      "published_sha256": "9e2d1872f523b8a0fd3e1d655659a7543ce63bc2f4b0e7eb5402965046c0438e"
+    },
+    "over-reservation-after/result.json": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/over-reservation-after/result.json",
+      "raw_sha256": "a7857a313e2911a9a6ce9d512d7c6585c8810fff11d3cbc89af3b3b75309392b",
+      "published_sha256": "a7857a313e2911a9a6ce9d512d7c6585c8810fff11d3cbc89af3b3b75309392b"
+    },
+    "inflight-test.txt": {
+      "source": "/home/pyh/.codex/artifacts/nz-provider-contract-2026-10-09/inflight-test.txt",
+      "raw_sha256": "b099717b0f4a9f62539b63fe5a8ebc7ae0aa524d60e983fbf07d0b6e38a1bf22",
+      "published_sha256": "b099717b0f4a9f62539b63fe5a8ebc7ae0aa524d60e983fbf07d0b6e38a1bf22"
+    }
+  },
+  "remote_model_requests": 0,
+  "raw_reasoning_content_published": false
+}

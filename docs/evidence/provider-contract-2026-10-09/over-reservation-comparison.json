@@ -1,0 +1,102 @@
+{
+  "before": {
+    "statuses": [
+      200,
+      200
+    ],
+    "actual_fake_upstream_requests": 2,
+    "reported_input_total": 300,
+    "occupied_input": 200,
+    "attempts": [
+      {
+        "attempt_id": "95dedf45fc79411fbd46c9009bef120f",
+        "experiment": "proof",
+        "bucket": "u1/r1/review",
+        "unit": "u1",
+        "run": "r1",
+        "role": "review",
+        "input_reserved": 100,
+        "output_reserved": 1024,
+        "input_method": "test-under-bound",
+        "input_exact": true,
+        "payload_sha256": "13bf427a40e74a8d1219cbfd59db3050cec31b0a79b53bda4c62216c59b0abc7",
+        "status": "complete",
+        "usage": null
+      },
+      {
+        "attempt_id": "fff8655a031f45058061e49a43f7379b",
+        "experiment": "proof",
+        "bucket": "u1/r1/review",
+        "unit": "u1",
+        "run": "r1",
+        "role": "review",
+        "input_reserved": 100,
+        "output_reserved": 1024,
+        "input_method": "test-under-bound",
+        "input_exact": true,
+        "payload_sha256": "13bf427a40e74a8d1219cbfd59db3050cec31b0a79b53bda4c62216c59b0abc7",
+        "status": "complete",
+        "usage": null
+      }
+    ],
+    "source_sha256": "6a3cde677aeb18f4efeffc63043f398d9dffbed7ff9564401af583c2a730f104"
+  },
+  "after": {
+    "statuses": [
+      200,
+      429
+    ],
+    "actual_fake_upstream_requests": 1,
+    "reported_input_total": 150,
+    "occupied_input": 150,
+    "attempts": [
+      {
+        "attempt_id": "e378b35f709f42ed90cf90676eab2907",
+        "experiment": "proof",
+        "bucket": "u1/r1/review",
+        "unit": "u1",
+        "run": "r1",
+        "role": "review",
+        "input_reserved": 100,
+        "output_reserved": 1024,
+        "input_method": "test-under-bound",
+        "input_exact": true,
+        "evidence_level": "exact",
+        "contract_id": "local-under-bound-proof",
+        "payload_sha256": "13bf427a40e74a8d1219cbfd59db3050cec31b0a79b53bda4c62216c59b0abc7",
+        "status": "complete",
+        "usage": {
+          "prompt_tokens": 150,
+          "completion_tokens": 7,
+          "total_tokens": 157,
+          "prompt_cache_hit_tokens": 3,
+          "completion_tokens_details": {
+            "reasoning_tokens": 2
+          }
+        },
+        "reported_usage": {
+          "prompt_tokens": 150,
+          "completion_tokens": 7,
+          "total_tokens": 157,
+          "prompt_cache_hit_tokens": 3,
+          "completion_tokens_details": {
+            "reasoning_tokens": 2
+          }
+        },
+        "usage_valid": true,
+        "usage_conflict": false,
+        "conflicting_reports": null,
+        "usage_unknown_reason": null,
+        "input_over_reservation": 50,
+        "output_over_reservation": 0,
+        "reservation_retained": false,
+        "ambiguous": false,
+        "contract_failed": true,
+        "finish_reason": "stop",
+        "provider_model": "local-model",
+        "system_fingerprint": null
+      }
+    ],
+    "source_sha256": "4edef1f0e4480658306f976bf6fe3c0a36192c94f6fdb9d751c7a10ee0646028"
+  }
+}

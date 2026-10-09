@@ -1,0 +1,31 @@
+{
+  "isolation_verified": true,
+  "input_contract_verified": true,
+  "output_contract_verified": true,
+  "budget_enforcement_verified": true,
+  "paid_authorization_valid": false,
+  "technical_ready": true,
+  "online_allowed": false,
+  "online_not_run": true,
+  "contract": {
+    "contract_id": "local-fake-v1",
+    "counter_source_sha256": "9292700fbbe58ce9151c50b85596ec86e0cfe90723fa4f82057c3f469f27ddf2",
+    "relay_source_sha256": "4edef1f0e4480658306f976bf6fe3c0a36192c94f6fdb9d751c7a10ee0646028",
+    "evidence_level": "exact",
+    "strict_input_bound_verified": true,
+    "model_scope": [
+      "deepseek-v4-flash"
+    ],
+    "service_scope": "loopback-fake-only",
+    "output_contract": {
+      "main": 64000,
+      "review": 1024,
+      "total": 100000,
+      "completion_includes_reasoning": true
+    }
+  },
+  "blockers": [
+    "missing_or_inapplicable_paid_authorization"
+  ],
+  "isolation_error": null
+}

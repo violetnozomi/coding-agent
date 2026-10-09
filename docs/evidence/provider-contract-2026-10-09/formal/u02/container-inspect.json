@@ -1,0 +1,359 @@
+{
+  "Id": "0fa5744ca44b55d5cf957e970dd53b6f24ac0abfbfa660957d54b68cbb036efd",
+  "Created": "2026-10-09T13:10:10.559806548Z",
+  "Path": "python",
+  "Args": [
+    "/driver/entry.py"
+  ],
+  "State": {
+    "Status": "created",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "0001-01-01T00:00:00Z",
+    "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "Image": "sha256:ad95168761bfd58549057442c026c24cb863a5bf2f3511c8f0bae5c462c49641",
+  "ResolvConfPath": "",
+  "HostnamePath": "",
+  "HostsPath": "",
+  "LogPath": "",
+  "Name": "/nz-review-u02",
+  "RestartCount": 0,
+  "Driver": "overlay2",
+  "Platform": "linux",
+  "MountLabel": "",
+  "ProcessLabel": "",
+  "AppArmorProfile": "",
+  "ExecIDs": null,
+  "HostConfig": {
+    "Binds": null,
+    "ContainerIDFile": "",
+    "LogConfig": {
+      "Type": "json-file",
+      "Config": {}
+    },
+    "NetworkMode": "none",
+    "PortBindings": {},
+    "RestartPolicy": {
+      "Name": "no",
+      "MaximumRetryCount": 0
+    },
+    "AutoRemove": false,
+    "VolumeDriver": "",
+    "VolumesFrom": null,
+    "ConsoleSize": [
+      0,
+      0
+    ],
+    "CapAdd": null,
+    "CapDrop": [
+      "ALL"
+    ],
+    "CgroupnsMode": "private",
+    "Dns": null,
+    "DnsOptions": [],
+    "DnsSearch": [],
+    "ExtraHosts": null,
+    "GroupAdd": null,
+    "IpcMode": "private",
+    "Cgroup": "",
+    "Links": null,
+    "OomScoreAdj": 0,
+    "PidMode": "",
+    "Privileged": false,
+    "PublishAllPorts": false,
+    "ReadonlyRootfs": true,
+    "SecurityOpt": [
+      "no-new-privileges"
+    ],
+    "UTSMode": "",
+    "UsernsMode": "",
+    "ShmSize": 67108864,
+    "Runtime": "runc",
+    "Isolation": "",
+    "CpuShares": 0,
+    "Memory": 536870912,
+    "NanoCpus": 0,
+    "CgroupParent": "",
+    "BlkioWeight": 0,
+    "BlkioWeightDevice": [],
+    "BlkioDeviceReadBps": [],
+    "BlkioDeviceWriteBps": [],
+    "BlkioDeviceReadIOps": [],
+    "BlkioDeviceWriteIOps": [],
+    "CpuPeriod": 0,
+    "CpuQuota": 0,
+    "CpuRealtimePeriod": 0,
+    "CpuRealtimeRuntime": 0,
+    "CpusetCpus": "",
+    "CpusetMems": "",
+    "Devices": [],
+    "DeviceCgroupRules": null,
+    "DeviceRequests": null,
+    "MemoryReservation": 0,
+    "MemorySwap": 1073741824,
+    "MemorySwappiness": null,
+    "OomKillDisable": false,
+    "PidsLimit": 128,
+    "Ulimits": [],
+    "CpuCount": 0,
+    "CpuPercent": 0,
+    "IOMaximumIOps": 0,
+    "IOMaximumBandwidth": 0,
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/home/pyh/.codex/artifacts/nz-review-execution-2026-10-09/code-old",
+        "Target": "/runtime",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/driver",
+        "Target": "/driver",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/workspace",
+        "Target": "/workspace"
+      },
+      {
+        "Type": "bind",
+        "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/home",
+        "Target": "/home/agent"
+      },
+      {
+        "Type": "bind",
+        "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/tmp",
+        "Target": "/tmp"
+      },
+      {
+        "Type": "bind",
+        "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/input",
+        "Target": "/input",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/sockets",
+        "Target": "/model",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/result",
+        "Target": "/result"
+      },
+      {
+        "Type": "bind",
+        "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/control",
+        "Target": "/control",
+        "ReadOnly": true
+      }
+    ],
+    "MaskedPaths": [
+      "/proc/acpi",
+      "/proc/asound",
+      "/proc/interrupts",
+      "/proc/kcore",
+      "/proc/keys",
+      "/proc/latency_stats",
+      "/proc/sched_debug",
+      "/proc/scsi",
+      "/proc/timer_list",
+      "/proc/timer_stats",
+      "/sys/devices/virtual/powercap",
+      "/sys/firmware",
+      "/sys/devices/system/cpu/cpu0/thermal_throttle",
+      "/sys/devices/system/cpu/cpu1/thermal_throttle",
+      "/sys/devices/system/cpu/cpu2/thermal_throttle",
+      "/sys/devices/system/cpu/cpu3/thermal_throttle",
+      "/sys/devices/system/cpu/cpu4/thermal_throttle",
+      "/sys/devices/system/cpu/cpu5/thermal_throttle",
+      "/sys/devices/system/cpu/cpu6/thermal_throttle",
+      "/sys/devices/system/cpu/cpu7/thermal_throttle",
+      "/sys/devices/system/cpu/cpu8/thermal_throttle",
+      "/sys/devices/system/cpu/cpu9/thermal_throttle",
+      "/sys/devices/system/cpu/cpu10/thermal_throttle",
+      "/sys/devices/system/cpu/cpu11/thermal_throttle",
+      "/sys/devices/system/cpu/cpu12/thermal_throttle",
+      "/sys/devices/system/cpu/cpu13/thermal_throttle",
+      "/sys/devices/system/cpu/cpu14/thermal_throttle",
+      "/sys/devices/system/cpu/cpu15/thermal_throttle",
+      "/sys/devices/system/cpu/cpu16/thermal_throttle",
+      "/sys/devices/system/cpu/cpu17/thermal_throttle",
+      "/sys/devices/system/cpu/cpu18/thermal_throttle",
+      "/sys/devices/system/cpu/cpu19/thermal_throttle",
+      "/sys/devices/system/cpu/cpu20/thermal_throttle",
+      "/sys/devices/system/cpu/cpu21/thermal_throttle",
+      "/sys/devices/system/cpu/cpu22/thermal_throttle",
+      "/sys/devices/system/cpu/cpu23/thermal_throttle",
+      "/sys/devices/system/cpu/cpu24/thermal_throttle",
+      "/sys/devices/system/cpu/cpu25/thermal_throttle",
+      "/sys/devices/system/cpu/cpu26/thermal_throttle",
+      "/sys/devices/system/cpu/cpu27/thermal_throttle",
+      "/sys/devices/system/cpu/cpu28/thermal_throttle",
+      "/sys/devices/system/cpu/cpu29/thermal_throttle",
+      "/sys/devices/system/cpu/cpu30/thermal_throttle",
+      "/sys/devices/system/cpu/cpu31/thermal_throttle"
+    ],
+    "ReadonlyPaths": [
+      "/proc/bus",
+      "/proc/fs",
+      "/proc/irq",
+      "/proc/sys",
+      "/proc/sysrq-trigger"
+    ],
+    "Init": true
+  },
+  "GraphDriver": {
+    "Data": {
+      "ID": "0fa5744ca44b55d5cf957e970dd53b6f24ac0abfbfa660957d54b68cbb036efd",
+      "LowerDir": "/var/lib/docker/overlay2/d2a4ce835bfb49fbfedbb5299c3b1f636ea1753fa55eb81cc5bab205e53928c4-init/diff:/var/lib/docker/overlay2/b7483a9cb64e7a4073714fd8b0e6ae8f2200f53b639c264abdaae7afb39e525d/diff:/var/lib/docker/overlay2/54966f42c1fe86480afb847225fa27da24a1586a8c7b1f0a205ad36b8102e6dc/diff:/var/lib/docker/overlay2/ceffb3edb125c103729257576456f25d2dd7b9c235a82c2918b18008a570900c/diff:/var/lib/docker/overlay2/86981aee2b84e7e83a2bdd96174a10ab1fd52bbed11e0f492acd4761279a06f4/diff:/var/lib/docker/overlay2/397965963c83c66778baf0e488ba59851f546b91de28892ee9f79ea20eb5302b/diff:/var/lib/docker/overlay2/a560fefb2704031b8099177730a2541a4f35b73e64c994b4e5829e7f0f3ae78f/diff:/var/lib/docker/overlay2/88141f514d456f65dff71fed9bc5ff8c44d2ed951b7803f03e0ae27de38a8711/diff",
+      "MergedDir": "/var/lib/docker/overlay2/d2a4ce835bfb49fbfedbb5299c3b1f636ea1753fa55eb81cc5bab205e53928c4/merged",
+      "UpperDir": "/var/lib/docker/overlay2/d2a4ce835bfb49fbfedbb5299c3b1f636ea1753fa55eb81cc5bab205e53928c4/diff",
+      "WorkDir": "/var/lib/docker/overlay2/d2a4ce835bfb49fbfedbb5299c3b1f636ea1753fa55eb81cc5bab205e53928c4/work"
+    },
+    "Name": "overlay2"
+  },
+  "Mounts": [
+    {
+      "Type": "bind",
+      "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/driver",
+      "Destination": "/driver",
+      "Mode": "",
+      "RW": false,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "bind",
+      "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/workspace",
+      "Destination": "/workspace",
+      "Mode": "",
+      "RW": true,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "bind",
+      "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/input",
+      "Destination": "/input",
+      "Mode": "",
+      "RW": false,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "bind",
+      "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/sockets",
+      "Destination": "/model",
+      "Mode": "",
+      "RW": false,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "bind",
+      "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/result",
+      "Destination": "/result",
+      "Mode": "",
+      "RW": true,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "bind",
+      "Source": "/home/pyh/.codex/artifacts/nz-review-execution-2026-10-09/code-old",
+      "Destination": "/runtime",
+      "Mode": "",
+      "RW": false,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "bind",
+      "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/home",
+      "Destination": "/home/agent",
+      "Mode": "",
+      "RW": true,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "bind",
+      "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/tmp",
+      "Destination": "/tmp",
+      "Mode": "",
+      "RW": true,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "bind",
+      "Source": "/tmp/pytest-of-pyh/pytest-8/test_formal_local_entry_frozen0/formal/u02/control",
+      "Destination": "/control",
+      "Mode": "",
+      "RW": false,
+      "Propagation": "rprivate"
+    }
+  ],
+  "Config": {
+    "Hostname": "0fa5744ca44b",
+    "Domainname": "",
+    "User": "1001:1001",
+    "AttachStdin": false,
+    "AttachStdout": true,
+    "AttachStderr": true,
+    "Tty": false,
+    "OpenStdin": false,
+    "StdinOnce": false,
+    "Env": [
+      "LANG=C.UTF-8",
+      "PYTHONDONTWRITEBYTECODE=1",
+      "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1",
+      "PYTHONHASHSEED=0",
+      "HOME=/home/agent",
+      "TMPDIR=/tmp",
+      "PYTHONPATH=/runtime",
+      "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305",
+      "PYTHON_VERSION=3.12.13",
+      "PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684"
+    ],
+    "Cmd": [
+      "python",
+      "/driver/entry.py"
+    ],
+    "Image": "sha256:ad95168761bfd58549057442c026c24cb863a5bf2f3511c8f0bae5c462c49641",
+    "Volumes": null,
+    "WorkingDir": "/workspace",
+    "Entrypoint": null,
+    "Labels": {
+      "nz-review-case": "u02"
+    }
+  },
+  "NetworkSettings": {
+    "SandboxID": "",
+    "SandboxKey": "",
+    "Ports": {},
+    "Networks": {
+      "none": {
+        "IPAMConfig": null,
+        "Links": null,
+        "Aliases": null,
+        "DriverOpts": null,
+        "GwPriority": 0,
+        "NetworkID": "",
+        "EndpointID": "",
+        "Gateway": "",
+        "IPAddress": "",
+        "MacAddress": "",
+        "IPPrefixLen": 0,
+        "IPv6Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "DNSNames": null
+      }
+    }
+  }
+}
