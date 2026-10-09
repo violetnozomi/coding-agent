@@ -1,0 +1,7 @@
+{
+  "closed_at_epoch": 1791565225.1605566,
+  "reason": "fixed experiment finished; unused budget not available for more calls",
+  "remote_requests": 12,
+  "grant_path": "authorization.json",
+  "automatic_reruns": 0
+}

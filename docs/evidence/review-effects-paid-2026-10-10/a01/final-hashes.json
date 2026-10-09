@@ -1,0 +1,20 @@
+{
+  ".pytest_cache/.gitignore": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
+  ".pytest_cache/CACHEDIR.TAG": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
+  ".pytest_cache/README.md": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
+  ".pytest_cache/v/cache/nodeids": "20dccb4ebdd0c56638f66f3c16915f3c6e122345a66ce86df7bcbf51dfd9e92c",
+  "README.md": "c06741a8a8777a0bea89ce5886643fe3eb83922502f42d23f399d33262cf0f77",
+  "app/__init__.py": "0556857c71d706021af74ff9d58c60b35598d608765b1cf6e30d19f7efaf54b4",
+  "app/adapters/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "app/adapters/json_sink.py": "89ac6f13c735ce933fc8ea9e8fb874c8bffac3a8cb6ee1834e49ac8e8dde5542",
+  "app/adapters/text_sink.py": "eae8b0e3df9dfb16d29b0ab143208725a77e7bb3459dee411335c589da8a5b45",
+  "app/api.py": "eda2d6eb9af45596427aef13f8f050df17488e24c7351b1154204d54d5d21cd9",
+  "app/cli.py": "bd0270e30d0cc162ce36c01c8e25c008401121445eec60237801075d9d8beab0",
+  "app/events.py": "27a08d00db9aada63630c90617b04c76f0122e0cac20593915d3323f216e87cb",
+  "app/formatting.py": "ae8f9647d28d3b74a7c56090a04ccc308e05ab774533098bcf30f2d3465c21d0",
+  "app/service.py": "660a747a33c0698f8a3f68ca038236fb286306af5ecb216c0a8b32db04bd7789",
+  "app/storage.py": "c45f6d5f7f7d31d67ccb5d2f9add0dbb3c8092944e98c0e29b97c970557d7d81",
+  "tests/test_api.py": "77761b60b3f9ebbaf77d1af248c2ea8cecfc703ba2c0a5204e876f40530ab989",
+  "tests/test_cli.py": "8594b2eee9ce5e8caf284283790da36b71bc3df2ccbdbad3e2fede6027fe239b",
+  "tests/test_sinks.py": "aadfb947e0639fefe9bd97a476ac2231fb29ffdee93ef0a0bc52f3c6879c3434"
+}

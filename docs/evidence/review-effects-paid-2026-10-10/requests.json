@@ -1,0 +1,1225 @@
+[
+  {
+    "physical_request": 1,
+    "event": "admitted",
+    "monotonic": 28672.32198848,
+    "time_epoch": 1791565120.8408504,
+    "attempt_id": "32b6a9d02c964f97b47ede9425700981",
+    "experiment": "review-effects-formal",
+    "bucket": "u01/u01/auxiliary",
+    "unit": "u01",
+    "run": "u01",
+    "role": "auxiliary",
+    "input_reserved": 2479,
+    "output_reserved": 1024,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "db9162482ea6be3ba6ef35e6f5d4c7f470c201084dce4887abb5b69c23c74199",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 2479,
+      "completion_tokens": 312,
+      "total_tokens": 2791,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 2479
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.01315,
+    "reported_usage": {
+      "prompt_tokens": 2479,
+      "completion_tokens": 312,
+      "total_tokens": 2791,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 2479
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.007454,
+    "started_at_epoch": 1791565118.8007402,
+    "finished_at_epoch": 1791565120.8408504,
+    "elapsed_seconds": 2.0401101112365723,
+    "role_detail": "verification_review",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": false,
+      "thinking": {
+        "type": "disabled"
+      },
+      "reasoning_effort": "unset",
+      "max_tokens": 1024
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_Mv6tG9rhr63S4okWRoXa1373",
+          "name": "emit_sidecar_verdict",
+          "arguments": {
+            "verdict": "accept",
+            "reason": "The user's current request explicitly authorizes the semantic change being flagged: \"permit negative values only when allow_refund=True.\" The deterministic compatibility signal flags the relaxation of the legacy `if value < 0:` guard, but this relaxation IS the requested behavior — the change is gated on the named `allow_refund` parameter, which is the exact input-specific gate the user specified. Default behavior (allow_refund=False) still rejects negatives, and positive values return unchanged, matching the \"preserve default rejection and positive behavior\" clause. The diff is minimal and correct: `if value < 0 and not allow_refund:`. The exact acceptance command `python -m pytest -q tests` was executed and passed (2 passed), per Runtime-owned execution fact. The one weakness is that the final text reports \"actual results\" only vaguely (\"Exact acceptance passed\") and does not enumerate the \"remaining limitations\" the user asked for; however, pytest output was 2 passed with no failures, and the agent did report the acceptance result accurately. This is a minor reporting-concision nit, not a missing sub-requirement that a further code iteration would close. The requested behavior change is implemented, compatibility of default/positive paths is preserved, and acceptance passed — accept."
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "db9162482ea6be3ba6ef35e6f5d4c7f470c201084dce4887abb5b69c23c74199",
+    "raw_response_sha256": "f536d84afc4037f1c55b8dbf88d08a81e5c9da80942c1536b0d5f1194e993c5e",
+    "raw_request_relative": "formal/u01/provider/32b6a9d02c964f97b47ede9425700981.request.json",
+    "raw_response_relative": "formal/u01/provider/32b6a9d02c964f97b47ede9425700981.response.txt",
+    "published_request": "u01/provider/32b6a9d02c964f97b47ede9425700981.request.json",
+    "published_response": "u01/provider/32b6a9d02c964f97b47ede9425700981.response.jsonl"
+  },
+  {
+    "physical_request": 2,
+    "event": "admitted",
+    "monotonic": 28677.770821303,
+    "time_epoch": 1791565125.8239677,
+    "attempt_id": "36f00f76e6d94c45b9bc87b336b57f51",
+    "experiment": "review-effects-formal",
+    "bucket": "u02/u02/auxiliary",
+    "unit": "u02",
+    "run": "u02",
+    "role": "auxiliary",
+    "input_reserved": 2219,
+    "output_reserved": 1024,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "2f27c379479eab534432117003ecf29cd5b4b69d81668db7dcd0cabaec45636d",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 2219,
+      "completion_tokens": 272,
+      "total_tokens": 2491,
+      "prompt_tokens_details": {
+        "cached_tokens": 1280
+      },
+      "prompt_cache_hit_tokens": 1280,
+      "prompt_cache_miss_tokens": 939
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.01263,
+    "reported_usage": {
+      "prompt_tokens": 2219,
+      "completion_tokens": 272,
+      "total_tokens": 2491,
+      "prompt_tokens_details": {
+        "cached_tokens": 1280
+      },
+      "prompt_cache_hit_tokens": 1280,
+      "prompt_cache_miss_tokens": 939
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.0041052,
+    "started_at_epoch": 1791565124.2495725,
+    "finished_at_epoch": 1791565125.8239677,
+    "elapsed_seconds": 1.5743951797485352,
+    "role_detail": "verification_review",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": false,
+      "thinking": {
+        "type": "disabled"
+      },
+      "reasoning_effort": "unset",
+      "max_tokens": 1024
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_oHjYtxwU3F7S9P3ZdNZw5520",
+          "name": "emit_sidecar_verdict",
+          "arguments": {
+            "verdict": "revise",
+            "reason": "The diff removes the negative-value rejection unconditionally and never consults allow_refund. The user required negative values be permitted ONLY when allow_refund=True while preserving the default rejection. The current implementation returns negative values even with the default allow_refund=False, which contradicts an explicit preservation sub-requirement. The passing pytest run (2 passed) does not cover this: the tests only exercise the positive/default happy path, so it cannot prove default rejection is preserved. (Also the final report omitted actual results and remaining limitations, but the behavioral regression is the blocking issue.)\n\nRequired correction: restore the guard so it only fires when refunds are not allowed, e.g.:\n    if value < 0 and not allow_refund:\n        raise ValueError(\"negative\")\n    return value\nThen re-run `python -m pytest -q tests` and report the actual output plus any remaining limitations.",
+            "suggestedFix": "if value < 0 and not allow_refund:\\n    raise ValueError(\"negative\")\\nreturn value"
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "2f27c379479eab534432117003ecf29cd5b4b69d81668db7dcd0cabaec45636d",
+    "raw_response_sha256": "6bdeba649629fce38c6217632a8449d09d44399a4b78dad98fdf09b78edff4e6",
+    "raw_request_relative": "formal/u02/provider/36f00f76e6d94c45b9bc87b336b57f51.request.json",
+    "raw_response_relative": "formal/u02/provider/36f00f76e6d94c45b9bc87b336b57f51.response.txt",
+    "published_request": "u02/provider/36f00f76e6d94c45b9bc87b336b57f51.request.json",
+    "published_response": "u02/provider/36f00f76e6d94c45b9bc87b336b57f51.response.jsonl"
+  },
+  {
+    "physical_request": 3,
+    "event": "admitted",
+    "monotonic": 28685.661744326,
+    "time_epoch": 1791565134.1514027,
+    "attempt_id": "da927cc71d684ef3aa3439a62c30880d",
+    "experiment": "review-effects-formal",
+    "bucket": "u04/u04/auxiliary",
+    "unit": "u04",
+    "run": "u04",
+    "role": "auxiliary",
+    "input_reserved": 2219,
+    "output_reserved": 1024,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "22a31e829f59a6e4a446eeb2c8d40249f5df3b2cffdda6f15dd9d79cb4a29c27",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 2219,
+      "completion_tokens": 357,
+      "total_tokens": 2576,
+      "prompt_tokens_details": {
+        "cached_tokens": 1664
+      },
+      "prompt_cache_hit_tokens": 1664,
+      "prompt_cache_miss_tokens": 555
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.01263,
+    "reported_usage": {
+      "prompt_tokens": 2219,
+      "completion_tokens": 357,
+      "total_tokens": 2576,
+      "prompt_tokens_details": {
+        "cached_tokens": 1664
+      },
+      "prompt_cache_hit_tokens": 1664,
+      "prompt_cache_miss_tokens": 555
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.00403256,
+    "started_at_epoch": 1791565132.1404955,
+    "finished_at_epoch": 1791565134.1514027,
+    "elapsed_seconds": 2.0109071731567383,
+    "role_detail": "verification_review",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": false,
+      "thinking": {
+        "type": "disabled"
+      },
+      "reasoning_effort": "unset",
+      "max_tokens": 1024
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_NpDk3TktPEZGD5LQjPwF6867",
+          "name": "emit_sidecar_verdict",
+          "arguments": {
+            "verdict": "revise",
+            "reason": "The diff removes the negative-value rejection entirely and never inspects the `allow_refund` parameter, so the promised behavior is not implemented: with allow_refund=False (the default), amount(-5) now returns -5 instead of raising ValueError(\"negative\"). The request explicitly requires that default rejection be preserved and that negatives be permitted ONLY when allow_refund=True. The passing `python -m pytest -q tests` (2 passed) does not exercise this: the existing tests still expect the old always-reject behavior, so a green run here is regression evidence, not proof of the requested semantics. Also, the final answer did not report the actual test output or remaining limitations as asked.",
+            "suggestedFix": "Implement conditional handling in payment.py, e.g.: `def amount(value, allow_refund=False):\\n    if value < 0 and not allow_refund:\\n        raise ValueError(\"negative\")\\n    return value` so negatives raise when allow_refund=False and are returned when allow_refund=True, while non-negative values behave unchanged. Add/adjust a test covering amount(-1) raising by default and amount(-1, allow_refund=True) returning -1, then re-run `python -m pytest -q tests` and report the literal pytest output plus any remaining limitations (e.g., which pre-existing tests, if any, still assert the old always-reject behavior and now fail/need updating)."
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "22a31e829f59a6e4a446eeb2c8d40249f5df3b2cffdda6f15dd9d79cb4a29c27",
+    "raw_response_sha256": "de3d2e1d5451055e1be8ca7c5189ed2acfea7b046796e37c235eabf7a492ffa3",
+    "raw_request_relative": "formal/u04/provider/da927cc71d684ef3aa3439a62c30880d.request.json",
+    "raw_response_relative": "formal/u04/provider/da927cc71d684ef3aa3439a62c30880d.response.txt",
+    "published_request": "u04/provider/da927cc71d684ef3aa3439a62c30880d.request.json",
+    "published_response": "u04/provider/da927cc71d684ef3aa3439a62c30880d.response.jsonl"
+  },
+  {
+    "physical_request": 4,
+    "event": "admitted",
+    "monotonic": 28690.37584161,
+    "time_epoch": 1791565137.441726,
+    "attempt_id": "5068415f2cf74e31a6af3516fbdaa1dd",
+    "experiment": "review-effects-formal",
+    "bucket": "a01/a01/main",
+    "unit": "a01",
+    "run": "a01",
+    "role": "main",
+    "input_reserved": 8943,
+    "output_reserved": 64000,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "a6ce1d5f4b459d835466d25303c47c6d298a53e71bbf161762bf664cedbbadc0",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 8943,
+      "completion_tokens": 66,
+      "total_tokens": 9009,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 13
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 8943
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.529886,
+    "reported_usage": {
+      "prompt_tokens": 8943,
+      "completion_tokens": 66,
+      "total_tokens": 9009,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 13
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 8943
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.018414,
+    "started_at_epoch": 1791565136.854593,
+    "finished_at_epoch": 1791565137.441726,
+    "elapsed_seconds": 0.5871329307556152,
+    "role_detail": "coding",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "thinking": "unset",
+      "reasoning_effort": "unset",
+      "max_tokens": 64000
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_Ue7rBjRzbo8kGqpfak5W6903",
+          "name": "list_directory",
+          "arguments": {
+            "path": ".",
+            "depth": 2
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "a6ce1d5f4b459d835466d25303c47c6d298a53e71bbf161762bf664cedbbadc0",
+    "raw_response_sha256": "d39339215efc5d9c246354e777dd64065a8149f9ae125d85c7386cd52f70d7d0",
+    "raw_request_relative": "formal/a01/provider/5068415f2cf74e31a6af3516fbdaa1dd.request.json",
+    "raw_response_relative": "formal/a01/provider/5068415f2cf74e31a6af3516fbdaa1dd.response.txt",
+    "published_request": "a01/provider/5068415f2cf74e31a6af3516fbdaa1dd.request.json",
+    "published_response": "a01/provider/5068415f2cf74e31a6af3516fbdaa1dd.response.jsonl"
+  },
+  {
+    "physical_request": 5,
+    "event": "admitted",
+    "monotonic": 28691.07618478,
+    "time_epoch": 1791565138.3586664,
+    "attempt_id": "96970ebf2eee4e029c48b10fb05d39b3",
+    "experiment": "review-effects-formal",
+    "bucket": "a01/a01/main",
+    "unit": "a01",
+    "run": "a01",
+    "role": "main",
+    "input_reserved": 9107,
+    "output_reserved": 64000,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "f395a651e8e26c47fda57287ebb7b196f93a5870749093f4b71107b96b557af7",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 9107,
+      "completion_tokens": 195,
+      "total_tokens": 9302,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 1299
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.530214,
+    "reported_usage": {
+      "prompt_tokens": 9107,
+      "completion_tokens": 195,
+      "total_tokens": 9302,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 1299
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.00447032,
+    "started_at_epoch": 1791565137.5549362,
+    "finished_at_epoch": 1791565138.3586664,
+    "elapsed_seconds": 0.8037302494049072,
+    "role_detail": "coding",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "thinking": "unset",
+      "reasoning_effort": "unset",
+      "max_tokens": 64000
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_ET_LqcxrwCDV8Fj3tk2LaEp3857",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/api.py"
+          }
+        },
+        {
+          "id": "call_01_ET_exIaeqeHIxvaN4SUTilS7351",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/events.py"
+          }
+        },
+        {
+          "id": "call_02_ET_8495KBUKGCfUDTnKzB7g6904",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/formatting.py"
+          }
+        },
+        {
+          "id": "call_03_ET_Ro9AlXD2rRvArfsOWBBb3828",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/service.py"
+          }
+        },
+        {
+          "id": "call_04_ET_C16WWbsii0cvyACKjUJ23908",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/storage.py"
+          }
+        },
+        {
+          "id": "call_05_ET_h2GARaeFmJQKQtNhch0j0880",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/cli.py"
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "f395a651e8e26c47fda57287ebb7b196f93a5870749093f4b71107b96b557af7",
+    "raw_response_sha256": "12ef87821e375cdb1d6a145320cc7e261d86afaa744c60946de4e354e69042cb",
+    "raw_request_relative": "formal/a01/provider/96970ebf2eee4e029c48b10fb05d39b3.request.json",
+    "raw_response_relative": "formal/a01/provider/96970ebf2eee4e029c48b10fb05d39b3.response.txt",
+    "published_request": "a01/provider/96970ebf2eee4e029c48b10fb05d39b3.request.json",
+    "published_response": "a01/provider/96970ebf2eee4e029c48b10fb05d39b3.response.jsonl"
+  },
+  {
+    "physical_request": 6,
+    "event": "admitted",
+    "monotonic": 28692.030295299,
+    "time_epoch": 1791565139.3948116,
+    "attempt_id": "4bd153a266374882ac31b034fefa3cb9",
+    "experiment": "review-effects-formal",
+    "bucket": "a01/a01/main",
+    "unit": "a01",
+    "run": "a01",
+    "role": "main",
+    "input_reserved": 9952,
+    "output_reserved": 64000,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "ebb04b2252383302f46b59de03c1b2e2e255212dd287d0e3a38902f6237f28f9",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 9952,
+      "completion_tokens": 167,
+      "total_tokens": 10119,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 2144
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.531904,
+    "reported_usage": {
+      "prompt_tokens": 9952,
+      "completion_tokens": 167,
+      "total_tokens": 10119,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 2144
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.00593632,
+    "started_at_epoch": 1791565138.5090466,
+    "finished_at_epoch": 1791565139.3948116,
+    "elapsed_seconds": 0.8857650756835938,
+    "role_detail": "coding",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "thinking": "unset",
+      "reasoning_effort": "unset",
+      "max_tokens": 64000
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_ET_C1IIbV6ik4AsxCGCWAMm3968",
+          "name": "read_file",
+          "arguments": {
+            "path": "tests/test_api.py"
+          }
+        },
+        {
+          "id": "call_01_ET_uE4V7knO3Y6WyUMiPH1h9415",
+          "name": "read_file",
+          "arguments": {
+            "path": "tests/test_cli.py"
+          }
+        },
+        {
+          "id": "call_02_ET_eEmzavDMwrtZSeI8lPzZ4865",
+          "name": "read_file",
+          "arguments": {
+            "path": "tests/test_sinks.py"
+          }
+        },
+        {
+          "id": "call_03_ET_w4o7ksHhK1ue3qrgcWLV1759",
+          "name": "read_file",
+          "arguments": {
+            "path": "README.md"
+          }
+        },
+        {
+          "id": "call_04_ET_6WnlfXrQuRQ3monGATo56971",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/__init__.py"
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "ebb04b2252383302f46b59de03c1b2e2e255212dd287d0e3a38902f6237f28f9",
+    "raw_response_sha256": "22198a76ae67c948f9571010ce75763b108dc1c5332aa62dba280c97d8832ac8",
+    "raw_request_relative": "formal/a01/provider/4bd153a266374882ac31b034fefa3cb9.request.json",
+    "raw_response_relative": "formal/a01/provider/4bd153a266374882ac31b034fefa3cb9.response.txt",
+    "published_request": "a01/provider/4bd153a266374882ac31b034fefa3cb9.request.json",
+    "published_response": "a01/provider/4bd153a266374882ac31b034fefa3cb9.response.jsonl"
+  },
+  {
+    "physical_request": 7,
+    "event": "admitted",
+    "monotonic": 28693.057544212,
+    "time_epoch": 1791565140.1076193,
+    "attempt_id": "6c7bc22e611e434fb33bcd9a48f0d089",
+    "experiment": "review-effects-formal",
+    "bucket": "a01/a01/main",
+    "unit": "a01",
+    "run": "a01",
+    "role": "main",
+    "input_reserved": 10644,
+    "output_reserved": 64000,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "e962e96428a6ec2b73f958b0599af54c49a01cce1b01527f36a8555c6b1de972",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 10644,
+      "completion_tokens": 41,
+      "total_tokens": 10685,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 2836
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.533288,
+    "reported_usage": {
+      "prompt_tokens": 10644,
+      "completion_tokens": 41,
+      "total_tokens": 10685,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 2836
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.00631232,
+    "started_at_epoch": 1791565139.5362954,
+    "finished_at_epoch": 1791565140.1076193,
+    "elapsed_seconds": 0.5713238716125488,
+    "role_detail": "coding",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "thinking": "unset",
+      "reasoning_effort": "unset",
+      "max_tokens": 64000
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_ET_r7Iacb1yq5sabQMiEf8B9496",
+          "name": "list_directory",
+          "arguments": {
+            "path": "app/adapters"
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "e962e96428a6ec2b73f958b0599af54c49a01cce1b01527f36a8555c6b1de972",
+    "raw_response_sha256": "f0dacafcc278310b0f8b448d96b4ad0eba125e908f9d6c75e3a08a1554a7786f",
+    "raw_request_relative": "formal/a01/provider/6c7bc22e611e434fb33bcd9a48f0d089.request.json",
+    "raw_response_relative": "formal/a01/provider/6c7bc22e611e434fb33bcd9a48f0d089.response.txt",
+    "published_request": "a01/provider/6c7bc22e611e434fb33bcd9a48f0d089.request.json",
+    "published_response": "a01/provider/6c7bc22e611e434fb33bcd9a48f0d089.response.jsonl"
+  },
+  {
+    "physical_request": 8,
+    "event": "admitted",
+    "monotonic": 28693.746148762,
+    "time_epoch": 1791565141.0820355,
+    "attempt_id": "da9353f911fc42898e2eb0741e809d4c",
+    "experiment": "review-effects-formal",
+    "bucket": "a01/a01/main",
+    "unit": "a01",
+    "run": "a01",
+    "role": "main",
+    "input_reserved": 10672,
+    "output_reserved": 64000,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "2d1e4d71f22a815407300ff5e4ddb328f88d75ef0752ff3050b1fbadc76643c2",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 10672,
+      "completion_tokens": 116,
+      "total_tokens": 10788,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 2864
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.533344,
+    "reported_usage": {
+      "prompt_tokens": 10672,
+      "completion_tokens": 116,
+      "total_tokens": 10788,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 2864
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.00696832,
+    "started_at_epoch": 1791565140.2249,
+    "finished_at_epoch": 1791565141.0820355,
+    "elapsed_seconds": 0.857135534286499,
+    "role_detail": "coding",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "thinking": "unset",
+      "reasoning_effort": "unset",
+      "max_tokens": 64000
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_ET_XVnRYG8Q1tp7OGjWVyNI9005",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/adapters/json_sink.py"
+          }
+        },
+        {
+          "id": "call_01_ET_zwt2q9XAJkkUaJC7ImJJ0662",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/adapters/text_sink.py"
+          }
+        },
+        {
+          "id": "call_02_ET_x8HoQXT2AOw9uxpKdjUh6144",
+          "name": "read_file",
+          "arguments": {
+            "path": "app/adapters/__init__.py"
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "2d1e4d71f22a815407300ff5e4ddb328f88d75ef0752ff3050b1fbadc76643c2",
+    "raw_response_sha256": "aa336d1d9c0aa644a7fc50b2f2fcbcc1461170a63e9aa7817309ad6cc26a75a6",
+    "raw_request_relative": "formal/a01/provider/da9353f911fc42898e2eb0741e809d4c.request.json",
+    "raw_response_relative": "formal/a01/provider/da9353f911fc42898e2eb0741e809d4c.response.txt",
+    "published_request": "a01/provider/da9353f911fc42898e2eb0741e809d4c.request.json",
+    "published_response": "a01/provider/da9353f911fc42898e2eb0741e809d4c.response.jsonl"
+  },
+  {
+    "physical_request": 9,
+    "event": "admitted",
+    "monotonic": 28694.733937618,
+    "time_epoch": 1791565145.2698424,
+    "attempt_id": "7945363e98f64ad6aa3144153cc069af",
+    "experiment": "review-effects-formal",
+    "bucket": "a01/a01/main",
+    "unit": "a01",
+    "run": "a01",
+    "role": "main",
+    "input_reserved": 11002,
+    "output_reserved": 64000,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "0eba8988c353a5130ee0531f5e4f48c7501a82e03801f75b4c708d463a2a9439",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 11002,
+      "completion_tokens": 1074,
+      "total_tokens": 12076,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 488
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 3194
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.534004,
+    "reported_usage": {
+      "prompt_tokens": 11002,
+      "completion_tokens": 1074,
+      "total_tokens": 12076,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 488
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 3194
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.01529232,
+    "started_at_epoch": 1791565141.212689,
+    "finished_at_epoch": 1791565145.2698424,
+    "elapsed_seconds": 4.0571534633636475,
+    "role_detail": "coding",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "thinking": "unset",
+      "reasoning_effort": "unset",
+      "max_tokens": 64000
+    },
+    "decoded_completion": {
+      "content": "Now implementing across the package.",
+      "tool_calls": [
+        {
+          "id": "call_00_T8aVuXpA5ejz3CkOEF460186",
+          "name": "apply_patch",
+          "arguments": {
+            "path": "app/events.py",
+            "changes": [
+              {
+                "op": "replace",
+                "old_text": "from dataclasses import dataclass\n\n\n@dataclass\nclass Event:\n    name: str\n    value: str",
+                "new_text": "from dataclasses import dataclass\n\n\n@dataclass\nclass Event:\n    name: str\n    value: str\n    correlation_id: str | None = None"
+              }
+            ]
+          }
+        },
+        {
+          "id": "call_01_xAdzi0cFTCBS9PMstq6r6198",
+          "name": "apply_patch",
+          "arguments": {
+            "path": "app/api.py",
+            "changes": [
+              {
+                "op": "replace",
+                "old_text": "def handle(name: str, value: str) -> dict:\n    return process(Event(name, value))",
+                "new_text": "def handle(name: str, value: str, correlation_id: str | None = None) -> dict:\n    return process(Event(name, value, correlation_id))"
+              }
+            ]
+          }
+        },
+        {
+          "id": "call_02_K6BiDrwmzUjF4xqsiaCB6791",
+          "name": "apply_patch",
+          "arguments": {
+            "path": "app/service.py",
+            "changes": [
+              {
+                "op": "replace",
+                "old_text": "def process(event: Event) -> dict:\n    return {\"name\": event.name, \"value\": event.value}",
+                "new_text": "def process(event: Event) -> dict:\n    record = {\"name\": event.name, \"value\": event.value}\n    if event.correlation_id is not None:\n        record[\"correlation_id\"] = event.correlation_id\n    return record"
+              }
+            ]
+          }
+        },
+        {
+          "id": "call_03_x5gLRyOowuy1E0x1ohUI6192",
+          "name": "apply_patch",
+          "arguments": {
+            "path": "app/formatting.py",
+            "changes": [
+              {
+                "op": "replace",
+                "old_text": "def as_text(record: dict) -> str:\n    return f\"{record['name']}={record['value']}\"",
+                "new_text": "def as_text(record: dict) -> str:\n    text = f\"{record['name']}={record['value']}\"\n    correlation_id = record.get(\"correlation_id\")\n    if correlation_id is not None:\n        text += f\" correlation_id={correlation_id}\"\n    return text"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "0eba8988c353a5130ee0531f5e4f48c7501a82e03801f75b4c708d463a2a9439",
+    "raw_response_sha256": "f7560d9aa360e6115519c75afe0ce16a6d079062de75a9da8e6d79884db2697c",
+    "raw_request_relative": "formal/a01/provider/7945363e98f64ad6aa3144153cc069af.request.json",
+    "raw_response_relative": "formal/a01/provider/7945363e98f64ad6aa3144153cc069af.response.txt",
+    "published_request": "a01/provider/7945363e98f64ad6aa3144153cc069af.request.json",
+    "published_response": "a01/provider/7945363e98f64ad6aa3144153cc069af.response.jsonl"
+  },
+  {
+    "physical_request": 10,
+    "event": "admitted",
+    "monotonic": 28699.078096474,
+    "time_epoch": 1791565150.2484014,
+    "attempt_id": "2d601a54282b437d845caf9249daca17",
+    "experiment": "review-effects-formal",
+    "bucket": "a01/a01/main",
+    "unit": "a01",
+    "run": "a01",
+    "role": "main",
+    "input_reserved": 12130,
+    "output_reserved": 64000,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "822c379ffdb818e1b9f3e860339681ef8ea8b9cc8941b3689441229959026a03",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 12130,
+      "completion_tokens": 1511,
+      "total_tokens": 13641,
+      "prompt_tokens_details": {
+        "cached_tokens": 5888
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 61
+      },
+      "prompt_cache_hit_tokens": 5888,
+      "prompt_cache_miss_tokens": 6242
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.53626,
+    "reported_usage": {
+      "prompt_tokens": 12130,
+      "completion_tokens": 1511,
+      "total_tokens": 13641,
+      "prompt_tokens_details": {
+        "cached_tokens": 5888
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 61
+      },
+      "prompt_cache_hit_tokens": 5888,
+      "prompt_cache_miss_tokens": 6242
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.02480752,
+    "started_at_epoch": 1791565145.5568478,
+    "finished_at_epoch": 1791565150.2484014,
+    "elapsed_seconds": 4.691553592681885,
+    "role_detail": "coding",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "thinking": "unset",
+      "reasoning_effort": "unset",
+      "max_tokens": 64000
+    },
+    "decoded_completion": {
+      "content": "Signature change is explicitly required by the task. Now the CLI, tests, and README.",
+      "tool_calls": [
+        {
+          "id": "call_00_JK3Z8HFmOYH4D2qODqQT9151",
+          "name": "write_file",
+          "arguments": {
+            "path": "app/cli.py",
+            "content": "import argparse\n\nfrom .api import handle\nfrom .storage import render_json, render_text\n\n\ndef main(argv=None) -> int:\n    parser = argparse.ArgumentParser()\n    parser.add_argument(\"name\")\n    parser.add_argument(\"value\")\n    parser.add_argument(\"--correlation-id\", default=None)\n    parser.add_argument(\n        \"--format\",\n        choices=(\"text\", \"json\"),\n        default=\"text\",\n        help=\"output format (default: text)\",\n    )\n    args = parser.parse_args(argv)\n    record = handle(args.name, args.value, correlation_id=args.correlation_id)\n    render = render_json if args.format == \"json\" else render_text\n    print(render(record))\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+          }
+        },
+        {
+          "id": "call_01_8vhzmAln6x7Jn2XiZfs25108",
+          "name": "write_file",
+          "arguments": {
+            "path": "tests/test_cli.py",
+            "content": "import json\n\nfrom app.cli import main\n\n\ndef test_cli(capsys):\n    assert main([\"created\", \"42\"]) == 0\n    assert capsys.readouterr().out.strip() == \"created=42\"\n\n\ndef test_cli_with_correlation_id_text(capsys):\n    assert main([\"created\", \"42\", \"--correlation-id\", \"abc\"]) == 0\n    assert capsys.readouterr().out.strip() == \"created=42 correlation_id=abc\"\n\n\ndef test_cli_defaults_to_text(capsys):\n    assert main([\"created\", \"42\", \"--correlation-id\", \"abc\"]) == 0\n    out = capsys.readouterr().out.strip()\n    assert out == \"created=42 correlation_id=abc\"\n    assert not out.startswith(\"{\")\n\n\ndef test_cli_json_output(capsys):\n    assert main([\"created\", \"42\", \"--format\", \"json\"]) == 0\n    assert json.loads(capsys.readouterr().out) == {\"name\": \"created\", \"value\": \"42\"}\n\n\ndef test_cli_json_output_with_correlation_id(capsys):\n    assert main([\"created\", \"42\", \"--format\", \"json\", \"--correlation-id\", \"abc\"]) == 0\n    assert json.loads(capsys.readouterr().out) == {\n        \"name\": \"created\",\n        \"value\": \"42\",\n        \"correlation_id\": \"abc\",\n    }\n\n\ndef test_cli_json_output_with_empty_correlation_id(capsys):\n    assert main([\"created\", \"42\", \"--format\", \"json\", \"--correlation-id\", \"\"]) == 0\n    assert json.loads(capsys.readouterr().out) == {\n        \"name\": \"created\",\n        \"value\": \"42\",\n        \"correlation_id\": \"\",\n    }\n\n\ndef test_cli_text_output_with_empty_correlation_id(capsys):\n    assert main([\"created\", \"42\", \"--correlation-id\", \"\"]) == 0\n    assert capsys.readouterr().out.strip() == \"created=42 correlation_id=\"\n"
+          }
+        },
+        {
+          "id": "call_02_fqkV8m1Hyv9u9ROPHNIu2345",
+          "name": "write_file",
+          "arguments": {
+            "path": "tests/test_api.py",
+            "content": "from app.api import handle\nfrom app.events import Event\n\n\ndef test_legacy_shape():\n    assert handle(\"created\", \"42\") == {\"name\": \"created\", \"value\": \"42\"}\n\n\ndef test_handle_accepts_optional_correlation_id():\n    assert handle(\"created\", \"42\", correlation_id=\"abc\") == {\n        \"name\": \"created\",\n        \"value\": \"42\",\n        \"correlation_id\": \"abc\",\n    }\n\n\ndef test_handle_accepts_correlation_id_keyword():\n    assert handle(\"created\", \"42\", correlation_id=\"abc\")[\"correlation_id\"] == \"abc\"\n\n\ndef test_handle_none_correlation_id_is_absent():\n    assert handle(\"created\", \"42\", correlation_id=None) == {\n        \"name\": \"created\",\n        \"value\": \"42\",\n    }\n\n\ndef test_handle_empty_correlation_id_is_present():\n    assert handle(\"created\", \"42\", correlation_id=\"\") == {\n        \"name\": \"created\",\n        \"value\": \"42\",\n        \"correlation_id\": \"\",\n    }\n\n\ndef test_event_accepts_optional_correlation_id():\n    assert Event(\"created\", \"42\").correlation_id is None\n    assert Event(\"created\", \"42\", correlation_id=\"abc\").correlation_id == \"abc\"\n    assert Event(\"created\", \"42\", \"abc\").correlation_id == \"abc\"\n"
+          }
+        },
+        {
+          "id": "call_03_ZSJ03SBeRjZCt4SBW5t58629",
+          "name": "write_file",
+          "arguments": {
+            "path": "README.md",
+            "content": "# Event processing\n\nUse `python -m app.cli NAME VALUE` to render an event.\n\n## Correlation IDs\n\nEvents accept an optional correlation ID. When it is omitted (`None`) the\noutput is unchanged; an empty string is a valid, present ID.\n\n### Python API\n\n```python\nfrom app.api import handle\n\nhandle(\"created\", \"42\")\n# {\"name\": \"created\", \"value\": \"42\"}\n\nhandle(\"created\", \"42\", correlation_id=\"abc\")\n# {\"name\": \"created\", \"value\": \"42\", \"correlation_id\": \"abc\"}\n```\n\n`correlation_id` is optional in `handle(name, value, correlation_id=None)` and\nin the `Event` model, so existing callers keep working unchanged.\n\n### Command line\n\nText output is the default and appends a trailing ` correlation_id=ID` when an\nID is supplied:\n\n```console\n$ python -m app.cli created 42\ncreated=42\n\n$ python -m app.cli created 42 --correlation-id abc\ncreated=42 correlation_id=abc\n```\n\nUse `--format json` for JSON output, where the ID appears as\n`correlation_id`:\n\n```console\n$ python -m app.cli created 42 --format json\n{\"name\": \"created\", \"value\": \"42\"}\n\n$ python -m app.cli created 42 --format json --correlation-id abc\n{\"name\": \"created\", \"value\": \"42\", \"correlation_id\": \"abc\"}\n```\n\n## Tests\n\n```console\n$ python -m pytest -q tests\n```\n"
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "822c379ffdb818e1b9f3e860339681ef8ea8b9cc8941b3689441229959026a03",
+    "raw_response_sha256": "0bce2184f1d96e38e2e86dcf413712ddfc8fea1efe67b04d5ac1d6b07cca8bfa",
+    "raw_request_relative": "formal/a01/provider/2d601a54282b437d845caf9249daca17.request.json",
+    "raw_response_relative": "formal/a01/provider/2d601a54282b437d845caf9249daca17.response.txt",
+    "published_request": "a01/provider/2d601a54282b437d845caf9249daca17.request.json",
+    "published_response": "a01/provider/2d601a54282b437d845caf9249daca17.response.jsonl"
+  },
+  {
+    "physical_request": 11,
+    "event": "admitted",
+    "monotonic": 28704.203652439,
+    "time_epoch": 1791565151.448064,
+    "attempt_id": "afb5f06283124ec3b6814fa1169a49aa",
+    "experiment": "review-effects-formal",
+    "bucket": "a01/a01/main",
+    "unit": "a01",
+    "run": "a01",
+    "role": "main",
+    "input_reserved": 15608,
+    "output_reserved": 64000,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "c30e291f3ace5ac813bb789eed06cab38bf60005a258ed3a97318001e606fcac",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 15608,
+      "completion_tokens": 78,
+      "total_tokens": 15686,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 16
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 7800
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.543216,
+    "reported_usage": {
+      "prompt_tokens": 15608,
+      "completion_tokens": 78,
+      "total_tokens": 15686,
+      "prompt_tokens_details": {
+        "cached_tokens": 7808
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 16
+      },
+      "prompt_cache_hit_tokens": 7808,
+      "prompt_cache_miss_tokens": 7800
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.01653632,
+    "started_at_epoch": 1791565150.6824038,
+    "finished_at_epoch": 1791565151.448064,
+    "elapsed_seconds": 0.765660285949707,
+    "role_detail": "coding",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "thinking": "unset",
+      "reasoning_effort": "unset",
+      "max_tokens": 64000
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_sKDdcUcvd0ZxNrmY2rFV7698",
+          "name": "bash",
+          "arguments": {
+            "command": "python -m pytest -q tests",
+            "workdir": "/workspace"
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "c30e291f3ace5ac813bb789eed06cab38bf60005a258ed3a97318001e606fcac",
+    "raw_response_sha256": "b883177a75adca22aeb6ed19427229493da2692b78acda739fb859050cbce415",
+    "raw_request_relative": "formal/a01/provider/afb5f06283124ec3b6814fa1169a49aa.request.json",
+    "raw_response_relative": "formal/a01/provider/afb5f06283124ec3b6814fa1169a49aa.response.txt",
+    "published_request": "a01/provider/afb5f06283124ec3b6814fa1169a49aa.request.json",
+    "published_response": "a01/provider/afb5f06283124ec3b6814fa1169a49aa.response.jsonl"
+  },
+  {
+    "physical_request": 12,
+    "event": "admitted",
+    "monotonic": 28705.586135997,
+    "time_epoch": 1791565154.027727,
+    "attempt_id": "2d8b96c4189045829671e4a07071a595",
+    "experiment": "review-effects-formal",
+    "bucket": "a01/a01/auxiliary",
+    "unit": "a01",
+    "run": "a01",
+    "role": "auxiliary",
+    "input_reserved": 7079,
+    "output_reserved": 1024,
+    "input_method": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "input_exact": false,
+    "evidence_level": "unknown",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "payload_sha256": "ceeeaf0c4191df89835916b95707a5e89d4e3af011277c016bd78d6e3df6802e",
+    "status": "complete",
+    "usage": {
+      "prompt_tokens": 7079,
+      "completion_tokens": 283,
+      "total_tokens": 7362,
+      "prompt_tokens_details": {
+        "cached_tokens": 1024
+      },
+      "prompt_cache_hit_tokens": 1024,
+      "prompt_cache_miss_tokens": 6055
+    },
+    "input_admission_mode": "empirical",
+    "estimated_cost_reserved_cny": 0.02235,
+    "reported_usage": {
+      "prompt_tokens": 7079,
+      "completion_tokens": 283,
+      "total_tokens": 7362,
+      "prompt_tokens_details": {
+        "cached_tokens": 1024
+      },
+      "prompt_cache_hit_tokens": 1024,
+      "prompt_cache_miss_tokens": 6055
+    },
+    "usage_valid": true,
+    "usage_conflict": false,
+    "conflicting_reports": null,
+    "usage_unknown_reason": null,
+    "input_over_reservation": 0,
+    "output_over_reservation": 0,
+    "reservation_retained": false,
+    "ambiguous": false,
+    "contract_failed": false,
+    "finish_reason": "tool_calls",
+    "provider_model": "deepseek-flash",
+    "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669",
+    "estimated_cost_reported_cny": 0.01441496,
+    "started_at_epoch": 1791565152.0648873,
+    "finished_at_epoch": 1791565154.027727,
+    "elapsed_seconds": 1.9628396034240723,
+    "role_detail": "verification_review",
+    "effective_config": {
+      "model": "deepseek-v4-flash",
+      "stream": false,
+      "thinking": {
+        "type": "disabled"
+      },
+      "reasoning_effort": "unset",
+      "max_tokens": 1024
+    },
+    "decoded_completion": {
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_00_sFigBmuDqVBm6FcjZMVm8363",
+          "name": "emit_sidecar_verdict",
+          "arguments": {
+            "verdict": "accept",
+            "reason": "All named sub-requirements are implemented in the diff and exercised by tests. handle and Event gained an optional correlation_id defaulting to None; process() omits the key when None so legacy output shape ({\"name\",\"value\"}) is byte-identical; as_text appends only when the value is not None, so empty string correctly yields the trailing \" correlation_id=\" while None yields no change. CLI adds --correlation-id with default None plus --format text|json (default text) and routes through the correct renderer. Tests cover legacy shape, keyword acceptance, None absent, empty-string present, and both CLI output formats including empty string; README documents both API and CLI. Runtime-recorded exact acceptance `python -m pytest -q tests` passed (14 passed). Remaining limitations: the final answer is terse and only states hidden pass counts without the reported per-test results/summary output or an explicit limitations statement; text-format CLI treats --correlation-id \"\" as an empty ID producing a trailing ' correlation_id=' which matches the spec, and --format is positional-agnostic. No semantic gap found."
+          }
+        }
+      ]
+    },
+    "raw_request_sha256": "ceeeaf0c4191df89835916b95707a5e89d4e3af011277c016bd78d6e3df6802e",
+    "raw_response_sha256": "6b33ddf6073014d21284e39f464c19bca9064a6548817d25bcaa2bf41dc8f4a4",
+    "raw_request_relative": "formal/a01/provider/2d8b96c4189045829671e4a07071a595.request.json",
+    "raw_response_relative": "formal/a01/provider/2d8b96c4189045829671e4a07071a595.response.txt",
+    "published_request": "a01/provider/2d8b96c4189045829671e4a07071a595.request.json",
+    "published_response": "a01/provider/2d8b96c4189045829671e4a07071a595.response.jsonl"
+  }
+]

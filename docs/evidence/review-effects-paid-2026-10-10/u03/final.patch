@@ -1,0 +1,5 @@
+--- a/payment.py
++++ b/payment.py
+@@ -2 +2 @@
+-    if value < 0:
++    if value < 0 and not allow_refund:

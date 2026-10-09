@@ -1,0 +1,183 @@
+--- a/README.md
++++ b/README.md
+@@ -3,0 +4,50 @@
++
++## Correlation IDs
++
++Events accept an optional correlation ID. When it is omitted (`None`) the
++output is unchanged; an empty string is a valid, present ID.
++
++### Python API
++
++```python
++from app.api import handle
++
++handle("created", "42")
++# {"name": "created", "value": "42"}
++
++handle("created", "42", correlation_id="abc")
++# {"name": "created", "value": "42", "correlation_id": "abc"}
++```
++
++`correlation_id` is optional in `handle(name, value, correlation_id=None)` and
++in the `Event` model, so existing callers keep working unchanged.
++
++### Command line
++
++Text output is the default and appends a trailing ` correlation_id=ID` when an
++ID is supplied:
++
++```console
++$ python -m app.cli created 42
++created=42
++
++$ python -m app.cli created 42 --correlation-id abc
++created=42 correlation_id=abc
++```
++
++Use `--format json` for JSON output, where the ID appears as
++`correlation_id`:
++
++```console
++$ python -m app.cli created 42 --format json
++{"name": "created", "value": "42"}
++
++$ python -m app.cli created 42 --format json --correlation-id abc
++{"name": "created", "value": "42", "correlation_id": "abc"}
++```
++
++## Tests
++
++```console
++$ python -m pytest -q tests
++```
+--- a/app/api.py
++++ b/app/api.py
+@@ -5,2 +5,2 @@
+-def handle(name: str, value: str) -> dict:
+-    return process(Event(name, value))
++def handle(name: str, value: str, correlation_id: str | None = None) -> dict:
++    return process(Event(name, value, correlation_id))
+--- a/app/cli.py
++++ b/app/cli.py
+@@ -4 +4 @@
+-from .storage import render_text
++from .storage import render_json, render_text
+@@ -10,0 +11,7 @@
++    parser.add_argument("--correlation-id", default=None)
++    parser.add_argument(
++        "--format",
++        choices=("text", "json"),
++        default="text",
++        help="output format (default: text)",
++    )
+@@ -12 +19,3 @@
+-    print(render_text(handle(args.name, args.value)))
++    record = handle(args.name, args.value, correlation_id=args.correlation_id)
++    render = render_json if args.format == "json" else render_text
++    print(render(record))
+--- a/app/events.py
++++ b/app/events.py
+@@ -7,0 +8 @@
++    correlation_id: str | None = None
+--- a/app/formatting.py
++++ b/app/formatting.py
+@@ -9 +9,5 @@
+-    return f"{record['name']}={record['value']}"
++    text = f"{record['name']}={record['value']}"
++    correlation_id = record.get("correlation_id")
++    if correlation_id is not None:
++        text += f" correlation_id={correlation_id}"
++    return text
+--- a/app/service.py
++++ b/app/service.py
+@@ -5 +5,4 @@
+-    return {"name": event.name, "value": event.value}
++    record = {"name": event.name, "value": event.value}
++    if event.correlation_id is not None:
++        record["correlation_id"] = event.correlation_id
++    return record
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -1,0 +2 @@
++from app.events import Event
+@@ -5,0 +7,33 @@
++
++
++def test_handle_accepts_optional_correlation_id():
++    assert handle("created", "42", correlation_id="abc") == {
++        "name": "created",
++        "value": "42",
++        "correlation_id": "abc",
++    }
++
++
++def test_handle_accepts_correlation_id_keyword():
++    assert handle("created", "42", correlation_id="abc")["correlation_id"] == "abc"
++
++
++def test_handle_none_correlation_id_is_absent():
++    assert handle("created", "42", correlation_id=None) == {
++        "name": "created",
++        "value": "42",
++    }
++
++
++def test_handle_empty_correlation_id_is_present():
++    assert handle("created", "42", correlation_id="") == {
++        "name": "created",
++        "value": "42",
++        "correlation_id": "",
++    }
++
++
++def test_event_accepts_optional_correlation_id():
++    assert Event("created", "42").correlation_id is None
++    assert Event("created", "42", correlation_id="abc").correlation_id == "abc"
++    assert Event("created", "42", "abc").correlation_id == "abc"
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -0,0 +1,2 @@
++import json
++
+@@ -6,0 +9,40 @@
++
++
++def test_cli_with_correlation_id_text(capsys):
++    assert main(["created", "42", "--correlation-id", "abc"]) == 0
++    assert capsys.readouterr().out.strip() == "created=42 correlation_id=abc"
++
++
++def test_cli_defaults_to_text(capsys):
++    assert main(["created", "42", "--correlation-id", "abc"]) == 0
++    out = capsys.readouterr().out.strip()
++    assert out == "created=42 correlation_id=abc"
++    assert not out.startswith("{")
++
++
++def test_cli_json_output(capsys):
++    assert main(["created", "42", "--format", "json"]) == 0
++    assert json.loads(capsys.readouterr().out) == {"name": "created", "value": "42"}
++
++
++def test_cli_json_output_with_correlation_id(capsys):
++    assert main(["created", "42", "--format", "json", "--correlation-id", "abc"]) == 0
++    assert json.loads(capsys.readouterr().out) == {
++        "name": "created",
++        "value": "42",
++        "correlation_id": "abc",
++    }
++
++
++def test_cli_json_output_with_empty_correlation_id(capsys):
++    assert main(["created", "42", "--format", "json", "--correlation-id", ""]) == 0
++    assert json.loads(capsys.readouterr().out) == {
++        "name": "created",
++        "value": "42",
++        "correlation_id": "",
++    }
++
++
++def test_cli_text_output_with_empty_correlation_id(capsys):
++    assert main(["created", "42", "--correlation-id", ""]) == 0
++    assert capsys.readouterr().out.strip() == "created=42 correlation_id="

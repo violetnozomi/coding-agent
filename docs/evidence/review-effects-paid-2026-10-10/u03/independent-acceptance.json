@@ -1,0 +1,55 @@
+{
+  "unit": "u03",
+  "frozen_hashes": {
+    ".pytest_cache/.gitignore": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
+    ".pytest_cache/CACHEDIR.TAG": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
+    ".pytest_cache/README.md": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
+    ".pytest_cache/v/cache/nodeids": "3c5115d2181fd286970fd1cfc8c27f5ba4bdf9d99d490d2d7da4951765dfe367",
+    "payment.py": "fac25d7a951a53f68d05052a9c196a427f08bc89ca2076f847af509b9c370b33",
+    "tests/test_amount.py": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+  },
+  "project_test": {
+    "argv": [
+      "<USER_HOME>/miniconda3/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "tests"
+    ],
+    "exit": 0,
+    "timed_out": false,
+    "timeout_seconds": 30,
+    "stdout": "..                                                                       [100%]\n2 passed in 0.00s\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n"
+  },
+  "independent": {
+    "argv": [
+      "<USER_HOME>/miniconda3/bin/python",
+      "-c",
+      "<independent evaluator code; frozen source hash recorded>"
+    ],
+    "exit": 0,
+    "timed_out": false,
+    "timeout_seconds": 8,
+    "stdout": "{\"checks\": [{\"requirement\": \"default_negative_rejection\", \"passed\": true, \"error\": null}, {\"requirement\": \"explicit_opt_in\", \"passed\": true, \"error\": null}, {\"requirement\": \"nonnegative_preservation\", \"passed\": true, \"error\": null}], \"passed\": true}\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n",
+    "source_sha256": "9db282b0bb62a37c7fac229f2b0f39c380bd2b814d20b9746d3ef04f72c54436",
+    "checks": [
+      {
+        "requirement": "default_negative_rejection",
+        "passed": true,
+        "error": null
+      },
+      {
+        "requirement": "explicit_opt_in",
+        "passed": true,
+        "error": null
+      },
+      {
+        "requirement": "nonnegative_preservation",
+        "passed": true,
+        "error": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "original_manifest_sha256": "ce3533973916c837fdc7e6c9827af9eb3d793e6d5c76684dbb942a8d6612e994",
+  "original_manifest_overwritten": false,
+  "strict_technical_ready": false,
+  "empirical_experiment_allowed": true,
+  "guarantee_relaxed": "input estimate, not strict upper bound or fee hard limit",
+  "authorization_used_sha256": "772752f71f0263def488f6b7cca6fabc97381c77eb245f272ec884093bb0a04e",
+  "adapter_commit": "cc7a43c53499cc4212cc100d06606119615aab81",
+  "image": "sha256:ad95168761bfd58549057442c026c24cb863a5bf2f3511c8f0bae5c462c49641",
+  "environments_rebuilt": false,
+  "isolation_receipts_reused_from": "../review-effects-execution-2026-10-09/",
+  "core_frozen": true,
+  "runtime": {
+    "python": "3.12.13",
+    "host_python": "3.13.12",
+    "network": "none in containers"
+  },
+  "price_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "peak_prices_cny_per_million": {
+    "input": 2,
+    "cached_input": 0.04,
+    "output": 8
+  },
+  "fee_risk_accepted": true,
+  "grant_closed": true,
+  "main_cap": 12,
+  "auxiliary_cap_A": 6,
+  "review_cap_per_unit": 2,
+  "global_cap": 26,
+  "estimated_input_threshold_per_request": 100000,
+  "estimated_input_threshold_total": 500000,
+  "output_total": 100000,
+  "request_seconds": 180,
+  "autonomous_seconds": 900
+}

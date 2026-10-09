@@ -1,0 +1,68 @@
+{
+  "image": "sha256:ad95168761bfd58549057442c026c24cb863a5bf2f3511c8f0bae5c462c49641",
+  "user": "1001:1001",
+  "network": "none",
+  "readonly_root": true,
+  "cap_drop": [
+    "ALL"
+  ],
+  "security_opt": [
+    "no-new-privileges"
+  ],
+  "privileged": false,
+  "mounts": [
+    {
+      "target": "/runtime",
+      "source": "<ARTIFACTS>/nz-review-execution-2026-10-09/code-old",
+      "writable": false
+    },
+    {
+      "target": "/workspace",
+      "source": "<PRIVATE_RUN>/formal/u03/workspace",
+      "writable": true
+    },
+    {
+      "target": "/home/agent",
+      "source": "<PRIVATE_RUN>/formal/u03/home",
+      "writable": true
+    },
+    {
+      "target": "/driver",
+      "source": "<PRIVATE_RUN>/formal/u03/driver",
+      "writable": false
+    },
+    {
+      "target": "/tmp",
+      "source": "<PRIVATE_RUN>/formal/u03/tmp",
+      "writable": true
+    },
+    {
+      "target": "/input",
+      "source": "<PRIVATE_RUN>/formal/u03/input",
+      "writable": false
+    },
+    {
+      "target": "/model",
+      "source": "<PRIVATE_RUN>/formal/u03/sockets",
+      "writable": false
+    },
+    {
+      "target": "/result",
+      "source": "<PRIVATE_RUN>/formal/u03/result",
+      "writable": true
+    },
+    {
+      "target": "/control",
+      "source": "<PRIVATE_RUN>/formal/u03/control",
+      "writable": false
+    }
+  ],
+  "final_state": {
+    "Running": false,
+    "ExitCode": 0,
+    "StartedAt": "2026-10-09T16:58:46.830638546Z",
+    "FinishedAt": "2026-10-09T16:58:49.064831162Z"
+  },
+  "raw_inspect_sha256": "39b2c889587cafcd55eda3cb27ba78bb03255f59530c472fc0fd45d265eab94f",
+  "raw_final_sha256": "53242773327cfae18ca819a604057e0c7b0cf1f3daf74b038c23845a2b41af63"
+}

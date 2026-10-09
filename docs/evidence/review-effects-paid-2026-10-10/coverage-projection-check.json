@@ -1,0 +1,14 @@
+{
+  "unit": "u04",
+  "packet_contains_actual_test_read": true,
+  "final_provider_request_contains_test_read": false,
+  "source_file": "nz_coder/runtime/verification/sidecar_verifier.py",
+  "source_commit": "4abbcafae69f2e3b9d162ad73e769913659aca59",
+  "function": "_render_transcript",
+  "line": 275,
+  "rule": "renders user and assistant messages, omits tool-result bodies",
+  "observed_reason_error": "states existing tests expect always-reject; actual visible test explicitly permits negative with allow_refund=True",
+  "verdict_correct_for_D": true,
+  "causal_strength": "source projection omission proven; causation of wrong rationale unproven",
+  "next_core_candidate_only": "bounded relevant verification/read evidence in existing reviewer projection; offline counterexample before any implementation"
+}

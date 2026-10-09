@@ -1,0 +1,830 @@
+[
+  {
+    "ts": 1791565136.5741289,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_started",
+    "turn": 1,
+    "reason": "initial_investigation",
+    "mutation_generation": 0,
+    "verification_generation": -1,
+    "transition": "",
+    "work_phase": "normal",
+    "budget_zone": "green"
+  },
+  {
+    "ts": 1791565137.487803,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_settled",
+    "turn": 1,
+    "reason": "initial_investigation",
+    "outcome": "investigation_batch",
+    "tool_names": [
+      "list_directory"
+    ],
+    "finish_reason": "tool_calls",
+    "mutation_generation_before": 0,
+    "mutation_generation_after": 0,
+    "mutation_delta": 0,
+    "verification_generation_after": -1
+  },
+  {
+    "ts": 1791565137.5274324,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_started",
+    "turn": 2,
+    "reason": "investigation",
+    "mutation_generation": 0,
+    "verification_generation": -1,
+    "transition": "",
+    "work_phase": "normal",
+    "budget_zone": "green"
+  },
+  {
+    "ts": 1791565138.4299054,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_settled",
+    "turn": 2,
+    "reason": "investigation",
+    "outcome": "investigation_batch",
+    "tool_names": [
+      "read_file",
+      "read_file",
+      "read_file",
+      "read_file",
+      "read_file",
+      "read_file"
+    ],
+    "finish_reason": "tool_calls",
+    "mutation_generation_before": 0,
+    "mutation_generation_after": 0,
+    "mutation_delta": 0,
+    "verification_generation_after": -1
+  },
+  {
+    "ts": 1791565138.4720697,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_started",
+    "turn": 3,
+    "reason": "investigation",
+    "mutation_generation": 0,
+    "verification_generation": -1,
+    "transition": "read",
+    "work_phase": "normal",
+    "budget_zone": "green"
+  },
+  {
+    "ts": 1791565139.452467,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_settled",
+    "turn": 3,
+    "reason": "investigation",
+    "outcome": "investigation_batch",
+    "tool_names": [
+      "read_file",
+      "read_file",
+      "read_file",
+      "read_file",
+      "read_file"
+    ],
+    "finish_reason": "tool_calls",
+    "mutation_generation_before": 0,
+    "mutation_generation_after": 0,
+    "mutation_delta": 0,
+    "verification_generation_after": -1
+  },
+  {
+    "ts": 1791565139.4970326,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_started",
+    "turn": 4,
+    "reason": "investigation",
+    "mutation_generation": 0,
+    "verification_generation": -1,
+    "transition": "read",
+    "work_phase": "normal",
+    "budget_zone": "green"
+  },
+  {
+    "ts": 1791565140.1479807,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_settled",
+    "turn": 4,
+    "reason": "investigation",
+    "outcome": "investigation_batch",
+    "tool_names": [
+      "list_directory"
+    ],
+    "finish_reason": "tool_calls",
+    "mutation_generation_before": 0,
+    "mutation_generation_after": 0,
+    "mutation_delta": 0,
+    "verification_generation_after": -1
+  },
+  {
+    "ts": 1791565140.1947503,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_started",
+    "turn": 5,
+    "reason": "investigation",
+    "mutation_generation": 0,
+    "verification_generation": -1,
+    "transition": "read",
+    "work_phase": "normal",
+    "budget_zone": "green"
+  },
+  {
+    "ts": 1791565141.1353793,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_settled",
+    "turn": 5,
+    "reason": "investigation",
+    "outcome": "investigation_batch",
+    "tool_names": [
+      "read_file",
+      "read_file",
+      "read_file"
+    ],
+    "finish_reason": "tool_calls",
+    "mutation_generation_before": 0,
+    "mutation_generation_after": 0,
+    "mutation_delta": 0,
+    "verification_generation_after": -1
+  },
+  {
+    "ts": 1791565141.1814787,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_started",
+    "turn": 6,
+    "reason": "investigation",
+    "mutation_generation": 0,
+    "verification_generation": -1,
+    "transition": "read",
+    "work_phase": "normal",
+    "budget_zone": "green"
+  },
+  {
+    "ts": 1791565145.4157562,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_settled",
+    "turn": 6,
+    "reason": "investigation",
+    "outcome": "mutation_batch",
+    "tool_names": [
+      "apply_patch",
+      "apply_patch",
+      "apply_patch",
+      "apply_patch"
+    ],
+    "finish_reason": "tool_calls",
+    "mutation_generation_before": 0,
+    "mutation_generation_after": 4,
+    "mutation_delta": 4,
+    "verification_generation_after": -1
+  },
+  {
+    "ts": 1791565145.5129972,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_started",
+    "turn": 7,
+    "reason": "verification",
+    "mutation_generation": 4,
+    "verification_generation": -1,
+    "transition": "edited_source",
+    "work_phase": "normal",
+    "budget_zone": "green"
+  },
+  {
+    "ts": 1791565150.5510018,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_settled",
+    "turn": 7,
+    "reason": "verification",
+    "outcome": "mutation_batch",
+    "tool_names": [
+      "write_file",
+      "write_file",
+      "write_file",
+      "write_file"
+    ],
+    "finish_reason": "tool_calls",
+    "mutation_generation_before": 4,
+    "mutation_generation_after": 8,
+    "mutation_delta": 4,
+    "verification_generation_after": -1
+  },
+  {
+    "ts": 1791565150.6325753,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_started",
+    "turn": 8,
+    "reason": "verification",
+    "mutation_generation": 8,
+    "verification_generation": -1,
+    "transition": "edited_source",
+    "work_phase": "normal",
+    "budget_zone": "green"
+  },
+  {
+    "ts": 1791565151.9533982,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "verification_result",
+    "command": "python -m pytest -q tests",
+    "stage": "regression",
+    "status": "passed",
+    "output": "..............                                                           [100%]\n14 passed in 0.03s"
+  },
+  {
+    "ts": 1791565151.9537125,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "verification_contract_accepted",
+    "command": "python -m pytest -q tests",
+    "required_stages": [
+      "static"
+    ]
+  },
+  {
+    "ts": 1791565151.9721713,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "provider_turn_settled",
+    "turn": 8,
+    "reason": "verification",
+    "outcome": "verification_batch",
+    "tool_names": [
+      "bash"
+    ],
+    "finish_reason": "tool_calls",
+    "mutation_generation_before": 8,
+    "mutation_generation_after": 8,
+    "mutation_delta": 0,
+    "verification_generation_after": 8
+  },
+  {
+    "ts": 1791565152.0518863,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "sidecar_started",
+    "provider": "openai-compatible",
+    "model": "deepseek-v4-flash",
+    "source": "inherit-main"
+  },
+  {
+    "ts": 1791565154.0320423,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "sidecar_finished",
+    "verdict": "accept",
+    "trace": "verifier_ok",
+    "reason": "All named sub-requirements are implemented in the diff and exercised by tests. handle and Event gained an optional correlation_id defaulting to None; process() omits the key when None so legacy output shape ({\"name\",\"value\"}) is byte-identical; as_text appends only when the value is not None, so empty string correctly yields the trailing \" correlation_id=\" while None yields no change. CLI adds --correlation-id with default None plus --format text|json (default text) and routes through the correct renderer. Tests cover legacy shape, keyword acceptance, None absent, empty-string present, and both CLI output formats including empty string; README documents both API and CLI. Runtime-recorded exact acceptance `python -m pytest -q tests` passed (14 passed). Remaining limitations: the final answer is terse and only states hidden pass counts without the reported per-test results/summary output or an explicit limitations statement; text-format CLI treats --correlation-id \"\" as an empty ID producing a trailing ' correlation_id=' which matches the spec, and --format is positional-agnostic. No semantic gap found.",
+    "elapsed_ms": 1980.147,
+    "provider": "openai-compatible",
+    "model": "deepseek-v4-flash",
+    "source": "inherit-main"
+  },
+  {
+    "ts": 1791565154.0339594,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "terminal_boundary_settled",
+    "boundary": "streamed_tool_batch",
+    "decision": "finalize",
+    "status": "completed",
+    "reason": "semantic_review_and_ledger_satisfied",
+    "completed_turns": 8,
+    "nominal_turns": 12,
+    "hard_cap": 12,
+    "contract_executed": false,
+    "contract_required": true,
+    "contract_passed": true,
+    "mutation_generation": 8,
+    "unresolved_requirements": [],
+    "semantic_review_pending_before": true,
+    "semantic_review_pending_after": false,
+    "semantic_review_generation": 8,
+    "early_tool_completion_candidate": true
+  },
+  {
+    "ts": 1791565154.0700145,
+    "run_id": "20261009_165856_47071c20",
+    "trace_id": "20261009_165856_47071c20",
+    "session_id": "isolated-coding-task",
+    "agent_id": "agent-3105c83e",
+    "parent_agent_id": null,
+    "parent_trace_id": null,
+    "agent_type": "main",
+    "event": "run_end",
+    "status": "completed",
+    "message_count": 37,
+    "runtime": {
+      "profile": "main",
+      "control_plane": "declared-agent-graph",
+      "active_agent": "coding-task",
+      "admitted": false,
+      "admitted_capabilities": [],
+      "admission_violations": [],
+      "structured_output": {},
+      "turn_count": 8,
+      "edits": 8,
+      "last_edit_turn": 7,
+      "mutation_generation": 8,
+      "acceptance_mutation_generation": 7,
+      "diff_generation": -1,
+      "verification_generation": 8,
+      "strict_progress_blocks": 0,
+      "work_phase": "normal",
+      "verification_failures": 0,
+      "package_install_attempts": 0,
+      "emergency_broad_exploration": 0,
+      "work_budget_zone": "green",
+      "has_diff": true,
+      "diff_chars": 6350,
+      "tests_modified": true,
+      "wants_tests": false,
+      "forbids_test_changes": false,
+      "requested_paths": [],
+      "broad_tests": 1,
+      "task_complexity": "L3",
+      "acceptance_criteria": [
+        "Existing callers that omit an ID must keep exactly the current output shape.",
+        "Public handle(name, value, correlation_id=None) and the Event model must accept the optional keyword.",
+        "The command-line interface must accept --correlation-id and support both JSON and text output (default text)."
+      ],
+      "plan_generated": false,
+      "replan_count": 0,
+      "provider_calls": 9,
+      "provider_attempts": 9,
+      "provider_calls_by_purpose": {
+        "coding": 8,
+        "verifier": 1
+      },
+      "provider_calls_by_model": {
+        "openai-compatible/deepseek-v4-flash": 9
+      },
+      "provider_usage": {
+        "input": 41377,
+        "output": 2953,
+        "total": 98668,
+        "reasoning": 578,
+        "cache_read": 53760,
+        "cache_write": 0
+      },
+      "provider_usage_by_purpose": {
+        "coding": {
+          "input": 35322,
+          "output": 2670,
+          "total": 91306,
+          "reasoning": 578,
+          "cache_read": 52736,
+          "cache_write": 0
+        },
+        "verifier": {
+          "input": 6055,
+          "output": 283,
+          "total": 7362,
+          "reasoning": 0,
+          "cache_read": 1024,
+          "cache_write": 0
+        }
+      },
+      "provider_duration_ms_by_purpose": {
+        "coding": 14727.42,
+        "verifier": 1978.917
+      },
+      "provider_usage_by_model": {
+        "openai-compatible/deepseek-v4-flash": {
+          "input": 41377,
+          "output": 2953,
+          "total": 98668,
+          "reasoning": 578,
+          "cache_read": 53760,
+          "cache_write": 0
+        }
+      },
+      "provider_duration_ms_by_model": {
+        "openai-compatible/deepseek-v4-flash": 16706.337
+      },
+      "provider_cost_usd": 0.0,
+      "provider_cost_usd_by_purpose": {},
+      "provider_cost_usd_by_model": {},
+      "provider_cost_unknown_calls": 9,
+      "provider_cost_sources": {
+        "unknown": 9
+      },
+      "provider_turns_by_reason": {
+        "initial_investigation": 1,
+        "investigation": 5,
+        "verification": 2
+      },
+      "provider_turns_by_outcome": {
+        "investigation_batch": 5,
+        "mutation_batch": 2,
+        "verification_batch": 1
+      },
+      "provider_turn_records": [
+        {
+          "turn": 1,
+          "reason": "initial_investigation",
+          "outcome": "investigation_batch",
+          "tool_names": [
+            "list_directory"
+          ],
+          "finish_reason": "tool_calls",
+          "mutation_generation_before": 0,
+          "mutation_generation_after": 0,
+          "mutation_delta": 0,
+          "verification_generation_after": -1
+        },
+        {
+          "turn": 2,
+          "reason": "investigation",
+          "outcome": "investigation_batch",
+          "tool_names": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "read_file",
+            "read_file",
+            "read_file"
+          ],
+          "finish_reason": "tool_calls",
+          "mutation_generation_before": 0,
+          "mutation_generation_after": 0,
+          "mutation_delta": 0,
+          "verification_generation_after": -1
+        },
+        {
+          "turn": 3,
+          "reason": "investigation",
+          "outcome": "investigation_batch",
+          "tool_names": [
+            "read_file",
+            "read_file",
+            "read_file",
+            "read_file",
+            "read_file"
+          ],
+          "finish_reason": "tool_calls",
+          "mutation_generation_before": 0,
+          "mutation_generation_after": 0,
+          "mutation_delta": 0,
+          "verification_generation_after": -1
+        },
+        {
+          "turn": 4,
+          "reason": "investigation",
+          "outcome": "investigation_batch",
+          "tool_names": [
+            "list_directory"
+          ],
+          "finish_reason": "tool_calls",
+          "mutation_generation_before": 0,
+          "mutation_generation_after": 0,
+          "mutation_delta": 0,
+          "verification_generation_after": -1
+        },
+        {
+          "turn": 5,
+          "reason": "investigation",
+          "outcome": "investigation_batch",
+          "tool_names": [
+            "read_file",
+            "read_file",
+            "read_file"
+          ],
+          "finish_reason": "tool_calls",
+          "mutation_generation_before": 0,
+          "mutation_generation_after": 0,
+          "mutation_delta": 0,
+          "verification_generation_after": -1
+        },
+        {
+          "turn": 6,
+          "reason": "investigation",
+          "outcome": "mutation_batch",
+          "tool_names": [
+            "apply_patch",
+            "apply_patch",
+            "apply_patch",
+            "apply_patch"
+          ],
+          "finish_reason": "tool_calls",
+          "mutation_generation_before": 0,
+          "mutation_generation_after": 4,
+          "mutation_delta": 4,
+          "verification_generation_after": -1
+        },
+        {
+          "turn": 7,
+          "reason": "verification",
+          "outcome": "mutation_batch",
+          "tool_names": [
+            "write_file",
+            "write_file",
+            "write_file",
+            "write_file"
+          ],
+          "finish_reason": "tool_calls",
+          "mutation_generation_before": 4,
+          "mutation_generation_after": 8,
+          "mutation_delta": 4,
+          "verification_generation_after": -1
+        },
+        {
+          "turn": 8,
+          "reason": "verification",
+          "outcome": "verification_batch",
+          "tool_names": [
+            "bash"
+          ],
+          "finish_reason": "tool_calls",
+          "mutation_generation_before": 8,
+          "mutation_generation_after": 8,
+          "mutation_delta": 0,
+          "verification_generation_after": 8
+        }
+      ],
+      "patch_risk": {
+        "risk": "high",
+        "fingerprint": "9202d15b9c42aa66",
+        "requires_replan": true,
+        "risk_signals": [
+          {
+            "category": "broad_scope_expansion",
+            "severity": "replan",
+            "detail": "5 source files changed"
+          },
+          {
+            "category": "public_signature_change",
+            "severity": "replan",
+            "detail": "app/api.py: handle"
+          }
+        ]
+      },
+      "patch_risk_reviewed": false,
+      "tool_observability": {
+        "batches": 8,
+        "calls": 25,
+        "wall_ms": 549.953,
+        "tool_duration_ms": 584.811,
+        "peak_concurrency": 4,
+        "parallel_segments": 3,
+        "serial_segments": 11,
+        "barrier_wait_ms": 0.0,
+        "streak_resets": 24
+      },
+      "reflection_status": null,
+      "reflection_summary": null,
+      "evidence": {
+        "created_files": 0,
+        "modified_files": 8,
+        "expected_files": 0,
+        "verification_results": 1,
+        "tool_failures": 0,
+        "limitations": []
+      }
+    },
+    "verification_needed": false,
+    "verification_state": "passed",
+    "last_verification": {
+      "command": "python -m pytest -q tests",
+      "stage": "acceptance",
+      "status": "passed",
+      "output": "..............                                                           [100%]\n14 passed in 0.03s"
+    },
+    "environment_blocker": null,
+    "verification_pipeline": {
+      "changed_files": [
+        "app/events.py",
+        "app/api.py",
+        "app/service.py",
+        "app/formatting.py",
+        "app/cli.py",
+        "tests/test_cli.py",
+        "tests/test_api.py"
+      ],
+      "stages": [
+        {
+          "name": "static",
+          "required": true,
+          "evidence_required": false,
+          "status": "passed",
+          "commands": [
+            {
+              "command": "python -m py_compile app/events.py",
+              "reason": "changed Python source file sanity check",
+              "required": true,
+              "status": "passed",
+              "last_command": "python -m pytest -q tests",
+              "satisfied_by": "user_acceptance_contract"
+            },
+            {
+              "command": "python -m py_compile app/api.py",
+              "reason": "changed Python source file sanity check",
+              "required": true,
+              "status": "passed",
+              "last_command": "python -m pytest -q tests",
+              "satisfied_by": "user_acceptance_contract"
+            },
+            {
+              "command": "python -m py_compile app/service.py",
+              "reason": "changed Python source file sanity check",
+              "required": true,
+              "status": "passed",
+              "last_command": "python -m pytest -q tests",
+              "satisfied_by": "user_acceptance_contract"
+            },
+            {
+              "command": "python -m py_compile app/formatting.py",
+              "reason": "changed Python source file sanity check",
+              "required": true,
+              "status": "passed",
+              "last_command": "python -m pytest -q tests",
+              "satisfied_by": "user_acceptance_contract"
+            },
+            {
+              "command": "python -m py_compile app/cli.py",
+              "reason": "changed Python source file sanity check",
+              "required": true,
+              "status": "passed",
+              "last_command": "python -m pytest -q tests",
+              "satisfied_by": "user_acceptance_contract"
+            }
+          ],
+          "observed": []
+        },
+        {
+          "name": "targeted",
+          "required": false,
+          "evidence_required": false,
+          "status": "optional",
+          "commands": [
+            {
+              "command": "pytest tests/test_api.py",
+              "reason": "related test candidate for app/api.py",
+              "required": false,
+              "status": "not_run"
+            },
+            {
+              "command": "pytest tests/test_cli.py",
+              "reason": "related test from module+identity-call-graph",
+              "required": false,
+              "status": "not_run"
+            },
+            {
+              "command": "pytest tests/test_sinks.py",
+              "reason": "related test from module+identity-call-graph",
+              "required": false,
+              "status": "not_run"
+            }
+          ],
+          "observed": []
+        },
+        {
+          "name": "regression",
+          "required": false,
+          "evidence_required": false,
+          "status": "passed",
+          "commands": [
+            {
+              "command": "pytest",
+              "reason": "broad Python test runner",
+              "required": false,
+              "status": "not_run"
+            }
+          ],
+          "observed": [
+            {
+              "command": "python -m pytest -q tests",
+              "required": false,
+              "status": "passed",
+              "last_command": "python -m pytest -q tests"
+            }
+          ]
+        }
+      ],
+      "next_required_stage": null
+    }
+  }
+]

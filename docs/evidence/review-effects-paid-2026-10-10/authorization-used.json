@@ -1,0 +1,44 @@
+{
+  "purpose": "review-effects-formal",
+  "account": "project-env:DeepSeek",
+  "authorization_text": "我授权；本轮总预算为10元人民币／美元，授权到本轮结束。按较低的10元人民币执行。",
+  "input_mode": "empirical",
+  "empirical_risk_accepted": true,
+  "cost_currency": "CNY",
+  "cost_limit": 10,
+  "manifest_sha256": "ce3533973916c837fdc7e6c9827af9eb3d793e6d5c76684dbb942a8d6612e994",
+  "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+  "counter_source_sha256": "53d0dc00d076a512528cc83577bd9905fd25ef591f5aab64ca22cbacf19d459f",
+  "relay_source_sha256": "742f476881dcbd365eafd446edbf9868b200298c5797490ac1b2772729135988",
+  "startup_source_sha256": "5be191429b75545dc60486f9bf8ca9b615a8e135ac57047f04d770b268eb7199",
+  "model": "deepseek-v4-flash",
+  "endpoint": "https://api.deepseek.com/v1/chat/completions",
+  "bounds": {
+    "requests": 26,
+    "input_per_request": 100000,
+    "input_total": 500000,
+    "output_total": 100000,
+    "request_seconds": 180.0
+  },
+  "scope": [
+    "u01",
+    "u02",
+    "u03",
+    "u04",
+    "a01"
+  ],
+  "valid_from": 1791565013.2278745,
+  "valid_until": 1791572218.2278752,
+  "validity_policy": "ends when this round finishes; additional 2h host expiration",
+  "prices_cny_per_million": {
+    "input": 2,
+    "cached_input": 0.04,
+    "output": 8
+  },
+  "pricing_policy": "published peak prices used conservatively for all requests; estimate, not invoice",
+  "price_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "price_source_sha256": "5a7b1832592387340f2fc456399b34b89b05f3fa167c2e35909e2fa4afe021e3",
+  "provider_hard_spending_cap_verified": false,
+  "historical_budget_reused": false,
+  "adapter_commit": "cc7a43c53499cc4212cc100d06606119615aab81"
+}

@@ -1,0 +1,45 @@
+{
+  "isolation_verified": true,
+  "input_contract_verified": false,
+  "output_contract_verified": true,
+  "budget_enforcement_verified": false,
+  "paid_authorization_valid": true,
+  "technical_ready": false,
+  "online_allowed": true,
+  "online_not_run": true,
+  "input_admission_mode": "empirical",
+  "empirical_admission_ready": true,
+  "strict_guarantee_relaxed": "reference count is an estimate; in-flight and billing deviation risk accepted",
+  "contract": {
+    "model_scope": [
+      "deepseek-flash",
+      "deepseek-v4-flash"
+    ],
+    "resources": {
+      "tokenizer_sha256": "81f64d1248a68ce3663e07ab3ee48b851e5df0e32d27cb98e4c9a268151e8d99",
+      "recipe_distribution": "0.1.1",
+      "recipe_native_version": "0.1.0",
+      "recipe_native_sha256": "1461bc4895c188d4ad60ca05eb7bd663aa7fa3286f2ecbebca39ecd73c5b0ec1",
+      "reference_source_revision": "57b9c842429d850b03b5fdbe3fed266c13cc7f2b"
+    },
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "counter_source_sha256": "53d0dc00d076a512528cc83577bd9905fd25ef591f5aab64ca22cbacf19d459f",
+    "relay_source_sha256": "742f476881dcbd365eafd446edbf9868b200298c5797490ac1b2772729135988",
+    "service_scope": "hosted-deepseek",
+    "output_contract": {
+      "main": 64000,
+      "review": 1024,
+      "total": 100000,
+      "completion_includes_reasoning": true
+    },
+    "evidence_level": "unknown",
+    "strict_input_bound_verified": false,
+    "reason": "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound"
+  },
+  "blockers": [],
+  "strict_blockers": [
+    "public_v41_recipe_has_no_hosted_api_equivalence_or_hidden_overhead_bound",
+    "budget_contract_unverified"
+  ],
+  "isolation_error": null
+}
