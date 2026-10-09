@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "<USER_HOME>/miniconda3/bin/python",
+    "<REPO>/tests/evaluation/fixtures/offline_exec.py",
+    "<USER_HOME>/miniconda3/bin/python",
+    "<REPO>/docs/evidence/review-effects-preflight-2026-10-09/packet-capture.py",
+    "--code",
+    "<LOCAL>/code-new",
+    "--workspace",
+    "<LOCAL>/runs/u01/workspace",
+    "--input",
+    "<LOCAL>/runs/u01/input.json",
+    "--output",
+    "<LOCAL>/runs/u01/raw"
+  ],
+  "exit": 1,
+  "stdout": "",
+  "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\nTraceback (most recent call last):\n  File \"<REPO>/docs/evidence/review-effects-preflight-2026-10-09/packet-capture.py\", line 139, in <module>\n    main()\n    ~~~~^^\n  File \"<REPO>/docs/evidence/review-effects-preflight-2026-10-09/packet-capture.py\", line 128, in main\n    assert all(item[\"denied\"] for item in denials)\n           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+}

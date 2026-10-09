@@ -1,0 +1,62 @@
+{
+  "G": {
+    "argv": [
+      "<PYTHON>",
+      "-c",
+      "<evaluator-only acceptance; source SHA-256 recorded>"
+    ],
+    "exit": 0,
+    "timed_out": false,
+    "timeout_seconds": 8,
+    "stdout": "{\"checks\": [{\"requirement\": \"default_negative_rejection\", \"passed\": true, \"error\": null}, {\"requirement\": \"explicit_opt_in\", \"passed\": true, \"error\": null}, {\"requirement\": \"nonnegative_preservation\", \"passed\": true, \"error\": null}], \"passed\": true}\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n",
+    "checks": [
+      {
+        "requirement": "default_negative_rejection",
+        "passed": true,
+        "error": null
+      },
+      {
+        "requirement": "explicit_opt_in",
+        "passed": true,
+        "error": null
+      },
+      {
+        "requirement": "nonnegative_preservation",
+        "passed": true,
+        "error": null
+      }
+    ],
+    "source_sha256": "9db282b0bb62a37c7fac229f2b0f39c380bd2b814d20b9746d3ef04f72c54436"
+  },
+  "D": {
+    "argv": [
+      "<PYTHON>",
+      "-c",
+      "<evaluator-only acceptance; source SHA-256 recorded>"
+    ],
+    "exit": 1,
+    "timed_out": false,
+    "timeout_seconds": 8,
+    "stdout": "{\"checks\": [{\"requirement\": \"default_negative_rejection\", \"passed\": false, \"error\": \"AssertionError: default accepted negative -3\"}, {\"requirement\": \"explicit_opt_in\", \"passed\": true, \"error\": null}, {\"requirement\": \"nonnegative_preservation\", \"passed\": true, \"error\": null}], \"passed\": false}\n",
+    "stderr": "sandbox: IPv4/IPv6 sockets denied; Unix HTTP transport only\n",
+    "checks": [
+      {
+        "requirement": "default_negative_rejection",
+        "passed": false,
+        "error": "AssertionError: default accepted negative -3"
+      },
+      {
+        "requirement": "explicit_opt_in",
+        "passed": true,
+        "error": null
+      },
+      {
+        "requirement": "nonnegative_preservation",
+        "passed": true,
+        "error": null
+      }
+    ],
+    "source_sha256": "9db282b0bb62a37c7fac229f2b0f39c380bd2b814d20b9746d3ef04f72c54436"
+  }
+}

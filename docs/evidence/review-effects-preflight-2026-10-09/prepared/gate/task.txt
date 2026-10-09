@@ -1,0 +1,1 @@
+Fix payment.py: permit negative values only when allow_refund=True. Preserve default rejection and positive behavior. Run python -m pytest -q tests and report actual results and remaining limitations.

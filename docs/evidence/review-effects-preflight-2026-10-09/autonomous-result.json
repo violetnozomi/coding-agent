@@ -1,0 +1,13 @@
+{
+  "status": "not_run",
+  "reason": "missing_paid_authorization",
+  "functional_acceptance": null,
+  "required_verification": null,
+  "delivery_obligations": null,
+  "terminal_status": null,
+  "diff": null,
+  "key_times": null,
+  "model_requests": 0,
+  "usage": null,
+  "cost": null
+}

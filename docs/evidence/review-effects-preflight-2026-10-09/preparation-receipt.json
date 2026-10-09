@@ -1,0 +1,32 @@
+{
+  "versions": {
+    "old": {
+      "head": "cf2ff5cf078559e9843c34614318d80c984b4168",
+      "production_tree": "1bb71b153691f3335d7c802caa56bb1e1d5a1130",
+      "worktree_status": ""
+    },
+    "new": {
+      "head": "4abbcafae69f2e3b9d162ad73e769913659aca59",
+      "production_tree": "5c4036a714759a8191a2a201c99cc3e12acf7865",
+      "worktree_status": ""
+    }
+  },
+  "model_requests_sent": 0,
+  "model_usage": null,
+  "model_cost": null,
+  "production_files_modified": [],
+  "offline_capture_units": 4,
+  "main_protocol_responses_in_completed_units": 12,
+  "held_review_boundaries_in_completed_units": 3,
+  "initial_u01_preparation_failure_preserved": true,
+  "autonomous_dry_adapter_failures": 2,
+  "autonomous_dry_failed_second_attempt_serialized_without_sending": true,
+  "online_isolation_ready": false,
+  "bwrap": {
+    "network_namespace": "Operation not permitted",
+    "uid_map": "Permission denied"
+  },
+  "full_suite_run_this_stage": false,
+  "windows_run_this_stage": false,
+  "references_executed": false
+}

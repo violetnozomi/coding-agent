@@ -1,0 +1,167 @@
+{
+  "phase": "offline_preparation_only",
+  "core_frozen": true,
+  "versions": {
+    "old": "cf2ff5cf078559e9843c34614318d80c984b4168",
+    "new": "4abbcafae69f2e3b9d162ad73e769913659aca59",
+    "infcodex_historical_only": "d3a812379b589597347f5be12d5b68477e577f02"
+  },
+  "head_at_start": "4abbcafae69f2e3b9d162ad73e769913659aca59",
+  "later_increments": [],
+  "initial_worktree": "clean",
+  "authorization": {
+    "valid": false,
+    "reason": "missing_paid_authorization",
+    "authorized_paid_requests": 0,
+    "account": null,
+    "total_cost_budget": null,
+    "historical_budget_reused": false
+  },
+  "requested_online_configuration": {
+    "status": "proposal_not_authorized",
+    "provider": "openai-compatible",
+    "endpoint": "https://api.deepseek.com",
+    "model": "deepseek-v4-flash",
+    "origin": "historical configuration only; availability and account not probed",
+    "main_thinking": "unset",
+    "main_reasoning_effort": "unset",
+    "main_stream": true,
+    "main_output_limit": 64000,
+    "review_stream": false,
+    "review_output_limit": 1024,
+    "review_thinking": "production capability selection; inspect dry request, do not infer from main"
+  },
+  "proposal_bounds": {
+    "review_decision_units": 4,
+    "runs_per_unit": 1,
+    "review_physical_requests_per_unit": 2,
+    "review_gateway_retry_limit": 1,
+    "judge_parse_retries": 0,
+    "sdk_retries": 0,
+    "autonomous_runs": 1,
+    "logical_turn_limit": 12,
+    "main_physical_request_cap": 12,
+    "all_auxiliary_physical_request_cap": 6,
+    "total_physical_request_cap": 26,
+    "per_request_input_token_cap": 100000,
+    "total_input_token_cap": 500000,
+    "total_output_token_cap": 100000,
+    "run_wall_timeout_seconds": 900,
+    "provider_timeout_seconds": 180,
+    "cost": null,
+    "counts_include": [
+      "main",
+      "review",
+      "summary",
+      "stall",
+      "embedding",
+      "retry",
+      "failed_requests"
+    ],
+    "enforcement": "must be wired and checked in authorized host relay before online; not claimed ready"
+  },
+  "gate": {
+    "task": "Fix payment.py: permit negative values only when allow_refund=True. Preserve default rejection and positive behavior. Run python -m pytest -q tests and report actual results and remaining limitations.",
+    "known_development_sample": true,
+    "initial_hashes": {
+      "payment.py": "fc9c190535db5d5101cb420cebf5f9b27ffdb089730a3168a771edd3945c72f1",
+      "tests/test_amount.py": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+    },
+    "candidate_hashes": {
+      "G": {
+        "payment.py": "fac25d7a951a53f68d05052a9c196a427f08bc89ca2076f847af509b9c370b33",
+        "tests/test_amount.py": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+      },
+      "D": {
+        "payment.py": "5937d92cccd919312f3d99f80586d4676bd97baf11c1f13e15e80b64de9493a1",
+        "tests/test_amount.py": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855"
+      }
+    },
+    "visible_tests": [
+      "explicit opt-in on -3",
+      "positive default on 3"
+    ],
+    "visible_test_gap": "default negative rejection deliberately untested in visible suite, identical for both candidates",
+    "independent_acceptance": "evaluator executes three requirement groups on frozen copies; code never injected into review",
+    "neutral_report": "Updated payment.py. python -m pytest -q tests: 2 passed. Visible tests cover explicit opt-in and positive input; default negative rejection is not exercised by these tests. No external integration was tested.",
+    "generation": "each version's existing _run -> NativeSDKRunner -> AgentRunner -> real read/edit/bash -> StopHook._evidence -> native judge boundary; no ledger injection",
+    "preparation_model_boundary": "scripted protocol inputs only to construct frozen candidate state; review transport refused without a verdict",
+    "natural_early_boundary": "retain production early completion; record real last_assistant_text even if neutral final response is never consumed"
+  },
+  "order": [
+    {
+      "unit": "u01",
+      "candidate": "G",
+      "version": "new"
+    },
+    {
+      "unit": "u02",
+      "candidate": "D",
+      "version": "old"
+    },
+    {
+      "unit": "u03",
+      "candidate": "G",
+      "version": "old"
+    },
+    {
+      "unit": "u04",
+      "candidate": "D",
+      "version": "new"
+    }
+  ],
+  "isolation": {
+    "version_checkouts": "separate detached worktrees, unmodified Core",
+    "index": "own workspace DB via own RepoIntelligenceService; schema 5/6 never shared",
+    "home_session_cache": "fresh per unit, production cache remains enabled",
+    "embeddings": "no endpoint/client configured",
+    "network": "existing offline_exec denies IPv4/IPv6 in parent and child; all offline Provider boundaries local-only",
+    "file_tools": "production workspace path checks plus narrow declared pytest Bash callback",
+    "host_filesystem": "blocked: bwrap uid map/net namespace denied; file tool checks do not prove host filesystem isolation",
+    "online_ready": false,
+    "hidden_acceptance_and_labels": "evaluator only, not copied into task workspace or provider messages"
+  },
+  "autonomous": {
+    "fixture": "A_unknown_location",
+    "known_regression_task": true,
+    "not_used_as_seven_fix_gate_sample": true,
+    "task": "Add optional correlation IDs to the event processing package. Existing callers that omit an ID must keep exactly the current output shape. Public handle(name, value, correlation_id=None) and the Event model must accept the optional keyword. Propagate a supplied ID (including an empty string) through processing to JSON output as correlation_id and text output as a trailing \" correlation_id=ID\"; None means absent. The command-line interface must accept --correlation-id and support both JSON and text output (default text). Preserve existing calls. Add meaningful project tests and a README example for both the Python API and CLI. Run python -m pytest -q tests and report the actual results and remaining limitations.\n",
+    "initial_hashes": {
+      "README.md": "11717241f513020a7f2b63c58bbc1acdefa9e99663e2ce24ed03ae94c90aba1a",
+      "app/__init__.py": "0556857c71d706021af74ff9d58c60b35598d608765b1cf6e30d19f7efaf54b4",
+      "app/adapters/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "app/adapters/json_sink.py": "89ac6f13c735ce933fc8ea9e8fb874c8bffac3a8cb6ee1834e49ac8e8dde5542",
+      "app/adapters/text_sink.py": "eae8b0e3df9dfb16d29b0ab143208725a77e7bb3459dee411335c589da8a5b45",
+      "app/api.py": "87237860f9ea0f61c0bad510791d95a7920370331a23e6e574a10f48841e128a",
+      "app/cli.py": "a6f3b37cb366e8d0a78195bd980ed79bc834b64309a34371f404327f231a3cf2",
+      "app/events.py": "5e2e6b99dd734db8cd3ca8f9d7934dc7b6d6131b1b5f2e410e66858e5fa4442a",
+      "app/formatting.py": "d04ddd7a9e10edb73cf069f00159f662d3c0423a5df9ab8568f53cfa1bbd1321",
+      "app/service.py": "aa00b3fc91f072d98fa271e09ab700fa73be9b836c53ba4caf26498b082de458",
+      "app/storage.py": "c45f6d5f7f7d31d67ccb5d2f9add0dbb3c8092944e98c0e29b97c970557d7d81",
+      "tests/test_api.py": "9b917ffb51e5d23a242dadda25aacda92a1d61fd31107c25af717abf4e7df494",
+      "tests/test_cli.py": "a2908e5cb088a86836d64ee64baeb49fa17e5b5b78f5b09bb943d7de8787198e",
+      "tests/test_sinks.py": "aadfb947e0639fefe9bd97a476ac2231fb29ffdee93ef0a0bc52f3c6879c3434"
+    },
+    "acceptance_source_sha256": "93af20d8895407981f30d775d520715ff0bd9a0935080d330d94d284da50420a",
+    "entry": "NativeSDKRunner (not TUI/Windows)",
+    "production_retrieval": "default policy, no agent/metadata retrieval override",
+    "offline_dry_run": "construct actual first outbound request then hold at Provider, no answer/actions/patch supplied",
+    "final_state": "not_run: missing_paid_authorization"
+  },
+  "rubric": {
+    "G": "valid accept with relevant, factually supported reason; distinguish legitimate evidence request from undoing authorized behavior",
+    "D": "identify default negative rejection violation and payment.py evidence; unrelated rejection is not defect discovery",
+    "gap": "evidence gap alone is not proof of defect; timeout/error/invalid/cached/not_sent separated",
+    "verdict_validity": "raw accept with invalid trace is not approval; raw/effective/source/consequence separately recorded",
+    "autonomous": "functional acceptance, actual required test execution at current generation, tests/docs/final-report obligations, and terminal status separately assessed",
+    "no_rates_or_ablation": true
+  },
+  "stop": [
+    "no paid authorization -> not_run and stop online",
+    "no reruns",
+    "no silent new model/effort/turns",
+    "stop on leakage/config/accounting mismatch",
+    "freeze result before analysis",
+    "no automatic Core change"
+  ]
+}

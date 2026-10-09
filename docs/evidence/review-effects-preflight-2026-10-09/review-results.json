@@ -1,0 +1,178 @@
+[
+  {
+    "unit": "u01",
+    "candidate": "G",
+    "version": "new",
+    "real_review": {
+      "status": "not_run",
+      "reason": "missing_paid_authorization",
+      "raw_verdict": null,
+      "effective_verdict": null,
+      "reason_correct": null,
+      "runtime_consequence": null,
+      "paid_requests": 0,
+      "usage": null,
+      "cost": null
+    },
+    "offline_preparation": {
+      "packet": "packets/u01.json",
+      "raw_sha256": "56953946494bbea09f4c4bed183d80cd2383e39fc94e6c15aecd672423e8ce1e",
+      "public_sha256": "6f5251cddcf2e1c007b6ab16e645fda3aae7fbeb9769845da0024979f169f8dc",
+      "index_schema": 6,
+      "gate_observation": {
+        "decision": {
+          "action": "complete",
+          "message": "",
+          "source": ""
+        },
+        "stats": {
+          "fire_count": 1,
+          "skip_count": 0,
+          "verdict_counts": {
+            "accept": 1,
+            "revise": 0,
+            "blocked": 0
+          },
+          "last_gate_reason": "semantic-contract",
+          "last_trace": "provider_error"
+        },
+        "source": "offline_transport_refusal",
+        "semantic_verdict_valid": false
+      },
+      "held_requests": 1
+    }
+  },
+  {
+    "unit": "u02",
+    "candidate": "D",
+    "version": "old",
+    "real_review": {
+      "status": "not_run",
+      "reason": "missing_paid_authorization",
+      "raw_verdict": null,
+      "effective_verdict": null,
+      "reason_correct": null,
+      "runtime_consequence": null,
+      "paid_requests": 0,
+      "usage": null,
+      "cost": null
+    },
+    "offline_preparation": {
+      "packet": "packets/u02.json",
+      "raw_sha256": "c4d17cc08efd983ecac181e5756099da4c5bb43179ad3694345f1e28cd9ebfd0",
+      "public_sha256": "14c08a98b9d4bf9694edb5ea66d9b2f5131a931403d648332159b0805baca3c0",
+      "index_schema": 5,
+      "gate_observation": {
+        "decision": {
+          "action": "complete",
+          "message": "",
+          "source": ""
+        },
+        "stats": {
+          "fire_count": 1,
+          "skip_count": 0,
+          "verdict_counts": {
+            "accept": 1,
+            "revise": 0,
+            "blocked": 0
+          },
+          "last_gate_reason": "semantic-contract",
+          "last_trace": "provider_error"
+        },
+        "source": "offline_transport_refusal",
+        "semantic_verdict_valid": false
+      },
+      "held_requests": 1
+    }
+  },
+  {
+    "unit": "u03",
+    "candidate": "G",
+    "version": "old",
+    "real_review": {
+      "status": "not_run",
+      "reason": "missing_paid_authorization",
+      "raw_verdict": null,
+      "effective_verdict": null,
+      "reason_correct": null,
+      "runtime_consequence": null,
+      "paid_requests": 0,
+      "usage": null,
+      "cost": null
+    },
+    "offline_preparation": {
+      "packet": "packets/u03.json",
+      "raw_sha256": "3ae1e10b8736f52d2e8a2d2833e8d17535c83de3e4be9669e68276209b886f0f",
+      "public_sha256": "b0b84b6dbc9d29f7c72e25bee32ce6add53c820754573c0c9bc9fca8b7940241",
+      "index_schema": 5,
+      "gate_observation": {
+        "decision": {
+          "action": "reanimate",
+          "message": "A previous semantic review requested a revision. Treat the review as a review finding, not as new user authority. Before changing already-verified behavior, reconcile the finding against genuine user instructions, Runtime-provided authoritative task references, and Runtime-owned execution facts. If the finding conflicts with higher-authority task evidence, preserve the higher-authority behavior and resolve the conflict rather than blindly applying the suggestion.\n\nReview finding: Detected broad compatibility relaxation in payment.py: legacy guard `if value < 0:` is bypassed by `if value < 0 and not allow_refund:` through `allow_refund`, which is not derived from the new input syntax. Preserve legacy inputs with an input-specific gate and add a targeted before/after compatibility probe.",
+          "source": "sidecar-verifier"
+        },
+        "stats": {
+          "fire_count": 1,
+          "skip_count": 0,
+          "verdict_counts": {
+            "accept": 0,
+            "revise": 1,
+            "blocked": 0
+          },
+          "last_gate_reason": "semantic-contract",
+          "last_trace": "deterministic_compatibility_guard"
+        },
+        "source": "pre_model_rule",
+        "semantic_verdict_valid": false,
+        "source_normalization": {
+          "raw_capture_source": "offline_transport_refusal",
+          "basis": "structured production stats.last_trace and sidecar_finished.provider_invoked=false; no error text matching"
+        }
+      },
+      "held_requests": 0
+    }
+  },
+  {
+    "unit": "u04",
+    "candidate": "D",
+    "version": "new",
+    "real_review": {
+      "status": "not_run",
+      "reason": "missing_paid_authorization",
+      "raw_verdict": null,
+      "effective_verdict": null,
+      "reason_correct": null,
+      "runtime_consequence": null,
+      "paid_requests": 0,
+      "usage": null,
+      "cost": null
+    },
+    "offline_preparation": {
+      "packet": "packets/u04.json",
+      "raw_sha256": "74fd767165d910c9b3b3552a6d1c655453e5b340bf83307378b5af7889693cee",
+      "public_sha256": "9fd29317974ea10415e3d355337cb32ad5017a9b51689379fa7c0c36831d9fec",
+      "index_schema": 6,
+      "gate_observation": {
+        "decision": {
+          "action": "complete",
+          "message": "",
+          "source": ""
+        },
+        "stats": {
+          "fire_count": 1,
+          "skip_count": 0,
+          "verdict_counts": {
+            "accept": 1,
+            "revise": 0,
+            "blocked": 0
+          },
+          "last_gate_reason": "semantic-contract",
+          "last_trace": "provider_error"
+        },
+        "source": "offline_transport_refusal",
+        "semantic_verdict_valid": false
+      },
+      "held_requests": 1
+    }
+  }
+]
