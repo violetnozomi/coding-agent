@@ -32,6 +32,7 @@ from nz_coder.runtime.agent.task_policy import (
     is_test_file,
     classify_instruction_paths,
     explicit_instruction_paths,
+    extract_explicit_mutation_operations,
     successful_mutation_operations,
     task_forbids_test_changes,
     task_wants_tests,
@@ -2074,14 +2075,6 @@ def extract_explicit_paths(text: str, limit: int = 5) -> list[str]:
 
 def extract_explicit_mutation_paths(text: str, limit: int = 5) -> list[str]:
     return list(extract_explicit_mutation_operations(text, limit=limit))
-
-
-def extract_explicit_mutation_operations(text: str, limit: int = 20) -> dict[str, str]:
-    operations: dict[str, str] = {}
-    for item in classify_instruction_paths(text):
-        if item.role == "mutation" and (item.path in operations or len(operations) < limit):
-            operations[item.path] = item.operation
-    return operations
 
 
 

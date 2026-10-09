@@ -585,7 +585,7 @@ def derive_task_contract(
         workspace=workspace or Path.cwd(),
         explicit_path_allowlist=explicit_path_allowlist,
     )
-    from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_operations
+    from nz_coder.runtime.agent.task_policy import extract_explicit_mutation_operations
     mutation_operations = extract_explicit_mutation_operations(text)
     hard_artifact_intent = any(
         operation in {"create", "delete"} or is_documentation_file(path)
@@ -694,7 +694,7 @@ def derive_round_artifact_contract(
 ) -> TaskContract:
     """Build only deterministic artifact obligations from explicit write targets."""
     text = " ".join(str(task_text or "").split())
-    from nz_coder.runtime.execution.runtime_state import extract_explicit_mutation_operations
+    from nz_coder.runtime.agent.task_policy import extract_explicit_mutation_operations
 
     operations = extract_explicit_mutation_operations(text)
     requirements: list[dict] = []

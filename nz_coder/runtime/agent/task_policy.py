@@ -684,3 +684,11 @@ def successful_mutation_operations(name: str, payload: dict, output: str) -> dic
             operations.update({normalize_path(line[2:]).removeprefix("./"): "create"
                                for line in created[1].splitlines() if line.startswith("- ")})
     return operations
+
+
+def extract_explicit_mutation_operations(text: str, limit: int = 20) -> dict[str, str]:
+    operations: dict[str, str] = {}
+    for item in classify_instruction_paths(text):
+        if item.role == "mutation" and (item.path in operations or len(operations) < limit):
+            operations[item.path] = item.operation
+    return operations
