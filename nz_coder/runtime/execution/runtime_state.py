@@ -30,7 +30,6 @@ from nz_coder.runtime.agent.task_policy import (
     is_documentation_file,
     is_exact_test_command,
     is_test_file,
-    classify_instruction_paths,
     explicit_instruction_paths,
     extract_explicit_mutation_operations,
     successful_mutation_operations,
