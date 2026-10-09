@@ -59,3 +59,28 @@ def test_rename_creation_deletion_and_ambiguous_paths():
         diff = f'--- {before}\n+++ {after}\n@@ -1 +1 @@\n-old\n+new\n'
         assert set(sidecar._bounded_diff_hints(diff, [path])) == {path}
         assert sidecar._bounded_diff_hints(diff + diff, [path]) == {}
+
+
+@pytest.mark.parametrize('gate', ['allow_refund', 'allow_pattern'])
+def test_authorized_gate_change_reaches_semantic_reviewer(monkeypatch, tmp_path, gate):
+    from tests.runtime.test_requirement_scope_runtime import _run
+    (tmp_path / 'payment.py').write_text(
+        f'def amount(value, {gate}=False):\n'
+        '    if value < 0:\n        raise ValueError("negative")\n    return value\n')
+    (tmp_path / 'tests').mkdir()
+    (tmp_path / 'tests/test_amount.py').write_text(
+        'import pytest\nfrom payment import amount\n'
+        f'def test_new(): assert amount(-3, {gate}=True) == -3\n'
+        'def test_default():\n    with pytest.raises(ValueError): amount(-3)\n'
+        'def test_positive(): assert amount(3) == 3\n')
+    result, state, trace, requests, reviews = _run(monkeypatch, tmp_path,
+        f'Fix payment.py: permit negative values only when {gate}=True. Preserve default rejection and positive behavior. Run python -m pytest -q tests.',
+        [[('read_file', {'path': 'payment.py'})],
+         [('edit_file', {'path': 'payment.py', 'old_text': 'if value < 0:',
+                         'new_text': f'if value < 0 and not {gate}:'})],
+         [('bash', {'command': 'python -m pytest -q tests'})], 'Implemented and verified.'],
+        label='authorized-gate-' + gate)
+    assert reviews, 'risk must not replace the semantic review'
+    assert result.status.value == 'completed'
+    assert any(e.get('status') == 'passed' for e in trace if e.get('event') == 'verification_result')
+    assert gate + '=True' in str(reviews[0]['messages'])

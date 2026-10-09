@@ -502,9 +502,9 @@ def _merge_compatibility_risk(
     verdict: VerifierVerdict,
     compatibility_risk: str,
 ) -> VerifierVerdict:
-    """Expose every deterministic risk in the same bounded repair request."""
+    """审查已要求修复时附上风险；启发式本身不能否决有效批准。"""
     risk = str(compatibility_risk or "").strip()
-    if not risk or verdict.verdict == "blocked":
+    if not risk or verdict.verdict != "revise":
         return verdict
     reasons = [risk]
     model_reason = str(verdict.reason or "").strip()
@@ -514,7 +514,7 @@ def _merge_compatibility_risk(
         "revise",
         "\n\n".join(reasons),
         suggested_fix=verdict.suggested_fix,
-        trace="deterministic_compatibility_guard",
+        trace=verdict.trace,
     )
 
 
@@ -1701,6 +1701,15 @@ class SidecarVerifierHook:
                 "DETERMINISTIC COMPATIBILITY RISK (must be resolved before "
                 "acceptance):\n" + compatibility_risk
             )
+        if compatibility_risk:
+            criteria.append(
+                "NON-AUTHORITATIVE COMPATIBILITY HYPOTHESES\n"
+                "Diff shape and identifier names do not prove a regression. Compare "
+                "these hypotheses with the actual user request and retained task "
+                "specification; explicitly authorized behavior may change. Return "
+                "revise only for a concrete unmet requirement, not for this signal alone.\n"
+                + compatibility_risk
+            )
         from nz_coder.runtime.verification.dependency_evidence import collect_dependency_evidence
 
         dependency, dependency_trace = collect_dependency_evidence(
@@ -1833,33 +1842,6 @@ class SidecarVerifierHook:
         if not fire:
             self.stats["skip_count"] += 1
             return StopHookDecision()
-
-        # Deterministic compatibility findings already prove that completion
-        # is unsafe.  Calling the judge first only adds latency/cost and can
-        # serialize independent defects across the two reanimation slots.
-        # Return the complete aggregated guard result now; the judge will run
-        # on the next clean generation after the model repairs every finding.
-        if semantic_pending and compatibility_risk:
-            self.stats["fire_count"] += 1
-            verdict = _merge_compatibility_risk(
-                VerifierVerdict("accept", "", trace="deterministic_guard"),
-                compatibility_risk,
-            )
-            self.stats["last_trace"] = verdict.trace
-            self.stats["verdict_counts"][verdict.verdict] += 1
-            if tracer is not None:
-                tracer.log(
-                    "sidecar_finished",
-                    verdict=verdict.verdict,
-                    trace=verdict.trace,
-                    reason=verdict.reason,
-                    elapsed_ms=0.0,
-                    provider=self._resolved.provider_name,
-                    model=self._resolved.model,
-                    source=self._resolved.source,
-                    provider_invoked=False,
-                )
-            return map_verdict_to_stop_decision(verdict)
 
         self.stats["fire_count"] += 1
         started = time.monotonic()

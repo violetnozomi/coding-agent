@@ -1,6 +1,8 @@
 """Source-translated contracts for the InfCodeX coding Sidecar Verifier."""
 from __future__ import annotations
 
+import pytest
+
 
 def test_verifier_context_keeps_real_query_and_bounds_recent_transcript():
     """Catches synthetic guidance replacing the ask or unbounded judge context."""
@@ -673,7 +675,8 @@ def test_semantic_contract_prioritizes_compatibility_delta_evidence():
     assert "+def test_cross_week_numeric_range" in delta_section
 
 
-def test_semantic_contract_rejects_broad_validation_relaxation_after_model_accept():
+@pytest.mark.parametrize("verdict", ["accept", "revise", "blocked"])
+def test_semantic_contract_risk_respects_actual_model_verdict(verdict):
     """A field-wide bypass cannot certify preservation of legacy inputs."""
     import asyncio
     from types import SimpleNamespace
@@ -715,7 +718,7 @@ def test_semantic_contract_rejects_broad_validation_relaxation_after_model_accep
             call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
                 arguments=(
-                    '{"verdict":"accept","reason":"numeric behavior is preserved"}'
+                    '{"verdict":"' + verdict + '","reason":"controlled judgment"}'
                 ),
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
@@ -781,11 +784,16 @@ def test_semantic_contract_rejects_broad_validation_relaxation_after_model_accep
         },
     )))
 
-    assert decision.action == "reanimate"
-    assert "broad compatibility relaxation" in decision.message
-    assert "allow_wrap" in decision.message
-    assert recorded == []
-    assert provider_calls == []
+    assert len(provider_calls) == 1
+    assert "NON-AUTHORITATIVE COMPATIBILITY HYPOTHESES" in str(provider_calls[0])
+    if verdict == "accept":
+        assert decision.action == "complete"
+        assert recorded and recorded[0]["accepted"] is True
+    else:
+        assert decision.action == ("abort" if verdict == "blocked" else "reanimate")
+        assert recorded == []
+        if verdict == "revise":
+            assert "broad compatibility relaxation" in decision.message
 
 
 def test_compatibility_guard_allows_new_syntax_specific_relaxation():
@@ -1059,7 +1067,7 @@ def test_deterministic_risks_are_merged_with_model_revision():
     )
 
     assert merged.verdict == "revise"
-    assert merged.trace == "deterministic_compatibility_guard"
+    assert merged.trace == "verifier_ok"
     assert "broad compatibility relaxation" in merged.reason
     assert "missing boundary test" in merged.reason
 
