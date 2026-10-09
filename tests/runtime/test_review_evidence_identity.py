@@ -61,8 +61,11 @@ def test_rename_creation_deletion_and_ambiguous_paths():
         assert sidecar._bounded_diff_hints(diff + diff, [path]) == {}
 
 
-@pytest.mark.parametrize('gate', ['allow_refund', 'allow_pattern'])
-def test_authorized_gate_change_reaches_semantic_reviewer(monkeypatch, tmp_path, gate):
+@pytest.mark.parametrize('gate,verdict', [
+    ('allow_refund', 'accept'), ('allow_pattern', 'accept'),
+    ('allow_refund', 'revise'), ('allow_refund', 'invalid'),
+])
+def test_authorized_gate_change_reaches_semantic_reviewer(monkeypatch, tmp_path, gate, verdict):
     from tests.runtime.test_requirement_scope_runtime import _run
     (tmp_path / 'payment.py').write_text(
         f'def amount(value, {gate}=False):\n'
@@ -79,8 +82,13 @@ def test_authorized_gate_change_reaches_semantic_reviewer(monkeypatch, tmp_path,
          [('edit_file', {'path': 'payment.py', 'old_text': 'if value < 0:',
                          'new_text': f'if value < 0 and not {gate}:'})],
          [('bash', {'command': 'python -m pytest -q tests'})], 'Implemented and verified.'],
-        label='authorized-gate-' + gate)
+        semantic=(verdict,) * 8, label='authorized-gate-' + gate + '-' + verdict)
     assert reviews, 'risk must not replace the semantic review'
-    assert result.status.value == 'completed'
+    assert (result.status.value == 'completed') is (verdict == 'accept')
     assert any(e.get('status') == 'passed' for e in trace if e.get('event') == 'verification_result')
     assert gate + '=True' in str(reviews[0]['messages'])
+    if verdict != 'accept':
+        compatibility = next(item for item in state['requirement_ledger']['items']
+                             if item['requirement']['kind'] == 'compatibility')
+        assert compatibility['status'] == 'candidate'
+        assert not any(e['type'] == 'semantic_review' for e in compatibility['evidence'])
