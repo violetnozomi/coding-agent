@@ -49,6 +49,33 @@ def _safe_source(path: str, excluded: set[str]) -> bool:
     )
 
 
+def _read_indexed_source(access, entry, cache):
+    """按文件去重读取，并核对 AST 建立时绑定的原始字节摘要。"""
+    if entry.path not in cache:
+        cache[entry.path] = access.read_text_with_identity(entry.path, maximum=MAX_FILE_BYTES)
+    source, identity = cache[entry.path]
+    if not entry.content_hash or identity.content_hash != entry.content_hash:
+        raise ValueError("indexed-content-mismatch")
+    return source, identity
+
+
+def _validate_indexed_sources(access, cache):
+    """组包末尾再次有界复核；每阶段每文件一次，不能承诺原子工作区快照。"""
+    for path, (_, observed) in cache.items():
+        _, current = access.read_bytes_with_identity(path, maximum=MAX_FILE_BYTES)
+        if current.content_hash != observed.content_hash:
+            raise ValueError("source-changed-during-read")
+
+
+def _unavailable_digest(records, reads, reason):
+    identity = {
+        "reason": reason,
+        "indexed": {p: entry.content_hash for p, entry in records.items()},
+        "observed": {p: value[1].content_hash for p, value in reads.items()},
+    }
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+
+
 def _collect(service, root: Path, changed: tuple[str, ...], excluded: set[str]):
     scope = service.changed_scope(changed_paths=list(changed), limit=MAX_CANDIDATES,
                                   max_depth=1, node_limit=20, time_budget_ms=50,
@@ -69,17 +96,19 @@ def _collect(service, root: Path, changed: tuple[str, ...], excluded: set[str]):
         return DependencyEvidence(), {'fallback_reason': 'index-changed-during-query'}
     access = WorkspaceFileAccess(root)
     records = {entry.path: entry for entry in snapshot.files}
-    # A ready service can lag the watcher. Never combine stale changed-source edges
-    # with current dependency bodies. Deleted roots may still contribute old impact.
+    reads = {}
+
+    def unavailable(reason):
+        return DependencyEvidence(digest=_unavailable_digest(records, reads, reason)), {'fallback_reason': reason}
+
+    # 就绪索引也可能落后于磁盘；删除后的历史边不能冒充当前关系。
     for path in changed:
         entry = records.get(path)
         if entry is not None:
             try:
-                current = access.stat(path)
-            except FileNotFoundError:
-                continue
-            if (current.mtime_ns, current.size) != entry.fingerprint:
-                return DependencyEvidence(), {'fallback_reason': 'stale-changed-source'}
+                _read_indexed_source(access, entry, reads)
+            except (OSError, ValueError, UnicodeError):
+                return unavailable('stale-changed-source')
     items, rendered = [], []
     remaining = MAX_TOTAL - len(LABEL) - 100  # reserve bounded omission marker
     for path, symbol in selected:
@@ -95,8 +124,8 @@ def _collect(service, root: Path, changed: tuple[str, ...], excluded: set[str]):
         if definition.confidence < CONFIDENCE:
             continue
         try:
-            source, identity = access.read_text_with_identity(path, maximum=MAX_FILE_BYTES)
-            if (identity.mtime_ns, identity.size) != entry.fingerprint or '\x00' in source:
+            source, identity = _read_indexed_source(access, entry, reads)
+            if '\x00' in source:
                 continue
             lines = source.splitlines()
             if not 1 <= definition.line <= definition.end_line <= len(lines):
@@ -123,10 +152,14 @@ def _collect(service, root: Path, changed: tuple[str, ...], excluded: set[str]):
                           'included': True, 'reason': 'high-confidence direct structural caller',
                           'truncated': truncated})
         except (OSError, ValueError, UnicodeError):
-            continue
+            return unavailable('stale-or-unavailable-source')
     omitted = len(candidates) - len(items)
     if service.state.status != 'ready' or service.state.generation != snapshot.generation:
         return DependencyEvidence(), {'fallback_reason': 'index-changed-during-read'}
+    try:
+        _validate_indexed_sources(access, reads)
+    except (OSError, ValueError, UnicodeError):
+        return unavailable('source-changed-during-read')
     text = LABEL + '\n'.join(rendered) + f'\nOmitted candidate symbols: {omitted}\n' if items else ''
     digest = hashlib.sha256(json.dumps({'items': items, 'text': text}, sort_keys=True).encode()).hexdigest() if items else ''
     provenance = tuple({**item, 'repo_generation': snapshot.generation} for item in items)

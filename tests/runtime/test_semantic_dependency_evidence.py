@@ -248,13 +248,13 @@ def test_budget_deterministic_and_tests_do_not_spend_budget(tmp_path):
         service.close()
 
 
-def test_deleted_root_can_locate_existing_unchanged_caller(indexed):
+def test_deleted_root_does_not_certify_historical_edge_as_current(indexed):
     from nz_coder.runtime.verification.dependency_evidence import collect_dependency_evidence
     workspace, service, paths, _ = indexed
     (workspace / 'encoder.py').unlink()
-    evidence, _ = collect_dependency_evidence(service, workspace, paths)
-    assert 'def save' in evidence.text
-    assert 'Path: encoder.py' not in evidence.text
+    evidence, trace = collect_dependency_evidence(service, workspace, paths)
+    assert not evidence.text
+    assert trace['fallback_reason'] == 'stale-changed-source'
 
 
 def test_stale_changed_source_invalidates_relation(indexed):

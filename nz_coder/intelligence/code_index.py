@@ -15,6 +15,7 @@ from typing import Protocol
 
 from nz_coder.foundation import config
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.intelligence.analyzers import (
     AnalysisResult,
     AnalyzerRegistry,
@@ -40,7 +41,7 @@ def is_excluded_directory(name: str) -> bool:
     return name in EXCLUDED_DIRS
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 # Compatibility hook: analyzers share this stdlib module object and historical
 # tests/extensions patch ``code_index.ast.parse`` to observe AST cache reuse.
 ast = _ast
@@ -223,6 +224,7 @@ class FileEntry:
     confidence: float = 0.0
     source: str = ""
     imports: tuple[ImportEntry, ...] = ()
+    content_hash: str = ""
 
 
 @dataclass(frozen=True)
@@ -379,7 +381,8 @@ class PersistentCodeIndex:
                 capability_tier TEXT NOT NULL,
                 confidence REAL NOT NULL,
                 source TEXT NOT NULL,
-                indexed_at REAL NOT NULL
+                indexed_at REAL NOT NULL,
+                content_hash TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS symbols (
                 symbol_id TEXT PRIMARY KEY,
@@ -410,6 +413,7 @@ class PersistentCodeIndex:
                 resolution_kind TEXT NOT NULL DEFAULT 'unresolved',
                 confidence REAL NOT NULL,
                 source TEXT NOT NULL,
+                lexical_binding_json TEXT,
                 candidates_json TEXT NOT NULL DEFAULT '[]'
             );
             CREATE TABLE IF NOT EXISTS imports (
@@ -435,6 +439,7 @@ class PersistentCodeIndex:
                 resolution_kind TEXT NOT NULL DEFAULT 'unresolved',
                 confidence REAL NOT NULL,
                 source TEXT NOT NULL,
+                lexical_binding_json TEXT,
                 candidates_json TEXT NOT NULL DEFAULT '[]',
                 usage_role TEXT NOT NULL DEFAULT 'unknown'
             );
@@ -509,6 +514,7 @@ class PersistentCodeIndex:
         relative = self._relative(path)
         language = _index_language(path)
         fingerprint = (stat.st_mtime_ns, stat.st_size)
+        content_hash = ""
         if stat.st_size > max(1, int(config.REPO_MAP_MAX_FILE_BYTES)):
             empty = AnalysisResult(
                 language, CapabilityTier.LEXICAL_FALLBACK.value, 0.0, "size-limit",
@@ -516,7 +522,11 @@ class PersistentCodeIndex:
             )
         else:
             try:
-                source = path.read_text(encoding="utf-8", errors="replace")
+                source, identity = WorkspaceFileAccess(self.workspace).read_text_with_identity(
+                    relative, errors="replace", maximum=max(1, int(config.REPO_MAP_MAX_FILE_BYTES)))
+                # 原始字节摘要和解析文本来自同一个受控句柄读取。
+                content_hash = identity.content_hash
+                fingerprint = (identity.mtime_ns, identity.size)
                 empty = self.analyzers.analyze_file(
                     path=path, relative=relative, source=source, language=language,
                 )
@@ -538,7 +548,7 @@ class PersistentCodeIndex:
         entry = FileEntry(
             relative, language, fingerprint, symbols, empty.parse_error,
             module_id, empty.capability_tier, empty.confidence,
-            empty.source, imports,
+            empty.source, imports, content_hash,
         )
         return entry, empty
 
@@ -564,11 +574,11 @@ class PersistentCodeIndex:
     ) -> None:
         connection.execute("DELETE FROM files WHERE path = ?", (entry.path,))
         connection.execute(
-            "INSERT INTO files VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO files VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 entry.path, entry.language, entry.module_id, entry.fingerprint[0],
                 entry.fingerprint[1], entry.parse_error, entry.capability_tier,
-                entry.confidence, entry.source, time.time(),
+                entry.confidence, entry.source, time.time(), entry.content_hash,
             ),
         )
         connection.executemany(
@@ -585,13 +595,13 @@ class PersistentCodeIndex:
         )
         connection.executemany(
             "INSERT INTO refs(path, source_symbol_id, raw_name, qualifier, target_symbol_id, "
-            "line, column_no, context, resolution_kind, confidence, source, candidates_json) "
-            "VALUES (?, ?, ?, ?, NULL, ?, ?, ?, 'unresolved', ?, ?, '[]')",
+            "line, column_no, context, resolution_kind, confidence, source, candidates_json, lexical_binding_json) "
+            "VALUES (?, ?, ?, ?, NULL, ?, ?, ?, 'unresolved', ?, ?, '[]', ?)",
             [
                 (
                     item.source_file, item.source_symbol_id, item.raw_name,
                     item.qualifier, item.line, item.column, item.context,
-                    item.confidence, item.source,
+                    item.confidence, item.source, json.dumps(item.lexical_binding),
                 )
                 for item in analysis.references
             ],
@@ -609,13 +619,13 @@ class PersistentCodeIndex:
         )
         connection.executemany(
             "INSERT INTO calls(path, caller_symbol_id, caller_name, raw_name, qualifier, "
-            "callee_symbol_id, line, resolution_kind, confidence, source, candidates_json, usage_role) "
-            "VALUES (?, ?, ?, ?, ?, NULL, ?, 'unresolved', ?, ?, '[]', ?)",
+            "callee_symbol_id, line, resolution_kind, confidence, source, candidates_json, usage_role, lexical_binding_json) "
+            "VALUES (?, ?, ?, ?, ?, NULL, ?, 'unresolved', ?, ?, '[]', ?, ?)",
             [
                 (
                     item.call_site_file, item.caller_symbol_id, item.caller_name,
                     item.raw_name, item.qualifier, item.line, item.confidence, item.source,
-                    item.usage_role,
+                    item.usage_role, json.dumps(item.lexical_binding),
                 )
                 for item in analysis.calls
             ],
@@ -768,7 +778,7 @@ class PersistentCodeIndex:
         with self._lock, self._connect() as connection:
             query = (
                 "SELECT id, path, line, raw_name, qualifier, caller_symbol_id FROM calls "
-                "WHERE callee_symbol_id IS NULL"
+                "WHERE callee_symbol_id IS NULL AND resolution_kind != 'lexical-shadowing'"
             )
             params: list[object] = []
             normalized_paths = tuple(dict.fromkeys(
@@ -809,8 +819,7 @@ class PersistentCodeIndex:
                 if target is None:
                     target = connection.execute(
                         "SELECT symbol_id FROM symbols WHERE path = ? "
-                        "AND (? = '' OR name = ?) "
-                        "ORDER BY ABS(line - ?), line LIMIT 1",
+                        "AND (? = '' OR name = ?) AND line = ? LIMIT 1",
                         (
                             location.file_path, location.name, location.name,
                             max(1, int(location.line)),
@@ -923,7 +932,7 @@ class PersistentCodeIndex:
                 return 0
         query = (
             f"SELECT id, path, {owner_column} AS owner_symbol_id, raw_name, qualifier, "
-            f"confidence, source FROM {relation}"
+            f"confidence, source, lexical_binding_json FROM {relation}"
         )
         if clauses:
             query += " WHERE " + " OR ".join(clauses)
@@ -962,6 +971,11 @@ class PersistentCodeIndex:
             target_paths.update(discovered)
             pending_import_paths.update(discovered)
 
+        for row in call_rows:
+            binding = json.loads(row["lexical_binding_json"] or "null")
+            if binding and binding.get("kind") == "import":
+                target_paths.update(cls._resolve_import_files(
+                    str(row["path"]), binding["module"], indexed_paths, modules))
         symbol_paths = call_paths | target_paths
         symbol_filters = (
             ("symbols.path", symbol_paths),
@@ -1012,8 +1026,24 @@ class PersistentCodeIndex:
             )
             confidence = base_confidence
 
+            binding = json.loads(row["lexical_binding_json"] or "null")
+            if binding and binding.get("kind") == "unresolved":
+                connection.execute(
+                    f"UPDATE {relation} SET {target_column}=NULL, resolution_kind='lexical-shadowing', "
+                    "confidence=0, candidates_json='[]' WHERE id=?", (int(row["id"]),))
+                resolved_count += 1
+                continue
+            bound_imports = imports.get(path, [])
+            if binding and binding.get("kind") == "import":
+                bound_imports = [{**binding, "kind": binding["import_kind"]}]
+            if binding and binding.get("kind") == "symbol" and not qualifier:
+                target = by_id.get(binding["symbol_id"])
+                if target:
+                    kind, confidence = "lexical-symbol", 0.99
+
             local = by_path.get(path, [])
-            if owner and qualifier.split(".", 1)[0] in {"self", "cls"}:
+            if (owner and qualifier.split(".", 1)[0] in {"self", "cls"}
+                    and (not binding or binding.get("kind") == "receiver")):
                 owner_name = str(owner["qualified_name"]).rsplit(".", 1)[0]
                 matches = [
                     item for item in local
@@ -1024,14 +1054,20 @@ class PersistentCodeIndex:
 
             if target is None and qualifier:
                 root = qualifier.split(".", 1)[0]
+                bound_symbol = by_id.get(binding.get("symbol_id", "")) if binding else None
+                if bound_symbol and bound_symbol["kind"] == "class":
+                    qualified = ".".join((bound_symbol["qualified_name"], *qualifier.split(".")[1:], raw_name))
+                    matches = [item for item in local if item["qualified_name"] == qualified]
+                    if len(matches) == 1:
+                        target, kind, confidence = matches[0], "qualified-same-module", 0.97
                 matches = [
                     item for item in local
                     if item["qualified_name"].endswith(f".{qualifier}.{raw_name}")
                 ]
-                if len(matches) == 1:
+                if len(matches) == 1 and not binding:
                     target, kind, confidence = matches[0], "qualified-same-module", 0.97
                 if target is None:
-                    for imported in imports.get(path, []):
+                    for imported in bound_imports:
                         if imported["binding"] != root:
                             continue
                         target_files = cls._resolve_import_files(
@@ -1049,7 +1085,7 @@ class PersistentCodeIndex:
                             target, kind, confidence = matches[0], "qualified-import-member", 0.96
                             break
 
-            if target is None and not qualifier:
+            if target is None and not qualifier and not binding:
                 matches = [item for item in local if item["name"] == raw_name]
                 top_level = [
                     item for item in matches
@@ -1060,7 +1096,7 @@ class PersistentCodeIndex:
                     target, kind, confidence = preferred[0], "exact-same-module", 0.99
 
             if target is None and not qualifier:
-                for imported in imports.get(path, []):
+                for imported in bound_imports:
                     if imported["binding"] != raw_name or imported["kind"] != "from-import":
                         continue
                     target_files = cls._resolve_import_files(
@@ -1103,7 +1139,7 @@ class PersistentCodeIndex:
             candidates = by_name.get(raw_name, [])
             # A dynamic ``object.method()`` is not made exact merely because the
             # repository currently has one method with that spelling.
-            if target is None and not qualifier and len(candidates) == 1:
+            if target is None and not binding and not qualifier and len(candidates) == 1:
                 target, kind, confidence = candidates[0], "unique-repository-symbol", 0.8
             candidate_ids = tuple(sorted(item["symbol_id"] for item in candidates)[:12])
             if target is None and candidate_ids:
@@ -1168,7 +1204,7 @@ class PersistentCodeIndex:
             entries.append(FileEntry(
                 path, row["language"], (int(row["mtime_ns"]), int(row["size"])),
                 symbols, row["parse_error"], row["module_id"], row["capability_tier"],
-                float(row["confidence"]), row["source"], imports,
+                float(row["confidence"]), row["source"], imports, row["content_hash"],
             ))
         return entries
 

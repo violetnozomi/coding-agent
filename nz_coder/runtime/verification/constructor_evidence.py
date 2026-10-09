@@ -11,7 +11,8 @@ from pathlib import Path
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.runtime.verification.dependency_evidence import (
     _safe_source,
-    MAX_FILE_BYTES,
+    _read_indexed_source, _validate_indexed_sources,
+    _unavailable_digest,
 )
 
 MAX_SYMBOLS = 2
@@ -45,11 +46,6 @@ def _native(entry):
     )
 
 
-def _fingerprint(access, entry):
-    current = access.stat(entry.path)
-    return (current.mtime_ns, current.size) == entry.fingerprint
-
-
 def _collect(service, root, changed, excluded):
     access = WorkspaceFileAccess(root)
     origins = service.index.snapshot(list(changed))
@@ -59,9 +55,16 @@ def _collect(service, root, changed, excluded):
     if len(origins.calls) > MAX_EDGES:
         return ConstructorEvidence(), {"fallback_reason": "edge-budget"}
     files = {f.path: f for f in origins.files}
+    reads = {}
+
+    def unavailable(reason):
+        return ConstructorEvidence(digest=_unavailable_digest(files, reads, reason)), {"fallback_reason": reason}
+
     for entry in origins.files:
-        if not _fingerprint(access, entry):
-            return ConstructorEvidence(), {"fallback_reason": "stale-caller"}
+        try:
+            _read_indexed_source(access, entry, reads)
+        except (OSError, ValueError, UnicodeError):
+            return unavailable("stale-caller")
     candidates = {}
     for edge in origins.calls:
         entry = files.get(edge.path)
@@ -125,13 +128,8 @@ def _collect(service, root, changed, excluded):
         start, end = definition.source_start_line, definition.end_line
         decision.update(source_start_line=start, end_line=end)
         try:
-            source, current = access.read_text_with_identity(
-                path, maximum=MAX_FILE_BYTES
-            )
+            source, current = _read_indexed_source(access, entry, reads)
             decision["source_hash"] = current.content_hash
-            if (current.mtime_ns, current.size) != entry.fingerprint:
-                decision["reason"] = "stale-source"
-                continue
             if "\x00" in source:
                 decision["reason"] = "nontext"
                 continue
@@ -161,15 +159,14 @@ def _collect(service, root, changed, excluded):
                 blocks.append(block)
                 remaining -= len(block)
         except (OSError, ValueError, UnicodeError):
-            decision["reason"] = "unsafe-or-unavailable-source"
+            return unavailable("stale-or-unavailable-source")
     # Reject a changed generation or bytes rather than mix stale topology/current source.
     if service.state.status != "ready" or service.state.generation != generation:
         return ConstructorEvidence(), {"fallback_reason": "index-changed"}
-    for entry in snapshot.files:
-        if not _fingerprint(access, entry):
-            return ConstructorEvidence(), {
-                "fallback_reason": "source-changed-during-read"
-            }
+    try:
+        _validate_indexed_sources(access, reads)
+    except (OSError, ValueError, UnicodeError):
+        return unavailable("source-changed-during-read")
     omitted = len(decisions) - len(selected)
     text = (
         LABEL + "".join(blocks) + f"\nOmitted candidate symbols: {omitted}\n"

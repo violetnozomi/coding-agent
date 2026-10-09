@@ -63,6 +63,7 @@ class ReferenceRecord:
     context: str
     confidence: float
     source: str
+    lexical_binding: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ class RawCallRecord:
     confidence: float
     source: str
     usage_role: str = "unknown"
+    lexical_binding: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -219,6 +221,100 @@ def _attribute_parts(node: ast.AST) -> list[str] | None:
     return None
 
 
+def _python_binding_lookup(tree, symbols):
+    """在已有 AST 上记录词法根绑定；不做类型推断或执行顺序猜测。"""
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    scope_types = (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                   ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+    facts = {}
+
+    def scope_of(node):
+        while node not in facts:
+            node = parents.get(node)
+            if node is None:
+                return tree
+        return node
+
+    for node in ast.walk(tree):
+        if isinstance(node, scope_types):
+            facts[node] = {}
+
+    def bind(scope, name, value, line):
+        entries = facts[scope].setdefault(name, [])
+        entries.append((value, line))
+
+    for node in ast.walk(tree):
+        scope = scope_of(parents.get(node))
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            symbol = symbols.get(node)
+            bind(scope, node.name, {"kind": "symbol", "symbol_id": symbol.symbol_id}
+                 if symbol else {"kind": "unresolved"}, node.lineno)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            args = node.args
+            positional = (*args.posonlyargs, *args.args)
+            for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs,
+                        *((args.vararg,) if args.vararg else ()),
+                        *((args.kwarg,) if args.kwarg else ())):
+                receiver = (
+                    isinstance(parents.get(node), ast.ClassDef)
+                    and positional and arg is positional[0]
+                    and arg.arg in {"self", "cls"}
+                    and not any(isinstance(d, ast.Name) and d.id == "staticmethod"
+                                for d in node.decorator_list)
+                )
+                bind(node, arg.arg, {"kind": "receiver" if receiver else "unresolved"}, 0)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            target_scope = scope_of(node)
+            # 推导式内海象赋值绑定到外层，不能漏掉其对后续调用的遮蔽。
+            if isinstance(parents.get(node), ast.NamedExpr):
+                while isinstance(target_scope, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                    target_scope = scope_of(parents.get(target_scope))
+            bind(target_scope, node.id, {"kind": "unresolved"}, node.lineno)
+        if isinstance(node, ast.ExceptHandler) and node.name:
+            bind(scope, node.name, {"kind": "unresolved"}, node.lineno)
+        if isinstance(node, (ast.Global, ast.Nonlocal)):
+            for name in node.names:
+                bind(scope, name, {"kind": "unresolved"}, 0)
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            conditional = parents.get(node) is not scope
+            for item in node.names:
+                name = item.asname or (item.name.split('.')[0] if isinstance(node, ast.Import) else item.name)
+                value = {"kind": "unresolved"} if conditional else {
+                    "kind": "import", "binding": name,
+                    "module": (item.name if isinstance(node, ast.Import)
+                               else '.' * node.level + (node.module or '')),
+                    "imported_name": None if isinstance(node, ast.Import) else item.name,
+                    "import_kind": "import" if isinstance(node, ast.Import) else "from-import",
+                }
+                bind(scope, name, value, node.lineno)
+        # 模式绑定不一定执行，保留 unknown，避免回落到模块导入。
+        if isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name:
+            bind(scope, node.name, {"kind": "unresolved"}, node.lineno)
+        if isinstance(node, ast.MatchMapping) and node.rest:
+            bind(scope, node.rest, {"kind": "unresolved"}, node.lineno)
+
+    def lookup(node, name):
+        scope = scope_of(node)
+        while scope is not None:
+            entries = facts[scope].get(name)
+            if entries:
+                if len(entries) == 1:
+                    value, line = entries[0]
+                    if line <= getattr(node, 'lineno', 0):
+                        return value
+                return {"kind": "unresolved"}
+            parent = parents.get(scope)
+            # 方法体不会捕获类命名空间，嵌套函数则会捕获外层函数。
+            skip_classes = isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+            scope = scope_of(parent) if parent is not None else None
+            while skip_classes and isinstance(scope, ast.ClassDef):
+                parent = parents.get(scope)
+                scope = scope_of(parent) if parent is not None else None
+        return None
+
+    return lookup
+
+
 class PythonAstAnalyzer:
     languages = frozenset({"python"})
     capability_tier = CapabilityTier.AST_NATIVE
@@ -300,9 +396,10 @@ class PythonAstAnalyzer:
                     collect(node.body, local_name, class_name)
 
         collect(tree.body)
+        binding_lookup = _python_binding_lookup(tree, node_symbols)
 
         imports: list[ImportRecord] = []
-        for node in ast.walk(tree):
+        for node in tree.body:
             if isinstance(node, ast.Import):
                 for item in node.names:
                     binding = item.asname or item.name.split(".", 1)[0]
@@ -353,6 +450,7 @@ class PythonAstAnalyzer:
                     line, column,
                     _compact(lines[line - 1] if line <= len(lines) else ""),
                     0.98, "python-ast",
+                    binding_lookup(node, parts[0]),
                 )
 
             def visit_Name(self, node: ast.Name) -> None:
@@ -437,6 +535,7 @@ class PythonAstAnalyzer:
                     confidence=0.98,
                     source="python-ast",
                     usage_role=usage_role,
+                    lexical_binding=binding_lookup(call, parts[0]),
                 ))
 
         return AnalysisResult(
