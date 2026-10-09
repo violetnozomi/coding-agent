@@ -104,3 +104,26 @@ def test_old_cache_is_rebuilt_not_backfilled_with_today_hash(tmp_path):
     rebuilt.scan(tmp_path, max_files=20)
     assert rebuilt.file_calls('factory.py')[0].callee_symbol_id is None
     assert rebuilt.snapshot(['factory.py']).files[0].content_hash
+
+
+def test_lsp_does_not_upgrade_shadowed_module_member_to_imported_class(tmp_path):
+    index = make_index(tmp_path, 'import model\ndef build(model):\n    return model.Payload()\n')
+    stats = index.augment_call_targets(SimpleNamespace(resolve=lambda request: ResolvedCallLocation(
+        file_path='model.py', line=1, name='Payload')), paths=['factory.py'])
+    assert stats.attempted == 1 and stats.resolved == 0
+    edge = index.file_calls('factory.py')[0]
+    assert edge.callee_symbol_id is None
+    assert edge.unresolved_target.candidates
+
+
+def test_lsp_parameter_location_does_not_choose_nearby_class(tmp_path):
+    index = make_index(tmp_path, 'def build(dynamic):\n    return dynamic()\n')
+    stats = index.augment_call_targets(SimpleNamespace(resolve=lambda request: ResolvedCallLocation(
+        file_path='model.py', line=2)), paths=['factory.py'])
+    # 根参数本来就不能增强；无参数绑定的未知名字也不能选择邻近类。
+    assert stats.resolved == 0
+    (tmp_path / 'factory.py').write_text('def build():\n    return unknown()\n')
+    index.update_paths(['factory.py'])
+    stats = index.augment_call_targets(SimpleNamespace(resolve=lambda request: ResolvedCallLocation(
+        file_path='model.py', line=2)), paths=['factory.py'])
+    assert stats.attempted == 1 and stats.resolved == 0

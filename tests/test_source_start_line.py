@@ -52,7 +52,7 @@ def test_index_rebuild_and_transport(tmp_path):
     index = PersistentCodeIndex(tmp_path)
     index.scan(tmp_path, max_files=10)
     with sqlite3.connect(index.database_path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
         assert db.execute("SELECT source_start_line FROM symbols").fetchone()[0] == 1
         db.execute("ALTER TABLE symbols DROP COLUMN source_start_line")
         db.execute("PRAGMA user_version=4")

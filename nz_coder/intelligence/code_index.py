@@ -777,7 +777,7 @@ class PersistentCodeIndex:
         truncated = False
         with self._lock, self._connect() as connection:
             query = (
-                "SELECT id, path, line, raw_name, qualifier, caller_symbol_id FROM calls "
+                "SELECT id, path, line, raw_name, qualifier, caller_symbol_id, lexical_binding_json FROM calls "
                 "WHERE callee_symbol_id IS NULL AND resolution_kind != 'lexical-shadowing'"
             )
             params: list[object] = []
@@ -813,12 +813,12 @@ class PersistentCodeIndex:
                 target = None
                 if location.symbol_id:
                     target = connection.execute(
-                        "SELECT symbol_id FROM symbols WHERE symbol_id = ?",
+                        "SELECT symbol_id, kind FROM symbols WHERE symbol_id = ?",
                         (location.symbol_id,),
                     ).fetchone()
                 if target is None:
                     target = connection.execute(
-                        "SELECT symbol_id FROM symbols WHERE path = ? "
+                        "SELECT symbol_id, kind FROM symbols WHERE path = ? "
                         "AND (? = '' OR name = ?) AND line = ? LIMIT 1",
                         (
                             location.file_path, location.name, location.name,
@@ -826,6 +826,10 @@ class PersistentCodeIndex:
                         ),
                     ).fetchone()
                 if target is None:
+                    continue
+                binding = json.loads(row["lexical_binding_json"] or "null")
+                # 动态接收者可由精确定义增强，但不能把遮蔽根参数重新认证成类。
+                if binding and binding.get("kind") == "unresolved" and target["kind"] == "class":
                     continue
                 connection.execute(
                     "UPDATE calls SET callee_symbol_id = ?, resolution_kind = ?, "
@@ -1028,9 +1032,11 @@ class PersistentCodeIndex:
 
             binding = json.loads(row["lexical_binding_json"] or "null")
             if binding and binding.get("kind") == "unresolved":
+                candidates = tuple(sorted(item["symbol_id"] for item in by_name.get(raw_name, []))[:12])
+                kind = "heuristic-candidates" if qualifier and candidates else "lexical-shadowing"
                 connection.execute(
-                    f"UPDATE {relation} SET {target_column}=NULL, resolution_kind='lexical-shadowing', "
-                    "confidence=0, candidates_json='[]' WHERE id=?", (int(row["id"]),))
+                    f"UPDATE {relation} SET {target_column}=NULL, resolution_kind=?, "
+                    "confidence=0, candidates_json=? WHERE id=?", (kind, json.dumps(candidates), int(row["id"])))
                 resolved_count += 1
                 continue
             bound_imports = imports.get(path, [])
