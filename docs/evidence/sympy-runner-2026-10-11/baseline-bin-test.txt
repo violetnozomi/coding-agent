@@ -1,0 +1,116 @@
+FF...........FFF....F                                                    [100%]
+=================================== FAILURES ===================================
+___________ test_strict_bash_executes_native_bin_test[test_sympify] ____________
+
+tmp_path = PosixPath('<private-path>
+selector = 'test_sympify'
+
+    @pytest.mark.parametrize("selector", ["test_sympify", "sympy/core/tests/test_sympify.py"])
+    def test_strict_bash_executes_native_bin_test(tmp_path, selector):
+        from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+        from nz_coder.runtime.process.workdir import scoped_workdir
+        from nz_coder.tools.bash import run_bash
+    
+        (tmp_path / "bin").mkdir()
+        (tmp_path / "bin/test").write_text("import sys\nprint(sys.argv[1])\n")
+        with scoped_workdir(tmp_path), scoped_runtime_overrides(strict_local_tools=True):
+            result = run_bash(f"python3 bin/test {selector} --no-colors")
+>       assert str(result).strip() == selector
+E       AssertionError: assert 'Error: arbit....test.label>.' == 'test_sympify'
+E         
+E         - test_sympify
+E         + Error: arbitrary Python execution is forbidden in SWE-bench strict mode. Allowed Python forms: python3 -m py_compile <file>, python3 -m compileall <path>, python3 -m pytest <narrow-target>, or python3 tests/runtests.py <dotted.test.label>.
+
+tests/test_swebench_strict.py:136: AssertionError
+_ test_strict_bash_executes_native_bin_test[sympy/core/tests/test_sympify.py] __
+
+tmp_path = PosixPath('<private-path>
+selector = 'sympy/core/tests/test_sympify.py'
+
+    @pytest.mark.parametrize("selector", ["test_sympify", "sympy/core/tests/test_sympify.py"])
+    def test_strict_bash_executes_native_bin_test(tmp_path, selector):
+        from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+        from nz_coder.runtime.process.workdir import scoped_workdir
+        from nz_coder.tools.bash import run_bash
+    
+        (tmp_path / "bin").mkdir()
+        (tmp_path / "bin/test").write_text("import sys\nprint(sys.argv[1])\n")
+        with scoped_workdir(tmp_path), scoped_runtime_overrides(strict_local_tools=True):
+            result = run_bash(f"python3 bin/test {selector} --no-colors")
+>       assert str(result).strip() == selector
+E       AssertionError: assert 'Error: arbit....test.label>.' == 'sympy/core/t...st_sympify.py'
+E         
+E         - sympy/core/tests/test_sympify.py
+E         + Error: arbitrary Python execution is forbidden in SWE-bench strict mode. Allowed Python forms: python3 -m py_compile <file>, python3 -m compileall <path>, python3 -m pytest <narrow-target>, or python3 tests/runtests.py <dotted.test.label>.
+
+tests/test_swebench_strict.py:136: AssertionError
+_ test_native_bin_test_is_targeted_verification[python3 bin/test test_sympify --no-colors] _
+
+command = 'python3 bin/test test_sympify --no-colors'
+
+    @pytest.mark.parametrize("command", [
+        "python3 bin/test test_sympify --no-colors",
+        "python bin/test sympy/core/tests/test_sympify.py --tb short",
+        "python3 bin/test test_sympify -k test_issue",
+    ])
+    def test_native_bin_test_is_targeted_verification(command):
+        from nz_coder.intelligence.verification_planner import classify_verification_command
+>       assert classify_verification_command(command) == "targeted"
+E       AssertionError: assert None == 'targeted'
+E        +  where None = <function classify_verification_command at 0x7180846f0720>('python3 bin/test test_sympify --no-colors')
+
+tests/test_verification_planner.py:13: AssertionError
+_ test_native_bin_test_is_targeted_verification[python bin/test sympy/core/tests/test_sympify.py --tb short] _
+
+command = 'python bin/test sympy/core/tests/test_sympify.py --tb short'
+
+    @pytest.mark.parametrize("command", [
+        "python3 bin/test test_sympify --no-colors",
+        "python bin/test sympy/core/tests/test_sympify.py --tb short",
+        "python3 bin/test test_sympify -k test_issue",
+    ])
+    def test_native_bin_test_is_targeted_verification(command):
+        from nz_coder.intelligence.verification_planner import classify_verification_command
+>       assert classify_verification_command(command) == "targeted"
+E       AssertionError: assert None == 'targeted'
+E        +  where None = <function classify_verification_command at 0x7180846f0720>('python bin/test sympy/core/tests/test_sympify.py --tb short')
+
+tests/test_verification_planner.py:13: AssertionError
+_ test_native_bin_test_is_targeted_verification[python3 bin/test test_sympify -k test_issue] _
+
+command = 'python3 bin/test test_sympify -k test_issue'
+
+    @pytest.mark.parametrize("command", [
+        "python3 bin/test test_sympify --no-colors",
+        "python bin/test sympy/core/tests/test_sympify.py --tb short",
+        "python3 bin/test test_sympify -k test_issue",
+    ])
+    def test_native_bin_test_is_targeted_verification(command):
+        from nz_coder.intelligence.verification_planner import classify_verification_command
+>       assert classify_verification_command(command) == "targeted"
+E       AssertionError: assert None == 'targeted'
+E        +  where None = <function classify_verification_command at 0x7180846f0720>('python3 bin/test test_sympify -k test_issue')
+
+tests/test_verification_planner.py:13: AssertionError
+______________ test_native_bin_test_empty_selection_is_not_a_pass ______________
+
+    def test_native_bin_test_empty_selection_is_not_a_pass():
+        # 来自固定初态 bin/test 的真实零选择输出；退出 0 也没有运行测试。
+        vm = make_vm(require_targeted=True)
+        vm.mark_write("edit_file", {"path": "module.py"})
+        vm.observe_bash({"command": "python3 bin/test test_no_such_test --no-colors"},
+                        "================== tests finished: 0 passed, in 0.00 seconds ===================",
+                        False, False, exit_code=0)
+>       assert vm.status()["last_verification"]["status"] == "skipped"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/test_verification.py:45: TypeError
+=========================== short test summary info ============================
+FAILED tests/test_swebench_strict.py::test_strict_bash_executes_native_bin_test[test_sympify]
+FAILED tests/test_swebench_strict.py::test_strict_bash_executes_native_bin_test[sympy/core/tests/test_sympify.py]
+FAILED tests/test_verification_planner.py::test_native_bin_test_is_targeted_verification[python3 bin/test test_sympify --no-colors]
+FAILED tests/test_verification_planner.py::test_native_bin_test_is_targeted_verification[python bin/test sympy/core/tests/test_sympify.py --tb short]
+FAILED tests/test_verification_planner.py::test_native_bin_test_is_targeted_verification[python3 bin/test test_sympify -k test_issue]
+FAILED tests/test_verification.py::test_native_bin_test_empty_selection_is_not_a_pass
+6 failed, 15 passed, 247 deselected in 0.30s

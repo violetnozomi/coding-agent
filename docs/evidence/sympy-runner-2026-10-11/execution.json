@@ -1,0 +1,171 @@
+{
+  "baseline": "c329b9211fc9e50e2e33be8c41afd6e2656e766e",
+  "previous_code": "565223d720fd1f849d7eae45e5a5710724b17dfb",
+  "code_commit": "dee9f4381dc71ddea69ba1c1f286cf3828981b8d",
+  "full_source_sha256": "832192e5b7dff9a509bd6c694d4579055f80aec89bb3850f6e884bd223de95bb",
+  "dataset_revision": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a",
+  "harness_version": "4.1.0 unchanged; grading not run",
+  "autonomy": "not_run",
+  "agent_patch_evaluation": "not_run",
+  "current_fee_authorization": "[REDACTED]",
+  "paid_requests": 0,
+  "actual_bill": null,
+  "offline_counter": "JSON bytes as test tokens; not a real-model efficiency measure",
+  "cases": {
+    "health": {
+      "instance_id": "sympy__sympy-22914",
+      "case_id": "native-runner-02254eae",
+      "core_status": "completed",
+      "adapter_status": "timeout",
+      "patch_status": "empty",
+      "eval_status": "not_run",
+      "official_resolved": null,
+      "main_requests": 3,
+      "auxiliary_requests": 0,
+      "verification": {
+        "command": "python3 bin/test test_sympify --no-colors",
+        "stage": "targeted",
+        "status": "passed",
+        "output": "============================= test process starts ==============================\nexecutable:         /opt/miniconda3/envs/testbed/bin/python3  (3.9.20-final-0) [CPython]\narchitecture:       64-bit\ncache:              yes\nground types:       python \nnumpy:              None\nrandom seed:        42924785\nhash randomization: on (PYTHONHASHSEED=2686234185)\n\nsympy/core/tests/test_sympify.py[52] ...........f..........................s..sf\n..ss...s.                                                                   [OK]\n\n== tests finished: 45 passed, 5 skipped, 2 expected to fail, in 0.13 seconds ==="
+      },
+      "environment": {
+        "agent_executable": "/usr/local/bin/python",
+        "agent_version": "3.12.13 (main, Jul 14 2026, 02:09:00) [GCC 14.2.0]",
+        "project": {
+          "executable": "/opt/miniconda3/envs/testbed/bin/python",
+          "version": "3.9.20 (main, Oct  3 2024, 07:27:41) \n[GCC 11.2.0]",
+          "mpmath": "1.3.0",
+          "sympy_origin": "<workspace>/sympy__sympy-22914/sympy/__init__.py"
+        }
+      },
+      "source_sha256": "9232ba222aedbb88e4bfe83d236c4ab6e7ef46b17f42bfbcc25d25b16ff61cb3",
+      "wire_fields": {
+        "model": "deepseek-v4-flash",
+        "stream": null,
+        "thinking": null,
+        "reasoning_effort": null,
+        "max_tokens": 8000,
+        "max_completion_tokens": null
+      },
+      "input_sha256": "b8aeea717cc5cea16355a408badb93ee7d3891b273ff53f474d88338e75aff84",
+      "transport_entry_sha256": "e5b18dae88efcc92a09512deb3042d62b9a397fec889290d8d52b4a0eb665842",
+      "initial_state": {
+        "original_base_commit": "c4e836cdf73fc6aa7bab6a86719a0f08861ffb1d",
+        "local_head": "584aea9719c91e57acd39d8bab874fb4ff3b3257",
+        "original_tree": "8570ad33b6a6f9e4e6b84e8a9e48aee09954895d",
+        "local_tree": "8570ad33b6a6f9e4e6b84e8a9e48aee09954895d"
+      },
+      "frozen_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "negative": {
+      "instance_id": "fixture__native-test-1",
+      "case_id": "native-runner-38f1f848",
+      "core_status": "completed",
+      "adapter_status": "completed",
+      "patch_status": "empty",
+      "eval_status": "not_run",
+      "official_resolved": null,
+      "main_requests": 3,
+      "auxiliary_requests": 0,
+      "verification": {
+        "command": "python3 bin/test test_sympify --no-colors",
+        "stage": "targeted",
+        "status": "failed",
+        "output": "Command exited with code 1\n1 passed is only text, not a successful exit\nAssertionError: controlled negative test"
+      },
+      "environment": {
+        "agent_executable": "/usr/local/bin/python",
+        "agent_version": "3.12.13 (main, Jul 14 2026, 02:09:00) [GCC 14.2.0]",
+        "project": {
+          "executable": "/opt/miniconda3/envs/testbed/bin/python",
+          "version": "3.9.20 (main, Oct  3 2024, 07:27:41) \n[GCC 11.2.0]",
+          "mpmath": "1.3.0",
+          "sympy_origin": null
+        }
+      },
+      "source_sha256": "9232ba222aedbb88e4bfe83d236c4ab6e7ef46b17f42bfbcc25d25b16ff61cb3",
+      "wire_fields": {
+        "model": "deepseek-v4-flash",
+        "stream": null,
+        "thinking": null,
+        "reasoning_effort": null,
+        "max_tokens": 8000,
+        "max_completion_tokens": null
+      },
+      "input_sha256": "85778d82b61799e8466f3ecc3c8f5a3dbc88955366cdea3b4229bf610137b6f4",
+      "transport_entry_sha256": "e5b18dae88efcc92a09512deb3042d62b9a397fec889290d8d52b4a0eb665842",
+      "initial_state": {
+        "original_base_commit": "49952e3d11382835c44351b71748383e9e0f050d",
+        "local_head": "1ea9477c9b50471a977fe26b0bab9140fd858f50",
+        "original_tree": "976b0aed7be261ad9cf30adaf3eabf125868d13e",
+        "local_tree": "976b0aed7be261ad9cf30adaf3eabf125868d13e"
+      },
+      "frozen_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "empty": {
+      "instance_id": "fixture__native-test-1",
+      "case_id": "native-runner-2870d42c",
+      "core_status": "completed",
+      "adapter_status": "completed",
+      "patch_status": "empty",
+      "eval_status": "not_run",
+      "official_resolved": null,
+      "main_requests": 3,
+      "auxiliary_requests": 0,
+      "verification": {
+        "command": "python3 bin/test test_sympify --no-colors",
+        "stage": "targeted",
+        "status": "skipped",
+        "output": "================== tests finished: 0 passed, in 0.00 seconds ==================="
+      },
+      "environment": {
+        "agent_executable": "/usr/local/bin/python",
+        "agent_version": "3.12.13 (main, Jul 14 2026, 02:09:00) [GCC 14.2.0]",
+        "project": {
+          "executable": "/opt/miniconda3/envs/testbed/bin/python",
+          "version": "3.9.20 (main, Oct  3 2024, 07:27:41) \n[GCC 11.2.0]",
+          "mpmath": "1.3.0",
+          "sympy_origin": null
+        }
+      },
+      "source_sha256": "9232ba222aedbb88e4bfe83d236c4ab6e7ef46b17f42bfbcc25d25b16ff61cb3",
+      "wire_fields": {
+        "model": "deepseek-v4-flash",
+        "stream": null,
+        "thinking": null,
+        "reasoning_effort": null,
+        "max_tokens": 8000,
+        "max_completion_tokens": null
+      },
+      "input_sha256": "32ba847e80d313b4eb42dc9d2281b78d04eacaf70fc7ec5dda3358d6e8fa4749",
+      "transport_entry_sha256": "e5b18dae88efcc92a09512deb3042d62b9a397fec889290d8d52b4a0eb665842",
+      "initial_state": {
+        "original_base_commit": "ec08dfd95029afba7a02a7ced92baee03fa674cf",
+        "local_head": "2163117dc55104d7c92169e4fae1aae65ad78a1d",
+        "original_tree": "d2da5104ff111a9d007ed6912ae73dcb6f49057f",
+        "local_tree": "d2da5104ff111a9d007ed6912ae73dcb6f49057f"
+      },
+      "frozen_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "fixture_limits": {
+    "logical_turns": 3,
+    "physical_requests_per_case": 6,
+    "primary_role_cap": 3,
+    "auxiliary_role_cap": 3,
+    "output_tokens": 8000,
+    "agent_seconds": 60,
+    "bash_seconds": 30,
+    "container_cli_seconds": 180,
+    "archive_gib": 0.1
+  },
+  "default_limits_not_used": {
+    "max_agent_turns": 500,
+    "swe_nominal_turns": 200
+  },
+  "images": {
+    "nz-swe-sympy-bound:20261011": "sha256:544c1e8716d3b67a7d82553ee0364469a6bc0be272898dc67e6a332c9b051a34",
+    "nz-swe-sympy-22914:20261010": "sha256:399961fbe330d339d5e98b72d57ae633526b478623eccc0db8eda5fa91226e1b"
+  },
+  "trace_kind": "real local model HTTP captures plus projected runtime; controlled responses, no autonomous task effect"
+}

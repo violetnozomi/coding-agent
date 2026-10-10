@@ -1,0 +1,41 @@
+[
+  {
+    "instance_id": "sympy__sympy-22914",
+    "repo": "sympy/sympy",
+    "base_commit": "c4e836cdf73fc6aa7bab6a86719a0f08861ffb1d",
+    "initial_state": {
+      "original_base_commit": "c4e836cdf73fc6aa7bab6a86719a0f08861ffb1d",
+      "local_head": "584aea9719c91e57acd39d8bab874fb4ff3b3257",
+      "original_tree": "8570ad33b6a6f9e4e6b84e8a9e48aee09954895d",
+      "local_tree": "8570ad33b6a6f9e4e6b84e8a9e48aee09954895d"
+    },
+    "status": "agent_failed",
+    "summary": "agent timed out after 60s",
+    "agent_status": {
+      "status": "timeout",
+      "error": "agent timed out after 60s"
+    },
+    "adapter_error": null,
+    "session_id": "swe-20261010_162204-b5b048ea",
+    "trace": "<workspace>/sympy__sympy-22914/.nz-coder-runs/swe-20261010_162204-b5b048ea__20261010_162204_4da6b6a6.jsonl",
+    "workdir": "<workspace>/sympy__sympy-22914",
+    "duration": 62.9,
+    "tool_calls": 2,
+    "tool_errors": 0,
+    "policy_rejections": 0,
+    "process_warnings": [],
+    "risk_reasons": [
+      "agent_status:timeout"
+    ],
+    "empty_patch_retries": 0,
+    "model_patch": "",
+    "patch_status": "empty",
+    "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "eval_status": "not_run",
+    "official_resolved": null,
+    "public_input": "<workspace>/sympy__sympy-22914/.nz-coder-runs/public-inference-input.json",
+    "trace_archive": "/result/predictions-raw-traces/sympy__sympy-22914",
+    "trace_archive_bytes": 35723785,
+    "diagnostic_cleanup_safe": true
+  }
+]

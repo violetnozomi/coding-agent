@@ -1,0 +1,9 @@
+{
+  "attempts": 1,
+  "benchmark_profile": "verified",
+  "event": "benchmark_instance",
+  "instance_id": "fixture__native-test-1",
+  "prompt": "Solve SWE-bench Verified instance `fixture__native-test-1`.\nRepository: fixture/native-test\nBase commit: 49952e3d11382835c44351b71748383e9e0f050d\n\nProblem statement:\nDiagnose the failing native test. Report remaining work honestly.\n\nWhen finished, leave the repository with only the intended source-code changes.",
+  "session_id": "swe-20261010_162348-928b734a",
+  "strict": true
+}

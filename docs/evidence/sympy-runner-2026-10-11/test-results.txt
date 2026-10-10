@@ -1,0 +1,26 @@
+实际验证与限制
+
+python -m pytest -q -rs tests/test_swebench_strict.py tests/test_verification_planner.py tests/test_task_policy.py tests/test_verification.py tests/evaluation/test_swebench_inference_input.py
+........................................................................ [ 25%]
+........................................................................ [ 50%]
+........................................................................ [ 76%]
+....................................................................     [100%]
+284 passed in 1.71s
+
+python -m pytest -q -rs tests/test_bash_progress.py tests/test_command_policy.py tests/security/test_subprocess_environment.py
+.............................                                            [100%]
+29 passed in 1.96s
+
+NZ_SWE_SYMPY_SMOKE=1 NZ_SWE_SYMPY_BASE=<frozen-public-base> python -m pytest -q -rs tests/evaluation/test_swebench_native_runner.py --basetemp=/tmp/nzsympy-1011-delivery
+...                                                                      [100%]
+3 passed in 112.07s (0:01:52)
+
+ruff: All checks passed!
+compileall: exit=0
+git diff --check: exit=0
+
+上述实际运行没有 skipped。默认未设置 NZ_SWE_SYMPY_SMOKE=1 时三个 Docker 测试会跳过，原因是需要已存在的本地匹配镜像和公开初态；不会下载依赖。Linux 已运行，Windows 和全仓未运行。
+
+基线隔离回放：6 failed, 15 passed, 247 deselected。前五项证明原准入和分类缺口；第六项在基线没有 last_verification，TypeError，并非证明基线已把 bin/test 记为 passed。零选择 passed→skipped 的失败断言在接入新 runner 后、添加格式识别前另行复现（actual passed, expected skipped）。见原始 baseline-bin-test.txt 和真实 zero-selection.txt。
+
+早期受控夹具失败保留在私有 offline-first.txt、offline-permission.txt、offline-final.txt、offline-verified.txt、offline-complete.txt；一次字段检查修正前主动中止见 offline-archive.txt。它们不是已通过测试，不计自主尝试，也不是历史 compaction 失败。最后完整回归见 offline-delivery.txt。关闭阶段 timeout 没有被改写成 completed；runtime 回归证明测试通道和状态真实性，不证明完整正常退出。

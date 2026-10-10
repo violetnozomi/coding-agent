@@ -1,0 +1,1 @@
+{"id": "local-native-test", "object": "chat.completion", "created": 0, "model": "deepseek-v4-flash", "choices": [{"index": 0, "message": {"role": "assistant", "content": "Health check only; no issue fix was implemented. Remaining repair is unverified."}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 33216, "completion_tokens": 4, "total_tokens": 33220}}

@@ -1,0 +1,14 @@
+Selected 1 SWE-bench verified instance(s).
+Policy: strict pass@1
+Work root: <workspace>
+Predictions: /result/predictions.jsonl
+Raw trace archive: /result/predictions-raw-traces (warning=85899345 bytes, hard=107374182 bytes)
+Manifest: /result/predictions.manifest.json
+
+[1/1] fixture__native-test-1
+
+[fixture__native-test-1]
+  read_file: unknown <path><workspace>/fixture__native-test-1/bin/test</path> <type>file</type> <content> 1: print('================== tests finished: 0 passed, in 0.00 seconds 
+  bash: unknown ================== tests finished: 0 passed, in 0.00 seconds ===================
+[EMPTY_PATCH] fixture__native-test-1: patch_chars=0, tools=2, risk=verification_needed
+Report: /result/predictions.report.json

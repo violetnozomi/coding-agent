@@ -1,0 +1,8 @@
+{
+  "baseline": "git archive c329b9211fc9e50e2e33be8c41afd6e2656e766e nz_coder; isolated PYTHONPATH + copied current regression files; python -m pytest -q tests/test_swebench_strict.py tests/test_verification_planner.py tests/test_verification.py -k bin_test",
+  "regressions": "python -m pytest -q -rs tests/test_swebench_strict.py tests/test_verification_planner.py tests/test_task_policy.py tests/test_verification.py tests/evaluation/test_swebench_inference_input.py",
+  "bash": "python -m pytest -q -rs tests/test_bash_progress.py tests/test_command_policy.py tests/security/test_subprocess_environment.py",
+  "runtime": "NZ_SWE_SYMPY_SMOKE=1 NZ_SWE_SYMPY_BASE=<frozen-public-base> python -m pytest -q -rs tests/evaluation/test_swebench_native_runner.py --basetemp=/tmp/nzsympy-1011-delivery",
+  "build": "docker build --pull=false --network=none -t nz-swe-sympy-bound:20261011 -f <private-archive>/Dockerfile <private-archive>",
+  "lint": "python -m ruff check <10 changed Python files>; python -m compileall -q <10 changed Python files>; git diff --check"
+}

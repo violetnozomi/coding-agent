@@ -1,0 +1,10 @@
+{
+  "instance_id": "fixture__native-test-1",
+  "model_patch": "",
+  "patch_chars": 0,
+  "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "session_id": "swe-20261010_162351-f8c4a48a",
+  "status": "empty_patch",
+  "summary": "patch_chars=0, tools=2, risk=verification_needed",
+  "trace": "<workspace>/fixture__native-test-1/.nz-coder-runs/swe-20261010_162351-f8c4a48a__20261010_162351_241129c1.jsonl"
+}
