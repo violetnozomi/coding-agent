@@ -64,6 +64,8 @@ def test_native_bin_test_through_isolated_swe_cli(tmp_path, mode):
     subprocess.run(["git", "clone", "--bare", str(source), str(bare)], check=True, capture_output=True)
     (case / "input/instances.json").write_text(json.dumps(packet))
     entry = (root / "tests/evaluation/fixtures/swebench_relay_entry.py").read_text()
+    shutil.copy2(root / "tests/evaluation/fixtures/swebench_close_observer.py",
+                 case / "driver/swebench_close_observer.py")
     # 无人值守 CLI 的工作区仍未信任；通过现有审批接口注入本轮已授权的窄测试，
     # 不修改 PermissionManager，也不把安全拒绝改成允许。
     entry = entry.replace("install_model_transport()\n\nif __name__", '''install_model_transport()
@@ -91,6 +93,10 @@ def configured_environment(system_prompt, **kwargs):
 composition.build_product_environment = configured_environment
 
 if __name__''')
+    entry = entry.replace('if __name__ == "__main__":', '''from swebench_close_observer import install as observe_close
+observe_close()
+
+if __name__ == "__main__":''')
     # 只读的环境回执在真实 CLI 结束后产生，不修改项目、不向模型提供解题分析。
     entry = entry.replace("raise SystemExit(main(sys.argv[1:]))", """result = main(sys.argv[1:])
     import json, subprocess
@@ -238,11 +244,20 @@ if __name__''')
         assert report["official_resolved"] is None
         assert report["patch_status"] == "empty"
         # 原生回合可以结束；没有补丁/官方评分，不能据此声称 SWE 解题成功。
-        assert report["agent_status"]["status"] in {"completed", "max_turns", "timeout"}
-        if report["agent_status"]["status"] == "timeout":
-            # Core 已结束不代表外层关闭成功；保留关闭阶段超时，不洗成 completed。
-            assert run_end["status"] == "completed"
-            assert report["agent_status"]["error"] == "agent timed out after 60s"
+        assert report["agent_status"]["status"] == run_end["status"] == "completed"
+        lifecycle = [json.loads(line) for line in (case / "result/lifecycle.jsonl").read_text().splitlines()]
+        sequence = [row["event"] for row in lifecycle]
+        for before, after in zip(("agent_execution_finished", "cleanup_started", "cleanup_finished", "worker_result_received"),
+                                 ("cleanup_started", "cleanup_finished", "worker_result_received", "attempt_parent_returned")):
+            assert sequence.index(before) < sequence.index(after)
+        closed = next(row for row in lifecycle if row["event"] == "cleanup_finished")
+        assert closed["complete"] and not closed["failures"]
+        assert not any(t["name"].startswith(("nz-repo-", "nz-process")) for t in closed["threads"])
+        assert next(row for row in lifecycle if row["event"] == "attempt_parent_returned")["children"] == []
+        finished = next(row for row in lifecycle if row["event"] == "agent_execution_finished")
+        ledger_rows = [json.loads(line) for line in (case / "ledger.jsonl").read_text().splitlines()]
+        assert all(row["monotonic"] < finished["monotonic"] for row in ledger_rows if row["event"] == "admitted")
+        assert not (case / "result/thread-stacks.txt").read_text()
         assert len(requests) <= 6
     finally:
         ledger.cancel(case.name)

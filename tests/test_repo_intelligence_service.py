@@ -8,6 +8,94 @@ import time
 import warnings
 
 
+def test_close_cancels_cold_scan_and_queued_query_without_partial_commit(tmp_path, monkeypatch):
+    import sqlite3
+    import pytest
+    from nz_coder.intelligence.service import RepoIntelligenceService
+
+    for name in ("first.py", "second.py"):
+        (tmp_path / name).write_text("def value(): return 1\n")
+    service = RepoIntelligenceService(tmp_path)
+    entered = threading.Event()
+    parsed = []
+    original_parse = service.index._parse
+
+    def parse(path):
+        parsed.append(path.name)
+        entered.set()
+        assert service._watch_stop.wait(2), "close did not signal its owned task"
+        return original_parse(path)
+
+    monkeypatch.setattr(service.index, "_parse", parse)
+    build = service.prewarm(max_files=20)
+    assert entered.wait(2)
+    queued_ran = threading.Event()
+    queued = service.submit_bounded_query(queued_ran.set)
+    service.close()
+
+    assert build.result().status == "cancelled"
+    assert parsed == ["first.py"]
+    assert queued.cancelled() and not queued_ran.is_set()
+    with pytest.raises(RuntimeError, match="closed"):
+        service.submit_bounded_query(lambda: None)
+    with sqlite3.connect(service.index.database_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM files").fetchone()[0] == 0
+        assert connection.execute("SELECT value FROM metadata WHERE key='generation'").fetchone()[0] == "0"
+    assert not any(thread.is_alive() for thread in service._executor._threads)
+
+
+def test_close_interrupts_an_active_sqlite_query(tmp_path):
+    import sqlite3
+    import pytest
+    from nz_coder.intelligence.service import RepoIntelligenceService
+
+    service = RepoIntelligenceService(tmp_path)
+    entered = threading.Event()
+
+    def query():
+        with service.index._connect() as connection:
+            connection.set_trace_callback(lambda _sql: entered.set())
+            return connection.execute(
+                "WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<10000000) "
+                "SELECT SUM(x) FROM n"
+            ).fetchone()
+
+    running = service.submit_bounded_query(query)
+    assert entered.wait(2)
+    service.close()
+    with pytest.raises(sqlite3.OperationalError, match="interrupted"):
+        running.result()
+    assert not any(thread.is_alive() for thread in service._executor._threads)
+
+
+def test_close_reports_uncooperative_work_and_can_be_retried(tmp_path):
+    import pytest
+    from nz_coder.intelligence.service import RepoIntelligenceService
+
+    service = RepoIntelligenceService(tmp_path)
+    entered, release = threading.Event(), threading.Event()
+
+    def uncooperative_query():
+        entered.set()
+        release.wait(2)
+
+    running = service.submit_bounded_query(uncooperative_query)
+    assert entered.wait(2)
+    queued_build = service.prewarm(max_files=20)
+    try:
+        with pytest.raises(RuntimeError, match="cleanup incomplete"):
+            service.close(timeout=0.01)
+        assert not running.done()
+        assert queued_build.cancelled()
+        with pytest.raises(RuntimeError, match="closed"):
+            service.prewarm()
+    finally:
+        release.set()
+        running.result(timeout=2)
+        service.close(timeout=0.1)
+    assert not any(thread.is_alive() for thread in service._executor._threads)
+
+
 def _fork_acquire_worker(workspace: str, connection) -> None:
     from pathlib import Path
     from nz_coder.intelligence.service import (

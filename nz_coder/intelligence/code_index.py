@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import threading
 import time
+from concurrent.futures import CancelledError
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Protocol
@@ -328,8 +329,10 @@ def _database_lock(path: Path) -> threading.RLock:
 class PersistentCodeIndex:
     """SQLite-backed index isolated to one resolved workspace."""
 
-    def __init__(self, workspace: Path, *, analyzers: AnalyzerRegistry | None = None):
+    def __init__(self, workspace: Path, *, analyzers: AnalyzerRegistry | None = None,
+                 stop_event: threading.Event | None = None):
         self.workspace = Path(workspace).resolve()
+        self._stop_event = stop_event
         state_dir = self.workspace / ".nz-coder"
         if state_dir.exists():
             try:
@@ -351,11 +354,19 @@ class PersistentCodeIndex:
             self._create_schema(connection)
 
     def _connect(self) -> sqlite3.Connection:
+        self._check_cancelled()
         connection = sqlite3.connect(str(self.database_path), timeout=5.0)
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 5000")
         connection.row_factory = sqlite3.Row
+        if self._stop_event is not None:
+            # 与文件间的停止检查配合，中止已经进入 SQLite 的大批量索引操作。
+            connection.set_progress_handler(lambda: int(self._stop_event.is_set()), 1000)
         return connection
+
+    def _check_cancelled(self) -> None:
+        if self._stop_event is not None and self._stop_event.is_set():
+            raise CancelledError("repository index stopped")
 
     @staticmethod
     def _create_schema(connection: sqlite3.Connection) -> None:
@@ -482,6 +493,7 @@ class PersistentCodeIndex:
             candidates.append(base)
         else:
             for root, dir_names, file_names in os.walk(base, followlinks=False):
+                self._check_cancelled()
                 dir_names[:] = sorted(
                     name
                     for name in dir_names
@@ -491,6 +503,7 @@ class PersistentCodeIndex:
         files: list[Path] = []
         omitted = 0
         for candidate in candidates:
+            self._check_cancelled()
             try:
                 resolved = candidate.resolve()
                 relative = resolved.relative_to(self.workspace)
@@ -666,6 +679,7 @@ class PersistentCodeIndex:
                 for row in connection.execute("SELECT path, mtime_ns, size FROM files")
             }
             for path, relative in zip(files, relative_paths):
+                self._check_cancelled()
                 stat = path.stat()
                 fingerprint = (stat.st_mtime_ns, stat.st_size)
                 if not refresh and known.get(relative) == fingerprint:
@@ -677,6 +691,7 @@ class PersistentCodeIndex:
                     affected_ids.add(str(row["symbol_id"]))
                     affected_names.add(str(row["name"]))
                 entry, analysis = self._parse(path)
+                self._check_cancelled()
                 self._replace(connection, entry, analysis)
                 affected_paths.add(relative)
                 affected_ids.update(item.symbol_id for item in analysis.symbols)
@@ -730,6 +745,7 @@ class PersistentCodeIndex:
         affected_ids: set[str] = set()
         with self._lock, self._connect() as connection:
             for value in unique:
+                self._check_cancelled()
                 target = (self.workspace / value).resolve()
                 relative = self._relative(target)
                 affected_paths.add(relative)
@@ -743,6 +759,7 @@ class PersistentCodeIndex:
                     removed += max(0, cursor.rowcount)
                     continue
                 entry, analysis = self._parse(target)
+                self._check_cancelled()
                 self._replace(connection, entry, analysis)
                 affected_ids.update(item.symbol_id for item in analysis.symbols)
                 affected_names.update(item.name for item in analysis.symbols)

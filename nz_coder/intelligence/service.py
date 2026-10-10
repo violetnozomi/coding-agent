@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeout
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeout, wait
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -47,13 +47,14 @@ class RepoIntelligenceService:
         self.workspace = Path(workspace).resolve()
         if not self.workspace.is_dir():
             raise ValueError("Repo intelligence workspace must be a directory")
-        self.index = PersistentCodeIndex(self.workspace)
+        self._watch_stop = Event()
+        self.index = PersistentCodeIndex(self.workspace, stop_event=self._watch_stop)
         self.graph: RepositoryGraph | None = None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="nz-repo-index")
         self._future: Future | None = None
         self._state = RepoIntelligenceState()
         self._lock = RLock()
-        self._watch_stop = Event()
+        self._query_futures: set[Future] = set()
         self._watch_thread: Thread | None = None
         self._closed = False
         self._deferred_watch: tuple[float, float, int] | None = None
@@ -112,6 +113,7 @@ class RepoIntelligenceService:
         started = time.perf_counter()
         try:
             _entries, stats = self.index.scan(self.workspace, max_files=max_files)
+            self.index._check_cancelled()
             snapshot = self.index.snapshot()
             graph = RepositoryGraph(self.workspace, index=self.index)
             graph.build(max_files=max_files, snapshot=snapshot)
@@ -136,7 +138,8 @@ class RepoIntelligenceService:
         except Exception as exc:
             previous = self.state
             state = replace(
-                previous, status="failed", error=f"{type(exc).__name__}: {exc}",
+                previous, status="cancelled" if self._watch_stop.is_set() else "failed",
+                error=f"{type(exc).__name__}: {exc}",
                 worker_queue=0,
             )
         with self._lock:
@@ -169,7 +172,14 @@ class RepoIntelligenceService:
         with self._lock:
             if self._closed:
                 raise RuntimeError("Repo intelligence service is closed")
-        return self._executor.submit(callback)
+            future = self._executor.submit(callback)
+            self._query_futures.add(future)
+            future.add_done_callback(self._retire_query)
+            return future
+
+    def _retire_query(self, future: Future) -> None:
+        with self._lock:
+            self._query_futures.discard(future)
 
     @property
     def semantic_available(self) -> bool:
@@ -418,7 +428,8 @@ class RepoIntelligenceService:
                 self._process_catalog.clear()
         except Exception as exc:
             state = replace(
-                previous, status="failed", error=f"{type(exc).__name__}: {exc}",
+                previous, status="cancelled" if self._watch_stop.is_set() else "failed",
+                error=f"{type(exc).__name__}: {exc}",
                 last_updated_paths=paths, worker_queue=0,
             )
         with self._lock:
@@ -876,14 +887,27 @@ class RepoIntelligenceService:
                 "semantic_index": semantic_metrics,
             }
 
-    def close(self) -> None:
+    def close(self, *, timeout: float = 5.0) -> None:
+        deadline = time.monotonic() + timeout
         with self._lock:
             self._closed = True
             self._watch_stop.set()
+            futures = set(self._query_futures)
+            if self._future is not None:
+                futures.add(self._future)
+        for future in futures:
+            future.cancel()
         thread = self._watch_thread
         if thread is not None:
-            thread.join(timeout=5)
-        self._executor.shutdown(wait=True, cancel_futures=False)
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        # 排队任务 cancel() 后可能已被 shutdown 移除，不能等待它再被 worker 通知一次。
+        active = {future for future in futures if not future.done()}
+        _done, pending = wait(active, timeout=max(0.0, deadline - time.monotonic())) if active else (set(), set())
+        if pending or (thread is not None and thread.is_alive()):
+            # 只报告未停止，不能将非守护任务遗留伪装为关闭成功；SWE 外层仍负责进程树兜底。
+            self._executor.shutdown(wait=False, cancel_futures=True)
+            raise RuntimeError("Repo intelligence cleanup incomplete: owned work did not stop")
+        self._executor.shutdown(wait=True, cancel_futures=True)
 
 
 _REGISTRY_LOCK = RLock()
