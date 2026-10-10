@@ -1,0 +1,37 @@
+{
+  "baseline_commit": "969e4e6f49a7589814e47986c10324566ea0a5d6",
+  "git_head_at_execution": "969e4e6f49a7589814e47986c10324566ea0a5d6",
+  "dirty_at_execution": true,
+  "source_tree_sha256_at_archive": "5a9e3a8326e4b013f9dd15882f258363392e657b923ae6b97fab5b6d0fe728a8",
+  "harness_version": "4.1.0",
+  "official_documents_checked": "2026-10-10",
+  "python_host": "3.13.12",
+  "images": {
+    "nz-swe-runtime:20261010": {
+      "image_id": "sha256:6d0e249254401cf77f5380f509d1e5417005b35363f6696496de30da45dd42ee",
+      "repo_digests": []
+    },
+    "nz-swe-sympy-22914:20261010": {
+      "image_id": "sha256:399961fbe330d339d5e98b72d57ae633526b478623eccc0db8eda5fa91226e1b",
+      "repo_digests": []
+    },
+    "swebench/sweb.eval.x86_64.sympy_1776_sympy-22914:latest": {
+      "image_id": "sha256:b7c7a4d4d23624b3bd3020b0e629b5e541f335caf9543a790f47f4001691af5f",
+      "repo_digests": [
+        "swebench/sweb.eval.x86_64.sympy_1776_sympy-22914@sha256:aa5f1cf12ce166511d03eed6ac0de0f76b27777ac2c6ddb4a9b11f67f000941f"
+      ]
+    }
+  },
+  "models": {
+    "billed_requests": 0,
+    "authorization_current_phase": null,
+    "billed_cost": null,
+    "hosted_tokens": null
+  },
+  "http_records": "only local relay smoke captured raw requests/responses; other traces explicitly projected",
+  "formal_run_status": "not_run",
+  "astropy_environment": "blocked_incomplete_image_pull",
+  "sympy_environment": "matched Python 3.9.20 and dependency environment extracted; public tests executed; strict bin/test admission not yet proved",
+  "delivered_code_commit": "565223d720fd1f849d7eae45e5a5710724b17dfb",
+  "inference_isolation_default": "not provided by bare CLI; verified local smoke used existing Docker launcher"
+}

@@ -1,0 +1,8 @@
+{
+  "purpose": "official harness self-test only; not Agent success",
+  "harness_version": "4.1.0",
+  "revision": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a",
+  "predictions_sha256": "069a353877401cd7d399347f2a880c99d538b4c10ab43dfca1e938a49f7ab01a",
+  "patch_sha256": "9bf076ac9ded3e486c10a22e70156aa2299a72dea087233cde48a5de6dbb74df",
+  "image_id": "sha256:b7c7a4d4d23624b3bd3020b0e629b5e541f335caf9543a790f47f4001691af5f"
+}

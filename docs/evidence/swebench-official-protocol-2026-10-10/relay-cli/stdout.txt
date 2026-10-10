@@ -1,0 +1,14 @@
+Selected 1 SWE-bench verified instance(s).
+Policy: strict pass@1
+Work root: /workspace/runs
+Predictions: /result/predictions.jsonl
+Raw trace archive: /result/predictions-raw-traces (warning=16106127 bytes, hard=21474836 bytes)
+Manifest: /result/predictions.manifest.json
+
+[1/1] owner__repo-1
+
+[owner__repo-1]
+  read_file: unknown <path>/workspace/runs/owner__repo-1/source.py</path> <type>file</type> <content> 1: VALUE = 1  (End of file - total 1 lines) </content>
+  compact: unknown Compacting...
+[AGENT_FAILED] owner__repo-1: patch_chars=0, tools=2, risk=agent_status:aborted
+Report: /result/predictions.report.json

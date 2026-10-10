@@ -1,0 +1,30 @@
+{
+  "counts": {
+    "attempted": 1,
+    "completed": 1,
+    "empty_patch": 0,
+    "environment_blocked": 0,
+    "not_run": 0,
+    "patch_applied": 1,
+    "patch_not_applied": 0,
+    "patch_present": 1,
+    "planned": 1,
+    "resolved": 1,
+    "unknown": 0,
+    "unresolved": 0
+  },
+  "harness_returncode": 0,
+  "instances": [
+    {
+      "eval_status": "completed",
+      "instance_id": "sympy__sympy-22914",
+      "official_report": "logs/run_evaluation/nz-adapter-self-test-20261010/harness-self-test-gold/sympy__sympy-22914/report.json",
+      "official_resolved": true,
+      "patch_applied": true,
+      "patch_sha256": "9bf076ac9ded3e486c10a22e70156aa2299a72dea087233cde48a5de6dbb74df",
+      "patch_status": "present",
+      "reason": "official_report"
+    }
+  ],
+  "run_id": "nz-adapter-self-test-20261010"
+}

@@ -1,0 +1,21 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  3.072kB
+Step 1/5 : FROM swebench/sweb.eval.x86_64.sympy_1776_sympy-22914@sha256:aa5f1cf12ce166511d03eed6ac0de0f76b27777ac2c6ddb4a9b11f67f000941f AS dependencies
+ ---> b7c7a4d4d236
+Step 2/5 : FROM nz-swe-runtime:20261010
+ ---> 6d0e24925440
+Step 3/5 : USER root
+ ---> Running in b8ae4b001c2d
+ ---> Removed intermediate container b8ae4b001c2d
+ ---> 8475e7e3047b
+Step 4/5 : COPY --from=dependencies /opt/miniconda3/envs/testbed /opt/miniconda3/envs/testbed
+ ---> 86181a928cee
+Step 5/5 : RUN rm -f /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/sympy.egg-link /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/easy-install.pth
+ ---> Running in 8fa1e0ea340f
+ ---> Removed intermediate container 8fa1e0ea340f
+ ---> 399961fbe330
+Successfully built 399961fbe330
+Successfully tagged nz-swe-sympy-22914:20261010

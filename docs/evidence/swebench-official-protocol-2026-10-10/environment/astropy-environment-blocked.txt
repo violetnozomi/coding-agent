@@ -1,0 +1,1 @@
+Official image pull attempted; one layer had not completed after six minutes. The owned client was stopped. No matched Astropy inference environment is claimed. Other workloads and global Docker/network configuration were unchanged.

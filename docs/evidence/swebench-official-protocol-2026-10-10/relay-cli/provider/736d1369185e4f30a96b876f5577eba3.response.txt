@@ -1,0 +1,1 @@
+{"id": "local-test", "created": 0, "model": "deepseek-v4-flash", "object": "chat.completion", "choices": [{"index": 0, "message": {"role": "assistant", "content": "Task: read source.py and report. Observed VALUE = 1; no edits or tests."}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 1509, "completion_tokens": 4, "total_tokens": 1513}}

@@ -1,0 +1,6 @@
+{
+  "adapter": "NZ_SWE_DOCKER_SMOKE=1 python -m pytest -q -rs tests/test_swebench_lite.py tests/test_swebench_strict.py tests/test_swebench_trace_budget.py tests/evaluation/test_swebench_protocol.py --basetemp=/tmp/nzswe-1010-final",
+  "owner": "NZ_SWE_DOCKER_SMOKE=1 python -m pytest -q -rs tests/test_swebench_strict.py tests/evaluation/test_swebench_protocol.py --basetemp=/tmp/nzswe-1010-owner2",
+  "owner_cli_fixed": "NZ_SWE_DOCKER_SMOKE=1 python -m pytest -q tests/evaluation/test_swebench_protocol.py -k real_cli_spawn --basetemp=/tmp/nzswe-1010-cli3",
+  "core": "python -m pytest -q -rs tests/runtime/test_native_runner.py tests/runtime/test_verification_contract.py tests/runtime/test_verification_scheduler.py tests/runtime/test_node_verification_runtime.py tests/test_verification.py tests/test_verification_planner.py tests/test_edit_recovery.py tests/test_skill_governance.py tests/security/test_artifact_boundary.py tests/security/test_transaction_track.py tests/security/test_transaction_recovery.py"
+}

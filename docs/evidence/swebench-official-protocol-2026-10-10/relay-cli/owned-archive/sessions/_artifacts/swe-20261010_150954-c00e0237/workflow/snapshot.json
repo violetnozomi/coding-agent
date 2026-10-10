@@ -1,0 +1,32 @@
+{
+  "counts": {
+    "cancelled": 0,
+    "completed": 0,
+    "failed": 0,
+    "pending": 0,
+    "running": 0
+  },
+  "elapsed_ms": 0,
+  "items": [],
+  "latest_message": "workflow started",
+  "progress": {
+    "active_agents": 0,
+    "agent_cap": 20,
+    "concurrency_cap": 4,
+    "failed_agents": 0,
+    "finished_agents": 0,
+    "peak_active_agents": 0,
+    "spawned_agents": 0,
+    "stopped_agents": 0
+  },
+  "revision": 1,
+  "run_id": "swe-20261010_150954-c00e0237",
+  "schema_version": 1,
+  "started_at": "2026-10-10T15:09:55.608167+00:00",
+  "status": "running",
+  "tokens": {
+    "spent": 0
+  },
+  "updated_at": "2026-10-10T15:09:55.608167+00:00",
+  "workflow_name": "background-agents"
+}

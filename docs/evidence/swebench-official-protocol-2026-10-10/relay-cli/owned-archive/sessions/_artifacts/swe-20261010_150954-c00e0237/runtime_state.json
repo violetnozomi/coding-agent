@@ -1,0 +1,185 @@
+{
+  "turn_count": 3,
+  "max_turns": 5,
+  "started_at": 1791644995.662741,
+  "timeout_seconds": 30.0,
+  "last_edit_turn": 0,
+  "edits_this_run": 0,
+  "has_diff": false,
+  "diff_chars": 0,
+  "changed_files": [],
+  "tests_modified": false,
+  "source_only": false,
+  "acceptance_criteria": [
+    "Read source.py, then compact the conversation. Report observations without editing."
+  ],
+  "requested_paths": [],
+  "task_mode": "feature",
+  "wants_tests": false,
+  "forbids_test_changes": false,
+  "plan_generated": false,
+  "plan_text": "",
+  "replan_count": 0,
+  "open_todo_items": 0,
+  "task_reference_evidence": [],
+  "task_references_bound": true,
+  "task_authority_epoch": 0,
+  "task_authority_message_id": "",
+  "task_reference_omitted_count": 0,
+  "task_contract": {},
+  "requirement_ledger": {},
+  "completion_gate_prompts": 0,
+  "completion_gate_signature": "",
+  "initial_task_text": "Solve SWE-bench Verified instance `owner__repo-1`.\nRepository: owner/repo\nBase commit: 59ced965d9af590268b4b0eba934c0022b2b18ba\n\nProblem statement:\nRead source.py, then compact the conversation. Report observations without editing.\n\nWhen finished, leave the repository with only the intended source-code changes.",
+  "current_round_instruction_text": "",
+  "initial_plan_complexity": "",
+  "patch_risk": {},
+  "risk_feedback_fingerprint": "",
+  "risk_replan_fingerprint": "",
+  "verification_attempts": 0,
+  "py_compile_ok": false,
+  "changed_files_verified": false,
+  "broad_test_attempts": 0,
+  "exact_test_attempts": 0,
+  "verification_contract": {},
+  "verification_failures": 0,
+  "last_verification_failure": "",
+  "completion_review_rejections": 0,
+  "last_completion_review_rejection": "",
+  "completion_review_generation": -1,
+  "needs_broad_exploration": false,
+  "scheduled_verification_generations": {},
+  "primary_recovery_classification": "",
+  "supporting_recovery_classifications": [],
+  "recovery_repair_targets": [],
+  "searched_patterns": [],
+  "read_files": [
+    "source.py"
+  ],
+  "investigation_calls_since_edit": 1,
+  "mutation_generation": 0,
+  "source_mutation_generation": 0,
+  "acceptance_mutation_generation": 0,
+  "diff_generation": -1,
+  "verification_generation": -1,
+  "strict_progress_nudges": 0,
+  "strict_progress_blocks": 0,
+  "budget_zones_emitted": [],
+  "budget_pressure_zone": "green",
+  "work_phase": "normal",
+  "workspace_git_available": true,
+  "package_install_attempts": 0,
+  "emergency_broad_exploration": 0,
+  "provider_calls": 4,
+  "provider_attempts": 7,
+  "provider_calls_by_purpose": {
+    "coding": 3,
+    "compaction": 1
+  },
+  "provider_calls_by_model": {
+    "openai-compatible/deepseek-v4-flash": 4
+  },
+  "provider_usage": {
+    "input": 63688,
+    "output": 12,
+    "total": 63700,
+    "reasoning": 0,
+    "cache_read": 0,
+    "cache_write": 0
+  },
+  "provider_usage_by_purpose": {
+    "coding": {
+      "input": 62179,
+      "output": 8,
+      "total": 62187,
+      "reasoning": 0,
+      "cache_read": 0,
+      "cache_write": 0
+    },
+    "compaction": {
+      "input": 1509,
+      "output": 4,
+      "total": 1513,
+      "reasoning": 0,
+      "cache_read": 0,
+      "cache_write": 0
+    }
+  },
+  "provider_usage_by_model": {
+    "openai-compatible/deepseek-v4-flash": {
+      "input": 63688,
+      "output": 12,
+      "total": 63700,
+      "reasoning": 0,
+      "cache_read": 0,
+      "cache_write": 0
+    }
+  },
+  "provider_duration_ms_by_purpose": {
+    "coding": 14421.929,
+    "compaction": 13.061
+  },
+  "provider_duration_ms_by_model": {
+    "openai-compatible/deepseek-v4-flash": 14434.99
+  },
+  "provider_cost_usd": 0.0,
+  "provider_cost_usd_by_purpose": {},
+  "provider_cost_usd_by_model": {},
+  "provider_cost_unknown_calls": 4,
+  "provider_cost_sources": {
+    "unknown": 4
+  },
+  "provider_turn_records": [
+    {
+      "turn": 1,
+      "reason": "initial_investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 2,
+      "reason": "investigation",
+      "outcome": "other_tool_batch",
+      "tool_names": [
+        "compact"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 3,
+      "reason": "investigation",
+      "outcome": "provider_error",
+      "tool_names": [],
+      "finish_reason": "error",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    }
+  ],
+  "provider_turns_by_reason": {
+    "initial_investigation": 1,
+    "investigation": 2
+  },
+  "provider_turns_by_outcome": {
+    "investigation_batch": 1,
+    "other_tool_batch": 1,
+    "provider_error": 1
+  },
+  "transition": "read",
+  "_state_block_emitted": false,
+  "_diff_seen_from_tool": false,
+  "active": false,
+  "saved_at": 1791645010.4213982
+}

@@ -1,0 +1,14 @@
+{
+  "scenario": "synthetic_public_fixture_not_SWE_instance",
+  "native_status": "max_turns",
+  "official_resolved": null,
+  "independent_test_exit": 0,
+  "patch_sha256": "dfd8ab6fa95ce91d88680bdeeb5b06912f455ccec1899c35eea7647ad00b9ff5",
+  "source_final_sha256": "3da6c4b355804b265ecef19dfe5945fe2790a8cc38dc9d0547fb1634c94cbbe7",
+  "main_requests": 7,
+  "auxiliary_requests": 0,
+  "tool_schema_sha256": "175c3dcf950ae1947aa28171151b9d0450843179205c0011fb551ef347e92364",
+  "raw_http_capture": "unavailable; actual controlled Provider request and projected response trace only",
+  "usage_semantics": "offline fixture values, not online efficiency",
+  "owned_artifact_archive": "tool-results/index.json; private raw archive independently retained"
+}

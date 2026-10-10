@@ -1,0 +1,9 @@
+{
+  "attempts": 1,
+  "benchmark_profile": "verified",
+  "event": "benchmark_instance",
+  "instance_id": "owner__repo-1",
+  "prompt": "Solve SWE-bench Verified instance `owner__repo-1`.\nRepository: owner/repo\nBase commit: 59ced965d9af590268b4b0eba934c0022b2b18ba\n\nProblem statement:\nRead source.py, then compact the conversation. Report observations without editing.\n\nWhen finished, leave the repository with only the intended source-code changes.",
+  "session_id": "swe-20261010_150954-c00e0237",
+  "strict": true
+}

@@ -1,0 +1,12 @@
+{
+  "files": {
+    "source.py": {
+      "blob": "e13df8c44af5dea1e412403910b99cc5a48f2ccbf68a66b3374d6ab9cef9fc65",
+      "mode": 420,
+      "size": 10
+    }
+  },
+  "snapshot": "snap-e4073bd70111ccecfa6fdeaf2e949c8706560c0187dd07ed50da132c59d8a714",
+  "version": 1,
+  "workspace": "/workspace/runs/owner__repo-1"
+}

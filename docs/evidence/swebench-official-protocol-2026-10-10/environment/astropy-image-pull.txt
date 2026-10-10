@@ -1,0 +1,18 @@
+latest: Pulling from swebench/sweb.eval.x86_64.astropy_1776_astropy-7166
+39a945af8df2: Already exists
+fd3f01088aa8: Already exists
+079027039e9d: Already exists
+407de719c2d3: Already exists
+0ddda5039dab: Already exists
+53752545c9b2: Already exists
+103089961f8e: Pulling fs layer
+5c1896964a33: Pulling fs layer
+a8451046d273: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+4f4fb700ef54: Waiting
+5c1896964a33: Verifying Checksum
+5c1896964a33: Download complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
+a8451046d273: Verifying Checksum
+a8451046d273: Download complete

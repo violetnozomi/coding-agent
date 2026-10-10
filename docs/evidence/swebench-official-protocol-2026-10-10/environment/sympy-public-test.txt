@@ -1,0 +1,13 @@
+============================= test process starts ==============================
+executable:         /opt/miniconda3/envs/testbed/bin/python  (3.9.20-final-0) [CPython]
+architecture:       64-bit
+cache:              yes
+ground types:       python 
+numpy:              None
+random seed:        49518672
+hash randomization: on (PYTHONHASHSEED=1366298810)
+
+sympy/core/tests/test_sympify.py[52] ...........f..........................s..sf
+..ss...s.                                                                   [OK]
+
+== tests finished: 45 passed, 5 skipped, 2 expected to fail, in 0.21 seconds ===

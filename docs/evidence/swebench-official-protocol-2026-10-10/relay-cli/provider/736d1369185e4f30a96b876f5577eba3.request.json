@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a context summarization specialist.\n\nCRITICAL: Respond with TEXT ONLY. Do NOT call any tools.\nTool calls will be rejected and waste the compaction turn.\n\nDo not continue the conversation or answer the user's task. Produce only the\nrequested continuation summary."
+    },
+    {
+      "role": "user",
+      "content": "Create a new continuity summary from the conversation.\n\nOutput exactly this Markdown structure and keep the section order unchanged:\n\n## Goal\n- Current task and success criteria\n\n## Constraints & Preferences\n- User constraints, preferences, and project rules\n\n## Progress\n### Done\n- Completed work and exact files changed\n### In Progress\n- Current work\n### Blocked\n- Blockers or failed approaches\n\n## Key Decisions\n- Decisions and reasons\n\n## Next Steps\n- Ordered next actions\n\n## Critical Context\n- Exact identifiers, commands, errors, and facts needed to continue\n\n## Relevant Files\n- Exact path and why it matters\n\nUse terse bullets. Keep every section, using \"(none)\" when empty. Do not mention compaction.\n\n[{\"role\": \"user\", \"content\": \"Solve SWE-bench Verified instance `owner__repo-1`.\\nRepository: owner/repo\\nBase commit: 59ced965d9af590268b4b0eba934c0022b2b18ba\\n\\nProblem statement:\\nRead source.py, then compact the conversation. Report observations without editing.\\n\\nWhen finished, leave the repository with only the intended source-code changes.\"}]"
+    }
+  ],
+  "model": "deepseek-v4-flash",
+  "max_tokens": 4000
+}

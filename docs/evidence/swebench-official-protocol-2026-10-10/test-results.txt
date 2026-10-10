@@ -1,0 +1,653 @@
+
+COMMAND RESULT FILE: protocol-red.txt
+F.FFFF                                                                   [100%]
+=================================== FAILURES ===================================
+_______________ test_collect_diff_keeps_index_and_all_real_files _______________
+
+repository = PosixPath('<private-path>
+tmp_path = PosixPath('<private-path>
+
+    def test_collect_diff_keeps_index_and_all_real_files(repository, tmp_path):
+        base = tmp_path / "independent-base"
+        subprocess.run(["git", "clone", "-q", str(repository), str(base)], check=True)
+        (repository / "source.py").write_text("VALUE = 2\n")
+        git(repository, "add", "source.py")
+        (repository / "source.py").write_text("VALUE = 3\n")
+        (repository / "deleted.py").unlink()
+        git(repository, "mv", "old.py", "renamed.py")
+        (repository / "test_new_feature.py").write_text("assert True\n")
+        (repository / ".nz-coder-runs").mkdir()
+        (repository / ".nz-coder-runs" / "private.txt").write_text("INTERNAL")
+        index_before = (repository / ".git" / "index").read_bytes()
+        patch = _collect_diff(repository)
+>       assert (repository / "test_new_feature.py").read_text() == "assert True\n"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/evaluation/test_swebench_protocol.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../miniconda3/lib/python3.13/pathlib/_local.py:546: in read_text
+    return PathBase.read_text(self, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../miniconda3/lib/python3.13/pathlib/_abc.py:632: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('<private-path>
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '<private-path>
+
+../miniconda3/lib/python3.13/pathlib/_local.py:537: FileNotFoundError
+________ test_prediction_paths_preserve_identical_real_patch[max_turns] ________
+
+repository = PosixPath('<private-path>
+tmp_path = PosixPath('<private-path>
+status = 'max_turns'
+
+    @pytest.mark.parametrize("status", ["completed", "max_turns", "timeout", "error"])
+    def test_prediction_paths_preserve_identical_real_patch(repository, tmp_path, status):
+        (repository / "source.py").write_text("VALUE = 2\n")
+        patch = _collect_diff(repository)
+        result = {"status": "completed" if status == "completed" else "agent_failed",
+                  "agent_status": {"status": status}, "model_patch": patch}
+        output = io.StringIO()
+        _write_prediction(output, "owner__repo-1", "offline", result)
+        journal = AttemptJournal(tmp_path / "attempts.jsonl")
+        journal.record({"instance_id": "owner__repo-1", "attempt": 1,
+                        "prediction": json.loads(output.getvalue())})
+        journal.write_predictions(tmp_path / "predictions.jsonl")
+>       assert json.loads(output.getvalue())["model_patch"] == patch
+E       AssertionError: assert '' == 'diff --git a...n+VALUE = 2\n'
+E         
+E         - diff --git a/source.py b/source.py
+E         - index b15b1b0..c8fcecd 100644
+E         - --- a/source.py
+E         - +++ b/source.py
+E         - @@ -1 +1 @@
+E         - -VALUE = 1
+E         - +VALUE = 2
+
+tests/evaluation/test_swebench_protocol.py:68: AssertionError
+_________ test_prediction_paths_preserve_identical_real_patch[timeout] _________
+
+repository = PosixPath('<private-path>
+tmp_path = PosixPath('<private-path>
+status = 'timeout'
+
+    @pytest.mark.parametrize("status", ["completed", "max_turns", "timeout", "error"])
+    def test_prediction_paths_preserve_identical_real_patch(repository, tmp_path, status):
+        (repository / "source.py").write_text("VALUE = 2\n")
+        patch = _collect_diff(repository)
+        result = {"status": "completed" if status == "completed" else "agent_failed",
+                  "agent_status": {"status": status}, "model_patch": patch}
+        output = io.StringIO()
+        _write_prediction(output, "owner__repo-1", "offline", result)
+        journal = AttemptJournal(tmp_path / "attempts.jsonl")
+        journal.record({"instance_id": "owner__repo-1", "attempt": 1,
+                        "prediction": json.loads(output.getvalue())})
+        journal.write_predictions(tmp_path / "predictions.jsonl")
+>       assert json.loads(output.getvalue())["model_patch"] == patch
+E       AssertionError: assert '' == 'diff --git a...n+VALUE = 2\n'
+E         
+E         - diff --git a/source.py b/source.py
+E         - index b15b1b0..c8fcecd 100644
+E         - --- a/source.py
+E         - +++ b/source.py
+E         - @@ -1 +1 @@
+E         - -VALUE = 1
+E         - +VALUE = 2
+
+tests/evaluation/test_swebench_protocol.py:68: AssertionError
+__________ test_prediction_paths_preserve_identical_real_patch[error] __________
+
+repository = PosixPath('<private-path>
+tmp_path = PosixPath('<private-path>
+status = 'error'
+
+    @pytest.mark.parametrize("status", ["completed", "max_turns", "timeout", "error"])
+    def test_prediction_paths_preserve_identical_real_patch(repository, tmp_path, status):
+        (repository / "source.py").write_text("VALUE = 2\n")
+        patch = _collect_diff(repository)
+        result = {"status": "completed" if status == "completed" else "agent_failed",
+                  "agent_status": {"status": status}, "model_patch": patch}
+        output = io.StringIO()
+        _write_prediction(output, "owner__repo-1", "offline", result)
+        journal = AttemptJournal(tmp_path / "attempts.jsonl")
+        journal.record({"instance_id": "owner__repo-1", "attempt": 1,
+                        "prediction": json.loads(output.getvalue())})
+        journal.write_predictions(tmp_path / "predictions.jsonl")
+>       assert json.loads(output.getvalue())["model_patch"] == patch
+E       AssertionError: assert '' == 'diff --git a...n+VALUE = 2\n'
+E         
+E         - diff --git a/source.py b/source.py
+E         - index b15b1b0..c8fcecd 100644
+E         - --- a/source.py
+E         - +++ b/source.py
+E         - @@ -1 +1 @@
+E         - -VALUE = 1
+E         - +VALUE = 2
+
+tests/evaluation/test_swebench_protocol.py:68: AssertionError
+__________ test_open_claim_preserves_interrupted_workspace_and_trace ___________
+
+tmp_path = PosixPath('<private-path>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x718c13525350>
+
+    def test_open_claim_preserves_interrupted_workspace_and_trace(tmp_path, monkeypatch):
+        root = tmp_path / "runs"
+        work = root / "owner__repo-1"
+        work.mkdir(parents=True)
+        (work / "source.py").write_text("FIRST ATTEMPT CHANGE\n")
+        (work / "request.jsonl").write_text('{"call_id":"first-actual-request"}\n')
+        journal = AttemptJournal(tmp_path / "attempts.jsonl")
+        journal.claim("owner__repo-1")
+        runner = RetryOrchestrator(None, None)
+    
+        def forbidden_restart(*_args, **_kwargs):
+            pytest.fail("open claim must not create a new Session or restart inference")
+    
+        monkeypatch.setattr(runner, "run_instance", forbidden_restart)
+>       result = runner.run_batch([{"instance_id": "owner__repo-1"}], work_root=root,
+            run_id="interrupted", config=None, build_prompt=None, agent_cls=None,
+            trace_cls=None, clone_timeout=1, agent_timeout=1, empty_patch_retries=0,
+            pred_file=None, model_name="offline", attempt_journal=journal,
+            cleanup_worktrees=True)
+
+tests/evaluation/test_swebench_protocol.py:86: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+nz_coder/swebench/orchestrator.py:549: in run_batch
+    result = self.run_instance(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+_args = ({'instance_id': 'owner__repo-1'},)
+_kwargs = {'agent_cls': None, 'agent_timeout': 1, 'build_prompt': None, 'clone_timeout': 1, ...}
+
+    def forbidden_restart(*_args, **_kwargs):
+>       pytest.fail("open claim must not create a new Session or restart inference")
+E       Failed: open claim must not create a new Session or restart inference
+
+tests/evaluation/test_swebench_protocol.py:83: Failed
+----------------------------- Captured stdout call -----------------------------
+
+[1/1] owner__repo-1
+=========================== short test summary info ============================
+FAILED tests/evaluation/test_swebench_protocol.py::test_collect_diff_keeps_index_and_all_real_files
+FAILED tests/evaluation/test_swebench_protocol.py::test_prediction_paths_preserve_identical_real_patch[max_turns]
+FAILED tests/evaluation/test_swebench_protocol.py::test_prediction_paths_preserve_identical_real_patch[timeout]
+FAILED tests/evaluation/test_swebench_protocol.py::test_prediction_paths_preserve_identical_real_patch[error]
+FAILED tests/evaluation/test_swebench_protocol.py::test_open_claim_preserves_interrupted_workspace_and_trace
+5 failed, 1 passed in 0.26s
+
+
+COMMAND RESULT FILE: archive-red.txt
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+________________ test_archive_relocates_owned_session_artifact _________________
+
+tmp_path = PosixPath('<private-path>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x724e1d707950>
+
+    def test_archive_relocates_owned_session_artifact(tmp_path, monkeypatch):
+        from nz_coder.foundation import config
+        from nz_coder.runtime.process.workdir import scoped_workdir
+        from nz_coder.state.sessions import save_session
+        from nz_coder.swebench.trace_budget import TraceBudget, archive_instance_diagnostics
+        from nz_coder.tool_platform.artifacts import ArtifactStore
+    
+        root = tmp_path / "runs"
+        work = root / "owner__repo-1"
+        work.mkdir(parents=True)
+        storage = tmp_path / "original-private-storage"
+        monkeypatch.setattr(config, "SESSION_DIR", storage)
+        with scoped_workdir(work):
+            store = ArtifactStore(work, "owned-session")
+            aid = store.put("UNIQUE MIDDLE FAILURE at source.py:17", kind="tool-result")
+            save_session([{"role": "tool", "content": aid}], session_id="owned-session", require_aliases=False)
+            ArtifactStore(work, "other-session").put("OTHER PRIVATE INSTANCE", kind="tool-result")
+        trace = work / "trace.jsonl"
+        trace.write_text(json.dumps({"artifact_id": aid}) + "\n")
+        result = archive_instance_diagnostics(instance_id="owner__repo-1", workdir=work,
+            run_root=root, trace_path=trace, public_input_path=None,
+            metadata={"session_id": "owned-session", "model_patch": ""},
+            budget=TraceBudget(tmp_path / "archive", 50000, 100000, 25000))
+        relocated = tmp_path / "independent-archive"
+        shutil.move(result.bundle_path, relocated)
+        shutil.rmtree(storage)
+        monkeypatch.setattr(config, "SESSION_DIR", relocated / "sessions")
+        recovered = ArtifactStore(work, "owned-session")
+>       assert recovered.read(aid) == "UNIQUE MIDDLE FAILURE at source.py:17"
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/evaluation/test_swebench_protocol.py:126: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+nz_coder/tool_platform/artifacts.py:142: in read
+    chunk = self.read_chunk(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <nz_coder.tool_platform.artifacts.ArtifactStore object at 0x724e1c3479d0>
+artifact_id = 'artifact_fd8ccaff9f654f93a645ec1ba23ac60b'
+
+    def read_chunk(
+        self,
+        artifact_id: str,
+        *,
+        offset: int = 0,
+        max_bytes: int | None = None,
+    ) -> ArtifactChunk:
+        safe_id = _validated_artifact_id(artifact_id)
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ArtifactAccessError("Artifact offset must be a non-negative integer")
+        requested = self.max_read_bytes if max_bytes is None else max_bytes
+        if isinstance(requested, bool) or not isinstance(requested, int) or requested < 1:
+            raise ArtifactAccessError("Artifact max_bytes must be a positive integer")
+        limit = min(requested, self.max_read_bytes)
+        with self._exclusive_lock():
+            manifest = self._load_manifest()
+            record = manifest["entries"].get(safe_id)
+            if not isinstance(record, dict):
+>               raise ArtifactAccessError("Artifact is not owned by the current Session")
+E               nz_coder.tool_platform.artifacts.ArtifactAccessError: Artifact is not owned by the current Session
+
+nz_coder/tool_platform/artifacts.py:169: ArtifactAccessError
+___________________ test_archive_quota_preserves_only_source ___________________
+
+tmp_path = PosixPath('<private-path>
+
+    def test_archive_quota_preserves_only_source(tmp_path):
+        from nz_coder.swebench.trace_budget import TraceBudget, archive_instance_diagnostics
+    
+        work = tmp_path / "runs" / "owner__repo-1"
+        work.mkdir(parents=True)
+        trace = work / "trace.jsonl"
+        trace.write_text('{"large":"' + "X" * 1000 + '"}\n')
+>       with pytest.raises(OSError, match="quota"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'OSError'>
+
+tests/evaluation/test_swebench_protocol.py:140: Failed
+=========================== short test summary info ============================
+FAILED tests/evaluation/test_swebench_protocol.py::test_archive_relocates_owned_session_artifact
+FAILED tests/evaluation/test_swebench_protocol.py::test_archive_quota_preserves_only_source
+2 failed, 6 deselected in 0.36s
+
+
+COMMAND RESULT FILE: harness-red.txt
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+____________ test_harness_effective_config_and_changed_patch_cache _____________
+
+tmp_path = PosixPath('<private-path>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a76417e3a80>
+
+    def test_harness_effective_config_and_changed_patch_cache(tmp_path, monkeypatch):
+        from types import SimpleNamespace
+        from nz_coder.swebench.adapter import SWEBenchAdapter
+    
+        monkeypatch.chdir(tmp_path)
+        adapter = SWEBenchAdapter("verified")
+        monkeypatch.setattr(adapter, "_check_module", lambda _: (True, "", ""))
+        monkeypatch.setattr(adapter, "_check_docker", lambda: (True, "", ""))
+        commands = []
+        monkeypatch.setattr("nz_coder.swebench.adapter.subprocess.run", lambda cmd:
+            commands.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+        predictions = tmp_path / "predictions.jsonl"
+        predictions.write_text(json.dumps({"instance_id": "owner__repo-1",
+            "model_name_or_path": "offline", "model_patch": "first patch"}) + "\n")
+        args = SimpleNamespace(profile="verified", split="dev", dataset_file=None,
+            instance_ids=["owner__repo-1"], prepull_timeout=0, max_workers=1,
+            run_id="fixed", timeout=60, clean=False, image_namespace="local-custom",
+            image_arch="x86_64", instance_image_tag="pinned")
+        assert adapter.run_harness(predictions, args) == 0
+        command = commands[-1]
+>       assert command[command.index("--split") + 1] == "dev"
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: '--split' is not in list
+
+<private-path> ValueError
+----------------------------- Captured stdout call -----------------------------
+Running official SWE-bench harness:
+<private-path> -m swebench.harness.run_evaluation --dataset_name princeton-nlp/SWE-bench_Verified --predictions_path <private-path> --max_workers 1 --run_id fixed --timeout 60 --instance_ids owner__repo-1
+__________________ test_invalid_official_resolved_is_unknown ___________________
+
+tmp_path = PosixPath('<private-path>
+
+    def test_invalid_official_resolved_is_unknown(tmp_path):
+        from nz_coder.swebench.adapter import SWEBenchAdapter
+    
+        logs = tmp_path / "owner__repo-1"
+        logs.mkdir()
+        (logs / "report.json").write_text('{"owner__repo-1":{"resolved":"false"}}')
+>       assert SWEBenchAdapter().load_feedback(logs.name, tmp_path).resolved == "unknown"
+E       AssertionError: assert 'false' == 'unknown'
+E         
+E         - unknown
+E         + false
+
+tests/evaluation/test_swebench_protocol.py:182: AssertionError
+=========================== short test summary info ============================
+FAILED tests/evaluation/test_swebench_protocol.py::test_harness_effective_config_and_changed_patch_cache
+FAILED tests/evaluation/test_swebench_protocol.py::test_invalid_official_resolved_is_unknown
+2 failed, 8 deselected in 0.07s
+
+
+COMMAND RESULT FILE: descendant-red.txt
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________ test_swe_timeout_stops_real_bash_descendant __________________
+
+tmp_path = PosixPath('<private-path>
+
+    def test_swe_timeout_stops_real_bash_descendant(tmp_path):
+        from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+        from nz_coder.runtime.process.workdir import scoped_workdir
+        from nz_coder.state.trace import TraceRecorder
+        from nz_coder.swebench.orchestrator import AgentRunTimeout, _run_agent_attempt
+        from nz_coder.swebench.policy import STRICT_ALLOWED_TOOLS
+    
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_slow.py").write_text(
+            "import os,time\nfrom pathlib import Path\n"
+            "def test_slow():\n"
+            "    Path('owned.pid').write_text(str(os.getpid()))\n"
+            "    for _ in range(2000):\n"
+            "        with open('pulse.txt','a') as f: f.write('pulse\\n'); f.flush()\n"
+            "        time.sleep(.02)\n")
+        traces = tmp_path / ".nz-coder-runs"
+        traces.mkdir()
+        (traces / "offline-actions.json").write_text(json.dumps([
+            [["bash", {"command": "python3 -m pytest -q tests/test_slow.py", "timeout": 60}]]]))
+        tracer = TraceRecorder(trace_dir=traces, session_id="timeout-regression")
+        try:
+            with scoped_workdir(tmp_path), scoped_runtime_overrides(max_agent_turns=2, strict_local_tools=True):
+                with pytest.raises(AgentRunTimeout):
+                    _run_agent_attempt(offline_environment, "Use the test.", tracer,
+                        [{"role": "user", "content": "Run python3 -m pytest -q tests/test_slow.py"}],
+                        lambda *_a: None, 4,
+                        agent_kwargs={"session_id": "timeout-regression", "tool_allowlist": STRICT_ALLOWED_TOOLS})
+            pulse = tmp_path / "pulse.txt"
+            assert pulse.is_file(), "real test subprocess must have started"
+            before = pulse.stat().st_size
+            deadline = time.monotonic() + .3
+            while time.monotonic() < deadline:
+                time.sleep(.01)
+>               assert pulse.stat().st_size == before, "tool descendant still writing after worker timeout"
+E               AssertionError: tool descendant still writing after worker timeout
+E               assert 888 == 882
+E                +  where 888 = os.stat_result(st_mode=33204, st_ino=21529805, st_dev=66309, st_nlink=1, st_uid=1001, st_gid=1001, st_size=888, st_atime=1791642372, st_mtime=1791642375, st_ctime=1791642375).st_size
+E                +    where os.stat_result(st_mode=33204, st_ino=21529805, st_dev=66309, st_nlink=1, st_uid=1001, st_gid=1001, st_size=888, st_atime=1791642372, st_mtime=1791642375, st_ctime=1791642375) = stat()
+E                +      where stat = PosixPath('<private-path>
+
+tests/evaluation/test_swebench_protocol.py:286: AssertionError
+=========================== short test summary info ============================
+FAILED tests/evaluation/test_swebench_protocol.py::test_swe_timeout_stops_real_bash_descendant
+1 failed, 10 deselected in 4.13s
+
+
+COMMAND RESULT FILE: summary-red.txt
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_official_summary_keeps_missing_and_filtered_instances __________
+
+tmp_path = PosixPath('<private-path>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7feaec997a80>
+
+    def test_official_summary_keeps_missing_and_filtered_instances(tmp_path, monkeypatch):
+        from nz_coder.swebench.adapter import SWEBenchAdapter
+        from nz_coder.swebench.submission import _report_resolved
+    
+        monkeypatch.chdir(tmp_path)
+        predictions = tmp_path / "predictions.jsonl"
+        predictions.write_text("".join(json.dumps({"instance_id": f"owner__repo-{i}",
+            "model_name_or_path": "offline", "model_patch": "patch" if i != 4 else ""}) + "\n"
+            for i in range(1, 5)))
+        root = tmp_path / "logs/run_evaluation/fixed"
+        report_dir = root / "offline/owner__repo-1"
+        report_dir.mkdir(parents=True)
+        report = report_dir / "report.json"
+        report.write_text('{"owner__repo-1":{"resolved":"false"}}')
+>       assert _report_resolved(report, "owner__repo-1") is None
+E       AssertionError: assert False is None
+E        +  where False = <function _report_resolved at 0x7feaec9fa480>(PosixPath('<private-path> 'owner__repo-1')
+
+<private-path> AssertionError
+=========================== short test summary info ============================
+FAILED tests/evaluation/test_swebench_protocol.py::test_official_summary_keeps_missing_and_filtered_instances
+1 failed, 14 deselected in 0.13s
+
+
+COMMAND RESULT FILE: provider-failure-baseline-spawn.txt
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________ test_real_provider_failure_keeps_committed_edit ________________
+
+repository = PosixPath('<private-path>
+tmp_path = PosixPath('<private-path>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a0bd125aea0>
+
+    def test_real_provider_failure_keeps_committed_edit(repository, tmp_path, monkeypatch):
+        from functools import partial
+        from nz_coder.foundation import config
+        from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+        from nz_coder.state.trace import TraceRecorder
+        from nz_coder.swebench.adapter import SWEBenchAdapter
+        from nz_coder.swebench.guardrail import PatchGuardrail
+    
+        monkeypatch.setattr("nz_coder.swebench.orchestrator._ensure_repo_cache", lambda *_a: repository)
+        actions = [[["read_file", {"path": "source.py"}]],
+            [["edit_file", {"path": "source.py", "old_text": "VALUE = 1", "new_text": "VALUE = 2"}]],
+            "RAISE_PROVIDER"]
+        instance = {"instance_id": "owner__repo-1", "repo": "owner/repo",
+            "base_commit": git(repository, "rev-parse", "HEAD").strip(),
+            "problem_statement": "Change source.py VALUE to 2. Then check the result."}
+        predictions = tmp_path / "predictions.jsonl"
+        journal = AttemptJournal(tmp_path / "attempts.jsonl")
+        with scoped_runtime_overrides(max_agent_turns=3, nominal_agent_turns=3, strict_local_tools=True):
+            results = RetryOrchestrator(SWEBenchAdapter(), PatchGuardrail()).run_batch(
+                [instance], work_root=tmp_path / "runs", run_id="failed-provider",
+                config=config, build_prompt=lambda: "Make the requested local edit.",
+                agent_cls=partial(offline_environment, actions=actions), trace_cls=TraceRecorder,
+                clone_timeout=10, agent_timeout=15, strict=True, empty_patch_retries=0,
+                pred_file=None, model_name="offline", attempt_journal=journal,
+                predictions_path=predictions)
+        result = results[0]
+        assert result["status"] == "agent_failed"
+>       assert "+VALUE = 2" in json.loads(predictions.read_text())["model_patch"]
+E       AssertionError: assert '+VALUE = 2' in ''
+
+tests/evaluation/test_swebench_protocol.py:470: AssertionError
+----------------------------- Captured stdout call -----------------------------
+
+[1/1] owner__repo-1
+
+[owner__repo-1]
+  read_file: ok <path><private-path></path> <type>file</type> <content> 1: VALUE = 1  (End of file - 
+  edit_file: ok Edited source.py (replaced 1 occurrence)  Diff: --- a/source.py +++ b/source.py @@ -1 +1 @@ -VALUE = 1 +VALUE = 2 
+[AGENT_FAILED] owner__repo-1: patch_chars=131, tools=2, risk=agent_status:aborted,verification_needed
+=========================== short test summary info ============================
+FAILED tests/evaluation/test_swebench_protocol.py::test_real_provider_failure_keeps_committed_edit
+1 failed, 15 deselected in 1.64s
+
+
+COMMAND RESULT FILE: runtime-complete.txt
+........................................................................ [ 45%]
+........................................................................ [ 91%]
+..............                                                           [100%]
+158 passed in 44.97s
+
+
+COMMAND RESULT FILE: owner-complete.txt
+........................................................................ [ 84%]
+............F                                                            [100%]
+=================================== FAILURES ===================================
+_________ test_real_cli_spawn_main_and_auxiliary_use_same_local_budget _________
+
+tmp_path = PosixPath('<private-path>
+
+    @pytest.mark.skipif(os.environ.get("NZ_SWE_DOCKER_SMOKE") != "1",
+                        reason="requires explicit local Docker smoke with nz-swe-runtime:20261010; never downloads an image")
+    def test_real_cli_spawn_main_and_auxiliary_use_same_local_budget(tmp_path):
+        import hashlib
+        import importlib.util
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from nz_coder.evaluation.model_relay import InputAccounting, RelayBinding, RelayLedger, RelayLimits, RelayServer
+        from nz_coder.swebench.profiles import get_profile
+    
+        root = Path(__file__).resolve().parents[2]
+        spec = importlib.util.spec_from_file_location("existing_review_launcher", root / "scripts/review_effects_execution.py")
+        launcher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(launcher)
+        code = tmp_path / "code-new" / "nz_coder"
+        shutil.copytree(root / "nz_coder", code, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        for child in (code / "evaluation").iterdir():
+            if child.name not in {"__init__.py", "reproducibility.py"}:
+                shutil.rmtree(child) if child.is_dir() else child.unlink()
+        import uuid
+        case = tmp_path / ("cli-spawn-" + uuid.uuid4().hex[:8])
+        for name in ("workspace", "home", "tmp", "input", "sockets", "result", "control", "driver"):
+            (case / name).mkdir(parents=True)
+        base = case / "workspace" / ".nz-coder" / "swebench-lite" / "repo-cache" / "owner_repo.git"
+        source = tmp_path / "public-base"
+        source.mkdir()
+        git(source, "init", "-q")
+        git(source, "config", "user.email", "offline@example.invalid")
+        git(source, "config", "user.name", "Offline")
+        (source / "source.py").write_text("VALUE = 1\n")
+        git(source, "add", ".")
+        git(source, "commit", "-qm", "public initial state")
+        base.parent.mkdir(parents=True)
+        subprocess.run(["git", "clone", "--bare", str(source), str(base)], check=True, capture_output=True)
+        (case / "input" / "instances.json").write_text(json.dumps({"dataset": get_profile("verified").dataset,
+            "revision": "a" * 40, "split": "test", "instances": [{"instance_id": "owner__repo-1", "repo": "owner/repo",
+            "base_commit": git(source, "rev-parse", "HEAD").strip(),
+            "problem_statement": "Read source.py, then compact the conversation. Report observations without editing."}]}))
+        shutil.copyfile(root / "tests/evaluation/fixtures/swebench_relay_entry.py", case / "driver" / "entry.py")
+        requests = []
+    
+        class FakeBoundary(BaseHTTPRequestHandler):
+            def do_POST(self):
+                raw = self.rfile.read(int(self.headers["Content-Length"]))
+                request = json.loads(raw)
+                requests.append(request)
+                schemas = [tool["function"]["name"] for tool in request.get("tools", [])]
+                if not schemas:
+                    message = {"role": "assistant", "content": "Task: read source.py and report. Observed VALUE = 1; no edits or tests."}
+                else:
+                    calls = [call for msg in request["messages"] for call in msg.get("tool_calls", [])]
+                    if not calls:
+                        tool, arguments = "read_file", {"path": "source.py"}
+                    else:
+                        assert "VALUE = 1" in json.dumps(request["messages"])
+                        tool, arguments = "compact", {}
+                    message = {"role": "assistant", "content": None, "tool_calls": [{"id": "offline-" + str(len(requests)),
+                        "type": "function", "function": {"name": tool, "arguments": json.dumps(arguments)}}]}
+                body = json.dumps({"id": "local-test", "created": 0, "model": request["model"], "object": "chat.completion",
+                    "choices": [{"index": 0, "message": message, "finish_reason": "tool_calls" if message.get("tool_calls") else "stop"}],
+                    "usage": {"prompt_tokens": len(raw), "completion_tokens": 4, "total_tokens": len(raw) + 4}}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+    
+            def log_message(self, *_args):
+                pass
+    
+        def counter(raw, _request):
+            return InputAccounting(len(raw), "offline-json-byte-test-count", trusted=True, exact=True,
+                evidence_level="exact", contract_id="local-only", payload_sha256=hashlib.sha256(raw).hexdigest())
+    
+        fake = ThreadingHTTPServer(("127.0.0.1", 0), FakeBoundary)
+        thread = threading.Thread(target=fake.serve_forever, daemon=True)
+        thread.start()
+        ledger = RelayLedger(case / "ledger.jsonl", RelayLimits(requests=3, input_total=300000, output_total=100000))
+        servers = []
+        for role, cap in (("main", 2), ("auxiliary", 1)):
+            server = RelayServer(case / "sockets" / (role + ".sock"), ledger=ledger,
+                binding=RelayBinding("offline-swe-smoke", "owner__repo-1", "same-attempt", role, cap,
+                    "deepseek-v4-flash", 8000, time.monotonic() + 60, role == "main"),
+                upstream=f"http://127.0.0.1:{fake.server_port}/v1/chat/completions", counter=counter,
+                trace_directory=case / "private-provider")
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            servers.append(server)
+        argv = launcher.launch_argv(tmp_path, case, image="nz-swe-runtime:20261010")
+        argv.insert(2, "--pull=never")
+        argv += ["run-agent", "--profile", "verified", "--instances-file", "/input/instances.json",
+            "--run-id", "offline-spawn", "--work-root", "/workspace/runs", "--output", "/result/predictions.jsonl",
+            "--clone-timeout", "10", "--agent-timeout", "30", "--no-cleanup-worktrees",
+            "--trace-budget-gib", "0.02", "--trace-warning-gib", "0.015", "--trace-cleanup-target-gib", "0.01"]
+        # 显式测试配置，不能继承真实密钥或代理；SWE 和所有辅助模型均经过同一账本。
+        insert = argv.index("nz-swe-runtime:20261010")
+        argv[insert:insert] = ["--env", "MAX_AGENT_TURNS=5", "--env", "NZ_SWE_NOMINAL_AGENT_TURNS=5",
+                             "--env", "MAX_OUTPUT_TOKENS=8000", "--env", "NZ_PROVIDER_MAX_RETRIES=0"]
+        container = "nz-review-" + case.name
+        try:
+            completed = subprocess.run(argv, env={"PATH": os.environ["PATH"], "HOME": str(Path.home()), "LANG": "C.UTF-8"},
+                                       capture_output=True, text=True, timeout=50)
+            (case / "stdout.txt").write_text(completed.stdout)
+            (case / "stderr.txt").write_text(completed.stderr)
+            assert completed.returncode == 1, completed.stdout + completed.stderr
+            events = [json.loads(line) for line in (case / "ledger.jsonl").read_text().splitlines()]
+            admitted = [row for row in events if row["event"] == "admitted"]
+            assert [row["role"] for row in admitted] == ["main", "main", "auxiliary"]
+            assert any(row.get("reason") == "physical_request_cap_exhausted" for row in events)
+            alternate = list(argv)
+            alternate[alternate.index("/result/predictions.jsonl")] = "/result/alternate.jsonl"
+            rejected = subprocess.run(alternate, env={"PATH": os.environ["PATH"], "HOME": str(Path.home()), "LANG": "C.UTF-8"},
+                                      capture_output=True, text=True, timeout=20)
+>           assert rejected.returncode == 2
+E           AssertionError: assert 125 == 2
+E            +  where 125 = CompletedProcess(args=['docker', 'run', '--pull=never', '--name', 'nz-review-cli-spawn-a2ee7c8a', '--init', '--network... remove (or rename) that container to be able to reuse that name.\n\nRun \'docker run --help\' for more information\n').returncode
+
+tests/evaluation/test_swebench_protocol.py:591: AssertionError
+1 failed, 84 passed in 31.05s
+
+
+COMMAND RESULT FILE: cli-owner-complete.txt
+.                                                                        [100%]
+1 passed, 15 deselected in 19.46s
+
+
+COMMAND RESULT FILE: cleanup-final.txt
+...                                                                      [100%]
+3 passed, 12 deselected in 6.55s
+
+
+COMMAND RESULT FILE: core-preservation.txt
+........................................................................ [ 19%]
+........................................................................ [ 38%]
+........................................................................ [ 58%]
+........................................................................ [ 77%]
+....................................................................ss.. [ 96%]
+....s.....ss                                                             [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/security/test_transaction_track.py:263: Windows native handle semantics
+SKIPPED [1] tests/security/test_transaction_track.py:294: Windows native handle semantics
+SKIPPED [1] tests/security/test_transaction_recovery.py:189: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_recovery.py:373: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_recovery.py:397: Windows junction semantics
+367 passed, 5 skipped in 12.73s
+
+
+COMMAND RESULT FILE: related-final.txt
+........................................................................ [ 31%]
+........................................................................ [ 63%]
+............s........................................................... [ 95%]
+..........s                                                              [100%]
+225 passed, 2 skipped in 62.67s (0:01:02)
+
+
+FINAL OFFICIAL PROJECTION:
+...                                                                      [100%]
+3 passed, 13 deselected in 0.10s

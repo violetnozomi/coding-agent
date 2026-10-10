@@ -1,0 +1,9 @@
+{
+  "attempts": 1,
+  "benchmark_profile": "verified",
+  "event": "benchmark_instance",
+  "instance_id": "owner__repo-1",
+  "prompt": "Solve SWE-bench Verified instance `owner__repo-1`.\nRepository: owner/repo\nBase commit: 2ffbb38ab94e6783fde3008b2797e52b45a7ca57\n\nProblem statement:\nFix source.py so VALUE is 2. Run python3 -m pytest -q -s tests/test_value.py.\n\nWhen finished, leave the repository with only the intended source-code changes.",
+  "session_id": "swe-20261010_225821-449213d9",
+  "strict": true
+}

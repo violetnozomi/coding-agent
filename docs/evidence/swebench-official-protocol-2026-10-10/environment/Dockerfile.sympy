@@ -1,0 +1,5 @@
+FROM swebench/sweb.eval.x86_64.sympy_1776_sympy-22914@sha256:aa5f1cf12ce166511d03eed6ac0de0f76b27777ac2c6ddb4a9b11f67f000941f AS dependencies
+FROM nz-swe-runtime:20261010
+USER root
+COPY --from=dependencies /opt/miniconda3/envs/testbed /opt/miniconda3/envs/testbed
+RUN rm -f /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/sympy.egg-link /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/easy-install.pth

@@ -1,0 +1,492 @@
+{
+  "session_id": "swe-20261010_150954-c00e0237",
+  "message_schema_version": 1,
+  "timestamp": "2026-10-10 15:10:10",
+  "workspace": "/workspace/runs/owner__repo-1",
+  "model": "deepseek-v4-flash",
+  "mode": "auto",
+  "messages": [
+    {
+      "role": "user",
+      "content": "<session-summary>\nTask: read source.py and report. Observed VALUE = 1; no edits or tests.\n</session-summary>\n\nContinue from this summary and the preserved recent turns.",
+      "_nz_compaction": {
+        "auto": false,
+        "overflow": false,
+        "resume": false,
+        "tail_start_id": "msg-5a117b26512a490b89ab86aa03c2295d",
+        "head_message_ids": [
+          "msg-f721627ed9305ee689d460b44867d96c"
+        ],
+        "created_at": 1791644996.236988,
+        "archive": "user-state://transcripts/swe-20261010_150954-c00e0237/transcript_1791644996220948128.jsonl"
+      },
+      "_nz_message_id": "msg-055eb3a4f8a758cebbd6424565739bd1",
+      "_nz_session_id": "swe-20261010_150954-c00e0237",
+      "_nz_parts": [
+        {
+          "id": "part-036b64835ab05d0c97d2f69bd667a0d9",
+          "message_id": "msg-055eb3a4f8a758cebbd6424565739bd1",
+          "type": "text",
+          "text": "<session-summary>\nTask: read source.py and report. Observed VALUE = 1; no edits or tests.\n</session-summary>\n\nContinue from this summary and the preserved recent turns."
+        },
+        {
+          "id": "part-37623efe131a5b788a1e92c784c90e25",
+          "message_id": "msg-055eb3a4f8a758cebbd6424565739bd1",
+          "type": "compaction",
+          "auto": false,
+          "overflow": false,
+          "resume": false,
+          "tail_start_id": "msg-5a117b26512a490b89ab86aa03c2295d"
+        }
+      ],
+      "_nz_time": {
+        "created": 1791644996.266253
+      },
+      "_nz_user_agent": "build",
+      "_nz_user_model": {
+        "provider_id": "openai-compatible",
+        "model_id": "deepseek-v4-flash"
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "_nz_interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+      "_nz_visible": true,
+      "_nz_internal": false,
+      "_nz_authoritative": true,
+      "_nz_mode": "build",
+      "_nz_agent": "build",
+      "_nz_path": {
+        "cwd": "/workspace/runs/owner__repo-1",
+        "root": "/workspace/runs/owner__repo-1"
+      },
+      "_nz_message_id": "msg-5a117b26512a490b89ab86aa03c2295d",
+      "_nz_session_id": "swe-20261010_150954-c00e0237",
+      "_nz_parts": [
+        {
+          "id": "part-498fe37440fc576d9afc93eb65332648",
+          "message_id": "msg-5a117b26512a490b89ab86aa03c2295d",
+          "type": "step-start",
+          "time": {
+            "start": 1791644995.6994967
+          },
+          "snapshot": "snap-e4073bd70111ccecfa6fdeaf2e949c8706560c0187dd07ed50da132c59d8a714",
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-27ec48982a3752f1b68ee70c8d7f644c",
+          "message_id": "msg-5a117b26512a490b89ab86aa03c2295d",
+          "type": "tool",
+          "tool": "read_file",
+          "call_id": "offline-1",
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "source.py"
+            },
+            "time": {
+              "start": 1791644996.0716648,
+              "end": 1791644996.094289
+            },
+            "output": "<path>/workspace/runs/owner__repo-1/source.py</path>\n<type>file</type>\n<content>\n1: VALUE = 1\n\n(End of file - total 1 lines)\n</content>",
+            "title": "Read source.py",
+            "metadata": {
+              "preview": "VALUE = 1",
+              "truncated": false,
+              "loaded": [],
+              "encoding": "utf-8",
+              "model_read_observation": {
+                "path": "source.py",
+                "offset": 1,
+                "limit": 2000,
+                "complete": true,
+                "identity": {
+                  "expected_exists": true,
+                  "device": 66309,
+                  "inode": 21537174,
+                  "size": 10,
+                  "mtime_ns": 1791644994788979831,
+                  "content_hash": "e13df8c44af5dea1e412403910b99cc5a48f2ccbf68a66b3374d6ab9cef9fc65"
+                }
+              }
+            }
+          },
+          "index": 0,
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-bfe0188dc0e25668b7987601382aa9b0",
+          "message_id": "msg-5a117b26512a490b89ab86aa03c2295d",
+          "type": "step-finish",
+          "time": {
+            "start": 1791644995.6994967,
+            "end": 1791644996.0967066
+          },
+          "snapshot": "snap-e4073bd70111ccecfa6fdeaf2e949c8706560c0187dd07ed50da132c59d8a714",
+          "reason": "tool_calls",
+          "tokens": {
+            "input": 30901,
+            "output": 4,
+            "total": 30905
+          },
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        }
+      ],
+      "_nz_time": {
+        "created": 1791644995.6994417,
+        "completed": 1791644996.0966852
+      },
+      "tool_calls": [
+        {
+          "id": "offline-1",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": {
+              "path": "source.py"
+            }
+          }
+        }
+      ],
+      "_nz_usage": {
+        "input": 30901,
+        "output": 4,
+        "total": 30905
+      },
+      "_nz_provider_id": "openai-compatible",
+      "_nz_provider_instance_id": "",
+      "_nz_model_id": "deepseek-v4-flash",
+      "_timestamp": 1791644996.0616417,
+      "_nz_finish": "tool_calls",
+      "_nz_parent_id": "msg-055eb3a4f8a758cebbd6424565739bd1"
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "offline-1",
+      "content": "<path>/workspace/runs/owner__repo-1/source.py</path>\n<type>file</type>\n<content>\n1: VALUE = 1\n\n(End of file - total 1 lines)\n</content>",
+      "_nz_evidence_kind": "file_read",
+      "_nz_resource": "source.py",
+      "_nz_mutation_generation": 0,
+      "_nz_message_id": "msg-ba531d7af26256438842f8d6bfaf0e75",
+      "_nz_session_id": "swe-20261010_150954-c00e0237",
+      "_nz_parts": [
+        {
+          "id": "part-f0c94c0588be5a4e8e59596e6fd56fa6",
+          "message_id": "msg-ba531d7af26256438842f8d6bfaf0e75",
+          "type": "text",
+          "text": "<path>/workspace/runs/owner__repo-1/source.py</path>\n<type>file</type>\n<content>\n1: VALUE = 1\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "_nz_interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+      "_nz_visible": true,
+      "_nz_internal": false,
+      "_nz_authoritative": true,
+      "_nz_mode": "build",
+      "_nz_agent": "build",
+      "_nz_path": {
+        "cwd": "/workspace/runs/owner__repo-1",
+        "root": "/workspace/runs/owner__repo-1"
+      },
+      "_nz_message_id": "msg-bfd53d6551dc4fbc86adcf67edffdf09",
+      "_nz_session_id": "swe-20261010_150954-c00e0237",
+      "_nz_parts": [
+        {
+          "id": "part-269d6b8044e4521ebf7a365c3a002160",
+          "message_id": "msg-bfd53d6551dc4fbc86adcf67edffdf09",
+          "type": "step-start",
+          "time": {
+            "start": 1791644996.1127677
+          },
+          "snapshot": "snap-e4073bd70111ccecfa6fdeaf2e949c8706560c0187dd07ed50da132c59d8a714",
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-dc8a740490f35ace9e60b32ba389f1f9",
+          "message_id": "msg-bfd53d6551dc4fbc86adcf67edffdf09",
+          "type": "tool",
+          "tool": "compact",
+          "call_id": "offline-2",
+          "state": {
+            "status": "completed",
+            "input": {},
+            "time": {
+              "start": 1791644996.204145,
+              "end": 1791644996.2188556
+            },
+            "output": "Compacting...",
+            "title": "compact: {}",
+            "metadata": {}
+          },
+          "index": 0,
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-dede29dc59885fb18a9103353aa0c3e7",
+          "message_id": "msg-bfd53d6551dc4fbc86adcf67edffdf09",
+          "type": "step-finish",
+          "time": {
+            "start": 1791644996.1127677,
+            "end": 1791644996.2385502
+          },
+          "snapshot": "snap-e4073bd70111ccecfa6fdeaf2e949c8706560c0187dd07ed50da132c59d8a714",
+          "reason": "tool_calls",
+          "tokens": {
+            "input": 31278,
+            "output": 4,
+            "total": 31282
+          },
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        }
+      ],
+      "_nz_time": {
+        "created": 1791644996.112728,
+        "completed": 1791644996.2385337
+      },
+      "tool_calls": [
+        {
+          "id": "offline-2",
+          "type": "function",
+          "function": {
+            "name": "compact",
+            "arguments": {}
+          }
+        }
+      ],
+      "_nz_usage": {
+        "input": 31278,
+        "output": 4,
+        "total": 31282
+      },
+      "_nz_provider_id": "openai-compatible",
+      "_nz_provider_instance_id": "",
+      "_nz_model_id": "deepseek-v4-flash",
+      "_timestamp": 1791644996.1858428,
+      "_nz_finish": "tool_calls",
+      "_nz_parent_id": "msg-055eb3a4f8a758cebbd6424565739bd1"
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "offline-2",
+      "content": "Compacting...",
+      "_nz_message_id": "msg-b1792519b3a951f89d75bdd0aabb3a32",
+      "_nz_session_id": "swe-20261010_150954-c00e0237",
+      "_nz_parts": [
+        {
+          "id": "part-0d40807c763a593cbb4258f3772415cd",
+          "message_id": "msg-b1792519b3a951f89d75bdd0aabb3a32",
+          "type": "text",
+          "text": "Compacting..."
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "Agent aborted after 0 consecutive errors",
+      "_nz_interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+      "_nz_visible": true,
+      "_nz_internal": false,
+      "_nz_authoritative": true,
+      "_nz_mode": "build",
+      "_nz_agent": "build",
+      "_nz_path": {
+        "cwd": "/workspace/runs/owner__repo-1",
+        "root": "/workspace/runs/owner__repo-1"
+      },
+      "_nz_message_id": "msg-f9a495c3ae454f84b0704588e64eb179",
+      "_nz_session_id": "swe-20261010_150954-c00e0237",
+      "_nz_parts": [
+        {
+          "id": "part-50bcddba10275d658fd0e3c4fb04649c",
+          "message_id": "msg-f9a495c3ae454f84b0704588e64eb179",
+          "type": "text",
+          "text": "Agent aborted after 0 consecutive errors"
+        },
+        {
+          "id": "part-6d0f65df0265505e8585ce0a3c4e4f65",
+          "message_id": "msg-f9a495c3ae454f84b0704588e64eb179",
+          "type": "step-start",
+          "time": {
+            "start": 1791644996.2663698
+          },
+          "snapshot": "snap-e4073bd70111ccecfa6fdeaf2e949c8706560c0187dd07ed50da132c59d8a714",
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-941682f360485e5ba56537c9c4bc6f8c",
+          "message_id": "msg-f9a495c3ae454f84b0704588e64eb179",
+          "type": "retry",
+          "attempt": 1,
+          "error": {
+            "name": "APIError",
+            "data": {
+              "message": "An internal error occurred.",
+              "public_error": {
+                "schema": "nz.public_error.v1",
+                "code": "internal_error",
+                "message": "An internal error occurred.",
+                "retryable": true,
+                "metadata": {
+                  "error_type": "RuntimeError"
+                }
+              },
+              "isRetryable": true
+            }
+          },
+          "message": "An internal error occurred.",
+          "time": {
+            "created": 1791644996.3052151
+          },
+          "next": 1791644998.3051193,
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-8887feec985f58a08a9039bcdec932ec",
+          "message_id": "msg-f9a495c3ae454f84b0704588e64eb179",
+          "type": "retry",
+          "attempt": 2,
+          "error": {
+            "name": "APIError",
+            "data": {
+              "message": "An internal error occurred.",
+              "public_error": {
+                "schema": "nz.public_error.v1",
+                "code": "internal_error",
+                "message": "An internal error occurred.",
+                "retryable": true,
+                "metadata": {
+                  "error_type": "RuntimeError"
+                }
+              },
+              "isRetryable": true
+            }
+          },
+          "message": "An internal error occurred.",
+          "time": {
+            "created": 1791644998.3319201
+          },
+          "next": 1791645002.3318424,
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-a18456b79d605b39874605e564dd899a",
+          "message_id": "msg-f9a495c3ae454f84b0704588e64eb179",
+          "type": "retry",
+          "attempt": 3,
+          "error": {
+            "name": "APIError",
+            "data": {
+              "message": "An internal error occurred.",
+              "public_error": {
+                "schema": "nz.public_error.v1",
+                "code": "internal_error",
+                "message": "An internal error occurred.",
+                "retryable": true,
+                "metadata": {
+                  "error_type": "RuntimeError"
+                }
+              },
+              "isRetryable": true
+            }
+          },
+          "message": "An internal error occurred.",
+          "time": {
+            "created": 1791645002.3597543
+          },
+          "next": 1791645010.359683,
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-dc5837517512540b81f27f0f24d9f7f7",
+          "message_id": "msg-f9a495c3ae454f84b0704588e64eb179",
+          "type": "step-finish",
+          "time": {
+            "start": 1791644996.2663698,
+            "end": 1791645010.399013
+          },
+          "snapshot": "snap-e4073bd70111ccecfa6fdeaf2e949c8706560c0187dd07ed50da132c59d8a714",
+          "reason": "error",
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "total": 0
+          },
+          "interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        }
+      ],
+      "_nz_time": {
+        "created": 1791644996.2663133,
+        "completed": 1791645010.3989906
+      },
+      "_nz_error": "The provider request failed.",
+      "_nz_assistant_error": {
+        "name": "APIError",
+        "data": {
+          "message": "The provider request failed.",
+          "public_error": {
+            "schema": "nz.public_error.v1",
+            "code": "provider_error",
+            "message": "The provider request failed.",
+            "retryable": true,
+            "metadata": {
+              "error_type": "RateLimitError",
+              "status_code": 429
+            }
+          },
+          "isRetryable": true,
+          "statusCode": 429
+        }
+      },
+      "_nz_finish": "error",
+      "_nz_end_state": {
+        "reason": "errored"
+      },
+      "_nz_parent_id": "msg-055eb3a4f8a758cebbd6424565739bd1"
+    }
+  ],
+  "artifacts_dir": "<private-path>",
+  "runtime_dir": "<private-path>",
+  "title": "Solve SWE-bench Verified instance `owner__repo-1`. Repository: owner/repo Base commit: 59ced965d9...",
+  "run_status": "error",
+  "metadata": {
+    "suppress_runtime_events": true,
+    "active_interaction_run_id": "interaction-2d6dece93a774b4580acd01c79425fc0"
+  }
+}

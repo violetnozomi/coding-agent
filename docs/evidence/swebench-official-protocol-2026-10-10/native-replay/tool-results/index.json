@@ -1,0 +1,21 @@
+{
+  "session_id": "swe-20261010_225821-449213d9",
+  "artifacts": {
+    "artifact_c93dde5a5bac4ffbbe40ff0f795fc31f": {
+      "public_file": "native-replay/tool-results/artifact_c93dde5a5bac4ffbbe40ff0f795fc31f.txt",
+      "raw_sha256": "78816e294409fca3a029fc1971b2993fb3d417d24212155d2f8d5e2e5f135798",
+      "public_sha256": "78816e294409fca3a029fc1971b2993fb3d417d24212155d2f8d5e2e5f135798",
+      "kind": "sanitized_text_copy",
+      "raw_bytes": 65692
+    },
+    "artifact_c9ac4944f0214a4bafd6db61475bdb8b": {
+      "public_file": "native-replay/tool-results/artifact_c9ac4944f0214a4bafd6db61475bdb8b.txt",
+      "raw_sha256": "d78548c7efb77ec9bf7d4586cf0e2cdf1b24d5a19c36ec349fc3199819f74043",
+      "public_sha256": "d78548c7efb77ec9bf7d4586cf0e2cdf1b24d5a19c36ec349fc3199819f74043",
+      "kind": "sanitized_text_copy",
+      "raw_bytes": 609534
+    }
+  },
+  "http_capture": "unavailable",
+  "portable_read_regression": "test_archive_relocates_owned_session_artifact"
+}
