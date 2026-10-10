@@ -1399,3 +1399,15 @@ Transaction 的备份记录现在包含同一事务内的 `MutationReceipt`。`t
 范围外既有问题：`TransactionManager._track_windows()` 捕获原文件 metadata，但 `_restore_backup_windows()` 仅将私有 backup 通过句柄 rename 回目标，没有应用原时间戳/属性；因此 Windows 现有内容恢复不等于 metadata 恢复。本轮保留 POSIX metadata 回归断言、Windows 内容恢复断言，不声称修复这项既有 Windows 差距，也不扩展本轮冻结的两个修复目标。
 
 本地验收：原始三条重建测试修复前 3 failed（exit 1），修复后 3 passed；新增文件完整运行 25 passed / 2 Windows-only skipped。`python -m pytest -q` 得到 3751 passed / 35 skipped（280.62s，exit 0）。`git diff --check`、`python -m compileall -q nz_coder tests`、`ruff check nz_coder tests`、`python -m build --wheel --sdist` 均 exit 0。源码外 `/tmp/pr2-remaining-wheel.HzOo3j/venv` 安装 wheel，移除 PYTHONPATH 后 help 与完整新增测试 exit 0（25 passed / 2 skipped）；transaction、workspace_file_access、execution_identity 的 `__file__` 均位于该 venv 的 `lib/python3.13/site-packages`。这些 Linux 结果不替代最终提交的 Windows CI；远端结果记录在 PR #2。
+
+### 22.7 真实产品验收 R1（2026-09-05）
+
+从已合并的 `89124f9` 新建独立产品验收分支，不继续修改 PR #2。
+真实安装版 daemon/attach 暴露了收尾错误：`RunContext.metadata` 持有未被消费的
+活体 event publisher，最终结果深拷贝触及文件句柄/锁，工具虽已执行，HTTP 却失败并
+丢失回复历史。移除该 metadata 引用，保持宿主/scoped bus 绑定，SDK 与真实 HTTP
+Native Runner 两条回归修复前失败、修复后通过。重装后权限、取消和会话续接行为恢复。
+
+本地全量 3758 passed / 35 skipped；这不等同于真实编码能力验收。当前无可用 API
+凭据，四个编码任务均 NOT_RUN；长输出错误详情/截断提示和人工终端视觉检查仍有缺口。
+完整首次结果、所有重试与验证限制见 [R1 验收报告](../tests/dogfooding/r1-results.md)。
