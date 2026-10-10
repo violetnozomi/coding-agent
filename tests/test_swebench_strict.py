@@ -344,7 +344,8 @@ def test_strict_agent_protocol_blocks_wasted_actions_and_bounds_verification():
 
     assert "web_search" in protocol and "unavailable" in protocol
     assert "full test suites" in protocol and "forbidden" in protocol
-    assert "one workspace-relative targeted pytest" in protocol
+    assert "targeted tests as needed" in protocol
+    assert "at most one" not in protocol
 
 
 def test_run_instance_binds_trace_and_agent_to_same_unique_session(
@@ -361,6 +362,8 @@ def test_run_instance_binds_trace_and_agent_to_same_unique_session(
         subprocess.run(
             ["git", "init", "--quiet"], cwd=repo_dir, check=True,
         )
+        subprocess.run(["git", "-c", "user.name=Offline", "-c", "user.email=offline@example.invalid",
+                        "commit", "--allow-empty", "-qm", "initial"], cwd=repo_dir, check=True)
         return {"returncode": 0, "summary": "repo ready"}
 
     class FakeTrace:
@@ -486,7 +489,7 @@ def test_attempt_claim_survives_crash_and_is_idempotent_until_result(tmp_path):
     ) == 1
 
 
-def test_batch_resume_reenters_claim_only_instance(tmp_path, monkeypatch):
+def test_batch_resume_preserves_claim_only_instance(tmp_path, monkeypatch):
     from nz_coder.swebench.artifacts import AttemptJournal
     from nz_coder.swebench.orchestrator import RetryOrchestrator
 
@@ -526,9 +529,9 @@ def test_batch_resume_reenters_claim_only_instance(tmp_path, monkeypatch):
         predictions_path=tmp_path / "predictions.jsonl",
     )
 
-    assert calls == ["owner__repo-1"]
-    assert [row["instance_id"] for row in results] == ["owner__repo-1"]
-    assert journal.completed_ids() == {"owner__repo-1"}
+    assert calls == []
+    assert results[0]["agent_status"]["status"] == "interrupted"
+    assert journal.completed_ids() == set()
 
 
 def test_public_trajectory_sanitizes_secrets_and_workspace(tmp_path):
@@ -742,7 +745,8 @@ def test_run_agent_manifest_uses_configured_infcode_turn_budget(
         "datasets",
         SimpleNamespace(
             load_dataset=lambda *_args, **_kwargs: [
-                {"instance_id": "django__django-10924"}
+                {"instance_id": "django__django-10924", "repo": "django/django",
+                 "base_commit": "a" * 40, "problem_statement": "Public issue"}
             ]
         ),
     )
@@ -819,7 +823,8 @@ def test_run_agent_default_checkout_ignores_workspace_pytest_config(
         "datasets",
         SimpleNamespace(
             load_dataset=lambda *_args, **_kwargs: [
-                {"instance_id": "django__django-10924"}
+                {"instance_id": "django__django-10924", "repo": "django/django",
+                 "base_commit": "a" * 40, "problem_statement": "Public issue"}
             ]
         ),
     )
@@ -924,7 +929,8 @@ def test_retry_agent_default_checkout_ignores_workspace_pytest_config(
         "datasets",
         SimpleNamespace(
             load_dataset=lambda *_args, **_kwargs: [
-                {"instance_id": "django__django-10924"}
+                {"instance_id": "django__django-10924", "repo": "django/django",
+                 "base_commit": "a" * 40, "problem_statement": "Public issue"}
             ]
         ),
     )
@@ -993,7 +999,7 @@ def test_cli_trace_budget_builds_run_scoped_archive_and_validates_order(tmp_path
         _build_trace_budget(args, predictions)
 
 
-def test_batch_cleanup_keeps_durable_prediction_and_public_trajectory(
+def test_batch_missing_owned_session_preserves_worktree_and_durable_outputs(
     tmp_path, monkeypatch
 ):
     from nz_coder.swebench.artifacts import AttemptJournal
@@ -1055,7 +1061,7 @@ def test_batch_cleanup_keeps_durable_prediction_and_public_trajectory(
         trace_budget=trace_budget,
     )
 
-    assert not workdir.exists()
+    assert workdir.exists()
     prediction = json.loads(predictions.read_text(encoding="utf-8"))
     assert prediction["instance_id"] == "owner__repo-1"
     assert "diff --git" in prediction["model_patch"]
@@ -1273,7 +1279,7 @@ def test_prepare_repo_resolves_relative_checkout_before_running_git(
         return subprocess.CompletedProcess(
             command,
             0 if working_directory.is_dir() else 2,
-            "",
+            "a" * 40 if command[:2] == ["git", "rev-parse"] else "",
             "",
         )
 

@@ -804,8 +804,10 @@ def test_run_harness_passes_explicit_clean_value(tmp_path, monkeypatch):
     """The official harness parses --clean as a boolean value, not a flag."""
     from nz_coder.swebench import adapter as adapter_mod
 
+    monkeypatch.chdir(tmp_path)
     predictions = tmp_path / "predictions.jsonl"
-    predictions.write_text("{}\n", encoding="utf-8")
+    predictions.write_text(json.dumps({"instance_id": "owner__repo-1",
+        "model_name_or_path": "offline", "model_patch": ""}) + "\n", encoding="utf-8")
     commands: list[list[str]] = []
     monkeypatch.setattr(
         adapter_mod.SWEBenchAdapter,
@@ -1180,7 +1182,7 @@ def test_prepare_repo_uses_local_cache_when_present(tmp_path, monkeypatch):
 
     def fake_run(cmd, *, cwd, timeout):
         calls.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, "", "")
+        return subprocess.CompletedProcess(cmd, 0, "a" * 40 if cmd[:2] == ["git", "rev-parse"] else "", "")
 
     monkeypatch.setattr(orch_mod, "_run", fake_run)
 
@@ -1210,7 +1212,7 @@ def test_prepare_repo_populates_missing_cache_before_checkout(tmp_path, monkeypa
         calls.append(cmd)
         if cmd[:4] == ["git", "clone", "--mirror", "--quiet"]:
             Path(cmd[-1]).mkdir(parents=True)
-        return subprocess.CompletedProcess(cmd, 0, "", "")
+        return subprocess.CompletedProcess(cmd, 0, "a" * 40 if cmd[:2] == ["git", "rev-parse"] else "", "")
 
     monkeypatch.setattr(orch_mod, "_run", fake_run)
 
@@ -1249,7 +1251,7 @@ def test_prepare_repo_falls_back_when_initial_mirror_clone_fails(
         return subprocess.CompletedProcess(
             cmd,
             128 if cmd[:4] == ["git", "clone", "--mirror", "--quiet"] else 0,
-            "",
+            "a" * 40 if cmd[:2] == ["git", "rev-parse"] else "",
             "mirror TLS failure",
         )
 
@@ -1286,7 +1288,7 @@ def test_prepare_repo_falls_back_to_remote_when_cache_clone_fails(tmp_path, monk
         calls.append(cmd)
         if len(calls) == 1:
             return subprocess.CompletedProcess(cmd, 128, "", "cache corrupt")
-        return subprocess.CompletedProcess(cmd, 0, "", "")
+        return subprocess.CompletedProcess(cmd, 0, "a" * 40 if cmd[:2] == ["git", "rev-parse"] else "", "")
 
     monkeypatch.setattr(orch_mod, "_run", fake_run)
 
@@ -1320,7 +1322,7 @@ def test_load_predictions_reads_jsonl(tmp_path):
     }
 
 
-def test_write_prediction_discards_agent_failed_patch(tmp_path):
+def test_write_prediction_preserves_agent_failed_patch(tmp_path):
     from nz_coder.swebench.orchestrator import _write_prediction
 
     path = tmp_path / "predictions.jsonl"
@@ -1334,7 +1336,7 @@ def test_write_prediction_discards_agent_failed_patch(tmp_path):
 
     row = json.loads(path.read_text(encoding="utf-8"))
 
-    assert row["model_patch"] == ""
+    assert row["model_patch"] == "diff --git a/x b/x\n"
 
 
 def test_terminal_provider_abort_is_agent_failed_not_empty_patch():

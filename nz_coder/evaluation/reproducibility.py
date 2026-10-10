@@ -29,6 +29,8 @@ _RESUME_IDENTITY_FIELDS = (
     "attempts_per_instance",
     "strict_mode",
     "trace_retention",
+    "effective_configuration",
+    "inference_dataset",
 )
 
 
@@ -109,6 +111,9 @@ def build_swebench_manifest(
         "official_test_knowledge_used": False,
         "answer_search_network_enabled": False,
         "public_trajectories": True,
+        "compliance_evidence": "input projection and runtime isolation require separate verification",
+        "maintainer_verified": False,
+        "leaderboard_eligibility_kind": "local_candidate_check_only",
         "leaderboard_eligible": bool(
             strict
             and benchmark_profile == "verified"

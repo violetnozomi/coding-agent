@@ -11,15 +11,21 @@ RetryOrchestrator is the only component that:
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
+import hashlib
 import json
 import multiprocessing
+import os
 import queue as queue_module
 import shutil
 import signal
 import subprocess
 import tempfile
+import threading
+import uuid
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from nz_coder.swebench.adapter import SWEBenchAdapter, _safe_name
@@ -43,7 +49,6 @@ from nz_coder.runtime.process.workdir import current_workdir, scoped_workdir
 from nz_coder.state.sessions import create_session_id
 from nz_coder.swebench.artifacts import AttemptJournal, export_public_trajectory
 from nz_coder.swebench.policy import STRICT_ALLOWED_TOOLS
-from nz_coder.tools import is_filesystem_mutation_tool
 from nz_coder.swebench.trace_budget import (
     TraceBudget,
     archive_instance_diagnostics,
@@ -76,6 +81,10 @@ class AgentRunTimeout(TimeoutError):
     """Raised when a single agent instance exceeds the configured timeout."""
 
 
+class UnstableAgentWorkspace(RuntimeError):
+    """Owned execution did not settle; do not label its patch frozen."""
+
+
 def _strict_agent_protocol() -> str:
     """Return the model-visible local-only execution contract for strict runs."""
     return (
@@ -92,9 +101,8 @@ def _strict_agent_protocol() -> str:
         "- web_search and every network tool are unavailable. Git history/remotes, "
         "package installation, absolute or outside-workspace paths, and full test "
         "suites are forbidden; calling them only wastes a turn.\n"
-        "- After verify_changed_files, run at most one workspace-relative targeted "
-        "pytest recommended by the verification pipeline. Never run broad pytest or "
-        "tox.\n"
+        "- Run relevant workspace-relative targeted tests as needed within the run budget. "
+        "Broad pytest and tox remain unavailable on this restricted tool surface.\n"
         "Structured navigation decisions:\n"
         "- If the exact file is unknown, call repo_map once on the smallest relevant "
         "directory, then narrow with grep_search.\n"
@@ -281,6 +289,7 @@ class RetryOrchestrator:
         *plan* is None for first-pass runs (no previous patch / feedback).
         When *plan* is provided its messages are prepended to the conversation.
         """
+        instance = {key: instance[key] for key in ("instance_id", "repo", "base_commit", "problem_statement")}
         instance_id = instance["instance_id"]
         repo_dir = work_root / _safe_name(instance_id)
         started = time.time()
@@ -326,20 +335,16 @@ class RetryOrchestrator:
             session_id=benchmark_session_id,
         )
         tool_log: list[dict] = []
-        tool_generation = 0
 
         def log_tool(name: str, output: str) -> None:
-            nonlocal tool_generation
-            status = _classify_tool_log_status(output)
-            if status == "ok" and is_filesystem_mutation_tool(name):
-                tool_generation += 1
+            status = "unknown"
             tool_log.append({
                 "tool": name,
                 "name": name,
                 "status": status,
-                "generation": tool_generation,
                 "output_len": len(output),
                 "output": output[:512],
+                "evidence_kind": "display_callback_not_execution_fact",
             })
             preview = output.replace("\n", " ")[:160]
             print(f"  {name}: {status} {preview}")
@@ -348,31 +353,18 @@ class RetryOrchestrator:
             system_prompt = build_prompt() + (
                 f"\n\nYou are solving a SWE-bench {self.adapter.profile.name.title()} task "
                 "in a checked-out repository. "
-                "Make the minimal source-code change needed to satisfy the issue. "
-                "Do not edit tests unless the issue explicitly requires it. "
-                "IMPORTANT: Always use 'python3' (not 'python') to run Python code. "
-                "IMPORTANT: Do NOT create any new files in the repository. "
-                "Clean up any scratch files before finishing. "
-                "IMPORTANT: This is a raw source checkout - the package is NOT installed. "
-                "Do NOT try `from <package> import ...` to verify your fix; "
-                "it will often fail with ModuleNotFoundError. "
-                "\n"
-                "Search and verification protocol:\n"
-                "1. Start with grep_search using key issue tokens, failing test names, "
-                "and traceback clues if available.\n"
-                "2. Inspect at most 3 candidate files before making the first edit.\n"
-                "3. Prefer read_symbol over read_file when a candidate "
-                "function/class/method is known.\n"
-                "4. After any source edit, call diff_status.\n"
-                "5. If diff_status shows a non-empty source-only diff, call "
-                "verify_changed_files.\n"
-                "6. verify_changed_files may schedule one narrow related pytest target; "
-                "run that exact target when requested, but never run broad pytest or tox.\n"
-                "7. If static checks and the requested target pass, finalize the patch.\n"
-                "8. If targeted verification is blocked by environment issues (missing modules, "
-                "import errors, database config, display backends), stop verifying "
-                "and leave the source patch for official SWE-bench evaluation.\n"
-                "9. A plausible non-empty source patch is better than no patch."
+                "Resolve the stated requirements using repository evidence and focused local verification. "
+                "Read and reread relevant files as needed; new source files, reproducers, and appropriate "
+                "test changes are allowed. Do not weaken tests to conceal a failure. "
+                "After changes, inspect the diff and use verify_changed_files plus relevant tests. "
+                "Repeat focused verification when new evidence or a change justifies it. "
+                "Static checks alone do not prove the issue is solved. Report missing requirements and "
+                "environment blockers honestly; do not install packages or fetch answers. "
+                "The inference environment is prepared separately; verify available dependencies rather "
+                "than assuming the project is installed or uninstalled. "
+                "Use read_tool_result with an opaque artifact ID to retrieve truncated evidence, and "
+                "repo_context for bounded local repository queries. Completion review is runtime-owned; "
+                "review_run_evidence is an optional read-only advisory tool, not a mandatory step."
             )
             if strict:
                 system_prompt += _strict_agent_protocol()
@@ -427,8 +419,14 @@ class RetryOrchestrator:
                     agent_kwargs=agent_kwargs,
                 )
 
+        agent_status = {}
+        model_patch = None
+        capture_attempted = False
+        adapter_error = None
         try:
             agent_status = run_attempt()
+            tool_log = _settled_tool_facts(repo_dir) or tool_log
+            capture_attempted = True
             model_patch = _collect_diff(repo_dir)
             empty_retry_count = 0
             while _should_retry_empty_patch(
@@ -464,23 +462,45 @@ class RetryOrchestrator:
 
         except AgentRunTimeout as exc:
             agent_status = {"status": "timeout", "error": str(exc)}
-            model_patch = _collect_diff(repo_dir)
+            try:
+                model_patch = _collect_diff(repo_dir)
+            except (OSError, UnicodeError, subprocess.SubprocessError) as capture_exc:
+                model_patch = None
+                agent_status["patch_capture_error"] = str(capture_exc)
             status = "agent_failed"
             summary = str(exc)
             risk_reasons = ["agent_status:timeout"]
-        except Exception as exc:
-            agent_status = {"status": "exception", "error": str(exc)}
-            model_patch = ""
+        except UnstableAgentWorkspace as exc:
+            agent_status = {"status": "error", "error": str(exc)}
+            model_patch = None
             status = "agent_failed"
             summary = str(exc)
-            risk_reasons = ["agent_status:exception"]
+            risk_reasons = ["execution_scope_not_stopped"]
+        except Exception as exc:
+            if agent_status:
+                adapter_error = str(exc)
+            else:
+                agent_status = {"status": "exception", "error": str(exc)}
+            # 普通运行错误不代表补丁不存在；在进程停止后尽力保留实际工作树。
+            if not capture_attempted:
+                try:
+                    model_patch = _collect_diff(repo_dir)
+                except (OSError, UnicodeError, subprocess.SubprocessError) as capture_exc:
+                    model_patch = None
+                    agent_status["patch_capture_error"] = str(capture_exc)
+            status = "adapter_failed" if adapter_error else "agent_failed"
+            summary = str(exc)
+            risk_reasons = ["adapter_exception" if adapter_error else "agent_status:exception"]
+        tool_log = _settled_tool_facts(repo_dir) or tool_log
         return {
             "instance_id": instance_id,
             "repo": instance.get("repo"),
             "base_commit": instance.get("base_commit"),
+            "initial_state": clone.get("initial_state"),
             "status": status,
             "summary": summary,
             "agent_status": agent_status,
+            "adapter_error": adapter_error,
             "session_id": locals().get("benchmark_session_id", ""),
             "trace": str(tracer.path),
             "workdir": str(repo_dir),
@@ -493,7 +513,11 @@ class RetryOrchestrator:
             "process_warnings": _agent_status_process_warnings(agent_status, tool_log),
             "risk_reasons": risk_reasons,
             "empty_patch_retries": locals().get("empty_retry_count", 0),
-            "model_patch": model_patch,
+            "model_patch": model_patch or "",
+            "patch_status": ("unstable" if "execution_scope_not_stopped" in risk_reasons else "not_captured") if model_patch is None else ("present" if model_patch else "empty"),
+            "patch_sha256": hashlib.sha256(model_patch.encode("utf-8")).hexdigest() if model_patch is not None else None,
+            "eval_status": "pending" if model_patch else "not_run",
+            "official_resolved": None,
             "public_input": str(locals().get("public_input_path", "")),
         }
 
@@ -525,9 +549,18 @@ class RetryOrchestrator:
         """First-pass: run agent on each instance without previous predictions."""
         results = []
         completed_ids = attempt_journal.completed_ids() if attempt_journal else set()
+        open_claims = attempt_journal.attempted_ids() - completed_ids if attempt_journal else set()
         for index, instance in enumerate(instances, start=1):
             if instance["instance_id"] in completed_ids:
                 print(f"[RESUME] {instance['instance_id']}: durable result already recorded; skipping.")
+                continue
+            if instance["instance_id"] in open_claims:
+                # 无法证明 claim 后没有请求：不重建工作树，不启动第二次解题。
+                results.append({"instance_id": instance["instance_id"], "status": "interrupted",
+                    "agent_status": {"status": "interrupted"}, "patch_status": "not_captured",
+                    "eval_status": "not_run", "official_resolved": None,
+                    "workdir": str(work_root / _safe_name(instance["instance_id"])),
+                    "summary": "open claim: prior inference state is unknown; restart refused"})
                 continue
             if trace_budget is not None:
                 pressure = evaluate_trace_budget(trace_budget)
@@ -583,12 +616,16 @@ class RetryOrchestrator:
                         }, ensure_ascii=False) + "\n", encoding="utf-8")
                     trajectory = str(trajectory_path)
                 model_patch = result.get("model_patch", "")
-                if result.get("status") == "agent_failed":
-                    model_patch = ""
+                # 原生结束状态和补丁验收分开；耗尽轮次不能抹掉已经形成的补丁。
                 attempt_journal.record({
                     "instance_id": instance["instance_id"],
                     "attempt": 1,
                     "status": result.get("status"),
+                    "agent_status": result.get("agent_status"),
+                    "patch_status": result.get("patch_status"),
+                    "patch_sha256": result.get("patch_sha256"),
+                    "eval_status": result.get("eval_status", "not_run"),
+                    "official_resolved": None,
                     "trajectory": trajectory,
                     "prediction": {
                         "instance_id": instance["instance_id"],
@@ -619,11 +656,15 @@ class RetryOrchestrator:
                             "summary": result.get("summary", ""),
                             "patch_chars": len(str(result.get("model_patch") or "")),
                             "trace": str(trace_path),
+                            "session_id": result.get("session_id"),
+                            "model_patch": result.get("model_patch", ""),
+                            "patch_sha256": result.get("patch_sha256"),
                         },
                         budget=trace_budget,
                     )
                     result["trace_archive"] = str(archived.bundle_path)
                     result["trace_archive_bytes"] = archived.used_bytes
+                    result["diagnostic_cleanup_safe"] = archived.cleanup_safe
                     if archived.warning:
                         print(
                             "[TRACE BUDGET] Warning threshold reached after "
@@ -638,12 +679,14 @@ class RetryOrchestrator:
                 else:
                     result["trace_archive_skipped"] = "raw trace unavailable"
             if cleanup_worktrees:
-                if result.get("workdir"):
+                if result.get("workdir") and result.get("diagnostic_cleanup_safe") and result.get("patch_status") != "unstable":
                     _cleanup_completed_worktree(
                         Path(str(result["workdir"])),
                         work_root,
                     )
                     result["workdir_cleaned"] = True
+                elif result.get("workdir"):
+                    result["cleanup_skipped"] = "owned Session diagnostic archive unavailable or execution unstable"
             print(f"[{result['status'].upper()}] {instance['instance_id']}: {result.get('summary', '')}")
             if max_new_instances is not None and len(results) >= max_new_instances:
                 print(
@@ -732,7 +775,11 @@ def _run_agent_attempt(
     agent = agent_cls(
         system_prompt, permission_mode="auto", tracer=tracer, **(agent_kwargs or {})
     )
-    return _run_agent_with_timeout(agent, messages, log_tool, timeout=timeout)
+    _bind_attempt_evidence(agent)
+    try:
+        return _run_agent_with_timeout(agent, messages, log_tool, timeout=timeout)
+    finally:
+        _close_attempt_environment(agent)
 
 
 def _run_agent_attempt_in_subprocess(
@@ -746,6 +793,7 @@ def _run_agent_attempt_in_subprocess(
 ) -> dict:
     ctx = multiprocessing.get_context("spawn")
     result_queue = ctx.Queue()
+    stop_event = ctx.Event()
     execution_snapshot = {
         "workdir": str(current_workdir()),
         "runtime_overrides": {
@@ -770,9 +818,12 @@ def _run_agent_attempt_in_subprocess(
             result_queue,
             execution_snapshot,
             agent_kwargs,
+            stop_event,
         ),
     )
     process.start()
+    descendants = {}
+    execution_stopped = False
     try:
         # Drain the result before joining.  multiprocessing.Queue writes from a
         # feeder thread, so joining first deadlocks once the payload exceeds the
@@ -780,46 +831,112 @@ def _run_agent_attempt_in_subprocess(
         # for the child.  Full tool output already lives in the trace artifact;
         # this channel carries only the bounded result projection below.
         try:
-            payload = result_queue.get(timeout=timeout)
+            deadline = time.monotonic() + timeout
+            while True:
+                descendants.update(_linux_owned_descendants(process.pid))
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise queue_module.Empty
+                try:
+                    payload = result_queue.get(timeout=min(.05, remaining))
+                    break
+                except queue_module.Empty:
+                    if not process.is_alive():
+                        raise
         except queue_module.Empty:
             if process.is_alive():
-                _stop_agent_process(process)
+                if not _stop_agent_process(process, stop_event, descendants):
+                    raise UnstableAgentWorkspace("timeout: attempt descendants did not stop")
+                execution_stopped = True
                 raise AgentRunTimeout(f"agent timed out after {timeout}s")
             process.join()
+            if not _stop_agent_process(process, stop_event, descendants):
+                raise UnstableAgentWorkspace("worker exited but descendants did not stop")
+            execution_stopped = True
             raise RuntimeError(
                 "agent subprocess exited without a result "
                 f"(exitcode={process.exitcode})"
             )
 
         process.join(5)
-        if process.is_alive():
-            _stop_agent_process(process)
+        if not _stop_agent_process(process, stop_event, descendants):
+            raise UnstableAgentWorkspace("attempt cleanup did not stop owned execution")
+        execution_stopped = True
         for event in payload.get("tool_events", []):
             log_tool(event["name"], event.get("output", ""))
         if not payload.get("ok"):
             raise RuntimeError(payload.get("error", "agent subprocess failed"))
         return payload["agent_status"]
     finally:
-        result_queue.close()
-        result_queue.join_thread()
+        try:
+            if not execution_stopped and not _stop_agent_process(process, stop_event, descendants):
+                raise UnstableAgentWorkspace("attempt interrupted with active descendants")
+        finally:
+            result_queue.close()
+            result_queue.join_thread()
 
 
-def _stop_agent_process(process) -> None:
-    """Terminate one benchmark Agent child without leaving a live process."""
+def _stop_agent_process(process, stop_event=None, descendants=None) -> bool:
+    """先取消 Runtime；Linux 兜底捕获本 worker 后代，包含另起进程组的 Bash。"""
+    from nz_coder.runtime.process.platform_runtime import terminate_process_tree
+
+    descendants = {**(descendants or {}), **_linux_owned_descendants(process.pid)}
+    if stop_event is not None:
+        stop_event.set()
+        process.join(2)
+    descendants.update(_linux_owned_descendants(process.pid))
+    if os.name == "nt" and process.is_alive():
+        terminate_process_tree(process, force=True)
+    for pid, identity in descendants.items():
+        if _linux_process_identity(pid) == identity:
+            owned = SimpleNamespace(pid=pid, kill=lambda pid=pid: os.kill(pid, signal.SIGKILL))
+            terminate_process_tree(owned, force=True)
     if not process.is_alive():
         process.join()
-        return
-    process.terminate()
-    process.join(5)
-    if process.is_alive():
-        process.kill()
+    else:
+        process.terminate()
         process.join(5)
+        if process.is_alive():
+            process.kill()
+            process.join(5)
+    deadline = time.monotonic() + 1
+    while time.monotonic() < deadline:
+        if all(_linux_process_identity(pid) != identity for pid, identity in descendants.items()):
+            return not process.is_alive()
+        time.sleep(.01)
+    return False
+
+
+def _linux_process_identity(pid: int) -> str | None:
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        return None if fields[0] == "Z" else fields[19]
+    except (OSError, IndexError):
+        return None
+
+
+def _linux_owned_descendants(root_pid: int) -> dict[int, str]:
+    if not Path("/proc").is_dir():
+        return {}
+    children = {}
+    for path in Path("/proc").glob("[0-9]*/stat"):
+        try:
+            fields = path.read_text().rsplit(")", 1)[1].split()
+            if fields[0] != "Z":
+                children[int(path.parent.name)] = (int(fields[1]), fields[19])
+        except (OSError, ValueError, IndexError):
+            continue
+    owned = {root_pid}
+    while next_ids := {pid for pid, (parent, _) in children.items() if parent in owned} - owned:
+        owned.update(next_ids)
+    return {pid: children[pid][1] for pid in owned - {root_pid}}
 
 
 def _agent_attempt_worker(
     agent_cls, system_prompt: str, tracer, messages: list[dict], queue,
     execution_snapshot: dict,
     agent_kwargs: dict | None = None,
+    stop_event=None,
 ) -> None:
     tool_events: list[dict] = []
 
@@ -837,9 +954,11 @@ def _agent_attempt_worker(
                 system_prompt, permission_mode="auto", tracer=tracer,
                 **(agent_kwargs or {}),
             )
-            agent_status = asyncio.run(
-                agent.run(messages, on_tool=child_log_tool, stream=False)
-            )
+            _bind_attempt_evidence(agent)
+            try:
+                agent_status = asyncio.run(_run_cancellable_attempt(agent, messages, child_log_tool, stop_event))
+            finally:
+                _close_attempt_environment(agent)
             queue.put({
                 "ok": True,
                 "agent_status": agent_status,
@@ -847,6 +966,98 @@ def _agent_attempt_worker(
             })
     except BaseException as exc:
         queue.put({"ok": False, "error": repr(exc), "tool_events": tool_events})
+
+
+async def _run_cancellable_attempt(agent, messages, log_tool, stop_event):
+    task = asyncio.create_task(agent.run(messages, on_tool=log_tool, stream=False))
+    try:
+        while not task.done():
+            if stop_event is not None and stop_event.is_set():
+                context = getattr(agent, "active_run_context", None)
+                if context is not None:
+                    context.cancellation = stop_event
+                task.cancel()
+                break
+            await asyncio.wait({task}, timeout=.02)
+        return await task
+    finally:
+        if not task.done():
+            task.cancel()
+
+
+def _close_attempt_environment(agent) -> None:
+    from nz_coder.runtime.execution.loop import ProductRunEnvironment
+    from nz_coder.runtime.process.process_service import close_workspace_process_service
+
+    try:
+        if isinstance(agent, ProductRunEnvironment):
+            agent.close()
+    finally:
+        close_workspace_process_service(current_workdir())
+
+
+def _bind_attempt_evidence(agent) -> None:
+    from nz_coder.runtime.execution.loop import ProductRunEnvironment
+
+    if not isinstance(agent, ProductRunEnvironment):
+        return
+    directory = current_workdir() / ".nz-coder-runs"
+    directory.mkdir(exist_ok=True)
+    original = agent._model_gateway_observer
+    calls = {}
+    call_lock = threading.Lock()
+
+    def append(name, payload):
+        encoded = (json.dumps({"event": name, "session_id": agent.session_id, **payload},
+                              ensure_ascii=False, default=str) + "\n").encode("utf-8")
+        descriptor = os.open(directory / "execution-facts.jsonl", os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+        try:
+            os.write(descriptor, encoded)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def observer(name, payload):
+        if name in {"model_call_start", "model_call_finish"}:
+            # 实际 Gateway 边界的保守启动证据；不声称 start 一定已经到达 Provider。
+            key = (threading.get_ident(), str(payload.get("purpose")))
+            with call_lock:
+                if name == "model_call_start":
+                    calls[key] = uuid.uuid4().hex
+                identity = calls.get(key)
+            append(name, {**payload, "call_id": identity})
+        original(name, payload)
+
+    def tool_result(context):
+        append("tool_execution_result", {"result": asdict(context.result),
+            "mutation_generation": context.loop.runtime_state.mutation_generation,
+            "verification_generation": context.loop.runtime_state.verification_generation})
+
+    agent._model_gateway_observer = observer
+    agent.hooks.register_after_tool_result(tool_result)
+
+
+def _settled_tool_facts(workspace: Path) -> list[dict]:
+    path = workspace / ".nz-coder-runs" / "execution-facts.jsonl"
+    if not path.is_file():
+        return []
+    facts = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        try:
+            row = json.loads(raw)
+        except json.JSONDecodeError:
+            # 中断可能留下半条记录，不能把缺失事实补写成成功。
+            continue
+        if row.get("event") != "tool_execution_result":
+            continue
+        result = row["result"]
+        status = "policy_rejected" if result["permission_denied"] else (
+            "error" if result["dispatch_failed"] else "nonzero" if result["command_failed"] else
+            "ok" if result["executed"] else "unknown")
+        facts.append({"tool": result["name"], "name": result["name"], "status": status,
+                      "generation": row["mutation_generation"], "executed": result["executed"],
+                      "dispatch_failed": result["dispatch_failed"], "command_failed": result["command_failed"]})
+    return facts
 
 
 def _run_agent_with_timeout(agent, messages: list[dict], log_tool, *, timeout: int) -> dict:
@@ -1038,12 +1249,19 @@ def _prepare_repo(
     checkout = _run(["git", "checkout", "--quiet", instance["base_commit"]], cwd=repo_dir, timeout=timeout)
     if checkout.returncode != 0:
         return _process_result(checkout, f"git checkout failed for {instance['base_commit']}")
+    original_tree = _run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo_dir, timeout=30).stdout.strip()
     if sanitize_history:
         sanitized = _reinitialize_repo_at_base(repo_dir, timeout)
         if sanitized.returncode != 0:
             return _process_result(sanitized, "failed to sanitize post-base Git history")
     _run(["git", "status", "--short"], cwd=repo_dir, timeout=30)
-    return {"returncode": 0, "summary": "repo ready"}
+    local_head = _run(["git", "rev-parse", "HEAD"], cwd=repo_dir, timeout=30).stdout.strip()
+    local_tree = _run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo_dir, timeout=30).stdout.strip()
+    if not original_tree or local_tree != original_tree:
+        return {"returncode": 2, "summary": "sanitized checkout changed the original source tree"}
+    return {"returncode": 0, "summary": "repo ready", "initial_state": {
+        "original_base_commit": instance["base_commit"], "local_head": local_head,
+        "original_tree": original_tree, "local_tree": local_tree}}
 
 
 def _reinitialize_repo_at_base(repo_dir: Path, timeout: int) -> subprocess.CompletedProcess:
@@ -1122,10 +1340,21 @@ def _apply_patch_text(repo_dir: Path, patch_text: str, timeout: int) -> subproce
 
 
 def _collect_diff(repo_dir: Path) -> str:
-    _cleanup_scratch_files(repo_dir)
-    _run(["git", "add", "-N", ".", ":!.nz-coder", ":!.nz-coder-runs"], cwd=repo_dir, timeout=30)
-    result = _run(["git", "diff", "--", ".", ":!.nz-coder", ":!.nz-coder-runs"], cwd=repo_dir, timeout=30)
-    return result.stdout
+    # 临时索引捕获最终字节：包含暂存/未暂存和新增文件，不改真实索引或按文件名删产物。
+    with tempfile.TemporaryDirectory(prefix="nz-swe-diff-") as directory:
+        index = Path(directory) / "index"
+        actual_index = repo_dir / ".git" / "index"
+        if actual_index.is_file():
+            shutil.copyfile(actual_index, index)
+        environment = {**os.environ, "GIT_INDEX_FILE": str(index)}
+        for command in (
+            ["git", "add", "-A", "--", ".", ":!.nz-coder", ":!.nz-coder-runs"],
+            ["git", "diff", "--cached", "--binary", "--no-ext-diff", "--no-textconv", "HEAD",
+             "--", ".", ":!.nz-coder", ":!.nz-coder-runs"],
+        ):
+            result = subprocess.run(command, cwd=repo_dir, env=environment, capture_output=True,
+                                    text=True, encoding="utf-8", timeout=30, check=True)
+        return result.stdout
 
 
 def _cleanup_completed_worktree(workdir: Path, work_root: Path) -> None:
@@ -1143,52 +1372,10 @@ def _cleanup_completed_worktree(workdir: Path, work_root: Path) -> None:
     shutil.rmtree(candidate)
 
 
-def _cleanup_scratch_files(repo_dir: Path) -> None:
-    result = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        cwd=repo_dir, capture_output=True, text=True, timeout=30,
-    )
-    for fname in result.stdout.splitlines():
-        if _is_scratch_file(fname):
-            path = repo_dir / fname
-            if path.is_file():
-                try:
-                    path.unlink()
-                except OSError:
-                    pass
-
-    result2 = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=A"],
-        cwd=repo_dir, capture_output=True, text=True, timeout=30,
-    )
-    for fname in result2.stdout.splitlines():
-        if not _is_scratch_file(fname):
-            continue
-        subprocess.run(
-            ["git", "rm", "--cached", "--force", fname],
-            cwd=repo_dir, capture_output=True, text=True, timeout=30,
-        )
-        path = repo_dir / fname
-        if path.is_file():
-            try:
-                path.unlink()
-            except OSError:
-                pass
-
-
-def _is_scratch_file(fname: str) -> bool:
-    if "/" in fname:
-        return False
-    lower = fname.lower()
-    return lower.startswith("test_") or lower.endswith("_test.py") or lower.endswith("_test.txt")
-
-
 # ── Prediction file helpers ───────────────────────────────────────────────────
 
 def _write_prediction(pred_file, instance_id: str, model_name: str, result: dict) -> None:
     model_patch = result.get("model_patch", "")
-    if result.get("status") == "agent_failed":
-        model_patch = ""
     pred_file.write(json.dumps({
         "instance_id": instance_id,
         "model_name_or_path": model_name,

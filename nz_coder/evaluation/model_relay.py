@@ -9,6 +9,7 @@ import ipaddress
 import json
 import math
 import os
+import re
 from pathlib import Path
 import select
 from socketserver import ThreadingMixIn, UnixStreamServer
@@ -74,12 +75,20 @@ def empirical_authorization_valid(grant) -> bool:
     prices = grant.get("prices_cny_per_million", {})
     numbers = [grant.get("cost_limit"), grant.get("valid_from"), grant.get("valid_until")]
     numbers += [prices.get(k) for k in ("input", "cached_input", "output")]
-    return (grant.get("purpose") == "review-effects-formal" and grant.get("input_mode") == "empirical"
+    scope = grant.get("scope")
+    if not isinstance(scope, list) or not scope or not all(isinstance(unit, str) for unit in scope):
+        return False
+    purpose = grant.get("purpose")
+    allowed_scope = (purpose == "review-effects-formal" and set(scope) <= {"u01", "u02", "u03", "u04", "a01"})
+    if purpose == "swebench-verified":
+        # 仍由宿主签发同一账本授权，仅增加冻结实例范围，不借用旧审查单元。
+        allowed_scope = (len(scope) <= 12 and len(set(scope)) == len(scope)
+                         and all(re.fullmatch(r"[\w-]+__[\w-]+-\d+", unit) for unit in scope)
+                         and bool(re.fullmatch(r"[0-9a-f]{64}", str(grant.get("instance_manifest_sha256", "")))))
+    return (allowed_scope and grant.get("input_mode") == "empirical"
             and grant.get("empirical_risk_accepted") is True and grant.get("cost_currency") == "CNY"
             and bool(grant.get("account")) and bool(grant.get("authorization_text"))
             and bool(grant.get("contract_id")) and grant.get("model") == "deepseek-v4-flash"
-            and isinstance(grant.get("scope"), list) and bool(grant["scope"])
-            and set(grant["scope"]) <= {"u01", "u02", "u03", "u04", "a01"}
             and all(type(n) in {int, float} and math.isfinite(n) and n > 0 for n in numbers)
             and prices["cached_input"] <= prices["input"]
             and grant["valid_from"] <= time.time() < grant["valid_until"])

@@ -6,7 +6,7 @@ import json
 import pytest
 
 
-def test_archive_publishes_complete_diagnostic_bundle_atomically(tmp_path):
+def test_archive_publishes_complete_diagnostic_bundle_atomically(tmp_path, monkeypatch):
     from nz_coder.swebench.trace_budget import (
         TraceBudget,
         archive_instance_diagnostics,
@@ -15,20 +15,25 @@ def test_archive_publishes_complete_diagnostic_bundle_atomically(tmp_path):
     run_root = tmp_path / "runs"
     workdir = run_root / "owner__repo-1"
     raw_dir = workdir / ".nz-coder-runs"
-    session_dir = workdir / ".nz-coder" / "sessions"
+    session_dir = tmp_path / "owned-session-storage"
     raw_dir.mkdir(parents=True)
     session_dir.mkdir(parents=True)
     trace = raw_dir / "trace.jsonl"
     trace.write_text('{"event":"llm_request"}\n', encoding="utf-8")
     public_input = raw_dir / "public-inference-input.json"
     public_input.write_text('{"event":"benchmark_instance"}\n', encoding="utf-8")
-    (session_dir / "session.json").write_text('{"status":"completed"}\n', encoding="utf-8")
+    from nz_coder.foundation import config
+    from nz_coder.state.sessions import save_session
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    monkeypatch.setattr(config, "SESSION_DIR", session_dir)
+    with scoped_workdir(workdir):
+        save_session([], session_id="session", require_aliases=False)
     archive_root = tmp_path / "trace-archive"
     budget = TraceBudget(
         archive_root=archive_root,
-        warning_bytes=1000,
-        hard_limit_bytes=2000,
-        cleanup_target_bytes=500,
+        warning_bytes=10000,
+        hard_limit_bytes=20000,
+        cleanup_target_bytes=5000,
     )
 
     result = archive_instance_diagnostics(
@@ -37,7 +42,7 @@ def test_archive_publishes_complete_diagnostic_bundle_atomically(tmp_path):
         run_root=run_root,
         trace_path=trace,
         public_input_path=public_input,
-        metadata={"status": "completed", "patch_chars": 42},
+        metadata={"status": "completed", "patch_chars": 42, "session_id": "session"},
         budget=budget,
     )
 
@@ -50,6 +55,7 @@ def test_archive_publishes_complete_diagnostic_bundle_atomically(tmp_path):
         "instance_id": "owner__repo-1",
         "patch_chars": 42,
         "status": "completed",
+        "session_id": "session",
     }
     assert not any(path.name.startswith(".owner__repo-1.tmp-") for path in archive_root.iterdir())
     assert result.used_bytes > 0

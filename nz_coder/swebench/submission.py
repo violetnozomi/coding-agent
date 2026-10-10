@@ -105,6 +105,8 @@ def validate_submission_inputs(
         for filename in ("report.json", "test_output.txt", "patch.diff"):
             if not (instance_logs / filename).is_file():
                 errors.append(f"missing official log {instance_id}/{filename}")
+        if (instance_logs / "report.json").is_file() and _report_resolved(instance_logs / "report.json", instance_id) is None:
+            errors.append(f"unknown official verdict for {instance_id}")
         official_patch = instance_logs / "patch.diff"
         if official_patch.is_file():
             try:
@@ -338,14 +340,15 @@ def _validate_trajectory(path: Path, instance_id: str, errors: list[str]) -> Non
             errors.append(f"forbidden tool in trajectory {instance_id}: {name}")
 
 
-def _report_resolved(path: Path, instance_id: str) -> bool:
+def _report_resolved(path: Path, instance_id: str) -> bool | None:
     try:
         report = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return False
+        return None
     if isinstance(report, dict) and isinstance(report.get(instance_id), dict):
         report = report[instance_id]
-    return bool(report.get("resolved")) if isinstance(report, dict) else False
+    value = report.get("resolved") if isinstance(report, dict) else None
+    return value if isinstance(value, bool) else None
 
 
 def _validate_attempt_journal(

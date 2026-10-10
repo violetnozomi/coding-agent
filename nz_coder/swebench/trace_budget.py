@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -51,6 +52,7 @@ class TraceArchiveResult:
     used_bytes: int
     warning: bool
     hard_limit_reached: bool
+    cleanup_safe: bool = False
 
 
 def measure_trace_archive(archive_root: Path) -> int:
@@ -150,20 +152,59 @@ def archive_instance_diagnostics(
 
     try:
         temporary.mkdir(mode=0o700)
-        shutil.copy2(trace, temporary / "raw-trace.jsonl")
+        _copy_with_quota(trace, temporary / "raw-trace.jsonl", temporary, budget)
         if public_input is not None:
-            shutil.copy2(public_input, temporary / "public-inference-input.json")
-        sessions = workspace / ".nz-coder" / "sessions"
-        if sessions.is_dir():
-            _copy_regular_tree(sessions, temporary / "sessions")
+            _copy_with_quota(public_input, temporary / "public-inference-input.json", temporary, budget)
+        facts = trace.parent / "execution-facts.jsonl"
+        if facts.is_file():
+            facts = _workspace_file(facts, workspace, "execution facts")
+            _copy_with_quota(facts, temporary / "execution-facts.jsonl", temporary, budget)
+        # Session 证据在工作区外；只收集本次绑定的 Session，不打包整个私有目录。
+        session_id = str(metadata.get("session_id") or "")
+        evidence = {"trace_kind": "projected_and_bounded", "http_capture": "unavailable",
+                    "session_id": session_id or None, "session_available": False, "artifact_ids": {}}
+        if session_id:
+            from nz_coder.runtime.process.workdir import scoped_workdir
+            from nz_coder.state.sessions import session_artifact_dir, session_dir
+
+            if not session_id.replace("-", "").replace("_", "").replace(".", "").isalnum() or session_id in {".", ".."}:
+                raise ValueError("invalid archive Session identity")
+            with scoped_workdir(workspace):
+                sessions = session_dir()
+                owned = session_artifact_dir(session_id)
+            session_file = sessions / f"{session_id}.json"
+            if session_file.is_file():
+                _reject_symlink_path(session_file, sessions)
+                recorded = json.loads(session_file.read_text(encoding="utf-8"))
+                if Path(recorded["workspace"]).resolve() != workspace:
+                    raise ValueError("archive Session belongs to another workspace")
+                destination = temporary / "sessions" / session_file.name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                _copy_with_quota(session_file, destination, temporary, budget)
+                evidence["session_available"] = True
+            if owned.is_dir():
+                _reject_symlink_path(owned, sessions)
+                _copy_regular_tree(owned, temporary / "sessions" / "_artifacts" / session_id,
+                                   archive=temporary, budget=budget)
+            manifest = temporary / "sessions" / "_artifacts" / session_id / "runtime" / "tool-results" / "manifest.json"
+            if manifest.is_file():
+                entries = json.loads(manifest.read_text(encoding="utf-8"))["entries"]
+                for artifact_id, entry in entries.items():
+                    path = manifest.parent / str(entry["filename"])
+                    if path.parent != manifest.parent or not path.is_file():
+                        raise ValueError("archive artifact reference is unavailable")
+                    evidence["artifact_ids"][artifact_id] = {
+                        "path": str(path.relative_to(temporary)),
+                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "bytes": path.stat().st_size}
+        # 原始 HTTP 未被收集时明确标缺失，不以裁剪 trace 冒充无损请求。
+        _write_with_quota(temporary / "evidence-index.json", evidence, budget)
         payload = {
             **dict(metadata),
             "instance_id": safe_id,
         }
-        (temporary / "metadata.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        _write_with_quota(temporary / "metadata.json", payload, budget)
+        if measure_trace_archive(archive_root) > budget.hard_limit_bytes:
+            raise OSError("trace archive quota exceeded; source evidence retained")
         _fsync_tree(temporary)
         os.replace(temporary, target)
         _fsync_directory(archive_root)
@@ -177,10 +218,12 @@ def archive_instance_diagnostics(
         used_bytes=decision.used_bytes,
         warning=decision.warning,
         hard_limit_reached=decision.hard_limit_reached,
+        cleanup_safe=bool(evidence["session_available"]),
     )
 
 
 def _workspace_file(path: Path, workspace: Path, label: str) -> Path:
+    _reject_symlink_path(Path(path).absolute(), workspace)
     candidate = Path(path).resolve()
     if candidate != workspace and workspace not in candidate.parents:
         raise ValueError(f"{label} is outside the instance workdir: {candidate}")
@@ -189,7 +232,35 @@ def _workspace_file(path: Path, workspace: Path, label: str) -> Path:
     return candidate
 
 
-def _copy_regular_tree(source: Path, target: Path) -> None:
+def _reject_symlink_path(path: Path, root: Path) -> None:
+    if any(parent.is_symlink() for parent in (root, *root.parents)):
+        raise ValueError("archive source contains a symbolic link")
+    relative = path.relative_to(root)
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError("archive source contains a symbolic link")
+
+
+def _copy_with_quota(source: Path, target: Path, archive: Path, budget: TraceBudget) -> None:
+    remaining = budget.hard_limit_bytes - measure_trace_archive(budget.archive_root)
+    with source.open("rb") as incoming, target.open("xb") as outgoing:
+        while chunk := incoming.read(min(65536, max(1, remaining + 1))):
+            if len(chunk) > remaining:
+                raise OSError("trace archive quota exceeded; source evidence retained")
+            outgoing.write(chunk)
+            remaining -= len(chunk)
+
+
+def _write_with_quota(target: Path, value: dict, budget: TraceBudget) -> None:
+    raw = (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if len(raw) + measure_trace_archive(budget.archive_root) > budget.hard_limit_bytes:
+        raise OSError("trace archive quota exceeded; source evidence retained")
+    target.write_bytes(raw)
+
+
+def _copy_regular_tree(source: Path, target: Path, *, archive: Path, budget: TraceBudget) -> None:
     for path in source.rglob("*"):
         if path.is_symlink():
             continue
@@ -199,7 +270,7 @@ def _copy_regular_tree(source: Path, target: Path) -> None:
             destination.mkdir(parents=True, exist_ok=True)
         elif path.is_file():
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, destination)
+            _copy_with_quota(path, destination, archive, budget)
 
 
 def _fsync_tree(root: Path) -> None:

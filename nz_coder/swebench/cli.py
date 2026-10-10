@@ -15,9 +15,12 @@ Usage (legacy compat):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from nz_coder.swebench.adapter import SWEBenchAdapter
 from nz_coder.swebench.artifacts import AttemptJournal
@@ -52,13 +55,46 @@ def _build_trace_budget(
     )
 
 
+def load_inference_instances(path: Path, profile, split: str) -> tuple[list[dict], dict]:
+    """只读冻结的公开任务文件；完整评分数据集不进入推理容器。"""
+    raw = Path(path).read_bytes()
+    packet = json.loads(raw)
+    if (not isinstance(packet, dict) or set(packet) != {"dataset", "revision", "split", "instances"}
+            or packet["dataset"] != profile.dataset or packet["split"] != split
+            or not re.fullmatch(r"[0-9a-f]{40}", str(packet["revision"]))):
+        raise ValueError("invalid frozen dataset identity")
+    rows = packet["instances"]
+    fields = {"instance_id", "repo", "base_commit", "problem_statement"}
+    if (not isinstance(rows, list) or not rows
+            or any(not isinstance(row, dict) or set(row) != fields
+                   or any(not isinstance(row[key], str) or not row[key] for key in fields)
+                   for row in rows)
+            or len({row["instance_id"] for row in rows}) != len(rows)):
+        raise ValueError("inference input must contain unique public-only instances")
+    return rows, {"revision": packet["revision"], "input_sha256": hashlib.sha256(raw).hexdigest()}
+
+
 def run_agent(args: argparse.Namespace) -> int:
+    """同一输出批次复用现有文件锁，只允许一个执行 owner。"""
+    from nz_coder.foundation.file_lock import exclusive_file_lock
+    from nz_coder.evaluation.reproducibility import write_reproducibility_manifest
+
+    args.run_id = args.run_id or time.strftime("%Y%m%d-%H%M%S")
+    output = Path(args.output or DEFAULT_BENCH_DIR / f"predictions-{args.run_id}.jsonl")
+    work_root = Path(args.work_root) if args.work_root else default_swe_work_root(args.run_id)
+    with exclusive_file_lock(output.with_suffix(".owner.lock")), exclusive_file_lock(work_root / ".nz-owner.lock"):
+        # 换输出文件不能绕过同一工作区的单次尝试归属。
+        receipt_path = work_root / ".nz-attempt-owner.json"
+        receipt = {"run_id": args.run_id, "predictions_path": str(output.resolve())}
+        if receipt_path.is_file() and json.loads(receipt_path.read_text()) != receipt:
+            print("Error: work root belongs to another attempt/output; restart refused.")
+            return 2
+        write_reproducibility_manifest(receipt_path, receipt)
+        return _run_agent_owned(args)
+
+
+def _run_agent_owned(args: argparse.Namespace) -> int:
     """Generate SWE-bench predictions by running NZ-Coder on dataset instances."""
-    try:
-        from datasets import load_dataset
-    except ImportError:
-        print("Error: datasets is not installed. Install it with `pip install datasets`.")
-        return 2
 
     from nz_coder.foundation import config
     from nz_coder.runtime.conversation.prompt import build
@@ -74,8 +110,24 @@ def run_agent(args: argparse.Namespace) -> int:
         print("Error: the Verified profile requires strict pass@1 mode.")
         return 2
     split = args.split or profile.split
-    dataset = load_dataset(profile.dataset, split=split)
+    dataset_identity = {}
+    if args.instances_file:
+        try:
+            dataset, dataset_identity = load_inference_instances(Path(args.instances_file), profile, split)
+        except (OSError, ValueError) as exc:
+            print(f"Error: cannot load frozen inference input: {exc}")
+            return 2
+    else:
+        try:
+            from datasets import load_dataset
+        except ImportError:
+            print("Error: datasets is not installed. Install it with `pip install datasets`.")
+            return 2
+        dataset = load_dataset(profile.dataset, split=split)
     instances = _select_instances(list(dataset), args.instance_ids, args.max_instances)
+    # 完整行只属于宿主准备/评分；推理层和 spawn 的参数只携带公开字段。
+    instances = [{key: row[key] for key in ("instance_id", "repo", "base_commit", "problem_statement")}
+                 for row in instances]
     if not instances:
         print("Error: no SWE-bench instances selected.")
         return 2
@@ -141,6 +193,25 @@ def run_agent(args: argparse.Namespace) -> int:
         "cleanup_worktrees": bool(args.cleanup_worktrees),
         "analysis_before_raw_trace_cleanup": True,
     }
+    endpoint = urlsplit(config.API_BASE_URL)
+    from nz_coder.swebench.policy import STRICT_ALLOWED_TOOLS
+    from nz_coder.swebench.orchestrator import _strict_agent_protocol
+    from nz_coder.runtime.core.execution_context import repo_retrieval_strategy
+    manifest["effective_configuration"] = {
+        "endpoint": {"scheme": endpoint.scheme, "host": endpoint.hostname, "port": endpoint.port,
+                     "path": endpoint.path},
+        "max_output_tokens": config.MAX_OUTPUT_TOKENS, "max_context_tokens": config.MAX_CONTEXT_TOKENS,
+        "provider_max_retries": config.PROVIDER_MAX_RETRIES,
+        "provider_hard_timeout_seconds": config.PROVIDER_HARD_TIMEOUT_SECONDS,
+        "stream": False, "thinking": None, "reasoning_effort": None,
+        "permission_mode": "auto", "repo_retrieval_strategy": repo_retrieval_strategy(),
+        "tool_allowlist": sorted(STRICT_ALLOWED_TOOLS) if args.strict else None,
+        "protocol_sha256": hashlib.sha256(_strict_agent_protocol().encode()).hexdigest() if args.strict else None,
+        "inference_environment": "externally_prepared; isolation requires execution receipt",
+        "work_root": str(work_root.resolve()),
+    }
+    if dataset_identity:
+        manifest["inference_dataset"] = dataset_identity
     if manifest_path.exists():
         if not args.resume:
             print(f"Error: manifest already exists: {manifest_path}")
@@ -196,7 +267,18 @@ def run_agent(args: argparse.Namespace) -> int:
             max_new_instances=args.max_new_instances,
         )
 
-    report_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    committed = {row["instance_id"]: row for row in journal.rows() if row.get("event") == "result"}
+    current = {row["instance_id"]: row for row in results}
+    all_results = []
+    for instance in instances:
+        instance_id = instance["instance_id"]
+        row = current.get(instance_id) or committed.get(instance_id)
+        if row is None:
+            row = {"instance_id": instance_id, "agent_status": {"status": "not_run"},
+                   "patch_status": "not_captured", "eval_status": "not_run", "official_resolved": None,
+                   "usage": None, "main_requests": None, "auxiliary_requests": None}
+        all_results.append(row)
+    report_path.write_text(json.dumps(all_results, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Report: {report_path}")
     completed_selected = len(
         journal.completed_ids()
@@ -325,6 +407,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = subparsers.add_parser("run-eval", help="Run official SWE-bench evaluation")
     run.add_argument("--profile", choices=sorted(PROFILES), default=DEFAULT_PROFILE)
+    run.add_argument("--dataset-file", help="Evaluator-only frozen official JSON/JSONL dataset.")
+    run.add_argument("--split")
     run.add_argument("--predictions-path", required=True, help="JSONL predictions file.")
     run.add_argument("--max-workers", type=int, default=1, help="Parallel evaluation workers.")
     run.add_argument("--run-id", default="nz_coder_swebench_verified", help="SWE-bench run id.")
@@ -344,6 +428,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent = subparsers.add_parser("run-agent", help="Run strict pass@1 NZ-Coder inference")
     agent.add_argument("--profile", choices=sorted(PROFILES), default=DEFAULT_PROFILE)
     agent.add_argument("--split")
+    agent.add_argument("--instances-file", help="Frozen public-only JSON input; excludes grading fields.")
     agent.add_argument("--max-instances", type=int)
     agent.add_argument(
         "--max-new-instances",
@@ -426,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.run_id,
                 )
             except (OSError, ValueError, json.JSONDecodeError) as exc:
-                print(f"Official evaluation passed, but provenance recording failed: {exc}")
+                print(f"Official harness exited with code 0, but provenance recording failed: {exc}")
                 return 2
         if result or not args.package or args.profile != "verified":
             return result

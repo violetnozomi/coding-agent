@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import hashlib
+import importlib.metadata
 import multiprocessing
 import platform
 import re
@@ -82,7 +84,13 @@ class SWEBenchAdapter:
             print(f"Error: Docker daemon is not usable: {docker_detail}")
             return 2
 
-        instance_ids = list(args.instance_ids or [])
+        selected_ids = list(args.instance_ids or self.load_predictions(predictions_path))
+        instance_ids = list(selected_ids)
+        selected_arch = getattr(args, "image_arch", "") or platform.machine()
+        native_arch = {"amd64": "x86_64", "aarch64": "arm64"}.get(platform.machine(), platform.machine())
+        if selected_arch != native_arch:
+            print("Error: installed harness CLI cannot select a non-native architecture.")
+            return 2
         if args.prepull_timeout:
             instance_ids = self._prepull_instance_images(
                 instance_ids,
@@ -94,6 +102,7 @@ class SWEBenchAdapter:
             )
             if args.instance_ids and not instance_ids:
                 print("No instances left after image pre-pull filtering.")
+                self._write_evaluation_results(predictions_path, args.run_id, selected_ids, [], 3)
                 return 3
 
         cmd = [
@@ -101,7 +110,10 @@ class SWEBenchAdapter:
             "-m",
             "swebench.harness.run_evaluation",
             "--dataset_name",
-            get_profile(getattr(args, "profile", DEFAULT_PROFILE)).dataset,
+            getattr(args, "dataset_file", None) or get_profile(getattr(args, "profile", DEFAULT_PROFILE)).dataset,
+            "--split", getattr(args, "split", None) or self.profile.split,
+            "--namespace", getattr(args, "image_namespace", "swebench"),
+            "--instance_image_tag", getattr(args, "instance_image_tag", "latest"),
             "--predictions_path",
             str(predictions_path),
             "--max_workers",
@@ -118,8 +130,89 @@ class SWEBenchAdapter:
 
         print("Running official SWE-bench harness:")
         print(" ".join(cmd))
-        result = subprocess.run(cmd)
-        return result.returncode
+        # 官方缓存不包含 patch 身份；同 run_id 换补丁必须拒绝，不能复用旧报告。
+        from nz_coder.foundation.file_lock import exclusive_file_lock
+        from nz_coder.evaluation.reproducibility import write_reproducibility_manifest
+
+        log_root = Path("logs/run_evaluation") / _safe_name(args.run_id)
+        identity_path = log_root / "nz-evaluation-identity.json"
+        dataset_file = getattr(args, "dataset_file", None)
+        identity = {"predictions_sha256": hashlib.sha256(predictions_path.read_bytes()).hexdigest(),
+            "dataset": cmd[cmd.index("--dataset_name") + 1],
+            "dataset_file_sha256": hashlib.sha256(Path(dataset_file).read_bytes()).hexdigest() if dataset_file else None,
+            "split": cmd[cmd.index("--split") + 1], "instance_ids": instance_ids,
+            "namespace": getattr(args, "image_namespace", "swebench"), "arch": selected_arch,
+            "instance_image_tag": getattr(args, "instance_image_tag", "latest"),
+            "harness_version": importlib.metadata.version("swebench"), "run_id": args.run_id}
+        with exclusive_file_lock(log_root / "nz-owner.lock"):
+            if identity_path.exists() and json.loads(identity_path.read_text()) != identity:
+                print("Error: evaluation identity changed; use a new run_id for a different patch/config.")
+                return 2
+            write_reproducibility_manifest(identity_path, identity)
+            returncode = None
+            try:
+                result = subprocess.run(cmd)
+                returncode = result.returncode
+                return returncode
+            finally:
+                self._write_evaluation_results(predictions_path, args.run_id,
+                    selected_ids, instance_ids, returncode)
+
+    def _write_evaluation_results(self, predictions_path: Path, run_id: str,
+                                  selected_ids: list[str], attempted_ids: list[str],
+                                  returncode: int | None) -> None:
+        """只投影本次官方报告；退出码和缺失报告都不能替代 resolved。"""
+        from nz_coder.evaluation.reproducibility import write_reproducibility_manifest
+
+        predictions = [json.loads(line) for line in predictions_path.read_text().splitlines() if line.strip()]
+        by_id = {row["instance_id"]: row for row in predictions}
+        log_root = Path("logs/run_evaluation") / _safe_name(run_id)
+        manifest_path = predictions_path.with_suffix(".manifest.json")
+        manifest_ids = json.loads(manifest_path.read_text()).get("instance_ids", []) if manifest_path.is_file() else []
+        planned_ids = list(dict.fromkeys([*manifest_ids, *by_id, *selected_ids]))
+        rows = []
+        for instance_id in planned_ids:
+            prediction = by_id.get(instance_id, {})
+            patch = prediction.get("model_patch")
+            # 仅使用实际 harness 的 run/model/instance 路径，不搜索其他运行的旧报告。
+            report_path = log_root / str(prediction.get("model_name_or_path", "None")).replace("/", "__") / instance_id / "report.json"
+            resolved = applied = None
+            if instance_id not in selected_ids:
+                state, reason = "not_run", "outside_selected_subset"
+            elif instance_id not in attempted_ids:
+                state, reason = "environment_blocked", "image_preparation_failed"
+            elif patch == "":
+                state, reason = "not_run", "empty_patch"
+            elif not prediction:
+                state, reason = "not_run", "prediction_missing"
+            else:
+                try:
+                    report = json.loads(report_path.read_text())
+                    report = report.get(instance_id, report) if isinstance(report, dict) else {}
+                except (OSError, ValueError):
+                    report = {}
+                if isinstance(report, dict):
+                    resolved = report.get("resolved") if isinstance(report.get("resolved"), bool) else None
+                    applied = report.get("patch_successfully_applied") if isinstance(report.get("patch_successfully_applied"), bool) else None
+                state = "completed" if resolved is not None else "unknown"
+                reason = "official_report" if resolved is not None else "missing_or_invalid_official_verdict"
+            rows.append({"instance_id": instance_id, "patch_status": "present" if patch else "empty" if patch == "" else "not_captured",
+                "patch_sha256": hashlib.sha256(patch.encode()).hexdigest() if isinstance(patch, str) else None,
+                "eval_status": state, "reason": reason, "official_resolved": resolved,
+                "patch_applied": applied, "official_report": str(report_path) if report_path.is_file() else None})
+        counts = {"planned": len(rows), "attempted": len(attempted_ids),
+            "patch_present": sum(row["patch_status"] == "present" for row in rows),
+            "empty_patch": sum(row["patch_status"] == "empty" for row in rows),
+            "patch_applied": sum(row["patch_applied"] is True for row in rows),
+            "patch_not_applied": sum(row["patch_applied"] is False for row in rows),
+            "completed": sum(row["eval_status"] == "completed" for row in rows),
+            "resolved": sum(row["official_resolved"] is True for row in rows),
+            "unresolved": sum(row["official_resolved"] is False for row in rows),
+            "unknown": sum(row["eval_status"] == "unknown" for row in rows),
+            "environment_blocked": sum(row["eval_status"] == "environment_blocked" for row in rows),
+            "not_run": sum(row["eval_status"] == "not_run" for row in rows)}
+        write_reproducibility_manifest(log_root / "nz-evaluation-results.json",
+            {"run_id": run_id, "harness_returncode": returncode, "instances": rows, "counts": counts})
 
     # ── Feedback loading ──────────────────────────────────────────────────────
 
@@ -158,8 +251,8 @@ class SWEBenchAdapter:
 
         return FailureFeedback(
             instance_id=instance_id,
-            resolved=report.get("resolved", "unknown") if report else "unknown",
-            patch_applied=report.get("patch_successfully_applied", "unknown") if report else "unknown",
+            resolved=report["resolved"] if isinstance(report.get("resolved"), bool) else "unknown",
+            patch_applied=report["patch_successfully_applied"] if isinstance(report.get("patch_successfully_applied"), bool) else "unknown",
             fail_to_pass=fail_to_pass,
             pass_to_pass=pass_to_pass,
             passing_tests=passing_tests,

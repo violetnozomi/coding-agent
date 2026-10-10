@@ -53,7 +53,7 @@ class AttemptJournal:
         return {str(row["instance_id"]) for row in self.rows()}
 
     def claim(self, instance_id: str) -> None:
-        """Durably claim inference, reusing a crash-interrupted open claim."""
+        """Durably mark the single attempt; an open claim is not restart permission."""
         normalized = str(instance_id or "")
         if not normalized:
             raise ValueError("attempt claim requires instance_id")
@@ -148,7 +148,7 @@ def _sanitize_public(value: Any, workspace: str) -> Any:
         return {
             str(key): (
                 "[REDACTED]"
-                if _SECRET_KEYS.search(str(key))
+                if _SECRET_KEYS.search(str(key)) or "reasoning_content" in str(key).casefold()
                 else _sanitize_public(item, workspace)
             )
             for key, item in value.items()
@@ -157,6 +157,7 @@ def _sanitize_public(value: Any, workspace: str) -> Any:
         return [_sanitize_public(item, workspace) for item in value]
     if isinstance(value, str):
         text = value.replace(workspace, "<workspace>")
+        text = re.sub(r"/(?:home|Users|root|tmp)/[^\s\"<>]+", "<private-path>", text)
         text = re.sub(
             r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]+",
             r"\1[REDACTED]",
