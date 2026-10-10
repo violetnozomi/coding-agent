@@ -1,0 +1,1 @@
+{"tool": "bash", "input": {"command": "python3 bin/test test_sympify --no-colors", "timeout": 30}, "allowed": true, "workspace": "/workspace/runs/fixture__native-test-1"}

@@ -1,0 +1,71 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_____ test_close_cancels_cold_scan_and_queued_query_without_partial_commit _____
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-79/test_close_cancels_cold_scan_a0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7eb1a957b100>
+
+    def test_close_cancels_cold_scan_and_queued_query_without_partial_commit(tmp_path, monkeypatch):
+        import sqlite3
+        import pytest
+        from nz_coder.intelligence.service import RepoIntelligenceService
+    
+        for name in ("first.py", "second.py"):
+            (tmp_path / name).write_text("def value(): return 1\n")
+        service = RepoIntelligenceService(tmp_path)
+        entered = threading.Event()
+        parsed = []
+        original_parse = service.index._parse
+    
+        def parse(path):
+            parsed.append(path.name)
+            entered.set()
+            assert service._watch_stop.wait(2), "close did not signal its owned task"
+            return original_parse(path)
+    
+        monkeypatch.setattr(service.index, "_parse", parse)
+        build = service.prewarm(max_files=20)
+        assert entered.wait(2)
+        queued_ran = threading.Event()
+        queued = service.submit_bounded_query(queued_ran.set)
+        service.close()
+    
+>       assert build.result().status == "cancelled"
+E       AssertionError: assert 'ready' == 'cancelled'
+E         
+E         - cancelled
+E         + ready
+
+tests/test_repo_intelligence_service.py:36: AssertionError
+_________________ test_close_interrupts_an_active_sqlite_query _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-79/test_close_interrupts_an_activ0')
+
+    def test_close_interrupts_an_active_sqlite_query(tmp_path):
+        import sqlite3
+        import pytest
+        from nz_coder.intelligence.service import RepoIntelligenceService
+    
+        service = RepoIntelligenceService(tmp_path)
+        entered = threading.Event()
+    
+        def query():
+            with service.index._connect() as connection:
+                connection.set_trace_callback(lambda _sql: entered.set())
+                return connection.execute(
+                    "WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<10000000) "
+                    "SELECT SUM(x) FROM n"
+                ).fetchone()
+    
+        running = service.submit_bounded_query(query)
+        assert entered.wait(2)
+        service.close()
+>       with pytest.raises(sqlite3.OperationalError, match="interrupted"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'sqlite3.OperationalError'>
+
+tests/test_repo_intelligence_service.py:66: Failed
+=========================== short test summary info ============================
+FAILED tests/test_repo_intelligence_service.py::test_close_cancels_cold_scan_and_queued_query_without_partial_commit
+FAILED tests/test_repo_intelligence_service.py::test_close_interrupts_an_active_sqlite_query
+2 failed, 21 deselected in 0.88s

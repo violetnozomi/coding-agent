@@ -1,0 +1,14 @@
+Selected 1 SWE-bench verified instance(s).
+Policy: strict pass@1
+Work root: /workspace/runs
+Predictions: /result/predictions.jsonl
+Raw trace archive: /result/predictions-raw-traces (warning=85899345 bytes, hard=107374182 bytes)
+Manifest: /result/predictions.manifest.json
+
+[1/1] sympy__sympy-22914
+
+[sympy__sympy-22914]
+  read_file: unknown <path>/workspace/runs/sympy__sympy-22914/bin/get_sympy.py</path> <type>file</type> <content> 1: """Functions to get the correct sympy version to run tests.""" 2
+  bash: unknown ============================= test process starts ============================== executable:         /opt/miniconda3/envs/testbed/bin/python3  (3.9.20-final-0) 
+[EMPTY_PATCH] sympy__sympy-22914: patch_chars=0, tools=2
+Report: /result/predictions.report.json

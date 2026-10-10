@@ -1,0 +1,121 @@
+{
+  "baseline": "faeacd86192d5f233afbc0110d7041c0d19b0534",
+  "implementation": "bf11b3468fdb49acacda25e80d8aaa146a9c637b",
+  "instance_id": "sympy__sympy-22914",
+  "dataset_revision": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a",
+  "base_commit": "c4e836cdf73fc6aa7bab6a86719a0f08861ffb1d",
+  "image_id": "sha256:544c1e8716d3b67a7d82553ee0364469a6bc0be272898dc67e6a332c9b051a34",
+  "online_status": "not_run: missing_paid_authorization",
+  "online_requests": 0,
+  "autonomous_agent_status": "not_run",
+  "autonomous_patch_status": "not_created",
+  "autonomous_eval_status": "not_run",
+  "official_resolved": null,
+  "cases": [
+    {
+      "case": "before",
+      "actual_case": "native-runner-68c69401",
+      "core_agent_status": "completed",
+      "agent_execution_finished": true,
+      "cleanup_started": true,
+      "cleanup_finished": false,
+      "worker_result_delivered": false,
+      "native_test_status": "passed",
+      "adapter_agent_status": "timeout",
+      "patch_status": "empty",
+      "eval_status": "not_run",
+      "official_resolved": null,
+      "attempt_seconds": 62.8,
+      "cleanup_seconds": null,
+      "actual_local_main_requests": 3,
+      "actual_auxiliary_requests": 0,
+      "fees": "local controlled Provider, not paid",
+      "runtime_source_sha256": {
+        "service.py": "0935099260a91e5348b2bbc92066ba76c4b7ae5c37745a81d96f35caa8c35c23",
+        "code_index.py": "97af536015289cba3d60a3f8e6f0d4c4239585a35c8d627a5e7bdfc502786399"
+      }
+    },
+    {
+      "case": "after",
+      "actual_case": "native-runner-95580eca",
+      "core_agent_status": "completed",
+      "agent_execution_finished": true,
+      "cleanup_started": true,
+      "cleanup_finished": true,
+      "worker_result_delivered": true,
+      "native_test_status": "passed",
+      "adapter_agent_status": "completed",
+      "patch_status": "empty",
+      "eval_status": "not_run",
+      "official_resolved": null,
+      "attempt_seconds": 4.6,
+      "cleanup_seconds": 0.0019826060015475377,
+      "actual_local_main_requests": 3,
+      "actual_auxiliary_requests": 0,
+      "fees": "local controlled Provider, not paid",
+      "runtime_source_sha256": {
+        "service.py": "464bb71b1d9804108eb8e0b50a67c23b69eeec6278837e368de6e9614c44cf56",
+        "code_index.py": "e77db643c35482674ab8948e9e8ec9c9c83a61eab444ac1a2b7f8daaf18b337c"
+      }
+    },
+    {
+      "case": "negative",
+      "actual_case": "native-runner-a0b08223",
+      "core_agent_status": "completed",
+      "agent_execution_finished": true,
+      "cleanup_started": true,
+      "cleanup_finished": true,
+      "worker_result_delivered": true,
+      "native_test_status": "failed",
+      "adapter_agent_status": "completed",
+      "patch_status": "empty",
+      "eval_status": "not_run",
+      "official_resolved": null,
+      "attempt_seconds": 1.4,
+      "cleanup_seconds": 0.0033072540027205832,
+      "actual_local_main_requests": 3,
+      "actual_auxiliary_requests": 0,
+      "fees": "local controlled Provider, not paid",
+      "runtime_source_sha256": {
+        "service.py": "730bb4ac18aeb8cf55e2ac8954fc39d442eb83d1604625eb2783e89c1d9e3279",
+        "code_index.py": "e77db643c35482674ab8948e9e8ec9c9c83a61eab444ac1a2b7f8daaf18b337c"
+      }
+    },
+    {
+      "case": "empty",
+      "actual_case": "native-runner-398483dd",
+      "core_agent_status": "completed",
+      "agent_execution_finished": true,
+      "cleanup_started": true,
+      "cleanup_finished": true,
+      "worker_result_delivered": true,
+      "native_test_status": "skipped",
+      "adapter_agent_status": "completed",
+      "patch_status": "empty",
+      "eval_status": "not_run",
+      "official_resolved": null,
+      "attempt_seconds": 1.4,
+      "cleanup_seconds": 0.014083856003708206,
+      "actual_local_main_requests": 3,
+      "actual_auxiliary_requests": 0,
+      "fees": "local controlled Provider, not paid",
+      "runtime_source_sha256": {
+        "service.py": "730bb4ac18aeb8cf55e2ac8954fc39d442eb83d1604625eb2783e89c1d9e3279",
+        "code_index.py": "e77db643c35482674ab8948e9e8ec9c9c83a61eab444ac1a2b7f8daaf18b337c"
+      }
+    }
+  ],
+  "final_code_files": {
+    "nz_coder/intelligence/service.py": "464bb71b1d9804108eb8e0b50a67c23b69eeec6278837e368de6e9614c44cf56",
+    "nz_coder/intelligence/code_index.py": "e77db643c35482674ab8948e9e8ec9c9c83a61eab444ac1a2b7f8daaf18b337c"
+  },
+  "controlled_calls": {
+    "before": 3,
+    "after_first": 9,
+    "after_final": 3,
+    "total": 15,
+    "auxiliary": 0
+  },
+  "windows_run": false,
+  "full_repo_tests_run": false
+}

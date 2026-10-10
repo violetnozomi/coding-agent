@@ -1,0 +1,45 @@
+{
+  "online_allowed": false,
+  "online_status": "not_run: missing_paid_authorization",
+  "online_requests": 0,
+  "requested": {
+    "purpose": "swebench-verified",
+    "scope": [
+      "sympy__sympy-22914"
+    ],
+    "account": "project-env:DeepSeek",
+    "model": "deepseek-v4-flash",
+    "input_mode": "empirical",
+    "empirical_risk_accepted": true,
+    "instance_manifest_sha256": "7fd2e094f377ffcb3567f61a197428c28116772368f8dcb81bd3fad6bd6069fb",
+    "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+    "source_commit": "bf11b3468fdb49acacda25e80d8aaa146a9c637b",
+    "startup_source_sha256": "19828227ed6cce4854df040b3e6e56ab64878ef01c3717d2183376fe5b2cb2b9",
+    "relay_source_sha256": "06a9069d03b39ee3858c93f08585e7dc1e80d9164dae3ffc4a82419e586eb296",
+    "bounds": {
+      "requests": 30,
+      "input_per_request": 100000,
+      "input_total": 500000,
+      "output_total": 100000,
+      "request_seconds": 180.0
+    },
+    "main_request_cap": 24,
+    "auxiliary_request_cap": 6,
+    "output_limit": 8000,
+    "agent_seconds": 900,
+    "thinking": null,
+    "reasoning_effort": null,
+    "stream": false,
+    "single_attempt": true,
+    "run_id": "nz-sympy-autonomous-20261011",
+    "output_root": "/private/user/.codex/artifacts/nz-sympy-autonomous-2026-10-11"
+  },
+  "missing_fields": [
+    "authorization_text",
+    "cost_limit",
+    "cost_currency=CNY",
+    "valid_from",
+    "valid_until",
+    "prices_cny_per_million"
+  ]
+}

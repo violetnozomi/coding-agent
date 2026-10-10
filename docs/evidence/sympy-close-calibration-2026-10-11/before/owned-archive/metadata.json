@@ -1,0 +1,10 @@
+{
+  "instance_id": "sympy__sympy-22914",
+  "model_patch": "",
+  "patch_chars": 0,
+  "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "session_id": "swe-20261010_164431-b27aaef6",
+  "status": "agent_failed",
+  "summary": "agent timed out after 60s",
+  "trace": "/workspace/runs/sympy__sympy-22914/.nz-coder-runs/swe-20261010_164431-b27aaef6__20261010_164431_0d1ab0fa.jsonl"
+}

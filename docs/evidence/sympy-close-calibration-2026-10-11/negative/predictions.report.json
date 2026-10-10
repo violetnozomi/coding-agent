@@ -1,0 +1,230 @@
+[
+  {
+    "instance_id": "fixture__native-test-1",
+    "repo": "fixture/native-test",
+    "base_commit": "8acb1824b65a3914172893cb7a036fe05a9fa83b",
+    "initial_state": {
+      "original_base_commit": "8acb1824b65a3914172893cb7a036fe05a9fa83b",
+      "local_head": "9cc43fab0e948566145b21fdd5ebb227305ebc17",
+      "original_tree": "976b0aed7be261ad9cf30adaf3eabf125868d13e",
+      "local_tree": "976b0aed7be261ad9cf30adaf3eabf125868d13e"
+    },
+    "status": "empty_patch",
+    "summary": "patch_chars=0, tools=2, risk=verification_needed,nonzero_commands",
+    "agent_status": {
+      "status": "completed",
+      "content": "Health check only; no issue fix was implemented. Remaining repair is unverified.",
+      "errors": 0,
+      "verification_needed": true,
+      "verification_state": "failed_repairable",
+      "last_verification": {
+        "command": "python3 bin/test test_sympify --no-colors",
+        "stage": "targeted",
+        "status": "failed",
+        "output": "Command exited with code 1\n1 passed is only text, not a successful exit\nAssertionError: controlled negative test"
+      },
+      "environment_blocker": null,
+      "verification_pipeline": {
+        "changed_files": [],
+        "stages": [
+          {
+            "name": "targeted",
+            "required": true,
+            "evidence_required": true,
+            "status": "failed",
+            "commands": [],
+            "observed": [
+              {
+                "command": "python3 bin/test test_sympify --no-colors",
+                "required": false,
+                "status": "failed",
+                "last_command": "python3 bin/test test_sympify --no-colors"
+              }
+            ]
+          }
+        ],
+        "next_required_stage": "targeted"
+      },
+      "runtime": {
+        "profile": "coding",
+        "control_plane": "native-coding-loop",
+        "active_agent": "worker",
+        "admitted": false,
+        "admitted_capabilities": [],
+        "admission_violations": [],
+        "structured_output": {},
+        "turn_count": 3,
+        "edits": 0,
+        "last_edit_turn": 0,
+        "mutation_generation": 0,
+        "acceptance_mutation_generation": 0,
+        "diff_generation": -1,
+        "verification_generation": -1,
+        "strict_progress_blocks": 0,
+        "work_phase": "closure_repair",
+        "verification_failures": 0,
+        "package_install_attempts": 0,
+        "emergency_broad_exploration": 0,
+        "work_budget_zone": "green",
+        "has_diff": false,
+        "diff_chars": 0,
+        "tests_modified": false,
+        "wants_tests": false,
+        "forbids_test_changes": false,
+        "requested_paths": [],
+        "broad_tests": 0,
+        "task_complexity": "L0",
+        "acceptance_criteria": [
+          "Diagnose the failing native test. Report remaining work honestly.",
+          "Diagnose the failing native test."
+        ],
+        "plan_generated": false,
+        "replan_count": 0,
+        "provider_calls": 3,
+        "provider_attempts": 3,
+        "provider_calls_by_purpose": {
+          "coding": 3
+        },
+        "provider_calls_by_model": {
+          "openai-compatible/deepseek-v4-flash": 3
+        },
+        "provider_usage": {
+          "input": 96115,
+          "output": 12,
+          "total": 96127,
+          "reasoning": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        },
+        "provider_usage_by_purpose": {
+          "coding": {
+            "input": 96115,
+            "output": 12,
+            "total": 96127,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          }
+        },
+        "provider_duration_ms_by_purpose": {
+          "coding": 187.524
+        },
+        "provider_usage_by_model": {
+          "openai-compatible/deepseek-v4-flash": {
+            "input": 96115,
+            "output": 12,
+            "total": 96127,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          }
+        },
+        "provider_duration_ms_by_model": {
+          "openai-compatible/deepseek-v4-flash": 187.524
+        },
+        "provider_cost_usd": 0.0,
+        "provider_cost_usd_by_purpose": {},
+        "provider_cost_usd_by_model": {},
+        "provider_cost_unknown_calls": 3,
+        "provider_cost_sources": {
+          "unknown": 3
+        },
+        "provider_turns_by_reason": {
+          "initial_investigation": 1,
+          "investigation": 1,
+          "convergence": 1
+        },
+        "provider_turns_by_outcome": {
+          "investigation_batch": 1,
+          "verification_batch": 1,
+          "final_answer": 1
+        },
+        "provider_turn_records": [
+          {
+            "turn": 1,
+            "reason": "initial_investigation",
+            "outcome": "investigation_batch",
+            "tool_names": [
+              "read_file"
+            ],
+            "finish_reason": "tool_calls",
+            "mutation_generation_before": 0,
+            "mutation_generation_after": 0,
+            "mutation_delta": 0,
+            "verification_generation_after": -1
+          },
+          {
+            "turn": 2,
+            "reason": "investigation",
+            "outcome": "verification_batch",
+            "tool_names": [
+              "bash"
+            ],
+            "finish_reason": "tool_calls",
+            "mutation_generation_before": 0,
+            "mutation_generation_after": 0,
+            "mutation_delta": 0,
+            "verification_generation_after": -1
+          },
+          {
+            "turn": 3,
+            "reason": "convergence",
+            "outcome": "final_answer",
+            "tool_names": [],
+            "finish_reason": "stop",
+            "mutation_generation_before": 0,
+            "mutation_generation_after": 0,
+            "mutation_delta": 0,
+            "verification_generation_after": -1
+          }
+        ],
+        "patch_risk": {},
+        "patch_risk_reviewed": false,
+        "tool_observability": {
+          "batches": 2,
+          "calls": 2,
+          "wall_ms": 33.698,
+          "tool_duration_ms": 33.257,
+          "peak_concurrency": 1,
+          "parallel_segments": 0,
+          "serial_segments": 2,
+          "barrier_wait_ms": 0.0,
+          "streak_resets": 1
+        },
+        "reflection_status": null,
+        "reflection_summary": null,
+        "evidence": {
+          "created_files": 0,
+          "modified_files": 0,
+          "expected_files": 0,
+          "verification_results": 1,
+          "tool_failures": 0,
+          "limitations": []
+        }
+      }
+    },
+    "adapter_error": null,
+    "session_id": "swe-20261010_164847-f334b1b3",
+    "trace": "/workspace/runs/fixture__native-test-1/.nz-coder-runs/swe-20261010_164847-f334b1b3__20261010_164847_f3e0432e.jsonl",
+    "workdir": "/workspace/runs/fixture__native-test-1",
+    "duration": 1.4,
+    "tool_calls": 2,
+    "tool_errors": 0,
+    "policy_rejections": 0,
+    "process_warnings": [],
+    "risk_reasons": [
+      "verification_needed",
+      "nonzero_commands"
+    ],
+    "empty_patch_retries": 0,
+    "model_patch": "",
+    "patch_status": "empty",
+    "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "eval_status": "not_run",
+    "official_resolved": null,
+    "public_input": "/workspace/runs/fixture__native-test-1/.nz-coder-runs/public-inference-input.json",
+    "trace_archive": "/result/predictions-raw-traces/fixture__native-test-1",
+    "trace_archive_bytes": 70150,
+    "diagnostic_cleanup_safe": true
+  }
+]

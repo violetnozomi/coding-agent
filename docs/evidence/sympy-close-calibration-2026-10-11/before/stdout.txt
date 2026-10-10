@@ -1,0 +1,12 @@
+Selected 1 SWE-bench verified instance(s).
+Policy: strict pass@1
+Work root: /workspace/runs
+Predictions: /result/predictions.jsonl
+Raw trace archive: /result/predictions-raw-traces (warning=85899345 bytes, hard=107374182 bytes)
+Manifest: /result/predictions.manifest.json
+
+[1/1] sympy__sympy-22914
+
+[sympy__sympy-22914]
+[AGENT_FAILED] sympy__sympy-22914: agent timed out after 60s
+Report: /result/predictions.report.json

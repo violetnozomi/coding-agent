@@ -1,0 +1,61 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_close_reports_uncooperative_work_and_can_be_retried ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-82/test_close_reports_uncooperati0')
+
+    def test_close_reports_uncooperative_work_and_can_be_retried(tmp_path):
+        import pytest
+        from nz_coder.intelligence.service import RepoIntelligenceService
+    
+        service = RepoIntelligenceService(tmp_path)
+        entered, release = threading.Event(), threading.Event()
+    
+        def uncooperative_query():
+            entered.set()
+            release.wait(2)
+    
+        running = service.submit_bounded_query(uncooperative_query)
+        assert entered.wait(2)
+        queued_build = service.prewarm(max_files=20)
+        try:
+            with pytest.raises(RuntimeError, match="cleanup incomplete"):
+                service.close(timeout=0.01)
+            assert not running.done()
+            assert queued_build.cancelled()
+            with pytest.raises(RuntimeError, match="closed"):
+                service.prewarm()
+        finally:
+            release.set()
+            running.result(timeout=2)
+>           service.close(timeout=0.1)
+
+tests/test_repo_intelligence_service.py:95: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <nz_coder.intelligence.service.RepoIntelligenceService object at 0x74899a6ee270>
+
+    def close(self, *, timeout: float = 5.0) -> None:
+        deadline = time.monotonic() + timeout
+        with self._lock:
+            self._closed = True
+            self._watch_stop.set()
+            futures = set(self._query_futures)
+            if self._future is not None:
+                futures.add(self._future)
+        for future in futures:
+            future.cancel()
+        thread = self._watch_thread
+        if thread is not None:
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        _done, pending = wait(futures, timeout=max(0.0, deadline - time.monotonic())) if futures else (set(), set())
+        if pending or (thread is not None and thread.is_alive()):
+            # 只报告未停止，不能将非守护任务遗留伪装为关闭成功；SWE 外层仍负责进程树兜底。
+            self._executor.shutdown(wait=False, cancel_futures=True)
+>           raise RuntimeError("Repo intelligence cleanup incomplete: owned work did not stop")
+E           RuntimeError: Repo intelligence cleanup incomplete: owned work did not stop
+
+nz_coder/intelligence/service.py:907: RuntimeError
+=========================== short test summary info ============================
+FAILED tests/test_repo_intelligence_service.py::test_close_reports_uncooperative_work_and_can_be_retried
+1 failed, 23 deselected in 0.21s

@@ -1,0 +1,41 @@
+[
+  {
+    "owned_path": "/tmp/nzc-b/test_native_bin_test_through_i0/native-runner-68c69401/workspace/runs/sympy__sympy-22914/.nz-coder/index",
+    "files": {
+      "code-index.sqlite3-wal": 1166071272,
+      "code-index.sqlite3": 102400,
+      "code-index.sqlite3-shm": 2293760
+    },
+    "reason": "generated derived cache; tools stopped, empty patch preserved in report; raw trace/Session/Artifact retained"
+  },
+  {
+    "owned_path": "/tmp/nzc-a/test_native_bin_test_through_i1/native-runner-a0b08223/workspace/runs/fixture__native-test-1/.nz-coder/index",
+    "files": {
+      "repository-graph-v2.json": 79,
+      "code-index.sqlite3": 102400
+    },
+    "reason": "generated derived cache; tools stopped, empty patch preserved in report; raw trace/Session/Artifact retained"
+  },
+  {
+    "owned_path": "/tmp/nzc-a/test_native_bin_test_through_i2/native-runner-398483dd/workspace/runs/fixture__native-test-1/.nz-coder/index",
+    "files": {
+      "repository-graph-v2.json": 80,
+      "code-index.sqlite3": 102400
+    },
+    "reason": "generated derived cache; tools stopped, empty patch preserved in report; raw trace/Session/Artifact retained"
+  },
+  {
+    "owned_path": "/tmp/nzc-a/test_native_bin_test_through_i0/native-runner-ffd7bafc/workspace/runs/sympy__sympy-22914/.nz-coder/index",
+    "files": {
+      "code-index.sqlite3": 102400
+    },
+    "reason": "generated derived cache; tools stopped, empty patch preserved in report; raw trace/Session/Artifact retained"
+  },
+  {
+    "owned_path": "/tmp/nzc-f/test_native_bin_test_through_i0/native-runner-95580eca/workspace/runs/sympy__sympy-22914/.nz-coder/index",
+    "files": {
+      "code-index.sqlite3": 102400
+    },
+    "reason": "generated derived cache; tools stopped, empty patch preserved in report; raw trace/Session/Artifact retained"
+  }
+]

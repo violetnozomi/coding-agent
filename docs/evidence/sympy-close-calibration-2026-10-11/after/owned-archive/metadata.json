@@ -1,0 +1,10 @@
+{
+  "instance_id": "sympy__sympy-22914",
+  "model_patch": "",
+  "patch_chars": 0,
+  "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "session_id": "swe-20261010_165117-d9bf6c9f",
+  "status": "empty_patch",
+  "summary": "patch_chars=0, tools=2",
+  "trace": "/workspace/runs/sympy__sympy-22914/.nz-coder-runs/swe-20261010_165117-d9bf6c9f__20261010_165117_a346bd0b.jsonl"
+}

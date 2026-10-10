@@ -1,0 +1,4 @@
+...........................................................s             [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/evaluation/test_swebench_protocol.py:479: requires explicit local Docker smoke with nz-swe-runtime:20261010; never downloads an image
+59 passed, 1 skipped in 11.21s
