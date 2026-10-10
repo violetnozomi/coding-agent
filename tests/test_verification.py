@@ -35,6 +35,17 @@ def make_vm(
     return vm
 
 
+def test_native_bin_test_empty_selection_is_not_a_pass():
+    # 来自固定初态 bin/test 的真实零选择输出；退出 0 也没有运行测试。
+    vm = make_vm(require_targeted=True)
+    vm.mark_write("edit_file", {"path": "module.py"})
+    vm.observe_bash({"command": "python3 bin/test test_no_such_test --no-colors"},
+                    "================== tests finished: 0 passed, in 0.00 seconds ===================",
+                    False, False, exit_code=0)
+    assert vm.status()["last_verification"]["status"] == "skipped"
+    assert vm.should_gate()
+
+
 def staged_plan(
     static: tuple[str, ...] = (),
     targeted: tuple[str, ...] = (),

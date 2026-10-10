@@ -3,6 +3,25 @@
 import pytest
 
 
+@pytest.mark.parametrize("command", [
+    "python3 bin/test test_sympify --no-colors",
+    "python bin/test sympy/core/tests/test_sympify.py --tb short",
+    "python3 bin/test test_sympify -k test_issue",
+])
+def test_native_bin_test_is_targeted_verification(command):
+    from nz_coder.intelligence.verification_planner import classify_verification_command
+    assert classify_verification_command(command) == "targeted"
+
+
+@pytest.mark.parametrize("command", [
+    "echo python3 bin/test test_sympify", "python3 bin/test --help",
+    "python3 bin/test ../test_sympify.py", "python3 bin/test test_sympify --unknown",
+])
+def test_invalid_bin_test_is_not_verification(command):
+    from nz_coder.intelligence.verification_planner import classify_verification_command
+    assert classify_verification_command(command) is None
+
+
 def test_plan_verification_python_prioritizes_py_compile_and_exact_test(tmp_path):
     from nz_coder.foundation import config
     from nz_coder.intelligence.verification_planner import format_verification_plan, plan_verification_commands

@@ -89,8 +89,53 @@ def normalize_path(path: str) -> str:
     return (path or "").replace("\\", "/")
 
 
-def native_runner_positional_selectors(args: list[str]) -> tuple[str, ...]:
+def native_runner_positional_selectors(
+    args: list[str], *, runner: str = "runtests.py",
+) -> tuple[str, ...]:
     """Return positional test selectors after skipping known runner options."""
+    if runner == "bin/test":
+        # bin/test 的 -v 是开关，-k 接收多个关键字，不能沿用 Django 的参数语义。
+        selectors: list[str] = []
+        index = 0
+        flags = {"-v", "--verbose", "--no-colors", "--force-colors", "--random",
+                 "-C", "--no-cache", "--no-subprocess", "-E", "--enhance-asserts"}
+        while index < len(args):
+            token = args[index]
+            if token in flags:
+                index += 1
+                continue
+            option, separator, value = token.partition("=")
+            if option in {"--tb", "--seed", "--timeout", "-t", "--types"}:
+                if not separator:
+                    index += 1
+                    if index == len(args):
+                        return ()
+                    value = args[index]
+                valid = (
+                    value in {"short", "no"} if option == "--tb" else
+                    value in {"gmpy", "gmpy1", "python"} if option in {"-t", "--types"} else
+                    value.isascii() and value.isdigit()
+                )
+                if not valid:
+                    return ()
+            elif token == "-k":
+                index += 1
+                start = index
+                while index < len(args) and not args[index].startswith("-"):
+                    if not re.fullmatch(r"[A-Za-z0-9_ ]+", args[index]):
+                        return ()
+                    index += 1
+                if index == start or not selectors:
+                    return ()
+                continue
+            elif (
+                not re.fullmatch(r"(?:[A-Za-z0-9_-]+/)*test_[A-Za-z0-9_]+(?:\.py)?", token)
+            ):
+                return ()
+            else:
+                selectors.append(token)
+            index += 1
+        return tuple(selectors)
     selectors: list[str] = []
     skip_value = False
     positional_only = False
@@ -358,7 +403,7 @@ def estimate_text_complexity(text: str) -> str:
 
 
 _TEST_RUNNER_MARKERS = (
-    "pytest", "tox", "nox", "runtests.py", "manage.py test", "unittest",
+    "pytest", "tox", "nox", "runtests.py", "bin/test", "manage.py test", "unittest",
     "npm test", "npm run test", "pnpm test", "pnpm run test",
     "yarn test", "yarn run test", "vitest", "jest",
     "go test", "cargo test", "mvn test", "gradle test", "./gradlew test",
@@ -368,6 +413,16 @@ _TEST_RUNNER_MARKERS = (
 
 def is_exact_test_command(command: str) -> bool:
     """True 表示命令运行的是聚焦/精确测试。"""
+    try:
+        tokens = shlex.split(command or "")
+    except ValueError:
+        return False
+    if (
+        len(tokens) >= 2
+        and tokens[0] in {"python", "python3"}
+        and tokens[1].removeprefix("./") == "bin/test"
+    ):
+        return bool(native_runner_positional_selectors(tokens[2:], runner="bin/test"))
     cmd = " ".join((command or "").strip().lower().split())
     if not cmd:
         return False

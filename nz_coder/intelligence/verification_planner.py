@@ -241,6 +241,7 @@ def verification_output_has_no_tests(output: str) -> bool:
             r"\bfound\s+0\s+tests?(?:\(s\))?",
             r"\btests run:\s*0\b",
             r"\btest result:\s*ok\.\s*0\s+passed\b",
+            r"\btests finished:\s*0\s+passed,\s*in\s+[0-9.]+\s+seconds\b",
         )
     )
 
@@ -550,6 +551,12 @@ def _segment_verification_stage(tokens: list[str]) -> str | None:
         )
 
     if executable.startswith(("python", "pypy")):
+        if args and args[0].removeprefix("./") == "bin/test":
+            return (
+                "targeted"
+                if native_runner_positional_selectors(args[1:], runner="bin/test")
+                else None
+            )
         if "-m" in args:
             module_index = args.index("-m") + 1
             module = lowered_args[module_index] if module_index < len(lowered_args) else ""

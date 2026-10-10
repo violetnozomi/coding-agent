@@ -81,3 +81,10 @@ def test_detect_task_mode_distinguishes_discussion_and_creation():
     assert detect_task_mode(
         "Fix parser.py, do not modify tests, then run pytest -q tests/test_parser.py"
     ) == "bugfix"
+
+
+def test_native_bin_test_counts_as_exact_without_requiring_a_py_suffix():
+    from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+    assert is_exact_test_command("python3 bin/test test_sympify --no-colors")
+    assert not is_broad_test_command("python3 bin/test test_sympify --no-colors")
+    assert is_broad_test_command("python3 bin/test")

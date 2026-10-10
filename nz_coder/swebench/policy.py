@@ -43,7 +43,7 @@ _LOCAL_GIT_SUBCOMMANDS = frozenset({
     "diff", "grep", "ls-files", "rev-parse", "status",
 })
 _PYTHON_MODULES = frozenset({"compileall", "py_compile", "pytest"})
-_REPOSITORY_TEST_RUNNERS = frozenset({"test/runtests.py", "tests/runtests.py"})
+_REPOSITORY_TEST_RUNNERS = frozenset({"test/runtests.py", "tests/runtests.py", "bin/test"})
 _DOTTED_TEST_LABEL_RE = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"
 )
@@ -361,7 +361,9 @@ def _is_narrow_repository_test_runner(tokens: list[str]) -> bool:
         runner = runner[2:]
     if runner not in _REPOSITORY_TEST_RUNNERS:
         return False
-    selectors = native_runner_positional_selectors(tokens[2:])
+    selectors = native_runner_positional_selectors(tokens[2:], runner=runner)
+    if runner == "bin/test":
+        return bool(selectors)
     return any(_DOTTED_TEST_LABEL_RE.fullmatch(token) for token in selectors)
 
 
@@ -379,7 +381,8 @@ def strict_bash_guidance(command: str, violation: str) -> str:
         return (
             "Allowed Python forms: python3 -m py_compile <file>, "
             "python3 -m compileall <path>, python3 -m pytest <narrow-target>, "
-            "or python3 tests/runtests.py <dotted.test.label>."
+            "python3 tests/runtests.py <dotted.test.label>, "
+            "or python3 bin/test <test_name|workspace/test_file.py> --no-colors."
         )
     if "environment assignment" in violation:
         return (

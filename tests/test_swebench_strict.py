@@ -123,6 +123,46 @@ def test_strict_bash_executes_narrow_repository_test_runner(tmp_path):
     assert str(result).strip() == "forms_tests.tests.test_media"
 
 
+@pytest.mark.parametrize("selector", ["test_sympify", "sympy/core/tests/test_sympify.py"])
+def test_strict_bash_executes_native_bin_test(tmp_path, selector):
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.bash import run_bash
+
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin/test").write_text("import sys\nprint(sys.argv[1])\n")
+    with scoped_workdir(tmp_path), scoped_runtime_overrides(strict_local_tools=True):
+        result = run_bash(f"python3 bin/test {selector} --no-colors")
+    assert str(result).strip() == selector
+
+
+@pytest.mark.parametrize("command", [
+    "python3 bin/test", "python3 bin/test --tb short", "python3 bin/test --pdb test_sympify",
+    "python3 bin/test test_sympify --rerun 999", "python3 bin/test ../test_sympify.py",
+    "python3 bin/test /tmp/test_sympify.py", "python3 bin/test .nz-coder/test_private.py",
+    "python3 bin/test test_sympify --unknown", "python3 scripts/test test_sympify",
+    "/opt/miniconda3/envs/testbed/bin/python bin/test test_sympify",
+])
+def test_native_bin_test_admission_remains_narrow(command):
+    from nz_coder.swebench.policy import strict_bash_violation
+    assert strict_bash_violation(command)
+
+
+def test_native_bin_test_cannot_escape_through_runner_symlink(tmp_path):
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.bash import run_bash
+    outside = tmp_path / "outside"
+    outside.write_text("raise AssertionError('must not execute')\n")
+    workspace = tmp_path / "workspace"
+    (workspace / "bin").mkdir(parents=True)
+    (workspace / "bin/test").symlink_to(outside)
+    with scoped_workdir(workspace), scoped_runtime_overrides(strict_local_tools=True):
+        result = run_bash("python3 bin/test test_sympify")
+    assert str(result).startswith("Error:")
+    assert "must not execute" not in str(result)
+
+
 def test_strict_bash_executes_narrow_test_runner_with_workspace_pythonpath(
     tmp_path,
 ):

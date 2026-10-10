@@ -5,6 +5,8 @@ from collections import deque
 import os
 import queue
 import re
+import shlex
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -433,6 +435,24 @@ def run_bash(
     if workdir_error:
         return workdir_error
     assert resolved_workdir is not None
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = []  # 无法解析的命令不声称已知可执行文件身份。
+    if strict_local_tools():
+        from nz_coder.intelligence.verification_planner import verification_command_segments
+
+        for segment in verification_command_segments(command):
+            if len(segment) < 2 or segment[1].removeprefix("./") != "bin/test":
+                continue
+            try:
+                runner = WorkspacePathPolicy(current_workdir()).validate_model_execute(
+                    str(resolved_workdir / segment[1]),
+                )
+            except WorkspacePathError as exc:
+                return format_public_error(exc)
+            if not runner.is_file():
+                return "Error: bin/test is not a workspace file in bash.workdir"
     pythonpath_root = _strict_pytest_source_root(command, resolved_workdir)
     process_environment = build_sanitized_subprocess_env()
     if pythonpath_root is not None:
@@ -442,6 +462,13 @@ def run_bash(
             inherited,
         )))
     strict_pythonpath_injected = pythonpath_root is not None
+    command_identity = {
+        "requested_command": requested_command,
+        "executed_command": command,
+        "workdir": str(resolved_workdir),
+        # 这是启动配置的解析结果；不把它冒充由进程上报的解释器版本。
+        "resolved_executable": shutil.which(tokens[0], path=process_environment.get("PATH")) if tokens else None,
+    }
     title = _command_title(command)
     description = title
     try:
@@ -461,6 +488,7 @@ def run_bash(
     report_tool_metadata(
         title=title,
         metadata={
+            **command_identity,
             "output": "",
             "description": description,
             "workdir": str(resolved_workdir),
@@ -643,6 +671,7 @@ def run_bash(
             f"Error: Command timed out ({timeout_seconds}s){suffix}",
             title=title,
             metadata={
+                **command_identity,
                 "exit": None,
                 "cancelled": False,
                 "timed_out": True,
@@ -658,6 +687,7 @@ def run_bash(
             f"Error: Command cancelled{suffix}",
             title=title,
             metadata={
+                **command_identity,
                 "exit": None,
                 "cancelled": True,
                 "timed_out": False,
@@ -683,6 +713,7 @@ def run_bash(
         output,
         title=title,
         metadata={
+            **command_identity,
             "output": _truncate_output(output, progress_limit),
             "exit": int(process.returncode or 0),
             "description": description,
