@@ -1,0 +1,117 @@
+{
+  "accept": {
+    "final_status": "completed",
+    "main_calls": 4,
+    "controlled_auxiliary_calls": 1,
+    "remote_model_requests": 0,
+    "sidecar_results": [
+      {
+        "ts": 1791621939.4587348,
+        "run_id": "20261010_164538_0713e36d",
+        "trace_id": "20261010_164538_0713e36d",
+        "session_id": "scope-replay",
+        "agent_id": "agent-d2772537",
+        "parent_agent_id": null,
+        "parent_trace_id": null,
+        "agent_type": "main",
+        "event": "sidecar_finished",
+        "verdict": "accept",
+        "trace": "verifier_ok",
+        "reason": "Controlled semantic acceptance of the final report.",
+        "elapsed_ms": 1.476,
+        "provider": "offline",
+        "model": "scope-fixture",
+        "source": "inherit-main"
+      }
+    ],
+    "implementation_sha": "dd0316df9578ec2736e1eda9feb8c2c9c2641b72"
+  },
+  "revise": {
+    "final_status": "max_turns",
+    "main_calls": 5,
+    "controlled_auxiliary_calls": 2,
+    "remote_model_requests": 0,
+    "sidecar_results": [
+      {
+        "ts": 1791621131.1405327,
+        "run_id": "20261010_163210_dddcd266",
+        "trace_id": "20261010_163210_dddcd266",
+        "session_id": "scope-replay",
+        "agent_id": "agent-d61427cb",
+        "parent_agent_id": null,
+        "parent_trace_id": null,
+        "agent_type": "main",
+        "event": "sidecar_finished",
+        "verdict": "revise",
+        "trace": "verifier_ok",
+        "reason": "Detected broad compatibility relaxation in payment.py: legacy guard `if value < 0:` is bypassed by `if value < 0 and not allow_refund:` through `allow_refund`, which is not derived from the new input syntax. Preserve legacy inputs with an input-specific gate and add a targeted before/after compatibility probe.\n\nAdditional verifier finding:\nControlled semantic judgment: report actual test result and limitations.",
+        "elapsed_ms": 1.067,
+        "provider": "offline",
+        "model": "scope-fixture",
+        "source": "inherit-main"
+      },
+      {
+        "ts": 1791621131.194076,
+        "run_id": "20261010_163210_dddcd266",
+        "trace_id": "20261010_163210_dddcd266",
+        "session_id": "scope-replay",
+        "agent_id": "agent-d61427cb",
+        "parent_agent_id": null,
+        "parent_trace_id": null,
+        "agent_type": "main",
+        "event": "sidecar_finished",
+        "verdict": "revise",
+        "trace": "verifier_ok",
+        "reason": "Detected broad compatibility relaxation in payment.py: legacy guard `if value < 0:` is bypassed by `if value < 0 and not allow_refund:` through `allow_refund`, which is not derived from the new input syntax. Preserve legacy inputs with an input-specific gate and add a targeted before/after compatibility probe.\n\nAdditional verifier finding:\nControlled semantic judgment: report actual test result and limitations.",
+        "elapsed_ms": 1.106,
+        "provider": "offline",
+        "model": "scope-fixture",
+        "source": "inherit-main"
+      }
+    ]
+  },
+  "invalid": {
+    "final_status": "max_turns",
+    "main_calls": 5,
+    "controlled_auxiliary_calls": 2,
+    "remote_model_requests": 0,
+    "sidecar_results": [
+      {
+        "ts": 1791621132.1182418,
+        "run_id": "20261010_163211_90dcdd6e",
+        "trace_id": "20261010_163211_90dcdd6e",
+        "session_id": "scope-replay",
+        "agent_id": "agent-25ae5510",
+        "parent_agent_id": null,
+        "parent_trace_id": null,
+        "agent_type": "main",
+        "event": "sidecar_finished",
+        "verdict": "accept",
+        "trace": "invalid_verdict_value",
+        "reason": "",
+        "elapsed_ms": 1.216,
+        "provider": "offline",
+        "model": "scope-fixture",
+        "source": "inherit-main"
+      },
+      {
+        "ts": 1791621132.195081,
+        "run_id": "20261010_163211_90dcdd6e",
+        "trace_id": "20261010_163211_90dcdd6e",
+        "session_id": "scope-replay",
+        "agent_id": "agent-25ae5510",
+        "parent_agent_id": null,
+        "parent_trace_id": null,
+        "agent_type": "main",
+        "event": "sidecar_finished",
+        "verdict": "accept",
+        "trace": "invalid_verdict_value",
+        "reason": "",
+        "elapsed_ms": 1.424,
+        "provider": "offline",
+        "model": "scope-fixture",
+        "source": "inherit-main"
+      }
+    ]
+  }
+}

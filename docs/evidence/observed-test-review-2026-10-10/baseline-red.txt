@@ -1,0 +1,16 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_captured_read_source_reaches_final_review_message ____________
+
+    def test_captured_read_source_reaches_final_review_message():
+        captured = json.loads(FIXTURE.read_text())
+        context = build_verifier_context(captured['transcript'], 'Report actual results.',
+            file_edits=captured['file_edits'], additional_criteria=captured['execution_facts'])
+        rendered = build_verifier_user_message(context)
+>       assert 'def test_explicit(): assert amount(-3, allow_refund=True) == -3' in rendered
+E       AssertionError: assert 'def test_explicit(): assert amount(-3, allow_refund=True) == -3' in '=== USER REQUEST (CURRENT TURN) ===\nFix payment.py: permit negative values only when allow_refund=True. Preserve def...e `reason` becomes a synthetic user follow-up the main agent will see as a review finding, not genuine user authority.'
+
+tests/test_read_test_review_evidence.py:67: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_read_test_review_evidence.py::test_captured_read_source_reaches_final_review_message
+1 failed in 0.18s

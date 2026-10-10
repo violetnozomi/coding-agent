@@ -1,0 +1,8 @@
+--- a/payment.py
++++ b/payment.py
+@@ -1,4 +1,4 @@
+ def amount(value, allow_refund=False):
+-    if value < 0:
++    if value < 0 and not allow_refund:
+         raise ValueError("negative")
+     return value

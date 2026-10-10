@@ -1,0 +1,6 @@
+.......................................................s.....ss          [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/security/test_transaction_recovery.py:189: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_recovery.py:373: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_recovery.py:397: Windows junction semantics
+60 passed, 3 skipped in 0.27s

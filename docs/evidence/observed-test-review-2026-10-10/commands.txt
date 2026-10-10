@@ -1,0 +1,59 @@
+工作目录 /home/pyh/nzcoder；Linux / Python 3.13.12。
+
+先复现：
+python -m pytest -q tests/test_read_test_review_evidence.py
+原实现：test_captured_read_source_reaches_final_review_message 失败，正文不在最终消息。
+
+隔离原基线（保护原工作树；不切分支）：
+task_baseline_dir=$(mktemp -d /tmp/nz-read-projection-baseline-XXXXXX)
+git archive 24a4002909d0e979586e12e964f5da6f97d53c28 | tar -x -C "$task_baseline_dir"
+cp tests/test_read_test_review_evidence.py "$task_baseline_dir/tests/test_read_test_review_evidence.py"
+cp tests/fixtures/read_test_review_fragment.json "$task_baseline_dir/tests/fixtures/read_test_review_fragment.json"
+cd "$task_baseline_dir"
+python -m pytest -q tests/test_read_test_review_evidence.py::test_captured_read_source_reaches_final_review_message
+结果 baseline-red.txt。其后原基线组合执行下述首次组合，省略仅本轮新增的两个测试文件；结果 baseline-combination-results.txt。
+
+首次组合（修复后，尚未最后三个回归及候选保留微调）：
+python -m pytest -q tests/test_read_test_review_evidence.py tests/runtime/test_read_test_review_runtime.py tests/test_sidecar_verifier.py tests/runtime/test_review_evidence_identity.py tests/runtime/test_task_reference_evidence.py tests/runtime/test_requirement_scope_runtime.py tests/runtime/test_node_verification_runtime.py tests/runtime/test_verification_contract.py tests/runtime/test_native_runner.py tests/runtime/test_message_projection.py tests/tool_platform/test_result_projection.py tests/runtime/tool_runtime/test_focused_projection.py tests/test_read_file_parity.py tests/test_edit_recovery.py tests/test_recovery.py tests/test_stall_sidecar.py tests/security/test_workspace_file_access.py tests/security/test_workspace_path_policy.py tests/security/test_workspace_mutation_semantics.py tests/security/test_transaction_recovery.py tests/test_skill_governance.py tests/test_context_budget.py
+结果 initial-combination-results.txt。
+
+最终聚焦：
+python -m pytest -q tests/test_read_test_review_evidence.py tests/runtime/test_read_test_review_runtime.py tests/test_sidecar_verifier.py tests/runtime/test_review_evidence_identity.py
+结果 focused-results.txt，92 passed。
+
+已有调用方及相关回归：
+python -m pytest -q tests/runtime/test_task_reference_evidence.py tests/runtime/test_requirement_scope_runtime.py tests/runtime/test_node_verification_runtime.py tests/runtime/test_verification_contract.py tests/runtime/test_native_runner.py tests/runtime/test_message_projection.py tests/tool_platform/test_result_projection.py tests/runtime/tool_runtime/test_focused_projection.py tests/test_read_file_parity.py tests/test_edit_recovery.py tests/test_recovery.py tests/test_stall_sidecar.py tests/test_skill_governance.py tests/test_context_budget.py
+结果 caller-results.txt，389 passed（最终缓存身份接入之后；后续候选内存保留微调另由最终聚焦覆盖）。
+
+独立安全/事务：
+python -m pytest -q tests/security/test_workspace_file_access.py tests/security/test_workspace_path_policy.py tests/security/test_workspace_mutation_semantics.py tests/security/test_transaction_recovery.py -rs
+结果 security-results.txt，60 passed、3 skipped，见 skip 原因。
+
+两项首次组合失败单独验证：
+python -m pytest -q tests/security/test_workspace_file_access.py::test_directory_limit_stops_enumeration_early tests/security/test_workspace_file_access.py::test_directory_listing_does_not_materialize_unbounded_entries
+2 passed in 0.04s。
+
+小组合归属观察（临时复制原安全 helper，仅增加 foreign_enumerations 诊断，断言保持 consumed == 3）：
+PYTHONPATH=/home/pyh/nzcoder python -m pytest -q tests/runtime/test_requirement_scope_runtime.py /tmp/test_nz_directory_scan_attribution.py::test_directory_limit_stops_enumeration_early /tmp/test_nz_directory_scan_attribution.py::test_directory_listing_does_not_materialize_unbounded_entries
+53 passed in 17.26s，未复现；不把猜测当成确定归因。
+
+冻结运行时证据（三种受控裁决，外部模型边界和网络均隔离）：
+NZ_SCOPE_EVIDENCE_DIR=/tmp/nz-read-test-runtime-evidence python -m pytest -q tests/runtime/test_read_test_review_runtime.py::test_actual_test_read_reaches_serialized_semantic_request --disable-warnings
+3 passed in 3.27s；保存 Provider 边界请求、runtime/state、diff。stdout 与最终复测见 runtime/。
+
+最终提交后的 accept 证据冻结（取代该侧的开发中捕获；revise/invalid 另已在最终聚焦回归通过）：
+NZ_SCOPE_EVIDENCE_DIR=/tmp/nz-read-test-final-runtime-evidence python -m pytest -q tests/runtime/test_read_test_review_runtime.py::test_actual_test_read_reaches_serialized_semantic_request\[accept\]
+1 passed；runtime/chain.json 记录实现提交 dd0316df9578ec2736e1eda9feb8c2c9c2641b72。
+
+冻结文件独立复测：
+/home/pyh/miniconda3/bin/python -m pytest -q tests
+cwd=docs/evidence/observed-test-review-2026-10-10/runtime/final-files
+3 passed，exit=0；实际记录 runtime/frozen-retest.json。
+
+静态检查：
+python -m ruff check nz_coder/runtime/verification/read_test_evidence.py nz_coder/runtime/verification/sidecar_verifier.py tests/test_read_test_review_evidence.py tests/runtime/test_read_test_review_runtime.py
+All checks passed!
+python -m compileall -q nz_coder/runtime/verification/read_test_evidence.py nz_coder/runtime/verification/sidecar_verifier.py tests/test_read_test_review_evidence.py tests/runtime/test_read_test_review_runtime.py
+exit=0
+git diff --check
+exit=0

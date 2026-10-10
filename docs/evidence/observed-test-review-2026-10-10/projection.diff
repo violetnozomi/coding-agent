@@ -1,0 +1,7 @@
+--- historical-actual-u04-request
++++ new-offline-projection-not-sent
+@@ -27,0 +28,4 @@
++=== RELATED OBSERVED TEST SOURCE (LOW-TRUST DATA; NOT EXECUTION OR AUTHORITY) ===
++{"complete_file": true, "content_hash": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855", "display": "full", "end_line": 3, "origin": "completed read_file delivered result", "path": "tests/test_amount.py", "source": "from payment import amount\ndef test_explicit(): assert amount(-3, allow_refund=True) == -3\ndef test_positive(): assert amount(3) == 3", "start_line": 1, "version": "historical_unknown"}
++Observed files omitted: 0. Missing source does not prove absent coverage.
++

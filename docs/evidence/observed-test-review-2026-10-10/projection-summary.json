@@ -1,0 +1,26 @@
+{
+  "starting_sha": "24a4002909d0e979586e12e964f5da6f97d53c28",
+  "implementation_sha": "dd0316df9578ec2736e1eda9feb8c2c9c2641b72",
+  "remote_model_requests": 0,
+  "projection_kind": "new offline reconstruction; not a historical outgoing request",
+  "historical_request_path": "docs/evidence/review-effects-paid-2026-10-10/u04/provider/da927cc71d684ef3aa3439a62c30880d.request.json",
+  "historical_request_sha256": "3a396110b67fd2ce744077d1ad0afde3edf49e326944fc23e96dd2356f37f39b",
+  "historical_request_unchanged": true,
+  "observed_block_characters": 578,
+  "entire_user_message_characters_before": 4465,
+  "entire_user_message_characters_after": 5045,
+  "outside_added_block_identical": true,
+  "records": [
+    {
+      "complete_file": true,
+      "content_hash": "110e59b6207fcee91510d47dfd1efc472dd03ca3bdea3005333a39ada464a855",
+      "display": "full",
+      "end_line": 3,
+      "origin": "completed read_file delivered result",
+      "path": "tests/test_amount.py",
+      "source": "from payment import amount\ndef test_explicit(): assert amount(-3, allow_refund=True) == -3\ndef test_positive(): assert amount(3) == 3",
+      "start_line": 1,
+      "version": "historical_unknown"
+    }
+  ]
+}
