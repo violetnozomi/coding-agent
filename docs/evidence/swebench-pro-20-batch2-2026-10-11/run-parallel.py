@@ -24,6 +24,8 @@ DOC = Path(__file__).resolve().parent
 OLD_DOC = DOC.parent / "swebench-pro-20-2026-10-11"
 OLD = Path("/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11")
 OUT = OLD.with_name("nz-swebench-pro-v2-20-batch2-2026-10-11")
+TASK_COUNT, BATCH, WORKERS = 20, 2, 2
+PRIOR_MANIFESTS = (OLD / "task-manifest.json",)
 
 
 def load(name, path):
@@ -39,36 +41,54 @@ pro.OUT, pro.DOC = OUT, DOC
 continuation.OUT, continuation.pro = OUT, pro
 
 
-def prepare():
-    OUT.mkdir(exist_ok=False)
-    old_manifest = json.loads((OLD / "task-manifest.json").read_text())
+def select_tasks(checksums, earlier, count):
+    candidates = {path.split("/")[1] for path in checksums
+                  if path.startswith("tasks/") and path.endswith("/instruction.md")}
+    excluded = {row["instance_id"] for manifest in earlier for row in manifest["tasks"]}
+    seed = earlier[0]["selection"]["seed"]
+    ordered = sorted(candidates, key=lambda task: hashlib.sha256((seed + "\n" + task).encode()).hexdigest())
+    selected = [task for task in ordered if task not in excluded][:count]
+    if len(selected) != count:
+        raise RuntimeError("not_enough_new_public_tasks")
+    return selected, excluded, seed
+
+
+def prepare(resume=False):
+    if resume and ((OUT / "task-manifest.json").exists() or (OUT / "live").exists()):
+        raise RuntimeError("frozen_or_started_batch_cannot_be_prepared_again")
+    OUT.mkdir(exist_ok=resume)
+    earlier = [json.loads(path.read_text()) for path in PRIOR_MANIFESTS]
+    old_manifest = earlier[0]
     checksums = {}
     for line in (OLD / "official-SHA256SUMS").read_text().splitlines():
         digest, path = line.split(maxsplit=1)
         checksums[path.lstrip("*").removeprefix("./")] = digest
     candidates = sorted({path.split("/")[1] for path in checksums
                          if path.startswith("tasks/") and path.endswith("/instruction.md")})
-    excluded = {row["instance_id"] for row in old_manifest["tasks"]}
-    seed = old_manifest["selection"]["seed"]
-    ordered = sorted(candidates, key=lambda task: hashlib.sha256((seed + "\n" + task).encode()).hexdigest())
-    selected = [task for task in ordered if task not in excluded][:20]
-    manifest = {"benchmark": "SWE-bench Pro V2 public", "batch": 2,
+    selected, excluded, seed = select_tasks(checksums, earlier, TASK_COUNT)
+    manifest = {"benchmark": "SWE-bench Pro V2 public", "batch": BATCH,
         "official_source_commit": old_manifest["official_source_commit"], "candidate_count": len(candidates),
-        "selection": {"seed": seed, "method": "next 20 in existing public-ID hash order, excluding batch 1",
-                      "excluded_manifest_sha256": hashlib.sha256((OLD / "task-manifest.json").read_bytes()).hexdigest(),
+        "selection": {"seed": seed, "method": f"next {TASK_COUNT} in existing public-ID hash order, excluding all supplied closed batches",
+                      "excluded_manifest_sha256": [hashlib.sha256(path.read_bytes()).hexdigest() for path in PRIOR_MANIFESTS],
                       "uses_task_results": False},
-        "model": pro.MODEL, "cost_limit": 50, "cost_currency": "CNY", "attempts_per_instance": 1,
-        "authorization_text": "新增这20题：人民币50元，继续Pro V2／deepseek-flash。并行测试，保留每题记录。旧批次余额不沿用。",
+        "model": pro.MODEL, "cost_limit": 50, "cost_currency": "CNY", "attempts_per_instance": 1, "request_limit": TASK_COUNT * 46,
+        "authorization_text": f"新增这{TASK_COUNT}题：人民币50元，继续Pro V2／deepseek-flash。并行测试，保留每题记录。旧批次余额不沿用。",
         "tasks": []}
     shutil.copy2(OLD / "official-SHA256SUMS", OUT / "official-SHA256SUMS")
 
     def fetch(task):
         prefix = "tasks/" + task + "/"
         target = OUT / "public-tasks" / task
-        target.mkdir(parents=True)
+        target.mkdir(parents=True, exist_ok=resume)
         data = {}
         for name in ("instruction.md", "task.toml"):
-            raw = pro.download(prefix + name, manifest, checksums)
+            cached = target / name
+            if resume and cached.exists():
+                raw = cached.read_bytes()
+                if hashlib.sha256(raw).hexdigest() != checksums[prefix + name]:
+                    raise RuntimeError("cached_public_input_checksum_mismatch")
+            else:
+                raw = pro.download(prefix + name, manifest, checksums)
             (target / name).write_bytes(raw)
             data[name] = raw
         return {"instance_id": task, "instruction_sha256": hashlib.sha256(data["instruction.md"]).hexdigest(),
@@ -84,15 +104,15 @@ def prepare():
         (target / "task-manifest.sha256").write_text(digest + "\n")
     shutil.copy2(OUT / "task-manifest.json", DOC / "task-manifest.json")
     shutil.copy2(OLD_DOC / "native-entry.py", DOC / "native-entry.py")
-    shutil.copytree(OLD / "runtime", OUT / "runtime")
+    shutil.copytree(OLD / "runtime", OUT / "runtime", dirs_exist_ok=resume)
     shutil.copy2(OLD / "isolated-python-build-config.json", OUT / "isolated-python-build-config.json")
     code = OUT / "code/nz_coder"
-    shutil.copytree(ROOT / "nz_coder", code, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    shutil.copytree(ROOT / "nz_coder", code, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"), dirs_exist_ok=resume)
     # 不把宿主评测、隐藏评分入口或计费凭据挂入 Agent。
     for path in (code / "evaluation").iterdir():
         if path.name not in {"__init__.py", "reproducibility.py"}:
             shutil.rmtree(path) if path.is_dir() else path.unlink()
-    print(json.dumps({"prepared": 20, "overlap": len(set(selected) & excluded), "manifest_sha256": digest}))
+    print(json.dumps({"prepared": TASK_COUNT, "overlap": len(set(selected) & excluded), "manifest_sha256": digest}))
 
 
 def preparation_remainder(source, manifest):
@@ -119,7 +139,7 @@ def preparation_remainder(source, manifest):
         calls = [row for row in admitted.values() if row["unit"] == task["instance_id"]]
         if report["attempt"] == 0 and not calls:
             tasks.append((number, task))
-    return {"used_cny": used, "remaining_cny": 50 - used, "remaining_requests": 920 - len(admitted),
+    return {"used_cny": used, "remaining_cny": manifest.get("cost_limit", 50) - used, "remaining_requests": manifest.get("request_limit", 920) - len(admitted),
             "source_ledger_sha256": hashlib.sha256(raw).hexdigest(), "tasks": tasks}
 
 
@@ -189,7 +209,7 @@ def execute(retry_preparation=False):
     if retry_preparation and Path("/proc/3135016").exists():
         raise RuntimeError("original_coordinator_still_running")
     tasks = plan["tasks"] if plan else list(enumerate(manifest["tasks"], 1))
-    cost_limit = plan["remaining_cny"] if plan else 50
+    cost_limit = plan["remaining_cny"] if plan else manifest["cost_limit"]
     if not tasks or cost_limit <= 3.145728:
         raise RuntimeError("no_unattempted_tasks_or_remaining_fee")
     interrupted = OUT / "preparation-retry"
@@ -211,7 +231,7 @@ def execute(retry_preparation=False):
         "prices_cny_per_million": {"input": 2, "cached_input": 0.04, "output": 8},
         "provider_output_reservation_tokens": 393216}
     if plan:
-        grant.update(original_total_authorization_cny=50, previous_used_cny=plan["used_cny"],
+        grant.update(original_total_authorization_cny=manifest["cost_limit"], previous_used_cny=plan["used_cny"],
                      predecessor_ledger_sha256=plan["source_ledger_sha256"],
                      preparation_retry_not_paid_agent_retry=True)
         if interrupted.exists():
@@ -219,11 +239,11 @@ def execute(retry_preparation=False):
         if source.name == "fee-handoff":
             grant["source_ledger_chain"] = json.loads((source / "source-chain.json").read_text())
         pro.save(live / "continuation-plan.json", plan)
-    limits = RelayLimits(requests=plan["remaining_requests"] if plan else 920, input_per_request=1000000,
+    limits = RelayLimits(requests=plan["remaining_requests"] if plan else manifest.get("request_limit", TASK_COUNT * 46), input_per_request=1000000,
         input_total=math.ceil(cost_limit / .04 * 1000000), output_total=math.ceil(cost_limit / 8 * 1000000), request_seconds=600)
     pro.save(live / "authorization-used.json", grant)
     pro.save(live / "execution-config.json", {"source_commit": pro.command(["git", "rev-parse", "HEAD"]).stdout.strip(),
-        "model": pro.MODEL, "limits": asdict(limits), "concurrency": 2, "shared_ledger": True,
+        "model": pro.MODEL, "limits": asdict(limits), "concurrency": WORKERS, "shared_ledger": True,
         "serialized_image_preparation": True, "main_requests_per_task": 40, "auxiliary_requests_per_task": 6,
         "task_seconds": 3000, "wire_max_tokens": None, "stream": False, "thinking": None, "reasoning_effort": None,
         "output_fee_reservation_tokens": 393216, "native_entry_sha256": hashlib.sha256((DOC / "native-entry.py").read_bytes()).hexdigest(),
@@ -242,7 +262,7 @@ def execute(retry_preparation=False):
         half_free = shutil.disk_usage(OUT).free / 2
         parallel_tasks = []
         for number, task in tasks:
-            preflight = OUT / "live" / f"b2-{number:02}" / "image-preflight.json"
+            preflight = OUT / "live" / f"b{BATCH}-{number:02}" / "image-preflight.json"
             estimate = json.loads(preflight.read_text())["estimated_required_bytes"] if preflight.exists() else 0
             (serial_tasks if estimate > half_free else parallel_tasks).append((number, task))
         tasks = parallel_tasks
@@ -255,7 +275,7 @@ def execute(retry_preparation=False):
             return counter(raw, payload)
 
     def run(number, task):
-        slot = live / f"b2-{number:02}"
+        slot = live / f"b{BATCH}-{number:02}"
         slot.mkdir()
         report = {"number": number, "instance_id": task["instance_id"], "attempt": 0,
                   "agent_status": None, "resolved": None}
@@ -288,7 +308,7 @@ def execute(retry_preparation=False):
             verdict = pro.grade(slot, base, task, manifest, checksums)
             report.update(resolved=verdict["resolved"], eval_status=verdict["status"])
             with archive_lock:
-                pro.archive_case(slot, case, task, "batch2", budget, archive_instance_diagnostics)
+                pro.archive_case(slot, case, task, f"batch{BATCH}", budget, archive_instance_diagnostics)
         except Exception as exc:
             report.update(status="blocked" if case is None else "attempt_or_delivery_error", error=repr(exc))
         finally:
@@ -311,7 +331,7 @@ def execute(retry_preparation=False):
         return report
 
     try:
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             futures = [pool.submit(run, number, task) for number, task in tasks]
             for future in as_completed(futures):
                 future.result()

@@ -24,6 +24,7 @@ OUT = ARTIFACTS / "nz-swebench-pro-v2-20-2026-10-11"
 DOC = Path(__file__).resolve().parent
 ENV = {"PATH": os.environ["PATH"], "HOME": str(Path.home()), "LANG": "C.UTF-8"}
 MODEL = "deepseek-flash"
+CONTAINER_EVIDENCE_LIMIT_BYTES = 512 * 1024 ** 2
 
 
 def save(path, value):
@@ -324,7 +325,7 @@ def archive_case(slot, case, task, mode, budget, archive):
     evidence_names = ("home/.local/state/nz-coder", "workspace/.nz-coder", "result", "input")
     evidence_bytes = sum(p.stat().st_size for name in evidence_names for p in (case / name).rglob("*")
                          if p.is_file() and not p.is_symlink())
-    if evidence_bytes > 512 * 1024 ** 2 or shutil.disk_usage(OUT).free < evidence_bytes + 512 * 1024 ** 2:
+    if evidence_bytes > CONTAINER_EVIDENCE_LIMIT_BYTES or shutil.disk_usage(OUT).free < evidence_bytes + 512 * 1024 ** 2:
         raise OSError("container_evidence_quota_or_free_space_exhausted; source retained")
     target = slot / "container-evidence.tar.gz"
     with tarfile.open(target, "x:gz", dereference=False) as bundle:

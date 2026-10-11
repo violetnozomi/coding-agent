@@ -149,3 +149,23 @@ def test_combined_closed_phases_count_second_fee_and_exclude_paid_task(tmp_path)
     assert plan["tasks"] == []
     assert plan["used_cny"] == pytest.approx(initial["estimated_cost_occupied_cny"] + fee)
     assert plan["remaining_requests"] == 917
+
+
+def test_forty_task_continuation_uses_current_authorized_request_limit(tmp_path):
+    manifest, summary = closed_source(tmp_path)
+    manifest.update(cost_limit=50, request_limit=1840)
+    plan = parallel.preparation_remainder(tmp_path, manifest)
+    assert plan["remaining_requests"] == 1838
+    assert plan["remaining_cny"] == pytest.approx(50-summary["estimated_cost_occupied_cny"])
+
+
+def test_next_forty_selection_excludes_both_closed_batches():
+    candidates = ["task-" + str(i) for i in range(100)]
+    sums = {"tasks/"+i+"/instruction.md": "a"*64 for i in candidates}
+    earlier = [{"selection":{"seed":"fixed"}, "tasks":[{"instance_id":i} for i in candidates[:20]]},
+               {"tasks":[{"instance_id":i} for i in candidates[20:40]]}]
+    selected, excluded, seed = parallel.select_tasks(sums, earlier, 40)
+    assert len(selected) == 40 and len(set(selected)) == 40
+    assert excluded == set(candidates[:40]) and not set(selected) & excluded
+    assert seed == "fixed"
+    assert selected == sorted(candidates[40:], key=lambda i: hashlib.sha256((seed+"\n"+i).encode()).hexdigest())[:40]
