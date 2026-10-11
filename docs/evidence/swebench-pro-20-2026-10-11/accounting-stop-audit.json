@@ -1,0 +1,37 @@
+{
+  "event": "verified_accounting_stop",
+  "run": "06",
+  "instance_id": "instance_future-architect__vuls-01441351c3407abfc21c48a38e28828e1b504e0c",
+  "actual_request_number_in_run": 11,
+  "attempt_id": "0935218d21df4f598f92b8e5cec8ff61",
+  "request_sha256": "7c8f6fbef73a4e783268d6a3cdc05d4cd14ebaab34d1ec5c7b00862657bdd526",
+  "request_max_tokens": 8000,
+  "output_reserved": 8000,
+  "actual_usage": {
+    "prompt_tokens": 19458,
+    "completion_tokens": 8001,
+    "total_tokens": 27459,
+    "prompt_tokens_details": {
+      "cached_tokens": 6528
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 7420
+    },
+    "prompt_cache_hit_tokens": 6528,
+    "prompt_cache_miss_tokens": 12930
+  },
+  "finish_reason": "length",
+  "output_over_reservation": 1,
+  "input_over_reservation": 0,
+  "cost_cny_reported_total": 3.52470736,
+  "physical_requests": 103,
+  "main_requests": 103,
+  "auxiliary_requests": 0,
+  "new_admissions_after_stop": 0,
+  "all_requests_settled": true,
+  "budget_cny": 50,
+  "budget_not_exhausted": true,
+  "raw_ledger_sha256": "ed56eebe58f1d9bcf6c773388d2cdc6cdc171c81b59ad78b2504424909ed3bdb",
+  "continuation_allowed_under_current_stop_policy": false,
+  "cause_of_extra_output_token": "unknown; no claim of EOS/provider bug without evidence"
+}

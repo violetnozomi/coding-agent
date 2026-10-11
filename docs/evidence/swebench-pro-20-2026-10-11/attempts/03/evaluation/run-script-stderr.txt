@@ -1,0 +1,6 @@
+Couldn't find statsd_server section in config
+ERROR: usage: pytest [options] [file_or_dir] [file_or_dir] [...]
+pytest: error: unrecognized arguments: --reruns=3
+  inifile: /app/pyproject.toml
+  rootdir: /app
+

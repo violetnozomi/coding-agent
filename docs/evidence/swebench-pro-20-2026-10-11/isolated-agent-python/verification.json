@@ -1,0 +1,11 @@
+{
+  "agent_status": "completed",
+  "project_python": "3.8.20",
+  "agent_python": "3.13",
+  "actual_native_sdk": true,
+  "actual_read_and_bash": true,
+  "changed_files": 0,
+  "local_provider_requests": 3,
+  "paid_model_requests": 0,
+  "project_pytest_not_from_agent_site": true
+}

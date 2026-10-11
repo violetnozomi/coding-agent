@@ -1,0 +1,9 @@
+{
+  "image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-395e5e20fab9cad517243372fa3c3c5d9e09ab2a-v7eee2454f617569fd6889f2211f75bc02a35f9f8",
+  "digest": "sha256:764c65f536098c68457927874cb22a79cce526161a21ad4d17faa1232fdf323c",
+  "index_digest": "sha256:b431b3207e1399420ccf6fe4ad343951a4194dab14fa33bd1a0931e1dad83d87",
+  "compressed_bytes": 716936603,
+  "estimated_required_bytes": 3583019934,
+  "free_bytes": 23502368768,
+  "estimate_is_not_exact": true
+}

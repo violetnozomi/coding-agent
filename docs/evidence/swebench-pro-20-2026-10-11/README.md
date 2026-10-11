@@ -1,6 +1,6 @@
 # SWE-bench Pro 20 题：任务与记录要求
 
-状态：**准备完成，启动固定清单的真实模型单次尝试**。冻结清单不改写，实际结果另记；本页准备状态不是成绩。
+状态：**计量止损，尚未完成 20 题**。固定名单中 4 题实际尝试、2 题环境准备受阻、14 题未运行。真实请求 103 次，usage 峰时估算人民币 3.52470736 元；不是账单。详见本页末尾最终检查点和 [逐题结果](current-outcomes.json)。
 
 ## 本轮目标
 
@@ -9,7 +9,7 @@
 - 原有 Verified/SymPy 受控校准不计入这 20 题。
 - 冻结版本、题目清单与资源边界后运行；不根据结果换题，不追跑到成功。
 
-## 已核实的入口与阻断
+## 启动前的入口与阻断（历史准备记录）
 
 开始时 NZ-Coder HEAD：`98171657a6d2be083fed2d39c74f80138ddb98e5`，`main` 与远端同步，工作树干净。
 
@@ -79,3 +79,35 @@ Agent 使用无网络、非 root、只读容器根目录、独立 HOME 和工作
 第 02 题的首次验收禁用了 pytest 插件，官方镜像的 PYTEST_ADDOPTS 含 `--reruns=3`，因此报 unknown argument，必需测试一个也未执行。该 reward=0 是验收环境阻断，不能当作补丁功能失败。原日志和结果不改写；对同一补丁在同一冻结原始镜像重新运行 unchanged verifier，恢复官方镜像自身的插件加载，不增加模型调用。
 
 当前长运行协调进程已经加载旧 grader 函数，修改脚本不会悄悄改变它；最终必须逐题核对官方原始日志，对受上述参数影响的验收做独立纠正。新脚本移除 grader 的 PYTHONPATH/PYTEST_DISABLE_PLUGIN_AUTOLOAD 覆盖，只隔离 HOME，并保留旧事件。未经有效复评的 Python 阻断结果记 unknown，不能按 failed 计入功能结论。
+
+## 本次停止检查点
+
+固定清单不换题。实际已尝试 01、02、03、06 四题；04/05 为准备阻断，07—20 为 `not_run: accounting_stop`，不能把后者当作模型失败。完整原始协调器 [summary](initial-coordinator-summary.json) 不改写；02/03 的有效官方复评在 [current-outcomes.json](current-outcomes.json) 和各题 `task-outcome.json` 中覆盖首次验收环境阻断的**解释口径**，并保留原日志。
+
+| 题号 | 实际主/辅助请求 | Agent 终态 | 官方固定验收 | 限制 |
+|---|---:|---|---|---|
+| [01](attempts/01/README.md) | 16/0 | completed | required tests 通过 | 原 bootstrap；实验权限拒绝记录保留 |
+| [02](attempts/02/README.md) | 40/0 | completed | 同一冻结补丁纠正验收环境后，6/6 必需项通过 | 推理阶段旧 bootstrap 的 pytest 路径混杂；未重跑模型 |
+| [03](attempts/03/README.md) | 36/0 | completed | 同一冻结补丁纠正验收环境后，6/6 必需项通过 | 同次全文件运行仍有 1 个非计分测试失败，不能称整个测试文件全绿 |
+| [04](attempts/04/README.md) | 0/0 | 未执行 | unknown/null | 项目 Python 3.8 无法直接安装 Agent 的锁定依赖；隔离方案已离线验证，尚未付费补做 |
+| [05](attempts/05/README.md) | 0/0 | 未执行 | unknown/null | 5.79 GB 压缩镜像拉取超过准备阶段 420 秒；不是 Agent 3000 秒超时 |
+| [06](attempts/06/README.md) | 11/0 | error | 失败 | 三次 length 后既有输出恢复耗尽，未提交修改；独立 Go 验收真实失败 |
+| 07—20 | 0/0 | 未执行 | unknown/null | 全局计量止损；每题单独保留状态目录 |
+
+总计 103 个真实主请求、0 个真实出站辅助请求；本地辅助准入拒绝另记。所有真实请求都返回可核验 usage，峰时估算 3.52470736 元，50 元未用完。预算不足、计量止损与模型失败是不同事实。没有算两任务或 20 题成功率，没有运行 InfCodeX，没有人工修改题目补丁。
+
+第 06 题第 11 次实际出站 `max_tokens=8000`，输出预留 8000；Provider 报告 `completion_tokens=8001`，input 未超预留，finish_reason=length。现有账本记录 `accounting_contract_failed`，此后没有新的 admitted 事件。多出的 token 原因未知，不能猜成 EOS 或供应商 bug。[止损证据](accounting-stop-audit.json)、[完整账本](ledger.jsonl)包含请求哈希和原 usage；公开响应已移除私有 reasoning_content。
+
+用户之前明确接受“缺失 usage 或超预留就停止后续调用”的机制。本次不重置账本、不放宽守卫、不借剩余额度自动续跑。已准备的补做入口在账本失败后实际拒绝，保留 [拒绝记录](continuation-rejection.txt)；未创建第二阶段账本，未发送补做模型请求。
+
+## 已授权的隔离 Agent Python
+
+用户明确选择“补隔离 Agent Python（建议）”。[环境与零付费证据](isolated-agent-python/verification.json)：从本机现有 Conda Python 3.13.12 复制解释器、标准库与 20 个必需共享库，排除私人 site-packages、pyc 和缓存；38 项 Agent 依赖沿用原锁定版本，下载相应 cp313 wheel 并记录 SHA-256。依赖下载与模型出站分开，Docker 构建使用 `--network=none`，没有 sudo、替换系统 Node/Python 或修改全局配置。
+
+真实第 04 题原始镜像为 Debian 12 / Python 3.8.20。在这个镜像派生的隔离容器中，真实 NativeSDKRunner、文件工具读取 setup.cfg，真实 Bash 返回原项目 Python 3.8.20 和项目 pytest 路径，最终 completed，未改文件；3 次模型请求全部在回环受控 Provider，0 次付费。Agent 显式由 `/opt/nz-agent/bin/python3.13` 启动，项目 PATH 不切换，独立官方验收仍用原始镜像。没有声称第 10 题实际工具链已运行。[构建配置](isolated-agent-python/build-config.json)、[源码身份](isolated-agent-python/source-identity.json)、[实际模型请求](isolated-agent-python/provider-requests.jsonl)、[工具轨迹](isolated-agent-python/runtime.jsonl)可核对。
+
+首次隔离 smoke 在 Unix socket 路径长度处阻断，尚未触达 SDK/Provider；原日志留存。缩短本轮目录后实际入口通过，不把首次失败删除或改成成功。
+
+同时发现 Agent 启动用的 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` 仍会影响项目子进程。本轮仅在 Agent 导入后移除这一覆盖和原已移除的 PYTHONPATH；第 06 题与成功隔离 smoke 留存 harness_revision=3 事实。第 03 题的 revision=2 不追认使用新设置；第 01/02 题 revision=1 不追认修正。对照不是无环境混杂的固定工具链实验，不据此归因整体 Core 能力变化。
+
+本轮停止于已保存原始轨迹、冻结补丁及有效/未知项。继续 16 道尚未尝试题之前，须解决并确认超预留停止后的处理口径；已尝试四题不自动重跑。

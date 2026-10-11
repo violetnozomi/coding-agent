@@ -1,0 +1,8 @@
+{
+  "source_private_path": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/continuation-not-executed.py",
+  "source_sha256": "69cf48486a3cf0d5ad36ea184d9baa9baf55c882044320ac70c631ef9a9e9307",
+  "paid_execution_started": false,
+  "second_ledger_created": false,
+  "rejection": "previous_accounting_stop_cannot_be_resumed",
+  "prior_ledger_preserved": true
+}

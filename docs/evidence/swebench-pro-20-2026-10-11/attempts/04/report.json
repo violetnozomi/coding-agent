@@ -1,0 +1,8 @@
+{
+  "instance_id": "instance_ansible__ansible-395e5e20fab9cad517243372fa3c3c5d9e09ab2a-v7eee2454f617569fd6889f2211f75bc02a35f9f8",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "blocked",
+  "error": "RuntimeError(\"command failed (1): ['/home/pyh/miniconda3/bin/python', '-m', 'pip']\")"
+}

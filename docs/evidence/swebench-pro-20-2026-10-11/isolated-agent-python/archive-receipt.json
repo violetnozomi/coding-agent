@@ -1,0 +1,7 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/iso/container-evidence.tar.gz",
+  "sha256": "b02d10817a08109cee0cf42f9b9305ebf943f1a96144418434f7d58d8917e2b5",
+  "bytes": 7926361,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/archives/isolated-python-smoke-instance_ansible__ansible-395e5e20fab9cad517243372fa3c3c5d9e09ab2a-v7eee2454f617569fd6889f2211f75bc02a35f9f8",
+  "retains_raw_container_session_and_artifacts": true
+}

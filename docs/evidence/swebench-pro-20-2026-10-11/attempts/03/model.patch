@@ -1,0 +1,188 @@
+diff --git a/openlibrary/catalog/add_book/__init__.py b/openlibrary/catalog/add_book/__init__.py
+index 95b63fea1..aa41f0818 100644
+--- a/openlibrary/catalog/add_book/__init__.py
++++ b/openlibrary/catalog/add_book/__init__.py
+@@ -28,7 +28,8 @@ import re
+ from collections import defaultdict
+ from copy import copy
+ from time import sleep
+-from typing import TYPE_CHECKING, Any, Final
++from typing import TYPE_CHECKING, Any, Final, Iterable
++from urllib.parse import urlparse
+ 
+ import requests
+ import web
+@@ -75,6 +76,11 @@ SUSPECT_PUBLICATION_DATES: Final = [
+ SUSPECT_AUTHOR_NAMES: Final = ["unknown", "n/a"]
+ SOURCE_RECORDS_REQUIRING_DATE_SCRUTINY: Final = ["amazon", "bwb", "promise"]
+ 
++# Only cover images served from these hosts may be fetched during import.
++# The HTTP proxy used by coverstore/import only allows these hosts, so
++# attempting to fetch covers from any other host can hang or time out.
++ALLOWED_COVER_HOSTS: Final = ["m.media-amazon.com"]
++
+ 
+ type_map = {
+     'description': 'text',
+@@ -552,6 +558,39 @@ def find_threshold_match(rec: dict, edition_pool: dict) -> str | None:
+     return None
+ 
+ 
++def process_cover_url(
++    edition: dict,
++    allowed_cover_hosts: Iterable[str] = ALLOWED_COVER_HOSTS,
++) -> tuple[str | None, dict]:
++    """
++    Validate and extract the 'cover' URL from an edition dictionary.
++
++    The 'cover' key is always removed from ``edition``. A cover URL is only
++    returned when it uses the HTTP or HTTPS protocol and its hostname matches
++    (case-insensitively) one of the ``allowed_cover_hosts``. Otherwise
++    ``None`` is returned so that the import does not attempt to fetch a cover
++    from an unsupported host (which may hang or time out).
++
++    :param dict edition: Open Library style edition dictionary
++    :param Iterable[str] allowed_cover_hosts: hosts permitted to serve covers
++    :rtype: tuple
++    :return: (cover_url or None, edition with the 'cover' key removed)
++    """
++    cover_url = edition.pop('cover', None)
++    if not cover_url:
++        return None, edition
++
++    parsed = urlparse(cover_url)
++    if parsed.scheme not in ('http', 'https') or not parsed.hostname:
++        return None, edition
++
++    allowed_hosts = {host.casefold() for host in allowed_cover_hosts}
++    if parsed.hostname.casefold() in allowed_hosts:
++        return cover_url, edition
++
++    return None, edition
++
++
+ def load_data(
+     rec: dict,
+     account_key: str | None = None,
+@@ -615,10 +654,7 @@ def load_data(
+     if not (edition_key := edition.get('key')):
+         edition_key = web.ctx.site.new_key('/type/edition')
+ 
+-    cover_url = None
+-    if 'cover' in edition:
+-        cover_url = edition['cover']
+-        del edition['cover']
++    cover_url, edition = process_cover_url(edition, ALLOWED_COVER_HOSTS)
+ 
+     cover_id = None
+     if cover_url:
+@@ -802,11 +838,12 @@ def update_edition_with_rec_data(
+     need_edition_save = False
+     # Add cover to edition
+     if 'cover' in rec and not edition.get_covers():
+-        cover_url = rec['cover']
+-        cover_id = add_cover(cover_url, edition.key, account_key=account_key)
+-        if cover_id:
+-            edition['covers'] = [cover_id]
+-            need_edition_save = True
++        cover_url, rec = process_cover_url(rec, ALLOWED_COVER_HOSTS)
++        if cover_url:
++            cover_id = add_cover(cover_url, edition.key, account_key=account_key)
++            if cover_id:
++                edition['covers'] = [cover_id]
++                need_edition_save = True
+ 
+     # Add ocaid to edition (str), if needed
+     if 'ocaid' in rec and not edition.ocaid:
+diff --git a/openlibrary/catalog/add_book/tests/test_add_book.py b/openlibrary/catalog/add_book/tests/test_add_book.py
+index 41522712c..413f0a491 100644
+--- a/openlibrary/catalog/add_book/tests/test_add_book.py
++++ b/openlibrary/catalog/add_book/tests/test_add_book.py
+@@ -7,6 +7,7 @@ from infogami.infobase.client import Nothing
+ from infogami.infobase.core import Text
+ from openlibrary.catalog import add_book
+ from openlibrary.catalog.add_book import (
++    ALLOWED_COVER_HOSTS,
+     IndependentlyPublished,
+     PublicationYearTooOld,
+     PublishedInFutureYear,
+@@ -19,6 +20,7 @@ from openlibrary.catalog.add_book import (
+     load,
+     load_data,
+     normalize_import_record,
++    process_cover_url,
+     should_overwrite_promise_item,
+     split_subtitle,
+     validate_record,
+@@ -1181,7 +1183,7 @@ def test_covers_are_added_to_edition(mock_site, monkeypatch) -> None:
+         'authors': [{'name': 'John Smith'}],
+         'publishers': ['Black Spot'],
+         'publish_date': 'Jan 09, 2011',
+-        'cover': 'https://www.covers.org/cover.jpg',
++        'cover': 'https://m.media-amazon.com/images/I/51IT9MV3KqL._AC_.jpg',
+     }
+ 
+     monkeypatch.setattr(add_book, "add_cover", lambda _, __, account_key: 1234)
+@@ -1193,6 +1195,62 @@ def test_covers_are_added_to_edition(mock_site, monkeypatch) -> None:
+     assert e['covers'] == [1234]
+ 
+ 
++class TestProcessCoverUrl:
++    def test_missing_cover(self) -> None:
++        """If cover is missing, return None and leave the edition unchanged."""
++        edition = {'title': 'No Cover'}
++        cover_url, updated = process_cover_url(edition)
++        assert cover_url is None
++        assert updated == {'title': 'No Cover'}
++
++    def test_valid_https_cover_is_extracted(self) -> None:
++        """A supported host over HTTPS is returned and its key removed."""
++        edition = {'cover': 'https://m.media-amazon.com/images/I/abc.jpg'}
++        cover_url, updated = process_cover_url(edition)
++        assert cover_url == 'https://m.media-amazon.com/images/I/abc.jpg'
++        assert 'cover' not in updated
++
++    def test_valid_http_cover_is_extracted(self) -> None:
++        """A supported host over plain HTTP is also accepted."""
++        edition = {'cover': 'http://m.media-amazon.com/images/I/abc.jpg'}
++        cover_url, updated = process_cover_url(edition)
++        assert cover_url == 'http://m.media-amazon.com/images/I/abc.jpg'
++        assert 'cover' not in updated
++
++    def test_host_matching_is_case_insensitive(self) -> None:
++        """Host comparisons ignore letter case."""
++        edition = {'cover': 'https://M.MEDIA-AMAZON.COM/images/I/abc.jpg'}
++        cover_url, updated = process_cover_url(edition)
++        assert cover_url == 'https://M.MEDIA-AMAZON.COM/images/I/abc.jpg'
++        assert 'cover' not in updated
++
++    def test_unsupported_host_is_ignored(self) -> None:
++        """A cover from an unsupported host is dropped along with the key."""
++        edition = {'cover': 'https://not-supported.org/cover.jpg'}
++        cover_url, updated = process_cover_url(edition)
++        assert cover_url is None
++        assert 'cover' not in updated
++
++    def test_unsupported_scheme_is_ignored(self) -> None:
++        """Only http and https protocols are accepted."""
++        edition = {'cover': 'ftp://m.media-amazon.com/images/I/abc.jpg'}
++        cover_url, updated = process_cover_url(edition)
++        assert cover_url is None
++        assert 'cover' not in updated
++
++    def test_custom_allowed_hosts(self) -> None:
++        """The allowed hosts are caller-configurable."""
++        edition = {'cover': 'https://not-supported.org/cover.jpg'}
++        cover_url, updated = process_cover_url(
++            edition, allowed_cover_hosts=['Not-Supported.org']
++        )
++        assert cover_url == 'https://not-supported.org/cover.jpg'
++        assert 'cover' not in updated
++
++    def test_allowed_cover_hosts_includes_media_amazon(self) -> None:
++        assert 'm.media-amazon.com' in ALLOWED_COVER_HOSTS
++
++
+ def test_add_description_to_work(mock_site) -> None:
+     """
+     Ensure that if an edition has a description, and the associated work does

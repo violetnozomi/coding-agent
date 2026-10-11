@@ -1,0 +1,10 @@
+{
+  "base": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:b431b3207e1399420ccf6fe4ad343951a4194dab14fa33bd1a0931e1dad83d87",
+  "base_image_id": "sha256:a3bbca9b15c4da35b421da5a6aaffd6abf45902d94f5c5b47e76c41ddfc2d37c",
+  "agent_executable": "/opt/nz-agent/bin/python3.13",
+  "project_executable": "python3",
+  "lock_sha256": "460cc768c94f247c2f24ddae27e6fb96ec32da0797321995ce987e6fe3b9a071",
+  "requirements_sha256": "87564701509a3e79ad8d905cf7dc3ae3db88b2e6d628177fdf25a89af096a9b7",
+  "network_during_build": "none",
+  "user_authorized": "\u8865\u9694\u79bb Agent Python\uff08\u5efa\u8bae\uff09"
+}

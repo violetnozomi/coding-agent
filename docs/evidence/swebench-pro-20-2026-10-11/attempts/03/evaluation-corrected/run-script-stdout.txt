@@ -1,0 +1,126 @@
+Running selected tests: openlibrary/catalog/add_book/tests/test_add_book.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.2, pytest-8.3.4, pluggy-1.5.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pyproject.toml
+plugins: rerunfailures-15.0, anyio-4.10.0, cov-4.1.0, asyncio-0.25.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 84 items
+
+openlibrary/catalog/add_book/tests/test_add_book.py::test_isbns_from_record PASSED [  1%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[Test Title-Test Title-None] PASSED [  2%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[Killers of the Flower Moon: The Osage Murders and the Birth of the FBI-Killers of the Flower Moon-The Osage Murders and the Birth of the FBI] PASSED [  3%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[Pachinko (National Book Award Finalist)-Pachinko-None] PASSED [  4%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[Trapped in a Video Game (Book 1) (Volume 1)-Trapped in a Video Game-None] PASSED [  5%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[An American Marriage (Oprah's Book Club): A Novel-An American Marriage-A Novel] PASSED [  7%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[A N\xf6vel (German Edition)-A N\xf6vel-None] PASSED [  8%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[Vietnam Travel Guide 2019: Ho Chi Minh City - First Journey : 10 Tips For an Amazing Trip-Vietnam Travel Guide 2019 : Ho Chi Minh City - First Journey-10 Tips For an Amazing Trip] PASSED [  9%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[Secrets of Adobe(r) Acrobat(r) 7. 150 Best Practices and Tips (Russian Edition)-Secrets of Adobe Acrobat 7. 150 Best Practices and Tips-None] PASSED [ 10%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[Last Days at Hot Slit: The Radical Feminism of Andrea Dworkin (Semiotext(e) / Native Agents)-Last Days at Hot Slit-The Radical Feminism of Andrea Dworkin] PASSED [ 11%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_split_subtitle[Bloody Times: The Funeral of Abraham Lincoln and the Manhunt for Jefferson Davis-Bloody Times-The Funeral of Abraham Lincoln and the Manhunt for Jefferson Davis] PASSED [ 13%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_editions_matched_no_results PASSED [ 14%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_editions_matched PASSED [ 15%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_load_without_required_field PASSED [ 16%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_load_test_item PASSED [ 17%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_load_deduplicates_authors PASSED [ 19%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_load_with_subjects PASSED [ 20%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_load_with_new_author PASSED [ 21%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_load_with_redirected_author PASSED [ 22%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_duplicate_ia_book PASSED [ 23%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_matched_edition_with_new_language_in_rec_adds_language PASSED [ 25%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_matched_edition_with_new_language_is_added_even_if_no_existing_language PASSED [ 26%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_matched_edition_properly_updates_non_language_fields PASSED [ 27%]
+openlibrary/catalog/add_book/tests/test_add_book.py::Test_From_MARC::test_from_marc_author PASSED [ 28%]
+openlibrary/catalog/add_book/tests/test_add_book.py::Test_From_MARC::test_from_marc[coursepuremath00hardrich] PASSED [ 29%]
+openlibrary/catalog/add_book/tests/test_add_book.py::Test_From_MARC::test_from_marc[roadstogreatness00gall] PASSED [ 30%]
+openlibrary/catalog/add_book/tests/test_add_book.py::Test_From_MARC::test_from_marc[treatiseonhistor00dixo] PASSED [ 32%]
+openlibrary/catalog/add_book/tests/test_add_book.py::Test_From_MARC::test_author_from_700 PASSED [ 33%]
+openlibrary/catalog/add_book/tests/test_add_book.py::Test_From_MARC::test_from_marc_reimport_modifications PASSED [ 34%]
+openlibrary/catalog/add_book/tests/test_add_book.py::Test_From_MARC::test_missing_ocaid PASSED [ 35%]
+openlibrary/catalog/add_book/tests/test_add_book.py::Test_From_MARC::test_from_marc_fields PASSED [ 36%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_build_pool PASSED [ 38%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_load_multiple PASSED [ 39%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_extra_author PASSED [ 40%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_missing_source_records PASSED [ 41%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_no_extra_author PASSED [ 42%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_same_twice PASSED [ 44%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_existing_work PASSED [ 45%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_existing_work_with_subtitle PASSED [ 46%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_subtitle_gets_split_from_title PASSED [ 47%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_title_with_trailing_period_is_stripped PASSED [ 48%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_find_match_is_used_when_looking_for_edition_matches PASSED [ 50%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_covers_are_added_to_edition RERUN [ 51%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_covers_are_added_to_edition RERUN [ 51%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_covers_are_added_to_edition RERUN [ 51%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_covers_are_added_to_edition FAILED [ 51%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_add_description_to_work PASSED [ 52%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_add_subjects_to_work_deduplicates PASSED [ 53%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_add_identifiers_to_edition PASSED [ 54%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_adding_list_field_items_to_edition_deduplicates_input PASSED [ 55%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_validate_record[Books prior to 1400 CANNOT be imported if from a bookseller requiring additional validation-rec0-PublicationYearTooOld] PASSED [ 57%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_validate_record[Books published on or after 1400 CE+ can be imported from any source-rec1-None] PASSED [ 58%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_validate_record[Trying to import a book from a future year raises an error-rec2-PublishedInFutureYear] PASSED [ 59%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_validate_record[Independently published books CANNOT be imported-rec3-IndependentlyPublished] PASSED [ 60%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_validate_record[Non-independently published books can be imported-rec4-None] PASSED [ 61%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_validate_record[Import sources that require an ISBN CANNOT be imported without an ISBN-rec5-SourceNeedsISBN] PASSED [ 63%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_validate_record[Can import sources that require an ISBN and have ISBN-rec6-None] PASSED [ 64%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_validate_record[Can import from sources that don't require an ISBN-rec7-None] PASSED [ 65%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_reimport_updates_edition_and_work_description PASSED [ 66%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_overwrite_if_rev1_promise_item[Overwrites revision 1 promise items with MARC data-edition0-True-True] PASSED [ 67%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_overwrite_if_rev1_promise_item[Doesn't overwrite rev 1 promise items WITHOUT MARC data-edition1-False-False] PASSED [ 69%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_overwrite_if_rev1_promise_item[Doesn't overwrite non-revision 1 promise items-edition2-True-False] PASSED [ 70%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_overwrite_if_rev1_promise_item[Doesn't overwrite revision 1 NON-promise items-edition3-True-False] PASSED [ 71%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_overwrite_if_rev1_promise_item[Can handle editions with an empty source record-edition4-True-False] PASSED [ 72%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_overwrite_if_rev1_promise_item[Can handle editions without a source record-edition5-True-False] PASSED [ 73%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_overwrite_if_rev1_promise_item[Can handle editions without a revision-edition6-True-False] PASSED [ 75%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestLoadDataWithARev1PromiseItem::test_passing_edition_to_load_data_overwrites_edition_with_rec_data PASSED [ 76%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_future_publication_dates_are_deleted[2000-11-11-True] PASSED [ 77%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_future_publication_dates_are_deleted[2026-True] PASSED [ 78%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_future_publication_dates_are_deleted[2027-False] PASSED [ 79%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_future_publication_dates_are_deleted[9999-01-01-False] PASSED [ 80%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_dummy_data_to_satisfy_parse_data_is_removed[rec0-expected0] PASSED [ 82%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_dummy_data_to_satisfy_parse_data_is_removed[rec1-expected1] PASSED [ 83%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_year_1900_removed_from_amz_and_bwb_promise_items[rec0-expected0] PASSED [ 84%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_year_1900_removed_from_amz_and_bwb_promise_items[rec1-expected1] PASSED [ 85%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_year_1900_removed_from_amz_and_bwb_promise_items[rec2-expected2] PASSED [ 86%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_year_1900_removed_from_amz_and_bwb_promise_items[rec3-expected3] PASSED [ 88%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_year_1900_removed_from_amz_and_bwb_promise_items[rec4-expected4] PASSED [ 89%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_year_1900_removed_from_amz_and_bwb_promise_items[rec5-expected5] PASSED [ 90%]
+openlibrary/catalog/add_book/tests/test_add_book.py::TestNormalizeImportRecord::test_year_1900_removed_from_amz_and_bwb_promise_items[rec6-expected6] PASSED [ 91%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_find_match_title_only_promiseitem_against_noisbn_marc PASSED [ 92%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_process_cover_url[edition0-None-expected_edition0] PASSED [ 94%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_process_cover_url[edition1-None-expected_edition1] PASSED [ 95%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_process_cover_url[edition2-https://m.media-amazon.com/image/123.jpg-expected_edition2] PASSED [ 96%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_process_cover_url[edition3-http://m.media-amazon.com/image/123.jpg-expected_edition3] PASSED [ 97%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_process_cover_url[edition4-https://m.MEDIA-amazon.com/image/123.jpg-expected_edition4] PASSED [ 98%]
+openlibrary/catalog/add_book/tests/test_add_book.py::test_process_cover_url[edition5-None-expected_edition5] PASSED [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_covers_are_added_to_edition _______________________
+openlibrary/catalog/add_book/tests/test_add_book.py:1193: in test_covers_are_added_to_edition
+    assert reply['edition']['status'] == 'modified'
+E   AssertionError: assert 'matched' == 'modified'
+E     
+E     - modified
+E     + matched
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/genshi/compat.py:141
+  /usr/local/lib/python3.12/site-packages/genshi/compat.py:141: DeprecationWarning: ast.Ellipsis is deprecated and will be removed in Python 3.14; use ast.Constant instead
+    _ast_Ellipsis = ast.Ellipsis
+
+../usr/local/lib/python3.12/site-packages/genshi/compat.py:142
+  /usr/local/lib/python3.12/site-packages/genshi/compat.py:142: DeprecationWarning: ast.Str is deprecated and will be removed in Python 3.14; use ast.Constant instead
+    _ast_Str = ast.Str
+
+../usr/local/lib/python3.12/site-packages/dateutil/tz/tz.py:37
+  /usr/local/lib/python3.12/site-packages/dateutil/tz/tz.py:37: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    EPOCH = datetime.datetime.utcfromtimestamp(0)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED openlibrary/catalog/add_book/tests/test_add_book.py::test_covers_are_added_to_edition - AssertionError: assert 'matched' == 'modified'
+  
+  - modified
+  + matched
+============== 1 failed, 83 passed, 3 warnings, 3 rerun in 0.83s ===============

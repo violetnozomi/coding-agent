@@ -1,0 +1,36 @@
+[
+  {
+    "tool_call_id": "call_00_ET_myRw1yNweAeDZw5hPzBh3430",
+    "input": {
+      "command": "find /workspace/contrib/snmp2cpe -type f | head -50"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/workspace/contrib/snmp2cpe/README.md\n/workspace/contrib/snmp2cpe/cmd/main.go\n/workspace/contrib/snmp2cpe/pkg/snmp/snmp.go\n/workspace/contrib/snmp2cpe/pkg/snmp/types.go\n/workspace/contrib/snmp2cpe/pkg/cmd/v2c/v2c.go\n/workspace/contrib/snmp2cpe/pkg/cmd/root/root.go\n/workspace/contrib/snmp2cpe/pkg/cmd/convert/convert.go\n/workspace/contrib/snmp2cpe/pkg/cmd/version/version.go\n/workspace/contrib/snmp2cpe/pkg/cmd/v1/v1.go\n/workspace/contrib/snmp2cpe/pkg/cmd/v3/v3.go\n/workspace/contrib/snmp2cpe/pkg/cpe/cpe_test.go\n/workspace/contrib/snmp2cpe/pkg/cpe/cpe.go\n/workspace/contrib/snmp2cpe/pkg/util/util.go"
+  },
+  {
+    "tool_call_id": "call_01_QnJdCRjKu0OFjkAbRhCa9410",
+    "input": {
+      "command": "cd /workspace/contrib/snmp2cpe 2>/dev/null || cd /workspace; git -C /workspace log --oneline -3 2>/dev/null; go version"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Z1BHwWBnI9bENIpQnWoA3793",
+    "input": {
+      "command": "go version",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go version go1.24.3 linux/amd64"
+  }
+]

@@ -1,0 +1,3 @@
+{"tool": "bash", "input": {"command": "find /workspace/contrib/snmp2cpe -type f | head -50"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace/contrib/snmp2cpe 2>/dev/null || cd /workspace; git -C /workspace log --oneline -3 2>/dev/null; go version"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go version", "workdir": "/workspace"}, "allowed": true}

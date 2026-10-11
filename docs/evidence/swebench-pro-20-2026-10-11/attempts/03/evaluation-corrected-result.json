@@ -1,0 +1,12 @@
+{
+  "status": "graded",
+  "returncode": 0,
+  "reward": "1",
+  "resolved": true,
+  "fresh_original_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:e3649cbff86bdc922b245a1e05a2dc9f3a348f8e0ee73967e72c951c5f9b25ce",
+  "unchanged_official_verifier": true,
+  "same_frozen_patch_sha256": "3f13b902fc845fb669c005074d3e37388d681f6b7a319dd87427a04520103324",
+  "original_image_plugin_loading_preserved": true,
+  "agent_rerun": false,
+  "paid_model_calls": 0
+}

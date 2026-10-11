@@ -1,0 +1,18 @@
+{
+  "files_checked": 336,
+  "json_or_jsonl_parsed": 245,
+  "fixed_tasks": 20,
+  "actual_attempts": 4,
+  "physical_main_requests": 103,
+  "physical_auxiliary_requests": 0,
+  "official_required_pass": 3,
+  "official_fail": 1,
+  "unattempted": 16,
+  "raw_patch_and_archive_identity": true,
+  "no_real_key_present": true,
+  "private_reasoning_removed_from_public_responses": true,
+  "local_document_links_valid": true,
+  "python_syntax_valid": true,
+  "all_usage_settled": true,
+  "no_requests_after_accounting_stop": true
+}

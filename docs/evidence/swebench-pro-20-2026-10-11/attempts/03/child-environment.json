@@ -1,0 +1,6 @@
+{
+  "agent_bootstrap_pythonpath": "/runtime:/opt/nz-site",
+  "project_child_pythonpath": null,
+  "project_dependency_isolation": "remove_agent_only_bootstrap_path",
+  "harness_revision": 2
+}

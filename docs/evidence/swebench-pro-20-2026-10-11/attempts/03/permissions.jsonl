@@ -1,0 +1,22 @@
+{"tool": "bash", "input": {"command": "ls /workspace && echo \"---\" && ls /workspace/openlibrary/catalog/add_book/ 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -R /workspace/openlibrary/catalog/add_book/tests | head -50; echo ---; ls /workspace/tests | head -50"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"cover\" /workspace/openlibrary/catalog/add_book/tests/test_add_book.py | head -40; echo ---; wc -l /workspace/openlibrary/catalog/add_book/tests/test_add_book.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"media-amazon\" /workspace/conf /workspace/config /workspace/openlibrary 2>/dev/null | grep -v node_modules | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rni \"allow.*host\\|host.*allow\\|coverstore.*host\\|AllowedHosts\" /workspace/conf /workspace/openlibrary/plugins/upstream 2>/dev/null | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "sed -n 1,40p /workspace/openlibrary/catalog/add_book/tests/conftest.py; echo ---; grep -rn \"def build_query\" /workspace/openlibrary/catalog/add_book/load_book.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -n \"cover\" /workspace/openlibrary/catalog/add_book/__init__.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git status --short && echo --- && git log --oneline -3"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -x -q 2>&1 | tail -25", "timeout": 300}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -q 2>&1 | tail -25", "timeout": 300, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -q 2>&1 | tail -25", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -q 2>&1 | tail -5", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/ -q 2>&1 | tail -5", "timeout": 180, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile openlibrary/catalog/add_book/__init__.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -q 2>&1 | tail -5", "timeout": 180, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -q 2>&1 | tail -5", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_load_book.py -q 2>&1 | tail -4", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '900,1000p' openlibrary/catalog/add_book/__init__.py", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '1000,1070p' openlibrary/catalog/add_book/__init__.py", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '555,595p' openlibrary/catalog/add_book/__init__.py", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "pytest openlibrary/catalog/add_book/tests/test_add_book.py::test_covers_are_added_to_edition", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "targeted", "command": "pytest openlibrary/catalog/add_book/tests/test_add_book.py -q -k \"cover or ProcessCover\" 2>&1 | tail -4"}, "allowed": true}
