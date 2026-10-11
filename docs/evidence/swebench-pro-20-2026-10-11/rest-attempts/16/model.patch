@@ -1,0 +1,124 @@
+diff --git a/applications/mail/src/app/helpers/message/messageImages.ts b/applications/mail/src/app/helpers/message/messageImages.ts
+index fd4f80b51..97998da60 100644
+--- a/applications/mail/src/app/helpers/message/messageImages.ts
++++ b/applications/mail/src/app/helpers/message/messageImages.ts
+@@ -26,6 +26,15 @@ export const getAnchor = (document: Element | null | undefined, image: MessageIm
+ export const getRemoteImages = ({ messageImages }: PartialMessageState) =>
+     (messageImages?.images.filter(({ type }) => type === 'remote') || []) as MessageRemoteImage[];
+ 
++/**
++ * Build the absolute URL used to load a remote image through the images proxy.
++ * It is forged from the current page origin so that the browser request carries the session cookies.
++ */
++export const forgeImageURL = (url: string, uid: string) => {
++    const encodedUrl = encodeURIComponent(url);
++    return `${window.location.origin}/api/core/v4/images?Url=${encodedUrl}&DryRun=0&UID=${uid}`;
++};
++
+ export const getEmbeddedImages = ({ messageImages }: PartialMessageState) =>
+     (messageImages?.images.filter(({ type }) => type === 'embedded') || []) as MessageEmbeddedImage[];
+ 
+diff --git a/applications/mail/src/app/logic/messages/images/messagesImagesActions.ts b/applications/mail/src/app/logic/messages/images/messagesImagesActions.ts
+index 7fc3b182f..b68b0b988 100644
+--- a/applications/mail/src/app/logic/messages/images/messagesImagesActions.ts
++++ b/applications/mail/src/app/logic/messages/images/messagesImagesActions.ts
+@@ -1,4 +1,4 @@
+-import { createAsyncThunk } from '@reduxjs/toolkit';
++import { createAction, createAsyncThunk } from '@reduxjs/toolkit';
+ 
+ import { getImage } from '@proton/shared/lib/api/images';
+ import { RESPONSE_CODE } from '@proton/shared/lib/drive/constants';
+@@ -7,7 +7,13 @@ import { get } from '../../../helpers/attachment/attachmentLoader';
+ import { preloadImage } from '../../../helpers/dom';
+ import { createBlob } from '../../../helpers/message/messageEmbeddeds';
+ import encodeImageUri from '../helpers/encodeImageUri';
+-import { LoadEmbeddedParams, LoadEmbeddedResults, LoadRemoteParams, LoadRemoteResults } from '../messagesTypes';
++import {
++    LoadEmbeddedParams,
++    LoadEmbeddedResults,
++    LoadRemoteFromURLParams,
++    LoadRemoteParams,
++    LoadRemoteResults,
++} from '../messagesTypes';
+ 
+ export const loadEmbedded = createAsyncThunk<LoadEmbeddedResults, LoadEmbeddedParams>(
+     'messages/embeddeds/load',
+@@ -72,6 +78,12 @@ export const loadRemoteProxy = createAsyncThunk<LoadRemoteResults, LoadRemotePar
+     }
+ );
+ 
++/**
++ * Load a remote image through the images proxy by forging the proxy URL directly in the rendered document.
++ * The URL carries the authenticated session UID, so the browser request is authenticated with cookies.
++ */
++export const loadRemoteProxyFromURL = createAction<LoadRemoteFromURLParams>('messages/remote/load/proxyFromURL');
++
+ export const loadFakeProxy = createAsyncThunk<LoadRemoteResults | undefined, LoadRemoteParams>(
+     'messages/remote/fake/proxy',
+     async ({ imageToLoad, api }) => {
+diff --git a/applications/mail/src/app/logic/messages/images/messagesImagesReducers.ts b/applications/mail/src/app/logic/messages/images/messagesImagesReducers.ts
+index aa31826c3..a44b6ba3f 100644
+--- a/applications/mail/src/app/logic/messages/images/messagesImagesReducers.ts
++++ b/applications/mail/src/app/logic/messages/images/messagesImagesReducers.ts
+@@ -2,12 +2,13 @@ import { PayloadAction } from '@reduxjs/toolkit';
+ import { Draft } from 'immer';
+ 
+ import { markEmbeddedImagesAsLoaded } from '../../../helpers/message/messageEmbeddeds';
+-import { getEmbeddedImages, getRemoteImages, updateImages } from '../../../helpers/message/messageImages';
++import { forgeImageURL, getEmbeddedImages, getRemoteImages, updateImages } from '../../../helpers/message/messageImages';
+ import { loadBackgroundImages, loadElementOtherThanImages, urlCreator } from '../../../helpers/message/messageRemotes';
+ import { getMessage } from '../helpers/messagesReducer';
+ import {
+     LoadEmbeddedParams,
+     LoadEmbeddedResults,
++    LoadRemoteFromURLParams,
+     LoadRemoteParams,
+     LoadRemoteResults,
+     MessageRemoteImage,
+@@ -106,6 +107,32 @@ export const loadRemoteProxyFulFilled = (
+     }
+ };
+ 
++export const loadRemoteProxyFromURLFulFilled = (
++    state: Draft<MessagesState>,
++    { payload: { ID, imageToLoad, uid } }: PayloadAction<LoadRemoteFromURLParams>
++) => {
++    const messageState = getMessage(state, ID);
++
++    if (messageState && messageState.messageImages) {
++        const { image } = getStateImage({ image: imageToLoad }, messageState);
++
++        if (image) {
++            // Keep the original remote address around, it is needed for direct loading and for the srcset attribute
++            image.originalURL = image.originalURL || image.url;
++
++            // Forge the proxy URL from the current page origin, no image data is retrieved beforehand
++            image.url = forgeImageURL(image.originalURL as string, uid);
++            image.error = undefined;
++            image.status = 'loaded';
++
++            messageState.messageImages.showRemoteImages = true;
++
++            loadElementOtherThanImages([image], messageState.messageDocument?.document);
++            loadBackgroundImages({ document: messageState.messageDocument?.document, images: [image] });
++        }
++    }
++};
++
+ export const loadFakeProxyPending = (
+     state: Draft<MessagesState>,
+     {
+diff --git a/applications/mail/src/app/logic/messages/messagesTypes.ts b/applications/mail/src/app/logic/messages/messagesTypes.ts
+index 3ba560acd..af4887865 100644
+--- a/applications/mail/src/app/logic/messages/messagesTypes.ts
++++ b/applications/mail/src/app/logic/messages/messagesTypes.ts
+@@ -355,3 +355,9 @@ export interface LoadRemoteResults {
+     tracker?: string;
+     error?: unknown;
+ }
++
++export interface LoadRemoteFromURLParams {
++    ID: string;
++    imageToLoad: MessageRemoteImage;
++    uid: string;
++}

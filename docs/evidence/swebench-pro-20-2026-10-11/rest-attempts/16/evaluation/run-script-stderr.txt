@@ -1,0 +1,133 @@
+PASS src/app/helpers/message/messageImages.test.ts (28.992 s, 752 MB heap size)
+  forgeImageURL
+    ✓ should forge the expected image URL (1 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        43.823 s
+Ran all test suites matching /applications\/mail\/src\/app\/helpers\/message\/messageImages.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+FAIL src/app/components/message/tests/Message.images.test.tsx (13.005 s, 806 MB heap size)
+  Message images
+    ✓ should display all elements other than images (285 ms)
+    ✕ should load correctly all elements other than images with proxy (189 ms)
+    ✕ should be able to load direct when proxy failed at loading (1117 ms)
+
+  ● Message images › should load correctly all elements other than images with proxy
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "http://localhost/api/core/v4/images?Url=imageURL&DryRun=0&UID=uid"
+    Received: null
+
+      167 |         // Check that proton attribute has been removed after images loading
+      168 |         const updatedElementBackground = await findByTestId(iframeRerendered, 'image-background');
+    > 169 |         expect(updatedElementBackground.getAttribute('background')).toEqual(forgedURL);
+          |                                                                     ^
+      170 |
+      171 |         const updatedElementPoster = await findByTestId(iframeRerendered, 'image-poster');
+      172 |         expect(updatedElementPoster.getAttribute('poster')).toEqual(forgedURL);
+
+      at toEqual (src/app/components/message/tests/Message.images.test.tsx:169:69)
+      at tryCatch (../../node_modules/@babel/runtime/helpers/regeneratorRuntime.js:44:17)
+      at Generator.<anonymous> (../../node_modules/@babel/runtime/helpers/regeneratorRuntime.js:125:22)
+      at Generator.next (../../node_modules/@babel/runtime/helpers/regeneratorRuntime.js:69:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:22:9)
+
+  ● Message images › should be able to load direct when proxy failed at loading
+
+    Unable to find an element by: [data-testid="image"]
+
+    Ignored nodes: comments, script, style
+    [36m<div[39m
+      [33mid[39m=[32m"proton-root"[39m
+    [36m>[39m
+      [0m
+              [0m
+      [36m<div[39m
+        [33mid[39m=[32m"proton-print-header"[39m
+      [36m/>[39m
+      [0m
+              [0m
+      [36m<div[39m
+        [33mstyle[39m=[32m"display: flex !important; width: 100% !important;"[39m
+      [36m>[39m
+        [0m
+              [0m
+        [36m<div[39m
+          [33mstyle[39m=[32m"width: 100% !important;padding-bottom:10px;!important"[39m
+        [36m>[39m
+          [0m
+                
+                [0m
+          [36m<div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"proton-image-anchor"[39m
+              [33mdata-proton-remote[39m=[32m"remote-8"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-describedby[39m=[32m"tooltip-531"[39m
+                [33mclass[39m=[32m"proton-image-placeholder proton-image-placeholder--error border-danger"[39m
+                [33mstyle[39m=[32m"width: 30px; height: 30px;"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"icon-20p"[39m
+                  [33mfocusable[39m=[32m"false"[39m
+                  [33mrole[39m=[32m"img"[39m
+                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                [36m>[39m
+                  [36m<use[39m
+                    [33mxlink:href[39m=[32m"#ic-cross-circle"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</span>[39m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mid[39m=[32m"proton-toggle"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mid[39m=[32m"proton-blockquote"[39m
+          [36m/>[39m
+          [0m
+                
+              [0m
+        [36m</div>[39m
+        [0m
+              [0m
+      [36m</div>[39m
+      [0m
+              [0m
+      [36m<div[39m
+        [33mid[39m=[32m"proton-print-footer"[39m
+      [36m/>[39m
+      [0m
+            [0m
+    [36m</div>[39m
+
+      224 |
+      225 |         // Make the loading through URL fail
+    > 226 |         const imageInBody = await findByTestId(iframeRerendered, 'image');
+          |                                               ^
+      227 |         fireEvent.error(imageInBody, { Code: 2902, Error: 'TEST error message' });
+      228 |
+      229 |         // Rerender again the message view to check that images have been loaded through normal api call
+
+      at waitForWrapper (../../node_modules/@testing-library/dom/dist/wait-for.js:166:27)
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+      at _callee3$ (src/app/components/message/tests/Message.images.test.tsx:226:47)
+      at tryCatch (../../node_modules/@babel/runtime/helpers/regeneratorRuntime.js:44:17)
+      at Generator.<anonymous> (../../node_modules/@babel/runtime/helpers/regeneratorRuntime.js:125:22)
+      at Generator.next (../../node_modules/@babel/runtime/helpers/regeneratorRuntime.js:69:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:22:9)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 1 passed, 3 total
+Snapshots:   0 total
+Time:        15.869 s
+Ran all test suites matching /applications\/mail\/src\/app\/components\/message\/tests\/Message.images.test.tsx/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

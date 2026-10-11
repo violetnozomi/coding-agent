@@ -1,0 +1,7 @@
+{"tool": "bash", "input": {"command": "cd /workspace && ls && git log --oneline -5 && git status"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls applications 2>/dev/null; echo \"---\"; ls applications/mail/src/app/logic/messages/images/ 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hello"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 2>&1 | head -20; git status --short 2>&1 | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls applications/mail/src/app/logic/messages/ applications/mail/src/app/logic/messages/*/ 2>&1 | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,60p' packages/shared/lib/api/images.ts 2>/dev/null; echo \"=== encodeImageUri ===\"; cat applications/mail/src/app/logic/messages/helpers/encodeImageUri.ts 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat applications/mail/src/app/logic/messages/helpers/encodeImageUri.ts; echo '=== jest ==='; sed -n '1,80p' applications/mail/jest.config.js 2>/dev/null || ls applications/mail"}, "allowed": false}

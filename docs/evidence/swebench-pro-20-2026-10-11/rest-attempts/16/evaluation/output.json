@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "src/app/helpers/message/messageImages.test.ts | should forge the expected image URL",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/components/message/tests/Message.images.test.tsx | should display all elements other than images",
+      "status": "PASSED"
+    }
+  ]
+}
