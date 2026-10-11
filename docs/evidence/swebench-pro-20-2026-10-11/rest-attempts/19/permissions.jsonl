@@ -1,0 +1,9 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && git status"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 2>&1 | head; git status --short 2>&1 | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./lib/client -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && ulimit -u 2>&1; nproc"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && GOMAXPROCS=2 GOFLAGS=-p=1 go build ./tool/tsh/... ./lib/client/... 2>&1 | tail -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && GOFLAGS=-p=1 go vet ./tool/tsh/ 2>&1 | tail -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && GOMAXPROCS=1 GOFLAGS=-p=1 go build ./tool/tsh/ 2>&1 | grep -v \"resource temporarily unavailable\\|failed to create new OS thread\\|newosproc\\|^runtime\\|^goroutine\\|^cmd/\\|^main\\.\\|created by\\|^\t\" | head -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && gofmt -e -l tool/tsh/tsh.go lib/client/api.go tool/tsh/tsh_test.go 2>&1 | head -20; echo \"gofmt-exit=$?\"", "timeout": 60}, "allowed": false}

@@ -1,0 +1,13 @@
+{
+  "instance_id": "instance_gravitational__teleport-326fd1d7be87b03998dbc53bc706fdef90f5065c-v626ec2a48416b10a88641359a169d99e935ff037",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": true,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/19",
+  "preparation_retry_not_agent_retry": true,
+  "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/pending/19",
+  "status": "attempted",
+  "patch_sha256": "6ea343ddc5e4dedf7ce947d8995369db3ddcff617423432540040bbc157f01d1",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

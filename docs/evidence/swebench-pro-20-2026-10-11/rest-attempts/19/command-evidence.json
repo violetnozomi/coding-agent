@@ -1,0 +1,117 @@
+[
+  {
+    "tool_call_id": "call_00_Gfk7acMwzZZpotNJCmZk1641",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /app 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_ytprJTOuC9a9z3fSEq6m6657",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 && git status"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_XoA48hwi3t6ZY3bYZQaK5063",
+    "input": {
+      "command": "ls -la /workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_nYUyklhQ1a88gTCO3hM19921",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3 2>&1 | head; git status --short 2>&1 | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-2",
+    "input": {
+      "command": "go test ./lib/client -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_MhT9rtTpRugJuwWlZAba3089",
+    "input": {
+      "command": "cd /workspace && ulimit -u 2>&1; nproc"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_YgoQRmbcLTNa1DwgVvz82553",
+    "input": {
+      "command": "cd /workspace && GOMAXPROCS=2 GOFLAGS=-p=1 go build ./tool/tsh/... ./lib/client/... 2>&1 | tail -30",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_5ZjrjyOC9KyMeanv4m9n1078",
+    "input": {
+      "command": "cd /workspace && GOFLAGS=-p=1 go vet ./tool/tsh/ 2>&1 | tail -30",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_iPFkUkv75wjePMF6GoIR3256",
+    "input": {
+      "command": "cd /workspace && GOMAXPROCS=1 GOFLAGS=-p=1 go build ./tool/tsh/ 2>&1 | grep -v \"resource temporarily unavailable\\|failed to create new OS thread\\|newosproc\\|^runtime\\|^goroutine\\|^cmd/\\|^main\\.\\|created by\\|^\t\" | head -40",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_pqu2PyjTcnibyV58vAPU4918",
+    "input": {
+      "command": "cd /workspace && gofmt -e -l tool/tsh/tsh.go lib/client/api.go tool/tsh/tsh_test.go 2>&1 | head -20; echo \"gofmt-exit=$?\"",
+      "timeout": 60
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

@@ -1,0 +1,162 @@
+diff --git a/lib/client/api.go b/lib/client/api.go
+index a1a73271a..6d4d825d5 100644
+--- a/lib/client/api.go
++++ b/lib/client/api.go
+@@ -266,6 +266,11 @@ type Config struct {
+ 	// if empty, they'll go to ~/.tsh
+ 	KeysDir string
+ 
++	// HomePath is a custom base directory where the client stores its profiles,
++	// keys, and certificates. If empty, the OS default location (usually ~/.tsh)
++	// is used.
++	HomePath string
++
+ 	// Env is a map of environmnent variables to send when opening session
+ 	Env map[string]string
+ 
+@@ -742,6 +747,12 @@ func Status(profileDir, proxyHost string) (*ProfileStatus, []*ProfileStatus, err
+ // profiles directory. If profileDir is an empty string, the default profile
+ // directory ~/.tsh is used.
+ func (c *Config) LoadProfile(profileDir string, proxyName string) error {
++	// Fall back to the configured home directory, if any. An empty profileDir
++	// continues to mean the default location.
++	if profileDir == "" {
++		profileDir = c.HomePath
++	}
++
+ 	// read the profile:
+ 	cp, err := profile.FromDir(profileDir, ProxyHost(proxyName))
+ 	if err != nil {
+@@ -779,6 +790,11 @@ func (c *Config) SaveProfile(dir string, makeCurrent bool) error {
+ 		return nil
+ 	}
+ 
++	// Fall back to the configured home directory, if any.
++	if dir == "" {
++		dir = c.HomePath
++	}
++
+ 	dir = profile.FullProfilePath(dir)
+ 
+ 	var cp profile.Profile
+diff --git a/tool/tsh/tsh.go b/tool/tsh/tsh.go
+index 9205be053..629eb1942 100644
+--- a/tool/tsh/tsh.go
++++ b/tool/tsh/tsh.go
+@@ -231,6 +231,11 @@ type CLIConf struct {
+ 	// PreserveAttrs preserves access/modification times from the original file.
+ 	PreserveAttrs bool
+ 
++	// HomePath is a custom base directory where tsh stores its configuration,
++	// profiles, keys and certificates. When empty, the OS default location is
++	// used.
++	HomePath string
++
+ 	// executablePath is the absolute path to the current executable.
+ 	executablePath string
+ 
+@@ -272,6 +277,9 @@ const (
+ 	userEnvVar             = "TELEPORT_USER"
+ 	addKeysToAgentEnvVar   = "TELEPORT_ADD_KEYS_TO_AGENT"
+ 	useLocalSSHAgentEnvVar = "TELEPORT_USE_LOCAL_SSH_AGENT"
++	// teleportHomeEnvVar is used to configure a custom base directory for all
++	// tsh data (configuration, profiles, keys and certificates).
++	teleportHomeEnvVar = "TELEPORT_HOME"
+ 
+ 	clusterHelp = "Specify the Teleport cluster to connect"
+ 	browserHelp = "Set to 'none' to suppress browser opening on login"
+@@ -546,6 +554,9 @@ func Run(args []string, opts ...cliOption) error {
+ 	// Read in cluster flag from CLI or environment.
+ 	readClusterFlag(&cf, os.Getenv)
+ 
++	// Read the custom home directory from the environment, if any.
++	readTeleportHome(&cf, os.Getenv)
++
+ 	switch command {
+ 	case ver.FullCommand():
+ 		utils.PrintVersion()
+@@ -1616,6 +1627,16 @@ func makeClient(cf *CLIConf, useProfileLogin bool) (*client.TeleportClient, erro
+ 	// 1: start with the defaults
+ 	c := client.MakeDefaultConfig()
+ 
++	// Use the custom home directory, if one was configured. Keys and
++	// certificates are stored alongside profiles unless an explicit keys
++	// directory was configured.
++	if cf.HomePath != "" {
++		c.HomePath = cf.HomePath
++		if c.KeysDir == "" {
++			c.KeysDir = c.HomePath
++		}
++	}
++
+ 	// ProxyJump is an alias of Proxy flag
+ 	if cf.ProxyJump != "" {
+ 		hosts, err := utils.ParseProxyJump(cf.ProxyJump)
+@@ -2200,6 +2221,16 @@ func readClusterFlag(cf *CLIConf, fn envGetter) {
+ 	}
+ }
+ 
++// readTeleportHome reads the TELEPORT_HOME environment variable using the
++// supplied lookup function and, when it is set to a non-empty value, uses the
++// normalized path as the base directory for all tsh data. When the variable is
++// unset or empty, HomePath is left unchanged so the OS default is used.
++func readTeleportHome(cf *CLIConf, fn envGetter) {
++	if teleportHome := fn(teleportHomeEnvVar); teleportHome != "" {
++		cf.HomePath = path.Clean(teleportHome)
++	}
++}
++
+ // envGetter is used to read in the environment. In production "os.Getenv"
+ // is used.
+ type envGetter func(string) string
+diff --git a/tool/tsh/tsh_test.go b/tool/tsh/tsh_test.go
+index 609c88153..476cf26aa 100644
+--- a/tool/tsh/tsh_test.go
++++ b/tool/tsh/tsh_test.go
+@@ -664,6 +664,46 @@ func TestReadClusterFlag(t *testing.T) {
+ 	}
+ }
+ 
++// TestReadTeleportHome tests that the custom home directory is read in correctly.
++func TestReadTeleportHome(t *testing.T) {
++	var tests = []struct {
++		desc        string
++		inCLIConf   CLIConf
++		inHomePath  string
++		outHomePath string
++	}{
++		{
++			desc:        "nothing set",
++			inCLIConf:   CLIConf{},
++			inHomePath:  "",
++			outHomePath: "",
++		},
++		{
++			desc:        "TELEPORT_HOME set",
++			inCLIConf:   CLIConf{},
++			inHomePath:  "/home/user/.tsh",
++			outHomePath: "/home/user/.tsh",
++		},
++		{
++			desc:        "TELEPORT_HOME with redundant separators is cleaned",
++			inCLIConf:   CLIConf{},
++			inHomePath:  "/home//user/./.tsh/",
++			outHomePath: "/home/user/.tsh",
++		},
++	}
++	for _, tt := range tests {
++		t.Run(tt.desc, func(t *testing.T) {
++			readTeleportHome(&tt.inCLIConf, func(envName string) string {
++				if envName == teleportHomeEnvVar {
++					return tt.inHomePath
++				}
++				return ""
++			})
++			require.Equal(t, tt.outHomePath, tt.inCLIConf.HomePath)
++		})
++	}
++}
++
+ func TestKubeConfigUpdate(t *testing.T) {
+ 	t.Parallel()
+ 	// don't need real creds for this test, just something to compare against

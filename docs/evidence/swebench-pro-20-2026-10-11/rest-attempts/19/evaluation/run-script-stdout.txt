@@ -1,0 +1,1165 @@
+Running selected tests: TestFormatConnectCommand/default_database_is_specified TestRelogin TestMakeClient TestFetchDatabaseCreds TestKubeConfigUpdate/no_tsh_path TestOptions/Incomplete_option TestResolveDefaultAddrSingleCandidate TestOptions/Forward_Agent_No TestOptions/Invalid_key TestReadClusterFlag/TELEPORT_SITE_and_TELEPORT_CLUSTER_and_CLI_flag_is_set _prefer_CLI TestOptions/Forward_Agent_Yes TestOptions/Equals_Sign_Delimited TestFailedLogin TestKubeConfigUpdate/invalid_selected_cluster TestOptions/Forward_Agent_Local TestKubeConfigUpdate/no_selected_cluster TestOptions/AddKeysToAgent_Invalid_Value TestResolveDefaultAddr TestReadTeleportHome/Environment_not_is_set TestResolveUndeliveredBodyDoesNotBlockForever TestResolveDefaultAddrTimeoutBeforeAllRacersLaunched TestOIDCLogin TestKubeConfigUpdate TestResolveNonOKResponseIsAnError TestResolveDefaultAddrTimeout TestFormatConnectCommand/default_user/database_are_specified TestIdentityRead TestReadClusterFlag/TELEPORT_SITE_and_TELEPORT_CLUSTER_set _prefer_TELEPORT_CLUSTER TestOptions TestKubeConfigUpdate/selected_cluster TestReadTeleportHome/Environment_is_set TestOptions/Space_Delimited TestFormatConnectCommand/unsupported_database_protocol TestReadClusterFlag/nothing_set TestReadTeleportHome TestFormatConnectCommand/default_user_is_specified TestReadClusterFlag/TELEPORT_CLUSTER_set TestFormatConnectCommand TestReadClusterFlag TestReadClusterFlag/TELEPORT_SITE_set TestOptions/Forward_Agent_InvalidValue TestResolveDefaultAddrNoCandidates TestKubeConfigUpdate/no_kube_clusters TestFormatConnectCommand/no_default_user/database_are_specified TestMakeClientHomePath
+=== RUN   TestFetchDatabaseCreds
+2026-10-11T10:47:14Z DEBU [TSH]       Web proxy port was not set. Attempting to detect port number to use. tsh/tsh.go:1869
+2026-10-11T10:47:14Z DEBU [TSH]       Resolving default proxy port (insecure: false) tsh/resolve_default_addr.go:121
+2026-10-11T10:47:14Z DEBU [TSH]       Trying 264a3ebe-4c8a-4340-a6b4-59b6ae6c9fc7:3080... tsh/resolve_default_addr.go:109
+2026-10-11T10:47:14Z DEBU [TSH]       Race request failed error:[Get "https://264a3ebe-4c8a-4340-a6b4-59b6ae6c9fc7:3080/webapi/ping": dial tcp: lookup 264a3ebe-4c8a-4340-a6b4-59b6ae6c9fc7 on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+2026-10-11T10:47:15Z DEBU [TSH]       Trying 264a3ebe-4c8a-4340-a6b4-59b6ae6c9fc7:443... tsh/resolve_default_addr.go:109
+2026-10-11T10:47:15Z DEBU [TSH]       Race request failed error:[Get "https://264a3ebe-4c8a-4340-a6b4-59b6ae6c9fc7:443/webapi/ping": dial tcp: lookup 264a3ebe-4c8a-4340-a6b4-59b6ae6c9fc7 on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+2026-10-11T10:47:15Z DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+2026-10-11T10:47:15Z DEBU [TSH]       Proxy port resolution failed, falling back to legacy default. error:[Get "https://264a3ebe-4c8a-4340-a6b4-59b6ae6c9fc7:443/webapi/ping": dial tcp: lookup 264a3ebe-4c8a-4340-a6b4-59b6ae6c9fc7 on 10.3.9.5:53: no such host] tsh/tsh.go:1878
+2026-10-11T10:47:15Z INFO [CLIENT]    No teleport login given. defaulting to root client/api.go:1035
+2026-10-11T10:47:15Z INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+2026-10-11T10:47:15Z DEBU [CLIENT]    Skipping connection to the local ssh-agent. client/keyagent.go:138
+2026-10-11T10:47:15Z DEBU [CLIENT]    open /root/.tsh/264a3ebe-4c8a-4340-a6b4-59b6ae6c9fc7.yaml: no such file or directory client/api.go:711
+--- PASS: TestFetchDatabaseCreds (0.26s)
+=== RUN   TestResolveDefaultAddr
+=== PAUSE TestResolveDefaultAddr
+=== RUN   TestResolveDefaultAddrNoCandidates
+=== PAUSE TestResolveDefaultAddrNoCandidates
+=== RUN   TestResolveDefaultAddrSingleCandidate
+=== PAUSE TestResolveDefaultAddrSingleCandidate
+=== RUN   TestResolveDefaultAddrTimeout
+=== PAUSE TestResolveDefaultAddrTimeout
+=== RUN   TestResolveNonOKResponseIsAnError
+=== PAUSE TestResolveNonOKResponseIsAnError
+=== RUN   TestResolveUndeliveredBodyDoesNotBlockForever
+=== PAUSE TestResolveUndeliveredBodyDoesNotBlockForever
+=== RUN   TestResolveDefaultAddrTimeoutBeforeAllRacersLaunched
+=== PAUSE TestResolveDefaultAddrTimeoutBeforeAllRacersLaunched
+=== RUN   TestFailedLogin
+INFO             Generating new host UUID: b9c7e0d5-0f63-4fc0-8885-565252e7f4fc. service/service.go:617
+2026-10-11T10:47:15Z DEBU [SQLITE]    Connected to: file:/tmp/TestFailedLogin493547468/001/proc/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+2026-10-11T10:47:15Z DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+2026-10-11T10:47:15Z DEBU [KEYGEN]    SSH cert authority is going to pre-compute 25 keys. native/native.go:99
+2026-10-11T10:47:15Z DEBU [SQLITE]    Connected to: file:/tmp/TestFailedLogin493547468/001/backend/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+2026-10-11T10:47:15Z DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+2026-10-11T10:47:15Z INFO [AUTH]      Applying 1 bootstrap resources (first initialization) auth/init.go:198
+2026-10-11T10:47:15Z DEBU [AUTH]      Cluster configuration: ClusterName(localhost). auth/init.go:296
+2026-10-11T10:47:15Z INFO [AUTH]      Updating cluster configuration: StaticTokens([ProvisionToken(Roles=[Proxy], Expires=2026-10-11 10:48:15.16959906 +0000 UTC m=+60.268869755)]). auth/init.go:302
+2026-10-11T10:47:15Z INFO [AUTH]      Updating auth preference: AuthPreference(Type="local",SecondFactor="otp"). auth/init.go:518
+2026-10-11T10:47:15Z INFO [AUTH]      Created namespace: "default". auth/init.go:314
+2026-10-11T10:47:15Z INFO [AUTH]      Created default admin role: "admin". auth/init.go:323
+2026-10-11T10:47:15Z INFO [AUTH]      First start: generating user certificate authority. auth/init.go:333
+2026-10-11T10:47:15Z INFO [AUTH]      First start: generating host certificate authority. auth/init.go:393
+2026-10-11T10:47:15Z INFO [AUTH]      Migrate: Adding JWT key to existing cluster "localhost". auth/init.go:462
+2026-10-11T10:47:15Z INFO [AUTH]      Enabling RBAC in OSS Teleport. Migrating users, roles and trusted clusters. auth/init.go:624
+2026-10-11T10:47:15Z INFO [AUTH]      Migration completed. Created 1 roles, updated 0 users, 0 trusted clusters and 0 Github connectors. auth/init.go:642
+2026-10-11T10:47:15Z DEBU [AUTH]      Migrations: skipping local cluster cert authority "localhost". auth/init.go:1201
+2026-10-11T10:47:15Z INFO [AUTH]      Auth server is running periodic operations. auth/init.go:493
+2026-10-11T10:47:15Z DEBU [AUTH]      Ticking with period: 14s. auth/auth.go:315
+2026-10-11T10:47:15Z DEBU [KEYGEN]    Generated SSH host certificate for role Admin with principals: [b9c7e0d5-0f63-4fc0-8885-565252e7f4fc localhost]. native/native.go:232
+2026-10-11T10:47:15Z INFO [CA]        Generating TLS certificate {0x45239d0 0xc0007ba050 1.3.9999.1.7=#13096c6f63616c686f7374,CN=b9c7e0d5-0f63-4fc0-8885-565252e7f4fc.localhost,O=Admin,POSTALCODE=null,STREET= 2036-10-08 10:47:15.582571355 +0000 UTC [localhost *.teleport.cluster.local teleport.cluster.local]}. common_name:b9c7e0d5-0f63-4fc0-8885-565252e7f4fc.localhost dns_names:[localhost *.teleport.cluster.local teleport.cluster.local] locality:[] not_after:2036-10-08 10:47:15.582571355 +0000 UTC org:[Admin] org_unit:[] tlsca/ca.go:600
+INFO [PROC:1]    Admin has obtained credentials to connect to cluster. service/connect.go:385
+INFO [PROC:1]    The process has successfully wrote credentials and state of Admin to disk. service/connect.go:426
+INFO [PROC:1]    Service auth is creating new listener on 127.0.0.1:0. service/signals.go:213
+2026-10-11T10:47:15Z DEBU [AUTH]      GRPC(SERVER): keep alive 1m0s count: 3. auth/grpcserver.go:2645
+WARN [AUTH:1]    Configuration setting auth_service/advertise_ip is not set. guessing 127.0.0.1:34201. service/service.go:1341
+2026-10-11T10:47:15Z DEBU [AUTH:BEAT] Starting Auth heartbeat with announce period: 1m0s, keep-alive period 5m0.925496179s, poll period: 5s srv/heartbeat.go:143
+INFO [AUTH:1]    Auth service 7.0.0-dev: is starting on 127.0.0.1:34201. utils/cli.go:272
+[AUTH]         Auth service 7.0.0-dev: is starting on 127.0.0.1:34201.
+INFO [PROC:1]    The new service has started successfully. Starting syncing rotation status with period 10m0s. service/connect.go:438
+INFO             Generating new host UUID: 44593902-f0ad-4c62-8627-9d28196dd21c. service/service.go:617
+2026-10-11T10:47:15Z DEBU [SQLITE]    Connected to: file:/tmp/TestFailedLogin493547468/002/proc/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+2026-10-11T10:47:15Z DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+2026-10-11T10:47:15Z DEBU [KEYGEN]    SSH cert authority is going to pre-compute 25 keys. native/native.go:99
+WARN             No TLS Keys provided, using self signed certificate. service/service.go:3318
+WARN             Generating self signed key and cert to /tmp/TestFailedLogin493547468/002/webproxy_key.pem /tmp/TestFailedLogin493547468/002/webproxy_cert.pem. service/service.go:3336
+INFO [PROC:2]    Joining the cluster with a secure token. service/connect.go:356
+2026-10-11T10:47:15Z DEBU [AUTH]      Registering node to the cluster. auth-servers:[{127.0.0.1:34201 tcp }] auth/register.go:125
+2026-10-11T10:47:15Z INFO [AUTH]      Attempting registration with auth server. auth/register.go:145
+2026-10-11T10:47:15Z WARN [AUTH]      Joining cluster without validating the identity of the Auth Server. This may open you up to a Man-In-The-Middle (MITM) attack if an attacker can gain privileged network access. To remedy this, use the CA pin value provided when join token was generated to validate the identity of the Auth Server. auth/register.go:250
+2026-10-11T10:47:15Z DEBU [AUTH:1]    Client "127.0.0.1:56472" sent "teleport.cluster.local" in SNI, which causes this auth server to send all known CAs in TLS handshake. If this client is version 4.2 or older, this is expected; if this client is version 4.3 or above, please let us know at https://github.com/gravitational/teleport/issues/new auth/middleware.go:249
+2026-10-11T10:47:15Z DEBU [AUTH:1]    Client "127.0.0.1:56478" sent "teleport.cluster.local" in SNI, which causes this auth server to send all known CAs in TLS handshake. If this client is version 4.2 or older, this is expected; if this client is version 4.3 or above, please let us know at https://github.com/gravitational/teleport/issues/new auth/middleware.go:249
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:310426921074581588952415791160029166221) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:110133648764481197607416326605228046996) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH:1]    Server certificate cert(b9c7e0d5-0f63-4fc0-8885-565252e7f4fc.localhost issued by localhost:310426921074581588952415791160029166221). auth/middleware.go:297
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:310426921074581588952415791160029166221) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:110133648764481197607416326605228046996) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH:1]    Server certificate cert(b9c7e0d5-0f63-4fc0-8885-565252e7f4fc.localhost issued by localhost:310426921074581588952415791160029166221). auth/middleware.go:297
+2026-10-11T10:47:15Z INFO [AUTH]      Node "localhost" [44593902-f0ad-4c62-8627-9d28196dd21c] is trying to join with role: Proxy. auth/auth.go:1550
+2026-10-11T10:47:15Z DEBU [KEYGEN]    Generated SSH host certificate for role Proxy with principals: [44593902-f0ad-4c62-8627-9d28196dd21c.localhost 44593902-f0ad-4c62-8627-9d28196dd21c localhost.localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local]. native/native.go:232
+2026-10-11T10:47:15Z INFO [CA]        Generating TLS certificate {0x45239d0 0xc000208a90 1.3.9999.1.7=#13096c6f63616c686f7374,CN=44593902-f0ad-4c62-8627-9d28196dd21c.localhost,O=Proxy,POSTALCODE=null,STREET= 2036-10-08 10:47:15.700932705 +0000 UTC [localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local *.teleport.cluster.local teleport.cluster.local]}. common_name:44593902-f0ad-4c62-8627-9d28196dd21c.localhost dns_names:[localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local *.teleport.cluster.local teleport.cluster.local] locality:[] not_after:2036-10-08 10:47:15.700932705 +0000 UTC org:[Proxy] org_unit:[] tlsca/ca.go:600
+2026-10-11T10:47:15Z INFO [AUTH]      Node "localhost" [44593902-f0ad-4c62-8627-9d28196dd21c] has joined the cluster. auth/auth.go:1584
+2026-10-11T10:47:15Z INFO [AUTH]      Successfully registered with auth server. auth/register.go:152
+INFO [PROC:2]    Proxy has obtained credentials to connect to cluster. service/connect.go:385
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:310426921074581588952415791160029166221) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:110133648764481197607416326605228046996) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:310426921074581588952415791160029166221) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH:1]    Server certificate cert(b9c7e0d5-0f63-4fc0-8885-565252e7f4fc.localhost issued by localhost:310426921074581588952415791160029166221). auth/middleware.go:297
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:110133648764481197607416326605228046996) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH:1]    Server certificate cert(b9c7e0d5-0f63-4fc0-8885-565252e7f4fc.localhost issued by localhost:310426921074581588952415791160029166221). auth/middleware.go:297
+INFO [PROC:2]    The process has successfully wrote credentials and state of Proxy to disk. service/connect.go:426
+INFO [PROC:2]    Proxy: features loaded from auth server: Kubernetes:true App:true DB:true  service/connect.go:61
+INFO [PROC:2]    Service proxy:ssh is creating new listener on 127.0.0.1:0. service/signals.go:213
+INFO [PROC:2]    Service proxy:tunnel:web is creating new listener on 127.0.0.1:0. service/signals.go:213
+2026-10-11T10:47:15Z DEBU [SSH:PROXY] Supported ciphers: ["aes128-gcm@openssh.com" "chacha20-poly1305@openssh.com" "aes128-ctr" "aes192-ctr" "aes256-ctr"]. sshutils/server.go:228
+2026-10-11T10:47:15Z DEBU [SSH:PROXY] Supported KEX algorithms: ["curve25519-sha256@libssh.org" "ecdh-sha2-nistp256" "ecdh-sha2-nistp384" "ecdh-sha2-nistp521"]. sshutils/server.go:238
+2026-10-11T10:47:15Z DEBU [SSH:PROXY] Supported MAC algorithms: ["hmac-sha2-256-etm@openssh.com" "hmac-sha2-256"]. sshutils/server.go:248
+INFO [PROXY:SER] Reverse tunnel service 7.0.0-dev: is starting on 127.0.0.1:0. utils/cli.go:272
+[PROXY]        Reverse tunnel service 7.0.0-dev: is starting on 127.0.0.1:0.
+INFO [PROXY:SER] Starting 7.0.0-dev: on 127.0.0.1:0 using no cache policy service/service.go:2500
+2026-10-11T10:47:15Z DEBU [SSH:PROXY] Listening on 127.0.0.1:33383. sshutils/server.go:381
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:310426921074581588952415791160029166221) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:110133648764481197607416326605228046996) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH:1]    Server certificate cert(b9c7e0d5-0f63-4fc0-8885-565252e7f4fc.localhost issued by localhost:310426921074581588952415791160029166221). auth/middleware.go:297
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:310426921074581588952415791160029166221) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:110133648764481197607416326605228046996) auth/middleware.go:592
+2026-10-11T10:47:15Z DEBU [AUTH:1]    Server certificate cert(b9c7e0d5-0f63-4fc0-8885-565252e7f4fc.localhost issued by localhost:310426921074581588952415791160029166221). auth/middleware.go:297
+INFO [PROXY:SER] Loading TLS certificate /tmp/TestFailedLogin493547468/002/webproxy_cert.pem and key /tmp/TestFailedLogin493547468/002/webproxy_key.pem. service/service.go:2616
+INFO [PROXY:SER] Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0. utils/cli.go:272
+[PROXY]        Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0.
+INFO [PROXY:SER] Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0. service/service.go:2660
+DEBU [CLIENT]    Failed to stat file: stat /root/.tsh: no such file or directory. client/api.go:680
+DEBU [SSH:PROXY] Supported ciphers: ["aes128-gcm@openssh.com" "chacha20-poly1305@openssh.com" "aes128-ctr" "aes192-ctr" "aes256-ctr"]. sshutils/server.go:228
+DEBU [SSH:PROXY] Supported KEX algorithms: ["curve25519-sha256@libssh.org" "ecdh-sha2-nistp256" "ecdh-sha2-nistp384" "ecdh-sha2-nistp521"]. sshutils/server.go:238
+DEBU [SSH:PROXY] Supported MAC algorithms: ["hmac-sha2-256-etm@openssh.com" "hmac-sha2-256"]. sshutils/server.go:248
+INFO [CLIENT]    No teleport login given. defaulting to root client/api.go:1035
+INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+DEBU [PROXY:BEA] Starting Proxy heartbeat with announce period: 1m0s, keep-alive period 5m27.949433914s, poll period: 5s srv/heartbeat.go:143
+INFO [PROXY:SER] SSH proxy service 7.0.0-dev: is starting on 127.0.0.1:36381. utils/cli.go:272
+[PROXY]        SSH proxy service 7.0.0-dev: is starting on 127.0.0.1:36381.
+INFO [PROXY:SER] SSH proxy service 7.0.0-dev: is starting on {127.0.0.1:36381 tcp } service/service.go:2705
+INFO [PROC:2]    The new service has started successfully. Starting syncing rotation status with period 10m0s. service/connect.go:438
+ERRO [CLIENT]    [KEY AGENT] Unable to connect to SSH agent on socket: "". client/api.go:2752
+INFO [PROXY:AGE] Starting reverse tunnel agent pool. service/service.go:2730
+DEBU [SSH:PROXY] Listening on 127.0.0.1:36381. sshutils/server.go:381
+DEBU [CLIENT]    attempting to use loopback pool for local proxy addr: 127.0.0.1:33383 client/api.go:2720
+INFO [AUDIT:2]   Creating directory /tmp/TestFailedLogin493547468/002/log. service/service.go:1927
+INFO [DB:SERVIC] Starting Database proxy server on 127.0.0.1:0. service/service.go:2831
+DEBU [CLIENT]    could not open any path in: /var/lib/teleport/webproxy_cert.pem client/api.go:2726
+DEBU [DB:PROXY]  Started database proxy. db/proxyserver.go:133
+INFO [AUDIT:2]   Creating directory /tmp/TestFailedLogin493547468/002/log/upload. service/service.go:1927
+INFO [AUDIT:2]   Creating directory /tmp/TestFailedLogin493547468/002/log/upload/sessions. service/service.go:1927
+INFO [AUDIT:2]   Creating directory /tmp/TestFailedLogin493547468/002/log/upload/sessions/default. service/service.go:1927
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:310426921074581588952415791160029166221) auth/middleware.go:592
+INFO [AUDIT:2]   Creating directory /tmp/TestFailedLogin493547468/002/log. service/service.go:1927
+INFO [AUDIT:2]   Creating directory /tmp/TestFailedLogin493547468/002/log/upload. service/service.go:1927
+INFO [AUDIT:2]   Creating directory /tmp/TestFailedLogin493547468/002/log/upload/streaming. service/service.go:1927
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:110133648764481197607416326605228046996) auth/middleware.go:592
+DEBU [AUTH:1]    Server certificate cert(b9c7e0d5-0f63-4fc0-8885-565252e7f4fc.localhost issued by localhost:310426921074581588952415791160029166221). auth/middleware.go:297
+INFO [AUDIT:2]   Creating directory /tmp/TestFailedLogin493547468/002/log/upload/streaming/default. service/service.go:1927
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:310426921074581588952415791160029166221) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:110133648764481197607416326605228046996) auth/middleware.go:592
+DEBU             Closing. reversetunnel/rc_manager.go:147
+WARN [PROC:1]    Sync rotation state cycle failed: context is closing, going to retry after ~10s. service/connect.go:455
+INFO [PROXY:SER] Shutting down immediately. service/service.go:2865
+INFO [AUDIT:2]   Shutting down. service/service.go:1967
+INFO [WEB]       Closing session cache. web/sessions.go:461
+INFO [AUDIT:2]   Exited. service/service.go:1969
+DEBU [SESSION:P] Closing Session Registry. srv/sess.go:120
+DEBU [AUDIT]     Uploader is exiting. events/uploader.go:158
+DEBU [AUTH:BEAT] Heartbeat exited. srv/heartbeat.go:269
+INFO [AUDIT:2]   File uploader is shutting down. service/service.go:1993
+DEBU [PROXY:2]   Closing. reversetunnel/srv.go:379
+INFO [AUTH:1]    Shutting down immediately. service/service.go:1404
+INFO [AUDIT:2]   File uploader has shut down. service/service.go:1995
+INFO [PROXY:SER] Exited. service/service.go:2901
+DEBU [SSH:PROXY] Server 127.0.0.1:36381 has closed. sshutils/server.go:386
+DEBU [PROXY:BEA] Heartbeat exited. srv/heartbeat.go:269
+DEBU [DB:PROXY]  Database proxy exited. db/proxyserver.go:141
+INFO [PROXY:SER] Exited. service/service.go:2666
+WARN [PROXY:2]   Re-init the watcher on error: context is closing. services/proxywatcher.go:189
+INFO [AUTH:1]    Exited. service/service.go:1414
+DEBU [PROXY:2]   Reloading Linear(attempt=0, duration=0s). services/proxywatcher.go:191
+INFO [WEB]       Closing session cache. web/sessions.go:461
+DEBU [SSH:PROXY] Server 127.0.0.1:33383 has closed. sshutils/server.go:386
+WARN [PROXY:2]   Re-init the watcher on error: rpc error: code = Canceled desc = context canceled. services/proxywatcher.go:189
+DEBU [PROXY:2]   Reloading Linear(attempt=1, duration=1s). services/proxywatcher.go:191
+DEBU [PROXY:2]   Closed, returning from update loop. services/proxywatcher.go:200
+WARN [AUTH:1]    TLS server exited with error: http: Server closed. service/service.go:1296
+--- PASS: TestFailedLogin (0.74s)
+=== RUN   TestOIDCLogin
+INFO             Generating new host UUID: e91bc5c1-f715-4dde-ad53-d5f59cf1796b. service/service.go:617
+DEBU [SQLITE]    Connected to: file:/tmp/TestOIDCLogin3026388493/001/proc/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+DEBU [KEYGEN]    SSH cert authority is going to pre-compute 25 keys. native/native.go:99
+DEBU [SQLITE]    Connected to: file:/tmp/TestOIDCLogin3026388493/001/backend/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+INFO [AUTH]      Applying 4 bootstrap resources (first initialization) auth/init.go:198
+DEBU [AUTH]      Cluster configuration: ClusterName(localhost). auth/init.go:296
+INFO [AUTH]      Updating cluster configuration: StaticTokens([ProvisionToken(Roles=[Proxy], Expires=2026-10-11 10:48:15.91224771 +0000 UTC m=+61.011518400)]). auth/init.go:302
+INFO [AUTH]      Updating auth preference: AuthPreference(Type="local",SecondFactor="otp"). auth/init.go:518
+INFO [AUTH]      Created namespace: "default". auth/init.go:314
+INFO [AUTH]      Created default admin role: "admin". auth/init.go:323
+INFO [AUTH]      First start: generating user certificate authority. auth/init.go:333
+INFO [KEYGEN]    Stopping key precomputation routine. native/native.go:139
+INFO [KEYGEN]    Stopping key precomputation routine. native/native.go:139
+INFO [AUTH]      First start: generating host certificate authority. auth/init.go:393
+INFO [AUTH]      Migrate: Adding JWT key to existing cluster "localhost". auth/init.go:462
+DEBU [AUTH]      Migrations: skipping local cluster cert authority "localhost". auth/init.go:1201
+INFO [AUTH]      Auth server is running periodic operations. auth/init.go:493
+DEBU [AUTH]      Ticking with period: 12s. auth/auth.go:315
+DEBU [KEYGEN]    Generated SSH host certificate for role Admin with principals: [e91bc5c1-f715-4dde-ad53-d5f59cf1796b localhost]. native/native.go:232
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc00084e0f0 1.3.9999.1.7=#13096c6f63616c686f7374,CN=e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost,O=Admin,POSTALCODE=null,STREET= 2036-10-08 10:47:16.543867371 +0000 UTC [localhost *.teleport.cluster.local teleport.cluster.local]}. common_name:e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost dns_names:[localhost *.teleport.cluster.local teleport.cluster.local] locality:[] not_after:2036-10-08 10:47:16.543867371 +0000 UTC org:[Admin] org_unit:[] tlsca/ca.go:600
+INFO [PROC:3]    Admin has obtained credentials to connect to cluster. service/connect.go:385
+INFO [PROC:3]    The process has successfully wrote credentials and state of Admin to disk. service/connect.go:426
+INFO [PROC:3]    Service auth is creating new listener on 127.0.0.1:0. service/signals.go:213
+DEBU [AUTH]      GRPC(SERVER): keep alive 1m0s count: 3. auth/grpcserver.go:2645
+WARN [AUTH:3]    Configuration setting auth_service/advertise_ip is not set. guessing 127.0.0.1:36805. service/service.go:1341
+DEBU [AUTH:BEAT] Starting Auth heartbeat with announce period: 1m0s, keep-alive period 5m22.639576535s, poll period: 5s srv/heartbeat.go:143
+INFO [AUTH:3]    Auth service 7.0.0-dev: is starting on 127.0.0.1:36805. utils/cli.go:272
+[AUTH]         Auth service 7.0.0-dev: is starting on 127.0.0.1:36805.
+INFO [PROC:3]    The new service has started successfully. Starting syncing rotation status with period 10m0s. service/connect.go:438
+INFO             Generating new host UUID: f52d0d0b-c8ef-4bff-8574-203e8922098b. service/service.go:617
+DEBU [SQLITE]    Connected to: file:/tmp/TestOIDCLogin3026388493/002/proc/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+DEBU [KEYGEN]    SSH cert authority is going to pre-compute 25 keys. native/native.go:99
+WARN             No TLS Keys provided, using self signed certificate. service/service.go:3318
+WARN             Generating self signed key and cert to /tmp/TestOIDCLogin3026388493/002/webproxy_key.pem /tmp/TestOIDCLogin3026388493/002/webproxy_cert.pem. service/service.go:3336
+INFO [PROC:4]    Joining the cluster with a secure token. service/connect.go:356
+DEBU [SQLITE]    Initialized event ID iterator to 20 lite/periodic.go:144
+DEBU [BUFFER]    Add Watcher(name=, prefixes=/authorities, capacity=1024, size=0). backend/buffer.go:233
+DEBU [AUTH]      Registering node to the cluster. auth-servers:[{127.0.0.1:36805 tcp }] auth/register.go:125
+INFO [AUTH]      Attempting registration with auth server. auth/register.go:145
+WARN [AUTH]      Joining cluster without validating the identity of the Auth Server. This may open you up to a Man-In-The-Middle (MITM) attack if an attacker can gain privileged network access. To remedy this, use the CA pin value provided when join token was generated to validate the identity of the Auth Server. auth/register.go:250
+DEBU [AUTH:3]    Client "127.0.0.1:39580" sent "teleport.cluster.local" in SNI, which causes this auth server to send all known CAs in TLS handshake. If this client is version 4.2 or older, this is expected; if this client is version 4.3 or above, please let us know at https://github.com/gravitational/teleport/issues/new auth/middleware.go:249
+DEBU [AUTH:3]    Client "127.0.0.1:39592" sent "teleport.cluster.local" in SNI, which causes this auth server to send all known CAs in TLS handshake. If this client is version 4.2 or older, this is expected; if this client is version 4.3 or above, please let us know at https://github.com/gravitational/teleport/issues/new auth/middleware.go:249
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+INFO [AUTH]      Node "localhost" [f52d0d0b-c8ef-4bff-8574-203e8922098b] is trying to join with role: Proxy. auth/auth.go:1550
+DEBU [KEYGEN]    Generated SSH host certificate for role Proxy with principals: [f52d0d0b-c8ef-4bff-8574-203e8922098b.localhost f52d0d0b-c8ef-4bff-8574-203e8922098b localhost.localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local]. native/native.go:232
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc000b048a0 1.3.9999.1.7=#13096c6f63616c686f7374,CN=f52d0d0b-c8ef-4bff-8574-203e8922098b.localhost,O=Proxy,POSTALCODE=null,STREET= 2036-10-08 10:47:17.079820136 +0000 UTC [localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local *.teleport.cluster.local teleport.cluster.local]}. common_name:f52d0d0b-c8ef-4bff-8574-203e8922098b.localhost dns_names:[localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local *.teleport.cluster.local teleport.cluster.local] locality:[] not_after:2036-10-08 10:47:17.079820136 +0000 UTC org:[Proxy] org_unit:[] tlsca/ca.go:600
+INFO [AUTH]      Node "localhost" [f52d0d0b-c8ef-4bff-8574-203e8922098b] has joined the cluster. auth/auth.go:1584
+INFO [AUTH]      Successfully registered with auth server. auth/register.go:152
+INFO [PROC:4]    Proxy has obtained credentials to connect to cluster. service/connect.go:385
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+INFO [PROC:4]    The process has successfully wrote credentials and state of Proxy to disk. service/connect.go:426
+INFO [PROC:4]    Proxy: features loaded from auth server: Kubernetes:true App:true DB:true AccessControls:true AdvancedAccessWorkflows:true  service/connect.go:61
+INFO [PROC:4]    Service proxy:ssh is creating new listener on 127.0.0.1:0. service/signals.go:213
+INFO [PROC:4]    Service proxy:tunnel:web is creating new listener on 127.0.0.1:0. service/signals.go:213
+DEBU [SSH:PROXY] Supported ciphers: ["aes128-gcm@openssh.com" "chacha20-poly1305@openssh.com" "aes128-ctr" "aes192-ctr" "aes256-ctr"]. sshutils/server.go:228
+DEBU [SSH:PROXY] Supported KEX algorithms: ["curve25519-sha256@libssh.org" "ecdh-sha2-nistp256" "ecdh-sha2-nistp384" "ecdh-sha2-nistp521"]. sshutils/server.go:238
+DEBU [SSH:PROXY] Supported MAC algorithms: ["hmac-sha2-256-etm@openssh.com" "hmac-sha2-256"]. sshutils/server.go:248
+INFO [PROXY:SER] Reverse tunnel service 7.0.0-dev: is starting on 127.0.0.1:0. utils/cli.go:272
+[PROXY]        Reverse tunnel service 7.0.0-dev: is starting on 127.0.0.1:0.
+INFO [PROXY:SER] Starting 7.0.0-dev: on 127.0.0.1:0 using no cache policy service/service.go:2500
+DEBU [SSH:PROXY] Listening on 127.0.0.1:38387. sshutils/server.go:381
+DEBU [BUFFER]    Add Watcher(name=f52d0d0b-c8ef-4bff-8574-203e8922098b.localhost, prefixes=/proxies, capacity=8192, size=0). backend/buffer.go:233
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+INFO [PROXY:SER] Loading TLS certificate /tmp/TestOIDCLogin3026388493/002/webproxy_cert.pem and key /tmp/TestOIDCLogin3026388493/002/webproxy_key.pem. service/service.go:2616
+WARN [PROXY:4]   Re-init the watcher on error: empty proxy list. services/proxywatcher.go:189
+DEBU [PROXY:4]   Reloading Linear(attempt=0, duration=0s). services/proxywatcher.go:191
+DEBU [BUFFER]    Removed watcher 0xc0004805b0 via external close. backend/buffer.go:254
+INFO [PROXY:SER] Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0. utils/cli.go:272
+[PROXY]        Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0.
+INFO [PROXY:SER] Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0. service/service.go:2660
+DEBU [CLIENT]    Failed to stat file: stat /root/.tsh: no such file or directory. client/api.go:680
+DEBU [SSH:PROXY] Supported ciphers: ["aes128-gcm@openssh.com" "chacha20-poly1305@openssh.com" "aes128-ctr" "aes192-ctr" "aes256-ctr"]. sshutils/server.go:228
+DEBU [SSH:PROXY] Supported KEX algorithms: ["curve25519-sha256@libssh.org" "ecdh-sha2-nistp256" "ecdh-sha2-nistp384" "ecdh-sha2-nistp521"]. sshutils/server.go:238
+DEBU [SSH:PROXY] Supported MAC algorithms: ["hmac-sha2-256-etm@openssh.com" "hmac-sha2-256"]. sshutils/server.go:248
+DEBU [PROXY:BEA] Starting Proxy heartbeat with announce period: 1m0s, keep-alive period 5m25.936315637s, poll period: 5s srv/heartbeat.go:143
+INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+INFO [PROXY:SER] SSH proxy service 7.0.0-dev: is starting on 127.0.0.1:35529. utils/cli.go:272
+[PROXY]        SSH proxy service 7.0.0-dev: is starting on 127.0.0.1:35529.
+INFO [PROXY:SER] SSH proxy service 7.0.0-dev: is starting on {127.0.0.1:35529 tcp } service/service.go:2705
+INFO [PROC:4]    The new service has started successfully. Starting syncing rotation status with period 10m0s. service/connect.go:438
+INFO [AUDIT:4]   Creating directory /tmp/TestOIDCLogin3026388493/002/log. service/service.go:1927
+INFO [PROXY:AGE] Starting reverse tunnel agent pool. service/service.go:2730
+INFO [DB:SERVIC] Starting Database proxy server on 127.0.0.1:0. service/service.go:2831
+DEBU [SSH:PROXY] Listening on 127.0.0.1:35529. sshutils/server.go:381
+DEBU [DB:PROXY]  Started database proxy. db/proxyserver.go:133
+INFO [AUDIT:4]   Creating directory /tmp/TestOIDCLogin3026388493/002/log/upload. service/service.go:1927
+INFO [AUDIT:4]   Creating directory /tmp/TestOIDCLogin3026388493/002/log/upload/sessions. service/service.go:1927
+WARN [PROXY:4]   Re-init the watcher on error: empty proxy list. services/proxywatcher.go:189
+INFO [AUDIT:4]   Creating directory /tmp/TestOIDCLogin3026388493/002/log/upload/sessions/default. service/service.go:1927
+DEBU [PROXY:4]   Reloading Linear(attempt=1, duration=1s). services/proxywatcher.go:191
+ERRO [CLIENT]    [KEY AGENT] Unable to connect to SSH agent on socket: "". client/api.go:2752
+INFO [AUDIT:4]   Creating directory /tmp/TestOIDCLogin3026388493/002/log. service/service.go:1927
+INFO [AUDIT:4]   Creating directory /tmp/TestOIDCLogin3026388493/002/log/upload. service/service.go:1927
+INFO [AUDIT:4]   Creating directory /tmp/TestOIDCLogin3026388493/002/log/upload/streaming. service/service.go:1927
+DEBU [CLIENT]    attempting to use loopback pool for local proxy addr: 127.0.0.1:38387 client/api.go:2720
+INFO [AUDIT:4]   Creating directory /tmp/TestOIDCLogin3026388493/002/log/upload/streaming/default. service/service.go:1927
+DEBU [BUFFER]    Removed watcher 0xc000148540 via external close. backend/buffer.go:254
+DEBU [CLIENT]    could not open any path in: /var/lib/teleport/webproxy_cert.pem client/api.go:2726
+DEBU [BUFFER]    Add Watcher(name=f52d0d0b-c8ef-4bff-8574-203e8922098b.localhost, prefixes=/authorities, capacity=8192, size=0). backend/buffer.go:233
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [KEYGEN]    generated user key for [-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425] with expiry on (1791719237) 2026-10-11 11:47:17.162188329 +0000 UTC native/native.go:257
+DEBU [AUTH]      Failed setting default kubernetes cluster for user login (user did not provide a cluster); leaving KubernetesCluster extension in the TLS certificate empty auth/auth.go:796
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc000e50580 1.3.9999.1.7=#13096c6f63616c686f7374,CN=alice@example.com,O=populist,POSTALCODE=null,STREET=localhost,L=-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 2026-10-11 11:47:17.163098857 +0000 UTC []}. common_name:alice@example.com dns_names:[] locality:[-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425] not_after:2026-10-11 11:47:17.163098857 +0000 UTC org:[populist] org_unit:[] tlsca/ca.go:600
+DEBU [KEYAGENT]  Adding CA key for localhost client/keyagent.go:289
+DEBU [KEYSTORE]  Adding known host localhost with key: SHA256:KNfvO6OZQ8FP0PvJEVf1CrQUQ7ZkaEMAGFhJ/MaVT3s client/keystore.go:539
+ERRO [KEYSTORE]  open /root/.tsh/keys/127.0.0.1/alice@example.com: no such file or directory client/keystore.go:243
+INFO [KEYAGENT]  Loading SSH key for user "alice@example.com" and cluster "localhost". client/keyagent.go:167
+INFO [CLIENT]    Connecting proxy=127.0.0.1:35529 login="-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425" client/api.go:2053
+DEBU [KEYAGENT]  Validated host 127.0.0.1:35529. client/keyagent.go:330
+DEBU [PROXY]     conn(127.0.0.1:58274->127.0.0.1:35529, user=-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425) auth attempt fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58274 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:211
+DEBU [PROXY]     conn(127.0.0.1:58274->127.0.0.1:35529, user=-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425) auth attempt with key ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU, &ssh.Certificate{Nonce:[]uint8{0xc7, 0x97, 0x4c, 0x4a, 0xed, 0x8d, 0x7d, 0x76, 0x6b, 0xe, 0xf9, 0x6b, 0x46, 0x26, 0x5, 0x8a, 0x1a, 0xa9, 0xe3, 0x0, 0xd8, 0x39, 0x38, 0x39, 0x14, 0xc8, 0xa5, 0x8b, 0x74, 0xac, 0xa0, 0x34}, Key:(*ssh.rsaPublicKey)(0xc000fb00f0), Serial:0x0, CertType:0x1, KeyId:"alice@example.com", ValidPrincipals:[]string{"-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425"}, ValidAfter:0x6acb68f9, ValidBefore:0x6acb7745, Permissions:ssh.Permissions{CriticalOptions:map[string]string{}, Extensions:map[string]string{"permit-port-forwarding":"", "permit-pty":"", "teleport-roles":"{\"version\":\"v1\",\"roles\":[\"populist\"]}", "teleport-route-to-cluster":"localhost", "teleport-traits":"null"}}, Reserved:[]uint8{}, SignatureKey:(*ssh.rsaPublicKey)(0xc000fb0130), Signature:(*ssh.Signature)(0xc000c78200)} fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58274 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:214
+DEBU [PROXY]     Successfully authenticated fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58274 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:274
+DEBU [SSH:PROXY] Incoming connection 127.0.0.1:58274 -> 127.0.0.1:35529 version: SSH-2.0-Go. sshutils/server.go:457
+INFO [CLIENT]    Successful auth with proxy 127.0.0.1:35529. client/api.go:2061
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Handling request subsystem, want reply true. id:1 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58274 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:1 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58274 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58274] regular/proxy.go:220
+DEBU [PROXY]     Handling request subsystem, want reply true. id:2 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58274 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:2 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58274 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58274] regular/proxy.go:220
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:36805 trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58274] regular/proxy.go:275
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:36805 trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58274] regular/proxy.go:275
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+DEBU [SSH:PROXY] Closed connection 127.0.0.1:58274. sshutils/server.go:462
+DEBU [PROXY]     Client 127.0.0.1:58274 disconnected. id:1 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58274 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:39658->127.0.0.1:36805: use of closed network connection. regular/sshserver.go:1414
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:39642->127.0.0.1:36805: use of closed network connection. regular/sshserver.go:1414
+DEBU [KEYAGENT]  Adding CA key for localhost client/keyagent.go:289
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Client 127.0.0.1:58274 disconnected. id:2 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58274 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [KEYSTORE]  Adding known host localhost with key: SHA256:KNfvO6OZQ8FP0PvJEVf1CrQUQ7ZkaEMAGFhJ/MaVT3s client/keystore.go:539
+INFO [CLIENT]    Connecting proxy=127.0.0.1:35529 login="-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425" client/api.go:2053
+DEBU [KEYAGENT]  Validated host 127.0.0.1:35529. client/keyagent.go:330
+DEBU [PROXY]     conn(127.0.0.1:58276->127.0.0.1:35529, user=-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425) auth attempt fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58276 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:211
+DEBU [PROXY]     conn(127.0.0.1:58276->127.0.0.1:35529, user=-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425) auth attempt with key ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU, &ssh.Certificate{Nonce:[]uint8{0xc7, 0x97, 0x4c, 0x4a, 0xed, 0x8d, 0x7d, 0x76, 0x6b, 0xe, 0xf9, 0x6b, 0x46, 0x26, 0x5, 0x8a, 0x1a, 0xa9, 0xe3, 0x0, 0xd8, 0x39, 0x38, 0x39, 0x14, 0xc8, 0xa5, 0x8b, 0x74, 0xac, 0xa0, 0x34}, Key:(*ssh.rsaPublicKey)(0xc00048ef50), Serial:0x0, CertType:0x1, KeyId:"alice@example.com", ValidPrincipals:[]string{"-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425"}, ValidAfter:0x6acb68f9, ValidBefore:0x6acb7745, Permissions:ssh.Permissions{CriticalOptions:map[string]string{}, Extensions:map[string]string{"permit-port-forwarding":"", "permit-pty":"", "teleport-roles":"{\"version\":\"v1\",\"roles\":[\"populist\"]}", "teleport-route-to-cluster":"localhost", "teleport-traits":"null"}}, Reserved:[]uint8{}, SignatureKey:(*ssh.rsaPublicKey)(0xc00048f040), Signature:(*ssh.Signature)(0xc000e9a600)} fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58276 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:214
+DEBU [PROXY]     Successfully authenticated fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58276 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:274
+DEBU [SSH:PROXY] Incoming connection 127.0.0.1:58276 -> 127.0.0.1:35529 version: SSH-2.0-Go. sshutils/server.go:457
+INFO [CLIENT]    Successful auth with proxy 127.0.0.1:35529. client/api.go:2061
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Handling request subsystem, want reply true. id:3 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58276 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:3 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58276 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58276] regular/proxy.go:220
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:36805 trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58276] regular/proxy.go:275
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+
+Seeking request approval... (id: 40c65b9f-744b-4004-a430-0e02f21ec9a5)
+INFO [CLIENT]    Connecting proxy=127.0.0.1:35529 login="-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425" client/api.go:2053
+DEBU [SSH:PROXY] Closed connection 127.0.0.1:58276. sshutils/server.go:462
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:39662->127.0.0.1:36805: use of closed network connection. regular/sshserver.go:1414
+DEBU [PROXY]     Client 127.0.0.1:58276 disconnected. id:3 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58276 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [KEYAGENT]  Validated host 127.0.0.1:35529. client/keyagent.go:330
+DEBU [PROXY]     conn(127.0.0.1:58282->127.0.0.1:35529, user=-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425) auth attempt fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58282 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:211
+DEBU [PROXY]     conn(127.0.0.1:58282->127.0.0.1:35529, user=-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425) auth attempt with key ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU, &ssh.Certificate{Nonce:[]uint8{0xc7, 0x97, 0x4c, 0x4a, 0xed, 0x8d, 0x7d, 0x76, 0x6b, 0xe, 0xf9, 0x6b, 0x46, 0x26, 0x5, 0x8a, 0x1a, 0xa9, 0xe3, 0x0, 0xd8, 0x39, 0x38, 0x39, 0x14, 0xc8, 0xa5, 0x8b, 0x74, 0xac, 0xa0, 0x34}, Key:(*ssh.rsaPublicKey)(0xc000d0a2a0), Serial:0x0, CertType:0x1, KeyId:"alice@example.com", ValidPrincipals:[]string{"-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425"}, ValidAfter:0x6acb68f9, ValidBefore:0x6acb7745, Permissions:ssh.Permissions{CriticalOptions:map[string]string{}, Extensions:map[string]string{"permit-port-forwarding":"", "permit-pty":"", "teleport-roles":"{\"version\":\"v1\",\"roles\":[\"populist\"]}", "teleport-route-to-cluster":"localhost", "teleport-traits":"null"}}, Reserved:[]uint8{}, SignatureKey:(*ssh.rsaPublicKey)(0xc000d0a3a0), Signature:(*ssh.Signature)(0xc00098fdc0)} fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58282 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:214
+DEBU [PROXY]     Successfully authenticated fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58282 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:274
+DEBU [SSH:PROXY] Incoming connection 127.0.0.1:58282 -> 127.0.0.1:35529 version: SSH-2.0-Go. sshutils/server.go:457
+INFO [CLIENT]    Successful auth with proxy 127.0.0.1:35529. client/api.go:2061
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Handling request subsystem, want reply true. id:4 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58282 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:4 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58282 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58282] regular/proxy.go:220
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:36805 trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58282] regular/proxy.go:275
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+DEBU [BUFFER]    Add Watcher(name=alice@example.com, prefixes=/access_requests, capacity=1024, size=0). backend/buffer.go:233
+INFO [AUDIT]     access_request.create cluster_name:localhost code:T5000I ei:0 event:access_request.create expires:2026-10-11T11:47:17Z id:40c65b9f-744b-4004-a430-0e02f21ec9a5 roles:[dictator] state:PENDING time:2026-10-11T10:47:17.206Z uid:ac3cb30a-c000-4683-9955-9ad9148ff39a user:alice@example.com events/emitter.go:323
+INFO [TSH]       Access-request watcher initialized... tsh/tsh.go:2098
+DEBU [TSH]       Skipping put event id=40c65b9f-744b-4004-a430-0e02f21ec9a5,state=PENDING. tsh/tsh.go:2106
+INFO [AUDIT]     access_request.update cluster_name:localhost code:T5001I ei:0 event:access_request.update expires:2026-10-11T11:47:17Z id:40c65b9f-744b-4004-a430-0e02f21ec9a5 state:APPROVED time:2026-10-11T10:47:17.915Z uid:5be872d7-47fe-41b3-af88-f47c56469ee4 updated_by:system events/emitter.go:323
+DEBU [BUFFER]    Add Watcher(name=f52d0d0b-c8ef-4bff-8574-203e8922098b.localhost, prefixes=/proxies, capacity=8192, size=0). backend/buffer.go:233
+DEBU [PROXY:4]   List of known proxies updated: ["f52d0d0b-c8ef-4bff-8574-203e8922098b"]. services/proxywatcher.go:149
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+
+Approval received, getting updated certificates...
+
+DEBU [SSH:PROXY] Closed connection 127.0.0.1:58282. sshutils/server.go:462
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:39670->127.0.0.1:36805: use of closed network connection. regular/sshserver.go:1414
+DEBU [PROXY]     Client 127.0.0.1:58282 disconnected. id:4 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58282 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [BUFFER]    Removed watcher 0xc000480690 via external close. backend/buffer.go:254
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Reading certificates from path "/root/.tsh/keys/127.0.0.1/alice@example.com-ssh/localhost-cert.pub". client/keystore.go:303
+INFO [CLIENT]    Connecting proxy=127.0.0.1:35529 login="-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425" client/api.go:2053
+DEBU [KEYAGENT]  Validated host 127.0.0.1:35529. client/keyagent.go:330
+DEBU [PROXY]     conn(127.0.0.1:58290->127.0.0.1:35529, user=-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425) auth attempt fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58290 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:211
+DEBU [PROXY]     conn(127.0.0.1:58290->127.0.0.1:35529, user=-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425) auth attempt with key ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU, &ssh.Certificate{Nonce:[]uint8{0xc7, 0x97, 0x4c, 0x4a, 0xed, 0x8d, 0x7d, 0x76, 0x6b, 0xe, 0xf9, 0x6b, 0x46, 0x26, 0x5, 0x8a, 0x1a, 0xa9, 0xe3, 0x0, 0xd8, 0x39, 0x38, 0x39, 0x14, 0xc8, 0xa5, 0x8b, 0x74, 0xac, 0xa0, 0x34}, Key:(*ssh.rsaPublicKey)(0xc00107a6e0), Serial:0x0, CertType:0x1, KeyId:"alice@example.com", ValidPrincipals:[]string{"-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425"}, ValidAfter:0x6acb68f9, ValidBefore:0x6acb7745, Permissions:ssh.Permissions{CriticalOptions:map[string]string{}, Extensions:map[string]string{"permit-port-forwarding":"", "permit-pty":"", "teleport-roles":"{\"version\":\"v1\",\"roles\":[\"populist\"]}", "teleport-route-to-cluster":"localhost", "teleport-traits":"null"}}, Reserved:[]uint8{}, SignatureKey:(*ssh.rsaPublicKey)(0xc00107a720), Signature:(*ssh.Signature)(0xc000fc62c0)} fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58290 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:214
+DEBU [PROXY]     Successfully authenticated fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:UoR3uST2kbg08jplcOXAFC/vBvzXwqKdIdJqKepDfRU local:127.0.0.1:35529 remote:127.0.0.1:58290 user:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 srv/authhandlers.go:274
+INFO [CLIENT]    Successful auth with proxy 127.0.0.1:35529. client/api.go:2061
+DEBU [SSH:PROXY] Incoming connection 127.0.0.1:58290 -> 127.0.0.1:35529 version: SSH-2.0-Go. sshutils/server.go:457
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Handling request subsystem, want reply true. id:5 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58290 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:5 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58290 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58290] regular/proxy.go:220
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:36805 trace.fields:map[dst:127.0.0.1:35529 src:127.0.0.1:58290] regular/proxy.go:275
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:234008099008104188842007546866550657209) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:123709200903474844631290730944057995982) auth/middleware.go:592
+DEBU [AUTH:3]    Server certificate cert(e91bc5c1-f715-4dde-ad53-d5f59cf1796b.localhost issued by localhost:234008099008104188842007546866550657209). auth/middleware.go:297
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+DEBU [KEYGEN]    generated user key for [-teleport-nologin-9cda40c7-3126-48ac-942e-9ae755b78480] with expiry on (1791719237) 2026-10-11 11:47:17.000103831 +0000 UTC native/native.go:257
+DEBU [AUTH]      Failed setting default kubernetes cluster for user login (user did not provide a cluster); leaving KubernetesCluster extension in the TLS certificate empty auth/auth.go:796
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc000b05860 1.3.9999.1.7=#13096c6f63616c686f7374,CN=alice@example.com,O=populist+O=dictator,POSTALCODE=null,STREET=localhost,L=-teleport-nologin-9cda40c7-3126-48ac-942e-9ae755b78480 2026-10-11 11:47:17.002242155 +0000 UTC []}. common_name:alice@example.com dns_names:[] locality:[-teleport-nologin-9cda40c7-3126-48ac-942e-9ae755b78480] not_after:2026-10-11 11:47:17.002242155 +0000 UTC org:[populist dictator] org_unit:[] tlsca/ca.go:600
+DEBU [PROXY]     Client 127.0.0.1:58290 disconnected. id:5 local:127.0.0.1:35529 login:-teleport-nologin-e1620b03-368f-4bfb-af63-5bf22127a425 remote:127.0.0.1:58290 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:39686->127.0.0.1:36805: use of closed network connection. regular/sshserver.go:1414
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+INFO [KEYAGENT]  Loading SSH key for user "alice@example.com" and cluster "localhost". client/keyagent.go:167
+DEBU [SSH:PROXY] Closed connection 127.0.0.1:58290. sshutils/server.go:462
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Reading certificates from path "/root/.tsh/keys/127.0.0.1/alice@example.com-ssh/localhost-cert.pub". client/keystore.go:303
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:17 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Reading certificates from path "/root/.tsh/keys/127.0.0.1/alice@example.com-ssh/localhost-cert.pub". client/keystore.go:303
+> Profile URL:        https://127.0.0.1:38387
+  Logged in as:       alice@example.com
+  Cluster:            localhost
+  Roles:              dictator, populist
+  Logins:             -teleport-nologin-9cda40c7-3126-48ac-942e-9ae755b78480
+  Kubernetes:         disabled
+  Valid until:        2026-10-11 11:47:17 +0000 UTC [valid for 1h0m0s]
+  Extensions:         permit-port-forwarding, permit-pty
+
+INFO [AUDIT:4]   Shutting down. service/service.go:1967
+DEBU             Closing. reversetunnel/rc_manager.go:147
+INFO [KEYGEN]    Stopping key precomputation routine. native/native.go:139
+INFO [AUDIT:4]   Exited. service/service.go:1969
+DEBU [AUDIT]     Uploader is exiting. events/uploader.go:158
+INFO [PROXY:SER] Shutting down immediately. service/service.go:2865
+DEBU [PROXY:4]   Closing. reversetunnel/srv.go:379
+INFO [AUDIT:4]   File uploader is shutting down. service/service.go:1993
+INFO [WEB]       Closing session cache. web/sessions.go:461
+INFO [KEYGEN]    Stopping key precomputation routine. native/native.go:139
+INFO [AUDIT:4]   File uploader has shut down. service/service.go:1995
+DEBU [AUTH:BEAT] Heartbeat exited. srv/heartbeat.go:269
+DEBU [PROXY:BEA] Heartbeat exited. srv/heartbeat.go:269
+DEBU [BUFFER]    Removed watcher 0xc000148850 via external close. backend/buffer.go:254
+DEBU [BUFFER]    Could not find watcher Watcher(name=f52d0d0b-c8ef-4bff-8574-203e8922098b.localhost, prefixes=/authorities, capacity=8192, size=0). backend/buffer.go:257
+WARN [PROXY:4]   Re-init the watcher on error: watcher is closed. services/proxywatcher.go:189
+DEBU [SESSION:P] Closing Session Registry. srv/sess.go:120
+DEBU [BUFFER]    Removed watcher 0xc0004800e0 via external close. backend/buffer.go:254
+INFO [PROXY:SER] Exited. service/service.go:2666
+INFO [AUTH:3]    Shutting down immediately. service/service.go:1404
+DEBU [PROXY:4]   Reloading Linear(attempt=0, duration=0s). services/proxywatcher.go:191
+DEBU [SSH:PROXY] Server 127.0.0.1:38387 has closed. sshutils/server.go:386
+INFO [PROXY:SER] Exited. service/service.go:2901
+WARN [PROXY:4]   Re-init the watcher on error: rpc error: code = Canceled desc = context canceled. services/proxywatcher.go:189
+DEBU [SSH:PROXY] Server 127.0.0.1:35529 has closed. sshutils/server.go:386
+DEBU [PROXY:4]   Reloading Linear(attempt=1, duration=1s). services/proxywatcher.go:191
+DEBU [PROXY:4]   Closed, returning from update loop. services/proxywatcher.go:200
+DEBU [DB:PROXY]  Database proxy exited. db/proxyserver.go:141
+INFO [WEB]       Closing session cache. web/sessions.go:461
+DEBU [BUFFER]    Could not find watcher Watcher(name=f52d0d0b-c8ef-4bff-8574-203e8922098b.localhost, prefixes=/proxies, capacity=8192, size=0). backend/buffer.go:257
+INFO [AUTH:3]    Exited. service/service.go:1414
+DEBU [BUFFER]    Removed watcher 0xc00047a150 via external close. backend/buffer.go:254
+WARN [AUTH:3]    TLS server exited with error: http: Server closed. service/service.go:1296
+DEBU [BUFFER]    Could not find watcher Watcher(name=, prefixes=/authorities, capacity=1024, size=0). backend/buffer.go:257
+--- PASS: TestOIDCLogin (3.02s)
+=== RUN   TestRelogin
+INFO             Generating new host UUID: cad40e14-a6b1-44ae-882d-b3796706f9e4. service/service.go:617
+DEBU [SQLITE]    Connected to: file:/tmp/TestRelogin36369627/001/proc/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+DEBU [KEYGEN]    SSH cert authority is going to pre-compute 25 keys. native/native.go:99
+DEBU [SQLITE]    Connected to: file:/tmp/TestRelogin36369627/001/backend/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+INFO [AUTH]      Applying 2 bootstrap resources (first initialization) auth/init.go:198
+DEBU [AUTH]      Cluster configuration: ClusterName(localhost). auth/init.go:296
+INFO [AUTH]      Updating cluster configuration: StaticTokens([ProvisionToken(Roles=[Proxy], Expires=2026-10-11 10:48:18.928763452 +0000 UTC m=+64.028034157)]). auth/init.go:302
+INFO [AUTH]      Updating auth preference: AuthPreference(Type="local",SecondFactor="otp"). auth/init.go:518
+INFO [AUTH]      Created namespace: "default". auth/init.go:314
+INFO [AUTH]      Created default admin role: "admin". auth/init.go:323
+INFO [AUTH]      First start: generating user certificate authority. auth/init.go:333
+INFO [AUTH]      First start: generating host certificate authority. auth/init.go:393
+INFO [AUTH]      Migrate: Adding JWT key to existing cluster "localhost". auth/init.go:462
+DEBU [AUTH]      Migrations: skipping local cluster cert authority "localhost". auth/init.go:1201
+INFO [AUTH]      Auth server is running periodic operations. auth/init.go:493
+DEBU [AUTH]      Ticking with period: 19s. auth/auth.go:315
+DEBU [KEYGEN]    Generated SSH host certificate for role Admin with principals: [cad40e14-a6b1-44ae-882d-b3796706f9e4 localhost]. native/native.go:232
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc00043c0a0 1.3.9999.1.7=#13096c6f63616c686f7374,CN=cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost,O=Admin,POSTALCODE=null,STREET= 2036-10-08 10:47:19.371244591 +0000 UTC [localhost *.teleport.cluster.local teleport.cluster.local]}. common_name:cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost dns_names:[localhost *.teleport.cluster.local teleport.cluster.local] locality:[] not_after:2036-10-08 10:47:19.371244591 +0000 UTC org:[Admin] org_unit:[] tlsca/ca.go:600
+INFO [PROC:5]    Admin has obtained credentials to connect to cluster. service/connect.go:385
+INFO [PROC:5]    The process has successfully wrote credentials and state of Admin to disk. service/connect.go:426
+INFO [PROC:5]    Service auth is creating new listener on 127.0.0.1:0. service/signals.go:213
+DEBU [AUTH]      GRPC(SERVER): keep alive 1m0s count: 3. auth/grpcserver.go:2645
+WARN [AUTH:5]    Configuration setting auth_service/advertise_ip is not set. guessing 127.0.0.1:38791. service/service.go:1341
+DEBU [AUTH:BEAT] Starting Auth heartbeat with announce period: 1m0s, keep-alive period 5m14.998108616s, poll period: 5s srv/heartbeat.go:143
+INFO [AUTH:5]    Auth service 7.0.0-dev: is starting on 127.0.0.1:38791. utils/cli.go:272
+[AUTH]         Auth service 7.0.0-dev: is starting on 127.0.0.1:38791.
+INFO [PROC:5]    The new service has started successfully. Starting syncing rotation status with period 10m0s. service/connect.go:438
+INFO             Generating new host UUID: 4888ced3-be94-48f0-b6a0-55802b415300. service/service.go:617
+DEBU [SQLITE]    Connected to: file:/tmp/TestRelogin36369627/002/proc/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+DEBU [KEYGEN]    SSH cert authority is going to pre-compute 25 keys. native/native.go:99
+WARN             No TLS Keys provided, using self signed certificate. service/service.go:3318
+WARN             Generating self signed key and cert to /tmp/TestRelogin36369627/002/webproxy_key.pem /tmp/TestRelogin36369627/002/webproxy_cert.pem. service/service.go:3336
+INFO [PROC:6]    Joining the cluster with a secure token. service/connect.go:356
+DEBU [AUTH]      Registering node to the cluster. auth-servers:[{127.0.0.1:38791 tcp }] auth/register.go:125
+INFO [AUTH]      Attempting registration with auth server. auth/register.go:145
+WARN [AUTH]      Joining cluster without validating the identity of the Auth Server. This may open you up to a Man-In-The-Middle (MITM) attack if an attacker can gain privileged network access. To remedy this, use the CA pin value provided when join token was generated to validate the identity of the Auth Server. auth/register.go:250
+DEBU [AUTH:5]    Client "127.0.0.1:50582" sent "teleport.cluster.local" in SNI, which causes this auth server to send all known CAs in TLS handshake. If this client is version 4.2 or older, this is expected; if this client is version 4.3 or above, please let us know at https://github.com/gravitational/teleport/issues/new auth/middleware.go:249
+DEBU [AUTH:5]    Client "127.0.0.1:50584" sent "teleport.cluster.local" in SNI, which causes this auth server to send all known CAs in TLS handshake. If this client is version 4.2 or older, this is expected; if this client is version 4.3 or above, please let us know at https://github.com/gravitational/teleport/issues/new auth/middleware.go:249
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+INFO [AUTH]      Node "localhost" [4888ced3-be94-48f0-b6a0-55802b415300] is trying to join with role: Proxy. auth/auth.go:1550
+DEBU [KEYGEN]    Generated SSH host certificate for role Proxy with principals: [4888ced3-be94-48f0-b6a0-55802b415300.localhost 4888ced3-be94-48f0-b6a0-55802b415300 localhost.localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local]. native/native.go:232
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc000f871d0 1.3.9999.1.7=#13096c6f63616c686f7374,CN=4888ced3-be94-48f0-b6a0-55802b415300.localhost,O=Proxy,POSTALCODE=null,STREET= 2036-10-08 10:47:19.566131805 +0000 UTC [localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local *.teleport.cluster.local teleport.cluster.local]}. common_name:4888ced3-be94-48f0-b6a0-55802b415300.localhost dns_names:[localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local *.teleport.cluster.local teleport.cluster.local] locality:[] not_after:2036-10-08 10:47:19.566131805 +0000 UTC org:[Proxy] org_unit:[] tlsca/ca.go:600
+INFO [AUTH]      Node "localhost" [4888ced3-be94-48f0-b6a0-55802b415300] has joined the cluster. auth/auth.go:1584
+INFO [AUTH]      Successfully registered with auth server. auth/register.go:152
+INFO [PROC:6]    Proxy has obtained credentials to connect to cluster. service/connect.go:385
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+INFO [PROC:6]    The process has successfully wrote credentials and state of Proxy to disk. service/connect.go:426
+INFO [PROC:6]    Proxy: features loaded from auth server: Kubernetes:true App:true DB:true AccessControls:true AdvancedAccessWorkflows:true  service/connect.go:61
+INFO [PROC:6]    Service proxy:ssh is creating new listener on 127.0.0.1:0. service/signals.go:213
+INFO [PROC:6]    Service proxy:tunnel:web is creating new listener on 127.0.0.1:0. service/signals.go:213
+DEBU [SSH:PROXY] Supported ciphers: ["aes128-gcm@openssh.com" "chacha20-poly1305@openssh.com" "aes128-ctr" "aes192-ctr" "aes256-ctr"]. sshutils/server.go:228
+DEBU [SSH:PROXY] Supported KEX algorithms: ["curve25519-sha256@libssh.org" "ecdh-sha2-nistp256" "ecdh-sha2-nistp384" "ecdh-sha2-nistp521"]. sshutils/server.go:238
+DEBU [SSH:PROXY] Supported MAC algorithms: ["hmac-sha2-256-etm@openssh.com" "hmac-sha2-256"]. sshutils/server.go:248
+INFO [PROXY:SER] Reverse tunnel service 7.0.0-dev: is starting on 127.0.0.1:0. utils/cli.go:272
+[PROXY]        Reverse tunnel service 7.0.0-dev: is starting on 127.0.0.1:0.
+INFO [PROXY:SER] Starting 7.0.0-dev: on 127.0.0.1:0 using no cache policy service/service.go:2500
+DEBU [SSH:PROXY] Listening on 127.0.0.1:39685. sshutils/server.go:381
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+INFO [PROXY:SER] Loading TLS certificate /tmp/TestRelogin36369627/002/webproxy_cert.pem and key /tmp/TestRelogin36369627/002/webproxy_key.pem. service/service.go:2616
+INFO [PROXY:SER] Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0. utils/cli.go:272
+[PROXY]        Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0.
+INFO [PROXY:SER] Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0. service/service.go:2660
+DEBU [CLIENT]    Failed to stat file: stat /root/.tsh: no such file or directory. client/api.go:680
+DEBU [SSH:PROXY] Supported ciphers: ["aes128-gcm@openssh.com" "chacha20-poly1305@openssh.com" "aes128-ctr" "aes192-ctr" "aes256-ctr"]. sshutils/server.go:228
+DEBU [SSH:PROXY] Supported KEX algorithms: ["curve25519-sha256@libssh.org" "ecdh-sha2-nistp256" "ecdh-sha2-nistp384" "ecdh-sha2-nistp521"]. sshutils/server.go:238
+DEBU [SSH:PROXY] Supported MAC algorithms: ["hmac-sha2-256-etm@openssh.com" "hmac-sha2-256"]. sshutils/server.go:248
+DEBU [PROXY:BEA] Starting Proxy heartbeat with announce period: 1m0s, keep-alive period 5m22.855265163s, poll period: 5s srv/heartbeat.go:143
+INFO [PROXY:SER] SSH proxy service 7.0.0-dev: is starting on 127.0.0.1:34167. utils/cli.go:272
+[PROXY]        SSH proxy service 7.0.0-dev: is starting on 127.0.0.1:34167.
+INFO [PROXY:SER] SSH proxy service 7.0.0-dev: is starting on {127.0.0.1:34167 tcp } service/service.go:2705
+INFO [CLIENT]    No teleport login given. defaulting to root client/api.go:1035
+INFO [PROC:6]    The new service has started successfully. Starting syncing rotation status with period 10m0s. service/connect.go:438
+INFO [PROXY:AGE] Starting reverse tunnel agent pool. service/service.go:2730
+INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+DEBU [SSH:PROXY] Listening on 127.0.0.1:34167. sshutils/server.go:381
+INFO [AUDIT:6]   Creating directory /tmp/TestRelogin36369627/002/log. service/service.go:1927
+INFO [DB:SERVIC] Starting Database proxy server on 127.0.0.1:0. service/service.go:2831
+INFO [AUDIT:6]   Creating directory /tmp/TestRelogin36369627/002/log/upload. service/service.go:1927
+INFO [AUDIT:6]   Creating directory /tmp/TestRelogin36369627/002/log/upload/sessions. service/service.go:1927
+INFO [AUDIT:6]   Creating directory /tmp/TestRelogin36369627/002/log/upload/sessions/default. service/service.go:1927
+INFO [AUDIT:6]   Creating directory /tmp/TestRelogin36369627/002/log. service/service.go:1927
+INFO [AUDIT:6]   Creating directory /tmp/TestRelogin36369627/002/log/upload. service/service.go:1927
+INFO [AUDIT:6]   Creating directory /tmp/TestRelogin36369627/002/log/upload/streaming. service/service.go:1927
+INFO [AUDIT:6]   Creating directory /tmp/TestRelogin36369627/002/log/upload/streaming/default. service/service.go:1927
+DEBU [DB:PROXY]  Started database proxy. db/proxyserver.go:133
+ERRO [CLIENT]    [KEY AGENT] Unable to connect to SSH agent on socket: "". client/api.go:2752
+DEBU [CLIENT]    attempting to use loopback pool for local proxy addr: 127.0.0.1:39685 client/api.go:2720
+DEBU [CLIENT]    could not open any path in: /var/lib/teleport/webproxy_cert.pem client/api.go:2726
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [KEYGEN]    generated user key for [root] with expiry on (1791719239) 2026-10-11 11:47:19.782258312 +0000 UTC native/native.go:257
+DEBU [AUTH]      Failed setting default kubernetes cluster for user login (user did not provide a cluster); leaving KubernetesCluster extension in the TLS certificate empty auth/auth.go:796
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc000fb0560 1.3.9999.1.7=#13096c6f63616c686f7374,CN=alice@example.com,O=admin,POSTALCODE=null,STREET=localhost,L=root 2026-10-11 11:47:19.783253647 +0000 UTC []}. common_name:alice@example.com dns_names:[] locality:[root] not_after:2026-10-11 11:47:19.783253647 +0000 UTC org:[admin] org_unit:[] tlsca/ca.go:600
+DEBU [KEYAGENT]  Adding CA key for localhost client/keyagent.go:289
+DEBU [KEYSTORE]  Adding known host localhost with key: SHA256:9k2t52hqJrGPplSGGIbD3+g0gy2NQTfheJAK3+7wDFI client/keystore.go:539
+ERRO [KEYSTORE]  open /root/.tsh/keys/127.0.0.1/alice@example.com: no such file or directory client/keystore.go:243
+INFO [KEYAGENT]  Loading SSH key for user "alice@example.com" and cluster "localhost". client/keyagent.go:167
+INFO [CLIENT]    Connecting proxy=127.0.0.1:34167 login="root" client/api.go:2053
+DEBU [KEYAGENT]  Validated host 127.0.0.1:34167. client/keyagent.go:330
+DEBU [PROXY]     conn(127.0.0.1:60986->127.0.0.1:34167, user=root) auth attempt fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:DE+RgBOz9HooAzbfOyqHXj8SIW5RhibKIanWG61pQ6o local:127.0.0.1:34167 remote:127.0.0.1:60986 user:root srv/authhandlers.go:211
+DEBU [PROXY]     conn(127.0.0.1:60986->127.0.0.1:34167, user=root) auth attempt with key ssh-rsa-cert-v01@openssh.com SHA256:DE+RgBOz9HooAzbfOyqHXj8SIW5RhibKIanWG61pQ6o, &ssh.Certificate{Nonce:[]uint8{0xdb, 0xd6, 0xab, 0x7e, 0x99, 0xd9, 0x21, 0x28, 0x6b, 0x57, 0x45, 0xd1, 0x6b, 0x13, 0xd1, 0x51, 0x58, 0xf1, 0x86, 0x9c, 0x45, 0xa4, 0x5e, 0x3d, 0x50, 0x2b, 0xa, 0x48, 0xa8, 0x6, 0x10, 0x5e}, Key:(*ssh.rsaPublicKey)(0xc000b9a550), Serial:0x0, CertType:0x1, KeyId:"alice@example.com", ValidPrincipals:[]string{"root"}, ValidAfter:0x6acb68fb, ValidBefore:0x6acb7747, Permissions:ssh.Permissions{CriticalOptions:map[string]string{}, Extensions:map[string]string{"permit-agent-forwarding":"", "permit-port-forwarding":"", "permit-pty":"", "teleport-roles":"{\"version\":\"v1\",\"roles\":[\"admin\"]}", "teleport-route-to-cluster":"localhost", "teleport-traits":"null"}}, Reserved:[]uint8{}, SignatureKey:(*ssh.rsaPublicKey)(0xc000b9a590), Signature:(*ssh.Signature)(0xc000cfe280)} fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:DE+RgBOz9HooAzbfOyqHXj8SIW5RhibKIanWG61pQ6o local:127.0.0.1:34167 remote:127.0.0.1:60986 user:root srv/authhandlers.go:214
+DEBU [PROXY]     Successfully authenticated fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:DE+RgBOz9HooAzbfOyqHXj8SIW5RhibKIanWG61pQ6o local:127.0.0.1:34167 remote:127.0.0.1:60986 user:root srv/authhandlers.go:274
+INFO [CLIENT]    Successful auth with proxy 127.0.0.1:34167. client/api.go:2061
+DEBU [SSH:PROXY] Incoming connection 127.0.0.1:60986 -> 127.0.0.1:34167 version: SSH-2.0-Go. sshutils/server.go:457
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Handling request subsystem, want reply true. id:6 local:127.0.0.1:34167 login:root remote:127.0.0.1:60986 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:6 local:127.0.0.1:34167 login:root remote:127.0.0.1:60986 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:60986] regular/proxy.go:220
+DEBU [PROXY]     Handling request subsystem, want reply true. id:7 local:127.0.0.1:34167 login:root remote:127.0.0.1:60986 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:7 local:127.0.0.1:34167 login:root remote:127.0.0.1:60986 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:60986] regular/proxy.go:220
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:38791 trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:60986] regular/proxy.go:275
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:38791 trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:60986] regular/proxy.go:275
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+DEBU [SSH:PROXY] Closed connection 127.0.0.1:60986. sshutils/server.go:462
+DEBU [KEYAGENT]  Adding CA key for localhost client/keyagent.go:289
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:50628->127.0.0.1:38791: use of closed network connection. regular/sshserver.go:1414
+DEBU [PROXY]     Client 127.0.0.1:60986 disconnected. id:7 local:127.0.0.1:34167 login:root remote:127.0.0.1:60986 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [PROXY]     Client 127.0.0.1:60986 disconnected. id:6 local:127.0.0.1:34167 login:root remote:127.0.0.1:60986 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [KEYSTORE]  Adding known host localhost with key: SHA256:9k2t52hqJrGPplSGGIbD3+g0gy2NQTfheJAK3+7wDFI client/keystore.go:539
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:50626->127.0.0.1:38791: use of closed network connection. regular/sshserver.go:1414
+INFO [CLIENT]    Connecting proxy=127.0.0.1:34167 login="root" client/api.go:2053
+DEBU [KEYAGENT]  Validated host 127.0.0.1:34167. client/keyagent.go:330
+DEBU [PROXY]     conn(127.0.0.1:60996->127.0.0.1:34167, user=root) auth attempt fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:DE+RgBOz9HooAzbfOyqHXj8SIW5RhibKIanWG61pQ6o local:127.0.0.1:34167 remote:127.0.0.1:60996 user:root srv/authhandlers.go:211
+DEBU [PROXY]     conn(127.0.0.1:60996->127.0.0.1:34167, user=root) auth attempt with key ssh-rsa-cert-v01@openssh.com SHA256:DE+RgBOz9HooAzbfOyqHXj8SIW5RhibKIanWG61pQ6o, &ssh.Certificate{Nonce:[]uint8{0xdb, 0xd6, 0xab, 0x7e, 0x99, 0xd9, 0x21, 0x28, 0x6b, 0x57, 0x45, 0xd1, 0x6b, 0x13, 0xd1, 0x51, 0x58, 0xf1, 0x86, 0x9c, 0x45, 0xa4, 0x5e, 0x3d, 0x50, 0x2b, 0xa, 0x48, 0xa8, 0x6, 0x10, 0x5e}, Key:(*ssh.rsaPublicKey)(0xc000673f50), Serial:0x0, CertType:0x1, KeyId:"alice@example.com", ValidPrincipals:[]string{"root"}, ValidAfter:0x6acb68fb, ValidBefore:0x6acb7747, Permissions:ssh.Permissions{CriticalOptions:map[string]string{}, Extensions:map[string]string{"permit-agent-forwarding":"", "permit-port-forwarding":"", "permit-pty":"", "teleport-roles":"{\"version\":\"v1\",\"roles\":[\"admin\"]}", "teleport-route-to-cluster":"localhost", "teleport-traits":"null"}}, Reserved:[]uint8{}, SignatureKey:(*ssh.rsaPublicKey)(0xc000673fb0), Signature:(*ssh.Signature)(0xc0011ca740)} fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:DE+RgBOz9HooAzbfOyqHXj8SIW5RhibKIanWG61pQ6o local:127.0.0.1:34167 remote:127.0.0.1:60996 user:root srv/authhandlers.go:214
+DEBU [PROXY]     Successfully authenticated fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:DE+RgBOz9HooAzbfOyqHXj8SIW5RhibKIanWG61pQ6o local:127.0.0.1:34167 remote:127.0.0.1:60996 user:root srv/authhandlers.go:274
+INFO [CLIENT]    Successful auth with proxy 127.0.0.1:34167. client/api.go:2061
+DEBU [SSH:PROXY] Incoming connection 127.0.0.1:60996 -> 127.0.0.1:34167 version: SSH-2.0-Go. sshutils/server.go:457
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Handling request subsystem, want reply true. id:8 local:127.0.0.1:34167 login:root remote:127.0.0.1:60996 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:8 local:127.0.0.1:34167 login:root remote:127.0.0.1:60996 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:60996] regular/proxy.go:220
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:38791 trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:60996] regular/proxy.go:275
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+DEBU [PROXY]     Client 127.0.0.1:60996 disconnected. id:8 local:127.0.0.1:34167 login:root remote:127.0.0.1:60996 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: <nil>. regular/sshserver.go:1414
+DEBU [SSH:PROXY] Closed connection 127.0.0.1:60996. sshutils/server.go:462
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Reading certificates from path "/root/.tsh/keys/127.0.0.1/alice@example.com-ssh/localhost-cert.pub". client/keystore.go:303
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Reading certificates from path "/root/.tsh/keys/127.0.0.1/alice@example.com-ssh/localhost-cert.pub". client/keystore.go:303
+> Profile URL:        https://127.0.0.1:39685
+  Logged in as:       alice@example.com
+  Cluster:            localhost
+  Roles:              admin
+  Logins:             root
+  Kubernetes:         disabled
+  Valid until:        2026-10-11 11:47:19 +0000 UTC [valid for 1h0m0s]
+  Extensions:         permit-agent-forwarding, permit-port-forwarding, permit-pty
+
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Reading certificates from path "/root/.tsh/keys/127.0.0.1/alice@example.com-ssh/localhost-cert.pub". client/keystore.go:303
+INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+ERRO [CLIENT]    [KEY AGENT] Unable to connect to SSH agent on socket: "". client/api.go:2752
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Reading certificates from path "/root/.tsh/keys/127.0.0.1/alice@example.com-ssh/localhost-cert.pub". client/keystore.go:303
+INFO [KEYAGENT]  Loading SSH key for user "alice@example.com" and cluster "localhost". client/keyagent.go:167
+DEBU [CLIENT]    attempting to use loopback pool for local proxy addr: 127.0.0.1:39685 client/api.go:2720
+DEBU [CLIENT]    could not open any path in: /var/lib/teleport/webproxy_cert.pem client/api.go:2726
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+> Profile URL:        https://127.0.0.1:39685
+  Logged in as:       alice@example.com
+  Cluster:            localhost
+  Roles:              admin
+  Logins:             root
+  Kubernetes:         disabled
+  Valid until:        2026-10-11 11:47:19 +0000 UTC [valid for 1h0m0s]
+  Extensions:         permit-agent-forwarding, permit-port-forwarding, permit-pty
+
+Logged out all users from all proxies.
+DEBU [CLIENT]    Failed to stat file: stat /root/.tsh: no such file or directory. client/api.go:680
+INFO [CLIENT]    No teleport login given. defaulting to root client/api.go:1035
+INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+ERRO [CLIENT]    [KEY AGENT] Unable to connect to SSH agent on socket: "". client/api.go:2752
+DEBU [CLIENT]    attempting to use loopback pool for local proxy addr: 127.0.0.1:39685 client/api.go:2720
+DEBU [CLIENT]    could not open any path in: /var/lib/teleport/webproxy_cert.pem client/api.go:2726
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [KEYGEN]    generated user key for [root] with expiry on (1791719239) 2026-10-11 11:47:19.906550062 +0000 UTC native/native.go:257
+DEBU [AUTH]      Failed setting default kubernetes cluster for user login (user did not provide a cluster); leaving KubernetesCluster extension in the TLS certificate empty auth/auth.go:796
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc0011c48d0 1.3.9999.1.7=#13096c6f63616c686f7374,CN=alice@example.com,O=admin,POSTALCODE=null,STREET=localhost,L=root 2026-10-11 11:47:19.907436967 +0000 UTC []}. common_name:alice@example.com dns_names:[] locality:[root] not_after:2026-10-11 11:47:19.907436967 +0000 UTC org:[admin] org_unit:[] tlsca/ca.go:600
+DEBU [KEYAGENT]  Adding CA key for localhost client/keyagent.go:289
+DEBU [KEYSTORE]  Adding known host localhost with key: SHA256:9k2t52hqJrGPplSGGIbD3+g0gy2NQTfheJAK3+7wDFI client/keystore.go:539
+ERRO [KEYSTORE]  open /root/.tsh/keys/127.0.0.1/alice@example.com: no such file or directory client/keystore.go:243
+INFO [KEYAGENT]  Loading SSH key for user "alice@example.com" and cluster "localhost". client/keyagent.go:167
+INFO [CLIENT]    Connecting proxy=127.0.0.1:34167 login="root" client/api.go:2053
+DEBU [KEYAGENT]  Validated host 127.0.0.1:34167. client/keyagent.go:330
+DEBU [PROXY]     conn(127.0.0.1:32770->127.0.0.1:34167, user=root) auth attempt fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:hc3aFvCayI83AzS+E1W70IZqsfFeBriDkPImFuyioO0 local:127.0.0.1:34167 remote:127.0.0.1:32770 user:root srv/authhandlers.go:211
+DEBU [PROXY]     conn(127.0.0.1:32770->127.0.0.1:34167, user=root) auth attempt with key ssh-rsa-cert-v01@openssh.com SHA256:hc3aFvCayI83AzS+E1W70IZqsfFeBriDkPImFuyioO0, &ssh.Certificate{Nonce:[]uint8{0x65, 0x74, 0x45, 0xb1, 0xc5, 0xe0, 0x2, 0xe9, 0xe6, 0x1, 0x1d, 0x92, 0x9a, 0xde, 0xea, 0xa8, 0xb2, 0x71, 0x39, 0xbf, 0xd9, 0xde, 0xf7, 0x1a, 0x1b, 0xe1, 0xb4, 0x14, 0x77, 0x33, 0xd5, 0x4d}, Key:(*ssh.rsaPublicKey)(0xc000e90790), Serial:0x0, CertType:0x1, KeyId:"alice@example.com", ValidPrincipals:[]string{"root"}, ValidAfter:0x6acb68fb, ValidBefore:0x6acb7747, Permissions:ssh.Permissions{CriticalOptions:map[string]string{}, Extensions:map[string]string{"permit-agent-forwarding":"", "permit-port-forwarding":"", "permit-pty":"", "teleport-roles":"{\"version\":\"v1\",\"roles\":[\"admin\"]}", "teleport-route-to-cluster":"localhost", "teleport-traits":"null"}}, Reserved:[]uint8{}, SignatureKey:(*ssh.rsaPublicKey)(0xc000e907f0), Signature:(*ssh.Signature)(0xc000fc6340)} fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:hc3aFvCayI83AzS+E1W70IZqsfFeBriDkPImFuyioO0 local:127.0.0.1:34167 remote:127.0.0.1:32770 user:root srv/authhandlers.go:214
+DEBU [PROXY]     Successfully authenticated fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:hc3aFvCayI83AzS+E1W70IZqsfFeBriDkPImFuyioO0 local:127.0.0.1:34167 remote:127.0.0.1:32770 user:root srv/authhandlers.go:274
+INFO [CLIENT]    Successful auth with proxy 127.0.0.1:34167. client/api.go:2061
+DEBU [SSH:PROXY] Incoming connection 127.0.0.1:32770 -> 127.0.0.1:34167 version: SSH-2.0-Go. sshutils/server.go:457
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Handling request subsystem, want reply true. id:9 local:127.0.0.1:34167 login:root remote:127.0.0.1:32770 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:9 local:127.0.0.1:34167 login:root remote:127.0.0.1:32770 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:32770] regular/proxy.go:220
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+DEBU [PROXY]     Handling request subsystem, want reply true. id:10 local:127.0.0.1:34167 login:root remote:127.0.0.1:32770 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:10 local:127.0.0.1:34167 login:root remote:127.0.0.1:32770 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:32770] regular/proxy.go:220
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:38791 trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:32770] regular/proxy.go:275
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:38791 trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:32770] regular/proxy.go:275
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+DEBU [KEYAGENT]  Adding CA key for localhost client/keyagent.go:289
+DEBU [SSH:PROXY] Closed connection 127.0.0.1:32770. sshutils/server.go:462
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Client 127.0.0.1:32770 disconnected. id:10 local:127.0.0.1:34167 login:root remote:127.0.0.1:32770 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:50670->127.0.0.1:38791: use of closed network connection. regular/sshserver.go:1414
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:50654->127.0.0.1:38791: use of closed network connection. regular/sshserver.go:1414
+DEBU [PROXY]     Client 127.0.0.1:32770 disconnected. id:9 local:127.0.0.1:34167 login:root remote:127.0.0.1:32770 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [KEYSTORE]  Adding known host localhost with key: SHA256:9k2t52hqJrGPplSGGIbD3+g0gy2NQTfheJAK3+7wDFI client/keystore.go:539
+DEBU [SQLITE]    Initialized event ID iterator to 19 lite/periodic.go:144
+DEBU [BUFFER]    Add Watcher(name=4888ced3-be94-48f0-b6a0-55802b415300.localhost, prefixes=/authorities, capacity=8192, size=0). backend/buffer.go:233
+DEBU [BUFFER]    Add Watcher(name=4888ced3-be94-48f0-b6a0-55802b415300.localhost, prefixes=/proxies, capacity=8192, size=0). backend/buffer.go:233
+DEBU [BUFFER]    Add Watcher(name=, prefixes=/authorities, capacity=1024, size=0). backend/buffer.go:233
+INFO [CLIENT]    Connecting proxy=127.0.0.1:34167 login="root" client/api.go:2053
+DEBU [PROXY:6]   List of known proxies updated: ["4888ced3-be94-48f0-b6a0-55802b415300"]. services/proxywatcher.go:149
+DEBU [KEYAGENT]  Validated host 127.0.0.1:34167. client/keyagent.go:330
+DEBU [PROXY]     conn(127.0.0.1:32774->127.0.0.1:34167, user=root) auth attempt fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:hc3aFvCayI83AzS+E1W70IZqsfFeBriDkPImFuyioO0 local:127.0.0.1:34167 remote:127.0.0.1:32774 user:root srv/authhandlers.go:211
+DEBU [PROXY]     conn(127.0.0.1:32774->127.0.0.1:34167, user=root) auth attempt with key ssh-rsa-cert-v01@openssh.com SHA256:hc3aFvCayI83AzS+E1W70IZqsfFeBriDkPImFuyioO0, &ssh.Certificate{Nonce:[]uint8{0x65, 0x74, 0x45, 0xb1, 0xc5, 0xe0, 0x2, 0xe9, 0xe6, 0x1, 0x1d, 0x92, 0x9a, 0xde, 0xea, 0xa8, 0xb2, 0x71, 0x39, 0xbf, 0xd9, 0xde, 0xf7, 0x1a, 0x1b, 0xe1, 0xb4, 0x14, 0x77, 0x33, 0xd5, 0x4d}, Key:(*ssh.rsaPublicKey)(0xc000b04a40), Serial:0x0, CertType:0x1, KeyId:"alice@example.com", ValidPrincipals:[]string{"root"}, ValidAfter:0x6acb68fb, ValidBefore:0x6acb7747, Permissions:ssh.Permissions{CriticalOptions:map[string]string{}, Extensions:map[string]string{"permit-agent-forwarding":"", "permit-port-forwarding":"", "permit-pty":"", "teleport-roles":"{\"version\":\"v1\",\"roles\":[\"admin\"]}", "teleport-route-to-cluster":"localhost", "teleport-traits":"null"}}, Reserved:[]uint8{}, SignatureKey:(*ssh.rsaPublicKey)(0xc000b04a80), Signature:(*ssh.Signature)(0xc0011348c0)} fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:hc3aFvCayI83AzS+E1W70IZqsfFeBriDkPImFuyioO0 local:127.0.0.1:34167 remote:127.0.0.1:32774 user:root srv/authhandlers.go:214
+DEBU [PROXY]     Successfully authenticated fingerprint:ssh-rsa-cert-v01@openssh.com SHA256:hc3aFvCayI83AzS+E1W70IZqsfFeBriDkPImFuyioO0 local:127.0.0.1:34167 remote:127.0.0.1:32774 user:root srv/authhandlers.go:274
+DEBU [SSH:PROXY] Incoming connection 127.0.0.1:32774 -> 127.0.0.1:34167 version: SSH-2.0-Go. sshutils/server.go:457
+INFO [CLIENT]    Successful auth with proxy 127.0.0.1:34167. client/api.go:2061
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [PROXY]     Handling request subsystem, want reply true. id:11 local:127.0.0.1:34167 login:root remote:127.0.0.1:32774 teleportUser:alice@example.com regular/sshserver.go:1289
+DEBU [NODE]      parse_proxy_subsys("proxy:@localhost") regular/proxy.go:84
+DEBU [NODE]      newProxySubsys({default   localhost}). regular/proxy.go:191
+DEBU [PROXY]     Subsystem request: proxySubsys(cluster=default/localhost, host=, port=). id:11 local:127.0.0.1:34167 login:root remote:127.0.0.1:32774 teleportUser:alice@example.com regular/sshserver.go:1404
+DEBU [KEEPALIVE] Starting keep-alive loop with with interval 5m0s and max count 3. srv/keepalive.go:65
+DEBU [SUBSYSTEM] Starting subsystem trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:32774] regular/proxy.go:220
+INFO [SUBSYSTEM] Connected to auth server: 127.0.0.1:38791 trace.fields:map[dst:127.0.0.1:34167 src:127.0.0.1:32774] regular/proxy.go:275
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:36038127376348589086609730061252368098) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:265572644493206326565980001613954202072) auth/middleware.go:592
+DEBU [AUTH:5]    Server certificate cert(cad40e14-a6b1-44ae-882d-b3796706f9e4.localhost issued by localhost:36038127376348589086609730061252368098). auth/middleware.go:297
+WARN             "Failed to find roles or traits in x509 identity for alice@example.com. Fetching\tfrom backend. If the identity provider allows username changes, this can potentially allow an attacker to change the role of the existing user." services/role.go:934
+DEBU [PROXY]     Client 127.0.0.1:32774 disconnected. id:11 local:127.0.0.1:34167 login:root remote:127.0.0.1:32774 teleportUser:alice@example.com regular/sshserver.go:1256
+DEBU [SSH:PROXY] Closed connection 127.0.0.1:32774. sshutils/server.go:462
+DEBU [NODE]      Subsystem proxySubsys(cluster=default/localhost, host=, port=) finished with result: read tcp 127.0.0.1:50674->127.0.0.1:38791: use of closed network connection. regular/sshserver.go:1414
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Reading certificates from path "/root/.tsh/keys/127.0.0.1/alice@example.com-ssh/localhost-cert.pub". client/keystore.go:303
+DEBU [KEYSTORE]  Returning Teleport TLS certificate "/root/.tsh/keys/127.0.0.1/alice@example.com-x509.pem" valid until "2026-10-11 11:47:19 +0000 UTC". client/keystore.go:280
+DEBU [KEYSTORE]  Reading certificates from path "/root/.tsh/keys/127.0.0.1/alice@example.com-ssh/localhost-cert.pub". client/keystore.go:303
+> Profile URL:        https://127.0.0.1:39685
+  Logged in as:       alice@example.com
+  Cluster:            localhost
+  Roles:              admin
+  Logins:             root
+  Kubernetes:         disabled
+  Valid until:        2026-10-11 11:47:19 +0000 UTC [valid for 1h0m0s]
+  Extensions:         permit-agent-forwarding, permit-port-forwarding, permit-pty
+
+DEBU             Closing. reversetunnel/rc_manager.go:147
+INFO [AUDIT:6]   Shutting down. service/service.go:1967
+INFO [AUDIT:6]   File uploader is shutting down. service/service.go:1993
+INFO [AUDIT:6]   Exited. service/service.go:1969
+INFO [AUDIT:6]   File uploader has shut down. service/service.go:1995
+INFO [PROXY:SER] Shutting down immediately. service/service.go:2865
+DEBU [AUDIT]     Uploader is exiting. events/uploader.go:158
+INFO [PROXY:SER] Exited. service/service.go:2666
+DEBU [AUTH:BEAT] Heartbeat exited. srv/heartbeat.go:269
+INFO [WEB]       Closing session cache. web/sessions.go:461
+INFO [AUTH:5]    Shutting down immediately. service/service.go:1404
+DEBU [PROXY:6]   Closing. reversetunnel/srv.go:379
+DEBU [SSH:PROXY] Server 127.0.0.1:39685 has closed. sshutils/server.go:386
+DEBU [BUFFER]    Removed watcher 0xc000320000 via external close. backend/buffer.go:254
+INFO [WEB]       Closing session cache. web/sessions.go:461
+WARN [PROXY:6]   Re-init the watcher on error: context is closing. services/proxywatcher.go:189
+DEBU [SESSION:P] Closing Session Registry. srv/sess.go:120
+DEBU [BUFFER]    Removed watcher 0xc0003bc000 via external close. backend/buffer.go:254
+DEBU [PROXY:6]   Reloading Linear(attempt=0, duration=0s). services/proxywatcher.go:191
+DEBU [PROXY:6]   Closed, returning from update loop. services/proxywatcher.go:200
+DEBU [BUFFER]    Could not find watcher Watcher(name=, prefixes=/authorities, capacity=1024, size=0). backend/buffer.go:257
+INFO [PROXY:SER] Exited. service/service.go:2901
+DEBU [PROXY:BEA] Heartbeat exited. srv/heartbeat.go:269
+INFO [AUTH:5]    Exited. service/service.go:1414
+DEBU [BUFFER]    Removed watcher 0xc000480380 via external close. backend/buffer.go:254
+DEBU [SSH:PROXY] Server 127.0.0.1:34167 has closed. sshutils/server.go:386
+WARN [AUTH:5]    TLS server exited with error: http: Server closed. service/service.go:1296
+DEBU [BUFFER]    Could not find watcher Watcher(name=4888ced3-be94-48f0-b6a0-55802b415300.localhost, prefixes=/proxies, capacity=8192, size=0). backend/buffer.go:257
+DEBU [DB:PROXY]  Database proxy exited. db/proxyserver.go:141
+--- PASS: TestRelogin (1.05s)
+=== RUN   TestMakeClient
+INFO [CLIENT]    No teleport login given. defaulting to root client/api.go:1035
+DEBU [TSH]       Web proxy port was not set. Attempting to detect port number to use. tsh/tsh.go:1869
+DEBU [TSH]       Resolving default proxy port (insecure: false) tsh/resolve_default_addr.go:121
+DEBU [TSH]       Trying proxy:3080... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Race request failed error:[Get "https://proxy:3080/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+INFO [KEYGEN]    Stopping key precomputation routine. native/native.go:139
+DEBU [TSH]       Trying proxy:443... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Race request failed error:[Get "https://proxy:443/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+DEBU [TSH]       Proxy port resolution failed, falling back to legacy default. error:[Get "https://proxy:443/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/tsh.go:1878
+INFO [CLIENT]    No teleport login given. defaulting to root client/api.go:1035
+INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+DEBU [CLIENT]    Skipping connection to the local ssh-agent. client/keyagent.go:138
+DEBU [TSH]       Web proxy port was not set. Attempting to detect port number to use. tsh/tsh.go:1869
+DEBU [TSH]       Resolving default proxy port (insecure: false) tsh/resolve_default_addr.go:121
+DEBU [TSH]       Trying proxy:3080... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Race request failed error:[Get "https://proxy:3080/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+INFO [KEYGEN]    Stopping key precomputation routine. native/native.go:139
+DEBU [TSH]       Trying proxy:443... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Race request failed error:[Get "https://proxy:443/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+DEBU [TSH]       Proxy port resolution failed, falling back to legacy default. error:[Get "https://proxy:443/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/tsh.go:1878
+INFO [CLIENT]    No teleport login given. defaulting to root client/api.go:1035
+DEBU [CLIENT]    Skipping connection to the local ssh-agent. client/keyagent.go:138
+DEBU [TSH]       Web proxy port was not set. Attempting to detect port number to use. tsh/tsh.go:1869
+DEBU [TSH]       Resolving default proxy port (insecure: false) tsh/resolve_default_addr.go:121
+DEBU [TSH]       Trying proxy:3080... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Race request failed error:[Get "https://proxy:3080/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Trying proxy:443... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Race request failed error:[Get "https://proxy:443/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+DEBU [TSH]       Proxy port resolution failed, falling back to legacy default. error:[Get "https://proxy:443/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/tsh.go:1878
+INFO [CLIENT]    No teleport login given. defaulting to root client/api.go:1035
+DEBU [CLIENT]    Skipping connection to the local ssh-agent. client/keyagent.go:138
+INFO             Generating new host UUID: 5200240a-205e-4d12-aa3d-5803890af3a3. service/service.go:617
+DEBU [SQLITE]    Connected to: file:/tmp/TestMakeClient1726134802/001/proc/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+DEBU [KEYGEN]    SSH cert authority is going to pre-compute 25 keys. native/native.go:99
+DEBU [SQLITE]    Connected to: file:/tmp/TestMakeClient1726134802/001/backend/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+DEBU [AUTH]      Cluster configuration: ClusterName(localhost). auth/init.go:296
+INFO [AUTH]      Updating cluster configuration: StaticTokens([ProvisionToken(Roles=[Proxy], Expires=2026-10-11 10:48:20.736485502 +0000 UTC m=+65.835756203)]). auth/init.go:302
+INFO [AUTH]      Updating auth preference: AuthPreference(Type="local",SecondFactor="otp"). auth/init.go:518
+INFO [AUTH]      Created namespace: "default". auth/init.go:314
+INFO [AUTH]      Created default admin role: "admin". auth/init.go:323
+INFO [AUTH]      First start: generating user certificate authority. auth/init.go:333
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+INFO [AUTH]      First start: generating host certificate authority. auth/init.go:393
+INFO [AUTH]      Migrate: Adding JWT key to existing cluster "localhost". auth/init.go:462
+DEBU [AUTH]      Migrations: skipping local cluster cert authority "localhost". auth/init.go:1201
+INFO [AUTH]      Auth server is running periodic operations. auth/init.go:493
+DEBU [AUTH]      Ticking with period: 19s. auth/auth.go:315
+DEBU [KEYGEN]    Generated SSH host certificate for role Admin with principals: [5200240a-205e-4d12-aa3d-5803890af3a3 localhost]. native/native.go:232
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc00126a030 1.3.9999.1.7=#13096c6f63616c686f7374,CN=5200240a-205e-4d12-aa3d-5803890af3a3.localhost,O=Admin,POSTALCODE=null,STREET= 2036-10-08 10:47:21.232288499 +0000 UTC [localhost *.teleport.cluster.local teleport.cluster.local]}. common_name:5200240a-205e-4d12-aa3d-5803890af3a3.localhost dns_names:[localhost *.teleport.cluster.local teleport.cluster.local] locality:[] not_after:2036-10-08 10:47:21.232288499 +0000 UTC org:[Admin] org_unit:[] tlsca/ca.go:600
+INFO [PROC:7]    Admin has obtained credentials to connect to cluster. service/connect.go:385
+INFO [PROC:7]    The process has successfully wrote credentials and state of Admin to disk. service/connect.go:426
+INFO [PROC:7]    Service auth is creating new listener on 127.0.0.1:0. service/signals.go:213
+DEBU [AUTH]      GRPC(SERVER): keep alive 1m0s count: 3. auth/grpcserver.go:2645
+WARN [AUTH:7]    Configuration setting auth_service/advertise_ip is not set. guessing 127.0.0.1:32867. service/service.go:1341
+DEBU [AUTH:BEAT] Starting Auth heartbeat with announce period: 1m0s, keep-alive period 5m5.972048898s, poll period: 5s srv/heartbeat.go:143
+INFO [AUTH:7]    Auth service 7.0.0-dev: is starting on 127.0.0.1:32867. utils/cli.go:272
+[AUTH]         Auth service 7.0.0-dev: is starting on 127.0.0.1:32867.
+INFO [PROC:7]    The new service has started successfully. Starting syncing rotation status with period 10m0s. service/connect.go:438
+INFO             Generating new host UUID: e4d282cc-e83c-4453-a993-f83d7133a628. service/service.go:617
+DEBU [SQLITE]    Connected to: file:/tmp/TestMakeClient1726134802/002/proc/sqlite.db?_busy_timeout=10000&_sync=OFF, poll stream period: 1s lite/lite.go:172
+DEBU [SQLITE]    Synchronous: 0, busy timeout: 10000 lite/lite.go:217
+DEBU [KEYGEN]    SSH cert authority is going to pre-compute 25 keys. native/native.go:99
+WARN             No TLS Keys provided, using self signed certificate. service/service.go:3318
+WARN             Generating self signed key and cert to /tmp/TestMakeClient1726134802/002/webproxy_key.pem /tmp/TestMakeClient1726134802/002/webproxy_cert.pem. service/service.go:3336
+INFO [PROC:8]    Joining the cluster with a secure token. service/connect.go:356
+DEBU [AUTH]      Registering node to the cluster. auth-servers:[{127.0.0.1:32867 tcp }] auth/register.go:125
+INFO [AUTH]      Attempting registration with auth server. auth/register.go:145
+WARN [AUTH]      Joining cluster without validating the identity of the Auth Server. This may open you up to a Man-In-The-Middle (MITM) attack if an attacker can gain privileged network access. To remedy this, use the CA pin value provided when join token was generated to validate the identity of the Auth Server. auth/register.go:250
+DEBU [AUTH:7]    Client "127.0.0.1:43422" sent "teleport.cluster.local" in SNI, which causes this auth server to send all known CAs in TLS handshake. If this client is version 4.2 or older, this is expected; if this client is version 4.3 or above, please let us know at https://github.com/gravitational/teleport/issues/new auth/middleware.go:249
+DEBU [AUTH:7]    Client "127.0.0.1:43428" sent "teleport.cluster.local" in SNI, which causes this auth server to send all known CAs in TLS handshake. If this client is version 4.2 or older, this is expected; if this client is version 4.3 or above, please let us know at https://github.com/gravitational/teleport/issues/new auth/middleware.go:249
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:166011719299810544728538141276039204565) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:299835959496856599150491739322999131811) auth/middleware.go:592
+DEBU [AUTH:7]    Server certificate cert(5200240a-205e-4d12-aa3d-5803890af3a3.localhost issued by localhost:166011719299810544728538141276039204565). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:166011719299810544728538141276039204565) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:299835959496856599150491739322999131811) auth/middleware.go:592
+DEBU [AUTH:7]    Server certificate cert(5200240a-205e-4d12-aa3d-5803890af3a3.localhost issued by localhost:166011719299810544728538141276039204565). auth/middleware.go:297
+INFO [AUTH]      Node "localhost" [e4d282cc-e83c-4453-a993-f83d7133a628] is trying to join with role: Proxy. auth/auth.go:1550
+DEBU [KEYGEN]    Generated SSH host certificate for role Proxy with principals: [e4d282cc-e83c-4453-a993-f83d7133a628.localhost e4d282cc-e83c-4453-a993-f83d7133a628 localhost.localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local]. native/native.go:232
+INFO [CA]        Generating TLS certificate {0x45239d0 0xc000fb10b0 1.3.9999.1.7=#13096c6f63616c686f7374,CN=e4d282cc-e83c-4453-a993-f83d7133a628.localhost,O=Proxy,POSTALCODE=null,STREET= 2036-10-08 10:47:21.42121279 +0000 UTC [localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local *.teleport.cluster.local teleport.cluster.local]}. common_name:e4d282cc-e83c-4453-a993-f83d7133a628.localhost dns_names:[localhost localhost 127.0.0.1 ::1 remote.kube.proxy.teleport.cluster.local *.teleport.cluster.local teleport.cluster.local] locality:[] not_after:2036-10-08 10:47:21.42121279 +0000 UTC org:[Proxy] org_unit:[] tlsca/ca.go:600
+INFO [AUTH]      Node "localhost" [e4d282cc-e83c-4453-a993-f83d7133a628] has joined the cluster. auth/auth.go:1584
+INFO [AUTH]      Successfully registered with auth server. auth/register.go:152
+INFO [PROC:8]    Proxy has obtained credentials to connect to cluster. service/connect.go:385
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:166011719299810544728538141276039204565) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:299835959496856599150491739322999131811) auth/middleware.go:592
+DEBU [AUTH:7]    Server certificate cert(5200240a-205e-4d12-aa3d-5803890af3a3.localhost issued by localhost:166011719299810544728538141276039204565). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:166011719299810544728538141276039204565) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:299835959496856599150491739322999131811) auth/middleware.go:592
+DEBU [AUTH:7]    Server certificate cert(5200240a-205e-4d12-aa3d-5803890af3a3.localhost issued by localhost:166011719299810544728538141276039204565). auth/middleware.go:297
+INFO [PROC:8]    The process has successfully wrote credentials and state of Proxy to disk. service/connect.go:426
+INFO [PROC:8]    Proxy: features loaded from auth server: Kubernetes:true App:true DB:true AccessControls:true AdvancedAccessWorkflows:true  service/connect.go:61
+INFO [PROC:8]    Service proxy:ssh is creating new listener on 127.0.0.1:0. service/signals.go:213
+INFO [PROC:8]    Service proxy:tunnel:web is creating new listener on 127.0.0.1:0. service/signals.go:213
+DEBU [SSH:PROXY] Supported ciphers: ["aes128-gcm@openssh.com" "chacha20-poly1305@openssh.com" "aes128-ctr" "aes192-ctr" "aes256-ctr"]. sshutils/server.go:228
+DEBU [SSH:PROXY] Supported KEX algorithms: ["curve25519-sha256@libssh.org" "ecdh-sha2-nistp256" "ecdh-sha2-nistp384" "ecdh-sha2-nistp521"]. sshutils/server.go:238
+DEBU [SSH:PROXY] Supported MAC algorithms: ["hmac-sha2-256-etm@openssh.com" "hmac-sha2-256"]. sshutils/server.go:248
+INFO [PROXY:SER] Reverse tunnel service 7.0.0-dev: is starting on 127.0.0.1:0. utils/cli.go:272
+[PROXY]        Reverse tunnel service 7.0.0-dev: is starting on 127.0.0.1:0.
+INFO [PROXY:SER] Starting 7.0.0-dev: on 127.0.0.1:0 using no cache policy service/service.go:2500
+DEBU [SSH:PROXY] Listening on 127.0.0.1:44451. sshutils/server.go:381
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:166011719299810544728538141276039204565) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:299835959496856599150491739322999131811) auth/middleware.go:592
+DEBU [AUTH:7]    Server certificate cert(5200240a-205e-4d12-aa3d-5803890af3a3.localhost issued by localhost:166011719299810544728538141276039204565). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:166011719299810544728538141276039204565) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:299835959496856599150491739322999131811) auth/middleware.go:592
+DEBU [AUTH:7]    Server certificate cert(5200240a-205e-4d12-aa3d-5803890af3a3.localhost issued by localhost:166011719299810544728538141276039204565). auth/middleware.go:297
+INFO [PROXY:SER] Loading TLS certificate /tmp/TestMakeClient1726134802/002/webproxy_cert.pem and key /tmp/TestMakeClient1726134802/002/webproxy_key.pem. service/service.go:2616
+INFO [PROXY:SER] Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0. utils/cli.go:272
+[PROXY]        Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0.
+INFO [PROXY:SER] Web proxy service 7.0.0-dev: is starting on 127.0.0.1:0. service/service.go:2660
+DEBU [TSH]       Extracted username "ekontsevoy" from the identity file ../../fixtures/certs/identities/key-cert-ca.pem. tsh/tsh.go:1677
+WARNING: the certificate has expired on 2017-06-11 07:27:06 +0000 UTC
+INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+DEBU [TSH]       Pinging the proxy to fetch listening addresses for non-web ports. tsh/tsh.go:1837
+DEBU [CLIENT]    attempting to use loopback pool for local proxy addr: 127.0.0.1:44451 client/api.go:2720
+DEBU [CLIENT]    could not open any path in: /var/lib/teleport/webproxy_cert.pem client/api.go:2726
+DEBU [SSH:PROXY] Supported ciphers: ["aes128-gcm@openssh.com" "chacha20-poly1305@openssh.com" "aes128-ctr" "aes192-ctr" "aes256-ctr"]. sshutils/server.go:228
+DEBU [SSH:PROXY] Supported KEX algorithms: ["curve25519-sha256@libssh.org" "ecdh-sha2-nistp256" "ecdh-sha2-nistp384" "ecdh-sha2-nistp521"]. sshutils/server.go:238
+DEBU [SSH:PROXY] Supported MAC algorithms: ["hmac-sha2-256-etm@openssh.com" "hmac-sha2-256"]. sshutils/server.go:248
+DEBU [PROXY:BEA] Starting Proxy heartbeat with announce period: 1m0s, keep-alive period 5m53.126086882s, poll period: 5s srv/heartbeat.go:143
+INFO [PROXY:SER] SSH proxy service 7.0.0-dev: is starting on 127.0.0.1:41117. utils/cli.go:272
+[PROXY]        SSH proxy service 7.0.0-dev: is starting on 127.0.0.1:41117.
+INFO [PROXY:SER] SSH proxy service 7.0.0-dev: is starting on {127.0.0.1:41117 tcp } service/service.go:2705
+INFO [PROC:8]    The new service has started successfully. Starting syncing rotation status with period 10m0s. service/connect.go:438
+INFO [PROXY:AGE] Starting reverse tunnel agent pool. service/service.go:2730
+INFO [DB:SERVIC] Starting Database proxy server on 127.0.0.1:0. service/service.go:2831
+DEBU [DB:PROXY]  Started database proxy. db/proxyserver.go:133
+DEBU [SSH:PROXY] Listening on 127.0.0.1:41117. sshutils/server.go:381
+INFO [AUDIT:8]   Creating directory /tmp/TestMakeClient1726134802/002/log. service/service.go:1927
+INFO [AUDIT:8]   Creating directory /tmp/TestMakeClient1726134802/002/log/upload. service/service.go:1927
+INFO [AUDIT:8]   Creating directory /tmp/TestMakeClient1726134802/002/log/upload/sessions. service/service.go:1927
+INFO [AUDIT:8]   Creating directory /tmp/TestMakeClient1726134802/002/log/upload/sessions/default. service/service.go:1927
+INFO [AUDIT:8]   Creating directory /tmp/TestMakeClient1726134802/002/log. service/service.go:1927
+INFO [AUDIT:8]   Creating directory /tmp/TestMakeClient1726134802/002/log/upload. service/service.go:1927
+INFO [AUDIT:8]   Creating directory /tmp/TestMakeClient1726134802/002/log/upload/streaming. service/service.go:1927
+INFO [AUDIT:8]   Creating directory /tmp/TestMakeClient1726134802/002/log/upload/streaming/default. service/service.go:1927
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:166011719299810544728538141276039204565) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:299835959496856599150491739322999131811) auth/middleware.go:592
+DEBU [AUTH:7]    Server certificate cert(5200240a-205e-4d12-aa3d-5803890af3a3.localhost issued by localhost:166011719299810544728538141276039204565). auth/middleware.go:297
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:166011719299810544728538141276039204565) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:166011719299810544728538141276039204565) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:299835959496856599150491739322999131811) auth/middleware.go:592
+DEBU [AUTH]      ClientCertPool -> cert(localhost issued by localhost:299835959496856599150491739322999131811) auth/middleware.go:592
+DEBU [AUTH:7]    Server certificate cert(5200240a-205e-4d12-aa3d-5803890af3a3.localhost issued by localhost:166011719299810544728538141276039204565). auth/middleware.go:297
+DEBU             Closing. reversetunnel/rc_manager.go:147
+INFO [AUDIT:8]   Shutting down. service/service.go:1967
+DEBU [AUTH:BEAT] Heartbeat exited. srv/heartbeat.go:269
+INFO [PROXY:SER] Shutting down immediately. service/service.go:2865
+INFO [AUDIT:8]   Exited. service/service.go:1969
+DEBU [AUDIT]     Uploader is exiting. events/uploader.go:158
+INFO [WEB]       Closing session cache. web/sessions.go:461
+WARN [PROC:7]    Sync rotation state cycle failed: context is closing, going to retry after ~10s. service/connect.go:455
+DEBU [SESSION:P] Closing Session Registry. srv/sess.go:120
+INFO [AUDIT:8]   File uploader is shutting down. service/service.go:1993
+WARN [PROXY:8]   Re-init the watcher on error: context is closing. services/proxywatcher.go:189
+INFO [AUDIT:8]   File uploader has shut down. service/service.go:1995
+DEBU [SSH:PROXY] Server 127.0.0.1:44451 has closed. sshutils/server.go:386
+INFO [PROXY:SER] Exited. service/service.go:2666
+INFO [WEB]       Closing session cache. web/sessions.go:461
+DEBU [PROXY:8]   Reloading Linear(attempt=0, duration=0s). services/proxywatcher.go:191
+INFO [AUTH:7]    Shutting down immediately. service/service.go:1404
+INFO [PROXY:SER] Exited. service/service.go:2901
+DEBU [PROXY:8]   Closed, returning from update loop. services/proxywatcher.go:200
+DEBU [PROXY:BEA] Heartbeat exited. srv/heartbeat.go:269
+DEBU [DB:PROXY]  Database proxy exited. db/proxyserver.go:141
+DEBU [SSH:PROXY] Server 127.0.0.1:41117 has closed. sshutils/server.go:386
+DEBU [PROXY:8]   Closing. reversetunnel/srv.go:379
+INFO [AUTH:7]    Exited. service/service.go:1414
+WARN [AUTH:7]    TLS server exited with error: http: Server closed. service/service.go:1296
+--- PASS: TestMakeClient (1.50s)
+=== RUN   TestIdentityRead
+--- PASS: TestIdentityRead (0.00s)
+=== RUN   TestOptions
+=== PAUSE TestOptions
+=== RUN   TestFormatConnectCommand
+=== RUN   TestFormatConnectCommand/no_default_user/database_are_specified
+=== RUN   TestFormatConnectCommand/default_user_is_specified
+=== RUN   TestFormatConnectCommand/default_database_is_specified
+=== RUN   TestFormatConnectCommand/default_user/database_are_specified
+=== RUN   TestFormatConnectCommand/unsupported_database_protocol
+--- PASS: TestFormatConnectCommand (0.00s)
+    --- PASS: TestFormatConnectCommand/no_default_user/database_are_specified (0.00s)
+    --- PASS: TestFormatConnectCommand/default_user_is_specified (0.00s)
+    --- PASS: TestFormatConnectCommand/default_database_is_specified (0.00s)
+    --- PASS: TestFormatConnectCommand/default_user/database_are_specified (0.00s)
+    --- PASS: TestFormatConnectCommand/unsupported_database_protocol (0.00s)
+=== RUN   TestReadClusterFlag
+=== RUN   TestReadClusterFlag/nothing_set
+=== RUN   TestReadClusterFlag/TELEPORT_SITE_set
+=== RUN   TestReadClusterFlag/TELEPORT_CLUSTER_set
+=== RUN   TestReadClusterFlag/TELEPORT_SITE_and_TELEPORT_CLUSTER_set,_prefer_TELEPORT_CLUSTER
+=== RUN   TestReadClusterFlag/TELEPORT_SITE_and_TELEPORT_CLUSTER_and_CLI_flag_is_set,_prefer_CLI
+--- PASS: TestReadClusterFlag (0.00s)
+    --- PASS: TestReadClusterFlag/nothing_set (0.00s)
+    --- PASS: TestReadClusterFlag/TELEPORT_SITE_set (0.00s)
+    --- PASS: TestReadClusterFlag/TELEPORT_CLUSTER_set (0.00s)
+    --- PASS: TestReadClusterFlag/TELEPORT_SITE_and_TELEPORT_CLUSTER_set,_prefer_TELEPORT_CLUSTER (0.00s)
+    --- PASS: TestReadClusterFlag/TELEPORT_SITE_and_TELEPORT_CLUSTER_and_CLI_flag_is_set,_prefer_CLI (0.00s)
+=== RUN   TestKubeConfigUpdate
+=== PAUSE TestKubeConfigUpdate
+=== RUN   TestMakeClientHomePath
+INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+DEBU [CLIENT]    Skipping connection to the local ssh-agent. client/keyagent.go:138
+ERRO [KEYSTORE]  open /tmp/TestMakeClientHomePath2487680152/001/keys/home-test.proxy.example.com/alice: no such file or directory client/keystore.go:243
+DEBU [TSH]       open /tmp/TestMakeClientHomePath2487680152/001/keys/home-test.proxy.example.com/alice: no such file or directory tsh/tsh.go:1824
+DEBU [TSH]       Web proxy port was not set. Attempting to detect port number to use. tsh/tsh.go:1869
+DEBU [TSH]       Resolving default proxy port (insecure: false) tsh/resolve_default_addr.go:121
+DEBU [TSH]       Trying proxy:3080... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Race request failed error:[Get "https://proxy:3080/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+INFO [KEYGEN]    Stopping key precomputation routine. native/native.go:139
+DEBU [TSH]       Trying proxy:443... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Race request failed error:[Get "https://proxy:443/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+DEBU [TSH]       Proxy port resolution failed, falling back to legacy default. error:[Get "https://proxy:443/webapi/ping": dial tcp: lookup proxy on 10.3.9.5:53: no such host] tsh/tsh.go:1878
+INFO [CLIENT]    No teleport login given. defaulting to root client/api.go:1035
+INFO [CLIENT]    no host login given. defaulting to root client/api.go:1045
+DEBU [CLIENT]    Skipping connection to the local ssh-agent. client/keyagent.go:138
+--- PASS: TestMakeClientHomePath (0.25s)
+=== RUN   TestReadTeleportHome
+=== RUN   TestReadTeleportHome/Environment_is_set
+=== RUN   TestReadTeleportHome/Environment_not_is_set
+--- PASS: TestReadTeleportHome (0.00s)
+    --- PASS: TestReadTeleportHome/Environment_is_set (0.00s)
+    --- PASS: TestReadTeleportHome/Environment_not_is_set (0.00s)
+=== CONT  TestResolveDefaultAddr
+=== CONT  TestResolveUndeliveredBodyDoesNotBlockForever
+=== CONT  TestKubeConfigUpdate
+=== RUN   TestKubeConfigUpdate/selected_cluster
+=== CONT  TestOptions
+=== CONT  TestResolveDefaultAddrTimeout
+=== CONT  TestResolveNonOKResponseIsAnError
+=== CONT  TestResolveDefaultAddrTimeoutBeforeAllRacersLaunched
+=== RUN   TestOptions/Space_Delimited
+=== RUN   TestOptions/Equals_Sign_Delimited
+=== RUN   TestOptions/Invalid_key
+DEBU [TSH]       Resolving default proxy port (insecure: true) tsh/resolve_default_addr.go:121
+=== RUN   TestOptions/Incomplete_option
+=== RUN   TestOptions/AddKeysToAgent_Invalid_Value
+DEBU [TSH]       Trying 127.0.0.1:35057... tsh/resolve_default_addr.go:109
+=== CONT  TestResolveDefaultAddrSingleCandidate
+=== RUN   TestOptions/Forward_Agent_Yes
+=== RUN   TestOptions/Forward_Agent_No
+=== RUN   TestOptions/Forward_Agent_Local
+=== RUN   TestOptions/Forward_Agent_InvalidValue
+--- PASS: TestOptions (0.00s)
+    --- PASS: TestOptions/Space_Delimited (0.00s)
+    --- PASS: TestOptions/Equals_Sign_Delimited (0.00s)
+    --- PASS: TestOptions/Invalid_key (0.00s)
+    --- PASS: TestOptions/Incomplete_option (0.00s)
+    --- PASS: TestOptions/AddKeysToAgent_Invalid_Value (0.00s)
+    --- PASS: TestOptions/Forward_Agent_Yes (0.00s)
+    --- PASS: TestOptions/Forward_Agent_No (0.00s)
+    --- PASS: TestOptions/Forward_Agent_Local (0.00s)
+    --- PASS: TestOptions/Forward_Agent_InvalidValue (0.00s)
+=== RUN   TestKubeConfigUpdate/no_selected_cluster
+=== CONT  TestResolveDefaultAddrNoCandidates
+DEBU [TSH]       Resolving default proxy port (insecure: true) tsh/resolve_default_addr.go:121
+=== RUN   TestKubeConfigUpdate/invalid_selected_cluster
+DEBU [TSH]       Trying 127.0.0.1:38989... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Resolving default proxy port (insecure: true) tsh/resolve_default_addr.go:121
+--- PASS: TestResolveDefaultAddrNoCandidates (0.00s)
+=== RUN   TestKubeConfigUpdate/no_kube_clusters
+DEBU [TSH]       Disabling exec plugin mode for kubeconfig because this Teleport cluster has no Kubernetes clusters. tsh/kube.go:321
+=== RUN   TestKubeConfigUpdate/no_tsh_path
+--- PASS: TestKubeConfigUpdate (0.00s)
+    --- PASS: TestKubeConfigUpdate/selected_cluster (0.00s)
+    --- PASS: TestKubeConfigUpdate/no_selected_cluster (0.00s)
+    --- PASS: TestKubeConfigUpdate/invalid_selected_cluster (0.00s)
+    --- PASS: TestKubeConfigUpdate/no_kube_clusters (0.00s)
+    --- PASS: TestKubeConfigUpdate/no_tsh_path (0.00s)
+DEBU [TSH]       Resolving default proxy port (insecure: true) tsh/resolve_default_addr.go:121
+DEBU [TSH]       Trying 127.0.0.1:44785... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Resolving default proxy port (insecure: true) tsh/resolve_default_addr.go:121
+DEBU [TSH]       Trying 127.0.0.1:42235... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Resolving default proxy port (insecure: true) tsh/resolve_default_addr.go:121
+DEBU [TSH]       Trying 127.0.0.1:45315... tsh/resolve_default_addr.go:109
+DEBU [TEST]      Writing response header to *http.response tsh/resolve_default_addr_test.go:209
+DEBU [TEST]      Waiting forever instead of sending response body tsh/resolve_default_addr_test.go:217
+DEBU [TSH]       Racer received non-OK response: 418 tsh/resolve_default_addr.go:94
+DEBU [TEST]      Waiting forever... tsh/resolve_default_addr_test.go:39
+DEBU [TEST]      Responding tsh/resolve_default_addr_test.go:48
+DEBU [TSH]       Address 127.0.0.1:44785 succeeded. Selected as canonical proxy address tsh/resolve_default_addr.go:195
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+--- PASS: TestResolveDefaultAddrSingleCandidate (0.00s)
+DEBU [TEST]      Waiting forever... tsh/resolve_default_addr_test.go:39
+DEBU [TEST]      Responding tsh/resolve_default_addr_test.go:48
+DEBU [TSH]       Racer received non-OK response: 418 tsh/resolve_default_addr.go:94
+DEBU [TSH]       Failed racer response body: "Hello, world" tsh/resolve_default_addr.go:66
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+--- PASS: TestResolveNonOKResponseIsAnError (0.00s)
+DEBU [TSH]       Resolving default proxy port (insecure: true) tsh/resolve_default_addr.go:121
+DEBU [TSH]       Trying 127.0.0.1:38421... tsh/resolve_default_addr.go:109
+DEBU [TEST]      Waiting forever... tsh/resolve_default_addr_test.go:39
+DEBU [TSH]       Trying 127.0.0.1:36333... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Trying 127.0.0.1:39169... tsh/resolve_default_addr.go:109
+DEBU [TEST]      Waiting forever... tsh/resolve_default_addr_test.go:39
+DEBU [TEST]      Waiting forever... tsh/resolve_default_addr_test.go:39
+INFO [KEYGEN]    Stopping key precomputation routine. native/native.go:139
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [TSH]       Trying 127.0.0.1:40211... tsh/resolve_default_addr.go:109
+DEBU [TEST]      Waiting forever... tsh/resolve_default_addr_test.go:39
+DEBU [TSH]       Trying 127.0.0.1:44481... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Trying 127.0.0.1:36581... tsh/resolve_default_addr.go:109
+DEBU [TEST]      Waiting forever... tsh/resolve_default_addr_test.go:39
+DEBU [TEST]      Waiting forever... tsh/resolve_default_addr_test.go:39
+DEBU [TSH]       Trying 127.0.0.1:41057... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:41057/webapi/ping": context deadline exceeded] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:38421/webapi/ping": context deadline exceeded] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:40211/webapi/ping": context deadline exceeded] tsh/resolve_default_addr.go:83
+--- PASS: TestResolveDefaultAddrTimeoutBeforeAllRacersLaunched (0.66s)
+DEBU [TSH]       Trying 127.0.0.1:38515... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Trying 127.0.0.1:36219... tsh/resolve_default_addr.go:109
+DEBU [TEST]      Responding tsh/resolve_default_addr_test.go:48
+DEBU [TSH]       Address 127.0.0.1:36219 succeeded. Selected as canonical proxy address tsh/resolve_default_addr.go:195
+DEBU [TEST]      Waiting forever... tsh/resolve_default_addr_test.go:39
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:42235/webapi/ping": context canceled] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:44481/webapi/ping": context canceled] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:36333/webapi/ping": context canceled] tsh/resolve_default_addr.go:83
+--- PASS: TestResolveDefaultAddr (0.75s)
+DEBU [CLIENT]    Client  is connecting to auth server on cluster "localhost". client/client.go:780
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+DEBU [TSH]       Could not read failed racer response body error:[context deadline exceeded] tsh/resolve_default_addr.go:62
+DEBU [TEST]      Exiting handler tsh/resolve_default_addr_test.go:220
+--- PASS: TestResolveUndeliveredBodyDoesNotBlockForever (1.00s)
+DEBU [TSH]       Trying 127.0.0.1:38259... tsh/resolve_default_addr.go:109
+DEBU [TSH]       Waiting for all in-flight racers to finish tsh/resolve_default_addr.go:144
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:38259/webapi/ping": context deadline exceeded] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:38515/webapi/ping": context deadline exceeded] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:45315/webapi/ping": context deadline exceeded] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:36581/webapi/ping": context deadline exceeded] tsh/resolve_default_addr.go:83
+DEBU [TSH]       Race request failed error:[Get "https://127.0.0.1:39169/webapi/ping": context deadline exceeded] tsh/resolve_default_addr.go:83
+--- PASS: TestResolveDefaultAddrTimeout (1.00s)
+PASS
+ok  	github.com/gravitational/teleport/tool/tsh	7.833s
