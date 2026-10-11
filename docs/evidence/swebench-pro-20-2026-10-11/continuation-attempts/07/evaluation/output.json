@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "Test_windows_detectKBsFromKernelVersion",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_windows_detectKBsFromKernelVersion/10.0.19045.2129",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_windows_detectKBsFromKernelVersion/10.0.19045.2130",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_windows_detectKBsFromKernelVersion/10.0.22621.1105",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_windows_detectKBsFromKernelVersion/10.0.20348.1547",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_windows_detectKBsFromKernelVersion/10.0.20348.9999",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_windows_detectKBsFromKernelVersion/err",
+      "status": "PASSED"
+    }
+  ]
+}

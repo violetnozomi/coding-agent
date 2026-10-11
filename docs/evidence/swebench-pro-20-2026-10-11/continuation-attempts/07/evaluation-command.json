@@ -1,0 +1,23 @@
+[
+  "docker",
+  "run",
+  "--name",
+  "nz-pro20-grade-07",
+  "--init",
+  "--pull=never",
+  "--memory=4g",
+  "--cpus=2",
+  "--env",
+  "HOME=/tmp/grade-home",
+  "--mount",
+  "type=bind,source=/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/evaluator-only/instance_future-architect__vuls-030b2e03525d68d74cb749959aac2d7f3fc0effa/tests,target=/tests,readonly",
+  "--mount",
+  "type=bind,source=/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/07/model.patch,target=/tmp/model.patch,readonly",
+  "--mount",
+  "type=bind,source=/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/07/evaluation,target=/logs/verifier",
+  "--entrypoint",
+  "/bin/bash",
+  "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:9b0c0aafd40081b89223b849b7fa30c988347cf0f3ff44d6224e72aa8b8ef4dd",
+  "-c",
+  "mkdir -p /tmp/grade-home; cd /app 2>/dev/null || cd /testbed; if [ -s /tmp/model.patch ]; then git apply --check /tmp/model.patch && git apply /tmp/model.patch || exit 97; fi; bash /tests/test.sh; result=$?; chmod -R a+rX /logs/verifier; exit $result"
+]

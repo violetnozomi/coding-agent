@@ -1,0 +1,11 @@
+{"tool": "bash", "input": {"command": "sed -n '2900,2906p' scanner/windows.go | cat -A | head -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace status --short && echo \"---\" && git -C /workspace log --oneline -3"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace diff scanner/windows.go"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./scanner/ -run Test_windows_detectKBsFromKernelVersion -v 2>&1 | tail -30", "workdir": "/workspace", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./scanner/ -run Test_windows_detectKBsFromKernelVersion -v 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go vet ./scanner/ 2>&1 | head -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "export GOMAXPROCS=2 GOFLAGS=-p=1; go build ./scanner/ 2>&1 | head -20", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build -p 1 ./scanner/ 2>&1 | head -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 ./scanner/ -run Test_windows_detectKBsFromKernelVersion -v 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 ./scanner/ 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace diff --stat && git -C /workspace diff scanner/windows_test.go | head -60"}, "allowed": true}

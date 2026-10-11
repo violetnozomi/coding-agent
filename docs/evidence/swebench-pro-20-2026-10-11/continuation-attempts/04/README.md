@@ -31,3 +31,12 @@
 - executed=False, status=error, command_failed=False: `cd /workspace && python -m py_compile lib/ansible/executor/play_iterator.py lib/ansible/plugins/strategy/__init__.py lib/ansible/plugins/strategy/linear.py && echo COMPILE_OK`
 
 面试复盘练习：从首次诊断找到修改依据，核对实际测试覆盖和改动版本；解释拒绝/环境失败/测试断言失败的差别；对照独立验收遗漏与最终说明，指出仍未证明的行为。受控 smoke 不计入本题，完整推理原件不公开。
+
+
+## 本题复盘要点
+
+任务要求把 PlayIterator 的整数状态迁移为公开的具名类型，同时保留旧名称的类级/实例级访问和弃用提示，并让 HostState 展示可读状态。实际补丁修改迭代器与两处 strategy 调用方，另留下一个 scratch 探测脚本；文件列表和精确变更见 model.patch，不能把探测脚本当成产品需求。
+
+官方在全新原始项目镜像应用本次冻结补丁与固定测试补丁，必需测试 8/8 通过。Agent 自己的测试/探测调用、拒绝与真实执行见 command-evidence.json；官方通过不追认那些未执行调用。Agent 用满 40 个主请求并以 max_turns 结束，没有将外部验收结果反写成 completed。
+
+面试时可解释三个具体问题：枚举与位标志为何采用不同类型；旧整数常量的兼容入口如何发出弃用警告而不改变值；跨模块迁移为何仍需验证旧插件访问。再对照轨迹指出哪些探测推动了修复、哪些调用没有执行，以及为何功能验收通过与 Agent 正常结束是两项独立结论。

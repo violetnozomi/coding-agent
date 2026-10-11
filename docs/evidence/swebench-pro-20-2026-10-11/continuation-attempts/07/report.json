@@ -1,0 +1,12 @@
+{
+  "instance_id": "instance_future-architect__vuls-030b2e03525d68d74cb749959aac2d7f3fc0effa",
+  "attempt": 1,
+  "agent_status": "completed",
+  "resolved": true,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/07",
+  "preparation_retry_not_agent_retry": true,
+  "status": "attempted",
+  "patch_sha256": "6570bf0a7626bba67250ea07b891e08a53c8400e5e7f3265b655a74ebd0df812",
+  "eval_status": "graded",
+  "physical_requests": 27
+}
