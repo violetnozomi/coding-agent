@@ -1,0 +1,268 @@
+[
+  {
+    "tool_call_id": "call_00_LqB4DdYXKfypR3fIjlwq2169",
+    "input": {
+      "command": "find /workspace -path '*/module_utils/common/validation.py' 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_HpsiBtRtBgwLRKiQUslM6031",
+    "input": {
+      "command": "cd /workspace && python -m pytest test/units/module_utils/common/validation/test_check_type_dict.py -q 2>&1 | tail -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_YDX2xQv5QlynPm5LG2Gz1960",
+    "input": {
+      "command": "cd /workspace && python -c \"\nimport sys\nsys.path.insert(0, 'lib')\nfrom ansible.module_utils.common.validation import check_type_dict\ncases = [\n    ({'k1':'v1'}, {'k1':'v1'}),\n    ('k1=v1,k2=v2', {'k1':'v1','k2':'v2'}),\n    ('k1=v1, k2=v2', {'k1':'v1','k2':'v2'}),\n    ('k1=v1 k2=v2', {'k1':'v1','k2':'v2'}),\n    ('{\\\"key\\\": \\\"value\\\", \\\"list\\\": [\\\"one\\\", \\\"two\\\"]}', {'key':'value','list':['one','two']}),\n    (\\\"{'k1': 'v1'}\\\", {'k1':'v1'}),\n]\nfor inp, exp in cases:\n    got = check_type_dict(inp)\n    assert got == exp, (inp, got, exp)\n    print('OK', repr(inp), '->', got)\nfor bad in [1, 3.14159, [1,2], 'a', '{1}', 'k1=v1 k2']:\n    try:\n        r = check_type_dict(bad)\n    except TypeError as e:\n        print('TypeError OK', repr(bad), e)\n    else:\n        raise AssertionError('expected TypeError for %r got %r' % (bad, r))\nprint('ALL PASS')\n\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_r4g6gXQ3KaNYGbTkQu1x7707",
+    "input": {
+      "command": "cd /workspace && python -m pytest test/units/module_utils/common/validation/test_check_type_dict.py -q"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_P4P5fmvTiYllGoHDUaF35970",
+    "input": {
+      "command": "echo hello"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "hello"
+  },
+  {
+    "tool_call_id": "call_00_GS1jIcsGbipfSUV5VFS05084",
+    "input": {
+      "command": "python3 -c \"print(1+1)\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "2"
+  },
+  {
+    "tool_call_id": "call_00_YeV6r9zbciU0KVc83kYv5340",
+    "input": {
+      "command": "cd /workspace && pytest test/units/module_utils/common/validation/test_check_type_dict.py -q 2>&1 | tail -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_5i6ml8omcRjW0JZ3qL7d5503",
+    "input": {
+      "command": "cd /workspace && python scratch_check_dict.py"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_0zj7nZXVssgpfyIjB20p6294",
+    "input": {
+      "command": "cd /workspace && python3 scratch_check_dict.py"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_7kjx0RO5RKVaraRBREng5918",
+    "input": {
+      "command": "cd /workspace && python3 scratch_check_dict.py 2>&1"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_uhY99uCFN0j4aEbL0vCM8922",
+    "input": {
+      "command": "python3 scratch_check_dict.py",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "OK {'k1': 'v1'} -> {'k1': 'v1'}\nOK 'k1=v1,k2=v2' -> {'k1': 'v1', 'k2': 'v2'}\nOK 'k1=v1, k2=v2' -> {'k1': 'v1', 'k2': 'v2'}\nOK 'k1=v1 k2=v2' -> {'k1': 'v1', 'k2': 'v2'}\nOK '{\"key\": \"value\", \"list\": [\"one\", \"two\"]}' -> {'key': 'value', 'list': ['one', 'two']}\nOK \"{'k1': 'v1'}\" -> {'k1': 'v1'}\nTypeError OK 1 <class 'int'> cannot be converted to a dict\nTypeError OK 3.14159 <class 'float'> cannot be converted to a dict\nTypeError OK [1, 2] <class 'list'> cannot be converted to a dict\nTypeError OK 'a' dictionary requested, could not parse JSON or key=value\nTypeError OK '{1}' unable to parse string as dictionary\nTypeError OK 'k1=v1 k2' failed to parse dictionary value 'k1=v1 k2': expected key=value pairs\nALL PASS"
+  },
+  {
+    "tool_call_id": "call_00_rAybZUjmzc5LjpjjWI4x9647",
+    "input": {
+      "command": "python3 -m pytest test/units/module_utils/common/validation/test_check_type_dict.py -q 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "..                                                                       [100%]\n2 passed in 0.01s"
+  },
+  {
+    "tool_call_id": "call_00_ulOsZLlNKd8apj951zbw0242",
+    "input": {
+      "command": "python3 -m pytest test/units/module_utils/common/validation/test_check_type_dict.py -q 2>&1 | tail -5; python3 scratch_check_dict.py 2>&1 | tail -3",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "..                                                                       [100%]\n2 passed in 0.01s\nTypeError OK '{1}' unable to parse string as dictionary\nTypeError OK 'k1=v1 k2' failed to parse dictionary value 'k1=v1 k2': expected key=value pairs\nALL PASS"
+  },
+  {
+    "tool_call_id": "call_00_RWnwxlweTsRPBC3luScE7792",
+    "input": {
+      "command": "rm -f scratch_check_dict.py && echo removed",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-3",
+    "input": {
+      "command": "python -m py_compile lib/ansible/module_utils/common/validation.py",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(python completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_Tn4gvSiWxKQEQM5TkOua3814",
+    "input": {
+      "command": "rm -f scratch_check_dict.py; ls scratch_check_dict.py 2>&1",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-4",
+    "input": {
+      "command": "python -m py_compile lib/ansible/module_utils/common/validation.py",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(python completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_aZKx32763v33LrrE0vah6542",
+    "input": {
+      "command": "git status --short",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "M lib/ansible/module_utils/common/validation.py\n?? .nz-coder/"
+  },
+  {
+    "tool_call_id": "call_00_ALIkJmwzawu0I6PMncgF0293",
+    "input": {
+      "command": "git diff",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "diff --git a/lib/ansible/module_utils/common/validation.py b/lib/ansible/module_utils/common/validation.py\nindex 69721e47f1..a118c26df3 100644\n--- a/lib/ansible/module_utils/common/validation.py\n+++ b/lib/ansible/module_utils/common/validation.py\n@@ -425,12 +425,17 @@ def check_type_dict(value):\n     if isinstance(value, string_types):\n         if value.startswith(\"{\"):\n             try:\n-                return json.loads(value)\n+                result = json.loads(value)\n             except Exception:\n-                (result, exc) = safe_eval(value, dict(), include_exceptions=True)\n-                if exc is not None:\n-                    raise TypeError('unable to evaluate string as dictionary')\n-                return result\n+                # JSON parsing failed, fall back to a restricted literal parse that\n+                # never executes arbitrary code and only accepts dictionaries.\n+                try:\n+                    result = literal_eval(value)\n+                except Exception:\n+                    raise TypeError('unable to parse string as dictionary')\n+            if not isinstance(result, dict):\n+                raise TypeError('unable to parse string as dictionary')\n+            return result\n         elif '=' in value:\n             fields = []\n             field_buffer = []\n@@ -457,7 +462,10 @@ def check_type_dict(value):\n             field = ''.join(field_buffer)\n             if field:\n                 fields.append(field)\n-            return dict(x.split(\"=\", 1) for x in fields)\n+            try:\n+                return dict(x.split(\"=\", 1) for x in fields)\n+            except ValueError:\n+                raise TypeError(\"failed to parse dictionary value '%s': expected key=value pairs\" % value)\n         else:\n             raise TypeError(\"dictionary requested, could not parse JSON or key=value\")"
+  },
+  {
+    "tool_call_id": "call_00_4yowr49eYyAMkQxy6sXu0529",
+    "input": {
+      "command": "python3 -m pytest test/units/module_utils/common/validation/ -q 2>&1 | tail -8",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_cv1PM7dmxJwzITCAxVpJ0803",
+    "input": {
+      "command": "python3 -m pytest test/units/module_utils/common/validation/test_check_type_dict.py -q 2>&1 | tail -5",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "..                                                                       [100%]\n2 passed in 0.01s"
+  },
+  {
+    "tool_call_id": "call_00_84pQpmzPvQ8ypa9BYWNR8214",
+    "input": {
+      "command": "git status --short; ls -la scratch_check_dict.py 2>&1",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_KaBNPUJXT2OeBJmyZoBZ4741",
+    "input": {
+      "command": "git status --short",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "M lib/ansible/module_utils/common/validation.py\n?? .nz-coder/"
+  }
+]

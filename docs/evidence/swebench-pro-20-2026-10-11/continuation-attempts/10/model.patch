@@ -1,0 +1,39 @@
+diff --git a/lib/ansible/module_utils/common/validation.py b/lib/ansible/module_utils/common/validation.py
+index 69721e47f1..a118c26df3 100644
+--- a/lib/ansible/module_utils/common/validation.py
++++ b/lib/ansible/module_utils/common/validation.py
+@@ -425,12 +425,17 @@ def check_type_dict(value):
+     if isinstance(value, string_types):
+         if value.startswith("{"):
+             try:
+-                return json.loads(value)
++                result = json.loads(value)
+             except Exception:
+-                (result, exc) = safe_eval(value, dict(), include_exceptions=True)
+-                if exc is not None:
+-                    raise TypeError('unable to evaluate string as dictionary')
+-                return result
++                # JSON parsing failed, fall back to a restricted literal parse that
++                # never executes arbitrary code and only accepts dictionaries.
++                try:
++                    result = literal_eval(value)
++                except Exception:
++                    raise TypeError('unable to parse string as dictionary')
++            if not isinstance(result, dict):
++                raise TypeError('unable to parse string as dictionary')
++            return result
+         elif '=' in value:
+             fields = []
+             field_buffer = []
+@@ -457,7 +462,10 @@ def check_type_dict(value):
+             field = ''.join(field_buffer)
+             if field:
+                 fields.append(field)
+-            return dict(x.split("=", 1) for x in fields)
++            try:
++                return dict(x.split("=", 1) for x in fields)
++            except ValueError:
++                raise TypeError("failed to parse dictionary value '%s': expected key=value pairs" % value)
+         else:
+             raise TypeError("dictionary requested, could not parse JSON or key=value")
+ 

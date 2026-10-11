@@ -1,0 +1,17 @@
+{
+  "instance_id": "instance_ansible__ansible-d9f1866249756efc264b00ff7497e92c11a9885f-v0f01c69f1e2528b935359cfe578530722bca2c59",
+  "actual_agent_attempt": 1,
+  "agent_status": "completed",
+  "report_status": "attempted",
+  "main_physical_requests": 37,
+  "auxiliary_physical_requests": 0,
+  "reported_usage_estimate_cny": 0.505496,
+  "official_resolved": true,
+  "initial_grade_environment_blocked": false,
+  "corrected_official_grade_present": false,
+  "agent_dependency_isolation_revision": 3,
+  "native_entry_sha256": "d940e7005fc64e0edf59e6d8271cfa90d2eea2b41ea1227a9d3be191ad43dd57",
+  "host_patch_or_model_hints": false,
+  "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/10",
+  "public_reasoning_removed": true
+}

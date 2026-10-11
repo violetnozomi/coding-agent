@@ -1,0 +1,12 @@
+{
+  "instance_id": "instance_ansible__ansible-d9f1866249756efc264b00ff7497e92c11a9885f-v0f01c69f1e2528b935359cfe578530722bca2c59",
+  "attempt": 1,
+  "agent_status": "completed",
+  "resolved": true,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/10",
+  "preparation_retry_not_agent_retry": true,
+  "status": "attempted",
+  "patch_sha256": "4b331c1e27e6f3d96eaf86653174cfd7cd0351291ba762992aa452e2e1bdb61d",
+  "eval_status": "graded",
+  "physical_requests": 37
+}
