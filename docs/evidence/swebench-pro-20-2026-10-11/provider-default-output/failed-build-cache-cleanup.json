@@ -1,0 +1,60 @@
+{
+  "only_ids_from_this_run_build_logs": true,
+  "offline_sdk_and_artifacts_archived": true,
+  "official_base_images_kept_for_first_paid_attempts": true,
+  "actions": [
+    {
+      "command": [
+        "docker",
+        "rm",
+        "16d04398a4bd"
+      ],
+      "returncode": 0,
+      "stdout": "16d04398a4bd\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "image",
+        "rm",
+        "4c13259474a2"
+      ],
+      "returncode": 0,
+      "stdout": "Deleted: sha256:4c13259474a275ca734d990e01f1e8bd1d881f8eeb37ad7bd7b36d889d00396b\nDeleted: sha256:5232812ad61a7bfad4b1e1fca680a821ae12951956fff28944111eb74b81b4c5\nDeleted: sha256:bec225dc88da5e775dfec63ec47fc2280dca0b097ed91de54c102a6c48b161b6\nDeleted: sha256:add515ffae488ae0142f3ffd555ff8f64816ea94fbaae1b7a1f2234e66e71af7\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "rm",
+        "8c9c4bad47d7"
+      ],
+      "returncode": 0,
+      "stdout": "8c9c4bad47d7\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "image",
+        "rm",
+        "d8efdc06d500"
+      ],
+      "returncode": 0,
+      "stdout": "Deleted: sha256:d8efdc06d500b51926d38ea0a5bf488ed83f9588685c42bd8c6edd30f0be2f3e\nDeleted: sha256:a3c091d06f4955a9e733fee70083fe8438091257b439667285e94b20374774ed\nDeleted: sha256:e519df46fe1ccf3fcf25cdc5a758505f8e74807d64dd156d0b7325ffafce450a\nDeleted: sha256:4c451cb7362e7989be0a4565793fecf5d3843b531704294613a0a5573026cfc6\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "image",
+        "rm",
+        "nz-pro20-musl:20261011"
+      ],
+      "returncode": 0,
+      "stdout": "Untagged: nz-pro20-musl:20261011\nDeleted: sha256:601bd805a509d90d7f479f762e83e039f5f06de3e2d71c2629e1b6827afb2af4\nDeleted: sha256:b83e68bbb6fae90de07c12166abdf2a5591b90e854fb0ba18ac10db380ec11d5\nDeleted: sha256:cbe2f5c3a7837d86fef23aa948f96b32ce3898a008b8b576ebe12f7ab2afca6b\nDeleted: sha256:5ca8d1f0f6f51662c0ca52ef7981f01b862459c725c44f261b68020258afdb7f\nDeleted: sha256:7e5476aaa3154910c050eaf0e4b833a9249d9180e71d4aacfa0e0ace2737a749\nDeleted: sha256:625935d1ffdfab993a286eb01042c7d0b5fdfc90604e73044a413d612c1bb9f5\n",
+      "stderr": ""
+    }
+  ]
+}

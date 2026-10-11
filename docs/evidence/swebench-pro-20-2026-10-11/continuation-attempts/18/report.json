@@ -1,0 +1,11 @@
+{
+  "instance_id": "instance_internetarchive__openlibrary-e010b2a13697de70170033902ba2e27a1e1acbe9-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "not_run",
+  "reason": "environment_preparation_restart_at_zero_inflight",
+  "physical_requests": 0,
+  "model_attempt_never_started": true,
+  "manual_intervention_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/coordinator-preparation-restart.json"
+}

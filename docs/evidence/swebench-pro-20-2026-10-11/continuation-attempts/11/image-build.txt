@@ -1,0 +1,20 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  13.23MB
+Step 1/4 : FROM ghcr.io/scaleapi/swe-bench_pro-v2@sha256:990b22aeb2c4c55a5f84ef5e9e163eb65b6027eb188770838b2367066f122009
+ ---> 86593ecc5a66
+Step 2/4 : COPY wheels /nz-wheels
+ ---> e519df46fe1c
+Step 3/4 : COPY requirements.txt /nz-requirements.txt
+ ---> d8efdc06d500
+Step 4/4 : RUN python3 -m pip install --no-index --no-deps --require-hashes --target=/opt/nz-site --find-links=/nz-wheels -r /nz-requirements.txt && rm -rf /nz-wheels
+ ---> Running in 8c9c4bad47d7
+Looking in links: /nz-wheels
+Processing /nz-wheels/annotated_types-0.8.0-py3-none-any.whl (from -r /nz-requirements.txt (line 1))
+Processing /nz-wheels/anyio-4.15.1-py3-none-any.whl (from -r /nz-requirements.txt (line 2))
+Processing /nz-wheels/certifi-2026.7.22-py3-none-any.whl (from -r /nz-requirements.txt (line 3))
+[91mERROR: Could not find a version that satisfies the requirement charset-normalizer==3.5.2 (from versions: none)
+[0m[91mERROR: No matching distribution found for charset-normalizer==3.5.2
+[0mThe command '/bin/sh -c python3 -m pip install --no-index --no-deps --require-hashes --target=/opt/nz-site --find-links=/nz-wheels -r /nz-requirements.txt && rm -rf /nz-wheels' returned a non-zero code: 1

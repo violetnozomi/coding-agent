@@ -1,0 +1,18 @@
+{
+  "reason": "restart_environment_preparation_after_confirmed_musl_fix",
+  "coordinator_pid": 1476085,
+  "all_admitted_requests_settled": true,
+  "all_charged_tasks_archived_and_reported": true,
+  "requests": 179,
+  "auxiliary_requests": 0,
+  "ledger_sha256": "205eb3d2e9d147ed476821f3d43dcc932175a7fa9308d7033230177f600d5768",
+  "only_owned_preparation_children_terminated": [
+    {
+      "pid": 1974399,
+      "command": "docker pull ghcr.io/scaleapi/swe-bench_pro-v2:instance_internetarchive__openlibrary-8a5a63af6e0be406aa6c8c9b6d5f28b2f1b6af5a-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4"
+    }
+  ],
+  "original_agent_attempts_not_repeated": true,
+  "user_total_budget_cny": 50,
+  "time_epoch": 1791704202.7715096
+}

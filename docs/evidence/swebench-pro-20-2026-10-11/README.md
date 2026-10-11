@@ -122,3 +122,14 @@ Agent 使用无网络、非 root、只读容器根目录、独立 HOME 和工作
 [回归结果](provider-default-output/test-results.txt)：85 passed、3 skipped；跳过项是未选择完整资源的旧审查测试和两个计数资源测试，没有自动下载或调用收费模型。真实 SDK 的受控检查在 Ansible 原始项目 Python 3.8 环境读取与执行命令，3 个实际主请求均没有 max_tokens，0 个收费请求；[入口检查](provider-default-output/runtime-smoke-verification.json) 和 [账目续接检查](provider-default-output/continuation-verification.json) 留存。初次归档重用了旧 smoke 名称而冲突；未重跑工具，改为独立归档名保存同次执行证据。
 
 运行命令 `python docs/evidence/swebench-pro-20-2026-10-11/continue-unattempted.py --execute`。新原件位于私有 next 目录，公开记录逐题放在 continuation-attempts。原先的 [首阶段结果](initial-outcomes.json)、原账本和原停止证据保持不变；最新汇总只替换已经有新报告的未尝试题目。每题终止、功能验收、usage、辅助拒绝与环境阻断分别记录。仍保留原任务轮次、安全、隔离和记录边界；本次只移除人为的主请求输出上限。
+
+
+## 第一次默认输出阶段的关闭与环境续接
+
+179 次真实主请求、0 次出站辅助请求均已结算；与首阶段 103 次合计 282 次。累计已返回 usage 的保守峰时估算 11.255294 元，剩余 38.744706 元，不是账单。04/07/09/10/12 五题的官方必需项通过；04 与 12 的 Agent 仍为 max_turns，其他三题正常结束。第 12 题必需项 42/42 通过；不反写 Agent 状态。
+
+08/11 在 manylinux 与 musllinux 轮包匹配处准备失败，均未调用模型；05 空间预检失败，也未调用模型。源文件修复不会改变已加载的长进程，因此在第 12 题完成验收与归档、所有已准入请求已结算后，仅终止本次协调器及其第 13 题 docker pull 子进程；原账本不改写。13—20 的零次尝试记录据实际账本登记为环境准备重启，不伪造 Agent 运行或通过。第一次检查发现 12 已有真实请求，守卫拒绝重启并恢复原进程；这次短暂暂停/恢复也留存，不隐藏人工干预。
+
+现有入口 `continue-unattempted.py --preparation-retry --execute` 只接续 05、08、11、13—20 的首次 Agent 尝试。预算从两份已关闭账本逐笔扣除，前阶段未知 usage、未结算请求、计量失败、费用矛盾或已发请求却声称零次尝试，都会拒绝新调用。新增离线回归 9 passed，不调用模型；[测试](../../../tests/evaluation/test_pro_continuation_plan.py)。主请求继续省略 max_tokens，50 元总授权不变。
+
+当前已有的大镜像优先使用后回收，再准备缺失镜像，固定名单和题号不变；排序只依据镜像缓存，不依据成绩。只清理本轮构建日志可归属的失败容器/中间镜像，以及已归档的离线 SDK 临时镜像，不清理用户或其他项目资源。原阶段闭账与人工干预见 provider-default-output 中的 phase2-summary、phase2-ledger 与 coordinator-preparation-restart 原件。

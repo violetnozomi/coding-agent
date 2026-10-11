@@ -1,0 +1,326 @@
+diff --git a/qutebrowser/misc/guiprocess.py b/qutebrowser/misc/guiprocess.py
+index f99be39fa..66693193d 100644
+--- a/qutebrowser/misc/guiprocess.py
++++ b/qutebrowser/misc/guiprocess.py
+@@ -189,6 +189,8 @@ class GUIProcess(QObject):
+         self._proc.started.connect(self._on_started)
+         self._proc.started.connect(self.started)
+         self._proc.readyRead.connect(self._on_ready_read)  # type: ignore[attr-defined]
++        self._proc.readyReadStandardError.connect(  # type: ignore[attr-defined]
++            self._on_ready_read_stderr)
+ 
+         if additional_env is not None:
+             procenv = QProcessEnvironment.systemEnvironment()
+@@ -206,8 +208,34 @@ class GUIProcess(QObject):
+         encoding = locale.getpreferredencoding(do_setlocale=False)
+         return qba.data().decode(encoding, 'replace')
+ 
++    @staticmethod
++    def _apply_cr(text: str, output: str) -> str:
++        """Apply crude CR handling to newly read text and accumulated output.
++
++        This is used for e.g. progress output which overwrites the current
++        line using a carriage return.
++
++        Args:
++            text: The newly read text.
++            output: The output accumulated so far for this stream.
++
++        Return:
++            The new accumulated output.
++        """
++        if '\r' in text and not utils.is_windows:
++            # Discard everything before the last \r in the new input, then discard
++            # everything after the last \n in the already accumulated output.
++            text = text.rsplit('\r', maxsplit=1)[-1]
++            if '\n' in output:
++                output = output.rsplit('\n', maxsplit=1)[0] + '\n'
++            else:
++                output = ''
++
++        return output + text
++
+     @pyqtSlot()
+     def _on_ready_read(self) -> None:
++        """Called when there's data to be read on stdout."""
+         if not self._output_messages:
+             return
+ 
+@@ -216,20 +244,25 @@ class GUIProcess(QObject):
+             if not text:
+                 break
+ 
+-            if '\r' in text and not utils.is_windows:
+-                # Crude handling of CR for e.g. progress output.
+-                # Discard everything before the last \r in the new input, then discard
+-                # everything after the last \n in self.stdout.
+-                text = text.rsplit('\r', maxsplit=1)[-1]
+-                if '\n' in self.stdout:
+-                    self.stdout = self.stdout.rsplit('\n', maxsplit=1)[0] + '\n'
+-                else:
+-                    self.stdout = ''
+-
+-            self.stdout += text
++            self.stdout = self._apply_cr(text, self.stdout)
+ 
+         message.info(self._elide_output(self.stdout), replace=f"stdout-{self.pid}")
+ 
++    @pyqtSlot()
++    def _on_ready_read_stderr(self) -> None:
++        """Called when there's data to be read on stderr."""
++        if not self._output_messages:
++            return
++
++        text = self._decode_data(
++            self._proc.readAllStandardError())  # type: ignore[arg-type]
++        if not text:
++            return
++
++        self.stderr = self._apply_cr(text, self.stderr)
++
++        message.error(self._elide_output(self.stderr), replace=f"stderr-{self.pid}")
++
+     @pyqtSlot(QProcess.ProcessError)
+     def _on_error(self, error: QProcess.ProcessError) -> None:
+         """Show a message if there was an error while spawning."""
+@@ -291,7 +324,8 @@ class GUIProcess(QObject):
+                 message.info(
+                     self._elide_output(self.stdout), replace=f"stdout-{self.pid}")
+             if self.stderr:
+-                message.error(self._elide_output(self.stderr))
++                message.error(
++                    self._elide_output(self.stderr), replace=f"stderr-{self.pid}")
+ 
+         if self.outcome.was_successful():
+             if self.verbose:
+diff --git a/scratch_gp.py b/scratch_gp.py
+new file mode 100644
+index 000000000..df5e46b17
+--- /dev/null
++++ b/scratch_gp.py
+@@ -0,0 +1,44 @@
++import sys
++
++from PyQt5.QtCore import QCoreApplication
++
++from qutebrowser.misc import guiprocess
++from qutebrowser.utils import message
++
++app = QCoreApplication(sys.argv)
++events = []
++
++proc = guiprocess.GUIProcess('test', output_messages=True)
++proc._proc.readyRead.connect(lambda: events.append('readyRead'))
++proc._proc.readyReadStandardOutput.connect(lambda: events.append('rr_out'))
++proc._proc.readyReadStandardError.connect(lambda: events.append('rr_err'))
++
++
++def info(text, **kwargs):
++    events.append(('info', text, kwargs.get('replace')))
++
++
++def error(text, **kwargs):
++    events.append(('error', text, kwargs.get('replace')))
++
++
++message.info = info
++message.error = error
++
++
++def fin(code, status):
++    print("EVENTS:", events, flush=True)
++    app.quit()
++
++
++proc.finished.connect(fin)
++
++script = ('import sys, time\n'
++          'print("out text", flush=True)\n'
++          'sys.stderr.write("err text\\n")\n'
++          'sys.stderr.flush()\n'
++          'time.sleep(0.5)\n')
++proc.start(sys.executable, ['-c', script])
++proc._proc.closeWriteChannel()
++
++app.exec_()
+diff --git a/scratch_proc_exp.py b/scratch_proc_exp.py
+new file mode 100644
+index 000000000..ab6c201a1
+--- /dev/null
++++ b/scratch_proc_exp.py
+@@ -0,0 +1,57 @@
++import sys
++from PyQt5.QtCore import QCoreApplication, QProcess
++
++app = QCoreApplication(sys.argv)
++
++
++def run(script, label):
++    proc = QProcess()
++    counts = {'readyRead': 0, 'out': 0, 'err': 0}
++    chunks = {'out': [], 'err': []}
++    proc.setReadChannel(QProcess.StandardOutput)
++
++    def rr():
++        counts['readyRead'] += 1
++
++    def rr_out():
++        counts['out'] += 1
++        chunks['out'].append(bytes(proc.readAllStandardOutput()))
++
++    def rr_err():
++        counts['err'] += 1
++        chunks['err'].append(bytes(proc.readAllStandardError()))
++
++    proc.readyRead.connect(rr)
++    proc.readyReadStandardOutput.connect(rr_out)
++    proc.readyReadStandardError.connect(rr_err)
++
++    def fin(c, s):
++        print(label, "counts:", counts, "chunks:", chunks, "remaining_out:", bytes(proc.readAllStandardOutput()), "remaining_err:", bytes(proc.readAllStandardError()), flush=True)
++        next_case()
++
++    proc.finished.connect(fin)
++    proc.start(sys.executable, ['-c', script])
++
++
++cases = [
++    ("stdout single print", "import sys; print('stdout text')"),
++    ("stderr single write", r"import sys; sys.stderr.write('stderr text\n')"),
++    ("both", "import sys; print('out'); sys.stderr.write('err\n')"),
++    ("two chunks", "import sys, time; print('a', flush=True, end=''); time.sleep(0.3); print('b', flush=True, end='')"),
++]
++
++idx = {'i': 0}
++
++
++def next_case():
++    i = idx['i']
++    if i >= len(cases):
++        app.quit()
++        return
++    idx['i'] += 1
++    label, script = cases[i]
++    run(script, label)
++
++
++next_case()
++app.exec_()
+diff --git a/scratch_proc_exp2.py b/scratch_proc_exp2.py
+new file mode 100644
+index 000000000..7fa7e8172
+--- /dev/null
++++ b/scratch_proc_exp2.py
+@@ -0,0 +1,51 @@
++import sys
++from PyQt5.QtCore import QCoreApplication, QProcess, QTimer
++
++app = QCoreApplication(sys.argv)
++
++results = []
++N = 30
++cases = [
++    ('stdout', 'import sys; print("stdout text")'),
++    ('stderr', 'import sys; sys.stderr.write("stderr text\\n")'),
++    ('both', 'import sys; print("stdout text"); sys.stderr.write("stderr text\\n")'),
++]
++
++
++def run(script, label):
++    proc = QProcess()
++    proc.setReadChannel(QProcess.StandardOutput)
++    counts = {'out': 0, 'err': 0}
++    proc.readyReadStandardOutput.connect(lambda: counts.__setitem__('out', counts['out'] + 1))
++    proc.readyReadStandardError.connect(lambda: counts.__setitem__('err', counts['err'] + 1))
++
++    def fin(c, s):
++        results.append((label, counts['out'], counts['err']))
++        step()
++
++    proc.finished.connect(fin)
++    proc.start(sys.executable, ['-c', script])
++    proc.closeWriteChannel()
++
++
++idx = {'i': 0}
++
++
++def step():
++    i = idx['i']
++    if i >= N * len(cases):
++        dump()
++        return
++    idx['i'] += 1
++    label, script = cases[i % len(cases)]
++    run(script, label)
++
++
++def dump():
++    from collections import Counter
++    print(Counter(results))
++    app.quit()
++
++
++QTimer.singleShot(0, step)
++app.exec_()
+diff --git a/tests/unit/misc/test_guiprocess.py b/tests/unit/misc/test_guiprocess.py
+index 0b707d9db..c30cf5553 100644
+--- a/tests/unit/misc/test_guiprocess.py
++++ b/tests/unit/misc/test_guiprocess.py
+@@ -170,32 +170,37 @@ def test_start_output_message(proc, qtbot, caplog, message_mock, py_proc,
+             proc.start(cmd, args)
+ 
+     if stdout and stderr:
+-        stdout_msg = message_mock.messages[0]
+-        stderr_msg = message_mock.messages[-1]
+-        msg_count = 3  # stdout is reported twice (once live)
+-    elif stdout:
+-        stdout_msg = message_mock.messages[0]
+-        stderr_msg = None
+-        msg_count = 2  # stdout is reported twice (once live)
+-    elif stderr:
+-        stdout_msg = None
+-        stderr_msg = message_mock.messages[0]
+-        msg_count = 1
++        msg_count = 4  # each stream is reported twice (once live)
++    elif stdout or stderr:
++        msg_count = 2  # the stream is reported twice (once live)
+     else:
+-        stdout_msg = None
+-        stderr_msg = None
+         msg_count = 0
+ 
+     assert len(message_mock.messages) == msg_count
+ 
+-    if stdout_msg is not None:
+-        assert stdout_msg.level == usertypes.MessageLevel.info
+-        assert stdout_msg.text == 'stdout text'
++    stdout_msgs = [m for m in message_mock.messages
++                   if m.level == usertypes.MessageLevel.info]
++    stderr_msgs = [m for m in message_mock.messages
++                   if m.level == usertypes.MessageLevel.error]
++
++    if stdout:
++        assert len(stdout_msgs) == 2
++        assert all(msg.text == 'stdout text' for msg in stdout_msgs)
+         assert proc.stdout.strip() == "stdout text", proc.stdout
+-    if stderr_msg is not None:
+-        assert stderr_msg.level == usertypes.MessageLevel.error
+-        assert stderr_msg.text == 'stderr text'
++    else:
++        assert not stdout_msgs
++
++    if stderr:
++        assert len(stderr_msgs) == 2
++        assert all(msg.text == 'stderr text' for msg in stderr_msgs)
+         assert proc.stderr.strip() == "stderr text", proc.stderr
++    else:
++        assert not stderr_msgs
++
++    if stdout and stderr:
++        # The final messages come stdout first, then stderr.
++        assert message_mock.messages[-2].level == usertypes.MessageLevel.info
++        assert message_mock.messages[-1].level == usertypes.MessageLevel.error
+ 
+ 
+ cr_skip = pytest.mark.skipif(

@@ -176,6 +176,15 @@ def main():
     key = dotenv_values(pro.ROOT / ".env").get("API_KEY")
     if not key:
         raise RuntimeError("authorized_host_key_unavailable")
+    if args.preparation_retry:
+        for candidate in plan["tasks"]:
+            image = candidate["task"]["configuration"]["environment"]["docker_image"]
+            candidate["already_cached_image"] = not pro.command(["docker", "image", "inspect", image], check=False).returncode
+        # 先用完已有大镜像并回收，再准备缺失镜像；题号和题面不变。
+        plan["tasks"].sort(key=lambda candidate: not candidate["already_cached_image"])
+        plan["execution_order_reason"] = "cached_environments_first_to_reclaim_owned_space; not_based_on_task_results"
+        pro.save(OUT / "preparation-retry-plan.json", plan)
+        print("ENVIRONMENT_ORDER " + json.dumps([c["number"] for c in plan["tasks"]]), flush=True)
     live = OUT / ("pending" if args.preparation_retry else "next")
     live.mkdir()
     grant = json.loads((OUT / "live/authorization-used.json").read_text())
