@@ -732,3 +732,15 @@ def test_contract_failure_keeps_already_sent_other_role_truthful(tmp_path):
             upstream.shutdown()
             upstream.server_close()
             http_thread.join(2)
+
+
+def test_authorized_forty_pro_instances_use_one_host_ledger(tmp_path):
+    grant = provider_output_grant()
+    grant['scope'] = ['instance_example__project-' + f'{i:040x}' for i in range(40)]
+    with running(tmp_path, authorization=grant, counter=reference_count, output=393216, exact_output=False) as (fake, ledger, binding, path):
+        assert post(path, model=binding.model, omit_output=True).status_code == 200
+        assert len(fake.requests) == len(ledger.attempts) == 1
+        assert ledger.empirical_authorization['cost_limit'] == 50
+    grant['scope'].append('instance_example__project-' + f'{40:040x}')
+    with pytest.raises(ValueError, match='invalid_empirical_authorization'):
+        RelayLedger(tmp_path/'forty-one.jsonl', RelayLimits(), empirical_authorization=grant)

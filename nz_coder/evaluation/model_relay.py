@@ -90,7 +90,7 @@ def empirical_authorization_valid(grant) -> bool:
                          and bool(re.fullmatch(r"[0-9a-f]{64}", str(grant.get("instance_manifest_sha256", "")))))
     if purpose == "swebench-pro-v2":
         # Pro 只使用本轮冻结的公开实例；不扩大旧 Verified 或审查授权。
-        allowed_scope = (len(scope) <= 20 and len(set(scope)) == len(scope)
+        allowed_scope = (len(scope) <= 40 and len(set(scope)) == len(scope)
                          and all(re.fullmatch(r"instance_[\w.-]+__[\w.-]+-[0-9a-f]{40}(?:-v(?:[0-9a-f]{40}|nan))?", unit)
                                  for unit in scope)
                          and bool(re.fullmatch(r"[0-9a-f]{64}", str(grant.get("instance_manifest_sha256", "")))))

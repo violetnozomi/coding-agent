@@ -1,0 +1,35 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_authorized_forty_pro_instances_use_one_host_ledger ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-164/test_authorized_forty_pro_inst0')
+
+    def test_authorized_forty_pro_instances_use_one_host_ledger(tmp_path):
+        grant = provider_output_grant()
+        grant['scope'] = ['instance_example__project-' + f'{i:040x}' for i in range(40)]
+>       with running(tmp_path, authorization=grant, counter=reference_count, output=393216, exact_output=False) as (fake, ledger, binding, path):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/evaluation/test_model_relay.py:740: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../miniconda3/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+tests/evaluation/test_model_relay.py:114: in running
+    ledger = RelayLedger(tmp_path / "ledger.jsonl", limits or RelayLimits(output_total=1000000 if authorization else 100000), empirical_authorization=authorization)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <nz_coder.evaluation.model_relay.RelayLedger object at 0x7edbfb33e510>
+path = PosixPath('/tmp/pytest-of-pyh/pytest-164/test_authorized_forty_pro_inst0/ledger.jsonl')
+limits = RelayLimits(requests=26, input_per_request=100000, input_total=500000, output_total=1000000, request_seconds=180.0)
+
+    def __init__(self, path: Path, limits: RelayLimits, *, clock=time.monotonic, empirical_authorization=None):
+        if empirical_authorization is not None and not empirical_authorization_valid(empirical_authorization):
+>           raise ValueError("invalid_empirical_authorization")
+E           ValueError: invalid_empirical_authorization
+
+nz_coder/evaluation/model_relay.py:112: ValueError
+=========================== short test summary info ============================
+FAILED tests/evaluation/test_model_relay.py::test_authorized_forty_pro_instances_use_one_host_ledger
+1 failed, 58 deselected in 0.14s
