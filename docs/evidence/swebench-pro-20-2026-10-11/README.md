@@ -1,6 +1,6 @@
 # SWE-bench Pro 20 题：任务与记录要求
 
-状态：**已按用户要求取消额外主请求输出限制，继续固定名单中尚未尝试的 16 题**。此前 4 题不重跑。原计量停止与首阶段费用记录保留；当前阶段的逐题轨迹另存 continuation-attempts，不覆盖旧记录。见本页末尾续跑口径和 [逐题结果](current-outcomes.json)。
+状态：**主模型请求已取消额外输出限制，9 题已结束并归档，其余 11 题正在首次接续**。截至前两阶段关闭，已返回 usage 的保守峰时估算 11.255294 元，剩余约 38.744706 元；当前阶段新增费用另在实时账本记录，估算不是账单。各阶段旧账目和原始记录保留，见末尾续接说明和 [逐题结果](current-outcomes.json)。
 
 ## 本轮目标
 
@@ -133,3 +133,5 @@ Agent 使用无网络、非 root、只读容器根目录、独立 HOME 和工作
 现有入口 `continue-unattempted.py --preparation-retry --execute` 只接续 05、08、11、13—20 的首次 Agent 尝试。预算从两份已关闭账本逐笔扣除，前阶段未知 usage、未结算请求、计量失败、费用矛盾或已发请求却声称零次尝试，都会拒绝新调用。新增离线回归 9 passed，不调用模型；[测试](../../../tests/evaluation/test_pro_continuation_plan.py)。主请求继续省略 max_tokens，50 元总授权不变。
 
 当前已有的大镜像优先使用后回收，再准备缺失镜像，固定名单和题号不变；排序只依据镜像缓存，不依据成绩。只清理本轮构建日志可归属的失败容器/中间镜像，以及已归档的离线 SDK 临时镜像，不清理用户或其他项目资源。原阶段闭账与人工干预见 provider-default-output 中的 phase2-summary、phase2-ledger 与 coordinator-preparation-restart 原件。
+
+第 08 题真实第 9 次主请求没有 max_tokens/max_completion_tokens，Provider 报告输出 36287 token，finish_reason=tool_calls，账本正常结算。见 [原始身份与 usage](provider-default-output/observed-long-output-36287.json)。这不是功能通过证据；该任务仍在运行，长响应后的搜索耗时保留在轨迹。第 07/09/10/12 题的 learning.md 补充冻结补丁对应的复盘要点，不向正在运行的 Agent 提供提示。

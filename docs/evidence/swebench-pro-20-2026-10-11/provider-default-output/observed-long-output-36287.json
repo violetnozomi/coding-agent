@@ -1,0 +1,28 @@
+{
+  "task": "08",
+  "attempt_id": "a91077276e214d26a1384a010236e801",
+  "wire_max_tokens": null,
+  "wire_max_completion_tokens": null,
+  "wire_model": "deepseek-flash",
+  "wire_thinking": null,
+  "wire_reasoning_effort": null,
+  "provider_capacity_reserved": 393216,
+  "provider_usage": {
+    "prompt_tokens": 11628,
+    "completion_tokens": 36287,
+    "total_tokens": 47915,
+    "prompt_tokens_details": {
+      "cached_tokens": 6272
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 36174
+    },
+    "prompt_cache_hit_tokens": 6272,
+    "prompt_cache_miss_tokens": 5356
+  },
+  "finish_reason": "tool_calls",
+  "accounting_contract_failed": false,
+  "request_sha256": "74e91273218b5b2be65dff1b4e721bdfa3f6ac84af50b032ddb2c492500c8fa4",
+  "response_sha256": "f75ef019cf7ee7d6b6aa2bbe8f84973c7fda9ad4b3651fefcc0080be8a2269de",
+  "interpretation": "实际输出超过8000且正常结算；官方容量仅供费用预留，不是出站参数。原推理正文保留在私有原件，本记录不公开。任务尚在执行，此记录不是功能通过证据。"
+}
