@@ -1,0 +1,7 @@
+{
+  "original_pid": 3854095,
+  "reason": "urllib download slow; direct curl probe succeeds",
+  "paid_model_requests": 0,
+  "cached_files_preserved": true,
+  "selection_unchanged": true
+}

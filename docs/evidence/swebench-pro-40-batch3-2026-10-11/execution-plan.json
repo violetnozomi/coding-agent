@@ -1,0 +1,24 @@
+{
+  "authorized_total_cny": 50,
+  "authorized_model": "deepseek-flash",
+  "prior_balances_used": false,
+  "planned_concurrency": 4,
+  "per_instance_main_requests": 40,
+  "per_instance_auxiliary_requests": 6,
+  "instance_seconds": 3000,
+  "wire_output_limit": null,
+  "raw_container_evidence_quota_bytes": 2147483648,
+  "current_head": "6388b1ceacb57bdc2d3b2a7ecab225e6fac7778b",
+  "uncommitted_user_changes_at_start": [],
+  "decisions": [
+    "reuse existing executor; no Core changes",
+    "frozen next 40 public IDs excluding both closed batches",
+    "one shared host fee ledger; no separate per-worker grant",
+    "prepare images serially; solve concurrently",
+    "archive before deleting only this batch owned workspaces and images"
+  ],
+  "unknowns": [
+    "50 CNY may not fund all 40 tasks",
+    "public tokenizer is empirical, risk accepted under existing stop-loss"
+  ]
+}
