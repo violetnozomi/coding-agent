@@ -1,0 +1,7 @@
+{"tool": "bash", "input": {"command": "ls /workspace && echo \"---\" && ls /workspace/openlibrary/catalog/utils/"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls /workspace/tests/ | head -50; echo \"---\"; find /workspace/tests -name \"*util*\" -o -name \"*import*\" | head -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest openlibrary/tests/catalog/test_utils.py -q 2>&1 | tail -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/tests/catalog/test_utils.py -q 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/tests/catalog -q 2>&1 | tail -5", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/tests/catalog/test_utils.py -q 2>&1 | tail -3; python -c \"from openlibrary.catalog.utils import get_non_isbn_asin, is_asin_only; print(get_non_isbn_asin({'source_records':['amazon:B000KRRIZI']}), is_asin_only({'source_records':['amazon:B000KRRIZI']}))\"", "workdir": "/workspace"}, "allowed": true}

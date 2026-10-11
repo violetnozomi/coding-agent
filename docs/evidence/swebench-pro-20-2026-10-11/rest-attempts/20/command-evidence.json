@@ -1,0 +1,83 @@
+[
+  {
+    "tool_call_id": "call_01_vVKcYZQ4A1fShOyy9MtU2878",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /workspace/openlibrary/catalog/utils/"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "CODE_OF_CONDUCT.md\nCONTRIBUTING.md\nLICENSE\nMakefile\nReadme.md\nReadme_chinese.md\nSECURITY.md\nbundlesize.config.json\ncompose.infogami-local.yaml\ncompose.override.yaml\ncompose.production.yaml\ncompose.staging.yaml\ncompose.yaml\nconf\nconfig\ndocker\ninfogami\nnode_modules\nopenlibrary\npackage-lock.json\npackage.json\npyproject.toml\nrenovate.json\nrequirements.txt\nrequirements_test.txt\nscripts\nsetup.py\nstatic\nstories\ntests\nvendor\nvue.config.js\nwebpack.config.js\n---\n__init__.py\nedit.py\nquery.py"
+  },
+  {
+    "tool_call_id": "call_00_henKkKcFLFwr3Npj93Xk7157",
+    "input": {
+      "command": "ls /workspace/tests/ | head -50; echo \"---\"; find /workspace/tests -name \"*util*\" -o -name \"*import*\" | head -40"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "test_docker_compose.py\nunit\n---\n/workspace/tests/unit/js/utils.test.js\n/workspace/tests/unit/js/nonjquery_utils.test.js\n/workspace/tests/unit/js/sample-html/utils-test-data.js"
+  },
+  {
+    "tool_call_id": "call_00_P8gRJdSLeeeiOgAhHNr19782",
+    "input": {
+      "command": "cd /workspace && python -m pytest openlibrary/tests/catalog/test_utils.py -q 2>&1 | tail -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_OxaQNnZYtksAzNjGMyZM1055",
+    "input": {
+      "command": "python -m pytest openlibrary/tests/catalog/test_utils.py -q 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "........................................................................ [ 81%]\n................                                                         [100%]\n88 passed in 0.08s"
+  },
+  {
+    "tool_call_id": "call_00_sywf580Fua92Va7ELV9y4217",
+    "input": {
+      "command": "python -m pytest openlibrary/tests/catalog -q 2>&1 | tail -5",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_xmgw7GpDSewGNEMtwrQ95734",
+    "input": {
+      "command": "git diff",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "diff --git a/openlibrary/catalog/utils/__init__.py b/openlibrary/catalog/utils/__init__.py\nindex 2d6e840ed..99db97e75 100644\n--- a/openlibrary/catalog/utils/__init__.py\n+++ b/openlibrary/catalog/utils/__init__.py\n@@ -360,6 +360,38 @@ def needs_isbn_and_lacks_one(rec: dict) -> bool:\n     return needs_isbn(rec) and not has_isbn(rec)\n \n \n+def get_non_isbn_asin(rec: dict) -> str | None:\n+    \"\"\"\n+    Return a non-ISBN ASIN (e.g. \"B012345678\") if one exists, otherwise None.\n+\n+    Non-ISBN ASINs begin with a \"B\" (as opposed to ISBN-10s which begin with a\n+    digit). The Amazon identifiers are checked first, then the source_records.\n+\n+    :param dict rec: an import dictionary record.\n+    \"\"\"\n+    for asin in (rec.get('identifiers') or {}).get('amazon') or []:\n+        if isinstance(asin, str) and asin.startswith('B'):\n+            return asin\n+\n+    for record in rec.get('source_records') or []:\n+        if isinstance(record, str) and record.startswith('amazon:B'):\n+            return record.split(':', 1)[1]\n+\n+    return None\n+\n+\n+def is_asin_only(rec: dict) -> bool:\n+    \"\"\"\n+    Return True if the record has only an ASIN and no ISBN.\n+\n+    :param dict rec: an import dictionary record.\n+    \"\"\"\n+    if rec.get('isbn_10') or rec.get('isbn_13'):\n+        return False\n+\n+    return get_non_isbn_asin(rec) is not None\n+\n+\n def is_promise_item(rec: dict) -> bool:\n     \"\"\"Returns True if the record is a promise item.\"\"\"\n     return any(\ndiff --git a/openlibrary/tests/catalog/test_utils.py b/openlibrary/tests/catalog/test_utils.py\nindex 318090546..90c556e00 100644\n--- a/openlibrary/tests/catalog/test_utils.py\n+++ b/openlibrary/tests/catalog/test_utils.py\n@@ -5,7 +5,9 @@ from openlibrary.catalog.utils import (\n     author_dates_match,\n     flip_name,\n     get_missing_fields,\n+    get_non_isbn_asin,\n     get_publication_year,\n+    is_asin_only,\n     is_independently_published,\n     is_promise_item,\n     match_with_bad_chars,\n@@ -323,6 +325,95 @@ def test_is_promise_item(rec, expected) -> None:\n     assert is_promise_item(rec) == expected\n \n \n+@pytest.mark.parametrize(\n+    'rec, expected',\n+    [\n+        # No identifiers or source records at all\n+        ({}, None),\n+        ({'identifiers': {}}, None),\n+        ({'identifiers': {'amazon': []}}, None),\n+        ({'source_records': []}, None),\n+        # ISBN-shaped Amazon identifiers (begin with a digit) are not returned\n+        ({'identifiers': {'amazon': ['0123456789']}}, None),\n+        ({'identifiers': {'amazon': ['1234567890']}}, None),\n+        # A non-ISBN ASIN in the amazon identifiers is returned\n+        ({'identifiers': {'amazon': ['B012345678']}}, 'B012345678'),\n+        # The first non-ISBN ASIN is returned\n+        (\n+            {'identifiers': {'amazon': ['0123456789', 'B012345678', 'B987654321']}},\n+            'B012345678',\n+        ),\n+        # Found via source_records when no identifiers are present\n+        ({'source_records': ['amazon:B012345678']}, 'B012345678'),\n+        # identifiers take precedence over source_records\n+        (\n+            {\n+                'identifiers': {'amazon': ['B111111111']},\n+                'source_records': ['amazon:B222222222'],\n+            },\n+            'B111111111',\n+        ),\n+        # source_records without an ASIN are ignored\n+        ({'source_records': ['amazon:123', 'ia:123']}, None),\n+        (\n+            {'identifiers': {'amazon': ['0123456789']}, 'source_records': ['ia:123']},\n+            None,\n+        ),\n+    ],\n+)\n+def test_get_non_isbn_asin(rec, expected) -> None:\n+    assert get_non_isbn_asin(rec) == expected\n+\n+\n+@pytest.mark.parametrize(\n+    'rec, expected',\n+    [\n+        # No ASIN at all\n+        ({}, False),\n+        ({'source_records': ['ia:123']}, False),\n+        ({'identifiers': {'amazon': []}}, False),\n+        # ASIN alongside an ISBN is not ASIN-only\n+        (\n+            {\n+                'isbn_10': ['0123456789'],\n+                'identifiers': {'amazon': ['B012345678']},\n+           ... (truncated)"
+  },
+  {
+    "tool_call_id": "call_00_vdOMB43gpJl57m8o6APz0430",
+    "input": {
+      "command": "python -m pytest openlibrary/tests/catalog/test_utils.py -q 2>&1 | tail -3; python -c \"from openlibrary.catalog.utils import get_non_isbn_asin, is_asin_only; print(get_non_isbn_asin({'source_records':['amazon:B000KRRIZI']}), is_asin_only({'source_records':['amazon:B000KRRIZI']}))\"",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "........................................................................ [ 81%]\n................                                                         [100%]\n88 passed in 0.04s\nB000KRRIZI True"
+  }
+]
