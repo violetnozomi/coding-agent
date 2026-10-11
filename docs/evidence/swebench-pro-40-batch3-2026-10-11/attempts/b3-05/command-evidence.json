@@ -1,0 +1,296 @@
+[
+  {
+    "tool_call_id": "call_00_1TRiAXEBQPDQSOBY3iyA6793",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /workspace/lib/ansible/plugins/callback/__init__.py"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "COPYING\nMANIFEST.in\nMakefile\nREADME.rst\nbin\nchangelogs\ndocs\nexamples\nhacking\nlib\nlicenses\npackaging\nrequirements.txt\nsetup.py\ntest\n---\n/workspace/lib/ansible/plugins/callback/__init__.py"
+  },
+  {
+    "tool_call_id": "call_00_f7cZ3yKGC03exz564atQ0301",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3 && wc -l lib/ansible/plugins/callback/__init__.py"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_IGzvyxiOGqLA7GGhg3oA2011",
+    "input": {
+      "command": "cd /workspace && ls test/units/plugins/callback/ 2>/dev/null; echo \"---\"; find test -path '*callback*' -name '*.py' | head -30"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_EAcuhBu4JUnfGZoWereM9425",
+    "input": {
+      "command": "cd /workspace && python -c \"\nimport sys\nsys.path.insert(0,'lib')\nfrom ansible.plugins.callback import CallbackBase\nclass Host: \n    def get_name(self): return 'primary'\nclass R:\n    _host=Host()\n    _result={}\nprint(repr(CallbackBase.host_label(R())))\nclass R2:\n    _host=Host()\n    _result={'_ansible_delegated_vars':{'ansible_host':'delegated'}}\nprint(repr(CallbackBase.host_label(R2())))\nprint(type(CallbackBase.__dict__['host_label']))\n\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_fq6nfjJ76vnr5EbGIlLG1520",
+    "input": {
+      "command": "cd /workspace && python -m pytest test/units/plugins/callback/test_callback.py -q 2>&1 | tail -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_t9zEfYwzi1kk4jROfd6B2667",
+    "input": {
+      "command": "cd /workspace && python --version && ls test/units/plugins/callback/"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_AIxzxvgKfJ9y8WTKxM0a9604",
+    "input": {
+      "command": "cd /workspace && python --version"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_hHxKsNatDsmVHo3vzFL32409",
+    "input": {
+      "command": "cd /workspace; python --version 2>&1"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_OYAPjUAF7MLlScKCOQNv3353",
+    "input": {
+      "command": "echo hi"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "hi"
+  },
+  {
+    "tool_call_id": "call_00_lSk4y93F57cjs6LhWLZ31733",
+    "input": {
+      "command": "python3 -V"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "Python 3.9.5"
+  },
+  {
+    "tool_call_id": "call_00_lzTaImimGib3LKuUdGdx5553",
+    "input": {
+      "command": "python3 -m pytest test/units/plugins/callback/test_callback.py -q 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "...........................                                              [100%]\n=============================== warnings summary ===============================\n../usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18\n  /usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18: DeprecationWarning: The _yaml extension module is now located at yaml._yaml and its location is subject to change.  To use the LibYAML-based parser and emitter, import from `yaml`: `from yaml import CLoader as Loader, CDumper as Dumper`.\n    warnings.warn(\n\n-- Docs: https://docs.pytest.org/en/stable/warnings.html\n27 passed, 1 warning in 0.13s"
+  },
+  {
+    "tool_call_id": "call_00_bGAWa0mbTw9LmYHdnanD5330",
+    "input": {
+      "command": "python3 -m pytest test/units/plugins/callback/test_callback.py -q 2>&1 | tail -8",
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_c1L1dS0SLWWiyodfm1940048",
+    "input": {
+      "command": "python3 -m pytest test/units/plugins/callback/test_callback.py::TestCallbackResults::test_host_label -q 2>&1 | head -50",
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_OiLSqHrmXcVRADsZBWLD5765",
+    "input": {
+      "command": "python3 -c \"import ansible.plugins.callback as m; print(m.__file__)\"",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/usr/local/lib/python3.9/dist-packages/ansible/plugins/callback/__init__.py"
+  },
+  {
+    "tool_call_id": "call_00_QIa04prTUUYNekzJN0eY9343",
+    "input": {
+      "command": "ls -la /usr/local/lib/python3.9/dist-packages/ | grep -i ansible; echo \"---\"; cat /usr/local/lib/python3.9/dist-packages/ansible*.pth 2>/dev/null; echo \"---\"; ls -la /usr/local/lib/python3.9/dist-packages/ansible | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_bjAw490qfWt2bfHfywxA4853",
+    "input": {
+      "command": "ls test/units/conftest.py test/conftest.py 2>&1; echo \"===\"; sed -n 1,40p test/units/conftest.py 2>/dev/null; echo \"=== root\"; cat conftest.py 2>/dev/null | head -30",
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_aOUkbzjE0gNcFs82QBe59357",
+    "input": {
+      "command": "python3 - <<'EOF'\nimport os\np='/usr/local/lib/python3.9/dist-packages/ansible'\nprint(os.path.islink(p), os.path.realpath(p))\nq=os.path.join(p,'plugins','callback','__init__.py')\nprint(os.path.exists(q))\nimport re\ns=open(q).read()\nprint('host_label' in s, len(s))\nEOF"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_RbwYoccPF8rUYtA7rXjj6488",
+    "input": {
+      "command": "python3 - <<'EOF'\nimport ansible, os\nprint(os.path.realpath(ansible.__file__))\nimport ansible.plugins.callback as cb\nprint('has host_label:', hasattr(cb.CallbackBase, 'host_label'))\nprint(os.path.realpath(cb.__file__))\nEOF",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/usr/local/lib/python3.9/dist-packages/ansible/__init__.py\nhas host_label: False\n/usr/local/lib/python3.9/dist-packages/ansible/plugins/callback/__init__.py"
+  },
+  {
+    "tool_call_id": "call_00_lKkmiYJ1JaU8etvJBaZo9612",
+    "input": {
+      "command": "PYTHONPATH=lib:test python3 -m pytest test/units/plugins/callback/test_callback.py -q 2>&1 | tail -8",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-5",
+    "input": {
+      "command": "python -m py_compile lib/ansible/plugins/callback/__init__.py",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(python completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_0zzNmPAPxakuy1DNx7RC9809",
+    "input": {
+      "command": "PYTHONPATH=/workspace/lib:/workspace/test python3 -m pytest test/units/plugins/callback/test_callback.py -q 2>&1 | tail -8"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": ".............................                                            [100%]\n=============================== warnings summary ===============================\n../usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18\n  /usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18: DeprecationWarning: The _yaml extension module is now located at yaml._yaml and its location is subject to change.  To use the LibYAML-based parser and emitter, import from `yaml`: `from yaml import CLoader as Loader, CDumper as Dumper`.\n    warnings.warn(\n\n-- Docs: https://docs.pytest.org/en/stable/warnings.html\n29 passed, 1 warning in 0.13s"
+  },
+  {
+    "tool_call_id": "call_00_zKcjB8g4M2g2SyXU3CuV4758",
+    "input": {
+      "command": "PYTHONPATH=/workspace/lib python3 -c \"\nfrom ansible.plugins.callback import CallbackBase\nfrom ansible.plugins.callback.default import CallbackModule\nprint('static:', isinstance(CallbackBase.__dict__['host_label'], staticmethod))\nclass H:\n    def get_name(self): return 'primary'\nclass R:\n    _host = H()\n    _result = {}\nclass R2:\n    _host = H()\n    _result = {'_ansible_delegated_vars': {'ansible_host': 'delegated'}}\nprint(repr(CallbackBase.host_label(R())))\nprint(repr(CallbackBase.host_label(R2())))\nprint(repr(CallbackModule.host_label(R2())))\nprint(type(CallbackBase.host_label(R2())))\n\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Tqp72bcJvJZ55vMVE7s22332",
+    "input": {
+      "command": "find /workspace -maxdepth 3 -name conftest.py -o -maxdepth 3 -name pytest.ini -o -maxdepth 3 -name setup.cfg -o -maxdepth 3 -name tox.ini 2>/dev/null; echo \"---\"; ls -la /workspace/*.egg-info 2>/dev/null; echo \"---\"; python3 -c \"import sys; print(sys.path)\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_redGg5XLe5vQmvjLgO5K3404",
+    "input": {
+      "command": "git -C /workspace --no-pager diff -- lib/ansible/plugins/callback/__init__.py lib/ansible/plugins/callback/default.py"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "diff --git a/lib/ansible/plugins/callback/__init__.py b/lib/ansible/plugins/callback/__init__.py\nindex 7a06698c7a..d37cd102fc 100644\n--- a/lib/ansible/plugins/callback/__init__.py\n+++ b/lib/ansible/plugins/callback/__init__.py\n@@ -240,6 +240,16 @@ class CallbackBase(AnsiblePlugin):\n             item = result.get('_ansible_item_label', result.get('item'))\n         return item\n \n+    @staticmethod\n+    def host_label(result):\n+        ''' Return the label for the host of a task result, including the\n+            delegated host when delegation metadata is present. '''\n+        hostname = result._host.get_name()\n+        delegated_vars = result._result.get('_ansible_delegated_vars', None)\n+        if delegated_vars and delegated_vars.get('ansible_host'):\n+            return \"%s -> %s\" % (hostname, delegated_vars['ansible_host'])\n+        return hostname\n+\n     def _process_items(self, result):\n         # just remove them as now they get handled by individual callbacks\n         del result._result['results']\ndiff --git a/lib/ansible/plugins/callback/default.py b/lib/ansible/plugins/callback/default.py\nindex 9a4f7b2253..06e966fbe8 100644\n--- a/lib/ansible/plugins/callback/default.py\n+++ b/lib/ansible/plugins/callback/default.py\n@@ -77,7 +77,6 @@ class CallbackModule(CallbackBase):\n \n     def v2_runner_on_failed(self, result, ignore_errors=False):\n \n-        delegated_vars = result._result.get('_ansible_delegated_vars', None)\n         self._clean_results(result._result, result._task.action)\n \n         if self._last_task_banner != result._task._uuid:\n@@ -90,25 +89,16 @@ class CallbackModule(CallbackBase):\n             self._process_items(result)\n \n         else:\n-            if delegated_vars:\n-                if self._display.verbosity < 2 and self.get_option('show_task_path_on_failure'):\n-                    self._print_task_path(result._task)\n-                self._display.display(\"fatal: [%s -> %s]: FAILED! => %s\" % (result._host.get_name(), delegated_vars['ansible_host'],\n-                                                                            self._dump_results(result._result)),\n-                                      color=C.COLOR_ERROR, stderr=self.display_failed_stderr)\n-            else:\n-                if self._display.verbosity < 2 and self.get_option('show_task_path_on_failure'):\n-                    self._print_task_path(result._task)\n-                self._display.display(\"fatal: [%s]: FAILED! => %s\" % (result._host.get_name(), self._dump_results(result._result)),\n-                                      color=C.COLOR_ERROR, stderr=self.display_failed_stderr)\n+            if self._display.verbosity < 2 and self.get_option('show_task_path_on_failure'):\n+                self._print_task_path(result._task)\n+            self._display.display(\"fatal: [%s]: FAILED! => %s\" % (self.host_label(result), self._dump_results(result._result)),\n+                                  color=C.COLOR_ERROR, stderr=self.display_failed_stderr)\n \n         if ignore_errors:\n             self._display.display(\"...ignoring\", color=C.COLOR_SKIP)\n \n     def v2_runner_on_ok(self, result):\n \n-        delegated_vars = result._result.get('_ansible_delegated_vars', None)\n-\n         if isinstance(result._task, TaskInclude):\n             if self._last_task_banner != result._task._uuid:\n                 self._print_task_banner(result._task)\n@@ -117,10 +107,7 @@ class CallbackModule(CallbackBase):\n             if self._last_task_banner != result._task._uuid:\n                 self._print_task_banner(result._task)\n \n-            if delegated_vars:\n-                msg = \"changed: [%s -> %s]\" % (result._host.get_name(), delegated_vars['ansible_host'])\n-            else:\n-                msg = \"changed: [%s]\" % result._host.get_name()\n+            msg = \"changed: [%s]\" % self.host_label(result)\n             color = C.COLOR_CHANGED\n         else:\n             if not self.display_ok_hosts:\n@@ -129,10 +116,7 @@ class CallbackModule(CallbackBase):\n             if se... (truncated)"
+  },
+  {
+    "tool_call_id": "call_00_P9R4RZo31vHFph57EVfn5681",
+    "input": {
+      "command": "PYTHONPATH=/workspace/lib:/workspace/test python3 -m pytest test/units/plugins/callback/test_callback.py -q 2>&1 | tail -3"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "-- Docs: https://docs.pytest.org/en/stable/warnings.html\n29 passed, 1 warning in 0.13s"
+  },
+  {
+    "tool_call_id": "call_01_l4ENKDowYEqC7AromiBh9403",
+    "input": {
+      "command": "PYTHONPATH=/workspace/lib:/workspace/test timeout 300 python3 -m pytest test/units/plugins/callback test/units/plugins/test_plugins.py -q 2>&1 | tail -5"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18: DeprecationWarning: The _yaml extension module is now located at yaml._yaml and its location is subject to change.  To use the LibYAML-based parser and emitter, import from `yaml`: `from yaml import CLoader as Loader, CDumper as Dumper`.\n    warnings.warn(\n\n-- Docs: https://docs.pytest.org/en/stable/warnings.html\n38 passed, 1 warning in 0.09s"
+  }
+]

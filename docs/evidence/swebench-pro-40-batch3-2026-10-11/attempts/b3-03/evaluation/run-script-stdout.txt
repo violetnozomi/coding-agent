@@ -1,0 +1,2170 @@
+Running selected tests: test/units/galaxy/test_collection_install.py
+Running unit test: test/units/galaxy/test_collection_install.py
+Configured locale: C.UTF-8
+WARNING: Using locale "C.UTF-8" instead of "en_US.UTF-8". Tests which depend on the locale may behave unexpectedly.
+Creating container database.
+Unit test controller with Python 3.9
+Initializing "/tmp/ansible-test-691dmr3g-injector" as the temporary injector directory.
+Injecting "/tmp/python-_n7cgo4z-ansible/python" as a execv wrapper for the "/usr/bin/python" interpreter.
+Stream command: pytest --forked -r a -n 4 --color no -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest/config/default.ini --junit-xml /app/test/results/junit/python3.9-controller-units.xml --strict-markers --rootdir /app --durations=25 -v test/units/galaxy/test_collection_install.py
+============================= test session starts ==============================
+platform linux -- Python 3.9.5, pytest-7.1.3, pluggy-1.0.0 -- /usr/bin/python
+rootdir: /app, configfile: test/lib/ansible_test/_data/pytest/config/default.ini
+plugins: forked-1.4.0, rerunfailures-10.2, xdist-2.5.0, mock-3.8.2
+gw0 I / gw1 I / gw2 I / gw3 I
+[gw0] linux Python 3.9.5 cwd: /app
+[gw1] linux Python 3.9.5 cwd: /app
+[gw2] linux Python 3.9.5 cwd: /app
+[gw3] linux Python 3.9.5 cwd: /app
+[gw2] Python 3.9.5 (default, Nov 23 2021, 15:27:38)  -- [GCC 9.3.0]
+[gw0] Python 3.9.5 (default, Nov 23 2021, 15:27:38)  -- [GCC 9.3.0]
+[gw3] Python 3.9.5 (default, Nov 23 2021, 15:27:38)  -- [GCC 9.3.0]
+[gw1] Python 3.9.5 (default, Nov 23 2021, 15:27:38)  -- [GCC 9.3.0]
+gw0 [63] / gw1 [63] / gw2 [63] / gw3 [63]
+
+scheduling tests via LoadScheduling
+
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_no_executable 
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd[https://github.com/org/repo/,commitish-None-True] 
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd[https://github.com/org/repo-commitish-False] 
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd[https://github.com/org/repo,commitish-None-False] 
+[gw1] [  1%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd[https://github.com/org/repo/,commitish-None-True] 
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo/,HEAD-None-True] 
+[gw2] [  3%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_no_executable 
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd[https://github.com/org/repo#,commitish-None-False] 
+[gw0] [  4%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd[https://github.com/org/repo-commitish-False] 
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo-HEAD-False] 
+[gw3] [  6%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd[https://github.com/org/repo,commitish-None-False] 
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo,HEAD-None-False] 
+[gw1] [  7%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo/,HEAD-None-True] 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.1.1] 
+[gw2] [  9%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd[https://github.com/org/repo#,commitish-None-False] 
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo#,HEAD-None-False] 
+[gw3] [ 11%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo,HEAD-None-False] 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_path 
+[gw0] [ 12%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo-HEAD-False] 
+test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo-None-False] 
+[gw2] [ 14%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo#,HEAD-None-False] 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.1.0] 
+[gw0] [ 15%] PASSED test/units/galaxy/test_collection_install.py::test_concrete_artifact_manager_scm_cmd_shallow[https://github.com/org/repo-None-False] 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.0.0] 
+[gw1] [ 17%] ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.1.1] 
+test/units/galaxy/test_collection_install.py::test_build_artifact_from_path_no_version 
+[gw2] [ 19%] ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.1.0] 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar_no_manifest 
+[gw2] [ 20%] PASSED test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar_no_manifest 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar_no_files 
+[gw2] [ 22%] PASSED test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar_no_files 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar_invalid_manifest 
+[gw3] [ 23%] ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_invalid_manifest 
+[gw2] [ 25%] PASSED test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar_invalid_manifest 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_name 
+[gw0] [ 26%] ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.0.0] 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_with_prerelease 
+[gw2] [ 28%] FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name 
+[gw0] [ 30%] FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_with_prerelease 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_multiple_version_results 
+test/units/galaxy/test_collection_install.py::test_build_requirment_from_name_with_prerelease_explicit 
+[gw3] [ 31%] ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_invalid_manifest 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_401_unauthorized 
+[gw1] [ 33%] ERROR test/units/galaxy/test_collection_install.py::test_build_artifact_from_path_no_version 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_no_version 
+[gw0] [ 34%] FAILED test/units/galaxy/test_collection_install.py::test_build_requirment_from_name_with_prerelease_explicit 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_second_server 
+[gw2] [ 36%] FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_multiple_version_results 
+test/units/galaxy/test_collection_install.py::test_candidate_with_conflict 
+[gw3] [ 38%] FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_401_unauthorized 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_single_version 
+[gw2] [ 39%] FAILED test/units/galaxy/test_collection_install.py::test_candidate_with_conflict 
+test/units/galaxy/test_collection_install.py::test_dep_candidate_with_conflict 
+[gw3] [ 41%] FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_single_version 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_multiple_versions_one_match 
+[gw0] [ 42%] FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_second_server 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_missing 
+[gw2] [ 44%] FAILED test/units/galaxy/test_collection_install.py::test_dep_candidate_with_conflict 
+test/units/galaxy/test_collection_install.py::test_install_installed_collection 
+[gw1] [ 46%] ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_no_version 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar 
+[gw0] [ 47%] FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_missing 
+[gw3] [ 49%] FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_multiple_versions_one_match 
+test/units/galaxy/test_collection_install.py::test_install_collections_existing_without_force 
+test/units/galaxy/test_collection_install.py::test_install_collection_with_download 
+[gw2] [ 50%] FAILED test/units/galaxy/test_collection_install.py::test_install_installed_collection 
+test/units/galaxy/test_collection_install.py::test_install_collection 
+[gw1] [ 52%] ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar 
+test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar_fail_not_tar 
+[gw1] [ 53%] PASSED test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar_fail_not_tar 
+test/units/galaxy/test_collection_install.py::test_install_collection_with_no_dependency[collection_artifact1] 
+[gw3] [ 55%] ERROR test/units/galaxy/test_collection_install.py::test_install_collection_with_download 
+[gw0] [ 57%] ERROR test/units/galaxy/test_collection_install.py::test_install_collections_existing_without_force 
+test/units/galaxy/test_collection_install.py::test_install_collections_from_tar 
+test/units/galaxy/test_collection_install.py::test_install_missing_metadata_warning 
+[gw2] [ 58%] ERROR test/units/galaxy/test_collection_install.py::test_install_collection 
+test/units/galaxy/test_collection_install.py::test_install_collection_with_circular_dependency[collection_artifact0] 
+[gw1] [ 60%] ERROR test/units/galaxy/test_collection_install.py::test_install_collection_with_no_dependency[collection_artifact1] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures0-all-ignore_errors0-True] 
+[gw1] [ 61%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures0-all-ignore_errors0-True] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures3-all-ignore_errors3-False] 
+[gw1] [ 63%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures3-all-ignore_errors3-False] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures4-all-ignore_errors4-True] 
+[gw3] [ 65%] ERROR test/units/galaxy/test_collection_install.py::test_install_collections_from_tar 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures1-all-ignore_errors1-True] 
+[gw1] [ 66%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures4-all-ignore_errors4-True] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures5-all-ignore_errors5-True] 
+[gw3] [ 68%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures1-all-ignore_errors1-True] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures6-+all-ignore_errors6-False] 
+[gw1] [ 69%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures5-all-ignore_errors5-True] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures7-+all-ignore_errors7-False] 
+[gw3] [ 71%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures6-+all-ignore_errors6-False] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures8-1-ignore_errors8-True] 
+[gw3] [ 73%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures8-1-ignore_errors8-True] 
+[gw1] [ 74%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures7-+all-ignore_errors7-False] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures9-+1-ignore_errors9-False] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures10-2-ignore_errors10-False] 
+[gw3] [ 76%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures10-2-ignore_errors10-False] 
+[gw1] [ 77%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures9-+1-ignore_errors9-False] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures12-2-ignore_errors12-False] 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures11-2-ignore_errors11-False] 
+[gw3] [ 79%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures12-2-ignore_errors12-False] 
+[gw1] [ 80%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures11-2-ignore_errors11-False] 
+test/units/galaxy/test_collection_install.py::test_multi_galaxy_api_proxy_offline_mode 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures13-2-ignore_errors13-True] 
+[gw0] [ 82%] ERROR test/units/galaxy/test_collection_install.py::test_install_missing_metadata_warning 
+test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures2-all-ignore_errors2-False] 
+[gw3] [ 84%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures13-2-ignore_errors13-True] 
+test/units/galaxy/test_collection_install.py::test_build_collection_dependency_resolver_passes_offline 
+[gw0] [ 85%] PASSED test/units/galaxy/test_collection_install.py::test_verify_file_signatures[signatures2-all-ignore_errors2-False] 
+test/units/galaxy/test_collection_install.py::test_download_collections_resolver_uses_offline_false 
+[gw2] [ 87%] ERROR test/units/galaxy/test_collection_install.py::test_install_collection_with_circular_dependency[collection_artifact0] 
+test/units/galaxy/test_collection_install.py::test_install_collection_with_no_dependency[None] 
+[gw3] [ 88%] FAILED test/units/galaxy/test_collection_install.py::test_build_collection_dependency_resolver_passes_offline 
+test/units/galaxy/test_collection_install.py::test_install_offline_argparse_flag 
+[gw1] [ 90%] FAILED test/units/galaxy/test_collection_install.py::test_multi_galaxy_api_proxy_offline_mode 
+test/units/galaxy/test_collection_install.py::test_multi_galaxy_api_proxy_offline_does_not_block_file_artifacts 
+[gw0] [ 92%] FAILED test/units/galaxy/test_collection_install.py::test_download_collections_resolver_uses_offline_false 
+test/units/galaxy/test_collection_install.py::test_install_collections_offline_missing_dependency[collection_artifact0] 
+[gw2] [ 93%] ERROR test/units/galaxy/test_collection_install.py::test_install_collection_with_no_dependency[None] 
+[gw3] [ 95%] FAILED test/units/galaxy/test_collection_install.py::test_install_offline_argparse_flag 
+test/units/galaxy/test_collection_install.py::test_install_collections_offline_with_tarball 
+[gw1] [ 96%] ERROR test/units/galaxy/test_collection_install.py::test_multi_galaxy_api_proxy_offline_does_not_block_file_artifacts 
+[gw0] [ 98%] ERROR test/units/galaxy/test_collection_install.py::test_install_collections_offline_missing_dependency[collection_artifact0] 
+[gw2] [100%] ERROR test/units/galaxy/test_collection_install.py::test_install_collections_offline_with_tarball 
+
+==================================== ERRORS ====================================
+___ ERROR at setup of test_build_requirement_from_path_with_manifest[1.1.1] ____
+[gw1] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_build_requirement_from_path_with_manifest[1.1.1]>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'), _trace=<pluggy._tracing.TagTracerSub object at 0x7754d5bef400>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+___ ERROR at setup of test_build_requirement_from_path_with_manifest[1.1.0] ____
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_build_requirement_from_path_with_manifest[1.1.0]>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+______________ ERROR at setup of test_build_requirement_from_path ______________
+[gw3] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_build_requirement_from_path>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'), _trace=<pluggy._tracing.TagTracerSub object at 0x72bffa5de430>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+___ ERROR at setup of test_build_requirement_from_path_with_manifest[1.0.0] ____
+[gw0] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_build_requirement_from_path_with_manifest[1.0.0]>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'), _trace=<pluggy._tracing.TagTracerSub object at 0x7fa621a63490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+_____ ERROR at setup of test_build_requirement_from_path_invalid_manifest ______
+[gw3] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_build_requirement_from_path_invalid_manifest>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'), _trace=<pluggy._tracing.TagTracerSub object at 0x72bffa5de430>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+__________ ERROR at setup of test_build_artifact_from_path_no_version __________
+[gw1] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_build_artifact_from_path_no_version>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'), _trace=<pluggy._tracing.TagTracerSub object at 0x7754d5bef400>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+________ ERROR at setup of test_build_requirement_from_path_no_version _________
+[gw1] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_build_requirement_from_path_no_version>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'), _trace=<pluggy._tracing.TagTracerSub object at 0x7754d5bef400>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+______________ ERROR at setup of test_build_requirement_from_tar _______________
+[gw1] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_build_requirement_from_tar>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'), _trace=<pluggy._tracing.TagTracerSub object at 0x7754d5bef400>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+___________ ERROR at setup of test_install_collection_with_download ____________
+[gw3] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_collection_with_download>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'), _trace=<pluggy._tracing.TagTracerSub object at 0x72bffa5de430>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+______ ERROR at setup of test_install_collections_existing_without_force _______
+[gw0] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_collections_existing_without_force>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'), _trace=<pluggy._tracing.TagTracerSub object at 0x7fa621a63490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+__________________ ERROR at setup of test_install_collection ___________________
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_collection>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+_ ERROR at setup of test_install_collection_with_no_dependency[collection_artifact1] _
+[gw1] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_collection_with_no_dependency[collection_artifact1]>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'), _trace=<pluggy._tracing.TagTracerSub object at 0x7754d5bef400>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+_____________ ERROR at setup of test_install_collections_from_tar ______________
+[gw3] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_collections_from_tar>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'), _trace=<pluggy._tracing.TagTracerSub object at 0x72bffa5de430>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+___________ ERROR at setup of test_install_missing_metadata_warning ____________
+[gw0] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_missing_metadata_warning>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'), _trace=<pluggy._tracing.TagTracerSub object at 0x7fa621a63490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+_ ERROR at setup of test_install_collection_with_circular_dependency[collection_artifact0] _
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_collection_with_circular_dependency[collection_artifact0]>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+______ ERROR at setup of test_install_collection_with_no_dependency[None] ______
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_collection_with_no_dependency[None]>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+_ ERROR at setup of test_multi_galaxy_api_proxy_offline_does_not_block_file_artifacts _
+[gw1] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_multi_galaxy_api_proxy_offline_does_not_block_file_artifacts>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'), _trace=<pluggy._tracing.TagTracerSub object at 0x7754d5bef400>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+_ ERROR at setup of test_install_collections_offline_missing_dependency[collection_artifact0] _
+[gw0] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_collections_offline_missing_dependency[collection_artifact0]>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'), _trace=<pluggy._tracing.TagTracerSub object at 0x7fa621a63490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+_______ ERROR at setup of test_install_collections_offline_with_tarball ________
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+request = <SubRequest 'collection_artifact' for <Function test_install_collections_offline_with_tarball>>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+
+    @pytest.fixture()
+    def collection_artifact(request, tmp_path_factory):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        namespace = 'ansible_namespace'
+        collection = 'collection'
+    
+        skeleton_path = os.path.join(os.path.dirname(os.path.split(__file__)[0]), 'cli', 'test_data', 'collection_skeleton')
+        collection_path = os.path.join(test_dir, namespace, collection)
+    
+>       call_galaxy_cli(['init', '%s.%s' % (namespace, collection), '-c', '--init-path', test_dir,
+                         '--collection-skeleton', skeleton_path])
+
+test/units/galaxy/test_collection_install.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test/units/galaxy/test_collection_install.py:51: in call_galaxy_cli
+    GalaxyCLI(args=['ansible-galaxy', 'collection'] + args).run()
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+=================================== FAILURES ===================================
+_______________________ test_build_requirement_from_name _______________________
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7de942eeac70>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+
+    def test_build_requirement_from_name(galaxy_server, monkeypatch, tmp_path_factory):
+        mock_get_versions = MagicMock()
+        mock_get_versions.return_value = ['2.1.9', '2.1.10']
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        mock_version_metadata = MagicMock(
+            namespace='namespace', name='collection',
+            version='2.1.10', artifact_sha256='', dependencies={}
+        )
+        monkeypatch.setattr(api.GalaxyAPI, 'get_collection_version_metadata', mock_version_metadata)
+    
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+    
+        collections = ['namespace.collection']
+        requirements_file = None
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', collections[0]])
+        requirements = cli._require_one_of_collections_requirements(
+            collections, requirements_file, artifacts_manager=concrete_artifact_cm
+        )['collections']
+>       actual = collection._resolve_depenency_map(
+            requirements, [galaxy_server], concrete_artifact_cm, None, True, False, False, False, False
+        )['namespace.collection']
+E       TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:475: TypeError
+_______________ test_build_requirement_from_name_with_prerelease _______________
+[gw0] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fa61bd32430>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'), _trace=<pluggy._tracing.TagTracerSub object at 0x7fa621a63490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'))
+
+    def test_build_requirement_from_name_with_prerelease(galaxy_server, monkeypatch, tmp_path_factory):
+        mock_get_versions = MagicMock()
+        mock_get_versions.return_value = ['1.0.1', '2.0.1-beta.1', '2.0.1']
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        mock_get_info = MagicMock()
+        mock_get_info.return_value = api.CollectionVersionMetadata('namespace', 'collection', '2.0.1', None, None, {}, None, None)
+        monkeypatch.setattr(galaxy_server, 'get_collection_version_metadata', mock_get_info)
+    
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['namespace.collection'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+>       actual = collection._resolve_depenency_map(
+            requirements, [galaxy_server], concrete_artifact_cm, None, True, False, False, False, False
+        )['namespace.collection']
+E       TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:504: TypeError
+___________ test_build_requirment_from_name_with_prerelease_explicit ___________
+[gw0] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fa61bd384c0>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'), _trace=<pluggy._tracing.TagTracerSub object at 0x7fa621a63490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'))
+
+    def test_build_requirment_from_name_with_prerelease_explicit(galaxy_server, monkeypatch, tmp_path_factory):
+        mock_get_versions = MagicMock()
+        mock_get_versions.return_value = ['1.0.1', '2.0.1-beta.1', '2.0.1']
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        mock_get_info = MagicMock()
+        mock_get_info.return_value = api.CollectionVersionMetadata('namespace', 'collection', '2.0.1-beta.1', None, None,
+                                                                   {}, None, None)
+        monkeypatch.setattr(galaxy_server, 'get_collection_version_metadata', mock_get_info)
+    
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection:2.0.1-beta.1'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['namespace.collection:2.0.1-beta.1'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+>       actual = collection._resolve_depenency_map(
+            requirements, [galaxy_server], concrete_artifact_cm, None, True, False, False, False, False
+        )['namespace.collection']
+E       TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:534: TypeError
+__________ test_build_requirement_from_name_multiple_version_results ___________
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7de942eead00>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+
+    def test_build_requirement_from_name_multiple_version_results(galaxy_server, monkeypatch, tmp_path_factory):
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+        multi_api_proxy = collection.galaxy_api_proxy.MultiGalaxyAPIProxy([galaxy_server], concrete_artifact_cm)
+        dep_provider = dependency_resolution.providers.CollectionDependencyProvider(apis=multi_api_proxy, concrete_artifacts_manager=concrete_artifact_cm)
+    
+        matches = RequirementCandidates()
+        mock_find_matches = MagicMock(side_effect=matches.func_wrapper(dep_provider.find_matches), autospec=True)
+        monkeypatch.setattr(dependency_resolution.providers.CollectionDependencyProvider, 'find_matches', mock_find_matches)
+    
+        mock_get_info = MagicMock()
+        mock_get_info.return_value = api.CollectionVersionMetadata('namespace', 'collection', '2.0.5', None, None, {}, None, None)
+        monkeypatch.setattr(galaxy_server, 'get_collection_version_metadata', mock_get_info)
+    
+        mock_get_versions = MagicMock()
+        mock_get_versions.return_value = ['1.0.1', '1.0.2', '1.0.3']
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        mock_get_versions.return_value = ['2.0.0', '2.0.1', '2.0.2', '2.0.3', '2.0.4', '2.0.5']
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection:!=2.0.2'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['namespace.collection:!=2.0.2'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+    
+>       actual = collection._resolve_depenency_map(
+            requirements, [galaxy_server], concrete_artifact_cm, None, False, True, False, False, False)['namespace.collection']
+E       TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:727: TypeError
+______________ test_build_requirement_from_name_401_unauthorized _______________
+[gw3] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72bff88d7460>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'), _trace=<pluggy._tracing.TagTracerSub object at 0x72bffa5de430>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'))
+
+    def test_build_requirement_from_name_401_unauthorized(galaxy_server, monkeypatch, tmp_path_factory):
+        mock_open = MagicMock()
+        mock_open.side_effect = api.GalaxyError(urllib_error.HTTPError('https://galaxy.server.com', 401, 'msg', {},
+                                                                       StringIO()), "error")
+    
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_open)
+    
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection:>1.0.1'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['namespace.collection'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+    
+        expected = "error (HTTP Code: 401, Message: msg)"
+        with pytest.raises(api.GalaxyError, match=re.escape(expected)):
+>           collection._resolve_depenency_map(requirements, [galaxy_server, galaxy_server], concrete_artifact_cm, None, False, False, False, False, False)
+E           TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:621: TypeError
+_________________________ test_candidate_with_conflict _________________________
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7de942ce1790>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+
+    def test_candidate_with_conflict(monkeypatch, tmp_path_factory, galaxy_server):
+    
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+    
+        mock_get_info = MagicMock()
+        mock_get_info.return_value = api.CollectionVersionMetadata('namespace', 'collection', '2.0.5', None, None, {}, None, None)
+        monkeypatch.setattr(galaxy_server, 'get_collection_version_metadata', mock_get_info)
+    
+        mock_get_versions = MagicMock()
+        mock_get_versions.return_value = ['2.0.5']
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection:!=2.0.5'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['namespace.collection:!=2.0.5'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+    
+        expected = "Failed to resolve the requested dependencies map. Could not satisfy the following requirements:\n"
+        expected += "* namespace.collection:!=2.0.5 (direct request)"
+        with pytest.raises(AnsibleError, match=re.escape(expected)):
+>           collection._resolve_depenency_map(requirements, [galaxy_server], concrete_artifact_cm, None, False, True, False, False, False)
+E           TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:762: TypeError
+_______________ test_build_requirement_from_name_single_version ________________
+[gw3] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72bff88d64f0>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'), _trace=<pluggy._tracing.TagTracerSub object at 0x72bffa5de430>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'))
+
+    def test_build_requirement_from_name_single_version(galaxy_server, monkeypatch, tmp_path_factory):
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+        multi_api_proxy = collection.galaxy_api_proxy.MultiGalaxyAPIProxy([galaxy_server], concrete_artifact_cm)
+        dep_provider = dependency_resolution.providers.CollectionDependencyProvider(apis=multi_api_proxy, concrete_artifacts_manager=concrete_artifact_cm)
+    
+        matches = RequirementCandidates()
+        mock_find_matches = MagicMock(side_effect=matches.func_wrapper(dep_provider.find_matches), autospec=True)
+        monkeypatch.setattr(dependency_resolution.providers.CollectionDependencyProvider, 'find_matches', mock_find_matches)
+    
+        mock_get_versions = MagicMock()
+        mock_get_versions.return_value = ['2.0.0']
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        mock_get_info = MagicMock()
+        mock_get_info.return_value = api.CollectionVersionMetadata('namespace', 'collection', '2.0.0', None, None,
+                                                                   {}, None, None)
+        monkeypatch.setattr(galaxy_server, 'get_collection_version_metadata', mock_get_info)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection:==2.0.0'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['namespace.collection:==2.0.0'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+    
+>       actual = collection._resolve_depenency_map(
+            requirements, [galaxy_server], concrete_artifact_cm, None, False, True, False, False, False)['namespace.collection']
+E       TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:648: TypeError
+________________ test_build_requirement_from_name_second_server ________________
+[gw0] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fa61bd38550>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'), _trace=<pluggy._tracing.TagTracerSub object at 0x7fa621a63490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'))
+
+    def test_build_requirement_from_name_second_server(galaxy_server, monkeypatch, tmp_path_factory):
+        mock_get_versions = MagicMock()
+        mock_get_versions.return_value = ['1.0.1', '1.0.2', '1.0.3']
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        mock_get_info = MagicMock()
+        mock_get_info.return_value = api.CollectionVersionMetadata('namespace', 'collection', '1.0.3', None, None, {}, None, None)
+        monkeypatch.setattr(galaxy_server, 'get_collection_version_metadata', mock_get_info)
+    
+        broken_server = copy.copy(galaxy_server)
+        broken_server.api_server = 'https://broken.com/'
+        mock_version_list = MagicMock()
+        mock_version_list.return_value = []
+        monkeypatch.setattr(broken_server, 'get_collection_versions', mock_version_list)
+    
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection:>1.0.1'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['namespace.collection:>1.0.1'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+>       actual = collection._resolve_depenency_map(
+            requirements, [broken_server, galaxy_server], concrete_artifact_cm, None, True, False, False, False, False
+        )['namespace.collection']
+E       TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:569: TypeError
+_______________________ test_dep_candidate_with_conflict _______________________
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7de942ce1b20>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+
+    def test_dep_candidate_with_conflict(monkeypatch, tmp_path_factory, galaxy_server):
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+    
+        mock_get_info_return = [
+            api.CollectionVersionMetadata('parent', 'collection', '2.0.5', None, None, {'namespace.collection': '!=1.0.0'}, None, None),
+            api.CollectionVersionMetadata('namespace', 'collection', '1.0.0', None, None, {}, None, None),
+        ]
+        mock_get_info = MagicMock(side_effect=mock_get_info_return)
+        monkeypatch.setattr(galaxy_server, 'get_collection_version_metadata', mock_get_info)
+    
+        mock_get_versions = MagicMock(side_effect=[['2.0.5'], ['1.0.0']])
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'parent.collection:2.0.5'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['parent.collection:2.0.5'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+    
+        expected = "Failed to resolve the requested dependencies map. Could not satisfy the following requirements:\n"
+        expected += "* namespace.collection:!=1.0.0 (dependency of parent.collection:2.0.5)"
+        with pytest.raises(AnsibleError, match=re.escape(expected)):
+>           collection._resolve_depenency_map(requirements, [galaxy_server], concrete_artifact_cm, None, False, True, False, False, False)
+E           TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:787: TypeError
+___________________ test_build_requirement_from_name_missing ___________________
+[gw0] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fa61bd325b0>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'), _trace=<pluggy._tracing.TagTracerSub object at 0x7fa621a63490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'))
+
+    def test_build_requirement_from_name_missing(galaxy_server, monkeypatch, tmp_path_factory):
+        mock_open = MagicMock()
+        mock_open.return_value = []
+    
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_open)
+    
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection:>1.0.1'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['namespace.collection'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+    
+        expected = "Failed to resolve the requested dependencies map. Could not satisfy the following requirements:\n* namespace.collection:* (direct request)"
+        with pytest.raises(AnsibleError, match=re.escape(expected)):
+>           collection._resolve_depenency_map(requirements, [galaxy_server, galaxy_server], concrete_artifact_cm, None, False, True, False, False, False)
+E           TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:601: TypeError
+_________ test_build_requirement_from_name_multiple_versions_one_match _________
+[gw3] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72bff88d6580>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'), _trace=<pluggy._tracing.TagTracerSub object at 0x72bffa5de430>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'))
+
+    def test_build_requirement_from_name_multiple_versions_one_match(galaxy_server, monkeypatch, tmp_path_factory):
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+        multi_api_proxy = collection.galaxy_api_proxy.MultiGalaxyAPIProxy([galaxy_server], concrete_artifact_cm)
+        dep_provider = dependency_resolution.providers.CollectionDependencyProvider(apis=multi_api_proxy, concrete_artifacts_manager=concrete_artifact_cm)
+    
+        matches = RequirementCandidates()
+        mock_find_matches = MagicMock(side_effect=matches.func_wrapper(dep_provider.find_matches), autospec=True)
+        monkeypatch.setattr(dependency_resolution.providers.CollectionDependencyProvider, 'find_matches', mock_find_matches)
+    
+        mock_get_versions = MagicMock()
+        mock_get_versions.return_value = ['2.0.0', '2.0.1', '2.0.2']
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        mock_get_info = MagicMock()
+        mock_get_info.return_value = api.CollectionVersionMetadata('namespace', 'collection', '2.0.1', None, None,
+                                                                   {}, None, None)
+        monkeypatch.setattr(galaxy_server, 'get_collection_version_metadata', mock_get_info)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection:>=2.0.1,<2.0.2'])
+        requirements = cli._require_one_of_collections_requirements(
+            ['namespace.collection:>=2.0.1,<2.0.2'], None, artifacts_manager=concrete_artifact_cm
+        )['collections']
+    
+>       actual = collection._resolve_depenency_map(
+            requirements, [galaxy_server], concrete_artifact_cm, None, False, True, False, False, False)['namespace.collection']
+E       TypeError: _resolve_depenency_map() takes 8 positional arguments but 9 were given
+
+test/units/galaxy/test_collection_install.py:685: TypeError
+______________________ test_install_installed_collection _______________________
+[gw2] linux -- Python 3.9.5 /usr/bin/python
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7de942ce1be0>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTracerSub object at 0x7de948b84490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw2'))
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+
+    def test_install_installed_collection(monkeypatch, tmp_path_factory, galaxy_server):
+    
+        mock_installed_collections = MagicMock(return_value=[Candidate('namespace.collection', '1.2.3', None, 'dir', None)])
+    
+        monkeypatch.setattr(collection, 'find_existing_collections', mock_installed_collections)
+    
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(test_dir, validate_certs=False)
+    
+        mock_display = MagicMock()
+        monkeypatch.setattr(Display, 'display', mock_display)
+    
+        mock_get_info = MagicMock()
+        mock_get_info.return_value = api.CollectionVersionMetadata('namespace', 'collection', '1.2.3', None, None, {}, None, None)
+        monkeypatch.setattr(galaxy_server, 'get_collection_version_metadata', mock_get_info)
+    
+        mock_get_versions = MagicMock(return_value=['1.2.3', '1.3.0'])
+        monkeypatch.setattr(galaxy_server, 'get_collection_versions', mock_get_versions)
+    
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'namespace.collection'])
+>       cli.run()
+
+test/units/galaxy/test_collection_install.py:810: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+lib/ansible/cli/galaxy.py:567: in run
+    super(GalaxyCLI, self).run()
+lib/ansible/cli/__init__.py:155: in run
+    self.parse()
+lib/ansible/cli/__init__.py:451: in parse
+    self.init_parser()
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+___________ test_build_collection_dependency_resolver_passes_offline ___________
+[gw3] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'), _trace=<pluggy._tracing.TagTracerSub object at 0x72bffa5de430>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw3'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72bff88d69d0>
+
+    def test_build_collection_dependency_resolver_passes_offline(
+        galaxy_server, tmp_path_factory, monkeypatch
+    ):
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(
+            test_dir, validate_certs=False
+        )
+    
+        captured = {}
+        original_init = collection.galaxy_api_proxy.MultiGalaxyAPIProxy.__init__
+    
+        def recording_init(self, apis, concrete_artifacts_manager, offline=False):
+            captured['offline'] = offline
+            original_init(self, apis, concrete_artifacts_manager, offline)
+    
+        monkeypatch.setattr(
+            collection.galaxy_api_proxy.MultiGalaxyAPIProxy, '__init__', recording_init
+        )
+    
+>       dependency_resolution.build_collection_dependency_resolver(
+            galaxy_apis=[galaxy_server],
+            concrete_artifacts_manager=concrete_artifact_cm,
+            user_requirements=[],
+            offline=True,
+        )
+E       TypeError: build_collection_dependency_resolver() got an unexpected keyword argument 'offline'
+
+test/units/galaxy/test_collection_install.py:1144: TypeError
+___________________ test_multi_galaxy_api_proxy_offline_mode ___________________
+[gw1] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'), _trace=<pluggy._tracing.TagTracerSub object at 0x7754d5bef400>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw1'))
+
+    def test_multi_galaxy_api_proxy_offline_mode(galaxy_server, tmp_path_factory):
+        test_dir = to_bytes(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Input'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(
+            test_dir, validate_certs=False
+        )
+>       proxy = collection.galaxy_api_proxy.MultiGalaxyAPIProxy(
+            [galaxy_server], concrete_artifact_cm, offline=True
+        )
+E       TypeError: __init__() got an unexpected keyword argument 'offline'
+
+test/units/galaxy/test_collection_install.py:1089: TypeError
+____________ test_download_collections_resolver_uses_offline_false _____________
+[gw0] linux -- Python 3.9.5 /usr/bin/python
+galaxy_server = <test_server "test_server" @ https://galaxy.ansible.com with priority inf>
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'), _trace=<pluggy._tracing.TagTracerSub object at 0x7fa621a63490>, _basetemp=PosixPath('/tmp/pytest-of-root/pytest-0/popen-gw0'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fa61bd38760>
+
+    def test_download_collections_resolver_uses_offline_false(
+        galaxy_server, tmp_path_factory, monkeypatch
+    ):
+        test_dir = to_text(tmp_path_factory.mktemp('test-ÅÑŚÌβŁÈ Collections Download'))
+        concrete_artifact_cm = collection.concrete_artifact_manager.ConcreteArtifactsManager(
+            to_bytes(test_dir), validate_certs=False
+        )
+    
+        mock_display = MagicMock()
+        monkeypatch.setattr(Display, 'display', mock_display)
+    
+        captured_kwargs = {}
+    
+        def mock_resolve(*args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return {}
+    
+        monkeypatch.setattr(collection, '_resolve_depenency_map', mock_resolve)
+    
+        collection.download_collections([], test_dir, [galaxy_server], False, False, concrete_artifact_cm)
+    
+>       assert captured_kwargs.get('offline') is False
+E       assert None is False
+E        +  where None = <built-in method get of dict object at 0x7fa62035c900>('offline')
+E        +    where <built-in method get of dict object at 0x7fa62035c900> = {'allow_pre_release': False, 'concrete_artifacts_manager': <ansible.galaxy.collection.concrete_artifact_manager.ConcreteArtifactsManager object at 0x7fa61bd38940>, 'galaxy_apis': [<test_server "test_server" @ https://galaxy.ansible.com with priority inf>], 'include_signatures': False, ...}.get
+
+test/units/galaxy/test_collection_install.py:1175: AssertionError
+______________________ test_install_offline_argparse_flag ______________________
+[gw3] linux -- Python 3.9.5 /usr/bin/python
+def test_install_offline_argparse_flag():
+        cli = GalaxyCLI(args=['ansible-galaxy', 'collection', 'install', 'ns.collection'])
+>       cli.init_parser()
+
+test/units/galaxy/test_collection_install.py:1180: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+lib/ansible/cli/galaxy.py:268: in init_parser
+    self.add_install_options(collection_parser, parents=[common, force, cache_options])
+lib/ansible/cli/galaxy.py:501: in add_install_options
+    install_parser.add_argument('--offline', dest='offline', action='store_true',
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='ansible-galaxy collection install', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+args = ('--offline',)
+kwargs = {'const': True, 'default': False, 'dest': 'offline', 'help': 'Install collection artifacts (tarballs) without contacti... distribution servers. This does not apply to collections in remote Git repositories or URLs to remote tarballs.', ...}
+chars = '-', action_class = <class 'argparse._StoreTrueAction'>
+
+    def add_argument(self, *args, **kwargs):
+        """
+        add_argument(dest, ..., name=value, ...)
+        add_argument(option_string, option_string, ..., name=value, ...)
+        """
+    
+        # if no positional args are supplied or only one is supplied and
+        # it doesn't look like an option string, parse a positional
+        # argument
+        chars = self.prefix_chars
+        if not args or len(args) == 1 and args[0][0] not in chars:
+            if args and 'dest' in kwargs:
+                raise ValueError('dest supplied twice for positional argument')
+            kwargs = self._get_positional_kwargs(*args, **kwargs)
+    
+        # otherwise, we're adding an optional argument
+        else:
+            kwargs = self._get_optional_kwargs(*args, **kwargs)
+    
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+    
+        # create the action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+>       action = action_class(**kwargs)
+E       TypeError: __init__() got an unexpected keyword argument 'const'
+
+/usr/lib/python3.9/argparse.py:1428: TypeError
+-- generated xml file: /app/test/results/junit/python3.9-controller-units.xml --
+============================= slowest 25 durations =============================
+0.06s setup    test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar
+0.05s setup    test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_no_version
+0.05s setup    test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_invalid_manifest
+0.05s setup    test/units/galaxy/test_collection_install.py::test_install_installed_collection
+0.05s setup    test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.0.0]
+0.05s setup    test/units/galaxy/test_collection_install.py::test_install_collection
+0.05s call     test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_401_unauthorized
+0.05s call     test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar_invalid_manifest
+0.01s setup    test/units/galaxy/test_collection_install.py::test_install_collection_with_download
+0.01s setup    test/units/galaxy/test_collection_install.py::test_install_collections_existing_without_force
+0.01s setup    test/units/galaxy/test_collection_install.py::test_install_collections_offline_missing_dependency[collection_artifact0]
+0.01s setup    test/units/galaxy/test_collection_install.py::test_install_collections_from_tar
+0.01s setup    test/units/galaxy/test_collection_install.py::test_install_missing_metadata_warning
+0.01s setup    test/units/galaxy/test_collection_install.py::test_install_collection_with_no_dependency[collection_artifact1]
+0.01s setup    test/units/galaxy/test_collection_install.py::test_install_collection_with_no_dependency[None]
+0.01s setup    test/units/galaxy/test_collection_install.py::test_install_collections_offline_with_tarball
+0.01s setup    test/units/galaxy/test_collection_install.py::test_build_requirement_from_path
+0.01s setup    test/units/galaxy/test_collection_install.py::test_install_collection_with_circular_dependency[collection_artifact0]
+0.01s setup    test/units/galaxy/test_collection_install.py::test_build_artifact_from_path_no_version
+0.01s setup    test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.1.1]
+0.01s call     test/units/galaxy/test_collection_install.py::test_install_installed_collection
+
+(4 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.1.1]
+ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.1.0]
+ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path
+ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_with_manifest[1.0.0]
+ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_invalid_manifest
+ERROR test/units/galaxy/test_collection_install.py::test_build_artifact_from_path_no_version
+ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_path_no_version
+ERROR test/units/galaxy/test_collection_install.py::test_build_requirement_from_tar
+ERROR test/units/galaxy/test_collection_install.py::test_install_collection_with_download
+ERROR test/units/galaxy/test_collection_install.py::test_install_collections_existing_without_force
+ERROR test/units/galaxy/test_collection_install.py::test_install_collection
+ERROR test/units/galaxy/test_collection_install.py::test_install_collection_with_no_dependency[collection_artifact1]
+ERROR test/units/galaxy/test_collection_install.py::test_install_collections_from_tar
+ERROR test/units/galaxy/test_collection_install.py::test_install_missing_metadata_warning
+ERROR test/units/galaxy/test_collection_install.py::test_install_collection_with_circular_dependency[collection_artifact0]
+ERROR test/units/galaxy/test_collection_install.py::test_install_collection_with_no_dependency[None]
+ERROR test/units/galaxy/test_collection_install.py::test_multi_galaxy_api_proxy_offline_does_not_block_file_artifacts
+ERROR test/units/galaxy/test_collection_install.py::test_install_collections_offline_missing_dependency[collection_artifact0]
+ERROR test/units/galaxy/test_collection_install.py::test_install_collections_offline_with_tarball
+FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name
+FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_with_prerelease
+FAILED test/units/galaxy/test_collection_install.py::test_build_requirment_from_name_with_prerelease_explicit
+FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_multiple_version_results
+FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_401_unauthorized
+FAILED test/units/galaxy/test_collection_install.py::test_candidate_with_conflict
+FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_single_version
+FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_second_server
+FAILED test/units/galaxy/test_collection_install.py::test_dep_candidate_with_conflict
+FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_missing
+FAILED test/units/galaxy/test_collection_install.py::test_build_requirement_from_name_multiple_versions_one_match
+FAILED test/units/galaxy/test_collection_install.py::test_install_installed_collection
+FAILED test/units/galaxy/test_collection_install.py::test_build_collection_dependency_resolver_passes_offline
+FAILED test/units/galaxy/test_collection_install.py::test_multi_galaxy_api_proxy_offline_mode
+FAILED test/units/galaxy/test_collection_install.py::test_download_collections_resolver_uses_offline_false
+FAILED test/units/galaxy/test_collection_install.py::test_install_offline_argparse_flag
+=================== 16 failed, 28 passed, 19 errors in 2.72s ===================

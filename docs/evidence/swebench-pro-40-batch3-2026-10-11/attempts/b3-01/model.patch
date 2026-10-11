@@ -1,0 +1,95 @@
+diff --git a/qutebrowser/qutebrowser.py b/qutebrowser/qutebrowser.py
+index d0819f832..9179cc8fc 100644
+--- a/qutebrowser/qutebrowser.py
++++ b/qutebrowser/qutebrowser.py
+@@ -99,6 +99,10 @@ def get_argparser():
+                         help=argparse.SUPPRESS,
+                         action='store_true')
+ 
++    parser.add_argument('--untrusted-args', action='store_true',
++                        help="All following arguments are treated as URLs or "
++                             "search terms, not flags or commands.")
++
+     debug = parser.add_argument_group('debug arguments')
+     debug.add_argument('-l', '--loglevel', dest='loglevel',
+                        help="Override the configured console loglevel",
+@@ -207,7 +211,28 @@ def _unpack_json_args(args):
+     return argparse.Namespace(**new_args)
+ 
+ 
++def _validate_untrusted_args(argv):
++    """Validate the --untrusted-args flag.
++
++    Only a single argument may follow --untrusted-args, and it must not start
++    with a dash or a colon.
++    """
++    try:
++        idx = argv.index('--untrusted-args')
++    except ValueError:
++        return
++
++    args = argv[idx + 1:]
++    if len(args) > 1:
++        sys.exit("Found multiple arguments ({}) after --untrusted-args, "
++                 "aborting.".format(' '.join(args)))
++
++    if args and (args[0].startswith('-') or args[0].startswith(':')):
++        sys.exit("Found {} after --untrusted-args, aborting.".format(args[0]))
++
++
+ def main():
++    _validate_untrusted_args(sys.argv)
+     parser = get_argparser()
+     argv = sys.argv[1:]
+     args = parser.parse_args(argv)
+diff --git a/tests/unit/test_qutebrowser.py b/tests/unit/test_qutebrowser.py
+index d9275631d..97995df83 100644
+--- a/tests/unit/test_qutebrowser.py
++++ b/tests/unit/test_qutebrowser.py
+@@ -75,3 +75,46 @@ class TestJsonArgs:
+         # pylint: disable=no-member
+         assert args.debug
+         assert not args.temp_basedir
++
++
++class TestUntrustedArgs:
++
++    def test_flag_accepted(self, parser):
++        args = parser.parse_args(['--untrusted-args', 'example.org'])
++        assert args.untrusted_args
++
++    def test_not_present(self):
++        # Should not raise.
++        qutebrowser._validate_untrusted_args(['qutebrowser', 'example.org'])
++
++    def test_single_arg(self):
++        # Should not raise.
++        qutebrowser._validate_untrusted_args(
++            ['qutebrowser', '--untrusted-args', 'example.org'])
++
++    def test_no_arg(self):
++        # Should not raise.
++        qutebrowser._validate_untrusted_args(
++            ['qutebrowser', '--untrusted-args'])
++
++    def test_multiple_args(self, capsys):
++        with pytest.raises(SystemExit) as excinfo:
++            qutebrowser._validate_untrusted_args(
++                ['qutebrowser', '--untrusted-args', 'foo', 'bar'])
++        assert 'Found multiple arguments (foo bar) after --untrusted-args' in str(
++            excinfo.value)
++
++    def test_multiple_args_with_dashes(self, capsys):
++        """The multiple-arguments check takes precedence over the dash check."""
++        with pytest.raises(SystemExit) as excinfo:
++            qutebrowser._validate_untrusted_args(
++                ['qutebrowser', '--untrusted-args', '--foo', '--bar'])
++        assert 'Found multiple arguments' in str(excinfo.value)
++
++    @pytest.mark.parametrize('arg', ['-foo', '--foo', ':cmd'])
++    def test_invalid_single_arg(self, arg):
++        with pytest.raises(SystemExit) as excinfo:
++            qutebrowser._validate_untrusted_args(
++                ['qutebrowser', '--untrusted-args', arg])
++        assert 'Found {} after --untrusted-args, aborting.'.format(
++            arg) in str(excinfo.value)

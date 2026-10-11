@@ -1,0 +1,292 @@
+diff --git a/cmd/flipt/import.go b/cmd/flipt/import.go
+index 42424d70..5f806d98 100644
+--- a/cmd/flipt/import.go
++++ b/cmd/flipt/import.go
+@@ -15,6 +15,7 @@ import (
+ type importCommand struct {
+ 	dropBeforeImport bool
+ 	importStdin      bool
++	skipExisting     bool
+ 	address          string
+ 	token            string
+ }
+@@ -42,6 +43,13 @@ func newImportCommand() *cobra.Command {
+ 		"import from STDIN",
+ 	)
+ 
++	cmd.Flags().BoolVar(
++		&importCmd.skipExisting,
++		"skip-existing",
++		false,
++		"import only new data",
++	)
++
+ 	cmd.Flags().StringVarP(
+ 		&importCmd.address,
+ 		"address", "a",
+@@ -100,7 +108,7 @@ func (c *importCommand) run(cmd *cobra.Command, args []string) error {
+ 		if err != nil {
+ 			return err
+ 		}
+-		return ext.NewImporter(client).Import(ctx, enc, in)
++		return ext.NewImporter(client).Import(ctx, enc, in, c.skipExisting)
+ 	}
+ 
+ 	logger, cfg, err := buildConfig(ctx)
+@@ -152,5 +160,5 @@ func (c *importCommand) run(cmd *cobra.Command, args []string) error {
+ 
+ 	return ext.NewImporter(
+ 		server,
+-	).Import(ctx, enc, in)
++	).Import(ctx, enc, in, c.skipExisting)
+ }
+diff --git a/internal/ext/importer.go b/internal/ext/importer.go
+index 442db941..e665f48d 100644
+--- a/internal/ext/importer.go
++++ b/internal/ext/importer.go
+@@ -25,6 +25,8 @@ type Creator interface {
+ 	CreateRule(context.Context, *flipt.CreateRuleRequest) (*flipt.Rule, error)
+ 	CreateDistribution(context.Context, *flipt.CreateDistributionRequest) (*flipt.Distribution, error)
+ 	CreateRollout(context.Context, *flipt.CreateRolloutRequest) (*flipt.Rollout, error)
++	ListFlags(context.Context, *flipt.ListFlagRequest) (*flipt.FlagList, error)
++	ListSegments(context.Context, *flipt.ListSegmentRequest) (*flipt.SegmentList, error)
+ }
+ 
+ type Importer struct {
+@@ -45,7 +47,7 @@ func NewImporter(store Creator, opts ...ImportOpt) *Importer {
+ 	return i
+ }
+ 
+-func (i *Importer) Import(ctx context.Context, enc Encoding, r io.Reader) (err error) {
++func (i *Importer) Import(ctx context.Context, enc Encoding, r io.Reader, skipExisting bool) (err error) {
+ 	var (
+ 		dec     = enc.NewDecoder(r)
+ 		version semver.Version
+@@ -115,12 +117,32 @@ func (i *Importer) Import(ctx context.Context, enc Encoding, r io.Reader) (err e
+ 			createdVariants = make(map[string]*flipt.Variant)
+ 		)
+ 
++		// only gather the set of already present flags and segments when the
++		// caller has asked us to skip existing data.
++		var existingFlags, existingSegments map[string]struct{}
++		if skipExisting {
++			existingFlags, err = i.listExistingFlags(ctx, namespace)
++			if err != nil {
++				return err
++			}
++
++			existingSegments, err = i.listExistingSegments(ctx, namespace)
++			if err != nil {
++				return err
++			}
++		}
++
+ 		// create flags/variants
+ 		for _, f := range doc.Flags {
+ 			if f == nil {
+ 				continue
+ 			}
+ 
++			// skip flags which already exist in the target namespace
++			if _, ok := existingFlags[f.Key]; ok {
++				continue
++			}
++
+ 			req := &flipt.CreateFlagRequest{
+ 				Key:          f.Key,
+ 				Name:         f.Name,
+@@ -209,6 +231,11 @@ func (i *Importer) Import(ctx context.Context, enc Encoding, r io.Reader) (err e
+ 				continue
+ 			}
+ 
++			// skip segments which already exist in the target namespace
++			if _, ok := existingSegments[s.Key]; ok {
++				continue
++			}
++
+ 			segment, err := i.creator.CreateSegment(ctx, &flipt.CreateSegmentRequest{
+ 				Key:          s.Key,
+ 				Name:         s.Name,
+@@ -249,6 +276,11 @@ func (i *Importer) Import(ctx context.Context, enc Encoding, r io.Reader) (err e
+ 				continue
+ 			}
+ 
++			// skip dependent definitions for flags which already exist
++			if _, ok := existingFlags[f.Key]; ok {
++				continue
++			}
++
+ 			// loop through rules
+ 			for idx, r := range f.Rules {
+ 				if r == nil {
+@@ -377,6 +409,42 @@ func (i *Importer) Import(ctx context.Context, enc Encoding, r io.Reader) (err e
+ 	return nil
+ }
+ 
++// listExistingFlags returns the set of flag keys present in the supplied namespace.
++func (i *Importer) listExistingFlags(ctx context.Context, namespace string) (map[string]struct{}, error) {
++	resp, err := i.creator.ListFlags(ctx, &flipt.ListFlagRequest{NamespaceKey: namespace})
++	if err != nil {
++		return nil, fmt.Errorf("listing flags: %w", err)
++	}
++
++	existing := make(map[string]struct{}, len(resp.GetFlags()))
++	for _, f := range resp.GetFlags() {
++		if f == nil {
++			continue
++		}
++		existing[f.Key] = struct{}{}
++	}
++
++	return existing, nil
++}
++
++// listExistingSegments returns the set of segment keys present in the supplied namespace.
++func (i *Importer) listExistingSegments(ctx context.Context, namespace string) (map[string]struct{}, error) {
++	resp, err := i.creator.ListSegments(ctx, &flipt.ListSegmentRequest{NamespaceKey: namespace})
++	if err != nil {
++		return nil, fmt.Errorf("listing segments: %w", err)
++	}
++
++	existing := make(map[string]struct{}, len(resp.GetSegments()))
++	for _, s := range resp.GetSegments() {
++		if s == nil {
++			continue
++		}
++		existing[s.Key] = struct{}{}
++	}
++
++	return existing, nil
++}
++
+ // convert converts each encountered map[interface{}]interface{} to a map[string]interface{} value.
+ // This is necessary because the json library does not support map[interface{}]interface{} values which nested
+ // maps get unmarshalled into from the yaml library.
+diff --git a/internal/ext/importer_fuzz_test.go b/internal/ext/importer_fuzz_test.go
+index a1bc305b..9fda5c88 100644
+--- a/internal/ext/importer_fuzz_test.go
++++ b/internal/ext/importer_fuzz_test.go
+@@ -20,7 +20,7 @@ func FuzzImport(f *testing.F) {
+ 
+ 	f.Fuzz(func(t *testing.T, in []byte) {
+ 		importer := NewImporter(&mockCreator{})
+-		if err := importer.Import(context.Background(), EncodingYAML, bytes.NewReader(in)); err != nil {
++		if err := importer.Import(context.Background(), EncodingYAML, bytes.NewReader(in), false); err != nil {
+ 			// we only care about panics
+ 			t.Skip()
+ 		}
+diff --git a/internal/ext/importer_test.go b/internal/ext/importer_test.go
+index 27122765..af0a41db 100644
+--- a/internal/ext/importer_test.go
++++ b/internal/ext/importer_test.go
+@@ -45,6 +45,14 @@ type mockCreator struct {
+ 
+ 	rolloutReqs []*flipt.CreateRolloutRequest
+ 	rolloutErr  error
++
++	listFlagReqs []*flipt.ListFlagRequest
++	listFlagResp *flipt.FlagList
++	listFlagErr  error
++
++	listSegmentReqs []*flipt.ListSegmentRequest
++	listSegmentResp *flipt.SegmentList
++	listSegmentErr  error
+ }
+ 
+ func (m *mockCreator) GetNamespace(ctx context.Context, r *flipt.GetNamespaceRequest) (*flipt.Namespace, error) {
+@@ -52,6 +60,28 @@ func (m *mockCreator) GetNamespace(ctx context.Context, r *flipt.GetNamespaceReq
+ 	return &flipt.Namespace{Key: "default"}, m.getNSErr
+ }
+ 
++func (m *mockCreator) ListFlags(ctx context.Context, r *flipt.ListFlagRequest) (*flipt.FlagList, error) {
++	m.listFlagReqs = append(m.listFlagReqs, r)
++	if m.listFlagErr != nil {
++		return nil, m.listFlagErr
++	}
++	if m.listFlagResp != nil {
++		return m.listFlagResp, nil
++	}
++	return &flipt.FlagList{}, nil
++}
++
++func (m *mockCreator) ListSegments(ctx context.Context, r *flipt.ListSegmentRequest) (*flipt.SegmentList, error) {
++	m.listSegmentReqs = append(m.listSegmentReqs, r)
++	if m.listSegmentErr != nil {
++		return nil, m.listSegmentErr
++	}
++	if m.listSegmentResp != nil {
++		return m.listSegmentResp, nil
++	}
++	return &flipt.SegmentList{}, nil
++}
++
+ func (m *mockCreator) CreateNamespace(ctx context.Context, r *flipt.CreateNamespaceRequest) (*flipt.Namespace, error) {
+ 	m.createNSReqs = append(m.createNSReqs, r)
+ 	return &flipt.Namespace{Key: "default"}, m.createNSErr
+@@ -810,7 +840,7 @@ func TestImport(t *testing.T) {
+ 				assert.NoError(t, err)
+ 				defer in.Close()
+ 
+-				err = importer.Import(context.Background(), ext, in)
++				err = importer.Import(context.Background(), ext, in, false)
+ 				assert.NoError(t, err)
+ 
+ 				assert.Equal(t, tc.expected, creator)
+@@ -829,7 +859,7 @@ func TestImport_Export(t *testing.T) {
+ 	assert.NoError(t, err)
+ 	defer in.Close()
+ 
+-	err = importer.Import(context.Background(), EncodingYML, in)
++	err = importer.Import(context.Background(), EncodingYML, in, false)
+ 	require.NoError(t, err)
+ 	assert.Equal(t, "default", creator.createflagReqs[0].NamespaceKey)
+ }
+@@ -845,7 +875,7 @@ func TestImport_InvalidVersion(t *testing.T) {
+ 		assert.NoError(t, err)
+ 		defer in.Close()
+ 
+-		err = importer.Import(context.Background(), ext, in)
++		err = importer.Import(context.Background(), ext, in, false)
+ 		assert.EqualError(t, err, "unsupported version: 5.0")
+ 	}
+ }
+@@ -861,7 +891,7 @@ func TestImport_FlagType_LTVersion1_1(t *testing.T) {
+ 		assert.NoError(t, err)
+ 		defer in.Close()
+ 
+-		err = importer.Import(context.Background(), ext, in)
++		err = importer.Import(context.Background(), ext, in, false)
+ 		assert.EqualError(t, err, "flag.type is supported in version >=1.1, found 1.0")
+ 	}
+ }
+@@ -877,7 +907,7 @@ func TestImport_Rollouts_LTVersion1_1(t *testing.T) {
+ 		assert.NoError(t, err)
+ 		defer in.Close()
+ 
+-		err = importer.Import(context.Background(), ext, in)
++		err = importer.Import(context.Background(), ext, in, false)
+ 		assert.EqualError(t, err, "flag.rollouts is supported in version >=1.1, found 1.0")
+ 	}
+ }
+@@ -940,7 +970,7 @@ func TestImport_Namespaces_Mix_And_Match(t *testing.T) {
+ 				assert.NoError(t, err)
+ 				defer in.Close()
+ 
+-				err = importer.Import(context.Background(), ext, in)
++				err = importer.Import(context.Background(), ext, in, false)
+ 				assert.NoError(t, err)
+ 
+ 				assert.Len(t, creator.getNSReqs, tc.expectedGetNSReqs)
+diff --git a/internal/storage/sql/evaluation_test.go b/internal/storage/sql/evaluation_test.go
+index 2f3213dc..0c207de7 100644
+--- a/internal/storage/sql/evaluation_test.go
++++ b/internal/storage/sql/evaluation_test.go
+@@ -881,7 +881,7 @@ func Benchmark_EvaluationV1AndV2(b *testing.B) {
+ 
+ 	require.NoError(t, err)
+ 
+-	err = importer.Import(context.TODO(), ext.EncodingYML, reader)
++	err = importer.Import(context.TODO(), ext.EncodingYML, reader, false)
+ 	require.NoError(t, err)
+ 
+ 	flagKeys := make([]string, 0, 10)

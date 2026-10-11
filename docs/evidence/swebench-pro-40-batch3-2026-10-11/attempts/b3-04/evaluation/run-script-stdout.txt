@@ -1,0 +1,91 @@
+Running selected tests: test/units/utils/collection_loader/test_collection_loader.py
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-6.2.5, py-1.11.0, pluggy-1.0.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+plugins: rerunfailures-10.2, mock-3.6.1, anyio-4.10.0
+collecting ... collected 69 items
+
+test/units/utils/collection_loader/test_collection_loader.py::test_find_module_py3 PASSED [  1%]
+test/units/utils/collection_loader/test_collection_loader.py::test_finder_setup PASSED [  2%]
+test/units/utils/collection_loader/test_collection_loader.py::test_finder_not_interested PASSED [  4%]
+test/units/utils/collection_loader/test_collection_loader.py::test_finder_ns PASSED [  5%]
+test/units/utils/collection_loader/test_collection_loader.py::test_loader_remove PASSED [  7%]
+test/units/utils/collection_loader/test_collection_loader.py::test_loader_install PASSED [  8%]
+test/units/utils/collection_loader/test_collection_loader.py::test_finder_coll PASSED [ 10%]
+test/units/utils/collection_loader/test_collection_loader.py::test_root_loader_not_interested PASSED [ 11%]
+test/units/utils/collection_loader/test_collection_loader.py::test_root_loader PASSED [ 13%]
+test/units/utils/collection_loader/test_collection_loader.py::test_nspkg_loader_not_interested PASSED [ 14%]
+test/units/utils/collection_loader/test_collection_loader.py::test_nspkg_loader_load_module PASSED [ 15%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collpkg_loader_not_interested PASSED [ 17%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collpkg_loader_load_module PASSED [ 18%]
+test/units/utils/collection_loader/test_collection_loader.py::test_coll_loader PASSED [ 20%]
+test/units/utils/collection_loader/test_collection_loader.py::test_path_hook_setup PASSED [ 21%]
+test/units/utils/collection_loader/test_collection_loader.py::test_path_hook_importerror PASSED [ 23%]
+test/units/utils/collection_loader/test_collection_loader.py::test_new_or_existing_module PASSED [ 24%]
+test/units/utils/collection_loader/test_collection_loader.py::test_iter_modules_impl PASSED [ 26%]
+test/units/utils/collection_loader/test_collection_loader.py::test_import_from_collection PASSED [ 27%]
+test/units/utils/collection_loader/test_collection_loader.py::test_eventsource PASSED [ 28%]
+test/units/utils/collection_loader/test_collection_loader.py::test_on_collection_load PASSED [ 30%]
+test/units/utils/collection_loader/test_collection_loader.py::test_default_collection_config PASSED [ 31%]
+test/units/utils/collection_loader/test_collection_loader.py::test_default_collection_detection PASSED [ 33%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collection_role_name_location[some_role-collection_list0-testns.testcoll-testns/testcoll/roles/some_role] PASSED [ 34%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collection_role_name_location[testns.testcoll.some_role-collection_list1-testns.testcoll-testns/testcoll/roles/some_role] PASSED [ 36%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collection_role_name_location[testns.testcoll.some_role-collection_list2-testns.testcoll-testns/testcoll/roles/some_role] PASSED [ 37%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collection_role_name_location[testns.testcoll.some_role-None-testns.testcoll-testns/testcoll/roles/some_role] PASSED [ 39%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collection_role_name_location[some_role-collection_list4-None-None] PASSED [ 40%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collection_role_name_location[some_role-None-None-None] PASSED [ 42%]
+test/units/utils/collection_loader/test_collection_loader.py::test_bogus_imports PASSED [ 43%]
+test/units/utils/collection_loader/test_collection_loader.py::test_empty_vs_no_code PASSED [ 44%]
+test/units/utils/collection_loader/test_collection_loader.py::test_finder_playbook_paths PASSED [ 46%]
+test/units/utils/collection_loader/test_collection_loader.py::test_toplevel_iter_modules PASSED [ 47%]
+test/units/utils/collection_loader/test_collection_loader.py::test_iter_modules_namespaces PASSED [ 49%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collection_get_data PASSED [ 50%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcr_parsing_valid[ns.coll.myaction-action-ns.coll--myaction-ansible_collections.ns.coll.plugins.action] PASSED [ 52%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcr_parsing_valid[ns.coll.subdir1.subdir2.myaction-action-ns.coll-subdir1.subdir2-myaction-ansible_collections.ns.coll.plugins.action.subdir1.subdir2] PASSED [ 53%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcr_parsing_valid[ns.coll.myrole-role-ns.coll--myrole-ansible_collections.ns.coll.roles.myrole] PASSED [ 55%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcr_parsing_valid[ns.coll.subdir1.subdir2.myrole-role-ns.coll-subdir1.subdir2-myrole-ansible_collections.ns.coll.roles.subdir1.subdir2.myrole] PASSED [ 56%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[ns1.coll2-True] PASSED [ 57%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[ns1#coll2-False] PASSED [ 59%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[def.coll3-False] PASSED [ 60%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[ns4.return-False] PASSED [ 62%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[assert.this-False] PASSED [ 63%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[import.that-False] PASSED [ 65%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[.that-False] PASSED [ 66%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[this.-False] PASSED [ 68%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[.-False] PASSED [ 69%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcn_validation[-False] PASSED [ 71%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcr_parsing_invalid[no_dots_at_all_action-action-ValueError-is not a valid collection reference] PASSED [ 72%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcr_parsing_invalid[no_nscoll.myaction-action-ValueError-is not a valid collection reference] PASSED [ 73%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcr_parsing_invalid[no_nscoll%myaction-action-ValueError-is not a valid collection reference] PASSED [ 75%]
+test/units/utils/collection_loader/test_collection_loader.py::test_fqcr_parsing_invalid[ns.coll.myaction-bogus-ValueError-invalid collection ref_type] PASSED [ 76%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collectionref_components_valid[ns.coll-None-res-doc_fragments-ansible_collections.ns.coll.plugins.doc_fragments] PASSED [ 78%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collectionref_components_valid[ns.coll-subdir1-res-doc_fragments-ansible_collections.ns.coll.plugins.doc_fragments.subdir1] PASSED [ 79%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collectionref_components_valid[ns.coll-subdir1.subdir2-res-action-ansible_collections.ns.coll.plugins.action.subdir1.subdir2] PASSED [ 81%]
+test/units/utils/collection_loader/test_collection_loader.py::test_legacy_plugin_dir_to_plugin_type[become_plugins-become] PASSED [ 82%]
+test/units/utils/collection_loader/test_collection_loader.py::test_legacy_plugin_dir_to_plugin_type[cache_plugins-cache] PASSED [ 84%]
+test/units/utils/collection_loader/test_collection_loader.py::test_legacy_plugin_dir_to_plugin_type[connection_plugins-connection] PASSED [ 85%]
+test/units/utils/collection_loader/test_collection_loader.py::test_legacy_plugin_dir_to_plugin_type[library-modules] PASSED [ 86%]
+test/units/utils/collection_loader/test_collection_loader.py::test_legacy_plugin_dir_to_plugin_type[filter_plugins-filter] PASSED [ 88%]
+test/units/utils/collection_loader/test_collection_loader.py::test_legacy_plugin_dir_to_plugin_type[bogus_plugins-ValueError] PASSED [ 89%]
+test/units/utils/collection_loader/test_collection_loader.py::test_legacy_plugin_dir_to_plugin_type[None-ValueError] PASSED [ 91%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collectionref_components_invalid[bad_ns--resource-action-ValueError-invalid collection name] PASSED [ 92%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collectionref_components_invalid[ns.coll.--resource-action-ValueError-invalid collection name] PASSED [ 94%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collectionref_components_invalid[ns.coll-badsubdir#-resource-action-ValueError-invalid subdirs entry] PASSED [ 95%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collectionref_components_invalid[ns.coll-badsubdir.-resource-action-ValueError-invalid subdirs entry] PASSED [ 97%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collectionref_components_invalid[ns.coll-.badsubdir-resource-action-ValueError-invalid subdirs entry] PASSED [ 98%]
+test/units/utils/collection_loader/test_collection_loader.py::test_collectionref_components_invalid[ns.coll--resource-bogus-ValueError-invalid collection ref_type] PASSED [100%]
+
+=============================== warnings summary ===============================
+test/units/utils/collection_loader/test_collection_loader.py::test_find_module_py3
+  <frozen importlib._bootstrap_external>:629: DeprecationWarning: find_module() is deprecated and slated for removal in Python 3.12; use find_spec() instead
+
+test/units/utils/collection_loader/test_collection_loader.py::test_find_module_py3
+  <frozen importlib._bootstrap_external>:1594: DeprecationWarning: FileFinder.find_loader() is deprecated and slated for removal in Python 3.12; use find_spec() instead
+
+test/units/utils/collection_loader/test_collection_loader.py::test_import_from_collection
+  /app/lib/ansible/plugins/loader.py:1154: UserWarning: AnsibleCollectionFinder has already been configured
+    warnings.warn('AnsibleCollectionFinder has already been configured')
+
+-- Docs: https://docs.pytest.org/en/stable/warnings.html
+======================== 69 passed, 3 warnings in 0.65s ========================

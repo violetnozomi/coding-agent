@@ -1,0 +1,100 @@
+Running selected tests: test/units/plugins/callback/test_callback.py
+Running unit test: test/units/plugins/callback/test_callback.py
+Run command: /usr/bin/python /app/test/lib/ansible_test/_data/yamlcheck.py
+Unit test with Python 3.9
+Injecting "/tmp/python-o7tke6f8-ansible/python" as a execv wrapper for the "/usr/bin/python" interpreter.
+Run command: pytest --boxed -r a -n 4 --color no -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest.ini --junit-xml /app/test/results/junit/python3.9-units.xml --durations=25 --strict-markers -v test/units/plugins/callback/test_callback.py
+============================= test session starts ==============================
+platform linux -- Python 3.9.5, pytest-6.2.3, py-1.10.0, pluggy-0.13.1 -- /usr/bin/python
+rootdir: /app/test/units/plugins/callback, configfile: ../../../lib/ansible_test/_data/pytest.ini
+plugins: rerunfailures-9.1.1, mock-3.5.1, xdist-2.2.1, forked-1.3.0
+gw0 I / gw1 I / gw2 I / gw3 I
+[gw0] linux Python 3.9.5 cwd: /app
+[gw1] linux Python 3.9.5 cwd: /app
+[gw2] linux Python 3.9.5 cwd: /app
+[gw3] linux Python 3.9.5 cwd: /app
+[gw0] Python 3.9.5 (default, Nov 23 2021, 15:27:38)  -- [GCC 9.3.0]
+[gw1] Python 3.9.5 (default, Nov 23 2021, 15:27:38)  -- [GCC 9.3.0]
+[gw3] Python 3.9.5 (default, Nov 23 2021, 15:27:38)  -- [GCC 9.3.0]
+[gw2] Python 3.9.5 (default, Nov 23 2021, 15:27:38)  -- [GCC 9.3.0]
+gw0 [29] / gw1 [29] / gw2 [29] / gw3 [29]
+
+scheduling tests via LoadScheduling
+
+test/units/plugins/callback/test_callback.py::TestCallback::test_host_label_delegated 
+test/units/plugins/callback/test_callback.py::TestCallback::test_host_label 
+test/units/plugins/callback/test_callback.py::TestCallback::test_display 
+test/units/plugins/callback/test_callback.py::TestCallback::test_display_verbose 
+[gw2] [  3%] PASSED test/units/plugins/callback/test_callback.py::TestCallback::test_host_label_delegated 
+[gw0] [  6%] PASSED test/units/plugins/callback/test_callback.py::TestCallback::test_display 
+[gw3] [ 10%] PASSED test/units/plugins/callback/test_callback.py::TestCallback::test_host_label 
+[gw1] [ 13%] PASSED test/units/plugins/callback/test_callback.py::TestCallback::test_display_verbose 
+test/units/plugins/callback/test_callback.py::TestCallbackResults::test_clean_results_debug_task_empty_results 
+test/units/plugins/callback/test_callback.py::TestCallback::test_init 
+test/units/plugins/callback/test_callback.py::TestCallbackResults::test_clean_results_debug_task 
+test/units/plugins/callback/test_callback.py::TestCallbackResults::test_clean_results 
+[gw2] [ 17%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackResults::test_clean_results_debug_task_empty_results 
+test/units/plugins/callback/test_callback.py::TestCallbackResults::test_clean_results_debug_task_no_invocation 
+[gw3] [ 20%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackResults::test_clean_results_debug_task 
+[gw0] [ 24%] PASSED test/units/plugins/callback/test_callback.py::TestCallback::test_init 
+[gw1] [ 27%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackResults::test_clean_results 
+test/units/plugins/callback/test_callback.py::TestCallbackResults::test_get_item_label_no_log 
+test/units/plugins/callback/test_callback.py::TestCallbackResults::test_get_item_label 
+test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_internal_keys 
+[gw2] [ 31%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackResults::test_clean_results_debug_task_no_invocation 
+test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_exception 
+[gw3] [ 34%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackResults::test_get_item_label_no_log 
+test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_verbose 
+[gw1] [ 37%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_internal_keys 
+[gw0] [ 41%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackResults::test_get_item_label 
+test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_mixed_keys 
+test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_diff 
+[gw2] [ 44%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_exception 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_clear_file 
+[gw3] [ 48%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_verbose 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_diff_after_none 
+[gw0] [ 51%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_mixed_keys 
+[gw1] [ 55%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDumpResults::test_diff 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_diff_before_none 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_diff_dicts 
+[gw2] [ 58%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_clear_file 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_difflist 
+[gw3] [ 62%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_diff_after_none 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_new_file 
+[gw0] [ 65%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_diff_before_none 
+[gw2] [ 68%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_difflist 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_no_trailing_newline_after 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_no_trailing_newline_both 
+[gw1] [ 72%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_diff_dicts 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_no_trailing_newline_before 
+[gw3] [ 75%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_new_file 
+[gw0] [ 79%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_no_trailing_newline_after 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_no_trailing_newline_both_with_some_changes 
+test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_simple_diff 
+[gw2] [ 82%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_no_trailing_newline_both 
+test/units/plugins/callback/test_callback.py::TestCallbackOnMethods::test_are_methods 
+[gw1] [ 86%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_no_trailing_newline_before 
+test/units/plugins/callback/test_callback.py::TestCallbackOnMethods::test_on_any 
+[gw3] [ 89%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_no_trailing_newline_both_with_some_changes 
+[gw0] [ 93%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackDiff::test_simple_diff 
+[gw2] [ 96%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackOnMethods::test_are_methods 
+[gw1] [100%] PASSED test/units/plugins/callback/test_callback.py::TestCallbackOnMethods::test_on_any 
+
+=============================== warnings summary ===============================
+../usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18
+../usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18
+../usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18
+../usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18
+  /usr/local/lib/python3.9/dist-packages/_yaml/__init__.py:18: DeprecationWarning: The _yaml extension module is now located at yaml._yaml and its location is subject to change.  To use the LibYAML-based parser and emitter, import from `yaml`: `from yaml import CLoader as Loader, CDumper as Dumper`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/warnings.html
+------- generated xml file: /app/test/results/junit/python3.9-units.xml --------
+============================= slowest 25 durations =============================
+0.05s setup    test_callback.py::TestCallbackDiff::test_no_trailing_newline_both
+0.05s setup    test_callback.py::TestCallbackDiff::test_no_trailing_newline_before
+0.03s setup    test_callback.py::TestCallback::test_host_label_delegated
+0.01s call     test_callback.py::TestCallback::test_display
+
+(21 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================== 29 passed, 4 warnings in 0.85s ========================

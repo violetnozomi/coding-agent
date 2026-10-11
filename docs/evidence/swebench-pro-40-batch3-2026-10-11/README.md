@@ -8,4 +8,4 @@
 
 Agent 复用真实 NativeSDKRunner、隔离容器和原生工具；网络仅可经宿主受控模型转发器，容器不含密钥。隐藏官方验收不进入 Agent 环境，补丁冻结后使用新鲜原镜像独立验收。
 
-原始含推理内容的 Provider 记录、Session/Artifact 原件保留在 `/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11`。公开导出移除凭据和 reasoning_content，保留原件 SHA-256、工具事实、补丁及验收。正在准备，本文件不代表已完成。
+原始含推理内容的 Provider 记录、Session/Artifact 原件保留在 `/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11`。公开导出移除凭据和 reasoning_content，保留原件 SHA-256、工具事实、补丁及验收。正在执行；已结束题目见 [当前记录](current-outcomes.json)。本文件不代表全部已完成。

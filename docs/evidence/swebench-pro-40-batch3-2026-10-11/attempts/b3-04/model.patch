@@ -1,0 +1,24 @@
+diff --git a/lib/ansible/utils/collection_loader/_collection_finder.py b/lib/ansible/utils/collection_loader/_collection_finder.py
+index 70e2d1038e..02d3600218 100644
+--- a/lib/ansible/utils/collection_loader/_collection_finder.py
++++ b/lib/ansible/utils/collection_loader/_collection_finder.py
+@@ -299,11 +299,16 @@ class _AnsiblePathHookFinder:
+     def find_module(self, fullname, path=None):
+         # we ignore the passed in path here- use what we got from the path hook init
+         finder = self._get_finder(fullname)
+-        if finder is not None:
+-            return finder.find_module(fullname, path=[self._pathctx])
+-        else:
++        if finder is None:
+             return None
+ 
++        # the FileFinder we use for ordinary directories on disk (py3 only) doesn't accept the legacy
++        # `path` argument, so only hand the stored path context to finders that can consume it
++        if PY3 and finder is self._file_finder:
++            return finder.find_module(fullname)
++
++        return finder.find_module(fullname, path=[self._pathctx])
++
+     def find_spec(self, fullname, target=None):
+         split_name = fullname.split('.')
+         toplevel_pkg = split_name[0]

@@ -1,0 +1,44 @@
+Running selected tests: TestImport TestImportCommand_SkipExistingFlag
+=== RUN   TestImportCommand_SkipExistingFlag
+--- PASS: TestImportCommand_SkipExistingFlag (0.00s)
+PASS
+ok  	go.flipt.io/flipt/cmd/flipt	0.013s
+=== RUN   TestImport
+=== RUN   TestImport/import_with_attachment_and_default_variant_(yml)
+=== RUN   TestImport/import_with_attachment_and_default_variant_(json)
+=== RUN   TestImport/import_with_attachment_(yml)
+=== RUN   TestImport/import_with_attachment_(json)
+=== RUN   TestImport/import_without_attachment_(yml)
+=== RUN   TestImport/import_without_attachment_(json)
+=== RUN   TestImport/import_with_implicit_rule_ranks_(yml)
+=== RUN   TestImport/import_with_implicit_rule_ranks_(json)
+=== RUN   TestImport/import_with_multiple_segments_(yml)
+=== RUN   TestImport/import_with_multiple_segments_(json)
+=== RUN   TestImport/import_v1_(yml)
+=== RUN   TestImport/import_v1_(json)
+=== RUN   TestImport/import_v1.1_(yml)
+=== RUN   TestImport/import_v1.1_(json)
+=== RUN   TestImport/import_new_flags_only_(yml)
+=== RUN   TestImport/import_new_flags_only_(json)
+--- PASS: TestImport (0.00s)
+    --- PASS: TestImport/import_with_attachment_and_default_variant_(yml) (0.00s)
+    --- PASS: TestImport/import_with_attachment_and_default_variant_(json) (0.00s)
+    --- PASS: TestImport/import_with_attachment_(yml) (0.00s)
+    --- PASS: TestImport/import_with_attachment_(json) (0.00s)
+    --- PASS: TestImport/import_without_attachment_(yml) (0.00s)
+    --- PASS: TestImport/import_without_attachment_(json) (0.00s)
+    --- PASS: TestImport/import_with_implicit_rule_ranks_(yml) (0.00s)
+    --- PASS: TestImport/import_with_implicit_rule_ranks_(json) (0.00s)
+    --- PASS: TestImport/import_with_multiple_segments_(yml) (0.00s)
+    --- PASS: TestImport/import_with_multiple_segments_(json) (0.00s)
+    --- PASS: TestImport/import_v1_(yml) (0.00s)
+    --- PASS: TestImport/import_v1_(json) (0.00s)
+    --- PASS: TestImport/import_v1.1_(yml) (0.00s)
+    --- PASS: TestImport/import_v1.1_(json) (0.00s)
+    --- PASS: TestImport/import_new_flags_only_(yml) (0.00s)
+    --- PASS: TestImport/import_new_flags_only_(json) (0.00s)
+PASS
+ok  	go.flipt.io/flipt/internal/ext	0.004s
+testing: warning: no tests to run
+PASS
+ok  	go.flipt.io/flipt/internal/storage/sql	0.010s [no tests to run]

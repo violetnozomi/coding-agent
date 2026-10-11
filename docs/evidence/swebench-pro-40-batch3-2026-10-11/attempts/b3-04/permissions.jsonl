@@ -1,0 +1,28 @@
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la && git log --oneline -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat README.rst | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pwd"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls lib"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls lib/ansible/utils/collection_loader/ 2>/dev/null; ls lib/ansible/utils/ | head -50"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -R test/units/utils/collection_loader 2>/dev/null; echo ---; grep -rn \"find_module\\|find_spec\" test/units/utils/collection_loader 2>/dev/null | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git log --oneline -3"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git status"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 --version; python --version 2>/dev/null; which python3"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git log --oneline -15 -- lib/ansible/utils/collection_loader/_collection_finder.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 -c \"\nimport importlib.machinery as m\nimport inspect\nprint(inspect.signature(m.FileFinder.find_module))\nprint(inspect.getsource(m.FileFinder.find_module))\n\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "cat lib/ansible/release.py | head -20; ls changelogs/fragments | head -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git show b50f16db91 --stat; echo =====; git show b50f16db91 -- lib/ansible/utils/collection_loader/_collection_finder.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && PYTHONPATH=lib:test python3 -c \"\nfrom ansible.utils.collection_loader._collection_finder import _AnsibleCollectionFinder, _AnsiblePathHookFinder\nimport tempfile, os\nd = tempfile.mkdtemp()\nf = _AnsiblePathHookFinder(_AnsibleCollectionFinder(), d)\ntry:\n    print('find_module missing ->', f.find_module('missing'))\nexcept Exception as e:\n    print('EXC', type(e).__name__, e)\ntry:\n    print('find_spec missing ->', f.find_spec('missing'))\nexcept Exception as e:\n    print('EXC', type(e).__name__, e)\n\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "PYTHONPATH=lib:test python3 -c \"import ansible; print(ansible.__file__)\"", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python3 -c \"import ansible, sys; print(ansible.__file__)\" 2>&1 | head; pip download ansible-core 2>&1 | head -3", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "readlink -f /workspace; python3 -c \"import sys; print([p for p in sys.path])\"; pip show ansible-core 2>/dev/null | head -10"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pwd -P; ls -la /workspace | head -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -la"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python3 -c \"import ansible.utils.collection_loader._collection_finder as m; print(m.__file__)\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 - <<'EOF'\nimport os\nprint(os.path.realpath('/workspace'))\nprint(os.path.realpath('/app'))\nprint(os.path.samefile('/workspace/lib/ansible/__init__.py','/app/lib/ansible/__init__.py'))\nEOF"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 -c \"import sys; [print(p) for p in sys.path]\"; echo ---; python3 -c \"import ansible_test; print(ansible_test.__file__)\" 2>&1 | tail -1; pip show ansible-core 2>&1 | head -12"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/utils/collection_loader/_collection_finder.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff"}, "allowed": true}
+{"tool": "bash", "input": {"command": "rm -f probe_tmp.txt; git status --short"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git status --short"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 -m pytest test/units/utils/collection_loader/test_collection_loader.py -q 2>&1 | tail -25", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 -c \"\nimport tempfile\nfrom ansible.utils.collection_loader._collection_finder import _AnsibleCollectionFinder, _AnsiblePathHookFinder\nd = tempfile.mkdtemp()\nf = _AnsiblePathHookFinder(_AnsibleCollectionFinder(), d)\nprint('find_module missing:', f.find_module('missing'))\nprint('find_spec missing:', f.find_spec('missing'))\n\"", "workdir": "/workspace"}, "allowed": true}

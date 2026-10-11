@@ -1,0 +1,23 @@
+[
+  "docker",
+  "run",
+  "--name",
+  "nz-pro20-grade-b3-05",
+  "--init",
+  "--pull=never",
+  "--memory=4g",
+  "--cpus=2",
+  "--env",
+  "HOME=/tmp/grade-home",
+  "--mount",
+  "type=bind,source=/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/evaluator-only/instance_ansible__ansible-185d41031660a676c43fbb781cd1335902024bfe-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5/tests,target=/tests,readonly",
+  "--mount",
+  "type=bind,source=/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-05/model.patch,target=/tmp/model.patch,readonly",
+  "--mount",
+  "type=bind,source=/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-05/evaluation,target=/logs/verifier",
+  "--entrypoint",
+  "/bin/bash",
+  "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:d827bde0c992072daf2e2eab357008c827e7175166c0ab76424c18cb2793fa8f",
+  "-c",
+  "mkdir -p /tmp/grade-home; cd /app 2>/dev/null || cd /testbed; if [ -s /tmp/model.patch ]; then git apply --check /tmp/model.patch && git apply /tmp/model.patch || exit 97; fi; bash /tests/test.sh; result=$?; chmod -R a+rX /logs/verifier; exit $result"
+]

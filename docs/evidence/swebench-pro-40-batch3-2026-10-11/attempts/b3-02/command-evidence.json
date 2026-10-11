@@ -1,0 +1,69 @@
+[
+  {
+    "tool_call_id": "call_00_NCdLtMmxaPm89vhmJnqC5076",
+    "input": {
+      "command": "ls -la /workspace && echo \"---APP---\" && ls -la /app 2>/dev/null | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_RtQClhPrXghuDCZa4DxO7106",
+    "input": {
+      "command": "ls -la /workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_eUuuqbbsfJtmtHdVxPBp1835",
+    "input": {
+      "command": "grep -rn \"ListFlagRequest\\|ListSegmentRequest\\|type FlagList\\|type SegmentList\" /workspace/rpc/flipt/*.go | head -30"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_2bfxOezhTEz8PHANb4E42724",
+    "input": {
+      "command": "ls /workspace/internal/ext/testdata/"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "export.json\nexport.yml\nexport_all_namespaces.json\nexport_all_namespaces.yml\nexport_default_and_foo.json\nexport_default_and_foo.yml\nfuzz\nimport.json\nimport.yml\nimport_implicit_rule_rank.json\nimport_implicit_rule_rank.yml\nimport_invalid_version.json\nimport_invalid_version.yml\nimport_no_attachment.json\nimport_no_attachment.yml\nimport_rule_multiple_segments.json\nimport_rule_multiple_segments.yml\nimport_single_namespace_foo.json\nimport_single_namespace_foo.yml\nimport_two_namespaces_default_and_foo.json\nimport_two_namespaces_default_and_foo.yml\nimport_v1.json\nimport_v1.yml\nimport_v1_1.json\nimport_v1_1.yml\nimport_v1_flag_type_not_supported.json\nimport_v1_flag_type_not_supported.yml\nimport_v1_rollouts_not_supported.json\nimport_v1_rollouts_not_supported.yml\nimport_with_attachment.json\nimport_with_attachment.yml\nimport_yaml_stream_all_unique_namespaces.json\nimport_yaml_stream_all_unique_namespaces.yml\nimport_yaml_stream_default_namespace.json\nimport_yaml_stream_default_namespace.yml"
+  },
+  {
+    "tool_call_id": "call_00_3xj2lAcv6GnMaICghcfL2651",
+    "input": {
+      "command": "ls /workspace/cmd/flipt/"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "banner.go\nbundle.go\ncloud.go\ncompletion.go\nconfig.go\ndefault.go\ndefault_linux.go\ndoc.go\nevaluate.go\nexport.go\nimport.go\nmain.go\nmigrate.go\nserver.go\nvalidate.go"
+  },
+  {
+    "tool_call_id": "verification-stage-static-3",
+    "input": {
+      "command": "go test ./cmd/flipt -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  }
+]

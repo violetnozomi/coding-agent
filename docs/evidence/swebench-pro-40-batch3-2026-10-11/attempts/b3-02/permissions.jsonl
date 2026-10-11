@@ -1,0 +1,5 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"ListFlagRequest\\|ListSegmentRequest\\|type FlagList\\|type SegmentList\" /workspace/rpc/flipt/*.go | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls /workspace/internal/ext/testdata/"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls /workspace/cmd/flipt/"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./cmd/flipt -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}

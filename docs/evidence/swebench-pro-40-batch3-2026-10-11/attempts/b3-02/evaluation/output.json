@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "TestImportCommand_SkipExistingFlag",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestImport",
+      "status": "PASSED"
+    }
+  ]
+}

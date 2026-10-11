@@ -16,6 +16,9 @@ summary=[]
 for s in sorted(LIVE.glob('b3-[0-9][0-9]')):
  if not (s/'report.json').exists():continue
  report=json.loads((s/'report.json').read_text());dst=DOC/PUBLIC/s.name;dst.mkdir(parents=True,exist_ok=True)
+ for name in ('instruction.md','task.toml'):
+  source=OUT/'public-tasks'/report['instance_id']/name
+  if source.exists():shutil.copy2(source,dst/name)
  admissions=[x for x in rows if x['event']=='admitted' and x['run']==s.name]
  ids={x['attempt_id'] for x in admissions};settlements=[x for x in rows if x['event']=='settled' and x['attempt_id'] in ids]
  estimates=[x.get('estimated_cost_reported_cny') for x in settlements]

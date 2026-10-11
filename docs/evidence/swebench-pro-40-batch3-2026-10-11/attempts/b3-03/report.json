@@ -1,0 +1,13 @@
+{
+  "number": 3,
+  "instance_id": "instance_ansible__ansible-a02e22e902a69aeb465f16bf03f7f5a91b2cb828-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": false,
+  "agent_started_epoch": 1791733749.5862255,
+  "agent_finished_epoch": 1791733875.213836,
+  "status": "attempted",
+  "patch_sha256": "3f378b8cbbc77551eb7f54ba63bec38719c7fba4e8188a1c4a2fdf8020b9bc5c",
+  "eval_status": "graded",
+  "physical_requests": 40
+}
