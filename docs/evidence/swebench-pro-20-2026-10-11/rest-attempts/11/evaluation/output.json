@@ -1,0 +1,88 @@
+{
+  "tests": [
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail proton1",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail proton2",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail gmail1",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail gmail2",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail gmail3",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail gmail4",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail gmx",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail android",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail aol1",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail aol2",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail icloud",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail netease",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail sina",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail thunderbird",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail yahoo",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should find the blockquote in the mail zoho",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should correctly detect proton blockquote with default font and no signature",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should take the last element containing text in case of siblings blockquotes",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should take the last element containing an image in case of siblings blockquotes",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should display nothing in blockquote when there is text after blockquotes",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/helpers/message/messageBlockquote.test.ts | messageBlockquote should display nothing in blockquote when there is an image after blockquotes",
+      "status": "PASSED"
+    }
+  ]
+}

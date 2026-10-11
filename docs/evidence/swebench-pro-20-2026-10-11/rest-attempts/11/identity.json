@@ -1,0 +1,9 @@
+{
+  "instance_id": "instance_protonmail__webclients-2f66db85455f4b22a47ffd853738f679b439593c",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/11",
+  "preparation_retry_not_agent_retry": true,
+  "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/pending/11"
+}

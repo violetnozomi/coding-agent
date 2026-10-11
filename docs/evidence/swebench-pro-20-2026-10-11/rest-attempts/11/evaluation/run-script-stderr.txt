@@ -1,0 +1,60 @@
+PASS src/app/helpers/message/messageBlockquote.test.ts (90 MB heap size)
+  messageBlockquote
+    ✓ should find the blockquote in the mail proton1 (31 ms)
+    ✓ should find the blockquote in the mail proton2 (16 ms)
+    ✓ should find the blockquote in the mail gmail1 (9 ms)
+    ✓ should find the blockquote in the mail gmail2 (3 ms)
+    ✓ should find the blockquote in the mail gmail3 (8 ms)
+    ✓ should find the blockquote in the mail gmail4 (7 ms)
+    ✓ should find the blockquote in the mail gmx (5 ms)
+    ✓ should find the blockquote in the mail android (3 ms)
+    ✓ should find the blockquote in the mail aol1 (13 ms)
+    ✓ should find the blockquote in the mail aol2 (8 ms)
+    ✓ should find the blockquote in the mail icloud (8 ms)
+    ✓ should find the blockquote in the mail netease (6 ms)
+    ✓ should find the blockquote in the mail sina (9 ms)
+    ✓ should find the blockquote in the mail thunderbird (5 ms)
+    ✓ should find the blockquote in the mail yahoo (6 ms)
+    ✓ should find the blockquote in the mail zoho (10 ms)
+    ✓ should correctly detect proton blockquote with default font and no signature (4 ms)
+    ✓ should take the last element containing text in case of siblings blockquotes (2 ms)
+    ✓ should take the last element containing an image in case of siblings blockquotes (2 ms)
+    ✓ should display nothing in blockquote when there is text after blockquotes (2 ms)
+    ✓ should display nothing in blockquote when there is an image after blockquotes (2 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       21 passed, 21 total
+Snapshots:   0 total
+Time:        21.608 s
+Ran all test suites matching /applications\/mail\/src\/app\/helpers\/message\/messageBlockquote.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+PASS src/app/helpers/message/messageBlockquote.test.ts (69 MB heap size)
+  messageBlockquote
+    ✓ should find the blockquote in the mail proton1 (29 ms)
+    ✓ should find the blockquote in the mail proton2 (15 ms)
+    ✓ should find the blockquote in the mail gmail1 (8 ms)
+    ✓ should find the blockquote in the mail gmail2 (4 ms)
+    ✓ should find the blockquote in the mail gmail3 (9 ms)
+    ✓ should find the blockquote in the mail gmail4 (6 ms)
+    ✓ should find the blockquote in the mail gmx (5 ms)
+    ✓ should find the blockquote in the mail android (4 ms)
+    ✓ should find the blockquote in the mail aol1 (13 ms)
+    ✓ should find the blockquote in the mail aol2 (8 ms)
+    ✓ should find the blockquote in the mail icloud (8 ms)
+    ✓ should find the blockquote in the mail netease (6 ms)
+    ✓ should find the blockquote in the mail sina (4 ms)
+    ✓ should find the blockquote in the mail thunderbird (4 ms)
+    ✓ should find the blockquote in the mail yahoo (7 ms)
+    ✓ should find the blockquote in the mail zoho (10 ms)
+    ✓ should correctly detect proton blockquote with default font and no signature (6 ms)
+    ✓ should take the last element containing text in case of siblings blockquotes (2 ms)
+    ✓ should take the last element containing an image in case of siblings blockquotes (3 ms)
+    ✓ should display nothing in blockquote when there is text after blockquotes (2 ms)
+    ✓ should display nothing in blockquote when there is an image after blockquotes (2 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       21 passed, 21 total
+Snapshots:   0 total
+Time:        6.615 s
+Ran all test suites matching /src\/app\/helpers\/message\/messageBlockquote.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

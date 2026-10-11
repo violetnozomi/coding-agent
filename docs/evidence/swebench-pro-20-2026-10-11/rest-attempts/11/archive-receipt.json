@@ -1,0 +1,10 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/rest/11/container-evidence.tar.gz",
+  "sha256": "e620563bc1eb7e3f5c42b8b2013ba9c8f5d72fa9f1c86eb48e6d653a79d81fa3",
+  "bytes": 224793069,
+  "source_evidence_bytes": 1142020894,
+  "recovered_after_delivery_error": true,
+  "retains_raw_container_session_and_artifacts": true,
+  "recovery_source_quota_bytes": 2147483648,
+  "no_agent_or_model_retry": true
+}
