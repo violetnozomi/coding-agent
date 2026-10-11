@@ -1,0 +1,14 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"cita_press\\|wikisource\" --include=*.py --include=*.xml --include=*.html --include=*.yml --include=*.yaml -l | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls tests/ && find . -path ./node_modules -prune -o -name \"test_book_providers*\" -print"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls openlibrary/templates/book_providers/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls conf/solr/conf 2>/dev/null; find conf -name \"*.xml\" | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && find . -path ./node_modules -prune -o -type d -name tests -print | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls openlibrary/plugins/worksearch/tests/ && ls openlibrary/plugins/upstream/tests 2>/dev/null | head && ls openlibrary/solr/updater/tests 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile openlibrary/book_providers.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile openlibrary/book_providers.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '365,375p;520,545p' openlibrary/book_providers.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile openlibrary/book_providers.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile openlibrary/book_providers.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile openlibrary/book_providers.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest openlibrary/tests/test_book_providers.py -q 2>&1 | tail -30", "timeout": 300}, "allowed": false}

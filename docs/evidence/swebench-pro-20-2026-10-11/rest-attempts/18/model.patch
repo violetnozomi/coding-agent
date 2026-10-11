@@ -1,0 +1,151 @@
+diff --git a/openlibrary/book_providers.py b/openlibrary/book_providers.py
+index cd7902200..80e7750da 100644
+--- a/openlibrary/book_providers.py
++++ b/openlibrary/book_providers.py
+@@ -366,6 +366,28 @@ class ProjectGutenbergProvider(AbstractBookProvider):
+         ]
+ 
+ 
++class ProjectRunebergProvider(AbstractBookProvider):
++    short_name = 'runeberg'
++    identifier_key = 'project_runeberg'
++
++    def is_own_ocaid(self, ocaid: str) -> bool:
++        return 'runeberg' in ocaid
++
++    def get_acquisitions(
++        self,
++        edition: Edition,
++    ) -> list[Acquisition]:
++        return [
++            Acquisition(
++                access='open-access',
++                format='web',
++                price=None,
++                url=f'https://runeberg.org/{self.get_best_identifier(edition)}/',
++                provider_name=self.short_name,
++            )
++        ]
++
++
+ class StandardEbooksProvider(AbstractBookProvider):
+     short_name = 'standard_ebooks'
+     identifier_key = 'standard_ebooks'
+@@ -528,6 +550,7 @@ PROVIDER_ORDER: list[AbstractBookProvider] = [
+     DirectProvider(),
+     LibriVoxProvider(),
+     ProjectGutenbergProvider(),
++    ProjectRunebergProvider(),
+     StandardEbooksProvider(),
+     OpenStaxProvider(),
+     CitaPressProvider(),
+diff --git a/openlibrary/plugins/worksearch/code.py b/openlibrary/plugins/worksearch/code.py
+index 931db0606..865d2e2b7 100644
+--- a/openlibrary/plugins/worksearch/code.py
++++ b/openlibrary/plugins/worksearch/code.py
+@@ -388,6 +388,7 @@ def get_doc(doc: SolrDocument):
+         cover_edition_key=doc.get('cover_edition_key', None),
+         languages=doc.get('language', []),
+         id_project_gutenberg=doc.get('id_project_gutenberg', []),
++        id_project_runeberg=doc.get('id_project_runeberg', []),
+         id_librivox=doc.get('id_librivox', []),
+         id_standard_ebooks=doc.get('id_standard_ebooks', []),
+         id_openstax=doc.get('id_openstax', []),
+diff --git a/openlibrary/plugins/worksearch/schemes/works.py b/openlibrary/plugins/worksearch/schemes/works.py
+index 500d91d94..7d3ee9729 100644
+--- a/openlibrary/plugins/worksearch/schemes/works.py
++++ b/openlibrary/plugins/worksearch/schemes/works.py
+@@ -185,6 +185,7 @@ class WorkSearchScheme(SearchScheme):
+         # FIXME: These should be fetched from book_providers, but can't cause circular
+         # dep
+         'id_project_gutenberg',
++        'id_project_runeberg',
+         'id_librivox',
+         'id_standard_ebooks',
+         'id_openstax',
+diff --git a/openlibrary/plugins/worksearch/tests/test_worksearch.py b/openlibrary/plugins/worksearch/tests/test_worksearch.py
+index 79226bb86..5cdc125b7 100644
+--- a/openlibrary/plugins/worksearch/tests/test_worksearch.py
++++ b/openlibrary/plugins/worksearch/tests/test_worksearch.py
+@@ -62,6 +62,7 @@ def test_get_doc():
+             'cover_edition_key': 'OL1111795M',
+             'languages': [],
+             'id_project_gutenberg': [],
++            'id_project_runeberg': [],
+             'id_librivox': [],
+             'id_standard_ebooks': [],
+             'id_openstax': [],
+diff --git a/openlibrary/templates/book_providers/runeberg_read_button.html b/openlibrary/templates/book_providers/runeberg_read_button.html
+new file mode 100644
+index 000000000..7212990f9
+--- /dev/null
++++ b/openlibrary/templates/book_providers/runeberg_read_button.html
+@@ -0,0 +1,22 @@
++$def with(runeberg_id, analytics_attr)
++
++<div class="cta-button-group">
++  <a
++      href="https://runeberg.org/$runeberg_id/"
++      title="$_('Read eBook from Project Runeberg')"
++      class="cta-btn cta-btn--available cta-btn--read cta-btn--external cta-btn--runeberg"
++      target="_blank"
++      $:analytics_attr('Read')
++      aria-haspopup="true"
++      aria-controls="runeberg-toast"
++  >$_('Read')</a>
++</div>
++
++$if render_once('runeberg-toast'):
++  <div class="toast toast--book-provider" data-toast-trigger=".cta-btn--runeberg" id="runeberg-toast" style="display:none">
++    <div class="toast__body">
++      $:_('This book is available from <a href="https://runeberg.org/">Project Runeberg</a>. Project Runeberg is a trusted book provider of classic Nordic (Scandinavian) literature in electronic form.')
++      <a href="https://runeberg.org/">$_("Learn more")</a>
++    </div>
++    <a class="toast__close">&times;<span class="shift">$_("Close")</span></a>
++  </div>
+diff --git a/openlibrary/tests/test_book_providers.py b/openlibrary/tests/test_book_providers.py
+new file mode 100644
+index 000000000..d732c6dc7
+--- /dev/null
++++ b/openlibrary/tests/test_book_providers.py
+@@ -0,0 +1,40 @@
++from openlibrary.book_providers import (
++    PROVIDER_ORDER,
++    ProjectRunebergProvider,
++    get_book_provider_by_name,
++)
++
++
++class TestProjectRunebergProvider:
++    def test_short_name(self):
++        assert ProjectRunebergProvider().short_name == 'runeberg'
++
++    def test_registered_in_provider_order(self):
++        assert any(
++            isinstance(p, ProjectRunebergProvider) for p in PROVIDER_ORDER
++        )
++
++    def test_get_book_provider_by_name(self):
++        assert isinstance(
++            get_book_provider_by_name('runeberg'), ProjectRunebergProvider
++        )
++
++    def test_is_own_ocaid_substring_match(self):
++        provider = ProjectRunebergProvider()
++        # Substring, not just a prefix
++        assert provider.is_own_ocaid('runeberg123')
++        assert provider.is_own_ocaid('foo_runeberg_bar')
++        assert provider.is_own_ocaid('some-runeberg')
++        assert not provider.is_own_ocaid('gutenberg123')
++
++    def test_get_acquisitions(self):
++        provider = ProjectRunebergProvider()
++        acquisitions = provider.get_acquisitions(
++            {'identifiers': {'project_runeberg': ['abc123']}}
++        )
++        assert len(acquisitions) == 1
++        acq = acquisitions[0]
++        assert acq.access == 'open-access'
++        assert acq.format == 'web'
++        assert acq.url == 'https://runeberg.org/abc123/'
++        assert acq.provider_name == 'runeberg'

@@ -1,0 +1,37 @@
+Running selected tests: openlibrary/plugins/worksearch/tests/test_worksearch.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.2, pytest-8.3.3, pluggy-1.5.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pyproject.toml
+plugins: rerunfailures-15.0, asyncio-0.24.0, anyio-4.10.0, cov-4.1.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 11 items
+
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_process_facet PASSED [  9%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_get_doc PASSED [ 18%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_get_doc_carries_id_project_runeberg_from_source[runeberg_ids0] PASSED [ 27%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_get_doc_carries_id_project_runeberg_from_source[runeberg_ids1] PASSED [ 36%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_get_doc_carries_id_project_runeberg_from_source[runeberg_ids2] PASSED [ 45%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_runeberg_provider_is_wired_into_search_and_dispatch PASSED [ 54%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_runeberg_ocaid_drives_provider_sniffing[runeberg_drabant-True] PASSED [ 63%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_runeberg_ocaid_drives_provider_sniffing[someitem_runeberg-True] PASSED [ 72%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_runeberg_ocaid_drives_provider_sniffing[gutenberg_12345-False] PASSED [ 81%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_runeberg_ocaid_drives_provider_sniffing[-False] PASSED [ 90%]
+openlibrary/plugins/worksearch/tests/test_worksearch.py::test_runeberg_acquisition_url_derives_from_best_identifier PASSED [100%]
+
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/genshi/compat.py:141
+  /usr/local/lib/python3.12/site-packages/genshi/compat.py:141: DeprecationWarning: ast.Ellipsis is deprecated and will be removed in Python 3.14; use ast.Constant instead
+    _ast_Ellipsis = ast.Ellipsis
+
+../usr/local/lib/python3.12/site-packages/genshi/compat.py:142
+  /usr/local/lib/python3.12/site-packages/genshi/compat.py:142: DeprecationWarning: ast.Str is deprecated and will be removed in Python 3.14; use ast.Constant instead
+    _ast_Str = ast.Str
+
+../usr/local/lib/python3.12/site-packages/dateutil/tz/tz.py:37
+  /usr/local/lib/python3.12/site-packages/dateutil/tz/tz.py:37: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    EPOCH = datetime.datetime.utcfromtimestamp(0)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 11 passed, 3 warnings in 0.03s ========================
