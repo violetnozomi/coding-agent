@@ -5,6 +5,7 @@ import asyncio
 from contextvars import ContextVar
 from dataclasses import asdict
 import json
+import os
 from pathlib import Path
 import shlex
 import uuid
@@ -24,6 +25,11 @@ from nz_coder.swebench.policy import STRICT_ALLOWED_TOOLS, strict_private_tool_i
 def main():
     config = json.loads(Path("/input/run.json").read_text())
     output = Path("/result")
+    # Agent 已完成依赖导入，sys.path 继续供 Agent 使用；测试子进程使用原项目依赖。
+    bootstrap_path = os.environ.pop("PYTHONPATH", None)
+    (output / "child-environment.json").write_text(json.dumps({
+        "agent_bootstrap_pythonpath": bootstrap_path, "project_child_pythonpath": None,
+        "project_dependency_isolation": "remove_agent_only_bootstrap_path", "harness_revision": 2}))
     purpose = ContextVar("model_purpose", default="coding")
 
     def nonce(request):
