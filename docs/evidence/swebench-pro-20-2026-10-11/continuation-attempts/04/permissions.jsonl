@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python --version && cat lib/ansible/release.py | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"import sys; print(sys.version)\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hi"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 --version; python2 --version 2>/dev/null; which pytest; python3 -c \"import ansible; print(ansible.__version__)\" 2>&1 | tail -1"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 - <<'EOF'\nfrom enum import IntEnum, IntFlag\n\nclass IteratingStates(IntEnum):\n    SETUP = 0\n    TASKS = 1\n    RESCUE = 2\n    ALWAYS = 3\n    COMPLETE = 4\n\nclass FailedStates(IntFlag):\n    NONE = 0\n    SETUP = 1\n    TASKS = 2\n    RESCUE = 4\n    ALWAYS = 8\n\nprint(repr(IteratingStates(0).name), str(IteratingStates(0)))\nfor n in (0,1,2,4,8,3,15,16):\n    try:\n        print(n, FailedStates(n).name)\n    except ValueError as e:\n        print(n, \"ValueError\")\nprint(FailedStates.NONE.name)\nprint(IteratingStates.SETUP == 0)\nprint(FailedStates.TASKS | FailedStates.ALWAYS)\nEOF"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 _scratch_enum_probe.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python3 _scratch_enum_probe.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"PlayIterator\\|play_iterator\" lib/ansible/plugins/strategy/__init__.py lib/ansible/plugins/strategy/linear.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile _scratch_enum_probe.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile _scratch_enum_probe.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git diff -- lib/ansible/plugins/strategy/linear.py | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile _scratch_enum_probe.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile _scratch_enum_probe.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile _scratch_enum_probe.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m py_compile lib/ansible/executor/play_iterator.py lib/ansible/plugins/strategy/__init__.py lib/ansible/plugins/strategy/linear.py && echo COMPILE_OK && rm -f _scratch_enum_probe.py && python -m pytest test/units/executor/test_play_iterator.py -q 2>&1 | tail -15"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m py_compile lib/ansible/executor/play_iterator.py lib/ansible/plugins/strategy/__init__.py lib/ansible/plugins/strategy/linear.py && echo COMPILE_OK"}, "allowed": false}

@@ -1,0 +1,11 @@
+{
+  "instance_id": "instance_protonmail__webclients-0ec14e36ceb01ba45602a563e12352af8171ed39",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/05",
+  "preparation_retry_not_agent_retry": true,
+  "status": "blocked",
+  "error": "RuntimeError('insufficient_storage_for_image_and_retained_evidence')",
+  "physical_requests": 0
+}

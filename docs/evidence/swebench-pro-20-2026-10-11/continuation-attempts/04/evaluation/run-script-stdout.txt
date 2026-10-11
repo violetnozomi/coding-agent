@@ -1,0 +1,15 @@
+Running selected tests: test/units/executor/test_play_iterator.py
+Running test: test/units/executor/test_play_iterator.py
+============================= test session starts ==============================
+collecting ... collected 8 items
+
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_failed_states_deprecation_class_attr PASSED [ 12%]
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_failed_states_deprecation_instance_attr PASSED [ 25%]
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_host_state PASSED [ 37%]
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_iterating_states_deprecation_class_attr PASSED [ 50%]
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_iterating_states_deprecation_instance_attr PASSED [ 62%]
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator PASSED [ 75%]
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator_add_tasks PASSED [ 87%]
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator_nested_blocks PASSED [100%]
+
+============================== 8 passed in 0.49s ===============================

@@ -1,0 +1,29 @@
+{
+  "actual_paid_requests": true,
+  "observations": [
+    {
+      "run": "04",
+      "attempt_id": "95cd15e6b68243f198531c8c1b308b82",
+      "request_sha256": "0a63d37347aecb5adbdaa7628047666b15384fc33d9a61c9f0b4a65332bbe641",
+      "wire_max_tokens": null,
+      "output_requested": null,
+      "output_reserved": 393216,
+      "usage": {
+        "prompt_tokens": 32338,
+        "completion_tokens": 9013,
+        "total_tokens": 41351,
+        "prompt_tokens_details": {
+          "cached_tokens": 6272
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 7245
+        },
+        "prompt_cache_hit_tokens": 6272,
+        "prompt_cache_miss_tokens": 26066
+      },
+      "finish_reason": "tool_calls",
+      "contract_failed": false
+    }
+  ],
+  "not_a_coding_correctness_claim": true
+}
