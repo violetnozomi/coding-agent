@@ -1,0 +1,9 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && git status"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./... && go test ./oval/ -run 'Test_rhelRebuildOSVersionToRHEL|Test_lessThan' -count=1 2>&1 | tail -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go vet ./oval/ 2>&1 | tail -30", "timeout": 110}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./oval/ -run 'Test_rhelRebuildOSVersionToRHEL' -count=1", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./oval/ -run 'Test_lessThan|Test_rhelRebuildOSVersionToRHEL' -count=1 -v 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build ./oval/ && echo BUILD_OK", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./oval/ -count=1 2>&1 | tail -15", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./oval/ -run 'Test_rhelRebuildOSVersionToRHEL|Test_lessThan|TestIsOvalDefAffected' -count=1 2>&1 | tail -15", "timeout": 120, "workdir": "/workspace"}, "allowed": true}

@@ -1,0 +1,53 @@
+diff --git a/oval/util.go b/oval/util.go
+index 569bcef..1585da5 100644
+--- a/oval/util.go
++++ b/oval/util.go
+@@ -439,8 +439,8 @@ func lessThan(family, newVer string, packInOVAL ovalmodels.Package) (bool, error
+ 		constant.CentOS,
+ 		constant.Alma,
+ 		constant.Rocky:
+-		vera := rpmver.NewVersion(rhelDownStreamOSVersionToRHEL(newVer))
+-		verb := rpmver.NewVersion(rhelDownStreamOSVersionToRHEL(packInOVAL.Version))
++		vera := rpmver.NewVersion(rhelRebuildOSVersionToRHEL(newVer))
++		verb := rpmver.NewVersion(rhelRebuildOSVersionToRHEL(packInOVAL.Version))
+ 		return vera.LessThan(verb), nil
+ 
+ 	default:
+@@ -448,10 +448,10 @@ func lessThan(family, newVer string, packInOVAL ovalmodels.Package) (bool, error
+ 	}
+ }
+ 
+-var rhelDownStreamOSVerPattern = regexp.MustCompile(`\.[es]l(\d+)(?:_\d+)?(?:\.(centos|rocky|alma))?`)
++var rhelRebuildOSVerPattern = regexp.MustCompile(`\.[es]l(\d+)(?:_\d+)?(?:\.(centos|rocky|alma))?`)
+ 
+-func rhelDownStreamOSVersionToRHEL(ver string) string {
+-	return rhelDownStreamOSVerPattern.ReplaceAllString(ver, ".el$1")
++func rhelRebuildOSVersionToRHEL(ver string) string {
++	return rhelRebuildOSVerPattern.ReplaceAllString(ver, ".el$1")
+ }
+ 
+ // NewOVALClient returns a client for OVAL database
+diff --git a/oval/util_test.go b/oval/util_test.go
+index 18c1c0b..78c3a88 100644
+--- a/oval/util_test.go
++++ b/oval/util_test.go
+@@ -1793,7 +1793,7 @@ func TestIsOvalDefAffected(t *testing.T) {
+ 	}
+ }
+ 
+-func Test_rhelDownStreamOSVersionToRHEL(t *testing.T) {
++func Test_rhelRebuildOSVersionToRHEL(t *testing.T) {
+ 	type args struct {
+ 		ver string
+ 	}
+@@ -1833,8 +1833,8 @@ func Test_rhelDownStreamOSVersionToRHEL(t *testing.T) {
+ 	}
+ 	for _, tt := range tests {
+ 		t.Run(tt.name, func(t *testing.T) {
+-			if got := rhelDownStreamOSVersionToRHEL(tt.args.ver); got != tt.want {
+-				t.Errorf("rhelDownStreamOSVersionToRHEL() = %v, want %v", got, tt.want)
++			if got := rhelRebuildOSVersionToRHEL(tt.args.ver); got != tt.want {
++				t.Errorf("rhelRebuildOSVersionToRHEL() = %v, want %v", got, tt.want)
+ 			}
+ 		})
+ 	}

@@ -63,3 +63,9 @@ Agent 使用无网络、非 root、只读容器根目录、独立 HOME 和工作
 本次离线检查：真实首题容器中读取 `go.mod`、实际 Bash 返回 `go version go1.24.3 linux/amd64`、生产 SDK 正常终止、归档重新打开通过；3 次本地受控模型请求，0 次付费请求，不计入 Pro 成绩。首次离线检查的 Go PATH 失败及归档路径失败原件保留，不改写。相关计费回归 72 passed、3 skipped；指定实际 tokenizer/recipe 资源后计数回归 7 passed。跳过项是未选实际资源的 2 个编码测试及 1 个旧生产审查资源集成测试；本题实际容器入口另行跑过。未运行 Windows 或全仓测试。
 
 执行命令：`python docs/evidence/swebench-pro-20-2026-10-11/run-pro.py --execute`。每题结果写入私有 `live/<序号>/report.json`，总状态 `live/progress.json`。未运行、环境阻断、Agent 状态、实际请求及官方 resolved 分开记录。受控 smoke 不证明真实模型编码能力。
+
+## 运行中的首题检查点
+
+第 01 题 Agent 正常结束，官方独立复评通过。真实请求 16 主/0 出站辅助，usage 峰时估算 0.1620748 元；2 次辅助调用本地拒绝另记，不冒充真实模型调用。[逐题轨迹和复盘](attempts/01/README.md)已保存，完整 Session/Artifact 与未公开 reasoning 的原始响应仍保留在私有目录。其余题目正在按原名单执行，20 题未完成。
+
+首次正式启动在镜像 OCI 格式预检处失败，未准入过任何模型请求；旧启动与账本保留并核验为零请求后才重新启动。修复的是镜像预检格式，没有重置付费占用或重新尝试已运行的任务。

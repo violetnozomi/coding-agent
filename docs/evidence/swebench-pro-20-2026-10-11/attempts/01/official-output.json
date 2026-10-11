@@ -1,0 +1,60 @@
+{
+  "tests": [
+    {
+      "name": "Test_rhelDownStreamOSVersionToRHEL",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_rhelDownStreamOSVersionToRHEL/remove_centos.",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_rhelDownStreamOSVersionToRHEL/remove_rocky.",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_rhelDownStreamOSVersionToRHEL/noop",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_rhelDownStreamOSVersionToRHEL/remove_minor",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_rhelDownStreamOSVersionToRHEL/remove_alma.",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_lessThan",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_lessThan/newVer_and_ovalmodels.Package_both_have_underscoreMinorversion.",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_lessThan/only_newVer_has_underscoreMinorversion.",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_lessThan/only_ovalmodels.Package_has_underscoreMinorversion.",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_lessThan/neither_newVer_nor_ovalmodels.Package_have_underscoreMinorversion.",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_lessThan/alma:_only_OVAL_version_has_underscore_minor_suffix,_normalize_to_equal",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_lessThan/rocky:_only_OVAL_version_has_underscore_minor_suffix,_normalize_to_equal",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_lessThan/alma:_canonical_scanned_equals_OVAL_with_alma_marker_after_normalization",
+      "status": "PASSED"
+    }
+  ]
+}
