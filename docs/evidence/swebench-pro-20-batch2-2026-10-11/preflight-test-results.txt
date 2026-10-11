@@ -1,0 +1,33 @@
+python -m pytest -q tests/evaluation/test_model_relay.py
+..........................................................               [100%]
+58 passed in 45.04s
+
+原准入回归：
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_pro_grant_accepts_frozen_official_nan_version_id _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-146/test_pro_grant_accepts_frozen_0')
+
+    def test_pro_grant_accepts_frozen_official_nan_version_id(tmp_path):
+        authorization = provider_output_grant()
+        authorization["scope"] = ["instance_element-hq__element-web-459df4583e01e4744a52d45446e34183385442d6-vnan"]
+>       ledger = RelayLedger(tmp_path / "ledger.jsonl", RelayLimits(), empirical_authorization=authorization)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/evaluation/test_model_relay.py:175:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <nz_coder.evaluation.model_relay.RelayLedger object at 0x761853ea5be0>
+path = PosixPath('/tmp/pytest-of-pyh/pytest-146/test_pro_grant_accepts_frozen_0/ledger.jsonl')
+limits = RelayLimits(requests=26, input_per_request=100000, input_total=500000, output_total=100000, request_seconds=180.0)
+
+    def __init__(self, path: Path, limits: RelayLimits, *, clock=time.monotonic, empirical_authorization=None):
+        if empirical_authorization is not None and not empirical_authorization_valid(empirical_authorization):
+>           raise ValueError("invalid_empirical_authorization")
+E           ValueError: invalid_empirical_authorization
+
+nz_coder/evaluation/model_relay.py:112: ValueError
+=========================== short test summary info ============================
+FAILED tests/evaluation/test_model_relay.py::test_pro_grant_accepts_frozen_official_nan_version_id
+1 failed, 57 deselected in 0.24s

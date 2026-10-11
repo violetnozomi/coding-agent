@@ -169,6 +169,16 @@ def reference_count(raw, _payload):
                            payload_sha256=hashlib.sha256(raw).hexdigest(), reference_count=len(raw))
 
 
+def test_pro_grant_accepts_frozen_official_nan_version_id(tmp_path):
+    authorization = provider_output_grant()
+    authorization["scope"] = ["instance_element-hq__element-web-459df4583e01e4744a52d45446e34183385442d6-vnan"]
+    ledger = RelayLedger(tmp_path / "ledger.jsonl", RelayLimits(), empirical_authorization=authorization)
+    ledger.close()
+    authorization["scope"] = [authorization["scope"][0].replace("-vnan", "-vunknown")]
+    with pytest.raises(ValueError, match="invalid_empirical_authorization"):
+        RelayLedger(tmp_path / "invalid.jsonl", RelayLimits(), empirical_authorization=authorization)
+
+
 def test_provider_default_output_uses_fee_reservation_without_setting_wire_limit(tmp_path):
     with running(tmp_path, mode="length", output=393216, counter=reference_count,
                  authorization=provider_output_grant(), exact_output=False) as (fake, ledger, binding, path):
@@ -252,6 +262,60 @@ def test_concurrent_last_request_and_64000_output_reservation(tmp_path, lim, rea
             fake.release.set()
             assert first.result(3).status_code == 200
         assert ledger.output_occupied == 7
+
+
+@pytest.mark.parametrize("budget,second_status", [(6, 429), (7, 200)])
+def test_two_task_relays_share_inflight_fee_and_cancel_only_their_run(tmp_path, budget, second_status):
+    """并行题目共享费用预留；已完成题目的取消不终止另一道请求。"""
+    authorization = provider_output_grant()
+    authorization["cost_limit"] = budget
+    with running(tmp_path, mode="hold", output=393216, counter=reference_count,
+                 authorization=authorization, exact_output=False) as (fake, ledger, first_binding, first_path):
+        from dataclasses import replace
+        second_fake = FakeService("hold")
+        second_upstream = ThreadingHTTPServer(("127.0.0.1", 0), second_fake.handler())
+        second_http_thread = threading.Thread(target=second_upstream.serve_forever, daemon=True)
+        second_http_thread.start()
+        second_binding = replace(first_binding, run="r2")
+        second_path = tmp_path / "second.sock"
+        second_relay = RelayServer(second_path, ledger=ledger, binding=second_binding,
+            upstream=f"http://127.0.0.1:{second_upstream.server_port}/v1/chat/completions", counter=reference_count)
+        second_thread = threading.Thread(target=second_relay.serve_forever, daemon=True)
+        second_thread.start()
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first = pool.submit(post, first_path, model=first_binding.model, omit_output=True)
+                assert fake.started.wait(2)
+                if second_status == 429:
+                    denied = post(second_path, model=second_binding.model, omit_output=True)
+                    assert denied.status_code == 429 and "estimated_fee" in denied.text
+                    assert not second_fake.requests and len(ledger.attempts) == 1
+                    fake.release.set()
+                    assert first.result(3).status_code == 200
+                else:
+                    second = pool.submit(post, second_path, model=second_binding.model, omit_output=True)
+                    assert second_fake.started.wait(2)
+                    assert len(ledger.attempts) == 2
+                    assert 6 < ledger.cost_occupied_cny <= budget
+                    assert all(row["status"] == "reserved" for row in ledger.attempts.values())
+                    fake.release.set()
+                    assert first.result(3).status_code == 200
+                    ledger.cancel(first_binding.run)
+                    assert "r2" not in ledger.cancelled and not second.done()
+                    second_fake.release.set()
+                    assert second.result(3).status_code == 200
+                    assert {row["run"] for row in ledger.attempts.values()} == {"r1", "r2"}
+                    assert all(row["usage"] is not None for row in ledger.attempts.values())
+            assert ledger.cost_occupied_cny <= budget
+        finally:
+            fake.release.set()
+            second_fake.release.set()
+            second_relay.shutdown()
+            second_relay.server_close()
+            second_thread.join(2)
+            second_upstream.shutdown()
+            second_upstream.server_close()
+            second_http_thread.join(2)
 
 
 def test_duplicate_nonce_does_not_resend_even_after_settlement(tmp_path):
