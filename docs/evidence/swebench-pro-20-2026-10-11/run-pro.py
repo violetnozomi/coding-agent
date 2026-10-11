@@ -99,17 +99,25 @@ def runtime_image(row, slot):
     python_version = command(["docker", "run", "--rm", "--network=none", "--entrypoint", "python3",
                        base, "--version"]).stdout.strip().split()[1]
     minor = "".join(python_version.split(".")[:2])
-    build = OUT / "runtime" / ("python-" + minor)
+    supported = command(["docker", "run", "--rm", "--network=none", "--entrypoint", "python3",
+                         base, "-m", "pip", "debug", "--verbose"]).stdout
+    (slot / "pip-supported-tags.txt").write_text(supported)
+    musl = list(dict.fromkeys(line.strip().split("-")[-1] for line in supported.splitlines()
+                             if len(line.strip().split("-")) == 3
+                             and line.strip().split("-")[-1].startswith("musllinux_")))
+    platforms = musl or ["manylinux_2_28_x86_64", "manylinux_2_17_x86_64", "manylinux2014_x86_64"]
+    # 使用原镜像真实兼容标签，避免把 glibc 轮包送给 Alpine/musl 项目。
+    build = OUT / "runtime" / ("python-" + minor + ("-" + musl[0] if musl else ""))
     if not build.exists():
         build.mkdir()
         wheels = build / "wheels"
-        if minor == "311":
+        if minor == "311" and not musl:
             shutil.copytree(OUT / "runtime/wheels", wheels)
         else:
             command([sys.executable, "-m", "pip", "download", "--no-cache-dir", "--no-deps", "--only-binary=:all:",
                      "--python-version", minor, "--implementation", "cp", "--abi", "cp" + minor,
-                     "--platform", "manylinux_2_28_x86_64", "--platform", "manylinux_2_17_x86_64",
-                     "--platform", "manylinux2014_x86_64", "-r", str(OUT / "runtime/requirements-pinned.txt"),
+                     *[item for platform in platforms for item in ("--platform", platform)],
+                     "-r", str(OUT / "runtime/requirements-pinned.txt"),
                      "-d", str(wheels)], log=build / "download.txt", timeout=180)
         requirements = []
         for p in sorted(wheels.glob("*.whl")):
@@ -126,6 +134,7 @@ def runtime_image(row, slot):
     command(["docker", "build", "--network=none", "--pull=false", "-t", tag, str(build)],
             log=slot / "image-build.txt", timeout=240)
     save(slot / "environment.json", {"source_image": base, "source_image_id": info["Id"], "project_python": python_version,
+        "agent_wheel_platforms": platforms,
         "source_size_bytes": info["Size"], "source_created_for_this_round": True,
         "agent_image": tag, "agent_image_id": command(["docker", "image", "inspect", tag, "--format", "{{.Id}}"]).stdout.strip()})
     return base, tag
