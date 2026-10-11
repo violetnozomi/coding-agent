@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 import hashlib
@@ -132,6 +133,42 @@ def run_case_with_short_path(slot, case, *args, **kwargs):
         return pro.run_case(slot, alias, *args, **kwargs)
 
 
+def combine_closed_sources(sources, manifest, target):
+    """合并只读阶段证据供既有准入函数核算，不清零费用或重试已运行题。"""
+    raw_parts, reports, chain = [], {}, []
+    for source in sources:
+        if not reports:
+            preparation_remainder(source, manifest)
+        raw = (source / "ledger.jsonl").read_bytes()
+        rows = [json.loads(line) for line in raw.splitlines()]
+        admissions = {r["attempt_id"]: r for r in rows if r["event"] == "admitted"}
+        settlements = [r for r in rows if r["event"] == "settled"]
+        summary = json.loads((source / "summary.json").read_text())
+        if Counter(r["attempt_id"] for r in settlements) != Counter(list(admissions)) or summary["accounting_failures"]:
+            raise RuntimeError("source_not_uniquely_settled")
+        fee = sum(r["estimated_cost_reported_cny"] if r["estimated_cost_reported_cny"] is not None
+                  else admissions[r["attempt_id"]]["estimated_cost_reserved_cny"] for r in settlements)
+        if not math.isclose(fee, summary["estimated_cost_occupied_cny"], abs_tol=1e-8):
+            raise RuntimeError("source_fee_mismatch")
+        for report in summary["tasks"]:
+            previous = reports.get(report["number"])
+            if previous and previous["attempt"]:
+                raise RuntimeError("source_repeated_paid_task")
+            reports[report["number"]] = report
+        raw_parts.append(raw)
+        chain.append({"source": str(source), "ledger_sha256": hashlib.sha256(raw).hexdigest(), "used_cny": fee})
+    merged = b"".join(raw_parts)
+    admissions = [r["attempt_id"] for line in merged.splitlines() if (r := json.loads(line))["event"] == "admitted"]
+    if len(admissions) != len(set(admissions)):
+        raise RuntimeError("source_duplicate_request")
+    target.mkdir(exist_ok=False)
+    (target / "ledger.jsonl").write_bytes(merged)
+    pro.save(target / "summary.json", {"tasks": [reports[n] for n in sorted(reports)],
+        "estimated_cost_occupied_cny": sum(r["used_cny"] for r in chain), "accounting_failures": {}})
+    pro.save(target / "source-chain.json", chain)
+    return preparation_remainder(target, manifest)
+
+
 def execute(retry_preparation=False):
     from dotenv import dotenv_values
     from nz_coder.evaluation.deepseek_counting import DeepSeekV41Counter
@@ -147,7 +184,8 @@ def execute(retry_preparation=False):
     key = os.environ.get("NZ_REVIEW_DEEPSEEK_API_KEY") or dotenv_values(ROOT / ".env").get("API_KEY")
     if not key:
         raise RuntimeError("authorized_host_key_unavailable")
-    plan = preparation_remainder(OUT / "live", manifest) if retry_preparation else None
+    source = OUT / "fee-handoff" if (OUT / "fee-handoff").exists() else OUT / "live"
+    plan = preparation_remainder(source, manifest) if retry_preparation else None
     if retry_preparation and Path("/proc/3135016").exists():
         raise RuntimeError("original_coordinator_still_running")
     tasks = plan["tasks"] if plan else list(enumerate(manifest["tasks"], 1))
@@ -162,7 +200,7 @@ def execute(retry_preparation=False):
         marker = json.loads((interrupted / "preparation-interruption.json").read_text())
         if not marker["no_sdk_launch_in_any_slot"] or marker["paid_requests"] != 0:
             raise RuntimeError("interrupted_preparation_not_proven_unstarted")
-    live = OUT / ("p2" if retry_preparation else "live")
+    live = OUT / (("p3" if source.name == "fee-handoff" else "p2") if retry_preparation else "live")
     live.mkdir(exist_ok=False)
     grant = {"purpose": "swebench-pro-v2", "model": pro.MODEL,
         "scope": [task["instance_id"] for _, task in tasks], "instance_manifest_sha256": digest,
@@ -178,6 +216,8 @@ def execute(retry_preparation=False):
                      preparation_retry_not_paid_agent_retry=True)
         if interrupted.exists():
             grant["zero_request_preparation_ledger_sha256"] = hashlib.sha256((interrupted / "ledger.jsonl").read_bytes()).hexdigest()
+        if source.name == "fee-handoff":
+            grant["source_ledger_chain"] = json.loads((source / "source-chain.json").read_text())
         pro.save(live / "continuation-plan.json", plan)
     limits = RelayLimits(requests=plan["remaining_requests"] if plan else 920, input_per_request=1000000,
         input_total=math.ceil(cost_limit / .04 * 1000000), output_total=math.ceil(cost_limit / 8 * 1000000), request_seconds=600)

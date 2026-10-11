@@ -119,3 +119,33 @@ def test_long_evidence_path_binds_real_relays_without_changing_mount_identity(tm
         assert json.loads((slot / "agent-exit.json").read_text())["returncode"] == 0
     finally:
         ledger.close()
+
+
+def test_combined_closed_phases_count_second_fee_and_exclude_paid_task(tmp_path):
+    first = tmp_path / "first"
+    first.mkdir()
+    manifest, initial = closed_source(first)
+    second = tmp_path / "second"
+    second.mkdir()
+    grant = json.loads((first / "ledger.jsonl").read_text().splitlines()[0])["fee_authorization"]
+    grant["scope"] = [manifest["tasks"][2]["instance_id"]]
+    grant["cost_limit"] = 50 - initial["estimated_cost_occupied_cny"]
+    ledger = RelayLedger(second / "ledger.jsonl", RelayLimits(output_total=2000000), empirical_authorization=grant)
+    binding = RelayBinding("swebench-pro-v2", grant["scope"][0], "b2-03", "main", 40,
+                           "deepseek-flash", 393216, time.monotonic() + 60, False)
+    payload = {"model": binding.model, "messages": [{"role": "user", "content": "offline"}]}
+    raw = json.dumps(payload).encode()
+    accounting = InputAccounting(None, "offline", contract_id="offline",
+        payload_sha256=hashlib.sha256(raw).hexdigest(), reference_count=10000)
+    attempt = ledger.reserve(binding, "third", raw, payload, accounting)
+    ledger.settle(attempt, status="complete", usage={"prompt_tokens": 1000,
+        "completion_tokens": 2, "total_tokens": 1002, "prompt_cache_hit_tokens": 50}, finish_reason="stop")
+    fee = ledger.cost_occupied_cny
+    (second / "summary.json").write_text(json.dumps({"tasks": [{"number": 3,
+        "instance_id": grant["scope"][0], "attempt": 1, "resolved": False}],
+        "estimated_cost_occupied_cny": fee, "accounting_failures": {}}))
+    ledger.close()
+    plan = parallel.combine_closed_sources([first, second], manifest, tmp_path / "combined")
+    assert plan["tasks"] == []
+    assert plan["used_cny"] == pytest.approx(initial["estimated_cost_occupied_cny"] + fee)
+    assert plan["remaining_requests"] == 917
