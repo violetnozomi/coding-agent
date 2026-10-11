@@ -1,0 +1,29 @@
+Running selected tests: TestDetectScanDest/single-addr TestDetectScanDest/asterisk TestDetectScanDest TestDetectScanDest/dup-addr-port TestDetectScanDest/empty TestDetectScanDest/multi-addr
+# github.com/mattn/go-sqlite3
+sqlite3-binding.c: In function 'sqlite3SelectNew':
+sqlite3-binding.c:128049:10: warning: function may return address of local variable [-Wreturn-local-addr]
+128049 |   return pNew;
+       |          ^~~~
+sqlite3-binding.c:128009:10: note: declared here
+128009 |   Select standin;
+       |          ^~~~~~~
+=== RUN   TestDetectScanDest
+=== RUN   TestDetectScanDest/empty
+    base_detect_scan_dest_test.go:91: base.detectScanDest() = [], want map[]
+=== RUN   TestDetectScanDest/single-addr
+    base_detect_scan_dest_test.go:91: base.detectScanDest() = [127.0.0.1:22], want map[127.0.0.1:[22]]
+=== RUN   TestDetectScanDest/dup-addr-port
+    base_detect_scan_dest_test.go:91: base.detectScanDest() = [127.0.0.1:22], want map[127.0.0.1:[22]]
+=== RUN   TestDetectScanDest/multi-addr
+    base_detect_scan_dest_test.go:91: base.detectScanDest() = [127.0.0.1:22 127.0.0.1:80 192.168.1.1:22], want map[127.0.0.1:[22 80] 192.168.1.1:[22]]
+=== RUN   TestDetectScanDest/asterisk
+    base_detect_scan_dest_test.go:91: base.detectScanDest() = [127.0.0.1:22 192.168.1.1:22], want map[127.0.0.1:[22] 192.168.1.1:[22]]
+--- FAIL: TestDetectScanDest (0.00s)
+    --- FAIL: TestDetectScanDest/empty (0.00s)
+    --- FAIL: TestDetectScanDest/single-addr (0.00s)
+    --- FAIL: TestDetectScanDest/dup-addr-port (0.00s)
+    --- FAIL: TestDetectScanDest/multi-addr (0.00s)
+    --- FAIL: TestDetectScanDest/asterisk (0.00s)
+FAIL
+FAIL	github.com/future-architect/vuls/scan	0.006s
+FAIL

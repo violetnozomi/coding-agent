@@ -1,0 +1,4 @@
+WARNING: PyYAML will be slow due to installation without libyaml support for interpreter: /usr/local/bin/python
+ERROR: Command "pytest --boxed -r a -n 4 --color no -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest.ini --junit-xml /app/test/results/junit/python3.9-units.xml --durations=25 --strict-markers -v test/units/module_utils/basic/test_sanitize_keys.py" returned exit status 1.
+WARNING: PyYAML will be slow due to installation without libyaml support for interpreter: /usr/local/bin/python
+ERROR: Command "pytest --boxed -r a -n 4 --color no -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest.ini --junit-xml /app/test/results/junit/python3.9-units.xml --durations=25 --strict-markers -v test/units/module_utils/basic/test_no_log.py" returned exit status 1.

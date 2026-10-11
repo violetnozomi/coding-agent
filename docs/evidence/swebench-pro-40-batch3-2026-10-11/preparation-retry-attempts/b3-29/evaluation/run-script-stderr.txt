@@ -1,0 +1,12 @@
+# go.flipt.io/flipt/internal/server [go.flipt.io/flipt/internal/server.test]
+internal/server/evaluator_test.go:188:24: undefined: flipt.EvaluationReason_FLAG_NOT_FOUND_EVALUATION_REASON
+internal/server/evaluator_test.go:188:80: resp.Reason undefined (type *flipt.EvaluationResponse has no field or method Reason)
+internal/server/evaluator_test.go:213:24: undefined: flipt.EvaluationReason_FLAG_DISABLED_EVALUATION_REASON
+internal/server/evaluator_test.go:213:79: resp.Reason undefined (type *flipt.EvaluationResponse has no field or method Reason)
+internal/server/evaluator_test.go:240:24: undefined: flipt.EvaluationReason_UNKNOWN_EVALUATION_REASON
+internal/server/evaluator_test.go:240:73: resp.Reason undefined (type *flipt.EvaluationResponse has no field or method Reason)
+internal/server/evaluator_test.go:267:24: undefined: flipt.EvaluationReason_ERROR_EVALUATION_REASON
+internal/server/evaluator_test.go:267:71: resp.Reason undefined (type *flipt.EvaluationResponse has no field or method Reason)
+internal/server/evaluator_test.go:329:24: undefined: flipt.EvaluationReason_ERROR_EVALUATION_REASON
+internal/server/evaluator_test.go:329:71: resp.Reason undefined (type *flipt.EvaluationResponse has no field or method Reason)
+internal/server/evaluator_test.go:329:71: too many errors

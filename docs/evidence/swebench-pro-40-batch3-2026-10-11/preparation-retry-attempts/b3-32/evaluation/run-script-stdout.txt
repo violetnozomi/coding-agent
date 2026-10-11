@@ -1,0 +1,91 @@
+Running selected tests: test/units/module_utils/basic/test_sanitize_keys.py test/units/module_utils/basic/test_no_log.py
+Running unit test: test/units/module_utils/basic/test_sanitize_keys.py
+Run command: /usr/local/bin/python /app/test/lib/ansible_test/_data/yamlcheck.py
+Unit test with Python 3.9
+Injecting "/tmp/python-mym62g_g-ansible/python" as a symlink to the "/usr/local/bin/python" interpreter.
+Run command: pytest --boxed -r a -n 4 --color no -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest.ini --junit-xml /app/test/results/junit/python3.9-units.xml --durations=25 --strict-markers -v test/units/module_utils/basic/test_sanitize_keys.py
+============================= test session starts ==============================
+platform linux -- Python 3.9.23, pytest-5.4.3, py-1.9.0, pluggy-0.13.1 -- /tmp/python-mym62g_g-ansible/python
+rootdir: /app/test/units/module_utils/basic, inifile: /app/test/lib/ansible_test/_data/pytest.ini
+plugins: mock-3.2.0, cov-2.10.0, xdist-1.33.0, rerunfailures-9.0, forked-1.2.0
+gw0 I / gw1 I / gw2 I / gw3 I
+[gw0] linux Python 3.9.23 cwd: /app
+[gw1] linux Python 3.9.23 cwd: /app
+[gw2] linux Python 3.9.23 cwd: /app
+[gw3] linux Python 3.9.23 cwd: /app
+[gw0] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw1] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw2] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw3] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+gw0 [0] / gw1 [0] / gw2 [0] / gw3 [0]
+
+scheduling tests via LoadScheduling
+
+==================================== ERRORS ====================================
+____________________ ERROR collecting test_sanitize_keys.py ____________________
+ImportError while importing test module '/app/test/units/module_utils/basic/test_sanitize_keys.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+test/units/module_utils/basic/test_sanitize_keys.py:10: in <module>
+    from ansible.module_utils.basic import sanitize_keys
+E   ImportError: cannot import name 'sanitize_keys' from 'ansible.module_utils.basic' (/app/lib/ansible/module_utils/basic.py)
+------- generated xml file: /app/test/results/junit/python3.9-units.xml --------
+=========================== short test summary info ============================
+ERROR test/units/module_utils/basic/test_sanitize_keys.py
+=============================== 1 error in 0.34s ===============================
+Running unit test: test/units/module_utils/basic/test_no_log.py
+Run command: /usr/local/bin/python /app/test/lib/ansible_test/_data/yamlcheck.py
+Unit test with Python 3.9
+Injecting "/tmp/python-5d11qlnj-ansible/python" as a symlink to the "/usr/local/bin/python" interpreter.
+Run command: pytest --boxed -r a -n 4 --color no -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest.ini --junit-xml /app/test/results/junit/python3.9-units.xml --durations=25 --strict-markers -v test/units/module_utils/basic/test_no_log.py
+============================= test session starts ==============================
+platform linux -- Python 3.9.23, pytest-5.4.3, py-1.9.0, pluggy-0.13.1 -- /tmp/python-5d11qlnj-ansible/python
+rootdir: /app/test/units/module_utils/basic, inifile: /app/test/lib/ansible_test/_data/pytest.ini
+plugins: mock-3.2.0, cov-2.10.0, xdist-1.33.0, rerunfailures-9.0, forked-1.2.0
+gw0 I / gw1 I / gw2 I / gw3 I
+[gw0] linux Python 3.9.23 cwd: /app
+[gw1] linux Python 3.9.23 cwd: /app
+[gw2] linux Python 3.9.23 cwd: /app
+[gw3] linux Python 3.9.23 cwd: /app
+[gw0] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw1] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw2] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw3] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+gw0 [6] / gw1 [6] / gw2 [6] / gw3 [6]
+
+scheduling tests via LoadScheduling
+[gw3] [ 16%] PASSED test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_no_removal 
+[gw0] [ 33%] PASSED test/units/module_utils/basic/test_no_log.py::TestReturnValues::test_return_datastructure_name 
+[gw1] [ 50%] PASSED test/units/module_utils/basic/test_no_log.py::TestReturnValues::test_unknown_type 
+[gw1] [ 66%] PASSED test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_unknown_type 
+[gw2] [ 83%] PASSED test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_hit_recursion_limit 
+[gw0] [100%] FAILED test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_strings_to_remove 
+
+=================================== FAILURES ===================================
+___________________ TestRemoveValues.test_strings_to_remove ____________________
+[gw0] linux -- Python 3.9.23 /tmp/python-5d11qlnj-ansible/python
+self = <units.module_utils.basic.test_no_log.TestRemoveValues testMethod=test_strings_to_remove>
+
+    def test_strings_to_remove(self):
+        for value, no_log_strings, expected in self.dataset_remove:
+>           self.assertEqual(remove_values(value, no_log_strings), expected)
+E           AssertionError: {'one[133 chars]R', 'VALUE_SPECIFIED_IN_NO_LOG_PARAMETER': ['V[45 chars]']}]} != {'one[133 chars]R', 'base': ['VALUE_SPECIFIED_IN_NO_LOG_PARAME[14 chars]']}]}
+E             {'one': 1,
+E              'three': ['VALUE_SPECIFIED_IN_NO_LOG_PARAMETER',
+E                        'musketeers',
+E                        None,
+E           +            {'base': ['VALUE_SPECIFIED_IN_NO_LOG_PARAMETER', 'raquets'],
+E           -            {'VALUE_SPECIFIED_IN_NO_LOG_PARAMETER': ['VALUE_SPECIFIED_IN_NO_LOG_PARAMETER',
+E           -                                                     'raquets'],
+E                         'ping': 'VALUE_SPECIFIED_IN_NO_LOG_PARAMETER'}],
+E              'two': 'dos'}
+
+test/units/module_utils/basic/test_no_log.py:130: AssertionError
+------- generated xml file: /app/test/results/junit/python3.9-units.xml --------
+========================== slowest 25 test durations ===========================
+0.02s call     test_no_log.py::TestRemoveValues::test_hit_recursion_limit
+
+(0.00 durations hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_strings_to_remove
+========================= 1 failed, 5 passed in 0.36s ==========================

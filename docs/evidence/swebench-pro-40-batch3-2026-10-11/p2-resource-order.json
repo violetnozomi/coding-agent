@@ -1,0 +1,24 @@
+{
+  "parallel": [
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40
+  ],
+  "serial_large_images": [],
+  "half_free_bytes_at_start": 13218826240.0,
+  "order_uses_task_scores": false
+}

@@ -1,0 +1,473 @@
+Running selected tests: test/components/views/settings/tabs/room/SecurityRoomSettingsTab-test.ts test/components/views/dialogs/spotlight/RoomResultContextMenus-test.tsx test/utils/ShieldUtils-test.ts test/components/structures/LoggedInView-test.ts test/stores/room-list/MessagePreviewStore-test.ts test/components/views/rooms/RoomHeader-test.ts test/components/views/settings/tabs/room/VoipRoomSettingsTab-test.ts test/components/structures/ThreadView-test.ts test/components/views/dialogs/spotlight/RoomResultContextMenus-test.ts test/components/views/rooms/RoomHeader-test.tsx test/components/views/rooms/wysiwyg_composer/SendWysiwygComposer-test.ts test/components/views/rooms/RoomTile-test.ts test/components/structures/auth/Registration-test.ts test/components/views/elements/crypto/VerificationQRCode-test.ts test/components/views/rooms/RoomTile-test.tsx test/utils/DateUtils-test.ts test/components/views/messages/MessageActionBar-test.ts test/utils/tooltipify-test.ts test/utils/exportUtils/HTMLExport-test.ts
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+(node:3413) [DEP0044] DeprecationWarning: The `util.isArray` API is deprecated. Please use `Array.isArray()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+FAIL test/components/views/rooms/RoomHeader-test.tsx (9.274 s)
+  RoomHeader
+    ✓ hides call buttons in video rooms (43 ms)
+    ✓ hides call buttons if showCallButtonsInComposer is disabled (9 ms)
+    ✓ hides the voice call button and disables the video call button if configured to use Element Call exclusively and there's an ongoing call (22 ms)
+    ✓ hides the voice call button and starts an Element call when the video call button is pressed if configured to use Element Call exclusively (65 ms)
+    ✓ hides the voice call button and disables the video call button if configured to use Element Call exclusively and the user lacks permission (12 ms)
+    ✓ disables call buttons in the new group call experience if there's an ongoing Element call (13 ms)
+    ✓ disables call buttons in the new group call experience if there's an ongoing legacy 1:1 call (14 ms)
+    ✓ disables call buttons in the new group call experience if there's an existing Jitsi widget (16 ms)
+    ✓ disables call buttons in the new group call experience if there's no other members (14 ms)
+    ✓ starts a legacy 1:1 call when call buttons are pressed in the new group call experience if there's 1 other member (14 ms)
+    ✓ creates a Jitsi widget when call buttons are pressed in the new group call experience if the user lacks permission to start Element calls (14 ms)
+    ✓ creates a Jitsi widget when the voice call button is pressed and shows a menu when the video call button is pressed in the new group call experience (82 ms)
+    ✓ disables the voice call button and starts an Element call when the video call button is pressed in the new group call experience if the user lacks permission to edit widgets (61 ms)
+    ✓ disables call buttons in the new group call experience if the user lacks permission (10 ms)
+    ✓ disables call buttons if there's an ongoing legacy 1:1 call (13 ms)
+    ✓ disables call buttons if there's an existing Jitsi widget (14 ms)
+    ✓ disables call buttons if there's no other members (12 ms)
+    ✓ starts a legacy 1:1 call when call buttons are pressed if there's 1 other member (14 ms)
+    ✓ creates a Jitsi widget when call buttons are pressed (14 ms)
+    ✓ disables call buttons if the user lacks permission (10 ms)
+    ✓ shows a close button when viewing a call lobby that returns to the timeline when pressed (58 ms)
+    ✓ shows a reduce button when viewing a call that returns to the timeline when pressed (58 ms)
+    ✓ shows a layout button when viewing a call that shows a menu when pressed (35 ms)
+    ✓ shows an invite button in video rooms (7 ms)
+    ✓ hides the invite button in non-video rooms when viewing a call (7 ms)
+    ✓ shows the room avatar in a room with only ourselves (6 ms)
+    ✓ shows the room avatar in a room with 2 people (6 ms)
+    ✓ shows the room avatar in a room with >2 people (6 ms)
+    ✓ shows the room avatar in a DM with only ourselves (9 ms)
+    ✓ shows the user avatar in a DM with 2 people (5 ms)
+    ✓ shows the room avatar in a DM with >2 people (5 ms)
+    ✓ renders call buttons normally (9 ms)
+    ✓ hides call buttons when the room is tombstoned (4 ms)
+    ✓ should render buttons if not passing showButtons (default true) (5 ms)
+    ✓ should not render buttons if passing showButtons = false (7 ms)
+    ✕ should render the room options context menu if not passing enableRoomOptionsMenu (default true) and UIComponent customisations room options enabled (5 ms)
+    ✓ should not render the room options context menu if passing enableRoomOptionsMenu = false and UIComponent customisations room options enable = true (9 ms)
+    ✕ should not render the room options context menu if passing enableRoomOptionsMenu = true and UIComponent customisations room options enable = false (8 ms)
+
+  ● RoomHeader › should render the room options context menu if not passing enableRoomOptionsMenu (default true) and UIComponent customisations room options enabled
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: undefined
+
+    Number of calls: 0
+
+      740 |         const room = createRoom({ name: "Room", isDm: false, userIds: [] });
+      741 |         const wrapper = mountHeader(room);
+    > 742 |         expect(shouldShowComponent).toHaveBeenCalledWith(UIComponent.RoomOptionsMenu);
+          |                                     ^
+      743 |         expect(wrapper.container.querySelector(".mx_RoomHeader_name.mx_AccessibleButton")).toBeDefined();
+      744 |     });
+      745 |
+
+      at Object.<anonymous> (test/components/views/rooms/RoomHeader-test.tsx:742:37)
+
+  ● RoomHeader › should not render the room options context menu if passing enableRoomOptionsMenu = true and UIComponent customisations room options enable = false
+
+    expect(received).toBeFalsy()
+
+    Received: <div aria-expanded="false" aria-haspopup="true" aria-label="Room options" class="mx_AccessibleButton mx_RoomHeader_name" role="button" tabindex="0"><div aria-level="1" class="mx_RoomHeader_nametext" dir="auto" role="heading" title="Room">Room</div><div class="mx_RoomHeader_chevron" /></div>
+
+      753 |             const room = createRoom({ name: "Room", isDm: false, userIds: [] });
+      754 |             const wrapper = mountHeader(room, { enableRoomOptionsMenu });
+    > 755 |             expect(wrapper.container.querySelector(".mx_RoomHeader_name.mx_AccessibleButton")).toBeFalsy();
+          |                                                                                                ^
+      756 |         },
+      757 |     );
+      758 | });
+
+      at test/components/views/rooms/RoomHeader-test.tsx:755:96
+
+PASS test/components/views/messages/MessageActionBar-test.tsx
+  <MessageActionBar />
+    ✓ kills event listeners on unmount (5 ms)
+    ✓ does not show context menu when right-clicking (19 ms)
+    ✓ does not show context menu when right-clicking (2 ms)
+    ✓ does not show context menu when right-clicking (2 ms)
+    ✓ does not show context menu when right-clicking (2 ms)
+    ✓ does not show context menu when right-clicking (2 ms)
+    ✓ does shows context menu when right-clicking options (3 ms)
+    decryption
+      ✓ decrypts event if needed (2 ms)
+      ✓ updates component on decrypted event (3 ms)
+    status
+      ✓ updates component when event status changes (3 ms)
+    redaction
+      ○ skipped updates component on before redaction event
+    options button
+      ✓ renders options menu (2 ms)
+      ✓ opens message context menu on click (8 ms)
+    reply button
+      ✓ renders reply button on own actionable event (3 ms)
+      ✓ renders reply button on others actionable event (1 ms)
+      ✓ does not render reply button on non-actionable event (2 ms)
+      ✓ does not render reply button when user cannot send messaged (1 ms)
+      ✓ dispatches reply event on click (2 ms)
+    react button
+      ✓ renders react button on own actionable event (2 ms)
+      ✓ renders react button on others actionable event (2 ms)
+      ✓ does not render react button on non-actionable event (1 ms)
+      ✓ does not render react button when user cannot react (1 ms)
+      ✓ opens reaction picker on click (26 ms)
+    cancel button
+      ✓ renders cancel button for an event with a cancelable status (2 ms)
+      ✓ renders cancel button for an event with a pending edit (2 ms)
+      ✓ renders cancel button for an event with a pending redaction (1 ms)
+      ✓ renders cancel and retry button for an event with NOT_SENT status (1 ms)
+      ✎ todo unsends event on cancel click
+      ✎ todo retrys event on retry click
+    thread button
+      when threads feature is enabled
+        ✓ renders thread button on own actionable event (2 ms)
+        ✓ does not render thread button for a beacon_info event (2 ms)
+        ✓ opens thread on click (2 ms)
+        ✓ opens parent thread for a thread reply message (5 ms)
+    favourite button
+      when favourite_messages feature is enabled
+        ✓ renders favourite button on own actionable event (2 ms)
+        ✓ renders favourite button on other actionable events (2 ms)
+        ✓ does not render Favourite button on non-actionable event (1 ms)
+        ✓ remembers favourited state of multiple events, and handles the localStorage of the events accordingly (5 ms)
+      when favourite_messages feature is disabled
+        ✓ does not render (2 ms)
+
+(node:3413) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 sync listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+PASS test/utils/exportUtils/HTMLExport-test.ts
+  HTMLExport
+    ✓ should throw when created with invalid config for LastNMessages (7 ms)
+    ✓ should have an SDK-branded destination file name (17 ms)
+    ✓ should export (226 ms)
+    ✓ should include the room's avatar (50 ms)
+    ✓ should include the creation event (48 ms)
+    ✓ should include the topic (46 ms)
+    ✓ should include avatars (43 ms)
+    ✓ should handle when an event has no sender (45 ms)
+    ✓ should handle when events sender cannot be found in room state (45 ms)
+    ✓ should include attachments (54 ms)
+    ✓ should handle when attachment cannot be fetched (59 ms)
+    ✓ should handle when attachment srcHttp is falsy (59 ms)
+    ✓ should omit attachments (52 ms)
+    ✓ should add link to next and previous file (2 ms)
+
+PASS test/components/views/settings/tabs/room/SecurityRoomSettingsTab-test.tsx
+  <SecurityRoomSettingsTab />
+    join rule
+      ✓ warns when trying to make an encrypted room public (42 ms)
+      ✓ updates join rule (20 ms)
+      ✓ handles error when updating join rule fails (16 ms)
+      ✓ displays advanced section toggle when join rule is public (12 ms)
+      ✓ does not display advanced section toggle when join rule is not public (5 ms)
+    guest access
+      ✓ uses forbidden by default when room has no guest access event (8 ms)
+      ✓ updates guest access on toggle (10 ms)
+      ✓ logs error and resets state when updating guest access fails (11 ms)
+    history visibility
+      ✓ does not render section when RoomHistorySettings feature is disabled (4 ms)
+      ✓ uses shared as default history visibility when no state event found (5 ms)
+      ✓ does not render world readable option when room is encrypted (5 ms)
+      ✓ renders world readable option when room is encrypted and history is already set to world readable (5 ms)
+      ✓ updates history visibility (5 ms)
+      ✓ handles error when updating history visibility (6 ms)
+    encryption
+      ✓ displays encryption as enabled (5 ms)
+      ✓ asks users to confirm when setting room to encrypted (21 ms)
+      ✓ enables encryption after confirmation (38 ms)
+      ✓ renders world readable option when room is encrypted and history is already set to world readable (5 ms)
+      ✓ updates history visibility (5 ms)
+      ✓ handles error when updating history visibility (6 ms)
+
+FAIL test/components/views/rooms/RoomTile-test.tsx
+  RoomTile
+    when message previews are not enabled
+      ✓ should render the room (9 ms)
+      ✕ does not render the room options context menu when UIComponent customisations disable room options (3 ms)
+      ✕ renders the room options context menu when UIComponent customisations enable room options (2 ms)
+      when a call starts
+        ✓ tracks connection state (62 ms)
+        ✓ tracks participants (6 ms)
+        and a live broadcast starts
+          ✓ should still render the call subtitle (8 ms)
+      when a live voice broadcast starts
+        ✓ should render the »Live« subtitle (3 ms)
+        and the broadcast stops
+          ✓ should not render the »Live« subtitle (4 ms)
+    when message previews are enabled
+      ✓ should render a room without a message as expected (5 ms)
+      and there is a message in the room
+        ✓ should render as expected (5 ms)
+      and there is a message in a thread
+        ✓ should render as expected (7 ms)
+      and there is a message and a thread without a reply
+        ✓ should render the message preview (4 ms)
+
+  ● RoomTile › when message previews are not enabled › does not render the room options context menu when UIComponent customisations disable room options
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: undefined
+
+    Number of calls: 0
+
+      163 |             mocked(shouldShowComponent).mockReturnValue(false);
+      164 |             renderRoomTile();
+    > 165 |             expect(shouldShowComponent).toHaveBeenCalledWith(UIComponent.RoomOptionsMenu);
+          |                                         ^
+      166 |             expect(screen.queryByRole("button", { name: "Room options" })).not.toBeInTheDocument();
+      167 |         });
+      168 |
+
+      at Object.<anonymous> (test/components/views/rooms/RoomTile-test.tsx:165:41)
+
+  ● RoomTile › when message previews are not enabled › renders the room options context menu when UIComponent customisations enable room options
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: undefined
+
+    Number of calls: 0
+
+      170 |             mocked(shouldShowComponent).mockReturnValue(true);
+      171 |             renderRoomTile();
+    > 172 |             expect(shouldShowComponent).toHaveBeenCalledWith(UIComponent.RoomOptionsMenu);
+          |                                         ^
+      173 |             expect(screen.queryByRole("button", { name: "Room options" })).toBeInTheDocument();
+      174 |         });
+      175 |
+
+      at Object.<anonymous> (test/components/views/rooms/RoomTile-test.tsx:172:41)
+
+(node:3413) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 accountData listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+PASS test/components/views/rooms/wysiwyg_composer/SendWysiwygComposer-test.tsx
+  SendWysiwygComposer
+    ✓ Should render WysiwygComposer when isRichTextEnabled is at true (564 ms)
+    ✓ Should render PlainTextComposer when isRichTextEnabled is at false (8 ms)
+    Should focus when receiving an Action.FocusSendMessageComposer action
+      ✓ Should focus when receiving an Action.FocusSendMessageComposer action (217 ms)
+      ✓ Should focus and clear when receiving an Action.ClearAndFocusSendMessageComposer (24 ms)
+      ✓ Should focus when receiving a reply_to_event action (14 ms)
+      ✓ Should not focus when disabled (10 ms)
+      ✓ Should focus when receiving an Action.FocusSendMessageComposer action (9 ms)
+      ✓ Should focus and clear when receiving an Action.ClearAndFocusSendMessageComposer (13 ms)
+      ✓ Should focus when receiving a reply_to_event action (9 ms)
+      ✓ Should not focus when disabled (9 ms)
+    Placeholder when { isRichTextEnabled: true }
+      ✓ Should not has placeholder (14 ms)
+      ✓ Should has placeholder (14 ms)
+      ✓ Should display or not placeholder when editor content change (24 ms)
+    Placeholder when { isRichTextEnabled: false }
+      ✓ Should not has placeholder (9 ms)
+      ✓ Should has placeholder (8 ms)
+      ✓ Should display or not placeholder when editor content change (19 ms)
+    Emoji when { isRichTextEnabled: true }
+      ✓ Should add an emoji in an empty composer (18 ms)
+      ✓ Should add an emoji in the middle of a word (27 ms)
+      ✓ Should add an emoji when a word is selected (26 ms)
+    Emoji when { isRichTextEnabled: false }
+      ✓ Should add an emoji in an empty composer (14 ms)
+      ✓ Should add an emoji in the middle of a word (20 ms)
+      ✓ Should add an emoji when a word is selected (21 ms)
+
+PASS test/components/structures/LoggedInView-test.tsx
+  <LoggedInView />
+    synced push rules
+      on mount
+        ✓ handles when user has no push rules event in account data (26 ms)
+        ✓ handles when user doesnt have a push rule defined in vector definitions (17 ms)
+        ✓ updates all mismatched rules from synced rules (12 ms)
+        ✓ catches and logs errors while updating a rule (17 ms)
+      on changes to account_data
+        ✓ ignores other account data events (12 ms)
+        ✓ updates all mismatched rules from synced rules on a change to push rules account data (15 ms)
+        ✓ stops listening to account data events on unmount (10 ms)
+
+PASS test/utils/ShieldUtils-test.ts
+  mkClient self-test
+    ✓ behaves well for self-trust=true (1 ms)
+    ✓ behaves well for self-trust=false
+    ✓ behaves well for user trust @TT:h
+    ✓ behaves well for user trust @TF:h
+    ✓ behaves well for user trust @FT:h
+    ✓ behaves well for user trust @FF:h
+    ✓ behaves well for device trust @TT:h
+    ✓ behaves well for device trust @TF:h
+    ✓ behaves well for device trust @FT:h
+    ✓ behaves well for device trust @FF:h
+  shieldStatusForMembership self-trust behaviour
+    ✓ 2 unverified: returns 'normal', self-trust = true, DM = true
+    ✓ 2 unverified: returns 'normal', self-trust = true, DM = false
+    ✓ 2 unverified: returns 'normal', self-trust = false, DM = true
+    ✓ 2 unverified: returns 'normal', self-trust = false, DM = false
+    ✓ 2 verified: returns 'verified', self-trust = true, DM = true (1 ms)
+    ✓ 2 verified: returns 'verified', self-trust = true, DM = false
+    ✓ 2 verified: returns 'verified', self-trust = false, DM = true
+    ✓ 2 verified: returns 'warning', self-trust = false, DM = false
+    ✓ 2 mixed: returns 'normal', self-trust = true, DM = true
+    ✓ 2 mixed: returns 'normal', self-trust = true, DM = false
+    ✓ 2 mixed: returns 'normal', self-trust = false, DM = true
+    ✓ 2 mixed: returns 'warning', self-trust = false, DM = false (1 ms)
+    ✓ 0 others: returns 'verified', self-trust = true, DM = true
+    ✓ 0 others: returns 'verified', self-trust = true, DM = false
+    ✓ 0 others: returns 'warning', self-trust = false, DM = true
+    ✓ 0 others: returns 'warning', self-trust = false, DM = false
+    ✓ 1 verified: returns 'verified', self-trust = true, DM = true
+    ✓ 1 verified: returns 'verified', self-trust = true, DM = false
+    ✓ 1 verified: returns 'verified', self-trust = false, DM = true
+    ✓ 1 verified: returns 'verified', self-trust = false, DM = false
+    ✓ 1 unverified: returns 'normal', self-trust = true, DM = true
+    ✓ 1 unverified: returns 'normal', self-trust = true, DM = false (1 ms)
+    ✓ 1 unverified: returns 'normal', self-trust = false, DM = true
+    ✓ 1 unverified: returns 'normal', self-trust = false, DM = false
+  shieldStatusForMembership other-trust behaviour
+    ✓ 1 verified/untrusted: returns 'warning', DM = true
+    ✓ 1 verified/untrusted: returns 'warning', DM = false
+    ✓ 2 verified/untrusted: returns 'warning', DM = true
+    ✓ 2 verified/untrusted: returns 'warning', DM = false
+    ✓ 2 unverified/untrusted: returns 'normal', DM = true
+    ✓ 2 unverified/untrusted: returns 'normal', DM = false
+    ✓ 2 was verified: returns 'warning', DM = true
+    ✓ 2 was verified: returns 'warning', DM = false
+
+PASS test/stores/room-list/MessagePreviewStore-test.ts
+  MessagePreviewStore
+    ✓ should ignore edits for events other than the latest one (2 ms)
+    ✓ should ignore edits to unknown events (1 ms)
+    ✓ should generate correct preview for message events in DMs (1 ms)
+    ✓ should generate the correct preview for a reaction (2 ms)
+    ✓ should generate the correct preview for a reaction on a thread root (4 ms)
+
+PASS test/components/structures/ThreadView-test.tsx
+  ThreadView
+    ✓ sends a message with the correct fallback (178 ms)
+    ✓ sends a thread message with the correct fallback (94 ms)
+    ✓ sets the correct thread in the room view store (78 ms)
+    ✓ clears highlight message in the room view store (29 ms)
+
+PASS test/utils/DateUtils-test.ts
+  formatSeconds
+    ✓ correctly formats time with hours (1 ms)
+    ✓ correctly formats time without hours
+  formatRelativeTime
+    ✓ returns hour format for events created in the same day
+    ✓ returns month and day for events created less than 24h ago but on a different day
+    ✓ honours the hour format setting (1 ms)
+    ✓ returns month and day for events created in the current year
+    ✓ does not return a leading 0 for single digit days
+    ✓ appends the year for events created in previous years
+  formatDuration()
+    ✓ rounds up to nearest day when more than 24h - 40 hours formats to 2d
+    ✓ rounds down to nearest day when more than 24h - 26 hours formats to 1d
+    ✓ 24 hours formats to 1d
+    ✓ rounds to nearest hour when less than 24h - 23h formats to 23h
+    ✓ rounds to nearest hour when less than 24h - 6h and 10min formats to 6h
+    ✓ rounds to nearest hours when less than 24h formats to 2h
+    ✓ rounds to nearest minute when less than 1h - 59 minutes formats to 59m
+    ✓ rounds to nearest minute when less than 1h -  1 minute formats to 1m
+    ✓ rounds to nearest second when less than 1min - 59 seconds formats to 59s
+    ✓ rounds to 0 seconds when less than a second - 123ms formats to 0s (1 ms)
+  formatPreciseDuration
+    ✓ 3 days, 6 hours, 48 minutes, 59 seconds formats to 3d 6h 48m 59s
+    ✓ 6 hours, 48 minutes, 59 seconds formats to 6h 48m 59s
+    ✓ 48 minutes, 59 seconds formats to 48m 59s
+    ✓ 59 seconds formats to 59s (1 ms)
+    ✓ 0 seconds formats to 0s
+  formatFullDateNoDayISO
+    ✓ should return ISO format
+  formatDateForInput
+    ✓ should format 1993-11-01
+    ✓ should format 1066-10-14
+    ✓ should format 0571-04-22
+    ✓ should format 0062-02-05
+  formatTimeLeft
+    ✓ should format 0 to 0s left
+    ✓ should format 23 to 23s left
+    ✓ should format 83 to 1m 23s left
+    ✓ should format 3600 to 1h 0m 0s left (1 ms)
+    ✓ should format 3623 to 1h 0m 23s left
+    ✓ should format 18443 to 5h 7m 23s left
+  formatLocalDateShort()
+    ✓ formats date correctly by locale (2 ms)
+
+PASS test/components/views/settings/tabs/room/VoipRoomSettingsTab-test.tsx
+  VoipRoomSettingsTab
+    Element Call
+      correct state
+        ✓ shows enabled when call member power level is 0 (5 ms)
+        ✓ shows disabled when call member power level is 0 (3 ms)
+        ✓ shows disabled when call member power level is 0 (2 ms)
+        ✓ shows disabled when call member power level is 0 (2 ms)
+      enabling/disabling
+        ✓ disables Element calls (57 ms)
+        enabling Element calls
+          ✓ enables Element calls in public room (11 ms)
+          ✓ enables Element calls in private room (3 ms)
+
+PASS test/components/structures/auth/Registration-test.tsx
+  Registration
+    ✓ should show server picker (12 ms)
+    ✓ should show form when custom URLs disabled (11 ms)
+    ✓ should show SSO options if those are available (8 ms)
+    ✓ should handle serverConfig updates correctly (13 ms)
+
+PASS test/utils/tooltipify-test.tsx
+  tooltipify
+    ✓ does nothing for empty element (1 ms)
+    ✓ wraps single anchor (2 ms)
+    ✓ ignores node (1 ms)
+    ✓ does not re-wrap if called multiple times (1 ms)
+
+FAIL test/components/views/dialogs/spotlight/RoomResultContextMenus-test.tsx
+  RoomResultContextMenus
+    ✕ does not render the room options context menu when UIComponent customisations disable room options (3 ms)
+    ✕ renders the room options context menu when UIComponent customisations enable room options (2 ms)
+
+  ● RoomResultContextMenus › does not render the room options context menu when UIComponent customisations disable room options
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: undefined
+
+    Number of calls: 0
+
+      54 |         mocked(shouldShowComponent).mockReturnValue(false);
+      55 |         renderRoomResultContextMenus();
+    > 56 |         expect(shouldShowComponent).toHaveBeenCalledWith(UIComponent.RoomOptionsMenu);
+         |                                     ^
+      57 |         expect(screen.queryByRole("button", { name: "Room options" })).not.toBeInTheDocument();
+      58 |     });
+      59 |
+
+      at Object.<anonymous> (test/components/views/dialogs/spotlight/RoomResultContextMenus-test.tsx:56:37)
+
+  ● RoomResultContextMenus › renders the room options context menu when UIComponent customisations enable room options
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: undefined
+
+    Number of calls: 0
+
+      61 |         mocked(shouldShowComponent).mockReturnValue(true);
+      62 |         renderRoomResultContextMenus();
+    > 63 |         expect(shouldShowComponent).toHaveBeenCalledWith(UIComponent.RoomOptionsMenu);
+         |                                     ^
+      64 |         expect(screen.queryByRole("button", { name: "Room options" })).toBeInTheDocument();
+      65 |     });
+      66 | });
+
+      at Object.<anonymous> (test/components/views/dialogs/spotlight/RoomResultContextMenus-test.tsx:63:37)
+
+PASS test/components/views/elements/crypto/VerificationQRCode-test.tsx
+  <VerificationQRCode />
+    ✓ renders a QR code (121 ms)
+
+Test Suites: 3 failed, 13 passed, 16 total
+Tests:       6 failed, 1 skipped, 2 todo, 246 passed, 255 total
+Snapshots:   20 passed, 20 total
+Time:        18.389 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+npm notice
+npm notice New major version of npm available! 10.9.2 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

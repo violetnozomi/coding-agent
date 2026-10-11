@@ -1,0 +1,385 @@
+{
+  "manifest_sha256": "a7f4e1750c24d430c7fcff55733b78151b7ad6eb845978f4082e397d16d79560",
+  "fixed_tasks": 40,
+  "sdk_started_tasks": 38,
+  "actual_model_tasks": 29,
+  "unattempted_numbers": [
+    27,
+    28,
+    31,
+    32,
+    33,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40
+  ],
+  "phases": [
+    {
+      "stage": "live",
+      "ledger_sha256": "b5314c7c930fec7bed852193d331c30398a5ea9e38a686cd3cd834ae0d89a431",
+      "physical_main": 776,
+      "physical_auxiliary": 0,
+      "occupied_cny": 45.99350296,
+      "authorized_remaining_at_start_cny": 50,
+      "accounting_failures": {}
+    },
+    {
+      "stage": "p2",
+      "ledger_sha256": "0d47a77978b27515297988a3177de33c9d291826a1bf4de3b1e525f9b0f2257a",
+      "physical_main": 43,
+      "physical_auxiliary": 0,
+      "occupied_cny": 0.84850144,
+      "authorized_remaining_at_start_cny": 4.006497039999999,
+      "accounting_failures": {}
+    }
+  ],
+  "main_physical_requests": 819,
+  "auxiliary_physical_requests": 0,
+  "known_usage_peak_estimate_cny": 46.8420044,
+  "retained_unknown_or_other_reservation_cny": 0.0,
+  "estimated_occupied_cny": 46.8420044,
+  "unused_authorization_cny": 3.1579955999999996,
+  "old_batch_allowance_used": false,
+  "actual_provider_bill_cny": null,
+  "unknown_usage_request_ids": [],
+  "known_usage_sums": {
+    "prompt_tokens": 25088175,
+    "completion_tokens": 897034,
+    "total_tokens": 25985209,
+    "prompt_cache_hit_tokens": 5362560,
+    "reasoning_tokens": 758183
+  },
+  "usage_field_observation_counts": {
+    "prompt_tokens": 819,
+    "completion_tokens": 819,
+    "total_tokens": 819,
+    "prompt_cache_hit_tokens": 819,
+    "reasoning_tokens": 819
+  },
+  "usage_total_complete": true,
+  "wire_configurations": [
+    {
+      "max_completion_tokens": "unset",
+      "max_tokens": "unset",
+      "model": "deepseek-flash",
+      "reasoning_effort": "unset",
+      "stream": "unset",
+      "thinking": "unset",
+      "requests": 819
+    }
+  ],
+  "response_model_counts": {
+    "deepseek-flash": 819
+  },
+  "raw_request_identity_records_verified": 819,
+  "nonempty_raw_response_records": 819,
+  "complete_json_response_records": 819,
+  "patch_and_archive_records_verified": [
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-8f46ba3f6dc7b18375f7aa63c48a1fe461190430-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-01",
+      "patch_sha256": "be186dc262d332b9c1f88f04c1c090b44dad5e6c0d14a36620026e6390da9d41",
+      "bundle_sha256": "202571412b3b4d2dcd7c06b931dba72999e66bc0f6ee0c5ac01b4b753cb5beb4",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-dae029cba7cdb98dfb1a6b416c00d324241e6063",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-02",
+      "patch_sha256": "0738e3aa69ba745a30077fcf4ab78dc56622eccbb02dd2daa6c540e740319ec6",
+      "bundle_sha256": "2fa12cd42637de8f4162487d118790a4b9f4183df9b50c35f9a2d4fee133c090",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_ansible__ansible-a02e22e902a69aeb465f16bf03f7f5a91b2cb828-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-03",
+      "patch_sha256": "3f378b8cbbc77551eb7f54ba63bec38719c7fba4e8188a1c4a2fdf8020b9bc5c",
+      "bundle_sha256": "5d11c7b177379e8970b479b5a898f8caaa07291c9f97c3bb5b614c80826cef27",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_ansible__ansible-ed6581e4db2f1bec5a772213c3e186081adc162d-v0f01c69f1e2528b935359cfe578530722bca2c59",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-04",
+      "patch_sha256": "1f1ca3d31434b093b85693645140fc5e2afa922d116f257cb0ef5c3d1f6e7ec1",
+      "bundle_sha256": "b5720ac800a95dc1dc320027ceb6cd1ef8475062d8049b543e3461a4638dd766",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_ansible__ansible-185d41031660a676c43fbb781cd1335902024bfe-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-05",
+      "patch_sha256": "532dd982d03c18e90f785f55ebf579974dcff2df0f038f31b100e9b9f8137259",
+      "bundle_sha256": "557f0795fc125e1c034ae0b7c6997b0d79fcd9545c23456abd65cfd8f48dbcc9",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-8bd3604dc54b681f1f0f7dd52cbc70b3024184b6",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-06",
+      "patch_sha256": "69e60fb4b85c0361eb1657952bfbc4f6b4a707900ac3c0da007277c3965f36fd",
+      "bundle_sha256": "38becfec6b7213b54b61f5ca17489b3844748a9679ad7aac454cc78b1ce4e25d",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_tutao__tutanota-51818218c6ae33de00cbea3a4d30daac8c34142e-vc4e41fd0029957297843cb9dec4a25c7c756f029",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-07",
+      "patch_sha256": "f053cdf33ae5237f3690181efedbc13c511e52373e216e6c9993157dafa24bdc",
+      "bundle_sha256": "58fca362746966bab3c7f984fd8e179bece006602cf2560882bc8996bf695d9e",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_gravitational__teleport-82185f232ae8974258397e121b3bc2ed0c3729ed-v626ec2a48416b10a88641359a169d99e935ff037",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-08",
+      "patch_sha256": "3a017c8b3cb1720192aceeb4b95e45c45751eb4e0e5f7984ef243eec499394ac",
+      "bundle_sha256": "f133f71a2e330db1510b818a7fc4be9ac6254430c78493d96a1d0b549772de17",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-3c48b4bb782189e0858e6c3fc7956046cf3e1cfb-v2d9a6c849c60ed19fd0858ce9e40b7cc8e097e59",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-09",
+      "patch_sha256": "14697064ef8bb8482e8883914a12be445873d54e4863cbba7214391542b0e525",
+      "bundle_sha256": "5d149d0591756a3156eab82af52ae9db83b2242e11883de4ae28826fa11422ff",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-ec2dcfce9eee9f808efc17a1b99e227fc4421dea-v5149fcda2a9a6fe1d35dfed1bade1444a11ef271",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-10",
+      "patch_sha256": "7567faed2419b89289e0ae0053847cf04bd8446ffa21be0846c66f7604f3411c",
+      "bundle_sha256": "2d2125ed62be879c9cb06c5800a21ddac794455e5b7520af845a9f4debc54521",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_navidrome__navidrome-8d56ec898e776e7e53e352cb9b25677975787ffc",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-11",
+      "patch_sha256": "f1bd9d4ac17a3dc44da8a91a5358fb0465cefce5530270070cbaa3742150eb50",
+      "bundle_sha256": "6d41254675927d964fa7f2272464c9281d257cddf0a20d18521ff70cd2d88a81",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-c12967bc73fdf02054cf3ef8498c05e25f0a18c0",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-12",
+      "patch_sha256": "17f613fac184cbbeae90f5a54030d91900bb29c82335fc3da57f9261826e9361",
+      "bundle_sha256": "f556a763b522003ef2e1e7ce0a29e9d2efec1f9c67597aca5b97ca796ab56452",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_gravitational__teleport-1b08e7d0dbe68fe530a0f08ad408ec198b7c53fc-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-13",
+      "patch_sha256": "a18d2bd48206e5b33f6937e885c4c2ce3ab2f94e4a49209be3c4a19f87970584",
+      "bundle_sha256": "42e70d84e75f4649a7cd8f667890cd9849fee71c04a6a70e0ffbcca08c2ce81f",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-4a5d2a7d24c9e4c11d3069220c0685b736d5ecde-v13642507b4fc1f8d234172bf8129942da2c2ca26",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-14",
+      "patch_sha256": "a8affa98696a191b9a544cae3b8fd83a1a034da15a0c7000491972b1bbb711a2",
+      "bundle_sha256": "06292fb613caf4636485593f7c3beb431cade7364531c65efe7debbd45d39bc7",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_element-hq__element-web-d06cf09bf0b3d4a0fbe6bd32e4115caea2083168-vnan",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-15",
+      "patch_sha256": "8566f2b6a38b7a28b6b7b6c9c5143770f0b0d5350ead9073f2f078c6a101440e",
+      "bundle_sha256": "7568adb6d2a3242c61e7a894a34207e435aa47e6b144f200dd9fbb4d6d7febe3",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_future-architect__vuls-fe8d252c51114e922e6836055ef86a15f79ad042",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-16",
+      "patch_sha256": "0ac8f7136769051e906ba5593a565c642c3fa517d7f3ad341075e437cf91dd59",
+      "bundle_sha256": "cc1700fbd29920d48b15ab7ceda8e8d86b5340906137eb34eee69a5545d88381",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_gravitational__teleport-769b4b5eec7286b7b14e179f2cc52e6b15d2d9f3-v626ec2a48416b10a88641359a169d99e935ff037",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-17",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "ef536093fe7fb489864957316fa1fd7800f2c1a54717bc1c49426a4a53539681",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-1894cb48d6e7fb498295a5d3ed0596f6f603b784-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-18",
+      "patch_sha256": "24f75d763b5bc716d49c74846e7f647032e6080b18f007bde7859f704b783438",
+      "bundle_sha256": "219261f5a5b4375da2927e1f456ef642ecaa91bca59a4b014c886fced75bccbb",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-0b119520afca1cf25c470ff4288c464d4510b944",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-19",
+      "patch_sha256": "88c062ce0d963a2d28fdf0dd0cdd6cc092e892cbcffb84ba20d686a70fac2583",
+      "bundle_sha256": "1e6d4274d9b847a51c558f3dd3b31628ed33e191f33e06db097abe4a22994e3f",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-25858f9f0c165df25742acf8309ce909773f0cdd-v13642507b4fc1f8d234172bf8129942da2c2ca26",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-20",
+      "patch_sha256": "8a5b140a4f73f00efbbd757ac1e0ea72a4b3637396f3bff0fbd6a2dab3dda9a8",
+      "bundle_sha256": "4451e496589266b1764975b1eb8ca934237f780bdba1cb8a766b2248048a4659",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-123e6e5e1c85b9c07d1e98f70bfc480bc8016890-v2733ff199fb72f0d033a30dc62cb0a4742e3a7f4",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-21",
+      "patch_sha256": "e1c9ccb96f2698a1316512e520380a3aee26638abe435bedca432e74017d0878",
+      "bundle_sha256": "2ec73bb732af7188a67fd7a1b85cce04ada58ef522ae2c2060b2184043e9789d",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-22",
+      "patch_sha256": "cab5b4dc3f79053df9bf2ddd388a65d824a68dd895927db82f52c6e243d55742",
+      "bundle_sha256": "85adbaf4a2a70815aea5f5a53c420a58bcfef770be8d62bad71e0c0e597b788e",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-5fdc83e5da6222fe61163395baaad7ae57fa2cb4-v363c8a7e5ccdf6968fc7ab84a2053ac78036691d",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-23",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "464020c410dbde727dac412b31dfb283ec7bf47c3694406b455838cb0ef6828c",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-36ade4bba504eb96f05d32ceab9972df7eb17bcc-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-24",
+      "patch_sha256": "e80304dc14d585fb54f70e4383b7d48aecd93823f6a6c6688337a90de7cc115c",
+      "bundle_sha256": "3777fad2932baf06f23ee94d46d6c66223544d5cb17eeb74ca52052b7740acfe",
+      "official_resolved": true
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-ef5ba1a0360b39f9eff027fbdc57f363597c3c3b-v363c8a7e5ccdf6968fc7ab84a2053ac78036691d",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-25",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "9fce96770ad6d1626529d6fe56d7aa909f08c538b599918159f2de4ba9929369",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_gravitational__teleport-eda668c30d9d3b56d9c69197b120b01013611186",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-26",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "b3949a4fc4c11889fcfcce406395bd995851ce606645114c7fef374a66271f81",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-967855b429f749c28c112b8cb1b15bc79157f973",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-29",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "806f70917130684e7fc0e779c441d5fd14575d07157e0d5405b1ab83c164139c",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_ansible__ansible-eea46a0d1b99a6dadedbb6a3502d599235fa7ec3-v390e508d27db7a51eece36bb6d9698b63a5b638a",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-30",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "c969465f51639fefe361d4a9bae00199a442fcc23f179ef762d69096bdbbf477",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-518ec324b66a07fdd95464a5e9ca5fe7681ad8f9",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-31",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "4b24235f7a72b7f0dede53a897240370c245ea4c00726382d617b65afae7ecd8",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_ansible__ansible-bf98f031f3f5af31a2d78dc2f0a58fe92ebae0bb-v1055803c3a812189a1133297f7f5468579283f86",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-32",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "7cf537466f2fa393f46df88ebb144ae65a3c0707f1b0ccbe61fba8b0c34d497a",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-ebfe9b7aa0c4ba9d451f993e08955004aaec4345-v059c6fdc75567943479b23ebca7c07b5e9a7f34c",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-33",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "7e3e98d75e544e06f85991c84e117421e9023c338aa68195a31cc33675786543",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_ansible__ansible-e0c91af45fa9af575d10fd3e724ebc59d2b2d6ac-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-34",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "5f13822054a716326589059c6935062939e97b4960ab7cedec14719630d720eb",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_element-hq__element-web-53b42e321777a598aaf2bb3eab22d710569f83a8-vnan",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-35",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "e9481a3433558f198ecc888216ef1d0e6fe37e03e8abe6e01601175a19f40088",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_future-architect__vuls-edb324c3d9ec3b107bf947f00e38af99d05b3e16",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-36",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "d3493ea1848b738b05080c8bbb2bd1532d7039412e9a18d9d1198695e6c1e124",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-44e64199ed38003253f0296badd4a447645067b6-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-37",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "add582a64ed7be697eeab68faaca51994c4cdf64eb8d4e4d4635d4ca7860bc2a",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_gravitational__teleport-b8fbb2d1e90ffcde88ed5fe9920015c1be075788-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-38",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "9a2315854a55c7ee22bbfaccf634767bc782842bc05a0a3b8f7a91eac2ba5e4f",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-d966559200183b713cdf3ea5007a7e0ba86a5afb",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-39",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "990341458f14a0fd6f57565f2776c17df8844f50b55f29cb3bd05cd0d62f7d7d",
+      "official_resolved": false
+    },
+    {
+      "instance_id": "instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4",
+      "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-40",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bundle_sha256": "9cdfd65e9d195f522afbf5a08b15f18c41aa692c65c86e83c814c44aedf3e375",
+      "official_resolved": false
+    }
+  ],
+  "local_rejection_reasons": {
+    "input_token_bound_unknown": 20,
+    "estimated_fee_reservation_exhausted": 77
+  },
+  "local_rejections_by_bucket": {
+    "instance_qutebrowser__qutebrowser-8f46ba3f6dc7b18375f7aa63c48a1fe461190430-v2ef375ac784985212b1805e1d0431dc8f1b3c171/b3-01/auxiliary": 2,
+    "instance_ansible__ansible-185d41031660a676c43fbb781cd1335902024bfe-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5/b3-05/auxiliary": 2,
+    "instance_navidrome__navidrome-8d56ec898e776e7e53e352cb9b25677975787ffc/b3-11/auxiliary": 2,
+    "instance_internetarchive__openlibrary-4a5d2a7d24c9e4c11d3069220c0685b736d5ecde-v13642507b4fc1f8d234172bf8129942da2c2ca26/b3-14/auxiliary": 2,
+    "instance_gravitational__teleport-1b08e7d0dbe68fe530a0f08ad408ec198b7c53fc-vee9b09fb20c43af7e520f57e9239bbcf46b7113d/b3-13/auxiliary": 2,
+    "instance_future-architect__vuls-fe8d252c51114e922e6836055ef86a15f79ad042/b3-16/auxiliary": 2,
+    "instance_element-hq__element-web-d06cf09bf0b3d4a0fbe6bd32e4115caea2083168-vnan/b3-15/auxiliary": 2,
+    "instance_gravitational__teleport-769b4b5eec7286b7b14e179f2cc52e6b15d2d9f3-v626ec2a48416b10a88641359a169d99e935ff037/b3-17/main": 5,
+    "instance_internetarchive__openlibrary-25858f9f0c165df25742acf8309ce909773f0cdd-v13642507b4fc1f8d234172bf8129942da2c2ca26/b3-20/main": 3,
+    "instance_flipt-io__flipt-0b119520afca1cf25c470ff4288c464d4510b944/b3-19/main": 3,
+    "instance_internetarchive__openlibrary-25858f9f0c165df25742acf8309ce909773f0cdd-v13642507b4fc1f8d234172bf8129942da2c2ca26/b3-20/auxiliary": 2,
+    "instance_internetarchive__openlibrary-123e6e5e1c85b9c07d1e98f70bfc480bc8016890-v2733ff199fb72f0d033a30dc62cb0a4742e3a7f4/b3-21/auxiliary": 2,
+    "instance_qutebrowser__qutebrowser-5fdc83e5da6222fe61163395baaad7ae57fa2cb4-v363c8a7e5ccdf6968fc7ab84a2053ac78036691d/b3-23/main": 7,
+    "instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa/b3-22/main": 3,
+    "instance_qutebrowser__qutebrowser-36ade4bba504eb96f05d32ceab9972df7eb17bcc-v2ef375ac784985212b1805e1d0431dc8f1b3c171/b3-24/auxiliary": 2,
+    "instance_qutebrowser__qutebrowser-ef5ba1a0360b39f9eff027fbdc57f363597c3c3b-v363c8a7e5ccdf6968fc7ab84a2053ac78036691d/b3-25/main": 4,
+    "instance_gravitational__teleport-eda668c30d9d3b56d9c69197b120b01013611186/b3-26/main": 4,
+    "instance_flipt-io__flipt-967855b429f749c28c112b8cb1b15bc79157f973/b3-29/main": 4,
+    "instance_ansible__ansible-eea46a0d1b99a6dadedbb6a3502d599235fa7ec3-v390e508d27db7a51eece36bb6d9698b63a5b638a/b3-30/main": 4,
+    "instance_flipt-io__flipt-518ec324b66a07fdd95464a5e9ca5fe7681ad8f9/b3-31/main": 4,
+    "instance_ansible__ansible-bf98f031f3f5af31a2d78dc2f0a58fe92ebae0bb-v1055803c3a812189a1133297f7f5468579283f86/b3-32/main": 4,
+    "instance_qutebrowser__qutebrowser-ebfe9b7aa0c4ba9d451f993e08955004aaec4345-v059c6fdc75567943479b23ebca7c07b5e9a7f34c/b3-33/main": 4,
+    "instance_ansible__ansible-e0c91af45fa9af575d10fd3e724ebc59d2b2d6ac-v30a923fb5c164d6cd18280c02422f75e611e8fb2/b3-34/main": 4,
+    "instance_element-hq__element-web-53b42e321777a598aaf2bb3eab22d710569f83a8-vnan/b3-35/main": 4,
+    "instance_future-architect__vuls-edb324c3d9ec3b107bf947f00e38af99d05b3e16/b3-36/main": 4,
+    "instance_qutebrowser__qutebrowser-44e64199ed38003253f0296badd4a447645067b6-v2ef375ac784985212b1805e1d0431dc8f1b3c171/b3-37/main": 4,
+    "instance_gravitational__teleport-b8fbb2d1e90ffcde88ed5fe9920015c1be075788-vee9b09fb20c43af7e520f57e9239bbcf46b7113d/b3-38/main": 4,
+    "instance_flipt-io__flipt-d966559200183b713cdf3ea5007a7e0ba86a5afb/b3-39/main": 4,
+    "instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4/b3-40/main": 4
+  },
+  "public_files_key_scanned": 1796,
+  "public_reasoning_removed": true
+}

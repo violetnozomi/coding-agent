@@ -1,0 +1,5 @@
+{"event": "local_rejection", "monotonic": 129136.080134442, "time_epoch": 1791742108.5900633, "bucket": "instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4/b3-40/main", "reason": "estimated_fee_reservation_exhausted", "usage": null}
+{"event": "local_rejection", "monotonic": 129138.176928387, "time_epoch": 1791742110.6868572, "bucket": "instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4/b3-40/main", "reason": "estimated_fee_reservation_exhausted", "usage": null}
+{"event": "local_rejection", "monotonic": 129142.224052691, "time_epoch": 1791742114.7339814, "bucket": "instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4/b3-40/main", "reason": "estimated_fee_reservation_exhausted", "usage": null}
+{"event": "local_rejection", "monotonic": 129150.269677259, "time_epoch": 1791742122.779606, "bucket": "instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4/b3-40/main", "reason": "estimated_fee_reservation_exhausted", "usage": null}
+{"event": "run_cancelled", "monotonic": 129150.998818341, "time_epoch": 1791742123.508748, "run": "b3-40"}

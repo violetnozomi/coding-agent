@@ -1,0 +1,23 @@
+Resetting test-space to base state (full test-code surface)...
+Applying test patch...
+Checking patch test/units/modules/network/eric_eccli/__init__.py...
+Checking patch test/units/modules/network/eric_eccli/eccli_module.py...
+Checking patch test/units/modules/network/eric_eccli/fixtures/configure_terminal...
+/tests/test_patch.patch:104: new blank line at EOF.
++
+Checking patch test/units/modules/network/eric_eccli/fixtures/show_version...
+/tests/test_patch.patch:119: new blank line at EOF.
++
+Checking patch test/units/modules/network/eric_eccli/test_eccli_command.py...
+Applied patch test/units/modules/network/eric_eccli/__init__.py cleanly.
+Applied patch test/units/modules/network/eric_eccli/eccli_module.py cleanly.
+Applied patch test/units/modules/network/eric_eccli/fixtures/configure_terminal cleanly.
+Applied patch test/units/modules/network/eric_eccli/fixtures/show_version cleanly.
+Applied patch test/units/modules/network/eric_eccli/test_eccli_command.py cleanly.
+warning: 2 lines add whitespace errors.
+Required tests: 10
+Passed tests: 0
+Required tests that passed: 0
+
+RESULT: FAILED
+Missing tests: ['test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_configure_check_warning', 'test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_multiple', 'test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_wait_for_fails', 'test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_match_all', 'test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_configure_not_warning', 'test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_simple', 'test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_wait_for', 'test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_match_all_failure', 'test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_retries', 'test/units/modules/network/eric_eccli/test_eccli_command.py::TestEccliCommandModule::test_eric_eccli_command_match_any']

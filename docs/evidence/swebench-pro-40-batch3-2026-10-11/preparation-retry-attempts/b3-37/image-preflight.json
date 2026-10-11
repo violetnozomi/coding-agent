@@ -1,0 +1,9 @@
+{
+  "image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_qutebrowser__qutebrowser-44e64199ed38003253f0296badd4a447645067b6-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+  "digest": "sha256:d40c9e300d2bde168b1845336f2e733b1cd934107060249c47e5e5913fb4cc19",
+  "index_digest": "sha256:c17f02e377f0698973a8ca51bce53adbc1cbd5a1493bb6faa4b7c4e0746d9da5",
+  "compressed_bytes": 751888835,
+  "estimated_required_bytes": 3705352746,
+  "free_bytes": 25958502400,
+  "estimate_is_not_exact": true
+}

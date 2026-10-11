@@ -1,0 +1,219 @@
+Running selected tests: test/units/plugins/lookup/test_env.py test/units/utils/test_py3compat.py
+# pytest would be preferred but using project's native test runner instead
+Running test: test/units/plugins/lookup/test_env.py
+[32mConfigured locale: C.UTF-8[0m
+[35mWARNING: Using locale "C.UTF-8" instead of "en_US.UTF-8". Tests which depend on the locale may behave unexpectedly.[0m
+[32mCreating container database.[0m
+Installing requirements for Python 3.11
+[32mStream command with data: /usr/local/bin/python[0m
+Execute command: /usr/local/bin/python /tmp/ansible-test-zsyuyxyq-pip.py install --disable-pip-version-check -r requirements/ansible.txt -r requirements/units.txt -c requirements/constraints.txt
+Execute command: /usr/local/bin/python /tmp/ansible-test-zsyuyxyq-pip.py install --disable-pip-version-check -r test/units/requirements.txt -c requirements/constraints.txt
+[32mRun command: /usr/local/bin/python /app/test/lib/ansible_test/_util/target/tools/yamlcheck.py[0m
+Unit test controller with Python 3.11
+[32mInitializing "/tmp/ansible-test-7drqy38n-injector" as the temporary injector directory.[0m
+[32mInjecting "/tmp/python-yr_rymqb-ansible/python" as a execv wrapper for the "/usr/local/bin/python" interpreter.[0m
+[32mStream command: pytest -r a -n 4 --color yes -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest/config/default.ini --junit-xml /app/test/results/junit/python3.11-controller-units.xml --strict-markers --rootdir /app --confcutdir /app --durations=25 -v test/units/plugins/lookup/test_env.py[0m
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.11.13, pytest-8.0.2, pluggy-1.4.0 -- /usr/local/bin/python
+rootdir: /app
+configfile: test/lib/ansible_test/_data/pytest/config/default.ini
+plugins: xdist-3.5.0, mock-3.12.0, rerunfailures-13.0, anyio-4.10.0, forked-1.6.0
+created: 4/4 workers
+4 workers [4 items]
+
+scheduling tests via LoadScheduling
+
+test/units/plugins/lookup/test_env.py::test_env_var_value[equation-a=b*100] 
+test/units/plugins/lookup/test_env.py::test_utf8_env_var_value[the_var-\xe3n\u02c8si\u03b2le] 
+test/units/plugins/lookup/test_env.py::test_env_var_value[foo-bar] 
+test/units/plugins/lookup/test_env.py::test_utf8_env_var_value[simple_var-alpha-\u03b2-gamma] 
+[gw1][36m [ 25%] [0m[31mFAILED[0m test/units/plugins/lookup/test_env.py::test_env_var_value[equation-a=b*100] 
+[gw2][36m [ 50%] [0m[31mFAILED[0m test/units/plugins/lookup/test_env.py::test_utf8_env_var_value[simple_var-alpha-\u03b2-gamma] 
+[gw3][36m [ 75%] [0m[31mFAILED[0m test/units/plugins/lookup/test_env.py::test_utf8_env_var_value[the_var-\xe3n\u02c8si\u03b2le] 
+[gw0][36m [100%] [0m[31mFAILED[0m test/units/plugins/lookup/test_env.py::test_env_var_value[foo-bar] 
+
+=================================== FAILURES ===================================
+[31m[1m_____________________ test_env_var_value[equation-a=b*100] _____________________[0m
+[gw1] linux -- Python 3.11.13 /usr/local/bin/python
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75fdaa589150>
+env_var = 'equation', exp_value = 'a=b*100'
+
+    @pytest.mark.parametrize('env_var,exp_value', [
+        ('foo', 'bar'),
+        ('equation', 'a=b*100')
+    ])
+    def test_env_var_value(monkeypatch, env_var, exp_value):
+        monkeypatch.setattr('os.environ.get', lambda x, y: exp_value)
+    
+        env_lookup = lookup_loader.get('env')
+        retval = env_lookup.run([env_var], None)
+>       assert retval == [exp_value]
+[1m[31mE       AssertionError: assert [''] == ['a=b*100'][0m
+[1m[31mE         [0m
+[1m[31mE         At index 0 diff: '' != 'a=b*100'[0m
+[1m[31mE         [0m
+[1m[31mE         Full diff:[0m
+[1m[31mE           [[0m
+[1m[31mE         -     'a=b*100',[0m
+[1m[31mE         +     '',[0m
+[1m[31mE           ][0m
+
+[1m[31mtest/units/plugins/lookup/test_env.py[0m:21: AssertionError
+[31m[1m____________ test_utf8_env_var_value[simple_var-alpha-\u03b2-gamma] ____________[0m
+[gw2] linux -- Python 3.11.13 /usr/local/bin/python
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7469f34fda90>
+env_var = 'simple_var', exp_value = 'alpha-β-gamma'
+
+    @pytest.mark.parametrize('env_var,exp_value', [
+        ('simple_var', 'alpha-β-gamma'),
+        ('the_var', 'ãnˈsiβle')
+    ])
+    def test_utf8_env_var_value(monkeypatch, env_var, exp_value):
+        monkeypatch.setattr('os.environ.get', lambda x, y: exp_value)
+    
+        env_lookup = lookup_loader.get('env')
+        retval = env_lookup.run([env_var], None)
+>       assert retval == [exp_value]
+[1m[31mE       AssertionError: assert [''] == ['alpha-β-gamma'][0m
+[1m[31mE         [0m
+[1m[31mE         At index 0 diff: '' != 'alpha-β-gamma'[0m
+[1m[31mE         [0m
+[1m[31mE         Full diff:[0m
+[1m[31mE           [[0m
+[1m[31mE         -     'alpha-β-gamma',[0m
+[1m[31mE         +     '',[0m
+[1m[31mE           ][0m
+
+[1m[31mtest/units/plugins/lookup/test_env.py[0m:33: AssertionError
+[31m[1m____________ test_utf8_env_var_value[the_var-\xe3n\u02c8si\u03b2le] ____________[0m
+[gw3] linux -- Python 3.11.13 /usr/local/bin/python
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x799127bb6790>
+env_var = 'the_var', exp_value = 'ãnˈsiβle'
+
+    @pytest.mark.parametrize('env_var,exp_value', [
+        ('simple_var', 'alpha-β-gamma'),
+        ('the_var', 'ãnˈsiβle')
+    ])
+    def test_utf8_env_var_value(monkeypatch, env_var, exp_value):
+        monkeypatch.setattr('os.environ.get', lambda x, y: exp_value)
+    
+        env_lookup = lookup_loader.get('env')
+        retval = env_lookup.run([env_var], None)
+>       assert retval == [exp_value]
+[1m[31mE       AssertionError: assert [''] == ['ãnˈsiβle'][0m
+[1m[31mE         [0m
+[1m[31mE         At index 0 diff: '' != 'ãnˈsiβle'[0m
+[1m[31mE         [0m
+[1m[31mE         Full diff:[0m
+[1m[31mE           [[0m
+[1m[31mE         -     'ãnˈsiβle',[0m
+[1m[31mE         +     '',[0m
+[1m[31mE           ][0m
+
+[1m[31mtest/units/plugins/lookup/test_env.py[0m:33: AssertionError
+[31m[1m_________________________ test_env_var_value[foo-bar] __________________________[0m
+[gw0] linux -- Python 3.11.13 /usr/local/bin/python
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70bf5c600e50>
+env_var = 'foo', exp_value = 'bar'
+
+    @pytest.mark.parametrize('env_var,exp_value', [
+        ('foo', 'bar'),
+        ('equation', 'a=b*100')
+    ])
+    def test_env_var_value(monkeypatch, env_var, exp_value):
+        monkeypatch.setattr('os.environ.get', lambda x, y: exp_value)
+    
+        env_lookup = lookup_loader.get('env')
+        retval = env_lookup.run([env_var], None)
+>       assert retval == [exp_value]
+[1m[31mE       AssertionError: assert [''] == ['bar'][0m
+[1m[31mE         [0m
+[1m[31mE         At index 0 diff: '' != 'bar'[0m
+[1m[31mE         [0m
+[1m[31mE         Full diff:[0m
+[1m[31mE           [[0m
+[1m[31mE         -     'bar',[0m
+[1m[31mE         ?      ---[0m
+[1m[31mE         +     '',[0m
+[1m[31mE           ][0m
+
+[1m[31mtest/units/plugins/lookup/test_env.py[0m:21: AssertionError
+- generated xml file: /app/test/results/junit/python3.11-controller-units.xml --
+============================= slowest 25 durations =============================
+0.03s call     test/units/plugins/lookup/test_env.py::test_env_var_value[foo-bar]
+0.03s call     test/units/plugins/lookup/test_env.py::test_utf8_env_var_value[simple_var-alpha-\u03b2-gamma]
+0.01s call     test/units/plugins/lookup/test_env.py::test_utf8_env_var_value[the_var-\xe3n\u02c8si\u03b2le]
+0.01s call     test/units/plugins/lookup/test_env.py::test_env_var_value[equation-a=b*100]
+
+(8 durations < 0.005s hidden.  Use -vv to show these durations.)
+[36m[1m=========================== short test summary info ============================[0m
+[31mFAILED[0m test/units/plugins/lookup/test_env.py::[1mtest_env_var_value[equation-a=b*100][0m - AssertionError: assert [''] == ['a=b*100']
+[31mFAILED[0m test/units/plugins/lookup/test_env.py::[1mtest_utf8_env_var_value[simple_var-alpha-\u03b2-gamma][0m - AssertionError: assert [''] == ['alpha-β-gamma']
+[31mFAILED[0m test/units/plugins/lookup/test_env.py::[1mtest_utf8_env_var_value[the_var-\xe3n\u02c8si\u03b2le][0m - AssertionError: assert [''] == ['ãnˈsiβle']
+[31mFAILED[0m test/units/plugins/lookup/test_env.py::[1mtest_env_var_value[foo-bar][0m - AssertionError: assert [''] == ['bar']
+[31m============================== [31m[1m4 failed[0m[31m in 0.52s[0m[31m ===============================[0m
+Running test: test/units/utils/test_py3compat.py
+[32mConfigured locale: C.UTF-8[0m
+[35mWARNING: Using locale "C.UTF-8" instead of "en_US.UTF-8". Tests which depend on the locale may behave unexpectedly.[0m
+[32mCreating container database.[0m
+Installing requirements for Python 3.11
+[32mStream command with data: /usr/local/bin/python[0m
+Execute command: /usr/local/bin/python /tmp/ansible-test-dgfddxte-pip.py install --disable-pip-version-check -r requirements/ansible.txt -r requirements/units.txt -c requirements/constraints.txt
+Execute command: /usr/local/bin/python /tmp/ansible-test-dgfddxte-pip.py install --disable-pip-version-check -r test/units/requirements.txt -c requirements/constraints.txt
+[32mRun command: /usr/local/bin/python /app/test/lib/ansible_test/_util/target/tools/yamlcheck.py[0m
+Unit test controller with Python 3.11
+[32mInitializing "/tmp/ansible-test-pymhvun6-injector" as the temporary injector directory.[0m
+[32mInjecting "/tmp/python-9cqqo8dv-ansible/python" as a execv wrapper for the "/usr/local/bin/python" interpreter.[0m
+[32mStream command: pytest -r a -n 4 --color yes -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest/config/default.ini --junit-xml /app/test/results/junit/python3.11-controller-units.xml --strict-markers --rootdir /app --confcutdir /app --durations=25 -v test/units/utils/test_py3compat.py[0m
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.11.13, pytest-8.0.2, pluggy-1.4.0 -- /usr/local/bin/python
+rootdir: /app
+configfile: test/lib/ansible_test/_data/pytest/config/default.ini
+plugins: xdist-3.5.0, mock-3.12.0, rerunfailures-13.0, anyio-4.10.0, forked-1.6.0
+created: 4/4 workers
+4 workers [2 items]
+
+scheduling tests via LoadScheduling
+
+test/units/utils/test_py3compat.py::test_environ_access_emits_deprecation 
+test/units/utils/test_py3compat.py::test_environ_returns_os_environ 
+[gw1][36m [ 50%] [0m[31mFAILED[0m test/units/utils/test_py3compat.py::test_environ_access_emits_deprecation 
+[gw0][36m [100%] [0m[31mFAILED[0m test/units/utils/test_py3compat.py::test_environ_returns_os_environ 
+
+=================================== FAILURES ===================================
+[31m[1m____________________ test_environ_access_emits_deprecation _____________________[0m
+[gw1] linux -- Python 3.11.13 /usr/local/bin/python
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7731cc85e8d0>
+
+    def test_environ_access_emits_deprecation(monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+>           py3compat.display, 'deprecated',
+            lambda *a, **kw: calls.append((a, kw)),
+        )
+[1m[31mE       AttributeError: module 'ansible.utils.py3compat' has no attribute 'display'[0m
+
+[1m[31mtest/units/utils/test_py3compat.py[0m:17: AttributeError
+[31m[1m_______________________ test_environ_returns_os_environ ________________________[0m
+[gw0] linux -- Python 3.11.13 /usr/local/bin/python
+
+    def test_environ_returns_os_environ():
+>       assert py3compat.environ is os.environ
+[1m[31mE       AssertionError: assert <ansible.utils.py3compat._TextEnviron object at 0x7b05f42f0a10> is environ({'LC_ALL': 'C.UTF-8', 'PATH': '/tmp/ansible-test-pymhvun6-injector:/tmp/python-9cqqo8dv-ansible:/app/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/tmp/grade-home', 'ANSIBLE_PYTHON_MODULE_RLIMIT_NOFILE': '1024', 'ANSIBLE_FORCE_COLOR': 'true', 'ANSIBLE_FORCE_HANDLERS': 'true', 'ANSIBLE_HOST_PATTERN_MISMATCH': 'error', 'ANSIBLE_INVENTORY': '/dev/null', 'ANSIBLE_DEPRECATION_WARNINGS': 'false', 'ANSIBLE_HOST_KEY_CHECKING': 'false', 'ANSIBLE_RETRY_FILES_ENABLED': 'false', 'ANSIBLE_CONFIG': '/app/test/lib/ansible_test/_data/ansible.cfg', 'ANSIBLE_LIBRARY': '/dev/null', 'ANSIBLE_DEVEL_WARNING': 'false', 'PYTHONPATH': '/app/lib:/app/test/lib/ansible_test/_util/target/pytest/plugins', 'PAGER': '/bin/cat', 'ANSIBLE_WORKER_SHUTDOWN_POLL_COUNT': '100', 'ANSIBLE_WORKER_SHUTDOWN_POLL_DELAY': '0.1', 'ANSIBLE_CONTROLLER_MIN_PYTHON_VERSION': '3.10', 'PYTEST_PLUGINS': 'ansible_forked', 'ANSIBLE_TEST_PYTHON_VERSION': '3.11', 'ANSIBLE_TEST_PYTHON_INTERPRETER': '/usr/local/bin/python', 'PYTEST_XDIST_TESTRUNUID': 'b4762096b308433b8af39ea7e8ca2ed3', 'PYTEST_XDIST_WORKER': 'gw0', 'PYTEST_XDIST_WORKER_COUNT': '4', 'PYTEST_CURRENT_TEST': 'test/units/utils/test_py3compat.py::test_environ_returns_os_environ (call)'})[0m
+[1m[31mE        +  where <ansible.utils.py3compat._TextEnviron object at 0x7b05f42f0a10> = py3compat.environ[0m
+[1m[31mE        +  and   environ({'LC_ALL': 'C.UTF-8', 'PATH': '/tmp/ansible-test-pymhvun6-injector:/tmp/python-9cqqo8dv-ansible:/app/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/tmp/grade-home', 'ANSIBLE_PYTHON_MODULE_RLIMIT_NOFILE': '1024', 'ANSIBLE_FORCE_COLOR': 'true', 'ANSIBLE_FORCE_HANDLERS': 'true', 'ANSIBLE_HOST_PATTERN_MISMATCH': 'error', 'ANSIBLE_INVENTORY': '/dev/null', 'ANSIBLE_DEPRECATION_WARNINGS': 'false', 'ANSIBLE_HOST_KEY_CHECKING': 'false', 'ANSIBLE_RETRY_FILES_ENABLED': 'false', 'ANSIBLE_CONFIG': '/app/test/lib/ansible_test/_data/ansible.cfg', 'ANSIBLE_LIBRARY': '/dev/null', 'ANSIBLE_DEVEL_WARNING': 'false', 'PYTHONPATH': '/app/lib:/app/test/lib/ansible_test/_util/target/pytest/plugins', 'PAGER': '/bin/cat', 'ANSIBLE_WORKER_SHUTDOWN_POLL_COUNT': '100', 'ANSIBLE_WORKER_SHUTDOWN_POLL_DELAY': '0.1', 'ANSIBLE_CONTROLLER_MIN_PYTHON_VERSION': '3.10', 'PYTEST_PLUGINS': 'ansible_forked', 'ANSIBLE_TEST_PYTHON_VERSION': '3.11', 'ANSIBLE_TEST_PYTHON_INTERPRETER': '/usr/local/bin/python', 'PYTEST_XDIST_TESTRUNUID': 'b4762096b308433b8af39ea7e8ca2ed3', 'PYTEST_XDIST_WORKER': 'gw0', 'PYTEST_XDIST_WORKER_COUNT': '4', 'PYTEST_CURRENT_TEST': 'test/units/utils/test_py3compat.py::test_environ_returns_os_environ (call)'}) = os.environ[0m
+
+[1m[31mtest/units/utils/test_py3compat.py[0m:11: AssertionError
+- generated xml file: /app/test/results/junit/python3.11-controller-units.xml --
+============================= slowest 25 durations =============================
+
+(6 durations < 0.005s hidden.  Use -vv to show these durations.)
+[36m[1m=========================== short test summary info ============================[0m
+[31mFAILED[0m test/units/utils/test_py3compat.py::[1mtest_environ_access_emits_deprecation[0m - AttributeError: module 'ansible.utils.py3compat' has no attribute 'display'
+[31mFAILED[0m test/units/utils/test_py3compat.py::[1mtest_environ_returns_os_environ[0m - AssertionError: assert <ansible.utils.py3compat._TextEnviron object at 0x7b...
+[31m============================== [31m[1m2 failed[0m[31m in 0.32s[0m[31m ===============================[0m

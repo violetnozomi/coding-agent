@@ -1,0 +1,3 @@
+Running selected tests: TestTracingExporter TestLoad TestLoadContextPropagation TestLogEncoding TestServeHTTP TestDefaultDatabaseRoot TestMarshalYAML TestDatabaseProtocol TestCacheBackend TestGetConfigFile TestStructTags TestScheme TestJSONSchema Test_mustBindEnv TestAnalyticsClickhouseConfiguration
+FAIL	go.flipt.io/flipt/internal/config [build failed]
+FAIL

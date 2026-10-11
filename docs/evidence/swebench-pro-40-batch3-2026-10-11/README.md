@@ -4,8 +4,12 @@
 
 按既有固定公开题目 ID 哈希顺序选择接下来的 40 题，排除前两批全部 40 题，不按成绩换题。官方来源固定 `scaleapi/SWE-bench_Pro-os@66f92766bba642462d4bbe5479e83f91f9211862`。
 
-计划 4 路 Agent 并发，镜像准备串行准入。每题最多 40 个主请求、6 个辅助请求、3000 秒，主请求不传 max_tokens；费用保守预留继续按已有经验计量与止损机制。总预算可能不足以完成全部题目，未尝试项必须保留为未执行，不能算测试失败。
+初始阶段实际使用 4 路 Agent 并发，尾段使用 1 路，镜像准备串行准入。每题最多 40 个主请求、6 个辅助请求、3000 秒，主请求不传 max_tokens；费用保守预留继续按已有经验计量与止损机制。未调用模型的题目保留为未执行，不计为模型测试失败。
 
 Agent 复用真实 NativeSDKRunner、隔离容器和原生工具；网络仅可经宿主受控模型转发器，容器不含密钥。隐藏官方验收不进入 Agent 环境，补丁冻结后使用新鲜原镜像独立验收。
 
-原始含推理内容的 Provider 记录、Session/Artifact 原件保留在 `/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11`。公开导出移除凭据和 reasoning_content，保留原件 SHA-256、工具事实、补丁及验收。正在执行；已结束题目见 [当前记录](current-outcomes.json)。本文件不代表全部已完成。
+原始含推理内容的 Provider 记录、Session/Artifact 原件保留在 `/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11`。公开导出移除凭据和 reasoning_content，保留原件 SHA-256、工具事实、补丁及验收。
+
+本批原人民币 50 元授权已闭账：29 题实际调用主模型，官方独立验收 19 题通过、10 题未通过；11 题尚未调用模型。819 次真实主请求全部结算，无真实辅助模型请求。按配置费率估算占用 46.84200440 元，供应商实际账单未知；未用额度不自动转为后续授权。
+
+详情见 [最终报告](final-report.md)、[逐题记录](current-outcomes.json)、[账目与完整性核验](final-accounting-and-integrity.json)及 [预算影响与阻断](closure-notes.json)。部分已调用任务受共享财务准入影响；未执行项同时包含环境阻断，不能将全部未通过或未执行归因于 Agent 能力。

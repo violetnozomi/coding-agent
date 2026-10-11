@@ -1,0 +1,10 @@
+[
+  {
+    "request_number": 1,
+    "role": "main",
+    "attempt_id": "74a036432b73411cb4a1dbd79e71ba20",
+    "private_request_sha256": "fd161d9f638710f7011b7ff3acf532679fb8df9ef84380f00ed459d47929dc85",
+    "private_response_sha256": "7d5d502f3b11cb9df1297c3c322832b88eb6f24bdf99d39ec953694993aaaa9e",
+    "public_reasoning_content_removed": true
+  }
+]

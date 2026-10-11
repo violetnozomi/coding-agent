@@ -1,0 +1,18 @@
+[
+  {
+    "request_number": 1,
+    "role": "main",
+    "attempt_id": "1146c12032454224ad1a7334b0eb6d9c",
+    "private_request_sha256": "6cbf664ea3d995394e59d1bd856f9e553a206b302d5be0af72bd3e2d7633e302",
+    "private_response_sha256": "a0c050f6740221c17e1ee12d2323669dc15bb2e8dc12ba341c6164d7ec870326",
+    "public_reasoning_content_removed": true
+  },
+  {
+    "request_number": 2,
+    "role": "main",
+    "attempt_id": "29f827a246e349efbd4c6d3969ae3d2f",
+    "private_request_sha256": "703f53475b8364ab25f21ad4ea475148db0bd6bc58ef9db458d8f0150167206f",
+    "private_response_sha256": "a640ce705104ae01de1acb03b0344f6ad114fbae867f312adc854fe398123b08",
+    "public_reasoning_content_removed": true
+  }
+]

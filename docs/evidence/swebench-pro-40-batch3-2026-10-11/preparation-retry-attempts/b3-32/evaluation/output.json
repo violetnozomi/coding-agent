@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_no_removal",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/units/module_utils/basic/test_no_log.py::TestReturnValues::test_return_datastructure_name",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/units/module_utils/basic/test_no_log.py::TestReturnValues::test_unknown_type",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_unknown_type",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_hit_recursion_limit",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_strings_to_remove",
+      "status": "FAILED"
+    }
+  ]
+}

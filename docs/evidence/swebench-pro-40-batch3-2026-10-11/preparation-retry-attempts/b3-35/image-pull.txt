@@ -1,0 +1,130 @@
+instance_element-hq__element-web-53b42e321777a598aaf2bb3eab22d710569f83a8-vnan: Pulling from scaleapi/swe-bench_pro-v2
+4f4c9ac5eb90: Pulling fs layer
+3ee1ef79bfdc: Pulling fs layer
+68201ec6e581: Pulling fs layer
+b3ee2c8b8446: Pulling fs layer
+e4925eac7a2d: Pulling fs layer
+3e0dd53af777: Pulling fs layer
+19cf23b61bdf: Pulling fs layer
+ace91f5f2084: Pulling fs layer
+fb67295ca065: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+712836f3d497: Pulling fs layer
+7fdefd9c584b: Pulling fs layer
+6486d962c17d: Pulling fs layer
+7113d81057dd: Pulling fs layer
+617bc43ea8d8: Pulling fs layer
+1d32dcbf5f22: Pulling fs layer
+ee32b14f11da: Pulling fs layer
+6f0a2cf862f9: Pulling fs layer
+78bc37839fd7: Pulling fs layer
+1b435b768658: Pulling fs layer
+58a7bf056561: Pulling fs layer
+4ed7a21a18bd: Pulling fs layer
+f7697ccc03e4: Pulling fs layer
+f937a78ded1c: Pulling fs layer
+d1117275ef21: Pulling fs layer
+f2542b122a12: Pulling fs layer
+617bc43ea8d8: Waiting
+1d32dcbf5f22: Waiting
+58a7bf056561: Waiting
+ee32b14f11da: Waiting
+6f0a2cf862f9: Waiting
+78bc37839fd7: Waiting
+4ed7a21a18bd: Waiting
+f7697ccc03e4: Waiting
+1b435b768658: Waiting
+fb67295ca065: Waiting
+7fdefd9c584b: Waiting
+4f4fb700ef54: Waiting
+712836f3d497: Waiting
+b3ee2c8b8446: Waiting
+e4925eac7a2d: Waiting
+f937a78ded1c: Waiting
+6486d962c17d: Waiting
+3e0dd53af777: Waiting
+d1117275ef21: Waiting
+19cf23b61bdf: Waiting
+f2542b122a12: Waiting
+ace91f5f2084: Waiting
+7113d81057dd: Waiting
+3ee1ef79bfdc: Verifying Checksum
+3ee1ef79bfdc: Download complete
+68201ec6e581: Verifying Checksum
+68201ec6e581: Download complete
+4f4c9ac5eb90: Verifying Checksum
+4f4c9ac5eb90: Download complete
+4f4c9ac5eb90: Pull complete
+3ee1ef79bfdc: Pull complete
+68201ec6e581: Pull complete
+e4925eac7a2d: Verifying Checksum
+e4925eac7a2d: Download complete
+19cf23b61bdf: Verifying Checksum
+19cf23b61bdf: Download complete
+ace91f5f2084: Verifying Checksum
+ace91f5f2084: Download complete
+3e0dd53af777: Verifying Checksum
+3e0dd53af777: Download complete
+fb67295ca065: Download complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
+712836f3d497: Verifying Checksum
+712836f3d497: Download complete
+6486d962c17d: Verifying Checksum
+6486d962c17d: Download complete
+7113d81057dd: Verifying Checksum
+7113d81057dd: Download complete
+b3ee2c8b8446: Verifying Checksum
+b3ee2c8b8446: Download complete
+b3ee2c8b8446: Pull complete
+e4925eac7a2d: Pull complete
+3e0dd53af777: Pull complete
+19cf23b61bdf: Pull complete
+ace91f5f2084: Pull complete
+fb67295ca065: Pull complete
+4f4fb700ef54: Pull complete
+617bc43ea8d8: Verifying Checksum
+617bc43ea8d8: Download complete
+712836f3d497: Pull complete
+ee32b14f11da: Verifying Checksum
+ee32b14f11da: Download complete
+1d32dcbf5f22: Verifying Checksum
+1d32dcbf5f22: Download complete
+6f0a2cf862f9: Verifying Checksum
+6f0a2cf862f9: Download complete
+1b435b768658: Verifying Checksum
+1b435b768658: Download complete
+58a7bf056561: Verifying Checksum
+58a7bf056561: Download complete
+4ed7a21a18bd: Verifying Checksum
+4ed7a21a18bd: Download complete
+f7697ccc03e4: Verifying Checksum
+f7697ccc03e4: Download complete
+78bc37839fd7: Verifying Checksum
+78bc37839fd7: Download complete
+d1117275ef21: Verifying Checksum
+d1117275ef21: Download complete
+f2542b122a12: Verifying Checksum
+f2542b122a12: Download complete
+7fdefd9c584b: Verifying Checksum
+7fdefd9c584b: Download complete
+7fdefd9c584b: Pull complete
+6486d962c17d: Pull complete
+7113d81057dd: Pull complete
+617bc43ea8d8: Pull complete
+1d32dcbf5f22: Pull complete
+ee32b14f11da: Pull complete
+6f0a2cf862f9: Pull complete
+78bc37839fd7: Pull complete
+f937a78ded1c: Verifying Checksum
+f937a78ded1c: Download complete
+1b435b768658: Pull complete
+58a7bf056561: Pull complete
+4ed7a21a18bd: Pull complete
+f7697ccc03e4: Pull complete
+f937a78ded1c: Pull complete
+d1117275ef21: Pull complete
+f2542b122a12: Pull complete
+Digest: sha256:18f01021e1ecd1f3a7a2b38a671421b58ca9c3ae3b0912b861ee67797c8c1245
+Status: Downloaded newer image for ghcr.io/scaleapi/swe-bench_pro-v2:instance_element-hq__element-web-53b42e321777a598aaf2bb3eab22d710569f83a8-vnan
+ghcr.io/scaleapi/swe-bench_pro-v2:instance_element-hq__element-web-53b42e321777a598aaf2bb3eab22d710569f83a8-vnan

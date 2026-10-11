@@ -1,0 +1,10 @@
+# go.flipt.io/flipt/internal/config [go.flipt.io/flipt/internal/config.test]
+internal/config/config_test.go:1129:43: too many arguments in call to Load
+	have ("context".Context, string)
+	want (string)
+internal/config/config_test.go:1177:43: too many arguments in call to Load
+	have ("context".Context, string)
+	want (string)
+internal/config/config_test.go:1576:22: too many arguments in call to Load
+	have ("context".Context, string)
+	want (string)

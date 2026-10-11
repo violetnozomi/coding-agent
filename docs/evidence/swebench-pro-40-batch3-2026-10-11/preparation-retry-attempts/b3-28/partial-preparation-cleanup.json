@@ -1,0 +1,10 @@
+{
+  "time_epoch": 1791740192.835112,
+  "no_sdk_launch": true,
+  "no_model_requests": true,
+  "removed_only_rebuildable_partial_workspace": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-28/case/workspace",
+  "bytes": 9213119504,
+  "original_error_preserved": true,
+  "official_image_identity": "image-preflight.json",
+  "reason": "storage_guard_interrupted_initial_copy"
+}

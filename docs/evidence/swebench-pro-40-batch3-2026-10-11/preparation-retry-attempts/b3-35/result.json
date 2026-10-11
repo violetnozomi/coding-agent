@@ -1,0 +1,400 @@
+{
+  "status": "error",
+  "final_text": "Agent aborted after 0 consecutive errors",
+  "messages": [
+    {
+      "role": "user",
+      "content": "A code repository is available in the `/app` directory. Your task is to implement the changes necessary to satisfy the following Pull Request (PR) description:\n\n<pr_description>\n\n## Title: A way to prevent displaying the room options menu\n\n### Description\n\nCustomized deployments need a way to keep certain UI components out of the interface, and the room options menu has no such control. The menu is reachable from room tiles, from the room header and from spotlight search results, and every one of those places renders it unconditionally, so a deployment that wants it gone has no configuration that removes it.\n\n## Requirements\n\n- When component visibility is resolved, the room options menu must be identified by a `RoomOptionsMenu` member of the `UIComponent` enum.\n- When the customization system reports the `RoomOptionsMenu` component as disabled, `RoomResultContextMenus` must not render the room options context menu button, and when it reports it as enabled the button must render.\n- When the customization system reports the `RoomOptionsMenu` component as disabled, `RoomHeader` must not render the room options context menu even if its `enableRoomOptionsMenu` prop is true, and it must not render it when that prop is false regardless of what the customization system reports.\n- When the customization system reports the `RoomOptionsMenu` component as disabled, `RoomTile` must not render the room options context menu, and when it reports it as enabled the menu must render.\n- When the room options context menu button renders, it must be identifiable by the accessible name `Room options`.\n\n## New Interfaces\n\nNo new interfaces are introduced.\n\n</pr_description>\n\nConstraints:\n\n* Do not reference, look up, or copy existing solutions, external PRs, or online workarounds. The implementation must be entirely your own independent work.\n\n\nExecution environment: repository is /workspace. Network is unavailable during this attempt. Use the installed project toolchain and cached dependencies. Implement the requested change and verify it with relevant local tests.",
+      "_nz_message_id": "msg-87b1bd9debd55128997f3c1f102a0f79",
+      "_nz_session_id": "pro20-b3-35",
+      "_nz_parts": [
+        {
+          "id": "part-3d7cb7406ec25b4dad3f7876df3bdbb0",
+          "message_id": "msg-87b1bd9debd55128997f3c1f102a0f79",
+          "type": "text",
+          "text": "A code repository is available in the `/app` directory. Your task is to implement the changes necessary to satisfy the following Pull Request (PR) description:\n\n<pr_description>\n\n## Title: A way to prevent displaying the room options menu\n\n### Description\n\nCustomized deployments need a way to keep certain UI components out of the interface, and the room options menu has no such control. The menu is reachable from room tiles, from the room header and from spotlight search results, and every one of those places renders it unconditionally, so a deployment that wants it gone has no configuration that removes it.\n\n## Requirements\n\n- When component visibility is resolved, the room options menu must be identified by a `RoomOptionsMenu` member of the `UIComponent` enum.\n- When the customization system reports the `RoomOptionsMenu` component as disabled, `RoomResultContextMenus` must not render the room options context menu button, and when it reports it as enabled the button must render.\n- When the customization system reports the `RoomOptionsMenu` component as disabled, `RoomHeader` must not render the room options context menu even if its `enableRoomOptionsMenu` prop is true, and it must not render it when that prop is false regardless of what the customization system reports.\n- When the customization system reports the `RoomOptionsMenu` component as disabled, `RoomTile` must not render the room options context menu, and when it reports it as enabled the menu must render.\n- When the room options context menu button renders, it must be identifiable by the accessible name `Room options`.\n\n## New Interfaces\n\nNo new interfaces are introduced.\n\n</pr_description>\n\nConstraints:\n\n* Do not reference, look up, or copy existing solutions, external PRs, or online workarounds. The implementation must be entirely your own independent work.\n\n\nExecution environment: repository is /workspace. Network is unavailable during this attempt. Use the installed project toolchain and cached dependencies. Implement the requested change and verify it with relevant local tests.",
+          "interaction_run_id": "interaction-426e5fa73d7240dc863cba30f64f8340"
+        }
+      ],
+      "_nz_interaction_run_id": "interaction-426e5fa73d7240dc863cba30f64f8340",
+      "_nz_time": {
+        "created": 1791741015.0770063
+      },
+      "_nz_user_agent": "build",
+      "_nz_user_model": {
+        "provider_id": "openai-compatible",
+        "model_id": "deepseek-flash"
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Agent aborted after 0 consecutive errors",
+      "_nz_interaction_run_id": "interaction-426e5fa73d7240dc863cba30f64f8340",
+      "_nz_visible": true,
+      "_nz_internal": false,
+      "_nz_authoritative": true,
+      "_nz_mode": "build",
+      "_nz_agent": "build",
+      "_nz_path": {
+        "cwd": "/workspace",
+        "root": "/workspace"
+      },
+      "_nz_message_id": "msg-2dbe00b1b34345e3b8046fc028bdf283",
+      "_nz_session_id": "pro20-b3-35",
+      "_nz_parts": [
+        {
+          "id": "part-8e26247468ea5efc9937dbb37c146985",
+          "message_id": "msg-2dbe00b1b34345e3b8046fc028bdf283",
+          "type": "text",
+          "text": "Agent aborted after 0 consecutive errors"
+        },
+        {
+          "id": "part-ab58ff6d094a59c1a22b3176763ebbfa",
+          "message_id": "msg-2dbe00b1b34345e3b8046fc028bdf283",
+          "type": "step-start",
+          "time": {
+            "start": 1791741015.1713254
+          },
+          "snapshot": "snap-cfc2e7cca3fdcef0dd24bb90dd7ec95d02f60f11d636f0308ec97fb167becc39",
+          "interaction_run_id": "interaction-426e5fa73d7240dc863cba30f64f8340",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-52dc600583865b47bdf2f79b7622c911",
+          "message_id": "msg-2dbe00b1b34345e3b8046fc028bdf283",
+          "type": "retry",
+          "attempt": 1,
+          "error": {
+            "name": "APIError",
+            "data": {
+              "message": "An internal error occurred.",
+              "public_error": {
+                "schema": "nz.public_error.v1",
+                "code": "internal_error",
+                "message": "An internal error occurred.",
+                "retryable": true,
+                "metadata": {
+                  "error_type": "RuntimeError"
+                }
+              },
+              "isRetryable": true
+            }
+          },
+          "message": "An internal error occurred.",
+          "time": {
+            "created": 1791741015.582825
+          },
+          "next": 1791741017.5827773,
+          "interaction_run_id": "interaction-426e5fa73d7240dc863cba30f64f8340",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-b8f6bb3d37c4515d8e82a04d98d15702",
+          "message_id": "msg-2dbe00b1b34345e3b8046fc028bdf283",
+          "type": "retry",
+          "attempt": 2,
+          "error": {
+            "name": "APIError",
+            "data": {
+              "message": "An internal error occurred.",
+              "public_error": {
+                "schema": "nz.public_error.v1",
+                "code": "internal_error",
+                "message": "An internal error occurred.",
+                "retryable": true,
+                "metadata": {
+                  "error_type": "RuntimeError"
+                }
+              },
+              "isRetryable": true
+            }
+          },
+          "message": "An internal error occurred.",
+          "time": {
+            "created": 1791741017.6291366
+          },
+          "next": 1791741021.6290984,
+          "interaction_run_id": "interaction-426e5fa73d7240dc863cba30f64f8340",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-19770ae3eadb5aeba91461b720461964",
+          "message_id": "msg-2dbe00b1b34345e3b8046fc028bdf283",
+          "type": "retry",
+          "attempt": 3,
+          "error": {
+            "name": "APIError",
+            "data": {
+              "message": "An internal error occurred.",
+              "public_error": {
+                "schema": "nz.public_error.v1",
+                "code": "internal_error",
+                "message": "An internal error occurred.",
+                "retryable": true,
+                "metadata": {
+                  "error_type": "RuntimeError"
+                }
+              },
+              "isRetryable": true
+            }
+          },
+          "message": "An internal error occurred.",
+          "time": {
+            "created": 1791741021.6778445
+          },
+          "next": 1791741029.6778004,
+          "interaction_run_id": "interaction-426e5fa73d7240dc863cba30f64f8340",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        },
+        {
+          "id": "part-2edaa63ab4c25c47bf25f915bdbc2bf2",
+          "message_id": "msg-2dbe00b1b34345e3b8046fc028bdf283",
+          "type": "step-finish",
+          "time": {
+            "start": 1791741015.1713254,
+            "end": 1791741029.7755737
+          },
+          "snapshot": "snap-cfc2e7cca3fdcef0dd24bb90dd7ec95d02f60f11d636f0308ec97fb167becc39",
+          "reason": "error",
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "total": 0
+          },
+          "interaction_run_id": "interaction-426e5fa73d7240dc863cba30f64f8340",
+          "visible": true,
+          "internal": false,
+          "authoritative": true
+        }
+      ],
+      "_nz_time": {
+        "created": 1791741015.171301,
+        "completed": 1791741029.7755573
+      },
+      "_nz_error": "The provider request failed.",
+      "_nz_assistant_error": {
+        "name": "APIError",
+        "data": {
+          "message": "The provider request failed.",
+          "public_error": {
+            "schema": "nz.public_error.v1",
+            "code": "provider_error",
+            "message": "The provider request failed.",
+            "retryable": true,
+            "metadata": {
+              "error_type": "RateLimitError",
+              "status_code": 429
+            }
+          },
+          "isRetryable": true,
+          "statusCode": 429
+        }
+      },
+      "_nz_finish": "error",
+      "_nz_end_state": {
+        "reason": "errored"
+      },
+      "_nz_parent_id": "msg-87b1bd9debd55128997f3c1f102a0f79"
+    }
+  ],
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cached_read_tokens": 0,
+    "cached_write_tokens": 0,
+    "reasoning_tokens": 0
+  },
+  "session_id": "pro20-b3-35",
+  "active_agent": "coding-task",
+  "error": "",
+  "metadata": {
+    "permission_mode": "auto",
+    "persist_session": true,
+    "max_turns": 40,
+    "interaction_run_id": "interaction-426e5fa73d7240dc863cba30f64f8340",
+    "session_open": "created",
+    "tool_exposure": {
+      "unlocked": [
+        "grep_search",
+        "read_file"
+      ],
+      "last_plan": {
+        "visible_names": [
+          "analyze_impact",
+          "apply_patch",
+          "bash",
+          "code_references",
+          "compact",
+          "diff_status",
+          "edit_file",
+          "find_symbol_callers",
+          "glob_search",
+          "grep_search",
+          "list_directory",
+          "read_file",
+          "read_scratchpad",
+          "read_symbol",
+          "read_tool_result",
+          "replace_lines",
+          "repo_context",
+          "repo_map",
+          "review_run_evidence",
+          "todo",
+          "update_scratchpad",
+          "verify_changed_files",
+          "write_file",
+          "write_files_batch"
+        ],
+        "deferred_names": [],
+        "hidden_names": [],
+        "estimated_tokens_before": 3765,
+        "estimated_tokens_after": 3765
+      }
+    },
+    "context_pressure": {
+      "context_window": 1000000,
+      "used_tokens": 10740,
+      "reserve_tokens": 65536
+    },
+    "runtime": {
+      "profile": "main",
+      "control_plane": "declared-agent-graph",
+      "active_agent": "coding-task",
+      "admitted": false,
+      "admitted_capabilities": [],
+      "admission_violations": [],
+      "structured_output": {},
+      "turn_count": 1,
+      "edits": 0,
+      "last_edit_turn": 0,
+      "mutation_generation": 0,
+      "acceptance_mutation_generation": 0,
+      "diff_generation": -1,
+      "verification_generation": -1,
+      "strict_progress_blocks": 0,
+      "work_phase": "normal",
+      "verification_failures": 0,
+      "package_install_attempts": 0,
+      "emergency_broad_exploration": 0,
+      "work_budget_zone": "green",
+      "has_diff": false,
+      "diff_chars": 0,
+      "tests_modified": false,
+      "wants_tests": false,
+      "forbids_test_changes": false,
+      "requested_paths": [],
+      "broad_tests": 0,
+      "task_complexity": "L0",
+      "acceptance_criteria": [
+        "When component visibility is resolved, the room options menu must be identified by a `RoomOptionsMenu` member of the `UIComponent` enum.",
+        "When the customization system reports the `RoomOptionsMenu` component as disabled, `RoomResultContextMenus` must not render the room options context menu button, and when it report",
+        "When the customization system reports the `RoomOptionsMenu` component as disabled, `RoomHeader` must not render the room options context menu even if its `enableRoomOptionsMenu` pr",
+        "When the customization system reports the `RoomOptionsMenu` component as disabled, `RoomTile` must not render the room options context menu, and when it reports it as enabled the m",
+        "When the room options context menu button renders, it must be identifiable by the accessible name `Room options`."
+      ],
+      "plan_generated": false,
+      "replan_count": 0,
+      "provider_calls": 1,
+      "provider_attempts": 4,
+      "provider_calls_by_purpose": {
+        "coding": 1
+      },
+      "provider_calls_by_model": {
+        "openai-compatible/deepseek-flash": 1
+      },
+      "provider_usage": {
+        "input": 0,
+        "output": 0,
+        "total": 0,
+        "reasoning": 0,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "provider_usage_by_purpose": {
+        "coding": {
+          "input": 0,
+          "output": 0,
+          "total": 0,
+          "reasoning": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        }
+      },
+      "provider_duration_ms_by_purpose": {
+        "coding": 14398.888
+      },
+      "provider_usage_by_model": {
+        "openai-compatible/deepseek-flash": {
+          "input": 0,
+          "output": 0,
+          "total": 0,
+          "reasoning": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        }
+      },
+      "provider_duration_ms_by_model": {
+        "openai-compatible/deepseek-flash": 14398.888
+      },
+      "provider_cost_usd": 0.0,
+      "provider_cost_usd_by_purpose": {},
+      "provider_cost_usd_by_model": {},
+      "provider_cost_unknown_calls": 1,
+      "provider_cost_sources": {
+        "unknown": 1
+      },
+      "provider_turns_by_reason": {
+        "initial_investigation": 1
+      },
+      "provider_turns_by_outcome": {
+        "provider_error": 1
+      },
+      "provider_turn_records": [
+        {
+          "turn": 1,
+          "reason": "initial_investigation",
+          "outcome": "provider_error",
+          "tool_names": [],
+          "finish_reason": "error",
+          "mutation_generation_before": 0,
+          "mutation_generation_after": 0,
+          "mutation_delta": 0,
+          "verification_generation_after": -1
+        }
+      ],
+      "patch_risk": {},
+      "patch_risk_reviewed": false,
+      "tool_observability": {
+        "batches": 0,
+        "calls": 0,
+        "wall_ms": 0.0,
+        "tool_duration_ms": 0.0,
+        "peak_concurrency": 0,
+        "parallel_segments": 0,
+        "serial_segments": 0,
+        "barrier_wait_ms": 0.0,
+        "streak_resets": 0
+      },
+      "reflection_status": null,
+      "reflection_summary": null,
+      "evidence": {
+        "created_files": 0,
+        "modified_files": 0,
+        "expected_files": 0,
+        "verification_results": 0,
+        "tool_failures": 0,
+        "limitations": []
+      }
+    },
+    "raw_status": "aborted",
+    "changed_files": []
+  }
+}

@@ -1,0 +1,4 @@
+Running selected tests: TestContextReader/simple_read TestContextReader/close_underlying_reader TestContextReader/cancelled_read TestContextReader/close_unblocks_reads TestContextReader TestStdin
+{"Time":"2026-10-11T18:01:08.387152104Z","Action":"start","Package":"github.com/gravitational/teleport/lib/utils/prompt"}
+{"Time":"2026-10-11T18:01:08.387205236Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Output":"FAIL\tgithub.com/gravitational/teleport/lib/utils/prompt [build failed]\n"}
+{"Time":"2026-10-11T18:01:08.387211417Z","Action":"fail","Package":"github.com/gravitational/teleport/lib/utils/prompt","Elapsed":0}

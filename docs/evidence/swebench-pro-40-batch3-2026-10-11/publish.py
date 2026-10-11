@@ -1,11 +1,11 @@
 """本轮已结束实例的脱敏导出；不调用模型，不评分、不改任务文件。"""
 from pathlib import Path
-import collections, hashlib, json, shutil, sys
+import collections, hashlib, json, shutil, sys, os
 from dotenv import dotenv_values
 ROOT=Path('/home/pyh/nzcoder');OUT=Path('/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11')
 STAGE=sys.argv[1] if len(sys.argv)>1 else 'live'
 PUBLIC={'live':'attempts','preparation-retry':'preparation-blocked','p2':'preparation-retry-attempts','p3':'final-unattempted'}[STAGE]
-LIVE=OUT/STAGE;DOC=ROOT/'docs/evidence/swebench-pro-40-batch3-2026-10-11';KEY=dotenv_values(ROOT/'.env').get('API_KEY')
+LIVE=OUT/STAGE;DOC=ROOT/'docs/evidence/swebench-pro-40-batch3-2026-10-11';KEYS=[k for k in (dotenv_values(ROOT/'.env').get('API_KEY'),os.environ.get('NZ_REVIEW_DEEPSEEK_API_KEY')) if k]
 def clean(x):
  if isinstance(x,dict):return {k:clean(v) for k,v in x.items() if k not in {'reasoning_content','api_key','Authorization'}}
  if isinstance(x,list):return [clean(v) for v in x]
@@ -39,7 +39,7 @@ for s in sorted(LIVE.glob('b3-[0-9][0-9]')):
  for n,v in [('provider-requests.jsonl',requests),('provider-responses.jsonl',responses)]:
   (dst/n).write_text(''.join(json.dumps(x,ensure_ascii=False)+'\n' for x in v))
  dump(dst/'raw-identity.json',rawindex)
- for name in ['report.json','identity.json','environment.json','image-pull.txt','image-build.txt','initial-files.json','model.patch','patch-identity.json','agent-exit.json','agent-stdio.txt','evaluation-result.json','evaluation-command.json','evaluation-stdio.txt','archive-receipt.json','launch.json','image-preflight.json','evaluation-corrected-result.json','evaluation-corrected-command.json','evaluation-corrected-stdio.txt','delivery-recovery.json','permission-classification-audit.json','case-path-alias.json']:
+ for name in ['report.json','identity.json','environment.json','image-pull.txt','image-build.txt','initial-files.json','model.patch','patch-identity.json','agent-exit.json','agent-stdio.txt','evaluation-result.json','evaluation-command.json','evaluation-stdio.txt','archive-receipt.json','launch.json','image-preflight.json','evaluation-corrected-result.json','evaluation-corrected-command.json','evaluation-corrected-stdio.txt','delivery-recovery.json','permission-classification-audit.json','case-path-alias.json','partial-preparation-cleanup.json']:
   source=s/name
   if source.exists():shutil.copy2(source,dst/name)
  if (s/'case/input/run.json').exists():shutil.copy2(s/'case/input/run.json',dst/'model-config.json')
@@ -67,9 +67,11 @@ for s in sorted(LIVE.glob('b3-[0-9][0-9]')):
  if envblocked and not corrected.exists():resolved=None
  actual_attempt=report['attempt'] if (s/'launch.json').exists() or admissions else 0
  metrics={'instance_id':report['instance_id'],'declared_attempt_before_launch':report['attempt'],'actual_agent_attempt':actual_attempt,'agent_status':report.get('agent_status'),'report_status':report['status'],'main_physical_requests':sum(a['role']=='main' for a in admissions),'auxiliary_physical_requests':sum(a['role']=='auxiliary' for a in admissions),'reported_usage_estimate_cny':sum(estimates) if all(x is not None for x in estimates) else None,'official_resolved':resolved,'initial_grade_environment_blocked':envblocked,'corrected_official_grade_present':corrected.exists(),'agent_dependency_isolation_revision':json.loads((result/'child-environment.json').read_text()).get('harness_revision') if (result/'child-environment.json').exists() else 1,'native_entry_sha256':hashlib.sha256((s/'case/driver/entry.py').read_bytes()).hexdigest() if (s/'case/driver/entry.py').exists() else None,'host_patch_or_model_hints':False,'record_root':str(s),'public_reasoning_removed':True}
+ metrics['sdk_launched']=(s/'launch.json').exists()
+ metrics['main_model_was_called']=any(a['role']=='main' for a in admissions)
  metrics['known_reported_usage_estimate_cny']=sum(x for x in estimates if x is not None)
  metrics['retained_unknown_request_reservation_cny']=sum(a.get('estimated_cost_reserved_cny',0) for a in admissions if any(z['attempt_id']==a['attempt_id'] and z.get('reservation_retained') for z in settlements))
- metrics['unknown_usage_request_ids']=[z['attempt_id'] for z in settlements if not z.get('usage_valid')]
+ metrics['unknown_usage_request_ids']=[z['attempt_id'] for z in settlements if not z.get('usage_valid') or not isinstance(z.get('usage'),dict) or z.get('estimated_cost_reported_cny') is None or z.get('reservation_retained')]
  metrics['outer_status']=json.loads((s/'agent-exit.json').read_text()).get('outer_status') if (s/'agent-exit.json').exists() else None
  metrics['runtime_trace_source']='recovered_raw_journal' if (result/'runtime-recovery.json').exists() else 'native_export' if (result/'runtime.jsonl').exists() else None
  dump(dst/'task-outcome.json',metrics)
@@ -84,7 +86,9 @@ for s in sorted(LIVE.glob('b3-[0-9][0-9]')):
   for x in command_tools:lines.append(f'- executed={x.get("executed")}, status={x.get("status")}, command_failed={x.get("command_failed")}: `{str(x.get("input",{}).get("command","")).replace(chr(10)," ↵ ")[:400]}`')
   lines+=['','面试复盘练习：从首次诊断找到修改依据，核对实际测试覆盖和改动版本；解释拒绝/环境失败/测试断言失败的差别；对照独立验收遗漏与最终说明，指出仍未证明的行为。受控 smoke 不计入本题，完整推理原件不公开。']
   (dst/'README.md').write_text('\n'.join(lines)+'\n')
- assert not KEY or all(KEY.encode() not in p.read_bytes() for p in dst.rglob('*') if p.is_file())
+ if actual_attempt and not metrics['main_model_was_called']:
+  (dst/'README.md').write_text(f"# 第 {s.name} 题：SDK 启动但模型未出站\n\n实例 `{report['instance_id']}`。SDK 状态 `{report.get('agent_status')}`，真实主请求为 0，不能计为自主编码任务。\n\n[本地拒绝](ledger.jsonl)、[运行时](runtime.jsonl)和[有效口径](task-outcome.json)保留。独立验收值 `{resolved}` 仅反映本次未修改基线，不能当作模型成功或失败。\n")
+ assert all(key.encode() not in p.read_bytes() for p in dst.rglob('*') if p.is_file() for key in KEYS)
  summary.append(metrics)
 dump(DOC/(STAGE+'-outcomes.json'),summary)
 # 同一实例仅准备失败可被后续实际尝试替代；每一阶段的原件仍独立保留。

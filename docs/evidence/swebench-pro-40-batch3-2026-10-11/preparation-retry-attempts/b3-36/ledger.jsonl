@@ -1,0 +1,5 @@
+{"event": "local_rejection", "monotonic": 128249.28674073, "time_epoch": 1791741221.7966695, "bucket": "instance_future-architect__vuls-edb324c3d9ec3b107bf947f00e38af99d05b3e16/b3-36/main", "reason": "estimated_fee_reservation_exhausted", "usage": null}
+{"event": "local_rejection", "monotonic": 128251.313556543, "time_epoch": 1791741223.8234854, "bucket": "instance_future-architect__vuls-edb324c3d9ec3b107bf947f00e38af99d05b3e16/b3-36/main", "reason": "estimated_fee_reservation_exhausted", "usage": null}
+{"event": "local_rejection", "monotonic": 128255.360272278, "time_epoch": 1791741227.870201, "bucket": "instance_future-architect__vuls-edb324c3d9ec3b107bf947f00e38af99d05b3e16/b3-36/main", "reason": "estimated_fee_reservation_exhausted", "usage": null}
+{"event": "local_rejection", "monotonic": 128263.394866565, "time_epoch": 1791741235.9047954, "bucket": "instance_future-architect__vuls-edb324c3d9ec3b107bf947f00e38af99d05b3e16/b3-36/main", "reason": "estimated_fee_reservation_exhausted", "usage": null}
+{"event": "run_cancelled", "monotonic": 128264.30228441, "time_epoch": 1791741236.812215, "run": "b3-36"}

@@ -1,0 +1,9 @@
+{
+  "image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-518ec324b66a07fdd95464a5e9ca5fe7681ad8f9",
+  "digest": "sha256:5bd20d4c335d43371032bdecd79f2a5ded579652d69cc2f1495717aace7a2806",
+  "index_digest": "sha256:961b0dc99ecc97775e4c92d2ea299e00fd7382a1598b77ad9a085e6c787c4014",
+  "compressed_bytes": 596365975,
+  "estimated_required_bytes": 3161022736,
+  "free_bytes": 26103361536,
+  "estimate_is_not_exact": true
+}

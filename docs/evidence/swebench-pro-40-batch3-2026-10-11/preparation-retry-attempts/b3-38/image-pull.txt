@@ -1,0 +1,83 @@
+instance_gravitational__teleport-b8fbb2d1e90ffcde88ed5fe9920015c1be075788-vee9b09fb20c43af7e520f57e9239bbcf46b7113d: Pulling from scaleapi/swe-bench_pro-v2
+43c4264eed91: Pulling fs layer
+ab19dfae90ef: Pulling fs layer
+e7bff916ab0c: Pulling fs layer
+78cee99375e3: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+e926874a3859: Pulling fs layer
+a447a3fa4bf4: Pulling fs layer
+160ff38caab0: Pulling fs layer
+c1485fd2eed9: Pulling fs layer
+d0ea096e3828: Pulling fs layer
+7cccce6dcbda: Pulling fs layer
+feacfb25da17: Pulling fs layer
+c8211ebd5682: Pulling fs layer
+a6b63c1d9570: Pulling fs layer
+d59294fa05ae: Pulling fs layer
+4fc458b8b26e: Pulling fs layer
+8c3e893f0712: Pulling fs layer
+e926874a3859: Waiting
+a447a3fa4bf4: Waiting
+160ff38caab0: Waiting
+c1485fd2eed9: Waiting
+d0ea096e3828: Waiting
+7cccce6dcbda: Waiting
+feacfb25da17: Waiting
+c8211ebd5682: Waiting
+a6b63c1d9570: Waiting
+d59294fa05ae: Waiting
+8c3e893f0712: Waiting
+4fc458b8b26e: Waiting
+78cee99375e3: Waiting
+4f4fb700ef54: Waiting
+ab19dfae90ef: Verifying Checksum
+ab19dfae90ef: Download complete
+43c4264eed91: Download complete
+43c4264eed91: Pull complete
+ab19dfae90ef: Pull complete
+78cee99375e3: Download complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
+e926874a3859: Verifying Checksum
+e926874a3859: Download complete
+e7bff916ab0c: Verifying Checksum
+e7bff916ab0c: Download complete
+e7bff916ab0c: Pull complete
+78cee99375e3: Pull complete
+4f4fb700ef54: Pull complete
+e926874a3859: Pull complete
+c1485fd2eed9: Verifying Checksum
+c1485fd2eed9: Download complete
+d0ea096e3828: Verifying Checksum
+d0ea096e3828: Download complete
+7cccce6dcbda: Verifying Checksum
+7cccce6dcbda: Download complete
+feacfb25da17: Verifying Checksum
+feacfb25da17: Download complete
+c8211ebd5682: Verifying Checksum
+c8211ebd5682: Download complete
+a6b63c1d9570: Verifying Checksum
+a6b63c1d9570: Download complete
+a447a3fa4bf4: Verifying Checksum
+a447a3fa4bf4: Download complete
+a447a3fa4bf4: Pull complete
+4fc458b8b26e: Verifying Checksum
+4fc458b8b26e: Download complete
+8c3e893f0712: Download complete
+d59294fa05ae: Verifying Checksum
+d59294fa05ae: Download complete
+160ff38caab0: Verifying Checksum
+160ff38caab0: Download complete
+160ff38caab0: Pull complete
+c1485fd2eed9: Pull complete
+d0ea096e3828: Pull complete
+7cccce6dcbda: Pull complete
+feacfb25da17: Pull complete
+c8211ebd5682: Pull complete
+a6b63c1d9570: Pull complete
+d59294fa05ae: Pull complete
+4fc458b8b26e: Pull complete
+8c3e893f0712: Pull complete
+Digest: sha256:88bbc7464e3d2926bcfb8b88b50c58ce37229291dab14b26c8f72345cc23bb4b
+Status: Downloaded newer image for ghcr.io/scaleapi/swe-bench_pro-v2:instance_gravitational__teleport-b8fbb2d1e90ffcde88ed5fe9920015c1be075788-vee9b09fb20c43af7e520f57e9239bbcf46b7113d
+ghcr.io/scaleapi/swe-bench_pro-v2:instance_gravitational__teleport-b8fbb2d1e90ffcde88ed5fe9920015c1be075788-vee9b09fb20c43af7e520f57e9239bbcf46b7113d

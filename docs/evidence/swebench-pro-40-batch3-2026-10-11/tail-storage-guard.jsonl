@@ -1,0 +1,1 @@
+{"time_epoch": 1791740123.536187, "free_bytes": 302850048, "stopped_only_this_run": ["docker cp nz-pro20-export-b3-28:/app/. /home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-28/case/workspace"], "reason": "storage_below_512_MiB"}

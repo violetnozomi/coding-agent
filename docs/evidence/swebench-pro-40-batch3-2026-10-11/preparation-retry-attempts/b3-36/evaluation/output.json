@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "TestDetectScanDest",
+      "status": "FAILED"
+    },
+    {
+      "name": "TestDetectScanDest/empty",
+      "status": "FAILED"
+    },
+    {
+      "name": "TestDetectScanDest/single-addr",
+      "status": "FAILED"
+    },
+    {
+      "name": "TestDetectScanDest/dup-addr-port",
+      "status": "FAILED"
+    },
+    {
+      "name": "TestDetectScanDest/multi-addr",
+      "status": "FAILED"
+    },
+    {
+      "name": "TestDetectScanDest/asterisk",
+      "status": "FAILED"
+    }
+  ]
+}

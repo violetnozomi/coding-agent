@@ -1,0 +1,5 @@
+# github.com/gravitational/teleport/lib/utils/prompt [github.com/gravitational/teleport/lib/utils/prompt.test]
+lib/utils/prompt/stdin_test.go:39:7: undefined: NewContextReader
+lib/utils/prompt/stdin_test.go:82:8: undefined: NewContextReader
+lib/utils/prompt/stdin_test.go:108:8: undefined: Stdin
+lib/utils/prompt/stdin_test.go:109:8: undefined: Stdin

@@ -1,0 +1,180 @@
+Running selected tests: tests/unit/utils/test_qtlog.py tests/unit/utils/test_log.py
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-7.4.0, pluggy-1.2.0 -- /usr/local/bin/python3.11
+cachedir: .pytest_cache
+benchmark: 4.0.0 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+hypothesis profile 'default' -> deadline=timedelta(milliseconds=600), suppress_health_check=[HealthCheck.function_scoped_fixture], database=DirectoryBasedExampleDatabase('/app/.hypothesis/examples')
+PyQt5 5.15.9 -- Qt runtime 5.15.2 -- Qt compiled 5.15.2
+backend: QtWebEngine 5.15.2, based on Chromium 83.0.4103.122 (from ELF)
+rootdir: /app
+configfile: pytest.ini
+plugins: mock-3.11.1, repeat-0.9.1, bdd-6.1.1, benchmark-4.0.0, xdist-3.3.1, rerunfailures-12.0, hypothesis-6.82.0, anyio-4.10.0, xvfb-3.0.0, instafail-0.5.0, cov-4.1.0, qt-4.2.0
+collecting ... collected 67 items
+
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_empty_message RERUN [  1%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_empty_message RERUN [  1%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_empty_message RERUN [  1%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_empty_message FAILED [  1%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[debug] RERUN [  2%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[debug] RERUN [  2%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[debug] RERUN [  2%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[debug] FAILED [  2%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[info] RERUN [  4%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[info] RERUN [  4%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[info] RERUN [  4%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[info] FAILED [  4%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[warning] RERUN [  5%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[warning] RERUN [  5%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[warning] RERUN [  5%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[warning] FAILED [  5%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[critical] RERUN [  7%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[critical] RERUN [  7%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[critical] RERUN [  7%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[critical] FAILED [  7%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[fatal] RERUN [  8%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[fatal] RERUN [  8%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[fatal] RERUN [  8%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[fatal] FAILED [  8%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[none] RERUN [ 10%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[none] RERUN [ 10%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[none] RERUN [ 10%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[none] FAILED [ 10%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[default] RERUN [ 11%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[default] RERUN [ 11%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[default] RERUN [ 11%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[default] FAILED [ 11%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[custom] RERUN [ 13%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[custom] RERUN [ 13%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[custom] RERUN [ 13%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[custom] FAILED [ 13%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_benign_message_demoted RERUN [ 14%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_benign_message_demoted RERUN [ 14%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_benign_message_demoted RERUN [ 14%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_benign_message_demoted FAILED [ 14%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[without-debug] RERUN [ 16%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[without-debug] RERUN [ 16%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[without-debug] RERUN [ 16%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[without-debug] FAILED [ 16%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[with-debug] RERUN [ 17%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[with-debug] RERUN [ 17%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[with-debug] RERUN [ 17%]
+tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[with-debug] FAILED [ 17%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters0-False-eggs.bacon.spam-True] PASSED [ 19%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters1-False-eggs-True] PASSED [ 20%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters2-True-ham-True] PASSED [ 22%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters3-False-eggs-True] PASSED [ 23%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters4-False-bacon-True] PASSED [ 25%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters5-False-eggs.fried-True] PASSED [ 26%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters6-False-spam-False] PASSED [ 28%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters7-False-eggsauce-False] PASSED [ 29%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters8-False-eggs.fried-False] PASSED [ 31%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters9-True-eggs-False] PASSED [ 32%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters10-True-bacon-False] PASSED [ 34%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters11-True-spam-True] PASSED [ 35%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter[filters12-True-eggsauce-True] PASSED [ 37%]
+tests/unit/utils/test_log.py::TestLogFilter::test_logfilter_benchmark PASSED [ 38%]
+tests/unit/utils/test_log.py::TestLogFilter::test_debug[True] PASSED     [ 40%]
+tests/unit/utils/test_log.py::TestLogFilter::test_debug[False] PASSED    [ 41%]
+tests/unit/utils/test_log.py::TestLogFilter::test_debug_log_filter_cmd[init-url,js-True-False] PASSED [ 43%]
+tests/unit/utils/test_log.py::TestLogFilter::test_debug_log_filter_cmd[url-url,js-False-True] PASSED [ 44%]
+tests/unit/utils/test_log.py::TestLogFilter::test_debug_log_filter_cmd[js-url,js-False-True] PASSED [ 46%]
+tests/unit/utils/test_log.py::TestLogFilter::test_debug_log_filter_cmd[js-none-False-True] PASSED [ 47%]
+tests/unit/utils/test_log.py::TestLogFilter::test_debug_log_filter_cmd_invalid PASSED [ 49%]
+tests/unit/utils/test_log.py::TestLogFilter::test_parsing[!js,misc-expected_names0-True] PASSED [ 50%]
+tests/unit/utils/test_log.py::TestLogFilter::test_parsing[js,misc-expected_names1-False] PASSED [ 52%]
+tests/unit/utils/test_log.py::TestLogFilter::test_parsing[js, misc-expected_names2-False] PASSED [ 53%]
+tests/unit/utils/test_log.py::TestLogFilter::test_parsing[JS, Misc-expected_names3-False] PASSED [ 55%]
+tests/unit/utils/test_log.py::TestLogFilter::test_parsing[None-expected_names4-False] PASSED [ 56%]
+tests/unit/utils/test_log.py::TestLogFilter::test_parsing[none-expected_names5-False] PASSED [ 58%]
+tests/unit/utils/test_log.py::TestLogFilter::test_parsing_invalid[js,!misc-!misc] PASSED [ 59%]
+tests/unit/utils/test_log.py::TestLogFilter::test_parsing_invalid[blabla,js,blablub-blabla, blablub] PASSED [ 61%]
+tests/unit/utils/test_log.py::test_ram_handler[data0-expected0] PASSED   [ 62%]
+tests/unit/utils/test_log.py::test_ram_handler[data1-expected1] PASSED   [ 64%]
+tests/unit/utils/test_log.py::test_ram_handler[data2-expected2] PASSED   [ 65%]
+tests/unit/utils/test_log.py::TestInitLog::test_stderr_none PASSED       [ 67%]
+tests/unit/utils/test_log.py::TestInitLog::test_python_warnings PASSED   [ 68%]
+tests/unit/utils/test_log.py::TestInitLog::test_python_warnings_werror PASSED [ 70%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_console[None-info-20] PASSED [ 71%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_console[None-warning-30] PASSED [ 73%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_console[info-warning-20] PASSED [ 74%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_console[warning-info-30] PASSED [ 76%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_ram[vdebug-9] PASSED [ 77%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_ram[debug-10] PASSED [ 79%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_ram[info-20] PASSED [ 80%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_ram[critical-50] PASSED [ 82%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_consistent_default PASSED [ 83%]
+tests/unit/utils/test_log.py::TestInitLog::test_init_from_config_format PASSED [ 85%]
+tests/unit/utils/test_log.py::TestInitLog::test_logfilter PASSED         [ 86%]
+tests/unit/utils/test_log.py::TestHideQtWarning::test_unfiltered PASSED  [ 88%]
+tests/unit/utils/test_log.py::TestHideQtWarning::test_filtered[Hello] PASSED [ 89%]
+tests/unit/utils/test_log.py::TestHideQtWarning::test_filtered[Hello World] PASSED [ 91%]
+tests/unit/utils/test_log.py::TestHideQtWarning::test_filtered[  Hello World  ] PASSED [ 92%]
+tests/unit/utils/test_log.py::test_stub[-STUB: test_stub] PASSED         [ 94%]
+tests/unit/utils/test_log.py::test_stub[foo-STUB: test_stub (foo)] PASSED [ 95%]
+tests/unit/utils/test_log.py::test_py_warning_filter PASSED              [ 97%]
+tests/unit/utils/test_log.py::test_py_warning_filter_error PASSED        [ 98%]
+tests/unit/utils/test_log.py::test_warning_still_errors PASSED           [100%]
+
+=================================== FAILURES ===================================
+___________________ TestQtMessageHandler.test_empty_message ____________________
+tests/unit/utils/test_qtlog.py:52: in test_empty_message
+    qtlog.qt_message_handler(qtcore.QtMsgType.QtDebugMsg, self.Context(), "")
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+_______________ TestQtMessageHandler.test_msg_type_level[debug] ________________
+tests/unit/utils/test_qtlog.py:66: in test_msg_type_level
+    qtlog.qt_message_handler(msg_type, self.Context(), "a qt message")
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+________________ TestQtMessageHandler.test_msg_type_level[info] ________________
+tests/unit/utils/test_qtlog.py:66: in test_msg_type_level
+    qtlog.qt_message_handler(msg_type, self.Context(), "a qt message")
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+______________ TestQtMessageHandler.test_msg_type_level[warning] _______________
+tests/unit/utils/test_qtlog.py:66: in test_msg_type_level
+    qtlog.qt_message_handler(msg_type, self.Context(), "a qt message")
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+______________ TestQtMessageHandler.test_msg_type_level[critical] ______________
+tests/unit/utils/test_qtlog.py:66: in test_msg_type_level
+    qtlog.qt_message_handler(msg_type, self.Context(), "a qt message")
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+_______________ TestQtMessageHandler.test_msg_type_level[fatal] ________________
+tests/unit/utils/test_qtlog.py:66: in test_msg_type_level
+    qtlog.qt_message_handler(msg_type, self.Context(), "a qt message")
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+_____________ TestQtMessageHandler.test_category_logger_name[none] _____________
+tests/unit/utils/test_qtlog.py:79: in test_category_logger_name
+    qtlog.qt_message_handler(qtcore.QtMsgType.QtWarningMsg,
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+___________ TestQtMessageHandler.test_category_logger_name[default] ____________
+tests/unit/utils/test_qtlog.py:79: in test_category_logger_name
+    qtlog.qt_message_handler(qtcore.QtMsgType.QtWarningMsg,
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+____________ TestQtMessageHandler.test_category_logger_name[custom] ____________
+tests/unit/utils/test_qtlog.py:79: in test_category_logger_name
+    qtlog.qt_message_handler(qtcore.QtMsgType.QtWarningMsg,
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+_______________ TestQtMessageHandler.test_benign_message_demoted _______________
+tests/unit/utils/test_qtlog.py:88: in test_benign_message_demoted
+    qtlog.qt_message_handler(qtcore.QtMsgType.QtWarningMsg,
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'qt_message_handler'
+_______ TestQtMessageHandler.test_debug_flag_stack_trace[without-debug] ________
+tests/unit/utils/test_qtlog.py:101: in test_debug_flag_stack_trace
+    qtlog.init(parser.parse_args(cli_args))
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'init'
+_________ TestQtMessageHandler.test_debug_flag_stack_trace[with-debug] _________
+tests/unit/utils/test_qtlog.py:101: in test_debug_flag_stack_trace
+    qtlog.init(parser.parse_args(cli_args))
+E   AttributeError: module 'qutebrowser.utils.qtlog' has no attribute 'init'
+=========================== short test summary info ============================
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_empty_message
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[debug]
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[info]
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[warning]
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[critical]
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_msg_type_level[fatal]
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[none]
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[default]
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_category_logger_name[custom]
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_benign_message_demoted
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[without-debug]
+FAILED tests/unit/utils/test_qtlog.py::TestQtMessageHandler::test_debug_flag_stack_trace[with-debug]
+=================== 12 failed, 55 passed, 36 rerun in 0.36s ====================
