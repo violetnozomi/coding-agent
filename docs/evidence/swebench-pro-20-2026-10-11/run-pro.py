@@ -62,16 +62,27 @@ def registry_preflight(image, slot):
     token_url = "https://ghcr.io/token?service=ghcr.io&scope=repository:" + repository + ":pull"
     with opener.open(token_url, timeout=20) as response:
         token = json.load(response)["token"]
-    request = urllib.request.Request("https://ghcr.io/v2/" + repository + "/manifests/" + tag,
-        headers={"Authorization": "Bearer " + token,
-                 "Accept": "application/vnd.docker.distribution.manifest.v2+json"})
-    with opener.open(request, timeout=30) as response:
-        value = json.load(response)
-        digest = response.headers.get("Docker-Content-Digest")
+    def fetch(reference):
+        request = urllib.request.Request("https://ghcr.io/v2/" + repository + "/manifests/" + reference,
+            headers={"Authorization": "Bearer " + token, "Accept": ", ".join([
+                "application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
+                "application/vnd.docker.distribution.manifest.list.v2+json",
+                "application/vnd.docker.distribution.manifest.v2+json"])})
+        with opener.open(request, timeout=30) as response:
+            return json.load(response), response.headers.get("Docker-Content-Digest")
+    value, index_digest = fetch(tag)
+    digest = index_digest
+    if "manifests" in value:
+        selected = [item for item in value["manifests"]
+                    if item.get("platform", {}).get("os") == "linux"
+                    and item.get("platform", {}).get("architecture") == "amd64"]
+        if len(selected) != 1:
+            raise RuntimeError("image_platform_selection_ambiguous")
+        value, digest = fetch(selected[0]["digest"])
     compressed = sum(layer["size"] for layer in value["layers"])
     free = shutil.disk_usage(OUT).free
     estimate = int(compressed * 3.5) + 1024 ** 3
-    save(slot / "image-preflight.json", {"image": image, "digest": digest, "compressed_bytes": compressed,
+    save(slot / "image-preflight.json", {"image": image, "digest": digest, "index_digest": index_digest, "compressed_bytes": compressed,
         "estimated_required_bytes": estimate, "free_bytes": free, "estimate_is_not_exact": True})
     if free < estimate:
         raise RuntimeError("insufficient_storage_for_image_and_retained_evidence")
