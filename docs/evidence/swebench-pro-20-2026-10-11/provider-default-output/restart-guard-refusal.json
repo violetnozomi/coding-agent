@@ -1,0 +1,7 @@
+{
+  "reason": "task12_already_had_actual_requests_so_restart_not_performed",
+  "coordinator_briefly_paused_and_resumed": true,
+  "preparation_children_not_terminated": true,
+  "no_paid_attempt_repeated": true,
+  "time_epoch": 1791703562.485853
+}

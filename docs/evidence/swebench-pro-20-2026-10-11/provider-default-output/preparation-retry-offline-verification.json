@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "both_actual_fee_prefixes_deducted_once": true,
+    "already_requested_units_never_repeated": true,
+    "missing_settlement_denied": "continuation_accounting_not_closed",
+    "unknown_usage_denied": "continuation_accounting_not_closed",
+    "accounting_failed_denied": "continuation_accounting_not_closed",
+    "summary_fee_mismatch_denied": "continuation_summary_ledger_mismatch"
+  },
+  "paid_model_calls": 0,
+  "synthetic_closed_stage_fixture_not_a_task_result": true,
+  "real_ledgers_unchanged": true
+}

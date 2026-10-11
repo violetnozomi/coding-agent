@@ -17,7 +17,7 @@ spec.loader.exec_module(pro)
 OUT = pro.OUT
 
 
-def remaining_plan():
+def remaining_plan(*, preparation_retry=False):
     # 原协调器完全结束才可补做，避免两个独立账本同时占用同一授权。
     if Path("/proc/1368343").exists():
         raise RuntimeError("original_coordinator_still_running")
@@ -67,12 +67,63 @@ def remaining_plan():
     remaining["cost_cny"] = events[0]["fee_authorization"]["cost_limit"] - used["cost_cny"]
     if any(v <= 0 for v in remaining.values()):
         raise RuntimeError("previous_global_budget_exhausted")
-    return {"predecessor_ledger_sha256": hashlib.sha256(raw).hexdigest(), "used": used,
+    plan = {"predecessor_ledger_sha256": hashlib.sha256(raw).hexdigest(), "used": used,
             "remaining": remaining, "original_limits": limits, "tasks": candidates,
             "phase_rule": "one paid attempt per fixed task; no retry of attempted tasks",
             "authorized_superseded_stop": {"attempt_id": audit["attempt_id"], "output_over_reservation": 1,
                 "authorization_text": "用户先回复继续进行，继而明确要求：你别设限制行吗？取消本轮人为单次输出限制，保留人民币50元总预算。",
                 "old_ledger_unchanged": True, "provider_output_reservation_tokens": 393216, "wire_max_tokens": None}}
+    if not preparation_retry:
+        return plan
+    if Path("/proc/1476085").exists():
+        raise RuntimeError("continuation_coordinator_still_running")
+    current = OUT / "next"
+    completed = json.loads((current / "summary.json").read_text())
+    current_raw = (current / "ledger.jsonl").read_bytes()
+    current_events = [json.loads(line) for line in current_raw.splitlines()]
+    authorization = current_events[0]["fee_authorization"]
+    if (authorization["predecessor_ledger_sha256"] != plan["predecessor_ledger_sha256"]
+            or abs(authorization["cost_limit"] - remaining["cost_cny"]) > 1e-8):
+        raise RuntimeError("continuation_fee_chain_mismatch")
+    calls = [e for e in current_events if e["event"] == "admitted"]
+    settled = [e for e in current_events if e["event"] == "settled"]
+    if (any(e["event"] == "accounting_contract_failed" for e in current_events)
+            or len(calls) != len({e["attempt_id"] for e in calls})
+            or len(settled) != len(calls)
+            or {e["attempt_id"] for e in settled} != {e["attempt_id"] for e in calls}
+            or any(e.get("reservation_retained") or not e.get("usage_valid") or e.get("usage") is None
+                   or e.get("estimated_cost_reported_cny") is None for e in settled)):
+        raise RuntimeError("continuation_accounting_not_closed")
+    current_cost = sum(e["estimated_cost_reported_cny"] for e in settled)
+    if (completed["physical_requests"] != len(calls)
+            or abs(current_cost - completed["estimated_cost_occupied_cny"]) > 1e-8):
+        raise RuntimeError("continuation_summary_ledger_mismatch")
+    outcomes = {e["instance_id"]: e for e in completed["tasks"]}
+    if len(outcomes) != len(candidates) or set(outcomes) != {c["task"]["instance_id"] for c in candidates}:
+        raise RuntimeError("continuation_task_reports_incomplete")
+    unstarted = []
+    for candidate in candidates:
+        identifier = candidate["task"]["instance_id"]
+        if outcomes[identifier]["attempt"] != 0:
+            continue
+        if any(e["unit"] == identifier for e in calls):
+            raise RuntimeError("preparation_retry_has_actual_model_request")
+        unstarted.append({**candidate, "previous_preparation_record": str(current / candidate["number"])})
+    # 准备失败不是付费重试；关闭前阶段账目后，仅首次运行尚未尝试的题。
+    used["requests"] += len(calls)
+    used["input_total"] += sum(e["usage"]["prompt_tokens"] for e in settled)
+    used["output_total"] += sum(e["usage"]["completion_tokens"] for e in settled)
+    used["cost_cny"] += current_cost
+    remaining["requests"] = limits["requests"] - used["requests"]
+    remaining["cost_cny"] = 50 - used["cost_cny"]
+    plan["superseded_token_quota_remaining"] = {k: limits[k] - used[k] for k in ("input_total", "output_total")}
+    for key in ("input_total", "output_total"):
+        remaining.pop(key)
+    if remaining["requests"] <= 0 or remaining["cost_cny"] <= 0:
+        raise RuntimeError("remaining_aggregate_budget_exhausted")
+    plan.update(tasks=unstarted, source_fee_ledger_chain_sha256=[plan["predecessor_ledger_sha256"],
+                hashlib.sha256(current_raw).hexdigest()], predecessor_ledger_sha256=hashlib.sha256(current_raw).hexdigest())
+    return plan
 
 
 def isolated_image(row, slot):
@@ -105,9 +156,10 @@ def isolated_image(row, slot):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--preparation-retry", action="store_true")
     args = parser.parse_args()
-    plan = remaining_plan()
-    pro.save(OUT / "continuation-plan.json", plan)
+    plan = remaining_plan(preparation_retry=args.preparation_retry)
+    pro.save(OUT / ("preparation-retry-plan.json" if args.preparation_retry else "continuation-plan.json"), plan)
     print(json.dumps({"remaining": plan["remaining"], "unattempted": [t["number"] for t in plan["tasks"]]}, ensure_ascii=False), flush=True)
     if not args.execute or not plan["tasks"]:
         return
@@ -124,7 +176,7 @@ def main():
     key = dotenv_values(pro.ROOT / ".env").get("API_KEY")
     if not key:
         raise RuntimeError("authorized_host_key_unavailable")
-    live = OUT / "next"
+    live = OUT / ("pending" if args.preparation_retry else "next")
     live.mkdir()
     grant = json.loads((OUT / "live/authorization-used.json").read_text())
     grant.update(cost_limit=plan["remaining"]["cost_cny"], scope=[t["task"]["instance_id"] for t in plan["tasks"]],
@@ -132,8 +184,11 @@ def main():
         predecessor_ledger_sha256=plan["predecessor_ledger_sha256"], original_total_authorization_cny=50,
         previous_used=plan["used"], provider_output_reservation_tokens=393216,
         authorized_superseded_stop=plan["authorized_superseded_stop"],
-        authorization_text=grant["authorization_text"] + " 用户看到8001停止原因后回复继续进行，并进一步要求：你别设限制行吗？主请求不传max_tokens，按官方容量预留费用；沿用50元总预算，仅补做16个尚未尝试实例。")
+        authorization_text=grant["authorization_text"] + f" 用户看到8001停止原因后回复继续进行，并进一步要求：你别设限制行吗？主请求不传max_tokens，按官方容量预留费用；沿用50元总预算，仅补做{len(plan['tasks'])}个尚未尝试实例。")
     pro.save(live / "authorization-used.json", grant)
+    if args.preparation_retry:
+        grant["source_fee_ledger_chain_sha256"] = plan["source_fee_ledger_chain_sha256"]
+        pro.save(live / "authorization-used.json", grant)
     limits = RelayLimits(requests=plan["remaining"]["requests"], input_per_request=1000000,
         input_total=__import__("math").ceil(grant["cost_limit"] / grant["prices_cny_per_million"]["cached_input"] * 1000000),
         output_total=__import__("math").ceil(grant["cost_limit"] / grant["prices_cny_per_million"]["output"] * 1000000),
@@ -158,6 +213,8 @@ def main():
             slot.mkdir()
             report = {"instance_id": task["instance_id"], "attempt": 0, "agent_status": None, "resolved": None,
                 "original_preparation_record": str(OUT / "live" / slot.name), "preparation_retry_not_agent_retry": True}
+            if args.preparation_retry:
+                report["previous_preparation_record"] = candidate["previous_preparation_record"]
             pro.save(slot / "identity.json", report)
             print("START " + slot.name + " " + task["instance_id"], flush=True)
             base = tag = case = None
@@ -182,7 +239,7 @@ def main():
                     patch_sha256=hashlib.sha256(patch).hexdigest())
                 verdict = pro.grade(slot, base, task, manifest, checksums)
                 report.update(resolved=verdict["resolved"], eval_status=verdict["status"])
-                pro.archive_case(slot, case, task, "next", budget, archive_instance_diagnostics)
+                pro.archive_case(slot, case, task, live.name, budget, archive_instance_diagnostics)
             except Exception as exc:
                 report.update(status="blocked" if case is None else "attempt_or_delivery_error", error=repr(exc))
             finally:

@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/home/pyh/nzcoder/docs/evidence/swebench-pro-20-2026-10-11/continue-unattempted.py", line 261, in <module>
+    main()
+    ~~~~^^
+  File "/home/pyh/nzcoder/docs/evidence/swebench-pro-20-2026-10-11/continue-unattempted.py", line 158, in main
+    plan = remaining_plan(preparation_retry=args.preparation_retry)
+  File "/home/pyh/nzcoder/docs/evidence/swebench-pro-20-2026-10-11/continue-unattempted.py", line 79, in remaining_plan
+    raise RuntimeError("continuation_coordinator_still_running")
+RuntimeError: continuation_coordinator_still_running
