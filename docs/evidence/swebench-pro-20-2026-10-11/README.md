@@ -73,3 +73,9 @@ Agent 使用无网络、非 root、只读容器根目录、独立 HOME 和工作
 ## 运行中发现的项目依赖隔离修正
 
 第 02 题仍运行时，实际原始镜像显示 pytest 7.4.0；Agent bootstrap 的 PYTHONPATH 带入 /opt/nz-site 后子进程导入 9.0.3。独立容器反例证明清除仅供 Agent 启动的 PYTHONPATH 后，子进程恢复 7.4.0，Agent 已加载的模块不受影响。native-entry 对后续题目作此环境修正，不更改文件工具或生产循环，不重跑已付费题目。第 01/02 题仍保留旧入口的逐字原件；第 02 题的推理阶段有此环境差异，不能作为无环境混杂的 Core 成绩。所有官方独立复评始终使用原始镜像，并未带入 Agent 依赖。每题入口副本/哈希用于区分这一修正，不能声称 20 题的 bootstrap 完全相同。
+
+## 官方验收环境校正（不重跑模型）
+
+第 02 题的首次验收禁用了 pytest 插件，官方镜像的 PYTEST_ADDOPTS 含 `--reruns=3`，因此报 unknown argument，必需测试一个也未执行。该 reward=0 是验收环境阻断，不能当作补丁功能失败。原日志和结果不改写；对同一补丁在同一冻结原始镜像重新运行 unchanged verifier，恢复官方镜像自身的插件加载，不增加模型调用。
+
+当前长运行协调进程已经加载旧 grader 函数，修改脚本不会悄悄改变它；最终必须逐题核对官方原始日志，对受上述参数影响的验收做独立纠正。新脚本移除 grader 的 PYTHONPATH/PYTEST_DISABLE_PLUGIN_AUTOLOAD 覆盖，只隔离 HOME，并保留旧事件。未经有效复评的 Python 阻断结果记 unknown，不能按 failed 计入功能结论。

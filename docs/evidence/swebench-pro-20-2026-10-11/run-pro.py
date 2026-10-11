@@ -274,7 +274,7 @@ def grade(slot, base, row, manifest, checksums):
     logs.chmod(0o777)
     name = "nz-pro20-grade-" + slot.name
     argv = ["docker", "run", "--name", name, "--init", "--pull=never", "--memory=4g", "--cpus=2",
-        "--env", "HOME=/tmp/grade-home", "--env", "PYTHONPATH=", "--env", "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1",
+        "--env", "HOME=/tmp/grade-home",
         "--mount", f"type=bind,source={verifier},target=/tests,readonly",
         "--mount", f"type=bind,source={slot / 'model.patch'},target=/tmp/model.patch,readonly",
         "--mount", f"type=bind,source={logs},target=/logs/verifier", "--entrypoint", "/bin/bash", base, "-c",
