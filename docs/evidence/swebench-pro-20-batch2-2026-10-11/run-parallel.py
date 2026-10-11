@@ -93,7 +93,35 @@ def prepare():
     print(json.dumps({"prepared": 20, "overlap": len(set(selected) & excluded), "manifest_sha256": digest}))
 
 
-def execute():
+def preparation_remainder(source, manifest):
+    """旧阶段完全结算后，只补准备失败且从未调用模型的题目。"""
+    raw = (source / "ledger.jsonl").read_bytes()
+    events = [json.loads(line) for line in raw.splitlines()]
+    admitted = {row["attempt_id"]: row for row in events if row["event"] == "admitted"}
+    settled = {row["attempt_id"]: row for row in events if row["event"] == "settled"}
+    summary = json.loads((source / "summary.json").read_text())
+    if set(admitted) != set(settled) or summary["accounting_failures"]:
+        raise RuntimeError("previous_stage_not_settled_or_accounting_stopped")
+    used = sum(row["estimated_cost_reported_cny"] if row["estimated_cost_reported_cny"] is not None
+               else admitted[key]["estimated_cost_reserved_cny"] for key, row in settled.items())
+    if not math.isclose(used, summary["estimated_cost_occupied_cny"], abs_tol=1e-8):
+        raise RuntimeError("previous_fee_summary_mismatch")
+    reports = {row["number"]: row for row in summary["tasks"]}
+    if len(reports) != len(manifest["tasks"]):
+        raise RuntimeError("previous_stage_incomplete")
+    tasks = []
+    for number, task in enumerate(manifest["tasks"], 1):
+        report = reports[number]
+        if report["instance_id"] != task["instance_id"]:
+            raise RuntimeError("previous_instance_identity_mismatch")
+        calls = [row for row in admitted.values() if row["unit"] == task["instance_id"]]
+        if report["attempt"] == 0 and not calls:
+            tasks.append((number, task))
+    return {"used_cny": used, "remaining_cny": 50 - used, "remaining_requests": 920 - len(admitted),
+            "source_ledger_sha256": hashlib.sha256(raw).hexdigest(), "tasks": tasks}
+
+
+def execute(retry_preparation=False):
     from dotenv import dotenv_values
     from nz_coder.evaluation.deepseek_counting import DeepSeekV41Counter
     from nz_coder.evaluation.model_relay import RelayLedger, RelayLimits
@@ -108,18 +136,30 @@ def execute():
     key = os.environ.get("NZ_REVIEW_DEEPSEEK_API_KEY") or dotenv_values(ROOT / ".env").get("API_KEY")
     if not key:
         raise RuntimeError("authorized_host_key_unavailable")
-    live = OUT / "live"
+    plan = preparation_remainder(OUT / "live", manifest) if retry_preparation else None
+    if retry_preparation and Path("/proc/3135016").exists():
+        raise RuntimeError("original_coordinator_still_running")
+    tasks = plan["tasks"] if plan else list(enumerate(manifest["tasks"], 1))
+    cost_limit = plan["remaining_cny"] if plan else 50
+    if not tasks or cost_limit <= 3.145728:
+        raise RuntimeError("no_unattempted_tasks_or_remaining_fee")
+    live = OUT / ("preparation-retry" if retry_preparation else "live")
     live.mkdir(exist_ok=False)
     grant = {"purpose": "swebench-pro-v2", "model": pro.MODEL,
-        "scope": [row["instance_id"] for row in manifest["tasks"]], "instance_manifest_sha256": digest,
+        "scope": [task["instance_id"] for _, task in tasks], "instance_manifest_sha256": digest,
         "account": "project-env:DeepSeek", "input_mode": "empirical", "empirical_risk_accepted": True,
-        "contract_id": counter.contract_id, "cost_limit": 50, "cost_currency": "CNY",
+        "contract_id": counter.contract_id, "cost_limit": cost_limit, "cost_currency": "CNY",
         "authorization_text": manifest["authorization_text"] + "复用此前已接受的经验计量与止损口径。",
         "valid_from": time.time() - 1, "valid_until": time.time() + 86400 * 2,
         "prices_cny_per_million": {"input": 2, "cached_input": 0.04, "output": 8},
         "provider_output_reservation_tokens": 393216}
-    limits = RelayLimits(requests=920, input_per_request=1000000,
-        input_total=math.ceil(50 / .04 * 1000000), output_total=math.ceil(50 / 8 * 1000000), request_seconds=600)
+    if plan:
+        grant.update(original_total_authorization_cny=50, previous_used_cny=plan["used_cny"],
+                     predecessor_ledger_sha256=plan["source_ledger_sha256"],
+                     preparation_retry_not_paid_agent_retry=True)
+        pro.save(live / "continuation-plan.json", plan)
+    limits = RelayLimits(requests=plan["remaining_requests"] if plan else 920, input_per_request=1000000,
+        input_total=math.ceil(cost_limit / .04 * 1000000), output_total=math.ceil(cost_limit / 8 * 1000000), request_seconds=600)
     pro.save(live / "authorization-used.json", grant)
     pro.save(live / "execution-config.json", {"source_commit": pro.command(["git", "rev-parse", "HEAD"]).stdout.strip(),
         "model": pro.MODEL, "limits": asdict(limits), "concurrency": 2, "shared_ledger": True,
@@ -135,6 +175,19 @@ def execute():
     budget = TraceBudget(OUT / "archives", warning_bytes=858993459, hard_limit_bytes=1073741824, cleanup_target_bytes=644245094)
     preparation_lock, archive_lock, counter_lock, progress_lock = (threading.Lock() for _ in range(4))
     reports = []
+    serial_tasks = []
+    if plan:
+        # 两个大镜像的空间估计合计超过本机空闲量；小环境仍双路，大环境逐题释放。
+        half_free = shutil.disk_usage(OUT).free / 2
+        parallel_tasks = []
+        for number, task in tasks:
+            preflight = OUT / "live" / f"b2-{number:02}" / "image-preflight.json"
+            estimate = json.loads(preflight.read_text())["estimated_required_bytes"] if preflight.exists() else 0
+            (serial_tasks if estimate > half_free else parallel_tasks).append((number, task))
+        tasks = parallel_tasks
+        pro.save(live / "resource-order.json", {"parallel": [n for n, _ in tasks],
+            "serial_large_images": [n for n, _ in serial_tasks], "half_free_bytes_at_start": half_free,
+            "order_uses_task_scores": False})
 
     def count(raw, payload):
         with counter_lock:
@@ -154,7 +207,7 @@ def execute():
                 with ledger.lock:
                     if ledger.failed_contracts:
                         raise RuntimeError("accounting_stop")
-                    if ledger.cost_occupied_cny + 3.145728 > 50:
+                    if ledger.cost_occupied_cny + 3.145728 > cost_limit:
                         raise RuntimeError("remaining_global_budget_stop")
                 if shutil.disk_usage(OUT).free < 2 * 1024 ** 3:
                     raise RuntimeError("storage_stop")
@@ -198,9 +251,11 @@ def execute():
 
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = [pool.submit(run, number, task) for number, task in enumerate(manifest["tasks"], 1)]
+            futures = [pool.submit(run, number, task) for number, task in tasks]
             for future in as_completed(futures):
                 future.result()
+        for number, task in serial_tasks:
+            run(number, task)
         with ledger.lock:
             pro.save(live / "summary.json", {"tasks": sorted(reports, key=lambda row: row["number"]),
                 "physical_requests": len(ledger.attempts), "estimated_cost_occupied_cny": ledger.cost_occupied_cny,
@@ -211,6 +266,6 @@ def execute():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare", "execute"])
+    parser.add_argument("action", choices=["prepare", "execute", "resume-preparation"])
     args = parser.parse_args()
-    prepare() if args.action == "prepare" else execute()
+    prepare() if args.action == "prepare" else execute(args.action == "resume-preparation")
