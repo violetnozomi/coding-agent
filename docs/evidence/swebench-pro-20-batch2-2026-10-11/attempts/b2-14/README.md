@@ -1,5 +1,7 @@
 # 第 b2-14 题：执行与学习记录
 
+[官方任务原文](instruction.md) · [官方任务配置](task.toml) · [复盘练习](learning.md)
+
 实例：`instance_ansible__ansible-d30fc6c0b359f631130b0e979d9a78a7b3747d48-v1055803c3a812189a1133297f7f5468579283f86`。Agent 状态 `max_turns`；官方有效结果 `True`，首次环境阻断 `False`。
 
 实际主/辅助请求 40/0；已返回 usage 的峰时估算 2.0936593599999997 元，非账单。

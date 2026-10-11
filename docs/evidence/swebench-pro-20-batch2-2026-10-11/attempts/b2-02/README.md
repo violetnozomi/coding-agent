@@ -1,5 +1,7 @@
 # 第 b2-02 题：执行与学习记录
 
+[官方任务原文](instruction.md) · [官方任务配置](task.toml) · [复盘练习](learning.md)
+
 实例：`instance_navidrome__navidrome-6c6223f2f9db2c8c253e0d40a192e3519c9037d1`。Agent 状态 `completed`；官方有效结果 `True`，首次环境阻断 `False`。
 
 实际主/辅助请求 32/0；已返回 usage 的峰时估算 1.7057217599999999 元，非账单。

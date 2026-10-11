@@ -1,5 +1,7 @@
 # 第 b2-13 题：执行与学习记录
 
+[官方任务原文](instruction.md) · [官方任务配置](task.toml) · [复盘练习](learning.md)
+
 实例：`instance_element-hq__element-web-459df4583e01e4744a52d45446e34183385442d6-vnan`。Agent 状态 `max_turns`；官方有效结果 `True`，首次环境阻断 `False`。
 
 实际主/辅助请求 40/0；已返回 usage 的峰时估算 2.01191576 元，非账单。

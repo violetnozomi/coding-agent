@@ -1,5 +1,7 @@
 # 第 b2-06 题：执行与学习记录
 
+[官方任务原文](instruction.md) · [官方任务配置](task.toml) · [复盘练习](learning.md)
+
 实例：`instance_future-architect__vuls-d18e7a751d07260d75ce3ba0cd67c4a6aebfd967`。Agent 状态 `completed`；官方有效结果 `False`，首次环境阻断 `False`。
 
 实际主/辅助请求 40/0；已返回 usage 的峰时估算 1.4056996 元，非账单。

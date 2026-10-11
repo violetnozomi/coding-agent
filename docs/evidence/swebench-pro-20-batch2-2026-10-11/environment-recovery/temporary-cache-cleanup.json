@@ -1,0 +1,19 @@
+{
+  "cache_server_stopped_pid": 3826452,
+  "only_this_run_temporary_objects_removed": [
+    {
+      "blob_sha256": "40a543a555ccabc122b3e595b81b9cdab38ddd69494d4cc6605926c527c3ccad",
+      "bytes": 2638440038,
+      "reason": "official image imported and independent evaluation finished; reproducible public download"
+    },
+    {
+      "blob_sha256": "34fed2bea86be287c06e3bb0146c3d89f62546dd868457ecdc14e10cd7d2cd7b",
+      "bytes": 1519764643,
+      "reason": "official image imported and independent evaluation finished; reproducible public download"
+    }
+  ],
+  "historical_task_archives_preserved": true,
+  "other_docker_images_untouched": true,
+  "time_epoch": 1791729916.9538178,
+  "temporary_image_alias_cleanup_returncode": 0
+}

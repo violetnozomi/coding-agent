@@ -1,0 +1,11 @@
+{
+  "public_files_scanned": 1021,
+  "json_parse_ok": true,
+  "private_key_and_reasoning_fields_absent": true,
+  "relative_links_checked": 298,
+  "relative_links_valid": true,
+  "canonical_task_results": 20,
+  "main_request_response_hash_pairs_previously_verified": 750,
+  "frozen_code_hashes_equal_across_stages": true,
+  "official_task_inputs_hash_verified": 20
+}

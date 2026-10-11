@@ -1,0 +1,58 @@
+{
+  "tasks": [
+    {
+      "number": 6,
+      "instance_id": "instance_future-architect__vuls-d18e7a751d07260d75ce3ba0cd67c4a6aebfd967",
+      "attempt": 1,
+      "agent_status": "completed",
+      "resolved": false,
+      "agent_started_epoch": 1791723538.1049986,
+      "agent_finished_epoch": 1791723764.6174126,
+      "status": "attempted",
+      "patch_sha256": "83a4c08424ca25610c6ffea0778c9c8580fd542daabb3f05f7aa4e852cbb1be9",
+      "eval_status": "graded",
+      "physical_requests": 40
+    },
+    {
+      "number": 7,
+      "instance_id": "instance_flipt-io__flipt-a0cbc0cb65ae601270bdbe3f5313e2dfd49c80e4",
+      "attempt": 1,
+      "agent_status": "completed",
+      "resolved": true,
+      "agent_started_epoch": 1791723766.923246,
+      "agent_finished_epoch": 1791724063.2790287,
+      "status": "attempted",
+      "patch_sha256": "97089212799933255a552f39e387b5dbd40b071a4b2838f5e23ad62a624dfd86",
+      "eval_status": "graded",
+      "physical_requests": 40
+    },
+    {
+      "number": 8,
+      "instance_id": "instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "status": "blocked",
+      "error": "TimeoutExpired(['docker', 'pull', 'ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37'], 1799.9999922920106)",
+      "physical_requests": 0
+    },
+    {
+      "number": 17,
+      "instance_id": "instance_protonmail__webclients-09fcf0dbdb87fa4f4a27700800ee4a3caed8b413",
+      "attempt": 1,
+      "agent_status": "completed",
+      "resolved": true,
+      "agent_started_epoch": 1791727171.2016268,
+      "agent_finished_epoch": 1791727698.528713,
+      "status": "attempt_or_delivery_error",
+      "patch_sha256": "06374843a1a1cdb3485499d9680025640564b7aa4376be79a7c5ef32bd06835c",
+      "eval_status": "graded",
+      "error": "OSError('container_evidence_quota_or_free_space_exhausted; source retained')",
+      "physical_requests": 40
+    }
+  ],
+  "physical_requests": 120,
+  "estimated_cost_occupied_cny": 4.554702400000002,
+  "accounting_failures": {},
+  "old_batch_balance_used": false
+}

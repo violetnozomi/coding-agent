@@ -1,0 +1,11 @@
+{
+  "blob": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/layer-cache-08-final/34fed2bea86be287c06e3bb0146c3d89f62546dd868457ecdc14e10cd7d2cd7b",
+  "sha256": "34fed2bea86be287c06e3bb0146c3d89f62546dd868457ecdc14e10cd7d2cd7b",
+  "bytes": 1519764643,
+  "chunks": 46,
+  "concurrency": 6,
+  "seconds": 294.636049712004,
+  "manifest_sha256": "sha256:fc3c867ad010832886951359395ad2d3bcf31872b432317fa499d55eec0bc0cf",
+  "source": "official ghcr.io blob, direct first, configured proxy only after per-chunk failure",
+  "model_calls": 0
+}

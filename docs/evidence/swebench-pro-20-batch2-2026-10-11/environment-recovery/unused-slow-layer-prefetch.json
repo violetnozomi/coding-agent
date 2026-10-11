@@ -1,0 +1,9 @@
+{
+  "reason": "native Docker pull completed before prefetch; prefetch not used",
+  "stopped_own_pid": 3828773,
+  "prefetched_bytes_before_stop": 335278563,
+  "full_digest_verified": false,
+  "agent_or_grader_used_this_prefetch": false,
+  "model_calls": 0,
+  "time_epoch": 1791729529.5547147
+}

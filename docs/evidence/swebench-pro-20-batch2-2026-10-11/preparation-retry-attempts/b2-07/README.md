@@ -1,5 +1,7 @@
 # 第 b2-07 题：执行与学习记录
 
+[官方任务原文](instruction.md) · [官方任务配置](task.toml) · [复盘练习](learning.md)
+
 实例：`instance_flipt-io__flipt-a0cbc0cb65ae601270bdbe3f5313e2dfd49c80e4`。Agent 状态 `completed`；官方有效结果 `True`，首次环境阻断 `False`。
 
 实际主/辅助请求 40/0；已返回 usage 的峰时估算 2.05907712 元，非账单。

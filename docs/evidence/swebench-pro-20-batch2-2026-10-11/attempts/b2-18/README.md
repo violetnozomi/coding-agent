@@ -1,5 +1,7 @@
 # 第 b2-18 题：执行与学习记录
 
+[官方任务原文](instruction.md) · [官方任务配置](task.toml) · [复盘练习](learning.md)
+
 实例：`instance_gravitational__teleport-e6895d8934f6e484341034869901145fbc025e72-vce94f93ad1030e3136852817f2423c1b3ac37bc4`。Agent 状态 `completed`；官方有效结果 `True`，首次环境阻断 `False`。
 
 实际主/辅助请求 30/0；已返回 usage 的峰时估算 6.58234528 元，非账单。

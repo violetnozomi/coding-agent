@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "name": "src/app/components/composer/tests/Composer.hotkeys.test.tsx | should close composer on escape",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/components/composer/tests/Composer.hotkeys.test.tsx | should send on meta + enter",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/components/composer/tests/Composer.hotkeys.test.tsx | should delete on meta + alt + enter",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/components/composer/tests/Composer.hotkeys.test.tsx | should save on meta + S",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/components/composer/tests/Composer.hotkeys.test.tsx | should open attachment on meta + shift + A",
+      "status": "PASSED"
+    }
+  ]
+}

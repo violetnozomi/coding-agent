@@ -1,5 +1,7 @@
 # 第 b2-19 题：执行与学习记录
 
+[官方任务原文](instruction.md) · [官方任务配置](task.toml) · [复盘练习](learning.md)
+
 实例：`instance_internetarchive__openlibrary-1be7de788a444f6255e89c10ef6aa608550604a8-v29f82c9cf21d57b242f8d8b0e541525d259e2d63`。Agent 状态 `completed`；官方有效结果 `True`，首次环境阻断 `False`。
 
 实际主/辅助请求 39/0；已返回 usage 的峰时估算 2.14637264 元，非账单。

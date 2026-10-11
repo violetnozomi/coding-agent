@@ -1,0 +1,1335 @@
+(node:3415) V8: /app/node_modules/openpgp/dist/openpgp.js:2491 Linking failure in asm.js: Unexpected stdlib member
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL src/app/components/composer/tests/Composer.outsideEncryption.test.tsx (23.643 s, 707 MB heap size)
+  Composer outside encryption
+    ✕ should set outside encryption and display the expiration banner (178 ms)
+    ✕ should set outside encryption with a default expiration time (198 ms)
+    ✕ should be able to edit encryption (102 ms)
+    ✕ should be able to remove encryption (179 ms)
+
+  ● Composer outside encryption › should set outside encryption and display the expiration banner
+
+    TestingLibraryElementError: Unable to find an element with the text: Encrypt message. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, <script />, <style />
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"composer-container flex flex-column flex-item-fluid relative w100"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"composer-inner-modal absolute upper-layer w100 h100 flex flex-justify-center flex-align-items-center"[39m
+            [33mdata-focus-root[39m=[32m"1"[39m
+            [33mtabindex[39m=[32m"-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"inner-modal"[39m
+            [36m>[39m
+              [36m<header[39m
+                [33mclass[39m=[32m"inner-modal-header"[39m
+              [36m>[39m
+                [36m<h1[39m
+                  [33mclass[39m=[32m"inner-modal-title outline-none"[39m
+                  [33mdata-focus-trap-fallback[39m=[32m"0"[39m
+                  [33mid[39m=[32m""[39m
+                  [33mtabindex[39m=[32m"-1"[39m
+                [36m>[39m
+                  [0mEncrypt for non-Proton users[0m
+                [36m</h1>[39m
+              [36m</header>[39m
+              [36m<form[39m
+                [33mautocomplete[39m=[32m"off"[39m
+                [33mclass[39m=[32m"inner-modal-content"[39m
+                [33mmethod[39m=[32m"post"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"inner-modal-content-inner"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"relative"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-sticky scrollshadow-sticky--top"[39m
+                    [36m/>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-static scrollshadow-static--top"[39m
+                    [36m/>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"mt0 mb1 color-weak"[39m
+                    [36m>[39m
+                      [0mEncrypted messages to non-Proton recipients will expire in 28 days unless a shorter expiration time is set.[0m
+                      [36m<br />[39m
+                      [36m<a[39m
+                        [33mhref[39m=[32m"https://localhost/support/password-protected-emails"[39m
+                        [33mrel[39m=[32m"noopener noreferrer nofollow"[39m
+                        [33mtarget[39m=[32m"_blank"[39m
+                      [36m>[39m
+                        [0mLearn more[0m
+                      [36m</a>[39m
+                    [36m</p>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-password-modal-48"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mMessage password[0m
+                        [36m</span>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-field-container relative"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex flex-nowrap flex-align-items-center flex-item-fluid relative inputform-suffix-container"[39m
+                        [36m>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"flex-item-fluid"[39m
+                          [36m>[39m
+                            [36m<input[39m
+                              [33maria-describedby[39m=[32m"id-49"[39m
+                              [33maria-invalid[39m=[32m"false"[39m
+                              [33mautocapitalize[39m=[32m"off"[39m
+                              [33mautocomplete[39m=[32m"off"[39m
+                              [33mautocorrect[39m=[32m"off"[39m
+                              [33mclass[39m=[32m"w100 inputform-field"[39m
+                              [33mdata-testid[39m=[32m"encryption-modal:password-input"[39m
+                              [33mid[39m=[32m"composer-password-password-modal-48"[39m
+                              [33mplaceholder[39m=[32m"Password"[39m
+                              [33mspellcheck[39m=[32m"false"[39m
+                              [33mtype[39m=[32m"password"[39m
+                              [33mvalue[39m=[32m""[39m
+                            [36m/>[39m
+                          [36m</div>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"inputform-suffix right-icon pr0-5 flex"[39m
+                          [36m>[39m
+                            [36m<span[39m
+                              [33mclass[39m=[32m"mauto flex"[39m
+                            [36m>[39m
+                              [36m<button[39m
+                                [33mclass[39m=[32m"inline-flex flex-item-noshrink"[39m
+                                [33mtabindex[39m=[32m"-1"[39m
+                                [33mtitle[39m=[32m"Reveal password"[39m
+                                [33mtype[39m=[32m"button"[39m
+                              [36m>[39m
+                                [36m<svg[39m
+                                  [33mclass[39m=[32m"icon-16p mauto"[39m
+                                  [33mfocusable[39m=[32m"false"[39m
+                                  [33mrole[39m=[32m"img"[39m
+                                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                                [36m>[39m
+                                  [36m<use[39m
+                                    [33mxlink:href[39m=[32m"#ic-eye"[39m
+                                  [36m/>[39m
+                                [36m</svg>[39m
+                              [36m</button>[39m
+                            [36m</span>[39m
+                          [36m</div>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-assist flex flex-nowrap"[39m
+                        [33mid[39m=[32m"id-49"[39m
+                      [36m/>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-verif-password-modal-48"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mConfirm password[0m
+                        [36m</span>[39m
+                      [36m</div>[39m
+       ...
+
+      52 |
+      53 |         // modal is displayed and we can set a password
+    > 54 |         getByText('Encrypt message');
+         |         ^
+      55 |
+      56 |         const passwordInput = getByTestId('encryption-modal:password-input');
+      57 |         fireEvent.change(passwordInput, { target: { value: password } });
+
+      at Object.getElementError (../../node_modules/@testing-library/dom/dist/config.js:38:19)
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:90:38
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:62:17
+      at getByText (../../node_modules/@testing-library/dom/dist/query-helpers.js:111:19)
+      at _callee3$ (src/app/components/composer/tests/Composer.outsideEncryption.test.tsx:54:9)
+      at tryCatch (../../node_modules/regenerator-runtime/runtime.js:63:40)
+      at Generator.invoke [as _invoke] (../../node_modules/regenerator-runtime/runtime.js:294:22)
+      at Generator.next (../../node_modules/regenerator-runtime/runtime.js:119:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:25:9)
+
+  ● Composer outside encryption › should set outside encryption with a default expiration time
+
+    TestingLibraryElementError: Unable to find an element with the text: Edit encryption. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, <script />, <style />
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"composer-container flex flex-column flex-item-fluid relative w100"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"composer-inner-modal absolute upper-layer w100 h100 flex flex-justify-center flex-align-items-center"[39m
+            [33mdata-focus-root[39m=[32m"1"[39m
+            [33mtabindex[39m=[32m"-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"inner-modal"[39m
+            [36m>[39m
+              [36m<header[39m
+                [33mclass[39m=[32m"inner-modal-header"[39m
+              [36m>[39m
+                [36m<h1[39m
+                  [33mclass[39m=[32m"inner-modal-title outline-none"[39m
+                  [33mdata-focus-trap-fallback[39m=[32m"0"[39m
+                  [33mid[39m=[32m""[39m
+                  [33mtabindex[39m=[32m"-1"[39m
+                [36m>[39m
+                  [0mEncrypt for non-Proton users[0m
+                [36m</h1>[39m
+              [36m</header>[39m
+              [36m<form[39m
+                [33mautocomplete[39m=[32m"off"[39m
+                [33mclass[39m=[32m"inner-modal-content"[39m
+                [33mmethod[39m=[32m"post"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"inner-modal-content-inner"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"relative"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-sticky scrollshadow-sticky--top"[39m
+                    [36m/>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-static scrollshadow-static--top"[39m
+                    [36m/>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"mt0 mb1 color-weak"[39m
+                    [36m>[39m
+                      [0mEncrypted messages to non-Proton recipients will expire in 28 days unless a shorter expiration time is set.[0m
+                      [36m<br />[39m
+                      [36m<a[39m
+                        [33mhref[39m=[32m"https://localhost/support/password-protected-emails"[39m
+                        [33mrel[39m=[32m"noopener noreferrer nofollow"[39m
+                        [33mtarget[39m=[32m"_blank"[39m
+                      [36m>[39m
+                        [0mLearn more[0m
+                      [36m</a>[39m
+                    [36m</p>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-password-modal-109"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mMessage password[0m
+                        [36m</span>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-field-container relative"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex flex-nowrap flex-align-items-center flex-item-fluid relative inputform-suffix-container"[39m
+                        [36m>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"flex-item-fluid"[39m
+                          [36m>[39m
+                            [36m<input[39m
+                              [33maria-describedby[39m=[32m"id-110"[39m
+                              [33maria-invalid[39m=[32m"false"[39m
+                              [33mautocapitalize[39m=[32m"off"[39m
+                              [33mautocomplete[39m=[32m"off"[39m
+                              [33mautocorrect[39m=[32m"off"[39m
+                              [33mclass[39m=[32m"w100 inputform-field"[39m
+                              [33mdata-testid[39m=[32m"encryption-modal:password-input"[39m
+                              [33mid[39m=[32m"composer-password-password-modal-109"[39m
+                              [33mplaceholder[39m=[32m"Password"[39m
+                              [33mspellcheck[39m=[32m"false"[39m
+                              [33mtype[39m=[32m"password"[39m
+                              [33mvalue[39m=[32m""[39m
+                            [36m/>[39m
+                          [36m</div>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"inputform-suffix right-icon pr0-5 flex"[39m
+                          [36m>[39m
+                            [36m<span[39m
+                              [33mclass[39m=[32m"mauto flex"[39m
+                            [36m>[39m
+                              [36m<button[39m
+                                [33mclass[39m=[32m"inline-flex flex-item-noshrink"[39m
+                                [33mtabindex[39m=[32m"-1"[39m
+                                [33mtitle[39m=[32m"Reveal password"[39m
+                                [33mtype[39m=[32m"button"[39m
+                              [36m>[39m
+                                [36m<svg[39m
+                                  [33mclass[39m=[32m"icon-16p mauto"[39m
+                                  [33mfocusable[39m=[32m"false"[39m
+                                  [33mrole[39m=[32m"img"[39m
+                                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                                [36m>[39m
+                                  [36m<use[39m
+                                    [33mxlink:href[39m=[32m"#ic-eye"[39m
+                                  [36m/>[39m
+                                [36m</svg>[39m
+                              [36m</button>[39m
+                            [36m</span>[39m
+                          [36m</div>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-assist flex flex-nowrap"[39m
+                        [33mid[39m=[32m"id-110"[39m
+                      [36m/>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-verif-password-modal-109"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mConfirm password[0m
+                        [36m</span>[39m
+                      [36m</div>[39...
+
+      87 |
+      88 |         // Modal and expiration date are displayed
+    > 89 |         getByText('Edit encryption');
+         |         ^
+      90 |         getByText('Your message will expire tomorrow.');
+      91 |     });
+      92 |
+
+      at Object.getElementError (../../node_modules/@testing-library/dom/dist/config.js:38:19)
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:90:38
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:62:17
+      at getByText (../../node_modules/@testing-library/dom/dist/query-helpers.js:111:19)
+      at _callee4$ (src/app/components/composer/tests/Composer.outsideEncryption.test.tsx:89:9)
+      at tryCatch (../../node_modules/regenerator-runtime/runtime.js:63:40)
+      at Generator.invoke [as _invoke] (../../node_modules/regenerator-runtime/runtime.js:294:22)
+      at Generator.next (../../node_modules/regenerator-runtime/runtime.js:119:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:25:9)
+
+  ● Composer outside encryption › should be able to edit encryption
+
+    TestingLibraryElementError: Unable to find an element with the text: Encrypt message. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, <script />, <style />
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"composer-container flex flex-column flex-item-fluid relative w100"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"composer-inner-modal absolute upper-layer w100 h100 flex flex-justify-center flex-align-items-center"[39m
+            [33mdata-focus-root[39m=[32m"1"[39m
+            [33mtabindex[39m=[32m"-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"inner-modal"[39m
+            [36m>[39m
+              [36m<header[39m
+                [33mclass[39m=[32m"inner-modal-header"[39m
+              [36m>[39m
+                [36m<h1[39m
+                  [33mclass[39m=[32m"inner-modal-title outline-none"[39m
+                  [33mdata-focus-trap-fallback[39m=[32m"0"[39m
+                  [33mid[39m=[32m""[39m
+                  [33mtabindex[39m=[32m"-1"[39m
+                [36m>[39m
+                  [0mEncrypt for non-Proton users[0m
+                [36m</h1>[39m
+              [36m</header>[39m
+              [36m<form[39m
+                [33mautocomplete[39m=[32m"off"[39m
+                [33mclass[39m=[32m"inner-modal-content"[39m
+                [33mmethod[39m=[32m"post"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"inner-modal-content-inner"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"relative"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-sticky scrollshadow-sticky--top"[39m
+                    [36m/>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-static scrollshadow-static--top"[39m
+                    [36m/>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"mt0 mb1 color-weak"[39m
+                    [36m>[39m
+                      [0mEncrypted messages to non-Proton recipients will expire in 28 days unless a shorter expiration time is set.[0m
+                      [36m<br />[39m
+                      [36m<a[39m
+                        [33mhref[39m=[32m"https://localhost/support/password-protected-emails"[39m
+                        [33mrel[39m=[32m"noopener noreferrer nofollow"[39m
+                        [33mtarget[39m=[32m"_blank"[39m
+                      [36m>[39m
+                        [0mLearn more[0m
+                      [36m</a>[39m
+                    [36m</p>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-password-modal-170"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mMessage password[0m
+                        [36m</span>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-field-container relative"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex flex-nowrap flex-align-items-center flex-item-fluid relative inputform-suffix-container"[39m
+                        [36m>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"flex-item-fluid"[39m
+                          [36m>[39m
+                            [36m<input[39m
+                              [33maria-describedby[39m=[32m"id-171"[39m
+                              [33maria-invalid[39m=[32m"false"[39m
+                              [33mautocapitalize[39m=[32m"off"[39m
+                              [33mautocomplete[39m=[32m"off"[39m
+                              [33mautocorrect[39m=[32m"off"[39m
+                              [33mclass[39m=[32m"w100 inputform-field"[39m
+                              [33mdata-testid[39m=[32m"encryption-modal:password-input"[39m
+                              [33mid[39m=[32m"composer-password-password-modal-170"[39m
+                              [33mplaceholder[39m=[32m"Password"[39m
+                              [33mspellcheck[39m=[32m"false"[39m
+                              [33mtype[39m=[32m"password"[39m
+                              [33mvalue[39m=[32m""[39m
+                            [36m/>[39m
+                          [36m</div>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"inputform-suffix right-icon pr0-5 flex"[39m
+                          [36m>[39m
+                            [36m<span[39m
+                              [33mclass[39m=[32m"mauto flex"[39m
+                            [36m>[39m
+                              [36m<button[39m
+                                [33mclass[39m=[32m"inline-flex flex-item-noshrink"[39m
+                                [33mtabindex[39m=[32m"-1"[39m
+                                [33mtitle[39m=[32m"Reveal password"[39m
+                                [33mtype[39m=[32m"button"[39m
+                              [36m>[39m
+                                [36m<svg[39m
+                                  [33mclass[39m=[32m"icon-16p mauto"[39m
+                                  [33mfocusable[39m=[32m"false"[39m
+                                  [33mrole[39m=[32m"img"[39m
+                                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                                [36m>[39m
+                                  [36m<use[39m
+                                    [33mxlink:href[39m=[32m"#ic-eye"[39m
+                                  [36m/>[39m
+                                [36m</svg>[39m
+                              [36m</button>[39m
+                            [36m</span>[39m
+                          [36m</div>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-assist flex flex-nowrap"[39m
+                        [33mid[39m=[32m"id-171"[39m
+                      [36m/>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-verif-password-modal-170"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mConfirm password[0m
+                        [36m</span>[39m
+                      [36m</div>[39...
+
+      105 |
+      106 |         // modal is displayed and we can set a password
+    > 107 |         getByText('Encrypt message');
+          |         ^
+      108 |
+      109 |         const passwordInput = getByTestId('encryption-modal:password-input');
+      110 |         fireEvent.change(passwordInput, { target: { value: password } });
+
+      at Object.getElementError (../../node_modules/@testing-library/dom/dist/config.js:38:19)
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:90:38
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:62:17
+      at getByText (../../node_modules/@testing-library/dom/dist/query-helpers.js:111:19)
+      at _callee8$ (src/app/components/composer/tests/Composer.outsideEncryption.test.tsx:107:9)
+      at tryCatch (../../node_modules/regenerator-runtime/runtime.js:63:40)
+      at Generator.invoke [as _invoke] (../../node_modules/regenerator-runtime/runtime.js:294:22)
+      at Generator.next (../../node_modules/regenerator-runtime/runtime.js:119:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:25:9)
+
+  ● Composer outside encryption › should be able to remove encryption
+
+    TestingLibraryElementError: Unable to find an element with the text: Encrypt message. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, <script />, <style />
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"composer-container flex flex-column flex-item-fluid relative w100"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"composer-inner-modal absolute upper-layer w100 h100 flex flex-justify-center flex-align-items-center"[39m
+            [33mdata-focus-root[39m=[32m"1"[39m
+            [33mtabindex[39m=[32m"-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"inner-modal"[39m
+            [36m>[39m
+              [36m<header[39m
+                [33mclass[39m=[32m"inner-modal-header"[39m
+              [36m>[39m
+                [36m<h1[39m
+                  [33mclass[39m=[32m"inner-modal-title outline-none"[39m
+                  [33mdata-focus-trap-fallback[39m=[32m"0"[39m
+                  [33mid[39m=[32m""[39m
+                  [33mtabindex[39m=[32m"-1"[39m
+                [36m>[39m
+                  [0mEncrypt for non-Proton users[0m
+                [36m</h1>[39m
+              [36m</header>[39m
+              [36m<form[39m
+                [33mautocomplete[39m=[32m"off"[39m
+                [33mclass[39m=[32m"inner-modal-content"[39m
+                [33mmethod[39m=[32m"post"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"inner-modal-content-inner"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"relative"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-sticky scrollshadow-sticky--top"[39m
+                    [36m/>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-static scrollshadow-static--top"[39m
+                    [36m/>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"mt0 mb1 color-weak"[39m
+                    [36m>[39m
+                      [0mEncrypted messages to non-Proton recipients will expire in 28 days unless a shorter expiration time is set.[0m
+                      [36m<br />[39m
+                      [36m<a[39m
+                        [33mhref[39m=[32m"https://localhost/support/password-protected-emails"[39m
+                        [33mrel[39m=[32m"noopener noreferrer nofollow"[39m
+                        [33mtarget[39m=[32m"_blank"[39m
+                      [36m>[39m
+                        [0mLearn more[0m
+                      [36m</a>[39m
+                    [36m</p>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-password-modal-231"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mMessage password[0m
+                        [36m</span>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-field-container relative"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex flex-nowrap flex-align-items-center flex-item-fluid relative inputform-suffix-container"[39m
+                        [36m>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"flex-item-fluid"[39m
+                          [36m>[39m
+                            [36m<input[39m
+                              [33maria-describedby[39m=[32m"id-232"[39m
+                              [33maria-invalid[39m=[32m"false"[39m
+                              [33mautocapitalize[39m=[32m"off"[39m
+                              [33mautocomplete[39m=[32m"off"[39m
+                              [33mautocorrect[39m=[32m"off"[39m
+                              [33mclass[39m=[32m"w100 inputform-field"[39m
+                              [33mdata-testid[39m=[32m"encryption-modal:password-input"[39m
+                              [33mid[39m=[32m"composer-password-password-modal-231"[39m
+                              [33mplaceholder[39m=[32m"Password"[39m
+                              [33mspellcheck[39m=[32m"false"[39m
+                              [33mtype[39m=[32m"password"[39m
+                              [33mvalue[39m=[32m""[39m
+                            [36m/>[39m
+                          [36m</div>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"inputform-suffix right-icon pr0-5 flex"[39m
+                          [36m>[39m
+                            [36m<span[39m
+                              [33mclass[39m=[32m"mauto flex"[39m
+                            [36m>[39m
+                              [36m<button[39m
+                                [33mclass[39m=[32m"inline-flex flex-item-noshrink"[39m
+                                [33mtabindex[39m=[32m"-1"[39m
+                                [33mtitle[39m=[32m"Reveal password"[39m
+                                [33mtype[39m=[32m"button"[39m
+                              [36m>[39m
+                                [36m<svg[39m
+                                  [33mclass[39m=[32m"icon-16p mauto"[39m
+                                  [33mfocusable[39m=[32m"false"[39m
+                                  [33mrole[39m=[32m"img"[39m
+                                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                                [36m>[39m
+                                  [36m<use[39m
+                                    [33mxlink:href[39m=[32m"#ic-eye"[39m
+                                  [36m/>[39m
+                                [36m</svg>[39m
+                              [36m</button>[39m
+                            [36m</span>[39m
+                          [36m</div>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-assist flex flex-nowrap"[39m
+                        [33mid[39m=[32m"id-232"[39m
+                      [36m/>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-verif-password-modal-231"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mConfirm password[0m
+                        [36m</span>[39m
+                      [36m</div>[39...
+
+      156 |
+      157 |         // modal is displayed and we can set a password
+    > 158 |         getByText('Encrypt message');
+          |         ^
+      159 |
+      160 |         const passwordInput = getByTestId('encryption-modal:password-input');
+      161 |         fireEvent.change(passwordInput, { target: { value: password } });
+
+      at Object.getElementError (../../node_modules/@testing-library/dom/dist/config.js:38:19)
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:90:38
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:62:17
+      at getByText (../../node_modules/@testing-library/dom/dist/query-helpers.js:111:19)
+      at _callee11$ (src/app/components/composer/tests/Composer.outsideEncryption.test.tsx:158:9)
+      at tryCatch (../../node_modules/regenerator-runtime/runtime.js:63:40)
+      at Generator.invoke [as _invoke] (../../node_modules/regenerator-runtime/runtime.js:294:22)
+      at Generator.next (../../node_modules/regenerator-runtime/runtime.js:119:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:25:9)
+
+Test Suites: 1 failed, 1 total
+Tests:       4 failed, 4 total
+Snapshots:   0 total
+Time:        31.958 s
+Ran all test suites matching /applications\/mail\/src\/app\/components\/composer\/tests\/Composer.outsideEncryption.test.tsx/i.
+(node:3464) V8: /app/node_modules/openpgp/dist/openpgp.js:2491 Linking failure in asm.js: Unexpected stdlib member
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL src/app/components/composer/tests/Composer.expiration.test.tsx (241 MB heap size)
+  Composer expiration
+    ✕ should open expiration modal with default values (408 ms)
+    ✕ should display expiration banner and open expiration modal when clicking on edit (306 ms)
+
+  ● Composer expiration › should open expiration modal with default values
+
+    TestingLibraryElementError: Unable to find an element with the text: Expiration time. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, <script />, <style />
+    [36m<div[39m
+      [33mclass[39m=[32m"dropdown dropdown--bottom-left editor-toolbar-dropdown outline-none"[39m
+      [33mdata-focus-root[39m=[32m"1"[39m
+      [33mdata-testid[39m=[32m"dropdown-button"[39m
+      [33mid[39m=[32m"dropdown-12"[39m
+      [33mrole[39m=[32m"dialog"[39m
+      [33mstyle[39m=[32m"--top: 8; --left: 0;"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dropdown-backdrop"[39m
+        [33mdata-ignore-close[39m=[32m"true"[39m
+        [33mrole[39m=[32m"button"[39m
+        [33mtabindex[39m=[32m"0"[39m
+        [33mtitle[39m=[32m"Close"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"sr-only"[39m
+        [36m>[39m
+          [0mClose[0m
+        [36m</span>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dropdown-content"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"dropdown-item-button w100 pr1 pl1 pt0-5 pb0-5 text-left flex flex-nowrap flex-align-items-center"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"mtauto mbauto flex-item-fluid pl0-25"[39m
+          [36m>[39m
+            [0mAttach public key[0m
+          [36m</span>[39m
+          [36m<svg[39m
+            [33mclass[39m=[32m"icon-16p ml1 visibility-hidden"[39m
+            [33mfocusable[39m=[32m"false"[39m
+            [33mrole[39m=[32m"img"[39m
+            [33mviewBox[39m=[32m"0 0 16 16"[39m
+          [36m>[39m
+            [36m<use[39m
+              [33mxlink:href[39m=[32m"#ic-checkmark"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"dropdown-item-button w100 pr1 pl1 pt0-5 pb0-5 text-left flex flex-nowrap flex-align-items-center"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"mtauto mbauto flex-item-fluid pl0-25"[39m
+          [36m>[39m
+            [0mRequest read receipt[0m
+          [36m</span>[39m
+          [36m<svg[39m
+            [33mclass[39m=[32m"icon-16p ml1 visibility-hidden"[39m
+            [33mfocusable[39m=[32m"false"[39m
+            [33mrole[39m=[32m"img"[39m
+            [33mviewBox[39m=[32m"0 0 16 16"[39m
+          [36m>[39m
+            [36m<use[39m
+              [33mxlink:href[39m=[32m"#ic-checkmark"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"dropdown-item-hr"[39m
+        [36m/>[39m
+        [36m<button[39m
+          [33maria-pressed[39m=[32m"false"[39m
+          [33mclass[39m=[32m"dropdown-item-button w100 pr1 pl1 pt0-5 pb0-5 text-left flex flex-nowrap flex-align-items-center"[39m
+          [33mdata-testid[39m=[32m"composer:expiration-button"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33mclass[39m=[32m"icon-16p"[39m
+            [33mfocusable[39m=[32m"false"[39m
+            [33mrole[39m=[32m"img"[39m
+            [33mviewBox[39m=[32m"0 0 16 16"[39m
+          [36m>[39m
+            [36m<use[39m
+              [33mxlink:href[39m=[32m"#ic-hourglass"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"ml0-5 mtauto mbauto flex-item-fluid"[39m
+          [36m>[39m
+            [0mSet expiration time[0m
+          [36m</span>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+
+      45 |         const dropdown = await getDropdown();
+      46 |
+    > 47 |         getByTextDefault(dropdown, 'Expiration time');
+         |         ^
+      48 |
+      49 |         const expirationButton = getByTestIdDefault(dropdown, 'composer:expiration-button');
+      50 |         await act(async () => {
+
+      at Object.getElementError (../../node_modules/@testing-library/dom/dist/config.js:38:19)
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:90:38
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:62:17
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:111:19
+      at _callee3$ (src/app/components/composer/tests/Composer.expiration.test.tsx:47:9)
+      at tryCatch (../../node_modules/regenerator-runtime/runtime.js:63:40)
+      at Generator.invoke [as _invoke] (../../node_modules/regenerator-runtime/runtime.js:294:22)
+      at Generator.next (../../node_modules/regenerator-runtime/runtime.js:119:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:25:9)
+
+  ● Composer expiration › should display expiration banner and open expiration modal when clicking on edit
+
+    TestingLibraryElementError: Unable to find an element with the text: Expiring message. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, <script />, <style />
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"composer-container flex flex-column flex-item-fluid relative w100"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"composer-inner-modal absolute upper-layer w100 h100 flex flex-justify-center flex-align-items-center"[39m
+            [33mdata-focus-root[39m=[32m"1"[39m
+            [33mtabindex[39m=[32m"-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"inner-modal"[39m
+            [36m>[39m
+              [36m<header[39m
+                [33mclass[39m=[32m"inner-modal-header"[39m
+              [36m>[39m
+                [36m<h1[39m
+                  [33mclass[39m=[32m"inner-modal-title outline-none"[39m
+                  [33mdata-focus-trap-fallback[39m=[32m"0"[39m
+                  [33mid[39m=[32m""[39m
+                  [33mtabindex[39m=[32m"-1"[39m
+                [36m>[39m
+                  [0mExpiration Time[0m
+                [36m</h1>[39m
+              [36m</header>[39m
+              [36m<form[39m
+                [33mautocomplete[39m=[32m"off"[39m
+                [33mclass[39m=[32m"inner-modal-content"[39m
+                [33mmethod[39m=[32m"post"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"inner-modal-content-inner"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"relative"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-sticky scrollshadow-sticky--top"[39m
+                    [36m/>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-static scrollshadow-static--top"[39m
+                    [36m/>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"mt0 color-weak"[39m
+                    [36m>[39m
+                      [0mIf you are sending this message to a non Proton Mail user, please be sure to set a password for your message.[0m
+                      [36m<br />[39m
+                      [36m<a[39m
+                        [33mhref[39m=[32m"https://localhost/support/expiration"[39m
+                        [33mrel[39m=[32m"noopener noreferrer nofollow"[39m
+                        [33mtarget[39m=[32m"_blank"[39m
+                      [36m>[39m
+                        [0mLearn more[0m
+                      [36m</a>[39m
+                    [36m</p>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex flex-column flex-nowrap mt1 mb1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"sr-only"[39m
+                        [33mid[39m=[32m"composer-expiration-string-password-modal-101"[39m
+                      [36m>[39m
+                        [0mExpiration time[0m
+                      [36m</span>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex flex-gap-0-5 flex-row flex"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex-item-fluid flex flex-column flex-nowrap"[39m
+                        [36m>[39m
+                          [36m<label[39m
+                            [33mclass[39m=[32m"mr0-5 text-semibold"[39m
+                            [33mfor[39m=[32m"composer-expiration-days-password-modal-101"[39m
+                          [36m>[39m
+                            [0mDays[0m
+                          [36m</label>[39m
+                          [36m<select[39m
+                            [33maria-describedby[39m=[32m"composer-expiration-string-password-modal-101"[39m
+                            [33mclass[39m=[32m"field mr0-25"[39m
+                            [33mdata-testid[39m=[32m"composer:expiration-days"[39m
+                            [33mid[39m=[32m"composer-expiration-days-password-modal-101"[39m
+                            [33mplaceholder[39m=[32m"Days"[39m
+                          [36m>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"0"[39m
+                            [36m>[39m
+                              [0m0[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"1"[39m
+                            [36m>[39m
+                              [0m1[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"2"[39m
+                            [36m>[39m
+                              [0m2[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"3"[39m
+                            [36m>[39m
+                              [0m3[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"4"[39m
+                            [36m>[39m
+                              [0m4[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"5"[39m
+                            [36m>[39m
+                              [0m5[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"6"[39m
+                            [36m>[39m
+                              [0m6[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"7"[39m
+                            [36m>[39m
+                              [0m7[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"8"[39m
+                            [36m>[39m
+                              [0m8[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"9"[39m
+                            [36m>[39m
+                              [0m9[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"10"[39m
+                            [36m>[39m
+                              [0m10[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"11"[39m
+                            [36m>[39m
+                              [0m11[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"12"[39m
+                            [36m>[39m
+                              [0m12[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"13"[39m
+                            [36m>[39m
+               ...
+
+      78 |         });
+      79 |
+    > 80 |         getByText('Expiring message');
+         |         ^
+      81 |         const dayInput = getByTestId('composer:expiration-days') as HTMLInputElement;
+      82 |         const hoursInput = getByTestId('composer:expiration-hours') as HTMLInputElement;
+      83 |
+
+      at Object.getElementError (../../node_modules/@testing-library/dom/dist/config.js:38:19)
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:90:38
+      at ../../node_modules/@testing-library/dom/dist/query-helpers.js:62:17
+      at getByText (../../node_modules/@testing-library/dom/dist/query-helpers.js:111:19)
+      at _callee5$ (src/app/components/composer/tests/Composer.expiration.test.tsx:80:9)
+      at tryCatch (../../node_modules/regenerator-runtime/runtime.js:63:40)
+      at Generator.invoke [as _invoke] (../../node_modules/regenerator-runtime/runtime.js:294:22)
+      at Generator.next (../../node_modules/regenerator-runtime/runtime.js:119:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:25:9)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 2 total
+Snapshots:   0 total
+Time:        7.452 s
+Ran all test suites matching /applications\/mail\/src\/app\/components\/composer\/tests\/Composer.expiration.test.tsx/i.
+(node:3513) V8: /app/node_modules/openpgp/dist/openpgp.js:2491 Linking failure in asm.js: Unexpected stdlib member
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL src/app/components/composer/tests/Composer.hotkeys.test.tsx (270 MB heap size)
+  Composer hotkeys
+    ✓ should close composer on escape (159 ms)
+    ✓ should send on meta + enter (163 ms)
+    ✓ should delete on meta + alt + enter (152 ms)
+    ✓ should save on meta + S (155 ms)
+    ✓ should open attachment on meta + shift + A (46 ms)
+    ✕ should open encryption modal on meta + shift + E (1061 ms)
+    ✕ should open encryption modal on meta + shift + X (1056 ms)
+
+  ● Composer hotkeys › should open encryption modal on meta + shift + E
+
+    Unable to find an element with the text: Encrypt message. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, <script />, <style />
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"composer-container flex flex-column flex-item-fluid relative w100"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"composer-inner-modal absolute upper-layer w100 h100 flex flex-justify-center flex-align-items-center"[39m
+            [33mdata-focus-root[39m=[32m"1"[39m
+            [33mtabindex[39m=[32m"-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"inner-modal"[39m
+            [36m>[39m
+              [36m<header[39m
+                [33mclass[39m=[32m"inner-modal-header"[39m
+              [36m>[39m
+                [36m<h1[39m
+                  [33mclass[39m=[32m"inner-modal-title outline-none"[39m
+                  [33mdata-focus-trap-fallback[39m=[32m"0"[39m
+                  [33mid[39m=[32m""[39m
+                  [33mtabindex[39m=[32m"-1"[39m
+                [36m>[39m
+                  [0mEncrypt for non-Proton users[0m
+                [36m</h1>[39m
+              [36m</header>[39m
+              [36m<form[39m
+                [33mautocomplete[39m=[32m"off"[39m
+                [33mclass[39m=[32m"inner-modal-content"[39m
+                [33mmethod[39m=[32m"post"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"inner-modal-content-inner"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"relative"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-sticky scrollshadow-sticky--top"[39m
+                    [36m/>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-static scrollshadow-static--top"[39m
+                    [36m/>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"mt0 mb1 color-weak"[39m
+                    [36m>[39m
+                      [0mEncrypted messages to non-Proton recipients will expire in 28 days unless a shorter expiration time is set.[0m
+                      [36m<br />[39m
+                      [36m<a[39m
+                        [33mhref[39m=[32m"https://localhost/support/password-protected-emails"[39m
+                        [33mrel[39m=[32m"noopener noreferrer nofollow"[39m
+                        [33mtarget[39m=[32m"_blank"[39m
+                      [36m>[39m
+                        [0mLearn more[0m
+                      [36m</a>[39m
+                    [36m</p>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-password-modal-312"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mMessage password[0m
+                        [36m</span>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-field-container relative"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex flex-nowrap flex-align-items-center flex-item-fluid relative inputform-suffix-container"[39m
+                        [36m>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"flex-item-fluid"[39m
+                          [36m>[39m
+                            [36m<input[39m
+                              [33maria-describedby[39m=[32m"id-313"[39m
+                              [33maria-invalid[39m=[32m"false"[39m
+                              [33mautocapitalize[39m=[32m"off"[39m
+                              [33mautocomplete[39m=[32m"off"[39m
+                              [33mautocorrect[39m=[32m"off"[39m
+                              [33mclass[39m=[32m"w100 inputform-field"[39m
+                              [33mdata-testid[39m=[32m"encryption-modal:password-input"[39m
+                              [33mid[39m=[32m"composer-password-password-modal-312"[39m
+                              [33mplaceholder[39m=[32m"Password"[39m
+                              [33mspellcheck[39m=[32m"false"[39m
+                              [33mtype[39m=[32m"password"[39m
+                              [33mvalue[39m=[32m""[39m
+                            [36m/>[39m
+                          [36m</div>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"inputform-suffix right-icon pr0-5 flex"[39m
+                          [36m>[39m
+                            [36m<span[39m
+                              [33mclass[39m=[32m"mauto flex"[39m
+                            [36m>[39m
+                              [36m<button[39m
+                                [33mclass[39m=[32m"inline-flex flex-item-noshrink"[39m
+                                [33mtabindex[39m=[32m"-1"[39m
+                                [33mtitle[39m=[32m"Reveal password"[39m
+                                [33mtype[39m=[32m"button"[39m
+                              [36m>[39m
+                                [36m<svg[39m
+                                  [33mclass[39m=[32m"icon-16p mauto"[39m
+                                  [33mfocusable[39m=[32m"false"[39m
+                                  [33mrole[39m=[32m"img"[39m
+                                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                                [36m>[39m
+                                  [36m<use[39m
+                                    [33mxlink:href[39m=[32m"#ic-eye"[39m
+                                  [36m/>[39m
+                                [36m</svg>[39m
+                              [36m</button>[39m
+                            [36m</span>[39m
+                          [36m</div>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"inputform-assist flex flex-nowrap"[39m
+                        [33mid[39m=[32m"id-313"[39m
+                      [36m/>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"inputform-container w100"[39m
+                      [33mfor[39m=[32m"composer-password-verif-password-modal-312"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex inputform-label flex-justify-space-between flex-nowrap flex-align-items-end"[39m
+                      [36m>[39m
+                        [36m<span[39m
+                          [33mclass[39m=[32m"inputform-label-text"[39m
+                        [36m>[39m
+                          [0mConfirm password[0m
+                        [36m</span>[39m
+                      [36m</div>[39...
+
+      120 |         ctrlShftE();
+      121 |
+    > 122 |         await findByText('Encrypt message');
+          |               ^
+      123 |     });
+      124 |
+      125 |     it('should open encryption modal on meta + shift + X', async () => {
+
+      at waitForWrapper (../../node_modules/@testing-library/dom/dist/wait-for.js:187:27)
+      at findByText (../../node_modules/@testing-library/dom/dist/query-helpers.js:101:33)
+      at _callee8$ (src/app/components/composer/tests/Composer.hotkeys.test.tsx:122:15)
+      at tryCatch (../../node_modules/regenerator-runtime/runtime.js:63:40)
+      at Generator.invoke [as _invoke] (../../node_modules/regenerator-runtime/runtime.js:294:22)
+      at Generator.next (../../node_modules/regenerator-runtime/runtime.js:119:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:25:9)
+
+  ● Composer hotkeys › should open encryption modal on meta + shift + X
+
+    Unable to find an element with the text: Expiring message. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, <script />, <style />
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"composer-container flex flex-column flex-item-fluid relative w100"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"composer-inner-modal absolute upper-layer w100 h100 flex flex-justify-center flex-align-items-center"[39m
+            [33mdata-focus-root[39m=[32m"1"[39m
+            [33mtabindex[39m=[32m"-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"inner-modal"[39m
+            [36m>[39m
+              [36m<header[39m
+                [33mclass[39m=[32m"inner-modal-header"[39m
+              [36m>[39m
+                [36m<h1[39m
+                  [33mclass[39m=[32m"inner-modal-title outline-none"[39m
+                  [33mdata-focus-trap-fallback[39m=[32m"0"[39m
+                  [33mid[39m=[32m""[39m
+                  [33mtabindex[39m=[32m"-1"[39m
+                [36m>[39m
+                  [0mExpiration Time[0m
+                [36m</h1>[39m
+              [36m</header>[39m
+              [36m<form[39m
+                [33mautocomplete[39m=[32m"off"[39m
+                [33mclass[39m=[32m"inner-modal-content"[39m
+                [33mmethod[39m=[32m"post"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"inner-modal-content-inner"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"relative"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-sticky scrollshadow-sticky--top"[39m
+                    [36m/>[39m
+                    [36m<div[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"scrollshadow-static scrollshadow-static--top"[39m
+                    [36m/>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"mt0 color-weak"[39m
+                    [36m>[39m
+                      [0mIf you are sending this message to a non Proton Mail user, please be sure to set a password for your message.[0m
+                      [36m<br />[39m
+                      [36m<a[39m
+                        [33mhref[39m=[32m"https://localhost/support/expiration"[39m
+                        [33mrel[39m=[32m"noopener noreferrer nofollow"[39m
+                        [33mtarget[39m=[32m"_blank"[39m
+                      [36m>[39m
+                        [0mLearn more[0m
+                      [36m</a>[39m
+                    [36m</p>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex flex-column flex-nowrap mt1 mb1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"sr-only"[39m
+                        [33mid[39m=[32m"composer-expiration-string-password-modal-387"[39m
+                      [36m>[39m
+                        [0mExpiration time[0m
+                      [36m</span>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex flex-gap-0-5 flex-row flex"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex-item-fluid flex flex-column flex-nowrap"[39m
+                        [36m>[39m
+                          [36m<label[39m
+                            [33mclass[39m=[32m"mr0-5 text-semibold"[39m
+                            [33mfor[39m=[32m"composer-expiration-days-password-modal-387"[39m
+                          [36m>[39m
+                            [0mDays[0m
+                          [36m</label>[39m
+                          [36m<select[39m
+                            [33maria-describedby[39m=[32m"composer-expiration-string-password-modal-387"[39m
+                            [33mclass[39m=[32m"field mr0-25"[39m
+                            [33mdata-testid[39m=[32m"composer:expiration-days"[39m
+                            [33mid[39m=[32m"composer-expiration-days-password-modal-387"[39m
+                            [33mplaceholder[39m=[32m"Days"[39m
+                          [36m>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"0"[39m
+                            [36m>[39m
+                              [0m0[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"1"[39m
+                            [36m>[39m
+                              [0m1[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"2"[39m
+                            [36m>[39m
+                              [0m2[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"3"[39m
+                            [36m>[39m
+                              [0m3[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"4"[39m
+                            [36m>[39m
+                              [0m4[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"5"[39m
+                            [36m>[39m
+                              [0m5[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"6"[39m
+                            [36m>[39m
+                              [0m6[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"7"[39m
+                            [36m>[39m
+                              [0m7[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"8"[39m
+                            [36m>[39m
+                              [0m8[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"9"[39m
+                            [36m>[39m
+                              [0m9[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"10"[39m
+                            [36m>[39m
+                              [0m10[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"11"[39m
+                            [36m>[39m
+                              [0m11[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"12"[39m
+                            [36m>[39m
+                              [0m12[0m
+                            [36m</option>[39m
+                            [36m<option[39m
+                              [33mvalue[39m=[32m"13"[39m
+                            [36m>[39m
+               ...
+
+      128 |         ctrlShftX();
+      129 |
+    > 130 |         await findByText('Expiring message');
+          |               ^
+      131 |     });
+      132 | });
+      133 |
+
+      at waitForWrapper (../../node_modules/@testing-library/dom/dist/wait-for.js:187:27)
+      at findByText (../../node_modules/@testing-library/dom/dist/query-helpers.js:101:33)
+      at _callee9$ (src/app/components/composer/tests/Composer.hotkeys.test.tsx:130:15)
+      at tryCatch (../../node_modules/regenerator-runtime/runtime.js:63:40)
+      at Generator.invoke [as _invoke] (../../node_modules/regenerator-runtime/runtime.js:294:22)
+      at Generator.next (../../node_modules/regenerator-runtime/runtime.js:119:21)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:24)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:25:9)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 5 passed, 7 total
+Snapshots:   0 total
+Time:        7.288 s
+Ran all test suites matching /applications\/mail\/src\/app\/components\/composer\/tests\/Composer.hotkeys.test.tsx/i.

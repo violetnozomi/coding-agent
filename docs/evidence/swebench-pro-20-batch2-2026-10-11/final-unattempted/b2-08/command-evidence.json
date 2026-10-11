@@ -1,0 +1,79 @@
+[
+  {
+    "tool_call_id": "call_00_AeyJfe5Wnz03B09PipPK1293",
+    "input": {
+      "command": "ls -la /workspace 2>/dev/null | head -50; echo \"---APP---\"; ls -la /app 2>/dev/null | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_sAR9sD2GAkGZtzuRQxI89286",
+    "input": {
+      "command": "pwd; ls -la"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_DoOEdI5r8el0dYucxzyT3842",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 && git status --short | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_jfLwmURLBdSmNawapKVU0428",
+    "input": {
+      "command": "echo hello"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "hello"
+  },
+  {
+    "tool_call_id": "call_00_JHAQoWaf76hqgGCD4IhP6709",
+    "input": {
+      "command": "git log --oneline -5; git status --short | head -20"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "2ea4c94b4 Merge branch 'move-self-message-to-inbox' into 'main'\n4c95b1413 Authorize user to move message to inbox if he sent the message to himself CLIENT-4132\nb2196e7ba Merge branch 'remove-is' into 'main'\nc3f7c1236 Remove `:is()` pseudo class for compatibility\n8f0f97a82 Merge branch 'unsubscribe-banner-update' into 'main'\n?? .nz-coder/"
+  },
+  {
+    "tool_call_id": "call_00_565RQ5D4eCFNZAxjxnMq0501",
+    "input": {
+      "command": "grep -rn \"password-modal\\|encryption-modal\\|composer:password-button\\|ComposerPasswordModal\\|EditorToolbarExtension\" applications/mail/src --include=*.ts --include=*.tsx | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_oWpAotWkqX7r6EECuVoo8287",
+    "input": {
+      "command": "grep -n \"getDropdown\\|export const render\" -r applications/mail/src/app/helpers/test/helper.tsx | head -20"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  }
+]

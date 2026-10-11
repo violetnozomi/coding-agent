@@ -1,0 +1,40 @@
+{
+  "purpose": "swebench-pro-v2",
+  "model": "deepseek-flash",
+  "scope": [
+    "instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37"
+  ],
+  "instance_manifest_sha256": "6be3614a91b9c70b9312c91c4d2b61dadecce1b2bee27e01cde531b49b6318ae",
+  "account": "project-env:DeepSeek",
+  "input_mode": "empirical",
+  "empirical_risk_accepted": true,
+  "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+  "cost_limit": 13.860921599999998,
+  "cost_currency": "CNY",
+  "authorization_text": "新增这20题：人民币50元，继续Pro V2／deepseek-flash。并行测试，保留每题记录。旧批次余额不沿用。复用此前已接受的经验计量与止损口径。",
+  "valid_from": 1791729505.3976176,
+  "valid_until": 1791902306.3976183,
+  "prices_cny_per_million": {
+    "input": 2,
+    "cached_input": 0.04,
+    "output": 8
+  },
+  "provider_output_reservation_tokens": 393216,
+  "original_total_authorization_cny": 50,
+  "previous_used_cny": 36.1390784,
+  "predecessor_ledger_sha256": "93b05cfd2e57295ff349e0a98ee9c83fcaa0d280ebcd1d0e883dbcda61498c7a",
+  "preparation_retry_not_paid_agent_retry": true,
+  "zero_request_preparation_ledger_sha256": "3a218715ad8d80f81b251391a82c5e3bb49dea2f237851862de4e8254375a393",
+  "source_ledger_chain": [
+    {
+      "source": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/live",
+      "ledger_sha256": "b2fcdc651faec6856f37a68f3bce164347e6902ab624e0c2a52fa4e36c759923",
+      "used_cny": 31.584376
+    },
+    {
+      "source": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/p2",
+      "ledger_sha256": "d6e977642909421e5fa9fdbbbc7ba4acb1a7c7b89f425b83a722f7091453d179",
+      "used_cny": 4.5547024
+    }
+  ]
+}

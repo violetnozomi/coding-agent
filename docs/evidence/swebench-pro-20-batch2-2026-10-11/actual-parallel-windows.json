@@ -1,0 +1,168 @@
+{
+  "basis": "closed paid task report Agent boundaries; no inference of model efficiency",
+  "windows": [
+    {
+      "slot": "b2-01",
+      "stage": "live",
+      "start_epoch": 1791717306.8182783,
+      "end_epoch": 1791717946.9855855
+    },
+    {
+      "slot": "b2-02",
+      "stage": "live",
+      "start_epoch": 1791717301.8012683,
+      "end_epoch": 1791717619.564666
+    },
+    {
+      "slot": "b2-03",
+      "stage": "live",
+      "start_epoch": 1791717810.744733,
+      "end_epoch": 1791718108.059558
+    },
+    {
+      "slot": "b2-04",
+      "stage": "live",
+      "start_epoch": 1791718167.4856174,
+      "end_epoch": 1791718401.234132
+    },
+    {
+      "slot": "b2-05",
+      "stage": "live",
+      "start_epoch": 1791718523.3032286,
+      "end_epoch": 1791718903.6741931
+    },
+    {
+      "slot": "b2-06",
+      "stage": "p2",
+      "start_epoch": 1791723538.1049986,
+      "end_epoch": 1791723764.6174126
+    },
+    {
+      "slot": "b2-07",
+      "stage": "p2",
+      "start_epoch": 1791723766.923246,
+      "end_epoch": 1791724063.2790287
+    },
+    {
+      "slot": "b2-08",
+      "stage": "p3",
+      "start_epoch": 1791729522.6139934,
+      "end_epoch": 1791729678.7905402
+    },
+    {
+      "slot": "b2-09",
+      "stage": "live",
+      "start_epoch": 1791718635.6843648,
+      "end_epoch": 1791718785.313761
+    },
+    {
+      "slot": "b2-10",
+      "stage": "live",
+      "start_epoch": 1791719423.309719,
+      "end_epoch": 1791720043.8612478
+    },
+    {
+      "slot": "b2-11",
+      "stage": "live",
+      "start_epoch": 1791719649.715577,
+      "end_epoch": 1791719963.1029406
+    },
+    {
+      "slot": "b2-12",
+      "stage": "live",
+      "start_epoch": 1791720171.2178485,
+      "end_epoch": 1791720293.029053
+    },
+    {
+      "slot": "b2-13",
+      "stage": "live",
+      "start_epoch": 1791720330.8437593,
+      "end_epoch": 1791720493.515838
+    },
+    {
+      "slot": "b2-14",
+      "stage": "live",
+      "start_epoch": 1791720417.289889,
+      "end_epoch": 1791720809.7288125
+    },
+    {
+      "slot": "b2-15",
+      "stage": "live",
+      "start_epoch": 1791720597.7402508,
+      "end_epoch": 1791720854.521218
+    },
+    {
+      "slot": "b2-16",
+      "stage": "live",
+      "start_epoch": 1791720958.6695387,
+      "end_epoch": 1791721019.0801136
+    },
+    {
+      "slot": "b2-17",
+      "stage": "p2",
+      "start_epoch": 1791727171.2016268,
+      "end_epoch": 1791727698.528713
+    },
+    {
+      "slot": "b2-18",
+      "stage": "live",
+      "start_epoch": 1791721303.4284685,
+      "end_epoch": 1791722152.2817519
+    },
+    {
+      "slot": "b2-19",
+      "stage": "live",
+      "start_epoch": 1791721446.712613,
+      "end_epoch": 1791721841.9838042
+    },
+    {
+      "slot": "b2-20",
+      "stage": "live",
+      "start_epoch": 1791721949.321748,
+      "end_epoch": 1791722404.7862394
+    }
+  ],
+  "overlaps": [
+    {
+      "first": "b2-01",
+      "second": "b2-02",
+      "overlap_seconds": 312.74638772010803
+    },
+    {
+      "first": "b2-01",
+      "second": "b2-03",
+      "overlap_seconds": 136.24085235595703
+    },
+    {
+      "first": "b2-05",
+      "second": "b2-09",
+      "overlap_seconds": 149.62939620018005
+    },
+    {
+      "first": "b2-10",
+      "second": "b2-11",
+      "overlap_seconds": 313.38736367225647
+    },
+    {
+      "first": "b2-13",
+      "second": "b2-14",
+      "overlap_seconds": 76.22594881057739
+    },
+    {
+      "first": "b2-14",
+      "second": "b2-15",
+      "overlap_seconds": 211.98856163024902
+    },
+    {
+      "first": "b2-18",
+      "second": "b2-19",
+      "overlap_seconds": 395.2711911201477
+    },
+    {
+      "first": "b2-18",
+      "second": "b2-20",
+      "overlap_seconds": 202.96000385284424
+    }
+  ],
+  "claims_speedup_factor": false
+}

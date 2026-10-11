@@ -1,0 +1,8 @@
+[
+  {
+    "layer_digest": "sha256:34fed2bea86be287c06e3bb0146c3d89f62546dd868457ecdc14e10cd7d2cd7b",
+    "layer_compressed_bytes": 1519764643,
+    "source_manifest_sha256": "sha256:fc3c867ad010832886951359395ad2d3bcf31872b432317fa499d55eec0bc0cf",
+    "model_calls": 0
+  }
+]

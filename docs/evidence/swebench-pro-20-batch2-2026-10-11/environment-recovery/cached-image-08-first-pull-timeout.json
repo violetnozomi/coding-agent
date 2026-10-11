@@ -1,0 +1,11 @@
+{
+  "command": [
+    "docker",
+    "pull",
+    "127.0.0.1:45293/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37"
+  ],
+  "timeout_seconds": 900,
+  "sdk_started": false,
+  "model_calls": 0,
+  "last_unfinished_layer": "sha256:34fed2bea86be287c06e3bb0146c3d89f62546dd868457ecdc14e10cd7d2cd7b"
+}

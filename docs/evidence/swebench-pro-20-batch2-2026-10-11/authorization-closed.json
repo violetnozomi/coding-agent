@@ -1,0 +1,14 @@
+{
+  "authorization_closed_at_epoch": 1791730030.5764759,
+  "authorization_cny": 50,
+  "estimated_occupied_cny": 37.96093664,
+  "unused_cny_not_authorized_for_future_runs": 12.03906336,
+  "all_admitted_requests_settled": true,
+  "coordinators_and_local_cache_stopped": true,
+  "models_called_after_end": false,
+  "source_ledger_sha256": [
+    "b2fcdc651faec6856f37a68f3bce164347e6902ab624e0c2a52fa4e36c759923",
+    "d6e977642909421e5fa9fdbbbc7ba4acb1a7c7b89f425b83a722f7091453d179",
+    "78c58ef1864e155ba8af92b868c5b60e9bd90295a5de4e3d971507ab33f21fa7"
+  ]
+}
