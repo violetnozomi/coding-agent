@@ -27,9 +27,12 @@ def main():
     output = Path("/result")
     # Agent 已完成依赖导入，sys.path 继续供 Agent 使用；测试子进程使用原项目依赖。
     bootstrap_path = os.environ.pop("PYTHONPATH", None)
+    bootstrap_plugins = os.environ.pop("PYTEST_DISABLE_PLUGIN_AUTOLOAD", None)
     (output / "child-environment.json").write_text(json.dumps({
         "agent_bootstrap_pythonpath": bootstrap_path, "project_child_pythonpath": None,
-        "project_dependency_isolation": "remove_agent_only_bootstrap_path", "harness_revision": 2}))
+        "agent_bootstrap_pytest_disable_plugin_autoload": bootstrap_plugins,
+        "project_child_pytest_disable_plugin_autoload": None,
+        "project_dependency_isolation": "remove_agent_only_bootstrap_path_and_plugin_override", "harness_revision": 3}))
     purpose = ContextVar("model_purpose", default="coding")
 
     def nonce(request):

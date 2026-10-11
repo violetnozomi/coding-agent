@@ -171,7 +171,7 @@ def prepare_case(slot, image, row, smoke):
     return case
 
 
-def run_case(slot, case, image, ledger, counter, *, key=None, upstream=None, smoke=False):
+def run_case(slot, case, image, ledger, counter, *, key=None, upstream=None, smoke=False, agent_python="python3"):
     from nz_coder.evaluation.model_relay import RelayBinding, RelayServer
     servers = []
     name = "nz-pro20-agent-" + slot.name
@@ -198,7 +198,7 @@ def run_case(slot, case, image, ledger, counter, *, key=None, upstream=None, smo
                 "MAX_OUTPUT_TOKENS": "8000", "NZ_PROVIDER_MAX_RETRIES": "0", "GOCACHE": "/tmp/go-build-cache",
                 "GOPROXY": "off", "GOTOOLCHAIN": "local", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"}.items():
             argv += ["--env", k + "=" + v]
-        argv += [image, "python3", "/driver/entry.py"]
+        argv += [image, agent_python, "/driver/entry.py"]
         save(slot / "launch.json", argv)
         start = time.monotonic()
         status = {}
