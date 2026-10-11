@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls internal/config && echo \"---\" && grep -rl \"DecodeHooks\" --include=*.go ."}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && head -80 config/schema_test.go && echo \"===LINES===\" && wc -l config/schema_test.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls internal/config/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && wc -l internal/config/config_test.go && ls internal/config/testdata/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"mapstructure\" go.mod go.sum | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && find internal/config/testdata -type f | sort"}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hi"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build ./internal/config/", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git status --porcelain && git stash list"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./internal/config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && go test -vet=off ./internal/config -run 'TestLoad' 2>&1 | tail -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go test -vet=off ./internal/config -run TestLoad 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test -vet=off ./internal/config -run TestLoad 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off ./internal/config -run TestLoadEnvironmentVariableSubstitution -v 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off ./internal/config/... 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}

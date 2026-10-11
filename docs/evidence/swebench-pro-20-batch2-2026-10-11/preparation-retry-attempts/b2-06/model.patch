@@ -1,0 +1,385 @@
+diff --git a/contrib/trivy/parser/parser.go b/contrib/trivy/parser/parser.go
+new file mode 100644
+index 0000000..845862e
+--- /dev/null
++++ b/contrib/trivy/parser/parser.go
+@@ -0,0 +1,148 @@
++package parser
++
++import (
++	"encoding/json"
++	"sort"
++
++	fanalos "github.com/aquasecurity/fanal/analyzer/os"
++	"github.com/aquasecurity/trivy/pkg/types"
++	"github.com/future-architect/vuls/models"
++	"golang.org/x/xerrors"
++)
++
++// result is a single Trivy scan result.
++type result struct {
++	Target          string                        `json:"Target"`
++	Type            string                        `json:"Type"`
++	Vulnerabilities []types.DetectedVulnerability `json:"Vulnerabilities"`
++}
++
++// results is a list of Trivy scan results.
++type results []result
++
++// IsTrivySupportedOS returns true if the given Trivy result type corresponds to
++// a supported operating system family.
++func IsTrivySupportedOS(family string) bool {
++	switch family {
++	case fanalos.Alpine, fanalos.Debian, fanalos.Ubuntu, fanalos.CentOS,
++		fanalos.RedHat, fanalos.Fedora, fanalos.Amazon, fanalos.Oracle,
++		fanalos.Photon, fanalos.OpenSUSE, fanalos.OpenSUSELeap,
++		fanalos.OpenSUSETumbleweed, fanalos.SLES, fanalos.Windows:
++		return true
++	default:
++		return false
++	}
++}
++
++// Parse parses a Trivy JSON report and populates the given scan result.
++// It returns the populated scan result, or a nil result and an error if the
++// JSON could not be unmarshalled.
++func Parse(vulnJSON []byte, scanResult *models.ScanResult) (*models.ScanResult, error) {
++	var rs results
++	if err := json.Unmarshal(vulnJSON, &rs); err != nil {
++		return nil, xerrors.Errorf("failed to unmarshal Trivy JSON: %w", err)
++	}
++
++	if scanResult == nil {
++		scanResult = &models.ScanResult{}
++	}
++
++	scannedCves := models.VulnInfos{}
++	packages := models.Packages{}
++	libraryScannerMap := map[string][]types.Library{}
++
++	for _, r := range rs {
++		isOSFamily := IsTrivySupportedOS(r.Type)
++		for _, vuln := range r.Vulnerabilities {
++			vinfo, found := scannedCves[vuln.VulnerabilityID]
++			if !found {
++				vinfo = models.VulnInfo{
++					CveID:       vuln.VulnerabilityID,
++					Confidences: models.Confidences{models.TrivyMatch},
++				}
++			}
++
++			pack := models.PackageFixStatus{
++				Name:    vuln.PkgName,
++				FixedIn: vuln.FixedVersion,
++			}
++			if vuln.FixedVersion == "" {
++				pack.NotFixedYet = true
++				pack.FixState = "Affected"
++			}
++			vinfo.AffectedPackages = append(vinfo.AffectedPackages, pack)
++
++			refs := models.References{}
++			for _, ref := range vuln.References {
++				refs = append(refs, models.Reference{Source: "trivy", Link: ref})
++			}
++			sort.Slice(refs, func(i, j int) bool {
++				return refs[i].Link < refs[j].Link
++			})
++
++			// Keep already collected content when merging the same
++			// vulnerability identifier seen in multiple results.
++			if existing, ok := vinfo.CveContents[models.Trivy]; !ok || existing.Empty() {
++				vinfo.CveContents = models.CveContents{
++					models.Trivy: {
++						Title:         vuln.Title,
++						Summary:       vuln.Description,
++						Cvss3Severity: vuln.Severity,
++						References:    refs,
++					},
++				}
++			}
++
++			if isOSFamily {
++				packages[vuln.PkgName] = models.Package{
++					Name:    vuln.PkgName,
++					Version: vuln.InstalledVersion,
++				}
++				scanResult.Family = r.Type
++				scanResult.ServerName = r.Target
++				scanResult.ScannedBy = "trivy"
++				scanResult.ScannedVia = "trivy"
++				scanResult.Optional = map[string]interface{}{
++					"trivy-target": r.Target,
++				}
++			} else {
++				vinfo.LibraryFixedIns = append(vinfo.LibraryFixedIns, models.LibraryFixedIn{
++					Key:     r.Type,
++					Name:    vuln.PkgName,
++					FixedIn: vuln.FixedVersion,
++				})
++				libraryScannerMap[r.Target] = append(libraryScannerMap[r.Target], types.Library{
++					Name:    vuln.PkgName,
++					Version: vuln.InstalledVersion,
++				})
++			}
++
++			scannedCves[vuln.VulnerabilityID] = vinfo
++		}
++	}
++
++	libraryScanners := models.LibraryScanners{}
++	for target, libs := range libraryScannerMap {
++		uniq := map[string]types.Library{}
++		for _, lib := range libs {
++			uniq[lib.Name+"@"+lib.Version] = lib
++		}
++		scanner := models.LibraryScanner{Path: target}
++		for _, lib := range uniq {
++			scanner.Libs = append(scanner.Libs, lib)
++		}
++		sort.Slice(scanner.Libs, func(i, j int) bool {
++			return scanner.Libs[i].Name < scanner.Libs[j].Name
++		})
++		libraryScanners = append(libraryScanners, scanner)
++	}
++	sort.Slice(libraryScanners, func(i, j int) bool {
++		return libraryScanners[i].Path < libraryScanners[j].Path
++	})
++
++	scanResult.ScannedCves = scannedCves
++	scanResult.Packages = packages
++	scanResult.LibraryScanners = libraryScanners
++
++	return scanResult, nil
++}
+diff --git a/contrib/trivy/parser/parser_test.go b/contrib/trivy/parser/parser_test.go
+new file mode 100644
+index 0000000..87c1494
+--- /dev/null
++++ b/contrib/trivy/parser/parser_test.go
+@@ -0,0 +1,225 @@
++package parser
++
++import (
++	"testing"
++
++	"github.com/aquasecurity/trivy/pkg/types"
++	"github.com/future-architect/vuls/models"
++)
++
++func TestIsTrivySupportedOS(t *testing.T) {
++	for _, family := range []string{
++		"alpine", "debian", "ubuntu", "centos", "redhat", "fedora",
++		"amazon", "oracle", "photon", "opensuse", "opensuse.leap",
++		"opensuse.tumbleweed", "suse linux enterprise server", "windows",
++	} {
++		if !IsTrivySupportedOS(family) {
++			t.Errorf("expected %q to be a supported OS", family)
++		}
++	}
++	for _, family := range []string{"", "npm", "composer", "pipenv", "bundler", "cargo", "unknown"} {
++		if IsTrivySupportedOS(family) {
++			t.Errorf("expected %q not to be a supported OS", family)
++		}
++	}
++}
++
++func TestParseInvalidJSON(t *testing.T) {
++	res, err := Parse([]byte(`{invalid`), &models.ScanResult{})
++	if err == nil {
++		t.Errorf("expected an error")
++	}
++	if res != nil {
++		t.Errorf("expected nil result, got %#v", res)
++	}
++}
++
++func TestParse(t *testing.T) {
++	vulnJSON := []byte(`[
++	  {
++	    "Target": "library",
++	    "Type": "npm",
++	    "Vulnerabilities": [
++	      {
++	        "VulnerabilityID": "CVE-2020-0001",
++	        "PkgName": "bad-lib",
++	        "InstalledVersion": "1.0.0",
++	        "FixedVersion": "1.1.0",
++	        "Title": "lib title",
++	        "Description": "lib description",
++	        "Severity": "HIGH",
++	        "References": ["https://b.example.com", "https://a.example.com"]
++	      },
++	      {
++	        "VulnerabilityID": "RUSTSEC-2020-0002",
++	        "PkgName": "rust-lib",
++	        "InstalledVersion": "0.1.0",
++	        "Title": "rust title",
++	        "Description": "rust description",
++	        "Severity": "MEDIUM"
++	      }
++	    ]
++	  },
++	  {
++	    "Target": "library",
++	    "Type": "npm",
++	    "Vulnerabilities": [
++	      {
++	        "VulnerabilityID": "CVE-2020-0001",
++	        "PkgName": "bad-lib",
++	        "InstalledVersion": "1.0.0",
++	        "FixedVersion": "1.1.0",
++	        "Title": "lib title",
++	        "Description": "lib description",
++	        "Severity": "HIGH"
++	      },
++	      {
++	        "VulnerabilityID": "CVE-2020-0001",
++	        "PkgName": "another-lib",
++	        "InstalledVersion": "2.0.0",
++	        "FixedVersion": "2.1.0"
++	      }
++	    ]
++	  },
++	  {
++	    "Target": "debian:10",
++	    "Type": "debian",
++	    "Vulnerabilities": [
++	      {
++	        "VulnerabilityID": "CVE-2020-0003",
++	        "PkgName": "os-pkg",
++	        "InstalledVersion": "3.0-1",
++	        "FixedVersion": "3.0-2",
++	        "Title": "os title",
++	        "Description": "os description",
++	        "Severity": "CRITICAL"
++	      }
++	    ]
++	  },
++	  {
++	    "Target": "unknown-target",
++	    "Type": "unknown",
++	    "Vulnerabilities": [
++	      {
++	        "VulnerabilityID": "CVE-2020-0004",
++	        "PkgName": "unknown-pkg",
++	        "InstalledVersion": "1.0.0",
++	        "FixedVersion": "1.0.1"
++	      }
++	    ]
++	  }
++	]`)
++
++	sr := &models.ScanResult{
++		JSONVersion: 2,
++		ServerUUID:  "uuid",
++	}
++	res, err := Parse(vulnJSON, sr)
++	if err != nil {
++		t.Fatalf("unexpected error: %s", err)
++	}
++	if res != sr {
++		t.Errorf("expected the supplied scan result to be returned")
++	}
++	if res.JSONVersion != 2 || res.ServerUUID != "uuid" {
++		t.Errorf("caller-supplied fields not preserved: %#v", res)
++	}
++
++	if len(res.ScannedCves) != 4 {
++		t.Fatalf("expected 4 vulns, got %d: %#v", len(res.ScannedCves), res.ScannedCves)
++	}
++
++	cve := res.ScannedCves["CVE-2020-0001"]
++	if cve.CveID != "CVE-2020-0001" {
++		t.Errorf("unexpected CveID: %s", cve.CveID)
++	}
++	if len(cve.Confidences) != 1 || cve.Confidences[0].Score != 100 ||
++		cve.Confidences[0].DetectionMethod != "TrivyMatch" {
++		t.Errorf("unexpected confidences: %#v", cve.Confidences)
++	}
++	if len(cve.AffectedPackages) != 3 {
++		t.Errorf("expected merged affected packages, got %#v", cve.AffectedPackages)
++	}
++	content, ok := cve.CveContents[models.Trivy]
++	if !ok {
++		t.Fatalf("expected trivy cve content")
++	}
++	if content.Title != "lib title" || content.Summary != "lib description" || content.Cvss3Severity != "HIGH" {
++		t.Errorf("unexpected cve content: %#v", content)
++	}
++	if len(content.References) != 2 ||
++		content.References[0].Link != "https://a.example.com" ||
++		content.References[0].Source != "trivy" ||
++		content.References[1].Link != "https://b.example.com" {
++		t.Errorf("unexpected references: %#v", content.References)
++	}
++	if len(cve.LibraryFixedIns) != 3 {
++		t.Errorf("expected library fixed ins, got %#v", cve.LibraryFixedIns)
++	}
++	for _, lfi := range cve.LibraryFixedIns {
++		if lfi.Key != "npm" {
++			t.Errorf("unexpected library key: %s", lfi.Key)
++		}
++	}
++
++	notFixed := res.ScannedCves["RUSTSEC-2020-0002"]
++	if len(notFixed.AffectedPackages) != 1 {
++		t.Fatalf("expected one affected package, got %#v", notFixed.AffectedPackages)
++	}
++	if !notFixed.AffectedPackages[0].NotFixedYet || notFixed.AffectedPackages[0].FixState != "Affected" {
++		t.Errorf("expected not fixed yet: %#v", notFixed.AffectedPackages[0])
++	}
++	if len(notFixed.LibraryFixedIns) != 1 || notFixed.LibraryFixedIns[0].FixedIn != "" {
++		t.Errorf("unexpected library fixed ins: %#v", notFixed.LibraryFixedIns)
++	}
++
++	if len(res.Packages) != 1 {
++		t.Fatalf("expected 1 package, got %#v", res.Packages)
++	}
++	pkg, ok := res.Packages["os-pkg"]
++	if !ok {
++		t.Fatalf("expected os-pkg in packages")
++	}
++	if pkg.Name != "os-pkg" || pkg.Version != "3.0-1" || pkg.Release != "" {
++		t.Errorf("unexpected package: %#v", pkg)
++	}
++
++	osCve := res.ScannedCves["CVE-2020-0003"]
++	if len(osCve.LibraryFixedIns) != 0 {
++		t.Errorf("OS findings must not have library fixed ins: %#v", osCve.LibraryFixedIns)
++	}
++	if fixed := osCve.AffectedPackages[0]; fixed.NotFixedYet || fixed.FixState != "" || fixed.FixedIn != "3.0-2" {
++		t.Errorf("unexpected affected package: %#v", fixed)
++	}
++
++	if res.Family != "debian" || res.ServerName != "debian:10" {
++		t.Errorf("unexpected family/server name: %s / %s", res.Family, res.ServerName)
++	}
++	if res.ScannedBy != "trivy" || res.ScannedVia != "trivy" {
++		t.Errorf("unexpected scanned by/via: %s / %s", res.ScannedBy, res.ScannedVia)
++	}
++	if len(res.Optional) != 1 || res.Optional["trivy-target"] != "debian:10" {
++		t.Errorf("unexpected optional: %#v", res.Optional)
++	}
++
++	if len(res.LibraryScanners) != 2 {
++		t.Fatalf("expected 2 library scanners, got %#v", res.LibraryScanners)
++	}
++	if res.LibraryScanners[0].Path != "library" || res.LibraryScanners[1].Path != "unknown-target" {
++		t.Errorf("scanners not sorted by path: %#v", res.LibraryScanners)
++	}
++	libs := res.LibraryScanners[0].Libs
++	expected := []types.Library{
++		{Name: "another-lib", Version: "2.0.0"},
++		{Name: "bad-lib", Version: "1.0.0"},
++		{Name: "rust-lib", Version: "0.1.0"},
++	}
++	if len(libs) != len(expected) {
++		t.Fatalf("expected %d libs, got %#v", len(expected), libs)
++	}
++	for i, e := range expected {
++		if libs[i] != e {
++			t.Errorf("unexpected lib at %d: %#v, want %#v", i, libs[i], e)
++		}
++	}
++}

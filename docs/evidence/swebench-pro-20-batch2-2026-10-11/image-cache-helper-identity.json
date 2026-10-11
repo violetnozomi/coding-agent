@@ -1,0 +1,10 @@
+{
+  "private_script_sha256": {
+    "download-shared-layer.py": "94c408eb7b32f39079bd112cc88a7815711dc139eececd33df7be218ce358473",
+    "local-image-cache.py": "a70e7291b5dae495f7b1da040718b393c8dc25291a877725d0f3e55171f07178"
+  },
+  "direct_first": true,
+  "loopback_only": true,
+  "global_docker_configuration_changed": false,
+  "downloads_are_model_calls": false
+}

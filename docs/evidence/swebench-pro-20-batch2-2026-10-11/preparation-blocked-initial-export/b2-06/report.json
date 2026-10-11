@@ -1,0 +1,11 @@
+{
+  "number": 6,
+  "instance_id": "instance_future-architect__vuls-d18e7a751d07260d75ce3ba0cd67c4a6aebfd967",
+  "attempt": 1,
+  "agent_status": null,
+  "resolved": null,
+  "agent_started_epoch": 1791722912.2219121,
+  "status": "attempt_or_delivery_error",
+  "error": "OSError('AF_UNIX path too long')",
+  "physical_requests": 0
+}

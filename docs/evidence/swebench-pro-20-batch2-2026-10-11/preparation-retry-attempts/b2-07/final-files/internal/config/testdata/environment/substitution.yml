@@ -1,0 +1,7 @@
+log:
+  level: ${LOG_LEVEL}
+  encoding: ${LOG_ENCODING}
+
+server:
+  http_port: ${HTTP_PORT}
+  grpc_port: ${GRPC_PORT}

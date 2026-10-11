@@ -1,0 +1,11 @@
+[
+  {
+    "mode": "direct",
+    "status": 206,
+    "bytes_read": 4096,
+    "response_host": "pkg-containers.githubusercontent.com",
+    "layer_digest": "sha256:40a543a555ccabc122b3e595b81b9cdab38ddd69494d4cc6605926c527c3ccad",
+    "layer_compressed_bytes": 2638440038,
+    "seconds": 3.088574695997522
+  }
+]

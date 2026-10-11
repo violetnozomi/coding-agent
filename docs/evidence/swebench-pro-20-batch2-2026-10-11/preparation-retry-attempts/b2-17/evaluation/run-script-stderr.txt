@@ -1,0 +1,72 @@
+PASS src/app/helpers/elements.test.ts (274 MB heap size)
+  elements
+    isConversation / isMessage
+      ✓ should return conversation when there is no conversationID in message
+      ✓ should return message when there is a conversationID in message
+    sort
+      ✓ should sort by time (1 ms)
+      ✓ should sort by time desc
+      ✓ should fallback on order (1 ms)
+      ✓ should sort by order reversed for time asc
+      ✓ should sort by size
+    getCounterMap
+      ✓ should use conversation or message count depending the label type (1 ms)
+    getDate
+      ✓ should not fail for an undefined element (1 ms)
+      ✓ should take the Time property of a message
+      ✓ should take the right label ContextTime of a conversation
+      ✓ should take the Time property of a conversation
+      ✓ should take the label time in priority for a conversation
+    isUnread
+      ✓ should not fail for an undefined element
+      ✓ should take the Unread property of a message
+      ✓ should take the right label ContextNumUnread of a conversation
+      ✓ should take the ContextNumUnread property of a conversation (1 ms)
+      ✓ should take the NumUnread property of a conversation
+      ✓ should take the value when all are present for a conversation
+    isFromProton
+      ✓ should be an element from Proton
+      ✓ should not be an element from Proton
+
+Test Suites: 1 passed, 1 total
+Tests:       21 passed, 21 total
+Snapshots:   0 total
+Time:        19.251 s
+Ran all test suites matching /src\/app\/helpers\/elements.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+PASS src/app/helpers/elements.test.ts (93 MB heap size)
+  elements
+    isConversation / isMessage
+      ✓ should return conversation when there is no conversationID in message (2 ms)
+      ✓ should return message when there is a conversationID in message
+    sort
+      ✓ should sort by time (1 ms)
+      ✓ should sort by time desc
+      ✓ should fallback on order (1 ms)
+      ✓ should sort by order reversed for time asc
+      ✓ should sort by size (1 ms)
+    getCounterMap
+      ✓ should use conversation or message count depending the label type (1 ms)
+    getDate
+      ✓ should not fail for an undefined element (1 ms)
+      ✓ should take the Time property of a message
+      ✓ should take the right label ContextTime of a conversation
+      ✓ should take the Time property of a conversation
+      ✓ should take the label time in priority for a conversation
+    isUnread
+      ✓ should not fail for an undefined element
+      ✓ should take the Unread property of a message
+      ✓ should take the right label ContextNumUnread of a conversation (1 ms)
+      ✓ should take the ContextNumUnread property of a conversation
+      ✓ should take the NumUnread property of a conversation
+      ✓ should take the value when all are present for a conversation
+    isFromProton
+      ✓ should be an element from Proton
+      ✓ should not be an element from Proton
+
+Test Suites: 1 passed, 1 total
+Tests:       21 passed, 21 total
+Snapshots:   0 total
+Time:        6.318 s
+Ran all test suites matching /applications\/mail\/src\/app\/helpers\/elements.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

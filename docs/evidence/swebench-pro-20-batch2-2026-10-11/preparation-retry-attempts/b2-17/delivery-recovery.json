@@ -1,0 +1,10 @@
+{
+  "archive_repaired": true,
+  "original_report_unchanged": true,
+  "agent_or_model_rerun": false,
+  "official_grade_unchanged": true,
+  "reason": "rebuildable repository index exceeded original raw archive quota; all evidence and index preserved",
+  "original_raw_limit_bytes": 536870912,
+  "repair_raw_limit_bytes": 2147483648,
+  "source_bytes": 1093461757
+}

@@ -1,0 +1,10 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/p2/b2-17/container-evidence.tar.gz",
+  "sha256": "cd0a54948897284d67af85ee055b4031dce88aabe07a6f2c44646c7b9c715ff4",
+  "bytes": 234161409,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/archives/batch2-instance_protonmail__webclients-09fcf0dbdb87fa4f4a27700800ee4a3caed8b413",
+  "retains_raw_container_session_and_artifacts": true,
+  "source_bytes": 1093461757,
+  "source_bytes_limit": 2147483648,
+  "all_regular_files_verified": 8150
+}

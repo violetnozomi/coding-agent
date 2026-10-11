@@ -1,0 +1,207 @@
+[
+  {
+    "tool_call_id": "call_00_Q9ACFfs9MnZSWPTzi9VX7067",
+    "input": {
+      "command": "ls /app 2>/dev/null | head; echo \"---\"; ls /workspace 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_07OIKAYMIzMa4knwM5Ih9075",
+    "input": {
+      "command": "ls -la /workspace | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_3UW3VW5T5POxc5UJIjFh0710",
+    "input": {
+      "command": "cd /workspace && ls internal/config && echo \"---\" && grep -rl \"DecodeHooks\" --include=*.go ."
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_x37tcbMMRMEAQAHs6qAT8635",
+    "input": {
+      "command": "cd /workspace && head -80 config/schema_test.go && echo \"===LINES===\" && wc -l config/schema_test.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_9zuf6t2KqsuwYgwrJEqp6273",
+    "input": {
+      "command": "cd /workspace && ls internal/config/"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Bzyc4XMK0ZyOGYRj95GP9245",
+    "input": {
+      "command": "cd /workspace && wc -l internal/config/config_test.go && ls internal/config/testdata/"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_f1oVK67iRiJcByw3oY2b6738",
+    "input": {
+      "command": "cd /workspace && grep -n \"mapstructure\" go.mod go.sum | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Qhe3zwhhumdKYWipMndR4630",
+    "input": {
+      "command": "cd /workspace && find internal/config/testdata -type f | sort"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_er5a9yln03asisRtBYQd2052",
+    "input": {
+      "command": "echo hi"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "hi"
+  },
+  {
+    "tool_call_id": "call_00_Ny0AuMXBq1znpraTtGrj5286",
+    "input": {
+      "command": "go build ./internal/config/",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(go completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_9iUpjjIyBRKorZ57dqck9481",
+    "input": {
+      "command": "cd /workspace && git status --porcelain && git stash list"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-1",
+    "input": {
+      "command": "go test ./internal/config -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_LHL1QSOBdKHOKzoxabG88151",
+    "input": {
+      "command": "cd /workspace && go test -vet=off ./internal/config -run 'TestLoad' 2>&1 | tail -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_Ff2fgGoos3dLRDpgge5g4819",
+    "input": {
+      "command": "cd /workspace && go test -vet=off ./internal/config -run TestLoad 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ryr2jHirmfwo7wAiuYt98585",
+    "input": {
+      "command": "go test -vet=off ./internal/config -run TestLoad 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/config\t0.230s"
+  },
+  {
+    "tool_call_id": "verification-stage-static-2",
+    "input": {
+      "command": "go test ./internal/config -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/config\t(cached) [no tests to run]"
+  },
+  {
+    "tool_call_id": "call_00_KCWSx9iT2Bg3SEPHfNAQ8849",
+    "input": {
+      "command": "go test -vet=off ./internal/config -run TestLoadEnvironmentVariableSubstitution -v 2>&1 | tail -30",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "=== RUN   TestLoadEnvironmentVariableSubstitution\n=== RUN   TestLoadEnvironmentVariableSubstitution/substitutes_environment_variables_in_yaml\n=== RUN   TestLoadEnvironmentVariableSubstitution/environment_variable_overrides_substituted_value\n--- PASS: TestLoadEnvironmentVariableSubstitution (0.00s)\n    --- PASS: TestLoadEnvironmentVariableSubstitution/substitutes_environment_variables_in_yaml (0.00s)\n    --- PASS: TestLoadEnvironmentVariableSubstitution/environment_variable_overrides_substituted_value (0.00s)\nPASS\nok  \tgo.flipt.io/flipt/internal/config\t0.016s"
+  },
+  {
+    "tool_call_id": "call_00_upXqNWMsr6NTHtlUphMJ9302",
+    "input": {
+      "command": "go test -vet=off ./internal/config/... 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

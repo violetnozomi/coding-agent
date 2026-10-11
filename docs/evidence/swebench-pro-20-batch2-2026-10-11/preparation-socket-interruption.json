@@ -1,0 +1,10 @@
+{
+  "reason": "unix_socket_path_limit_before_sdk_launch",
+  "coordinator_pid": 3701617,
+  "stopped_direct_pull_pid": 3709480,
+  "paid_requests": 0,
+  "no_sdk_launch_in_any_slot": true,
+  "empty_admissions_ledger_sha256": "3a218715ad8d80f81b251391a82c5e3bb49dea2f237851862de4e8254375a393",
+  "prior_paid_stage_unchanged": true,
+  "time_epoch": 1791723002.2162423
+}

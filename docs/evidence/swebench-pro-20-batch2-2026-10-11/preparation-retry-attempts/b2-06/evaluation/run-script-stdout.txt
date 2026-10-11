@@ -1,0 +1,6 @@
+Running selected tests: TestParse
+# github.com/future-architect/vuls/contrib/trivy/parser
+contrib/trivy/parser/parser_test.go:7:2: no required module provides package github.com/d4l3k/messagediff; to add it:
+	go get github.com/d4l3k/messagediff
+FAIL	github.com/future-architect/vuls/contrib/trivy/parser [setup failed]
+FAIL

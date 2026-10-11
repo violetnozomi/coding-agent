@@ -1,0 +1,41 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 2>/dev/null; echo \"---\"; ls contrib 2>/dev/null; echo \"--- go.mod ---\"; head -40 go.mod"}, "allowed": false}
+{"tool": "bash", "input": {"command": "head -40 /workspace/go.mod"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go env GOPATH GOMODCACHE 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"Alpine\\|Debian\\|Ubuntu\" /workspace --include=*.go -l | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go doc github.com/aquasecurity/fanal/analyzer/os 2>&1 | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && GOFLAGS=-mod=mod go doc github.com/aquasecurity/fanal/analyzer/os 2>&1 | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go doc github.com/aquasecurity/fanal/analyzer/os"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go env GOFLAGS GOPATH; ls -la; cat go.sum | grep fanal"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go doc github.com/aquasecurity/fanal/analyzer/os", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/fanal/analyzer/os 2>&1 | head -80", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"ScannedCves\\|Packages \\|LibraryScanners\\|type ScanResult\\|Optional\\|Family\\|ServerName\\|ScannedBy\\|ScannedVia\\|JSONVersion\\|ServerUUID\" models/vulninfos.go | head -60", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '1,230p' models/vulninfos.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"type Confidence\\|type Confidences\\|DetectionMethod\\|TrivyMatch\\|type CveContents\\|type CveContent struct\\|type CveContentType\\|Trivy \" models/*.go | head -40", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "sed -n '805,915p' models/vulninfos.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '1,60p;160,200p;340,380p' models/cvecontents.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '198,260p' models/cvecontents.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '1,180p' models/library.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/trivy/pkg/types 2>&1 | head -120", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/fanal/types 2>&1 | grep -n \"Result\\|Library\\|Vulnerability\" | head -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/trivy/pkg/report 2>&1 | head -80", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/trivy-db/pkg/types 2>&1 | head -80", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/fanal/types 2>&1 | sed -n '1,120p'", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"type Package struct\\|type Packages\\|func (ps Packages)\\|Version \\|Release \" models/packages.go | head -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '1,80p' models/packages.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/trivy-db/pkg/types.Vulnerability 2>&1 | head -40; echo \"=== fanal library check ===\"; go doc github.com/aquasecurity/trivy/pkg/types.Library 2>&1 | head", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/trivy/pkg/scanner 2>&1 | head -40; echo \"=== fanal artifact ===\"; go doc -all github.com/aquasecurity/fanal/types.Artifact 2>&1 | head -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '255,330p' models/cvecontents.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc github.com/aquasecurity/trivy/pkg/report.Result 2>&1; go doc github.com/aquasecurity/trivy/pkg/types.DetectedVulnerability 2>&1", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/trivy/pkg/analyzer 2>&1 | grep -n \"Type\\|type \" | head -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"report.Result\\|pkg/report\" --include=*.go . | head", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go list -m github.com/aquasecurity/trivy github.com/aquasecurity/fanal 2>&1", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc github.com/aquasecurity/trivy/pkg/report.Results 2>&1", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./contrib/trivy/parser -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./contrib/trivy/parser 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -count=1 -run 'TestParse|TestIsTrivySupportedOS' github.com/future-architect/vuls/contrib/trivy/parser 2>&1 | tail -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -count=1 -run 'TestParse|TestIsTrivySupportedOS' github.com/future-architect/vuls/contrib/trivy/parser '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -count=1 -run 'TestParse|TestIsTrivySupportedOS' github.com/future-architect/vuls/contrib/trivy/parser '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "targeted", "command": "go test -count=1 -run 'TestParse|TestIsTrivySupportedOS' github.com/future-architect/vuls/contrib/trivy/parser"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -count=1 -run 'TestParse|TestIsTrivySupportedOS' github.com/future-architect/vuls/contrib/trivy/parser '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -count=1 -run 'TestParse|TestIsTrivySupportedOS' github.com/future-architect/vuls/contrib/trivy/parser '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}

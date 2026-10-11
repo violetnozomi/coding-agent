@@ -1,0 +1,9 @@
+{
+  "image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_future-architect__vuls-d18e7a751d07260d75ce3ba0cd67c4a6aebfd967",
+  "digest": "sha256:8b8bc686ec016db50fd70056648cc8ebf02df6b12c36f15213b61abf4c17ac53",
+  "index_digest": "sha256:23b315a7f554d490aac0409f554bbb11925d70aec693cf3be9493b053314897f",
+  "compressed_bytes": 1204526305,
+  "estimated_required_bytes": 5289583891,
+  "free_bytes": 22216388608,
+  "estimate_is_not_exact": true
+}

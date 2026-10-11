@@ -1,0 +1,10 @@
+{
+  "host": "127.0.0.1",
+  "port": 45293,
+  "fixed_manifest_digests": {
+    "instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37": "sha256:fc3c867ad010832886951359395ad2d3bcf31872b432317fa499d55eec0bc0cf",
+    "instance_protonmail__webclients-09fcf0dbdb87fa4f4a27700800ee4a3caed8b413": "sha256:0cef5023bc1e15285150f693e7a73ddfaaf1f4041c30551efa2af17e640d0425"
+  },
+  "only_verified_official_objects": true,
+  "model_calls": 0
+}

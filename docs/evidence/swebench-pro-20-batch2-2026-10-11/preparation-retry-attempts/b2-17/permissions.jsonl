@@ -1,0 +1,14 @@
+{"tool": "bash", "input": {"command": "grep -rn \"IsProton\" /workspace/packages/shared/lib/interfaces/ 2>/dev/null | head -30; echo \"---\"; ls /workspace/packages/shared/lib/interfaces/mail/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"IsProton\" /workspace/packages/ 2>/dev/null | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"IsProton\" /workspace/applications/ 2>/dev/null | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "find /workspace/applications/mail/src/app/helpers -name \"*.test.*\" | head -30"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git status 2>&1 | head -5; echo \"===\"; git log --oneline -3 2>&1 | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat applications/mail/package.json | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls && cat package.json | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace/applications/mail && ls node_modules/.bin/ | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace/applications/mail && npx jest src/app/helpers/elements.test.ts --coverage=false 2>&1 | tail -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace/applications/mail && yarn jest src/app/helpers/elements.test.ts --coverage=false 2>&1 | tail -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hello"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace/applications/mail && ./node_modules/.bin/jest --version 2>&1 | head", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace/applications/mail && node /workspace/node_modules/jest/bin/jest.js src/app/helpers/elements.test.ts --coverage=false 2>&1 | tail -40", "timeout": 120}, "allowed": false}
