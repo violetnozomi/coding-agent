@@ -85,10 +85,17 @@ def empirical_authorization_valid(grant) -> bool:
         allowed_scope = (len(scope) <= 12 and len(set(scope)) == len(scope)
                          and all(re.fullmatch(r"[\w-]+__[\w-]+-\d+", unit) for unit in scope)
                          and bool(re.fullmatch(r"[0-9a-f]{64}", str(grant.get("instance_manifest_sha256", "")))))
+    if purpose == "swebench-pro-v2":
+        # Pro 只使用本轮冻结的公开实例；不扩大旧 Verified 或审查授权。
+        allowed_scope = (len(scope) <= 20 and len(set(scope)) == len(scope)
+                         and all(re.fullmatch(r"instance_[\w.-]+__[\w.-]+-[0-9a-f]{40}(?:-v[0-9a-f]{40})?", unit)
+                                 for unit in scope)
+                         and bool(re.fullmatch(r"[0-9a-f]{64}", str(grant.get("instance_manifest_sha256", "")))))
     return (allowed_scope and grant.get("input_mode") == "empirical"
             and grant.get("empirical_risk_accepted") is True and grant.get("cost_currency") == "CNY"
             and bool(grant.get("account")) and bool(grant.get("authorization_text"))
-            and bool(grant.get("contract_id")) and grant.get("model") == "deepseek-v4-flash"
+            and bool(grant.get("contract_id"))
+            and grant.get("model") == ("deepseek-flash" if purpose == "swebench-pro-v2" else "deepseek-v4-flash")
             and all(type(n) in {int, float} and math.isfinite(n) and n > 0 for n in numbers)
             and prices["cached_input"] <= prices["input"]
             and grant["valid_from"] <= time.time() < grant["valid_until"])

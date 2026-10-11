@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from nz_coder.evaluation.model_relay import AdmissionDenied, InputAccounting, RelayBinding, RelayLedger, RelayLimits
+from nz_coder.evaluation.model_relay import AdmissionDenied, InputAccounting, RelayBinding, RelayLedger, RelayLimits, empirical_authorization_valid
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +32,57 @@ def request():
                                  payload_sha256=hashlib.sha256(raw).hexdigest(), reference_count=100)
     binding = RelayBinding("review-effects-formal", "u01", "u01", "auxiliary", 2, payload["model"], 1024, time.monotonic()+5)
     return binding, raw, payload, accounting
+
+
+def pro_grant():
+    authorization = grant()
+    authorization.update(purpose="swebench-pro-v2", model="deepseek-flash", cost_limit=50,
+                         instance_manifest_sha256="a" * 64,
+                         scope=[f"instance_example__project-{i:040x}" for i in range(20)])
+    return authorization
+
+
+def test_pro_twenty_task_grant_uses_same_ledger_and_never_widens_old_scope(tmp_path):
+    authorization = pro_grant()
+    assert empirical_authorization_valid(authorization)
+    ledger = RelayLedger(tmp_path / "pro-ledger", RelayLimits(), empirical_authorization=authorization)
+    binding, raw, payload, accounting = request()
+    payload["model"] = "deepseek-flash"
+    raw = json.dumps(payload).encode()
+    accounting = InputAccounting(None, "official-reference-fixture", contract_id="reference-fixture",
+                                 payload_sha256=hashlib.sha256(raw).hexdigest(), reference_count=100)
+    binding = RelayBinding("swebench-pro-v2", authorization["scope"][0], "pro-run", "main", 2,
+                           payload["model"], 1024, time.monotonic() + 5)
+    try:
+        attempt = ledger.reserve(binding, "one", raw, payload, accounting)
+        ledger.settle(attempt, status="complete", finish_reason="stop",
+                      usage={"prompt_tokens": 100, "completion_tokens": 10})
+        assert ledger.cost_occupied_cny == pytest.approx((100 * 2 + 10 * 8) / 1_000_000)
+        other = RelayBinding("swebench-pro-v2", "instance_other__project-" + "b" * 40,
+                             "other", "main", 2, payload["model"], 1024, time.monotonic() + 5)
+        with pytest.raises(AdmissionDenied, match="scope_mismatch"):
+            ledger.reserve(other, "two", raw, payload, accounting)
+        assert len(ledger.attempts) == 1
+    finally:
+        ledger.close()
+
+
+@pytest.mark.parametrize("change", ["too_many", "duplicate", "bad_id", "wrong_model", "old_purpose", "no_risk"])
+def test_pro_grant_rejects_scope_or_model_expansion(change):
+    authorization = pro_grant()
+    if change == "too_many":
+        authorization["scope"].append("instance_example__project-" + "f" * 40)
+    elif change == "duplicate":
+        authorization["scope"][1] = authorization["scope"][0]
+    elif change == "bad_id":
+        authorization["scope"][0] = "../private"
+    elif change == "wrong_model":
+        authorization["model"] = "deepseek-v4-pro"
+    elif change == "old_purpose":
+        authorization["purpose"] = "swebench-verified"
+    else:
+        authorization["empirical_risk_accepted"] = False
+    assert not empirical_authorization_valid(authorization)
 
 
 def test_strict_still_rejects_reference_count_without_a_bound(tmp_path):
