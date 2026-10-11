@@ -1,0 +1,13 @@
+{
+  "instance_id": "instance_flipt-io__flipt-7161f7b876773a911afdd804b281e52681cb7321",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": true,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/15",
+  "preparation_retry_not_agent_retry": true,
+  "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/pending/15",
+  "status": "attempted",
+  "patch_sha256": "adefa29bc2c0599f4f51c28fdb5402bfd0c433d856f6644dffbdf666e5a8dc06",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

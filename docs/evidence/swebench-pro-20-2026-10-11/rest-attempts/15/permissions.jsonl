@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -8 && echo \"---\" && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls internal/config/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && head -20 cmd/flipt/default.go cmd/flipt/default_linux.go 2>/dev/null; ls cmd/flipt/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls cmd/flipt && echo \"---default.go---\" && cat cmd/flipt/default.go && echo \"---default_linux.go---\" && cat cmd/flipt/default_linux.go && echo \"---default_darwin?---\" && ls cmd/flipt/*.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,40p' go.mod | grep -n viper; grep -n \"spf13/viper\" go.mod go.sum | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go test ./internal/config/... 2>&1 | tail -30", "timeout": 300}, "allowed": false}
+{"tool": "bash", "input": {"command": "go version"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/... 2>&1 | tail -30", "workdir": "/workspace", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/... 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./cmd/flipt -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "targeted", "command": "go vet -vettool= 2>/dev/null; go test -vet=off -p 1 ./internal/config 2>&1 | tail -20", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -count=1 -run 'TestLoad' ./internal/config 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -count=1 -run 'TestLoad_DefaultPathAppliesEnvOverrides' ./internal/config 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -count=1 -v -run 'TestLoad_DefaultPathAppliesEnvOverrides' ./internal/config 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -count=1 ./internal/config 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build -vet=off ./cmd/flipt 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
