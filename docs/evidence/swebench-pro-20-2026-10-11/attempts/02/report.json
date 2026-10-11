@@ -1,0 +1,10 @@
+{
+  "instance_id": "instance_internetarchive__openlibrary-dbbd9d539c6d4fd45d5be9662aa19b6d664b5137-v08d8e8889ec945ab821fb156c04c7d2e2810debb",
+  "attempt": 1,
+  "agent_status": "completed",
+  "resolved": false,
+  "status": "attempted",
+  "patch_sha256": "ef02acf857a49a6a555ef0315bce0800e4eadffade9152c261076de5bbb8a129",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

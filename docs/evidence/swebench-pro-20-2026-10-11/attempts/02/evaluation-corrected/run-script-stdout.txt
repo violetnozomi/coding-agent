@@ -1,0 +1,26 @@
+Running selected tests: openlibrary/plugins/openlibrary/tests/test_lists.py
+pytest_configure None
+============================= test session starts ==============================
+platform linux -- Python 3.11.1, pytest-7.4.0, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pyproject.toml
+plugins: anyio-4.10.0, asyncio-0.21.1, rerunfailures-15.1, cov-4.1.0
+asyncio: mode=Mode.STRICT
+collecting ... collected 7 items
+
+openlibrary/plugins/openlibrary/tests/test_lists.py::test_process_seeds PASSED [ 14%]
+openlibrary/plugins/openlibrary/tests/test_lists.py::TestListRecord::test_from_input_no_data PASSED [ 28%]
+openlibrary/plugins/openlibrary/tests/test_lists.py::TestListRecord::test_from_input_with_data PASSED [ 42%]
+openlibrary/plugins/openlibrary/tests/test_lists.py::TestListRecord::test_from_input_seeds[seeds0-expected0] PASSED [ 57%]
+openlibrary/plugins/openlibrary/tests/test_lists.py::TestListRecord::test_from_input_seeds[seeds1-expected1] PASSED [ 71%]
+openlibrary/plugins/openlibrary/tests/test_lists.py::TestListRecord::test_from_input_seeds[seeds2-expected2] PASSED [ 85%]
+openlibrary/plugins/openlibrary/tests/test_lists.py::TestListRecord::test_from_input_seeds[seeds3-expected3] PASSED [100%]
+
+=============================== warnings summary ===============================
+../usr/local/lib/python3.11/site-packages/web/webapi.py:6
+  /usr/local/lib/python3.11/site-packages/web/webapi.py:6: DeprecationWarning: 'cgi' is deprecated and slated for removal in Python 3.13
+    import cgi
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========================= 7 passed, 1 warning in 0.22s =========================

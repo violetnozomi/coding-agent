@@ -1,0 +1,17 @@
+{
+  "instance_id": "instance_internetarchive__openlibrary-dbbd9d539c6d4fd45d5be9662aa19b6d664b5137-v08d8e8889ec945ab821fb156c04c7d2e2810debb",
+  "actual_agent_attempt": 1,
+  "agent_status": "completed",
+  "report_status": "attempted",
+  "main_physical_requests": 40,
+  "auxiliary_physical_requests": 0,
+  "reported_usage_estimate_cny": 1.92289536,
+  "official_resolved": true,
+  "initial_grade_environment_blocked": true,
+  "corrected_official_grade_present": true,
+  "agent_dependency_isolation_revision": 1,
+  "native_entry_sha256": "3bab476d4c50a30d6da20bf0c4c7a082529993361d9605050514589bf83f6143",
+  "host_patch_or_model_hints": false,
+  "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/02",
+  "public_reasoning_removed": true
+}

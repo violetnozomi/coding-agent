@@ -1,0 +1,210 @@
+diff --git a/openlibrary/plugins/openlibrary/lists.py b/openlibrary/plugins/openlibrary/lists.py
+index 29a39cbe8..f25ada0da 100644
+--- a/openlibrary/plugins/openlibrary/lists.py
++++ b/openlibrary/plugins/openlibrary/lists.py
+@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
+ import json
+ import random
+ from typing import TypedDict
++import urllib.parse
+ import web
+ 
+ from infogami.utils import delegate
+@@ -49,27 +50,66 @@ class ListRecord:
+ 
+     @staticmethod
+     def from_input():
+-        i = utils.unflatten(
+-            web.input(
++        data = web.data()
++        if data:
++            # When body data is present, use it exclusively and ignore the
++            # query string. Parse it as standard
++            # application/x-www-form-urlencoded form data (where "+" encodes
++            # a space) and resolve each key to a single string value.
++            if isinstance(data, bytes):
++                data = data.decode('utf-8')
++            input_data = {
++                key: values[-1]
++                for key, values in urllib.parse.parse_qs(
++                    data, keep_blank_values=True
++                ).items()
++            }
++
++            # Defaults may only fill keys that are absent and that are not
++            # ancestors of any nested/indexed key present in the body. For
++            # example, when a "seeds--0--key" field is submitted, no default
++            # is injected for "seeds" before unflattening.
++            nested_ancestors = set()
++            for key in input_data:
++                if '--' in key:
++                    parts = key.split('--')
++                    for index in range(1, len(parts)):
++                        nested_ancestors.add('--'.join(parts[:index]))
++            for key, default in (
++                ('key', None),
++                ('name', ''),
++                ('description', ''),
++                ('seeds', []),
++            ):
++                if key not in input_data and key not in nested_ancestors:
++                    input_data[key] = default
++        else:
++            input_data = web.input(
+                 key=None,
+                 name='',
+                 description='',
+                 seeds=[],
+             )
+-        )
+ 
+-        normalized_seeds = [
+-            ListRecord.normalize_input_seed(seed)
+-            for seed_list in i.seeds
+-            for seed in (
++        i = utils.unflatten(input_data)
++
++        seeds = i.seeds if isinstance(i.seeds, list) else [i.seeds]
++        normalized_seeds = []
++        for seed_list in seeds:
++            seed_items = (
+                 seed_list.split(',') if isinstance(seed_list, str) else [seed_list]
+             )
+-        ]
+-        normalized_seeds = [
+-            seed
+-            for seed in normalized_seeds
+-            if seed and (isinstance(seed, str) or seed.get('key'))
+-        ]
++            for seed in seed_items:
++                if isinstance(seed, str):
++                    if not seed.strip():
++                        continue
++                elif isinstance(seed, dict):
++                    if not seed.get('key'):
++                        continue
++                else:
++                    continue
++                normalized_seeds.append(ListRecord.normalize_input_seed(seed))
++
+         return ListRecord(
+             key=i.key,
+             name=i.name,
+diff --git a/openlibrary/plugins/openlibrary/tests/test_lists.py b/openlibrary/plugins/openlibrary/tests/test_lists.py
+index a282c36e6..bc1c239ae 100644
+--- a/openlibrary/plugins/openlibrary/tests/test_lists.py
++++ b/openlibrary/plugins/openlibrary/tests/test_lists.py
+@@ -1,4 +1,7 @@
++import web
++
+ from openlibrary.plugins.openlibrary import lists
++from openlibrary.plugins.upstream import utils
+ 
+ 
+ def test_process_seeds():
+@@ -11,3 +14,82 @@ def test_process_seeds():
+     assert f({"key": "/books/OL1M"}) == {"key": "/books/OL1M"}
+     assert f("/subjects/love") == "subject:love"
+     assert f("subject:love") == "subject:love"
++
++
++def test_unflatten_setvalue_overwrites_simple_keys():
++    # Simple (separator-free) keys must overwrite previously set values.
++    assert utils.unflatten({'a': 1, 'a--0': 2})['a'] == [2]
++    assert dict(utils.unflatten({'x': 'first'})).get('x') == 'first'
++
++
++def test_from_input_prefers_body_over_query(monkeypatch):
++    web.ctx.query = '?key=/lists/OL1L&name=from-query&seeds=/books/OL1M'
++    monkeypatch.setattr(
++        web,
++        'data',
++        lambda: b'name=Body+Name&description=Body+description'
++        b'&seeds--0--key=%2Fbooks%2FOL2M',
++    )
++    monkeypatch.setattr(
++        web,
++        'input',
++        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("web.input called")),
++    )
++
++    record = lists.ListRecord.from_input()
++    assert record.key is None
++    assert record.name == 'Body Name'
++    assert record.description == 'Body description'
++    assert record.seeds == [{'key': '/books/OL2M'}]
++
++
++def test_from_input_seeds_comma_separated(monkeypatch):
++    web.ctx.query = ''
++    monkeypatch.setattr(web, 'data', lambda: b'name=x&seeds=%2Fbooks%2FOL1M,%2Fbooks%2FOL2M,,')
++
++    record = lists.ListRecord.from_input()
++    assert record.seeds == [{'key': '/books/OL1M'}, {'key': '/books/OL2M'}]
++
++
++def test_from_input_ignores_empty_seeds(monkeypatch):
++    web.ctx.query = ''
++    monkeypatch.setattr(
++        web,
++        'data',
++        lambda: b'name=x&seeds--0--key=&seeds--1--key=%2Fbooks%2FOL1M',
++    )
++
++    record = lists.ListRecord.from_input()
++    assert record.seeds == [{'key': '/books/OL1M'}]
++
++
++def test_from_input_defaults_not_injected_for_nested_ancestors(monkeypatch):
++    web.ctx.query = ''
++    # Only a nested key is provided; no default must be injected for "seeds".
++    monkeypatch.setattr(web, 'data', lambda: b'seeds--0--key=%2Fbooks%2FOL1M')
++
++    record = lists.ListRecord.from_input()
++    assert record.name == ''
++    assert record.description == ''
++    assert record.key is None
++    assert record.seeds == [{'key': '/books/OL1M'}]
++
++
++def test_from_input_falls_back_to_web_input(monkeypatch):
++    web.ctx.query = ''
++    monkeypatch.setattr(web, 'data', lambda: b'')
++    monkeypatch.setattr(
++        web,
++        'input',
++        lambda *a, **kw: web.storage(
++            key='/lists/OL1L',
++            name='From Input',
++            description='',
++            seeds=['/books/OL1M'],
++        ),
++    )
++
++    record = lists.ListRecord.from_input()
++    assert record.key == '/lists/OL1L'
++    assert record.name == 'From Input'
++    assert record.seeds == [{'key': '/books/OL1M'}]
+diff --git a/openlibrary/plugins/upstream/utils.py b/openlibrary/plugins/upstream/utils.py
+index 38dc26dda..02ec0cb1a 100644
+--- a/openlibrary/plugins/upstream/utils.py
++++ b/openlibrary/plugins/upstream/utils.py
+@@ -286,11 +286,14 @@ def unflatten(d: Storage, separator: str = "--") -> Storage:
+     def setvalue(data, k, v):
+         if '--' in k:
+             k, k2 = k.split(separator, 1)
+-            setvalue(data.setdefault(k, {}), k2, v)
++            # Replace a conflicting simple value so nested keys can be set
++            # without crashing.
++            if not isinstance(data.get(k), dict):
++                data[k] = {}
++            setvalue(data[k], k2, v)
+         else:
+-            # Don't overwrite if the key already exists
+-            if k not in data:
+-                data[k] = v
++            # Overwrite any existing value for simple keys (no separator).
++            data[k] = v
+ 
+     def makelist(d):
+         """Convert d into a list if all the keys of d are integers."""
