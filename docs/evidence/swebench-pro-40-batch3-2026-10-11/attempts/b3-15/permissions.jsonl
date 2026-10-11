@@ -1,0 +1,25 @@
+{"tool": "bash", "input": {"command": "cd /workspace && cat package.json | head -80 && echo \"---\" && ls test/utils | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls test/utils/ | head -80", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls; echo \"--- test ---\"; ls test 2>/dev/null | head; echo \"--- find pillify tests ---\"; find . -path ./node_modules -prune -o -name \"*pillify*\" -print -o -name \"*tooltipify*\" -print 2>/dev/null", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && node -e \"console.log(require('react/package.json').version, require('react-dom/package.json').version)\" && grep -n '\"react' package.json && ls node_modules/react-dom/client.js 2>/dev/null; ls node_modules/react-dom/ | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,60p' src/utils/ReactUtils.tsx"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls node_modules/react-dom/ | head", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls test/test-utils/", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls; echo ---; cat jest.config.js 2>/dev/null | head -60", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls /workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cat jest.config.ts", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls test; echo ---; cat test/setupTests.ts 2>/dev/null | head -60", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls test/unit-tests/components/views/messages/ | head -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"pill\\|Pill\\|@room\\|reactRoots\\|tooltip\" test/unit-tests/components/views/messages/TextualBody-test.tsx | head -60", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"pillifyLinks\\|tooltipifyLinks\\|unmountPills\\|unmountTooltips\\|ReactRootManager\" test | head -40", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | tail -60", "workdir": "/workspace", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | tail -60", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/utils/tooltipify-test.tsx 2>&1 | head -120", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/utils/tooltipify-test.tsx 2>&1 | grep -A 30 \"●\" | head -120", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/utils/tooltipify-test.tsx 2>&1 | grep -v \"console.error\" | sed -n '1,200p' | grep -n \"\" | grep -iE \"✕|✓|●|Expected|Received|Number of calls|toEqual|toBe|Test Suites|Tests:\" | head -60", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/utils/pillify-test.tsx 2>&1 | grep -v \"console.error\" | sed -n '1,300p' | grep -iE \"✕|✓|●|Expected|Received|Test Suites|Tests:\" | head -60", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | grep -iE \"✕|✓|●|Expected|Received|Test Suites|Tests:\" | head -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/utils/react-test.tsx test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | grep -iE \"✕|✓|●|Expected|Received|Test Suites|Tests:\" | head -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/unit-tests/components/views/messages/TextualBody-test.tsx 2>&1 | grep -iE \"✕|Test Suites|Tests:\" | head -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "npx tsc --noEmit -p tsconfig.json 2>&1 | grep -iE \"react.tsx|pillify|tooltipify|TextualBody|EditHistoryMessage\" | head -20; echo \"tsc-done\"", "timeout": 120, "workdir": "/workspace"}, "allowed": false}

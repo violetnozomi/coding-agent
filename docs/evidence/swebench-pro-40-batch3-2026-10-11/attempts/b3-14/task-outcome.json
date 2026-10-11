@@ -15,6 +15,8 @@
   "host_patch_or_model_hints": false,
   "record_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-14",
   "public_reasoning_removed": true,
+  "sdk_launched": true,
+  "main_model_was_called": true,
   "known_reported_usage_estimate_cny": 0.15060608,
   "retained_unknown_request_reservation_cny": 0,
   "unknown_usage_request_ids": [],

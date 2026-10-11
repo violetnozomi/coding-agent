@@ -1,0 +1,736 @@
+{
+  "turn_count": 40,
+  "max_turns": 40,
+  "started_at": 1791737816.39237,
+  "timeout_seconds": 0.0,
+  "last_edit_turn": 35,
+  "edits_this_run": 7,
+  "has_diff": true,
+  "diff_chars": 9553,
+  "changed_files": [
+    "internal/config/authentication.go",
+    "internal/config/config_test.go",
+    "internal/config/errors.go",
+    "internal/config/testdata/authentication/github_missing_client_id.yml",
+    "internal/config/testdata/authentication/github_missing_client_secret.yml",
+    "internal/config/testdata/authentication/github_missing_redirect_address.yml",
+    "internal/config/testdata/authentication/github_no_org_scope.yml",
+    "internal/config/testdata/authentication/oidc_missing_client_id.yml",
+    "internal/config/testdata/authentication/oidc_missing_client_secret.yml",
+    "internal/config/testdata/authentication/oidc_missing_redirect_address.yml"
+  ],
+  "tests_modified": true,
+  "source_only": true,
+  "acceptance_criteria": [
+    "Ensure that GitHub authentication configuration must be rejected if `client_id`, `client_secret`, or `redirect_address` is empty.",
+    "Maintain validation such that when `allowed_organizations` is configured for GitHub authentication, the `scopes` list must include `read:org`.",
+    "Ensure that each configured OIDC provider must be rejected if `client_id`, `client_secret`, or `redirect_address` is empty.",
+    "Configuration loading must reject invalid authentication configurations and return an error instead of proceeding with initialization.",
+    "Error messages for GitHub authentication validation must always include the provider key `\"github\"`."
+  ],
+  "requested_paths": [],
+  "task_mode": "feature",
+  "wants_tests": false,
+  "forbids_test_changes": false,
+  "plan_generated": false,
+  "plan_text": "",
+  "replan_count": 0,
+  "open_todo_items": 0,
+  "task_reference_evidence": [],
+  "task_references_bound": true,
+  "task_authority_epoch": 0,
+  "task_authority_message_id": "",
+  "task_reference_omitted_count": 0,
+  "task_contract": {},
+  "requirement_ledger": {},
+  "completion_gate_prompts": 0,
+  "completion_gate_signature": "",
+  "initial_task_text": "A code repository is available in the `/app` directory. Your task is to implement the changes necessary to satisfy the following Pull Request (PR) description:\n\n<pr_description>\n# Title: feat: validate some common auth config settings\n\n## Description\nAuthentication configuration for GitHub and OIDC is loaded without checking that common required settings are present. When the configuration is invalid or incomplete, the application should fail during load with a clear validation error instead of accepting the config silently. For GitHub authentication, validation should also cover cases where organization restrictions are configured but the configuration does not meet the related scope requirements.\n\n## Requirements\n\n- Ensure that GitHub authentication configuration must be rejected if `client_id`, `client_secret`, or `redirect_address` is empty.\n- Maintain validation such that when `allowed_organizations` is configured for GitHub authentication, the `scopes` list must include `read:org`.\n- Ensure that each configured OIDC provider must be rejected if `client_id`, `client_secret`, or `redirect_address` is empty.\n- Configuration loading must reject invalid authentication configurations and return an error instead of proceeding with initialization.\n- Error messages for GitHub authentication validation must always include the provider key `\"github\"`.\n- Error messages for OIDC authentication validation must always include the exact YAML provider key (for example `\"foo\"`).\n- Ensure that when a required field is missing, the error message follows the format: `provider \"<provider>\": field \"<field>\": non-empty value is required`.\n- Ensure that when GitHub authentication is configured with `allowed_organizations` but the `scopes` list does not include `read:org`, the error message is: `provider \"github\": field \"scopes\": must contain read:org when allowed_organizations is not empty`.\n\n## New Interfaces\n\nNo new interfaces are introduced.\n</pr_description>\n\nConstraints:\n* Do not reference, look up, or copy existing solutions, external PRs, or online workarounds. The implementation must be entirely your own independent work.\n\n\nExecution environment: repository is /workspace. Network is unavailable during this attempt. Use the installed project toolchain and cached dependencies. Implement the requested change and verify it with relevant local tests.",
+  "current_round_instruction_text": "",
+  "initial_plan_complexity": "",
+  "patch_risk": {
+    "risk": "high",
+    "fingerprint": "fd41c81b2c5cb885",
+    "requires_replan": false,
+    "risk_signals": [],
+    "reasons": [
+      "2 source files changed",
+      "large diff (9553 chars)",
+      "sensitive path touched (config/auth/security/database/schema/migration)"
+    ],
+    "affected_files": [
+      "internal/config/authentication.go",
+      "internal/config/config_test.go",
+      "internal/config/errors.go",
+      "internal/config/testdata/authentication/github_missing_client_id.yml",
+      "internal/config/testdata/authentication/github_missing_client_secret.yml",
+      "internal/config/testdata/authentication/github_missing_redirect_address.yml",
+      "internal/config/testdata/authentication/github_no_org_scope.yml",
+      "internal/config/testdata/authentication/oidc_missing_client_id.yml",
+      "internal/config/testdata/authentication/oidc_missing_client_secret.yml",
+      "internal/config/testdata/authentication/oidc_missing_redirect_address.yml"
+    ],
+    "likely_tests": [],
+    "suggested_verification": [
+      "go test ./internal/config -run '^$'"
+    ],
+    "review_notes": [
+      "Review the diff manually before finalizing; impact may cross module boundaries.",
+      "Confirm test changes match the user request and are not masking failures."
+    ],
+    "structural_impact": {
+      "changed_symbols": [],
+      "impacted_callers": [],
+      "direct_callers": [],
+      "transitive_callers": [],
+      "dependent_modules": [],
+      "related_tests": [],
+      "public_api_exposure": [],
+      "truncated": false,
+      "budget": {},
+      "related": [],
+      "source": "unavailable"
+    }
+  },
+  "risk_feedback_fingerprint": "",
+  "risk_replan_fingerprint": "",
+  "verification_attempts": 2,
+  "py_compile_ok": true,
+  "changed_files_verified": true,
+  "broad_test_attempts": 0,
+  "exact_test_attempts": 1,
+  "verification_contract": {},
+  "verification_failures": 0,
+  "last_verification_failure": "",
+  "completion_review_rejections": 0,
+  "last_completion_review_rejection": "",
+  "completion_review_generation": -1,
+  "needs_broad_exploration": false,
+  "scheduled_verification_generations": {
+    "static": 7,
+    "targeted": 6
+  },
+  "primary_recovery_classification": "",
+  "supporting_recovery_classifications": [],
+  "recovery_repair_targets": [],
+  "searched_patterns": [
+    "github_no_org_scope|authentication",
+    "allowed_organizations|redirect_address|client_secret",
+    "client_id|oidc|github",
+    "errProviderWrap|providerErrFmt"
+  ],
+  "read_files": [
+    "internal/config/authentication.go",
+    "internal/config/errors.go",
+    "internal/config/testdata/authentication/github_no_org_scope.yml",
+    "internal/config/config_test.go",
+    "internal/config/config.go",
+    "internal/config/testdata/advanced.yml",
+    "internal/config/testdata/authentication/session_domain_scheme_port.yml"
+  ],
+  "investigation_calls_since_edit": 1,
+  "mutation_generation": 7,
+  "source_mutation_generation": 7,
+  "acceptance_mutation_generation": 7,
+  "diff_generation": 1,
+  "verification_generation": 7,
+  "strict_progress_nudges": 0,
+  "strict_progress_blocks": 0,
+  "budget_zones_emitted": [
+    "yellow",
+    "orange",
+    "red"
+  ],
+  "budget_pressure_zone": "red",
+  "work_phase": "closure_finalize",
+  "workspace_git_available": true,
+  "package_install_attempts": 0,
+  "emergency_broad_exploration": 0,
+  "provider_calls": 40,
+  "provider_attempts": 43,
+  "provider_calls_by_purpose": {
+    "coding": 40
+  },
+  "provider_calls_by_model": {
+    "openai-compatible/deepseek-flash": 40
+  },
+  "provider_usage": {
+    "input": 749841,
+    "output": 5708,
+    "total": 1034326,
+    "reasoning": 22521,
+    "cache_read": 256256,
+    "cache_write": 0
+  },
+  "provider_usage_by_purpose": {
+    "coding": {
+      "input": 749841,
+      "output": 5708,
+      "total": 1034326,
+      "reasoning": 22521,
+      "cache_read": 256256,
+      "cache_write": 0
+    }
+  },
+  "provider_usage_by_model": {
+    "openai-compatible/deepseek-flash": {
+      "input": 749841,
+      "output": 5708,
+      "total": 1034326,
+      "reasoning": 22521,
+      "cache_read": 256256,
+      "cache_write": 0
+    }
+  },
+  "provider_duration_ms_by_purpose": {
+    "coding": 180428.334
+  },
+  "provider_duration_ms_by_model": {
+    "openai-compatible/deepseek-flash": 180428.334
+  },
+  "provider_cost_usd": 0.0,
+  "provider_cost_usd_by_purpose": {},
+  "provider_cost_usd_by_model": {},
+  "provider_cost_unknown_calls": 40,
+  "provider_cost_sources": {
+    "unknown": 40
+  },
+  "provider_turn_records": [
+    {
+      "turn": 1,
+      "reason": "initial_investigation",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 2,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "list_directory"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 3,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "list_directory"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 4,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 5,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 6,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "list_directory"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 7,
+      "reason": "investigation",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 8,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 9,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 10,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 11,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 12,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 13,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 14,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 15,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 16,
+      "reason": "investigation",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 17,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 18,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 19,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 20,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "list_directory"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 21,
+      "reason": "investigation",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "edit_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 1,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 22,
+      "reason": "verification",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 1,
+      "mutation_generation_after": 1,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 23,
+      "reason": "verification",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "diff_status"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 1,
+      "mutation_generation_after": 1,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 24,
+      "reason": "verification",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 1,
+      "mutation_generation_after": 1,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 25,
+      "reason": "verification",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 1,
+      "mutation_generation_after": 1,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 26,
+      "reason": "verification",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "apply_patch"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 1,
+      "mutation_generation_after": 2,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 27,
+      "reason": "verification",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "apply_patch"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 2,
+      "mutation_generation_after": 3,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 28,
+      "reason": "verification",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 29,
+      "reason": "convergence",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 30,
+      "reason": "convergence",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 31,
+      "reason": "convergence",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "edit_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 4,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 32,
+      "reason": "convergence",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "write_files_batch"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 4,
+      "mutation_generation_after": 5,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 33,
+      "reason": "convergence",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 5,
+      "mutation_generation_after": 5,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 34,
+      "reason": "convergence",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 5,
+      "mutation_generation_after": 5,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 35,
+      "reason": "convergence",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "write_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 5,
+      "mutation_generation_after": 6,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 36,
+      "reason": "convergence",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 7,
+      "mutation_generation_after": 7,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 37,
+      "reason": "convergence",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 7,
+      "mutation_generation_after": 7,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 38,
+      "reason": "convergence",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 7,
+      "mutation_generation_after": 7,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 39,
+      "reason": "convergence",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 7,
+      "mutation_generation_after": 7,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 40,
+      "reason": "convergence",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "verify_changed_files"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 7,
+      "mutation_generation_after": 7,
+      "mutation_delta": 0,
+      "verification_generation_after": 7
+    }
+  ],
+  "provider_turns_by_reason": {
+    "initial_investigation": 1,
+    "investigation": 20,
+    "verification": 7,
+    "convergence": 12
+  },
+  "provider_turns_by_outcome": {
+    "verification_batch": 12,
+    "investigation_batch": 22,
+    "mutation_batch": 6
+  },
+  "transition": "verified",
+  "_state_block_emitted": false,
+  "_diff_seen_from_tool": true,
+  "active": true,
+  "saved_at": 1791738074.1216483
+}

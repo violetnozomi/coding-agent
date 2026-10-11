@@ -1,0 +1,3 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls /workspace/tests/unit/config/ 2>/dev/null; echo ---; ls /workspace/tests/unit/config 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls /workspace/scripts/dev/ 2>/dev/null; echo ---; ls /workspace/scripts/; echo ---; grep -rn \"workarounds\" /workspace/qutebrowser/ | head -50"}, "allowed": false}

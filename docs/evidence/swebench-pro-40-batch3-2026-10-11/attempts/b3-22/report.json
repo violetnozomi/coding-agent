@@ -1,0 +1,13 @@
+{
+  "number": 22,
+  "instance_id": "instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": true,
+  "agent_started_epoch": 1791737815.7068002,
+  "agent_finished_epoch": 1791738075.4786942,
+  "status": "attempted",
+  "patch_sha256": "cab5b4dc3f79053df9bf2ddd388a65d824a68dd895927db82f52c6e243d55742",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

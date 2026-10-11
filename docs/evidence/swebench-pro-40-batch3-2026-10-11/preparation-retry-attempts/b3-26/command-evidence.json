@@ -1,0 +1,68 @@
+[
+  {
+    "tool_call_id": "call_00_tRWJclLejD9M1JuVlrCz1080",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /app 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_ST32Hfyjwa3Imv0Ks0aq0129",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3 2>/dev/null; echo \"---\"; git status 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_vbHXYHA6XZDh6qXshWq00584",
+    "input": {
+      "command": "ls /workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "CHANGELOG.md\nCODE_OF_CONDUCT.md\nCONTRIBUTING.md\nLICENSE\nMakefile\nREADME.md\nSECURITY.md\napi\nassets\nbpf\nbuild\nbuild.assets\nconstants.go\ndoc.go\ndocker\ndocs\ndronegen\ne\nexamples\nfixtures\ngo.mod\ngo.sum\ngravitational.asc\nintegration\nlib\nmetrics.go\nrfd\ntool\nvagrant\nvendor\nversion.go\nversion.mk\nwebassets"
+  },
+  {
+    "tool_call_id": "call_01_7331U6AeEEOsyWhSLwbx7001",
+    "input": {
+      "command": "cd /workspace && git status --short | head -50; echo \"---\"; git log --oneline -5"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_N1XDg7fTl5QK087VxXPq0152",
+    "input": {
+      "command": "cd /workspace && wc -l lib/kube/proxy/auth.go lib/kube/proxy/auth_test.go lib/kube/proxy/forwarder.go lib/kube/proxy/forwarder_test.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_kD7su6vbhaD1uINyftSO0892",
+    "input": {
+      "command": "cd /workspace && grep -n \"clusterSession\\|kubeClusterEndpoint\\|newClusterSession\\|getKubeCreds\\|endpoint{\" lib/kube/proxy/auth.go | head -60"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

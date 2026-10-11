@@ -1,0 +1,10 @@
+{
+  "number": 39,
+  "instance_id": "instance_flipt-io__flipt-d966559200183b713cdf3ea5007a7e0ba86a5afb",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "blocked",
+  "error": "RuntimeError('remaining_global_budget_stop')",
+  "physical_requests": 0
+}

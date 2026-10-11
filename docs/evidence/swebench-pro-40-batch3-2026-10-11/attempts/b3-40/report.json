@@ -1,0 +1,10 @@
+{
+  "number": 40,
+  "instance_id": "instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "blocked",
+  "error": "RuntimeError('remaining_global_budget_stop')",
+  "physical_requests": 0
+}

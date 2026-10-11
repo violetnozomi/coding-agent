@@ -1,0 +1,157 @@
+[
+  {
+    "tool_call_id": "call_01_QRQ5wGaaToD2fRdGqqvs2294",
+    "input": {
+      "command": "cd /workspace && python - <<'EOF'\nfrom dataclasses import dataclass, field\n\n@dataclass(order=True, slots=True)\nclass Foo:\n    identifier: str = field(compare=False)\n    priority: int = field(default=0)\n    def __eq__(self, other):\n        if not isinstance(other, Foo):\n            return NotImplemented\n        return self.identifier == other.identifier\n    def __hash__(self):\n        return hash(self.identifier)\n\na = Foo(\"x\", 1)\nb = Foo(\"x\", 2)\nc = Foo(\"y\", 0)\nprint(a == b, {a, b, a}, {a, c}, a < b)\nprint(Foo.__eq__ is not None, Foo.__hash__)\nEOF"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ELBeefzhShLcI4NcG2eT4364",
+    "input": {
+      "command": "cd /workspace && python -c \"\nfrom dataclasses import dataclass, field\nfrom datetime import datetime\nfrom enum import Enum\n\nclass Priority(Enum):\n    HIGH = 0\n    LOW = 1\n    def __lt__(self, other):\n        if isinstance(other, Priority):\n            return self.value < other.value\n        return NotImplemented\n\n@dataclass(order=True, slots=True)\nclass PrioritizedIdentifier:\n    identifier: str = field(compare=False)\n    stage_import: bool = field(default=False, compare=False)\n    priority: Priority = field(default=Priority.LOW)\n    timestamp: datetime = field(default_factory=datetime.now)\n    def __hash__(self):\n        return hash(self.identifier)\n    def __eq__(self, other):\n        if not isinstance(other, PrioritizedIdentifier):\n            return NotImplemented\n        return self.identifier == other.identifier\n    def to_dict(self):\n        return {'identifier': self.identifier, 'stage_import': self.stage_import, 'priority': self.priority.name, 'timestamp': self.timestamp.isoformat()}\n\na = PrioritizedIdentifier('x', priority=Priority.HIGH)\nb = PrioritizedIdentifier('x', priority=Priority.LOW)\nc = PrioritizedIdentifier('y')\nprint('eq', a == b, 'hash set', len({a, b, a}), len({a, c}))\nprint('lt', a < b)\nimport json\nprint(json.dumps(a.to_dict()))\nprint(PrioritizedIdentifier.__hash__ is not None)\n\"\n"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_USzJ9pUPkP29ynE8ooz73140",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 && git status --short | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_hJSx3t1ITYcmXAzLSjyy8536",
+    "input": {
+      "command": "echo hello"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "hello"
+  },
+  {
+    "tool_call_id": "call_00_ZXIFa7TVk7GBTjgMEQpD8683",
+    "input": {
+      "command": "git status --short",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "?? .nz-coder/"
+  },
+  {
+    "tool_call_id": "call_00_DOxY8KR41FIst3pa2V7I5242",
+    "input": {
+      "command": "python -m py_compile scripts/affiliate_server.py scripts/tests/test_affiliate_server.py && echo COMPILE_OK",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "COMPILE_OK"
+  },
+  {
+    "tool_call_id": "call_00_Dp3KzyLlDufnRYjZWfdr2906",
+    "input": {
+      "command": "python -c \"\nfrom dataclasses import dataclass, field\nfrom datetime import datetime\nfrom enum import Enum\nimport json\n\nclass Priority(Enum):\n    HIGH = 0\n    LOW = 1\n    def __lt__(self, other):\n        if isinstance(other, Priority):\n            return self.value < other.value\n        return NotImplemented\n\n@dataclass(order=True, slots=True)\nclass PrioritizedIdentifier:\n    identifier: str = field(compare=False)\n    stage_import: bool = field(default=False, compare=False)\n    priority: Priority = field(default=Priority.LOW)\n    timestamp: datetime = field(default_factory=datetime.now)\n    def __hash__(self):\n        return hash(self.identifier)\n    def __eq__(self, other):\n        if not isinstance(other, PrioritizedIdentifier):\n            return NotImplemented\n        return self.identifier == other.identifier\n    @property\n    def isbn(self):\n        return self.identifier\n    def to_dict(self):\n        return {'identifier': self.identifier, 'stage_import': self.stage_import, 'priority': self.priority.name, 'timestamp': self.timestamp.isoformat()}\n\na = PrioritizedIdentifier('x', priority=Priority.HIGH)\nb = PrioritizedIdentifier('x', priority=Priority.LOW)\nc = PrioritizedIdentifier('y')\nprint('eq_same_id', a == b)\nprint('set_same_instance', len({a, a}))\nprint('set_same_id', len({a, b}))\nprint('set_distinct', len({a, c}))\nprint('lt', a < b)\nprint('isbn_alias', a.isbn)\nprint('json', json.dumps(a.to_dict()))\nprint('hash_eq', hash(a) == hash(b))\n\"\n"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "eq_same_id True\nset_same_instance 1\nset_same_id 1\nset_distinct 2\nlt True\nisbn_alias x\njson {\"identifier\": \"x\", \"stage_import\": false, \"priority\": \"HIGH\", \"timestamp\": \"2026-10-11T16:55:35.567922\"}\nhash_eq True"
+  },
+  {
+    "tool_call_id": "call_00_FX5LdiiU6E5Mrw5FIdwv5213",
+    "input": {
+      "command": "python -m pytest scripts/tests/test_affiliate_server.py -q 2>&1 | tail -30",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": ".................                                                        [100%]\n17 passed in 0.31s"
+  },
+  {
+    "tool_call_id": "call_00_jx76i8UVT2DWqGHKzCTn3590",
+    "input": {
+      "command": "python -m py_compile scripts/affiliate_server.py scripts/tests/test_affiliate_server.py && python -m pytest scripts/tests/test_affiliate_server.py -q 2>&1 | tail -15",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": ".................                                                        [100%]\n17 passed in 0.22s"
+  },
+  {
+    "tool_call_id": "call_00_FwTFkpr0eDDtAcFsuMYi5413",
+    "input": {
+      "command": "git diff",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "diff --git a/scripts/affiliate_server.py b/scripts/affiliate_server.py\nindex 5746f38b3..e3e66ace9 100644\n--- a/scripts/affiliate_server.py\n+++ b/scripts/affiliate_server.py\n@@ -96,11 +96,11 @@ web.amazon_lookup_thread = None\n \n class Priority(Enum):\n     \"\"\"\n-    Priority for the `PrioritizedISBN` class.\n+    Priority for the `PrioritizedIdentifier` class.\n \n     `queue.PriorityQueue` has a lowest-value-is-highest-priority system, but\n-    setting `PrioritizedISBN.priority` to 0 can make it look as if priority is\n-    disabled. Using an `Enum` can help with that.\n+    setting `PrioritizedIdentifier.priority` to 0 can make it look as if priority\n+    is disabled. Using an `Enum` can help with that.\n     \"\"\"\n \n     HIGH = 0\n@@ -113,39 +113,66 @@ class Priority(Enum):\n \n \n @dataclass(order=True, slots=True)\n-class PrioritizedISBN:\n+class PrioritizedIdentifier:\n     \"\"\"\n-    Represent an ISBN's priority in the queue. Sorting is based on the `priority`\n-    attribute, then the `timestamp` to solve tie breaks within a specific priority,\n-    with priority going to whatever `min([items])` would return.\n+    Represent an ISBN-13 or Amazon ASIN's priority in the queue. Sorting is based\n+    on the `priority` attribute, then the `timestamp` to solve tie breaks within a\n+    specific priority, with priority going to whatever `min([items])` would return.\n     For more, see https://docs.python.org/3/library/queue.html#queue.PriorityQueue.\n \n     Therefore, priority 0, which is equivalent to `Priority.HIGH`, is the highest\n     priority.\n \n-    This exists so certain ISBNs can go to the front of the queue for faster\n+    This exists so certain identifiers can go to the front of the queue for faster\n     processing as their look-ups are time sensitive and should return look up data\n     to the caller (e.g. interactive API usage through `/isbn`).\n \n-    Note: also handles Amazon-specific ASINs.\n+    `stage_import` indicates whether the identifier's product data should be staged\n+    for import once it has been looked up.\n+\n+    Note: supports both ISBNs and Amazon-specific ASINs.\n     \"\"\"\n \n-    isbn: str = field(compare=False)\n+    identifier: str = field(compare=False)\n+    stage_import: bool = field(default=False, compare=False)\n     priority: Priority = field(default=Priority.LOW)\n     timestamp: datetime = field(default_factory=datetime.now)\n \n-    def to_dict(self):\n+    def __hash__(self) -> int:\n+        return hash(self.identifier)\n+\n+    def __eq__(self, other: object) -> bool:\n+        \"\"\"\n+        Two `PrioritizedIdentifier`s are equal when they wrap the same identifier\n+        string, so that duplicates collapse into a single set/queue entry while\n+        distinct identifiers remain distinct entries.\n         \"\"\"\n-        Convert the PrioritizedISBN object to a dictionary representation suitable\n-        for JSON serialization.\n+        if not isinstance(other, PrioritizedIdentifier):\n+            return NotImplemented\n+        return self.identifier == other.identifier\n+\n+    @property\n+    def isbn(self) -> str:\n+        \"\"\"Backwards-compatible alias for `identifier`.\"\"\"\n+        return self.identifier\n+\n+    def to_dict(self) -> dict[str, Any]:\n+        \"\"\"\n+        Convert the PrioritizedIdentifier object to a dictionary representation\n+        suitable for JSON serialization.\n         \"\"\"\n         return {\n-            \"isbn\": self.isbn,\n+            \"identifier\": self.identifier,\n+            \"stage_import\": self.stage_import,\n             \"priority\": self.priority.name,\n             \"timestamp\": self.timestamp.isoformat(),\n         }\n \n \n+# Backwards-compatible alias for the former name of PrioritizedIdentifier.\n+PrioritizedISBN = PrioritizedIdentifier\n+\n+\n def get_current_amazon_batch() -> Batch:\n     \"\"\"\n     At startup, get the Amazon openlibrary.core.imports.Batch() for global use.\n@@ -314,7 +341,9 @@ def amazon_lookup(site, stats_client, logger) -> None:\n         ):\n             try:  # queue.get() will block (sleep... (truncated)"
+  },
+  {
+    "tool_call_id": "call_01_7fWeHqyvLft0FsSpOqQz2170",
+    "input": {
+      "command": "python -c \"\nimport sys\nfrom unittest.mock import MagicMock\nsys.modules['_init_path'] = MagicMock()\n\" 2>/dev/null; python - <<'PY'\nimport json, sys\nfrom unittest.mock import MagicMock\nsys.modules['_init_path'] = MagicMock()\nfrom scripts.affiliate_server import PrioritizedIdentifier, PrioritizedISBN, Priority\nassert PrioritizedISBN is PrioritizedIdentifier\np = PrioritizedISBN(isbn=\"1111111111\", priority=Priority.HIGH)\nassert p.identifier == \"1111111111\" and p.isbn == \"1111111111\"\nassert p.stage_import is False\nassert json.loads(json.dumps(p.to_dict()))[\"priority\"] == \"HIGH\"\na = PrioritizedIdentifier(identifier=\"1111111111\")\nb = PrioritizedIdentifier(identifier=\"1111111111\")\nc = PrioritizedIdentifier(identifier=\"B06XYHVXVJ\")\nassert len({a, a}) == 1 and len({a, b}) == 1 and len({a, c}) == 2\nassert PrioritizedIdentifier(identifier=\"x\") < PrioritizedIdentifier(identifier=\"x\", priority=Priority.LOW)\nprint(\"compat+behavior OK\")\nPY",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ryNt9wVyE2vRFyTq0R7k4644",
+    "input": {
+      "command": "python -m pytest scripts/tests/test_affiliate_server.py -q 2>&1 | tail -5",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": ".................                                                        [100%]\n17 passed in 0.22s"
+  },
+  {
+    "tool_call_id": "call_01_4cUntCBEEaLKLLMd5f0a0402",
+    "input": {
+      "command": "python -m mypy scripts/affiliate_server.py --ignore-missing-imports 2>&1 | tail -15",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  }
+]

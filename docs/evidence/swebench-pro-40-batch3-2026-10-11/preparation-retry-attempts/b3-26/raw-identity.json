@@ -1,0 +1,50 @@
+[
+  {
+    "request_number": 1,
+    "role": "main",
+    "attempt_id": "fe620f1014dc4b7f9c7864ebefbec59a",
+    "private_request_sha256": "3f79599d759ed1953e3854ea10328bd26954883e393db29228f32366f142d7cc",
+    "private_response_sha256": "cacee869a4959ffa3f45abc4b49a9834503fa3130a56352bcdcb2b5cd1dfd772",
+    "public_reasoning_content_removed": true
+  },
+  {
+    "request_number": 2,
+    "role": "main",
+    "attempt_id": "ccbdd774be694145b377243fcf6ba98b",
+    "private_request_sha256": "f49a3e2e296765fbafd3cefd09b70871ac6562400afbf93425df29f1b893992f",
+    "private_response_sha256": "c2e097a9c526ed5e4ac364f066bdb5c5924d0c437d4ccf24b564e824ccca4e9f",
+    "public_reasoning_content_removed": true
+  },
+  {
+    "request_number": 3,
+    "role": "main",
+    "attempt_id": "30a8fdfc4ce04dc2a1237a2786ca9252",
+    "private_request_sha256": "a6017d97aeb2cbe1d03f6a23b521ecd8e54f532e5633d6a36af16e3dcb26bd66",
+    "private_response_sha256": "42937c2337b748c844f5f8531ddc30ace38af4a979bc9ed2501a22b648005ac7",
+    "public_reasoning_content_removed": true
+  },
+  {
+    "request_number": 4,
+    "role": "main",
+    "attempt_id": "108bd6775f124014b4ae4e3462207f7d",
+    "private_request_sha256": "50ca4120e43533ee95c7dac63de8a631f7ee1aa359c62a83533cd075d33ba0c9",
+    "private_response_sha256": "a849c7a606d945d3cb69e6df2edc684b3ff2a2da95f20aee11c2a903b5b4208b",
+    "public_reasoning_content_removed": true
+  },
+  {
+    "request_number": 5,
+    "role": "main",
+    "attempt_id": "e23e7fc9f3ca414e88bafeebdc34cf94",
+    "private_request_sha256": "6086d802c3a2a351bfe755464c052eeca2a15b3d7d51e73789739f3b1ce207b2",
+    "private_response_sha256": "7f9a435a553970c3101b31ecc7270e055a4c5bbc355e40203ce2cf6d4ee549ff",
+    "public_reasoning_content_removed": true
+  },
+  {
+    "request_number": 6,
+    "role": "main",
+    "attempt_id": "4d3d0a9677c34cc6a70573dbed818e86",
+    "private_request_sha256": "5a4913c999ef8bf76e8d5240fd13ea8d484f86d21fcce8c5c0a75a0ff1d9a084",
+    "private_response_sha256": "af731da8e60335558b25a72a46319d6ed8d307b8e80c11f23e109728220ab308",
+    "public_reasoning_content_removed": true
+  }
+]

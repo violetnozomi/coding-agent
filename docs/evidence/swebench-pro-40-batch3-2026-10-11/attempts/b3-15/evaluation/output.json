@@ -1,0 +1,784 @@
+{
+  "tests": [
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | finds no votes if there are none",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders a loader while responses are still loading",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders no votes if none were made",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | finds votes from multiple people",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | ignores end poll events from unauthorised users",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | hides scores if I have not voted",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | hides a single vote if I have not voted",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | takes someone's most recent vote if they voted several times",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | uses my local vote",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | overrides my other votes with my local vote",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | cancels my local vote if another comes in",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | doesn't cancel my local vote if someone else votes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | highlights my vote even if I did it on another device",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | ignores extra answers",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | allows un-voting by passing an empty vote",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | allows re-voting after un-voting",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | treats any invalid answer as a spoiled ballot",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | allows re-voting after a spoiled ballot",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders nothing if poll has no answers",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders the first 20 answers if 21 were given",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | hides scores if I voted but the poll is undisclosed",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | highlights my vote if the poll is undisclosed",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | shows scores if the poll is undisclosed but ended",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | sends a vote event when I choose an option",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | sends only one vote event when I click several times",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | sends no vote event when I click what I already chose",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | sends several events when I click different options",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | sends no events when I click in an ended poll",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | finds the top answer among several votes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | finds all top answers when there is a draw",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | is silent about the top answer if there are no votes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | shows non-radio buttons if the poll is ended",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | counts votes as normal if the poll is ended",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | counts a single vote as normal if the poll is ended",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | shows ended vote counts of different numbers",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | ignores votes that arrived after poll ended",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | counts votes that arrived after an unauthorised poll end event",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | ignores votes that arrived after the first end poll event",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | highlights the winning vote in an ended poll",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | highlights multiple winning votes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | highlights nothing if poll has no votes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | says poll is not ended if there is no end event",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | says poll is ended if there is an end event",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | says poll is not ended if poll is fetching responses",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | Displays edited content and new answer IDs if the poll has been edited",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders a poll with no votes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders a poll with only non-local votes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders a warning message when poll has undecryptable relations",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders a poll with local, non-local and invalid votes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders a poll that I have not voted in",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders a finished poll with no votes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders a finished poll",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders a finished poll with multiple winners",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders an undisclosed, unfinished poll",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/messages/MPollBody-test.tsx | MPollBody | renders an undisclosed, finished poll",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | throws when room is not found",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | renders a loading message while poll history is fetched",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | fetches poll history until end of timeline is reached while within time limit",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | fetches poll history until event older than history period is reached",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | renders a no polls message when there are no active polls in the room",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | renders a no polls message and a load more button when not at end of timeline",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | renders a no past polls message when there are no past polls in the room",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | renders a list of active polls when there are polls in the room",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | updates when new polls are added to the room",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | <PollHistory /> | filters ended polls",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | Poll detail | displays poll detail on active poll list item click",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | Poll detail | links to the poll start event from an active poll detail",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | Poll detail | navigates in app when clicking view in timeline button",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | Poll detail | doesnt navigate in app when view in timeline link is ctrl + clicked",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | Poll detail | navigates back to poll list from detail view on header click",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | Poll detail | displays poll detail on past poll list item click",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx | Poll detail | links to the poll end events from a ended poll detail",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | <JoinRuleSettings /> | should not show knock room join rule",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when room does not support join rule knock | should not show knock room join rule when upgrade is disabled",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when room does not support join rule knock | should show knock room join rule when upgrade is enabled",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when room does not support join rule knock | upgrades room when changing join rule to knock",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when room does not support join rule knock | upgrades room with no parent spaces or members when changing join rule to knock",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when room does not support join rule restricted | should not show restricted room join rule when upgrade is disabled",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when room does not support join rule restricted | should show restricted room join rule when upgrade is enabled",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when room does not support join rule restricted | upgrades room when changing join rule to restricted",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when room does not support join rule restricted | upgrades room with no parent spaces or members when changing join rule to restricted",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when join rule is knock | should set the visibility to public",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when join rule is knock | should set the visibility to private",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when join rule is knock | should call onError if setting visibility fails",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when the room version is unsupported and upgrade is enabled | should disable the checkbox",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when join rule is not knock | should disable the checkbox",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx | when join rule is not knock | should set the visibility to private by default",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | <LocationPicker /> | displays error when map emits an error",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | <LocationPicker /> | displays error when map display is not configured properly",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | <LocationPicker /> | displays error when WebGl is not enabled",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | <LocationPicker /> | displays error when map setup throws",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | <LocationPicker /> | initiates map with geolocation",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | user location behaviours | closes and displays error when geolocation errors",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | user location behaviours | sets position on geolocate event",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | user location behaviours | disables submit button until geolocation completes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | user location behaviours | submits location",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | for Live location share type | renders live duration dropdown with default option",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | for Live location share type | updates selected duration",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | user location behaviours | closes and displays error when geolocation errors",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | user location behaviours | sets position on geolocate event",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | user location behaviours | disables submit button until geolocation completes",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | user location behaviours | submits location",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | for Pin drop location share type | initiates map with geolocation",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | for Pin drop location share type | removes geolocation control on geolocation error",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | for Pin drop location share type | does not set position on geolocate event",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | for Pin drop location share type | sets position on click event",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/location/LocationPicker-test.tsx | for Pin drop location share type | submits location",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | WebPlatform | returns human readable name",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | WebPlatform | registers service worker",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | WebPlatform | should call reload on window location object",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | WebPlatform | should call reload to install update",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | WebPlatform | should return config from config.json",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | WebPlatform | should re-render favicon when setting error status",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | getDefaultDeviceDisplayName | https://develop.element.io/#/room/!foo:bar & Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 = develop.element.io: Chrome on macOS",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | notification support | supportsNotifications returns false when platform does not support notifications",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | notification support | supportsNotifications returns true when platform supports notifications",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | notification support | maySendNotifications returns true when notification permissions are not granted",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | notification support | maySendNotifications returns true when notification permissions are granted",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | notification support | requests notification permissions and returns result",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | app version | should return true from canSelfUpdate()",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | app version | getAppVersion returns normalized app version",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | pollForUpdate() | should return not available and call showNoUpdate when current version matches most recent version",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | pollForUpdate() | should strip v prefix from versions before comparing",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | pollForUpdate() | should return ready and call showUpdate when current version differs from most recent version",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | pollForUpdate() | should return ready without showing update when user registered in last 24",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/vector/platform/WebPlatform-test.ts | pollForUpdate() | should return error when version check fails",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | basic text handling | at end of single line",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | basic text handling | at start of single line",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | basic text handling | at middle of single line",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling line breaks | at start of first line which is empty",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling line breaks | at end of last line",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling line breaks | at start of last line",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling line breaks | before empty line",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling line breaks | in empty line",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling line breaks | after empty line",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling non-editable parts and caret nodes | at start of non-editable part (with plain text around)",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling non-editable parts and caret nodes | in middle of non-editable part (with plain text around)",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling non-editable parts and caret nodes | at start of non-editable part (without plain text around)",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling non-editable parts and caret nodes | in middle of non-editable part (without plain text around)",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling non-editable parts and caret nodes | in middle of a first non-editable part, with another one following",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling non-editable parts and caret nodes | in start of a second non-editable part, with another one before it",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/editor/caret-test.ts | handling non-editable parts and caret nodes | in middle of a second non-editable part, with another one before it",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx | RoomGeneralContextMenu | renders an empty context menu for archived rooms",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx | RoomGeneralContextMenu | renders the default context menu",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx | RoomGeneralContextMenu | does not render invite menu item when UIComponent customisations disable room invite",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx | RoomGeneralContextMenu | renders invite menu item when UIComponent customisations enables room invite",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx | RoomGeneralContextMenu | marks the room as read",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx | RoomGeneralContextMenu | marks the room as unread",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx | RoomGeneralContextMenu | when developer mode is disabled, it should not render the developer tools option",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx | when developer mode is enabled | should render the developer tools option",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts | when there is no voice broadcast info at all | should return false/false",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts | when the \u00bbstate\u00ab prop is missing | should return false/false",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts | when there is a live broadcast from the current and another user | should return true/true",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts | when there are only stopped info events | should return false/false",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts | when there is a live, started broadcast from the current user | should return true/true",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts | when there is a live, paused broadcast from the current user | should return true/true",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts | when there is a live, resumed broadcast from the current user | should return true/true",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts | when there was a live broadcast, that has been stopped | should return false/false",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts | when there is a live broadcast from another user | should return true/false",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx | <SecureBackupPanel /> | displays a loader while checking keybackup",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx | <SecureBackupPanel /> | handles error fetching backup",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx | <SecureBackupPanel /> | handles absence of backup",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx | <SecureBackupPanel /> | suggests connecting session to key backup when backup exists",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx | <SecureBackupPanel /> | displays when session is connected to key backup",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx | <SecureBackupPanel /> | asks for confirmation before deleting a backup",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx | <SecureBackupPanel /> | deletes backup after confirmation",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx | <SecureBackupPanel /> | resets secret storage",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/pillify-test.tsx | pillify | should do nothing for empty element",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/pillify-test.tsx | pillify | should pillify @room",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/pillify-test.tsx | pillify | should pillify @room in an intentional mentions world",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/pillify-test.tsx | pillify | should not double up pillification on repeated calls",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/toasts/VerificationRequestToast-test.tsx | VerificationRequestToast | should render a self-verification",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/toasts/VerificationRequestToast-test.tsx | VerificationRequestToast | should render a cross-user verification",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/components/views/toasts/VerificationRequestToast-test.tsx | VerificationRequestToast | dismisses itself once the request can no longer be accepted",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/CreateCrossSigning-test.ts | CreateCrossSigning | should call bootstrapCrossSigning with an authUploadDeviceSigningKeys function",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/CreateCrossSigning-test.ts | CreateCrossSigning | should upload with password auth if possible",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/CreateCrossSigning-test.ts | CreateCrossSigning | should attempt to upload keys without auth if using token login",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/CreateCrossSigning-test.ts | CreateCrossSigning | should prompt user if password upload not possible",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/tooltipify-test.tsx | tooltipify | does nothing for empty element",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/tooltipify-test.tsx | tooltipify | wraps single anchor",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/tooltipify-test.tsx | tooltipify | ignores node",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/tooltipify-test.tsx | tooltipify | does not re-wrap if called multiple times",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/hooks/useUserDirectory-test.tsx | useUserDirectory | search for users in the identity server",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/hooks/useUserDirectory-test.tsx | useUserDirectory | should work with empty queries",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/hooks/useUserDirectory-test.tsx | useUserDirectory | should recover from a server exception",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/settings/handlers/RoomDeviceSettingsHandler-test.ts | RoomDeviceSettingsHandler | should write/read/clear the value for \u00bbRightPanel.phases\u00ab",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/settings/handlers/RoomDeviceSettingsHandler-test.ts | RoomDeviceSettingsHandler | should write/read/clear the value for \u00bbblacklistUnverifiedDevices\u00ab",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/settings/handlers/RoomDeviceSettingsHandler-test.ts | RoomDeviceSettingsHandler | canSetValue should return true",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/UrlUtils-test.ts | abbreviateUrl | should return empty string if passed falsey",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/UrlUtils-test.ts | abbreviateUrl | should abbreviate to host if empty pathname",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/UrlUtils-test.ts | abbreviateUrl | should not abbreviate if has path parts",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/UrlUtils-test.ts | unabbreviateUrl | should return empty string if passed falsey",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/UrlUtils-test.ts | unabbreviateUrl | should prepend https to input if it lacks it",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/UrlUtils-test.ts | unabbreviateUrl | should not prepend https to input if it has it",
+      "status": "PASSED"
+    },
+    {
+      "name": "test/unit-tests/utils/UrlUtils-test.ts | parseUrl | should not throw on no proto",
+      "status": "PASSED"
+    }
+  ]
+}

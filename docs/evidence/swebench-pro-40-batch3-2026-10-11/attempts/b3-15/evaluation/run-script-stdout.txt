@@ -1,0 +1,295 @@
+Running selected tests: test/unit-tests/utils/tooltipify-test.tsx test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/UrlUtils-test.ts test/unit-tests/settings/handlers/RoomDeviceSettingsHandler-test.ts test/unit-tests/vector/platform/WebPlatform-test.ts test/unit-tests/editor/caret-test.ts test/CreateCrossSigning-test.ts test/unit-tests/components/views/toasts/VerificationRequestToast-test.tsx test/unit-tests/hooks/useUserDirectory-test.tsx test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts test/unit-tests/components/views/location/LocationPicker-test.tsx test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx test/unit-tests/components/views/messages/MPollBody-test.tsx test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+(node:5201) [DEP0044] DeprecationWarning: The `util.isArray` API is deprecated. Please use `Array.isArray()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS test/unit-tests/components/views/messages/MPollBody-test.tsx (11.281 s)
+  MPollBody
+    ✓ finds no votes if there are none (1 ms)
+    ✓ renders a loader while responses are still loading (33 ms)
+    ✓ renders no votes if none were made (14 ms)
+    ✓ finds votes from multiple people (8 ms)
+    ✓ ignores end poll events from unauthorised users (7 ms)
+    ✓ hides scores if I have not voted (5 ms)
+    ✓ hides a single vote if I have not voted (6 ms)
+    ✓ takes someone's most recent vote if they voted several times (9 ms)
+    ✓ uses my local vote (8 ms)
+    ✓ overrides my other votes with my local vote (6 ms)
+    ✓ cancels my local vote if another comes in (7 ms)
+    ✓ doesn't cancel my local vote if someone else votes (8 ms)
+    ✓ highlights my vote even if I did it on another device (4 ms)
+    ✓ ignores extra answers (5 ms)
+    ✓ allows un-voting by passing an empty vote (5 ms)
+    ✓ allows re-voting after un-voting (5 ms)
+    ✓ treats any invalid answer as a spoiled ballot (6 ms)
+    ✓ allows re-voting after a spoiled ballot (5 ms)
+    ✓ renders nothing if poll has no answers (2 ms)
+    ✓ renders the first 20 answers if 21 were given (10 ms)
+    ✓ hides scores if I voted but the poll is undisclosed (6 ms)
+    ✓ highlights my vote if the poll is undisclosed (4 ms)
+    ✓ shows scores if the poll is undisclosed but ended (4 ms)
+    ✓ sends a vote event when I choose an option (5 ms)
+    ✓ sends only one vote event when I click several times (4 ms)
+    ✓ sends no vote event when I click what I already chose (5 ms)
+    ✓ sends several events when I click different options (8 ms)
+    ✓ sends no events when I click in an ended poll (3 ms)
+    ✓ finds the top answer among several votes (1 ms)
+    ✓ finds all top answers when there is a draw (2 ms)
+    ✓ is silent about the top answer if there are no votes
+    ✓ shows non-radio buttons if the poll is ended (4 ms)
+    ✓ counts votes as normal if the poll is ended (4 ms)
+    ✓ counts a single vote as normal if the poll is ended (4 ms)
+    ✓ shows ended vote counts of different numbers (6 ms)
+    ✓ ignores votes that arrived after poll ended (4 ms)
+    ✓ counts votes that arrived after an unauthorised poll end event (5 ms)
+    ✓ ignores votes that arrived after the first end poll event (3 ms)
+    ✓ highlights the winning vote in an ended poll (4 ms)
+    ✓ highlights multiple winning votes (6 ms)
+    ✓ highlights nothing if poll has no votes (4 ms)
+    ✓ says poll is not ended if there is no end event (2 ms)
+    ✓ says poll is ended if there is an end event (1 ms)
+    ✓ says poll is not ended if poll is fetching responses (2 ms)
+    ✓ Displays edited content and new answer IDs if the poll has been edited (4 ms)
+    ✓ renders a poll with no votes (5 ms)
+    ✓ renders a poll with only non-local votes (5 ms)
+    ✓ renders a warning message when poll has undecryptable relations (5 ms)
+    ✓ renders a poll with local, non-local and invalid votes (6 ms)
+    ✓ renders a poll that I have not voted in (5 ms)
+    ✓ renders a finished poll with no votes (4 ms)
+    ✓ renders a finished poll (4 ms)
+    ✓ renders a finished poll with multiple winners (4 ms)
+    ✓ renders an undisclosed, unfinished poll (4 ms)
+    ✓ renders an undisclosed, finished poll (6 ms)
+
+PASS test/unit-tests/components/views/polls/pollHistory/PollHistory-test.tsx
+  <PollHistory />
+    ✓ throws when room is not found (16 ms)
+    ✓ renders a loading message while poll history is fetched (7 ms)
+    ✓ fetches poll history until end of timeline is reached while within time limit (3 ms)
+    ✓ fetches poll history until event older than history period is reached (6 ms)
+    ✓ renders a no polls message when there are no active polls in the room (3 ms)
+    ✓ renders a no polls message and a load more button when not at end of timeline (5 ms)
+    ✓ renders a no past polls message when there are no past polls in the room (5 ms)
+    ✓ renders a list of active polls when there are polls in the room (64 ms)
+    ✓ updates when new polls are added to the room (43 ms)
+    ✓ filters ended polls (53 ms)
+    Poll detail
+      ✓ displays poll detail on active poll list item click (43 ms)
+      ✓ links to the poll start event from an active poll detail (39 ms)
+      ✓ navigates in app when clicking view in timeline button (40 ms)
+      ✓ doesnt navigate in app when view in timeline link is ctrl + clicked (44 ms)
+      ✓ navigates back to poll list from detail view on header click (58 ms)
+      ✓ displays poll detail on past poll list item click (48 ms)
+      ✓ links to the poll end events from a ended poll detail (44 ms)
+
+PASS test/unit-tests/components/views/settings/JoinRuleSettings-test.tsx
+  <JoinRuleSettings />
+    ✓ should not show knock room join rule (1 ms)
+    knock rooms
+      when room does not support join rule knock
+        ✓ should not show knock room join rule when upgrade is disabled (5 ms)
+        ✓ should show knock room join rule when upgrade is enabled (4 ms)
+        ✓ upgrades room when changing join rule to knock (136 ms)
+        ✓ upgrades room with no parent spaces or members when changing join rule to knock (77 ms)
+    restricted rooms
+      when room does not support join rule restricted
+        ✓ should not show restricted room join rule when upgrade is disabled (3 ms)
+        ✓ should show restricted room join rule when upgrade is enabled (3 ms)
+        ✓ upgrades room when changing join rule to restricted (40 ms)
+        ✓ upgrades room with no parent spaces or members when changing join rule to restricted (36 ms)
+    knock rooms directory visibility
+      when join rule is knock
+        ✓ should set the visibility to public (8 ms)
+        ✓ should set the visibility to private (9 ms)
+        ✓ should call onError if setting visibility fails (8 ms)
+      when the room version is unsupported and upgrade is enabled
+        ✓ should disable the checkbox (4 ms)
+      when join rule is not knock
+        ✓ should disable the checkbox (4 ms)
+        ✓ should set the visibility to private by default (5 ms)
+
+(node:5201) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 error listeners added to [MockMap]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(node:5201) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 load listeners added to [MockMap]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+PASS test/unit-tests/components/views/location/LocationPicker-test.tsx
+  LocationPicker
+    <LocationPicker />
+      ✓ displays error when map emits an error (4 ms)
+      ✓ displays error when map display is not configured properly (2 ms)
+      ✓ displays error when WebGl is not enabled (1 ms)
+      ✓ displays error when map setup throws (1 ms)
+      ✓ initiates map with geolocation (1 ms)
+      for Own location share type
+        user location behaviours
+          ✓ closes and displays error when geolocation errors (5 ms)
+          ✓ sets position on geolocate event (3 ms)
+          ✓ disables submit button until geolocation completes (5 ms)
+          ✓ submits location (2 ms)
+      for Live location share type
+        ✓ renders live duration dropdown with default option (1 ms)
+        ✓ updates selected duration (5 ms)
+        user location behaviours
+          ✓ closes and displays error when geolocation errors (2 ms)
+          ✓ sets position on geolocate event (3 ms)
+          ✓ disables submit button until geolocation completes (2 ms)
+          ✓ submits location (3 ms)
+      for Pin drop location share type
+        ✓ initiates map with geolocation (1 ms)
+        ✓ removes geolocation control on geolocation error (1 ms)
+        ✓ does not set position on geolocate event (1 ms)
+        ✓ sets position on click event (1 ms)
+        ✓ submits location (2 ms)
+
+PASS test/unit-tests/vector/platform/WebPlatform-test.ts
+  WebPlatform
+    ✓ returns human readable name
+    ✓ registers service worker
+    ✓ should call reload on window location object
+    ✓ should call reload to install update
+    ✓ should return config from config.json (2 ms)
+    ✓ should re-render favicon when setting error status (3 ms)
+    getDefaultDeviceDisplayName
+      ✓ https://develop.element.io/#/room/!foo:bar & Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 = develop.element.io: Chrome on macOS (2 ms)
+    notification support
+      ✓ supportsNotifications returns false when platform does not support notifications
+      ✓ supportsNotifications returns true when platform supports notifications
+      ✓ maySendNotifications returns true when notification permissions are not granted (1 ms)
+      ✓ maySendNotifications returns true when notification permissions are granted
+      ✓ requests notification permissions and returns result
+    app version
+      ✓ should return true from canSelfUpdate() (4 ms)
+      ✓ getAppVersion returns normalized app version (1 ms)
+      pollForUpdate()
+        ✓ should return not available and call showNoUpdate when current version matches most recent version (1 ms)
+        ✓ should strip v prefix from versions before comparing
+        ✓ should return ready and call showUpdate when current version differs from most recent version (1 ms)
+        ✓ should return ready without showing update when user registered in last 24 (1 ms)
+        ✓ should return error when version check fails (1 ms)
+
+PASS test/unit-tests/editor/caret-test.ts
+  editor/caret: DOM position for caret
+    basic text handling
+      ✓ at end of single line (1 ms)
+      ✓ at start of single line
+      ✓ at middle of single line
+    handling line breaks
+      ✓ at start of first line which is empty
+      ✓ at end of last line
+      ✓ at start of last line
+      ✓ before empty line
+      ✓ in empty line
+      ✓ after empty line
+    handling non-editable parts and caret nodes
+      ✓ at start of non-editable part (with plain text around)
+      ✓ in middle of non-editable part (with plain text around)
+      ✓ at start of non-editable part (without plain text around) (1 ms)
+      ✓ in middle of non-editable part (without plain text around)
+      ✓ in middle of a first non-editable part, with another one following
+      ✓ in start of a second non-editable part, with another one before it
+      ✓ in middle of a second non-editable part, with another one before it
+
+PASS test/unit-tests/components/views/context_menus/RoomGeneralContextMenu-test.tsx
+  RoomGeneralContextMenu
+    ✓ renders an empty context menu for archived rooms (21 ms)
+    ✓ renders the default context menu (5 ms)
+    ✓ does not render invite menu item when UIComponent customisations disable room invite (14 ms)
+    ✓ renders invite menu item when UIComponent customisations enables room invite (10 ms)
+    ✓ marks the room as read (9 ms)
+    ✓ marks the room as unread (8 ms)
+    ✓ when developer mode is disabled, it should not render the developer tools option (5 ms)
+    when developer mode is enabled
+      ✓ should render the developer tools option (108 ms)
+
+PASS test/unit-tests/voice-broadcast/utils/hasRoomLiveVoiceBroadcast-test.ts
+  hasRoomLiveVoiceBroadcast
+    when there is no voice broadcast info at all
+      ✓ should return false/false (2 ms)
+    when the »state« prop is missing
+      ✓ should return false/false (1 ms)
+    when there is a live broadcast from the current and another user
+      ✓ should return true/true (1 ms)
+    when there are only stopped info events
+      ✓ should return false/false (2 ms)
+    when there is a live, started broadcast from the current user
+      ✓ should return true/true (1 ms)
+    when there is a live, paused broadcast from the current user
+      ✓ should return true/true (1 ms)
+    when there is a live, resumed broadcast from the current user
+      ✓ should return true/true (4 ms)
+    when there was a live broadcast, that has been stopped
+      ✓ should return false/false (1 ms)
+    when there is a live broadcast from another user
+      ✓ should return true/false (1 ms)
+
+PASS test/unit-tests/components/views/settings/SecureBackupPanel-test.tsx
+  <SecureBackupPanel />
+    ✓ displays a loader while checking keybackup (13 ms)
+    ✓ handles error fetching backup (8 ms)
+    ✓ handles absence of backup (3 ms)
+    ✓ suggests connecting session to key backup when backup exists (3 ms)
+    ✓ displays when session is connected to key backup (2 ms)
+    ✓ asks for confirmation before deleting a backup (19 ms)
+    ✓ deletes backup after confirmation (19 ms)
+    ✓ resets secret storage (6 ms)
+
+PASS test/unit-tests/utils/pillify-test.tsx
+  pillify
+    ✓ should do nothing for empty element (6 ms)
+    ✓ should pillify @room (4 ms)
+    ✓ should pillify @room in an intentional mentions world (2 ms)
+    ✓ should not double up pillification on repeated calls (3 ms)
+
+PASS test/unit-tests/components/views/toasts/VerificationRequestToast-test.tsx
+  VerificationRequestToast
+    ✓ should render a self-verification (5 ms)
+    ✓ should render a cross-user verification (4 ms)
+    ✓ dismisses itself once the request can no longer be accepted (2 ms)
+
+PASS test/CreateCrossSigning-test.ts
+  CreateCrossSigning
+    ✓ should call bootstrapCrossSigning with an authUploadDeviceSigningKeys function (1 ms)
+    ✓ should upload with password auth if possible (1 ms)
+    ✓ should attempt to upload keys without auth if using token login (1 ms)
+    ✓ should prompt user if password upload not possible
+
+PASS test/unit-tests/utils/tooltipify-test.tsx
+  tooltipify
+    ✓ does nothing for empty element (2 ms)
+    ✓ wraps single anchor (2 ms)
+    ✓ ignores node (1 ms)
+    ✓ does not re-wrap if called multiple times (101 ms)
+
+PASS test/unit-tests/hooks/useUserDirectory-test.tsx
+  useUserDirectory
+    ✓ search for users in the identity server (4 ms)
+    ✓ should work with empty queries (3 ms)
+    ✓ should recover from a server exception (2 ms)
+
+PASS test/unit-tests/settings/handlers/RoomDeviceSettingsHandler-test.ts
+  RoomDeviceSettingsHandler
+    ✓ should write/read/clear the value for »RightPanel.phases« (1 ms)
+    ✓ should write/read/clear the value for »blacklistUnverifiedDevices«
+    ✓ canSetValue should return true
+
+PASS test/unit-tests/utils/UrlUtils-test.ts
+  abbreviateUrl
+    ✓ should return empty string if passed falsey
+    ✓ should abbreviate to host if empty pathname
+    ✓ should not abbreviate if has path parts
+  unabbreviateUrl
+    ✓ should return empty string if passed falsey
+    ✓ should prepend https to input if it lacks it
+    ✓ should not prepend https to input if it has it
+  parseUrl
+    ✓ should not throw on no proto
+
+Test Suites: 16 passed, 16 total
+Tests:       195 passed, 195 total
+Snapshots:   22 passed, 22 total
+Time:        17.023 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+npm notice
+npm notice New major version of npm available! 10.9.2 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

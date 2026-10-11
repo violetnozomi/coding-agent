@@ -1,0 +1,6 @@
+# github.com/gravitational/teleport/tool/tsh [github.com/gravitational/teleport/tool/tsh.test]
+tool/tsh/tsh_test.go:459:28: undefined: "github.com/gravitational/teleport/lib/client".ForwardAgentNo
+tool/tsh/tsh_test.go:469:28: undefined: "github.com/gravitational/teleport/lib/client".ForwardAgentNo
+tool/tsh/tsh_test.go:498:28: undefined: "github.com/gravitational/teleport/lib/client".ForwardAgentYes
+tool/tsh/tsh_test.go:508:28: undefined: "github.com/gravitational/teleport/lib/client".ForwardAgentNo
+tool/tsh/tsh_test.go:518:28: undefined: "github.com/gravitational/teleport/lib/client".ForwardAgentLocal

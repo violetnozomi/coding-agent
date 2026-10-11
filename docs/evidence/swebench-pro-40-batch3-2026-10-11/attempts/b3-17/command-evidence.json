@@ -1,0 +1,79 @@
+[
+  {
+    "tool_call_id": "call_00_OsstGD3CRabfGhzFDwiV2153",
+    "input": {
+      "command": "cd /workspace && ls && git log --oneline -3 && git status"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_plbjv6fg67X8HYprZvcn0114",
+    "input": {
+      "command": "cd /workspace && grep -rn \"ForwardAgent\" --include=*.go lib tool integration | head -60"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ay1hK8tr4eEXsZRO9tQG4091",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_02_XaNLJ9geJIpKV7TF1Cj32520",
+    "input": {
+      "command": "cd /workspace && head -5 integration/integration_test.go integration/helpers.go lib/client/session.go 2>&1 | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_tBo4A6BofTFSP1gBX1ye6190",
+    "input": {
+      "command": "cd /workspace && sed -n '1580,1660p' tool/tsh/tsh.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_gMJcwa5WjuLVZmq21gRi2501",
+    "input": {
+      "command": "cd /workspace && ls lib/client/"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Sx3DRPfRKApNXAiQbIZx6458",
+    "input": {
+      "command": "cd /workspace && head -20 integration/integration_test.go && echo ---- && head -20 integration/helpers.go && echo ---- && cat lib/client/session_windows.go | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

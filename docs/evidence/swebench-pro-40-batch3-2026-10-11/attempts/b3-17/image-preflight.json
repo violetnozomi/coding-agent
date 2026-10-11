@@ -1,0 +1,9 @@
+{
+  "image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_gravitational__teleport-769b4b5eec7286b7b14e179f2cc52e6b15d2d9f3-v626ec2a48416b10a88641359a169d99e935ff037",
+  "digest": "sha256:0e3a2913c0217f90e1c6241c22adfe0ccfb51ff78a3660b3d6d9ba86665d6dd2",
+  "index_digest": "sha256:0e3a2913c0217f90e1c6241c22adfe0ccfb51ff78a3660b3d6d9ba86665d6dd2",
+  "compressed_bytes": 2580134539,
+  "estimated_required_bytes": 10104212710,
+  "free_bytes": 11047608320,
+  "estimate_is_not_exact": true
+}

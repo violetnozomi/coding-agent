@@ -1,0 +1,13 @@
+{
+  "number": 24,
+  "instance_id": "instance_qutebrowser__qutebrowser-36ade4bba504eb96f05d32ceab9972df7eb17bcc-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+  "attempt": 1,
+  "agent_status": "completed",
+  "resolved": true,
+  "agent_started_epoch": 1791738239.9166183,
+  "agent_finished_epoch": 1791738346.5607426,
+  "status": "attempted",
+  "patch_sha256": "e80304dc14d585fb54f70e4383b7d48aecd93823f6a6c6688337a90de7cc115c",
+  "eval_status": "graded",
+  "physical_requests": 21
+}

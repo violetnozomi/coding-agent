@@ -1,0 +1,15 @@
+authentication:
+  required: true
+  session:
+    domain: "http://localhost:8080"
+    secure: false
+  methods:
+    github:
+      enabled: true
+      client_id: "abcdefg"
+      client_secret: "bcdefgh"
+      redirect_address: "http://localhost:8080"
+      scopes:
+        - "user:email"
+      allowed_organizations:
+        - "github.com/flipt-io"

@@ -1,0 +1,380 @@
+Running selected tests: TestCleanup TestAuthenticationMethodRequiresDatabase TestAuthenticationConfigRequiresDatabase TestAuthenticationShouldRunCleanup TestCleanupSkipsNonDatabaseMethods
+=== RUN   TestCleanup
+=== RUN   TestCleanup/ensure_non-expiring_token_exists
+=== RUN   TestCleanup/Authentication_Method_"METHOD_TOKEN"
+=== PAUSE TestCleanup/Authentication_Method_"METHOD_TOKEN"
+=== RUN   TestCleanup/Authentication_Method_"METHOD_GITHUB"
+=== PAUSE TestCleanup/Authentication_Method_"METHOD_GITHUB"
+=== RUN   TestCleanup/Authentication_Method_"METHOD_OIDC"
+=== PAUSE TestCleanup/Authentication_Method_"METHOD_OIDC"
+=== RUN   TestCleanup/Authentication_Method_"METHOD_KUBERNETES"
+=== PAUSE TestCleanup/Authentication_Method_"METHOD_KUBERNETES"
+=== CONT  TestCleanup/Authentication_Method_"METHOD_TOKEN"
+=== CONT  TestCleanup/Authentication_Method_"METHOD_KUBERNETES"
+    cleanup_test.go:78: create an expiring token and ensure it exists
+=== CONT  TestCleanup/Authentication_Method_"METHOD_OIDC"
+=== CONT  TestCleanup/Authentication_Method_"METHOD_GITHUB"
+=== NAME  TestCleanup/Authentication_Method_"METHOD_TOKEN"
+    cleanup_test.go:78: create an expiring token and ensure it exists
+=== NAME  TestCleanup/Authentication_Method_"METHOD_GITHUB"
+    cleanup_test.go:78: create an expiring token and ensure it exists
+=== NAME  TestCleanup
+    logger.go:146: 2026-10-11T16:51:55.197Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:50.197Z"}
+=== NAME  TestCleanup/Authentication_Method_"METHOD_GITHUB"
+    cleanup_test.go:92: ensure grace period protects token from being deleted
+=== NAME  TestCleanup
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:56.197Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:56.198Z"}
+=== NAME  TestCleanup/Authentication_Method_"METHOD_TOKEN"
+    cleanup_test.go:92: ensure grace period protects token from being deleted
+=== NAME  TestCleanup
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:56.198Z"}
+=== NAME  TestCleanup/Authentication_Method_"METHOD_OIDC"
+    cleanup_test.go:78: create an expiring token and ensure it exists
+    cleanup_test.go:92: ensure grace period protects token from being deleted
+=== NAME  TestCleanup/Authentication_Method_"METHOD_KUBERNETES"
+    cleanup_test.go:92: ensure grace period protects token from being deleted
+=== NAME  TestCleanup
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:56.197Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:50.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:56.197Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:56.197Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:50.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:56.198Z"}
+    logger.go:146: 2026-10-11T16:51:55.198Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:50.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:51.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:51.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:51.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:51.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:56.198Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:57.198Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:52.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:52.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:52.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:52.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:57.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:58.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:53.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:53.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:53.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:53.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:58.199Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:51:59.199Z"}
+    logger.go:146: 2026-10-11T16:51:59.199Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:54.199Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:54.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:54.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:54.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:00.199Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:00.199Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:00.200Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:00.199Z"}
+    logger.go:146: 2026-10-11T16:51:59.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:00.199Z"}
+=== NAME  TestCleanup/Authentication_Method_"METHOD_KUBERNETES"
+    cleanup_test.go:104: once expiry and grace period ellapses ensure token is deleted
+=== NAME  TestCleanup/Authentication_Method_"METHOD_OIDC"
+    cleanup_test.go:104: once expiry and grace period ellapses ensure token is deleted
+=== NAME  TestCleanup/Authentication_Method_"METHOD_GITHUB"
+    cleanup_test.go:104: once expiry and grace period ellapses ensure token is deleted
+=== NAME  TestCleanup/Authentication_Method_"METHOD_TOKEN"
+    cleanup_test.go:104: once expiry and grace period ellapses ensure token is deleted
+=== NAME  TestCleanup
+    logger.go:146: 2026-10-11T16:52:00.200Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:55.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:55.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:55.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:55.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:00.200Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:01.200Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:56.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:56.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:56.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:56.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:01.201Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:02.201Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:57.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:57.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:57.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:57.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:02.202Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:03.202Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:58.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:58.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:58.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:58.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:03.203Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:04.203Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:51:59.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:51:59.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:51:59.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:51:59.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:04.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:05.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:52:00.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:52:00.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:52:00.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:52:00.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:05.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:06.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:52:01.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:52:01.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:52:01.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:52:01.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:06.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:07.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:52:02.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:52:02.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.204Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:52:02.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.204Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:52:02.205Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:08.205Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:08.205Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:08.204Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:08.205Z"}
+    logger.go:146: 2026-10-11T16:52:07.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:08.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:52:03.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:52:03.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:52:03.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:52:03.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:08.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:09.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "expired_before": "2026-10-11T16:52:04.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "expired_before": "2026-10-11T16:52:04.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "expired_before": "2026-10-11T16:52:04.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	INFO	cleanup process deleting authentications	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "expired_before": "2026-10-11T16:52:04.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_TOKEN", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_GITHUB", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_KUBERNETES", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:09.205Z	DEBUG	cleanup process not acquired	{"service": "authentication cleanup service", "method": "METHOD_OIDC", "next_attempt": "2026-10-11T16:52:10.205Z"}
+    logger.go:146: 2026-10-11T16:52:10.199Z	DEBUG	shutting down...	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.200Z	DEBUG	shutdown complete	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.200Z	DEBUG	shutting down...	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.200Z	DEBUG	shutdown complete	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.200Z	DEBUG	shutting down...	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.200Z	DEBUG	shutdown complete	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.200Z	DEBUG	shutting down...	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.200Z	DEBUG	shutdown complete	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.200Z	DEBUG	shutting down...	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.200Z	DEBUG	shutdown complete	{"service": "authentication cleanup service"}
+--- PASS: TestCleanup (0.00s)
+    --- PASS: TestCleanup/ensure_non-expiring_token_exists (0.00s)
+    --- PASS: TestCleanup/Authentication_Method_"METHOD_GITHUB" (15.00s)
+    --- PASS: TestCleanup/Authentication_Method_"METHOD_OIDC" (15.00s)
+    --- PASS: TestCleanup/Authentication_Method_"METHOD_TOKEN" (15.00s)
+    --- PASS: TestCleanup/Authentication_Method_"METHOD_KUBERNETES" (15.00s)
+=== RUN   TestAuthenticationMethodRequiresDatabase
+--- PASS: TestAuthenticationMethodRequiresDatabase (0.00s)
+=== RUN   TestAuthenticationConfigRequiresDatabase
+=== RUN   TestAuthenticationConfigRequiresDatabase/no_methods_enabled
+=== RUN   TestAuthenticationConfigRequiresDatabase/jwt_only_enabled
+=== RUN   TestAuthenticationConfigRequiresDatabase/token_enabled
+--- PASS: TestAuthenticationConfigRequiresDatabase (0.00s)
+    --- PASS: TestAuthenticationConfigRequiresDatabase/no_methods_enabled (0.00s)
+    --- PASS: TestAuthenticationConfigRequiresDatabase/jwt_only_enabled (0.00s)
+    --- PASS: TestAuthenticationConfigRequiresDatabase/token_enabled (0.00s)
+=== RUN   TestAuthenticationShouldRunCleanup
+=== RUN   TestAuthenticationShouldRunCleanup/jwt_with_cleanup
+=== RUN   TestAuthenticationShouldRunCleanup/token_with_cleanup
+--- PASS: TestAuthenticationShouldRunCleanup (0.00s)
+    --- PASS: TestAuthenticationShouldRunCleanup/jwt_with_cleanup (0.00s)
+    --- PASS: TestAuthenticationShouldRunCleanup/token_with_cleanup (0.00s)
+=== RUN   TestCleanupSkipsNonDatabaseMethods
+    logger.go:146: 2026-10-11T16:52:10.251Z	DEBUG	shutting down...	{"service": "authentication cleanup service"}
+    logger.go:146: 2026-10-11T16:52:10.251Z	DEBUG	shutdown complete	{"service": "authentication cleanup service"}
+--- PASS: TestCleanupSkipsNonDatabaseMethods (0.05s)
+PASS
+ok  	go.flipt.io/flipt/internal/cleanup	15.060s

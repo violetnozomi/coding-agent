@@ -1,0 +1,21 @@
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la && git log --oneline -5 2>/dev/null | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -8 && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,60p' internal/storage/oplock/sql/oplock.go 2>/dev/null; echo \"---\"; grep -rn \"func New\" internal/storage/oplock/sql/*.go | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls internal/storage/oplock/ && echo \"---sql---\" && sed -n '1,60p' internal/storage/oplock/sql/sql.go 2>/dev/null || find internal/storage/oplock -name '*.go' | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go version"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && ls internal/storage/oplock/sql/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./internal/... 2>&1 | head -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./internal/cmd/... ./internal/config/... ./internal/cleanup/... 2>&1 | head -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./internal/config/ ./internal/cleanup/ ./internal/cmd/", "timeout": 180}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./internal/cleanup -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "go build ./internal/config ./internal/cleanup ./internal/cmd && echo BUILD_OK", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && GOFLAGS=-p=1 go build ./internal/config ./internal/cleanup 2>&1 | tail -20; echo \"EXIT=$?\"", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "cd /workspace && go vet ./internal/config 2>&1 | tail -20; echo EXIT=$?", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "cd /workspace && go test ./internal/config -run '^$' 2>&1 | tail -15", "timeout": 180}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "cd /workspace && go test -count=1 ./internal/config ./internal/cleanup 2>&1 | tail -25", "timeout": 180}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && GOFLAGS=-p=1 GOMAXPROCS=1 go build ./internal/config/ ./internal/cleanup/ && echo BUILD_OK", "timeout": 180}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "cd /workspace && go test ./internal/config/... -run '^$' 2>&1 | tail -20", "timeout": 180}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "go test ./internal/config -run '^$'", "timeout": 180}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "go test ./internal/config -run '^$'", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "go test ./internal/cmd -run '^$'", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/cleanup -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}

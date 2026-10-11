@@ -1,0 +1,152 @@
+instance_element-hq__element-web-d06cf09bf0b3d4a0fbe6bd32e4115caea2083168-vnan: Pulling from scaleapi/swe-bench_pro-v2
+4f4c9ac5eb90: Pulling fs layer
+3ee1ef79bfdc: Pulling fs layer
+68201ec6e581: Pulling fs layer
+b3ee2c8b8446: Pulling fs layer
+e4925eac7a2d: Pulling fs layer
+3e0dd53af777: Pulling fs layer
+19cf23b61bdf: Pulling fs layer
+ace91f5f2084: Pulling fs layer
+fb67295ca065: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+712836f3d497: Pulling fs layer
+7fdefd9c584b: Pulling fs layer
+6486d962c17d: Pulling fs layer
+f878f158c212: Pulling fs layer
+af14aa21d3f3: Pulling fs layer
+1a74d2ef6bd1: Pulling fs layer
+bbc8da8af87c: Pulling fs layer
+6e0f44d1b7f8: Pulling fs layer
+c7c64ecad22c: Pulling fs layer
+93d007751249: Pulling fs layer
+c036207681d8: Pulling fs layer
+7dcc2284fee9: Pulling fs layer
+9ad166a322e2: Pulling fs layer
+4a34a662858f: Pulling fs layer
+dfc63284cec8: Pulling fs layer
+aa9f85ee78ac: Pulling fs layer
+f878f158c212: Waiting
+af14aa21d3f3: Waiting
+1a74d2ef6bd1: Waiting
+bbc8da8af87c: Waiting
+6e0f44d1b7f8: Waiting
+c7c64ecad22c: Waiting
+93d007751249: Waiting
+c036207681d8: Waiting
+7dcc2284fee9: Waiting
+9ad166a322e2: Waiting
+4a34a662858f: Waiting
+dfc63284cec8: Waiting
+aa9f85ee78ac: Waiting
+b3ee2c8b8446: Waiting
+e4925eac7a2d: Waiting
+3e0dd53af777: Waiting
+19cf23b61bdf: Waiting
+ace91f5f2084: Waiting
+fb67295ca065: Waiting
+4f4fb700ef54: Waiting
+712836f3d497: Waiting
+7fdefd9c584b: Waiting
+6486d962c17d: Waiting
+3ee1ef79bfdc: Verifying Checksum
+3ee1ef79bfdc: Download complete
+68201ec6e581: Verifying Checksum
+68201ec6e581: Download complete
+4f4c9ac5eb90: Verifying Checksum
+4f4c9ac5eb90: Download complete
+4f4c9ac5eb90: Pull complete
+3ee1ef79bfdc: Pull complete
+68201ec6e581: Pull complete
+e4925eac7a2d: Verifying Checksum
+e4925eac7a2d: Download complete
+19cf23b61bdf: Verifying Checksum
+19cf23b61bdf: Download complete
+ace91f5f2084: Download complete
+3e0dd53af777: Verifying Checksum
+3e0dd53af777: Download complete
+fb67295ca065: Download complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
+712836f3d497: Verifying Checksum
+712836f3d497: Download complete
+6486d962c17d: Verifying Checksum
+6486d962c17d: Download complete
+f878f158c212: Verifying Checksum
+f878f158c212: Download complete
+b3ee2c8b8446: Verifying Checksum
+b3ee2c8b8446: Download complete
+af14aa21d3f3: Verifying Checksum
+af14aa21d3f3: Download complete
+b3ee2c8b8446: Pull complete
+e4925eac7a2d: Pull complete
+3e0dd53af777: Pull complete
+19cf23b61bdf: Pull complete
+ace91f5f2084: Pull complete
+fb67295ca065: Pull complete
+4f4fb700ef54: Pull complete
+712836f3d497: Pull complete
+bbc8da8af87c: Download complete
+1a74d2ef6bd1: Verifying Checksum
+1a74d2ef6bd1: Download complete
+6e0f44d1b7f8: Download complete
+c7c64ecad22c: Retrying in 5 seconds
+c7c64ecad22c: Retrying in 4 seconds
+c7c64ecad22c: Retrying in 3 seconds
+c7c64ecad22c: Retrying in 2 seconds
+c7c64ecad22c: Retrying in 1 second
+7fdefd9c584b: Retrying in 5 seconds
+7fdefd9c584b: Retrying in 4 seconds
+7fdefd9c584b: Retrying in 3 seconds
+7fdefd9c584b: Retrying in 2 seconds
+7fdefd9c584b: Retrying in 1 second
+93d007751249: Retrying in 5 seconds
+c7c64ecad22c: Retrying in 10 seconds
+93d007751249: Retrying in 4 seconds
+c7c64ecad22c: Retrying in 9 seconds
+93d007751249: Retrying in 3 seconds
+c7c64ecad22c: Retrying in 8 seconds
+93d007751249: Retrying in 2 seconds
+c7c64ecad22c: Retrying in 7 seconds
+93d007751249: Retrying in 1 second
+c7c64ecad22c: Retrying in 6 seconds
+c7c64ecad22c: Retrying in 5 seconds
+c7c64ecad22c: Retrying in 4 seconds
+c7c64ecad22c: Retrying in 3 seconds
+c7c64ecad22c: Retrying in 2 seconds
+c7c64ecad22c: Retrying in 1 second
+93d007751249: Verifying Checksum
+93d007751249: Download complete
+c036207681d8: Verifying Checksum
+c036207681d8: Download complete
+7dcc2284fee9: Verifying Checksum
+7dcc2284fee9: Download complete
+9ad166a322e2: Verifying Checksum
+9ad166a322e2: Download complete
+7fdefd9c584b: Verifying Checksum
+7fdefd9c584b: Download complete
+7fdefd9c584b: Pull complete
+6486d962c17d: Pull complete
+f878f158c212: Pull complete
+af14aa21d3f3: Pull complete
+1a74d2ef6bd1: Pull complete
+bbc8da8af87c: Pull complete
+6e0f44d1b7f8: Pull complete
+dfc63284cec8: Verifying Checksum
+dfc63284cec8: Download complete
+aa9f85ee78ac: Verifying Checksum
+aa9f85ee78ac: Download complete
+c7c64ecad22c: Verifying Checksum
+c7c64ecad22c: Download complete
+c7c64ecad22c: Pull complete
+93d007751249: Pull complete
+c036207681d8: Pull complete
+7dcc2284fee9: Pull complete
+9ad166a322e2: Pull complete
+4a34a662858f: Verifying Checksum
+4a34a662858f: Download complete
+4a34a662858f: Pull complete
+dfc63284cec8: Pull complete
+aa9f85ee78ac: Pull complete
+Digest: sha256:66738f3f66b8add8b299588dfff13eadcfa57a60a7f279d62c9247aac4f39f93
+Status: Downloaded newer image for ghcr.io/scaleapi/swe-bench_pro-v2:instance_element-hq__element-web-d06cf09bf0b3d4a0fbe6bd32e4115caea2083168-vnan
+ghcr.io/scaleapi/swe-bench_pro-v2:instance_element-hq__element-web-d06cf09bf0b3d4a0fbe6bd32e4115caea2083168-vnan

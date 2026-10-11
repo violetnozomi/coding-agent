@@ -1,0 +1,35 @@
+[
+  {
+    "tool_call_id": "call_01_xqdjw2NddPfYMOG5yIHz7931",
+    "input": {
+      "command": "ls -la /workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_SaSZ0MtedCyKQYvqoluI5377",
+    "input": {
+      "command": "ls /workspace/tests/unit/config/ 2>/dev/null; echo ---; ls /workspace/tests/unit/config 2>/dev/null"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "test_config.py\ntest_configcache.py\ntest_configcommands.py\ntest_configdata.py\ntest_configexc.py\ntest_configfiles.py\ntest_configinit.py\ntest_configtypes.py\ntest_configutils.py\ntest_qtargs.py\ntest_stylesheet.py\ntest_websettings.py\n---\ntest_config.py\ntest_configcache.py\ntest_configcommands.py\ntest_configdata.py\ntest_configexc.py\ntest_configfiles.py\ntest_configinit.py\ntest_configtypes.py\ntest_configutils.py\ntest_qtargs.py\ntest_stylesheet.py\ntest_websettings.py"
+  },
+  {
+    "tool_call_id": "call_00_lzDXzUCPu7Lp5JAnQi8g4608",
+    "input": {
+      "command": "ls /workspace/scripts/dev/ 2>/dev/null; echo ---; ls /workspace/scripts/; echo ---; grep -rn \"workarounds\" /workspace/qutebrowser/ | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

@@ -1,0 +1,167 @@
+Running selected tests: tests/unit/config/test_configutils.py
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-7.4.2, pluggy-1.3.0 -- /usr/local/bin/python3.11
+cachedir: .pytest_cache
+benchmark: 4.0.0 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+hypothesis profile 'default' -> deadline=timedelta(milliseconds=600), database=DirectoryBasedExampleDatabase('/app/.hypothesis/examples')
+PyQt5 5.15.9 -- Qt runtime 5.15.2 -- Qt compiled 5.15.2
+rootdir: /app
+configfile: pytest.ini
+plugins: mock-3.11.1, repeat-0.9.1, bdd-6.1.1, benchmark-4.0.0, xdist-3.3.1, rerunfailures-12.0, hypothesis-6.86.1, anyio-4.10.0, xvfb-3.0.0, instafail-0.5.0, cov-4.1.0, qt-4.2.0
+collecting ... collected 57 items
+
+tests/unit/config/test_configutils.py::test_str PASSED                   [  1%]
+tests/unit/config/test_configutils.py::test_str_empty PASSED             [  3%]
+tests/unit/config/test_configutils.py::test_str_mixed PASSED             [  5%]
+tests/unit/config/test_configutils.py::test_dump[True-expected0] PASSED  [  7%]
+tests/unit/config/test_configutils.py::test_dump[False-expected1] PASSED [  8%]
+tests/unit/config/test_configutils.py::test_bool PASSED                  [ 10%]
+tests/unit/config/test_configutils.py::test_iter PASSED                  [ 12%]
+tests/unit/config/test_configutils.py::test_add_existing PASSED          [ 14%]
+tests/unit/config/test_configutils.py::test_add_new PASSED               [ 15%]
+tests/unit/config/test_configutils.py::test_remove_existing PASSED       [ 17%]
+tests/unit/config/test_configutils.py::test_remove_non_existing PASSED   [ 19%]
+tests/unit/config/test_configutils.py::test_clear PASSED                 [ 21%]
+tests/unit/config/test_configutils.py::test_get_matching PASSED          [ 22%]
+tests/unit/config/test_configutils.py::test_get_unset PASSED             [ 24%]
+tests/unit/config/test_configutils.py::test_get_no_global PASSED         [ 26%]
+tests/unit/config/test_configutils.py::test_get_unset_fallback PASSED    [ 28%]
+tests/unit/config/test_configutils.py::test_get_non_matching PASSED      [ 29%]
+tests/unit/config/test_configutils.py::test_get_non_matching_fallback PASSED [ 31%]
+tests/unit/config/test_configutils.py::test_get_multiple_matches PASSED  [ 33%]
+tests/unit/config/test_configutils.py::test_get_non_domain_patterns PASSED [ 35%]
+tests/unit/config/test_configutils.py::test_get_matching_pattern PASSED  [ 36%]
+tests/unit/config/test_configutils.py::test_get_pattern_none PASSED      [ 38%]
+tests/unit/config/test_configutils.py::test_get_unset_pattern PASSED     [ 40%]
+tests/unit/config/test_configutils.py::test_get_no_global_pattern PASSED [ 42%]
+tests/unit/config/test_configutils.py::test_get_unset_fallback_pattern PASSED [ 43%]
+tests/unit/config/test_configutils.py::test_get_non_matching_pattern PASSED [ 45%]
+tests/unit/config/test_configutils.py::test_get_non_matching_fallback_pattern PASSED [ 47%]
+tests/unit/config/test_configutils.py::test_get_equivalent_patterns PASSED [ 49%]
+tests/unit/config/test_configutils.py::test_no_pattern_support[add] PASSED [ 50%]
+tests/unit/config/test_configutils.py::test_no_pattern_support[remove] PASSED [ 52%]
+tests/unit/config/test_configutils.py::test_no_pattern_support[get_for_url] PASSED [ 54%]
+tests/unit/config/test_configutils.py::test_no_pattern_support[get_for_pattern] PASSED [ 56%]
+tests/unit/config/test_configutils.py::test_add_url_benchmark PASSED     [ 57%]
+tests/unit/config/test_configutils.py::test_domain_lookup_sparse_benchmark[http://www.qutebrowser.com/] PASSED [ 59%]
+tests/unit/config/test_configutils.py::test_domain_lookup_sparse_benchmark[http://foo.bar.baz/] PASSED [ 61%]
+tests/unit/config/test_configutils.py::test_domain_lookup_sparse_benchmark[http://bop.foo.bar.baz/] PASSED [ 63%]
+tests/unit/config/test_configutils.py::TestWiden::test_widen_hostnames[a.b.c-expected0] PASSED [ 64%]
+tests/unit/config/test_configutils.py::TestWiden::test_widen_hostnames[foobarbaz-expected1] PASSED [ 66%]
+tests/unit/config/test_configutils.py::TestWiden::test_widen_hostnames[-expected2] PASSED [ 68%]
+tests/unit/config/test_configutils.py::TestWiden::test_widen_hostnames[.c-expected3] PASSED [ 70%]
+tests/unit/config/test_configutils.py::TestWiden::test_widen_hostnames[c.-expected4] PASSED [ 71%]
+tests/unit/config/test_configutils.py::TestWiden::test_widen_hostnames[.c.-expected5] PASSED [ 73%]
+tests/unit/config/test_configutils.py::TestWiden::test_widen_hostnames[None-expected6] PASSED [ 75%]
+tests/unit/config/test_configutils.py::TestWiden::test_bench_widen_hostnames[test.qutebrowser.org] PASSED [ 77%]
+tests/unit/config/test_configutils.py::TestWiden::test_bench_widen_hostnames[a.b.c.d.e.f.g.h.i.j.k.l.m.n.o.p.q.r.s.t.u.v.w.z.y.z] PASSED [ 78%]
+tests/unit/config/test_configutils.py::TestWiden::test_bench_widen_hostnames[qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq.c] PASSED [ 80%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, bar-expected0] RERUN [ 82%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, bar-expected0] RERUN [ 82%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, bar-expected0] RERUN [ 82%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, bar-expected0] FAILED [ 82%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo,   spaces -expected1] RERUN [ 84%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo,   spaces -expected1] RERUN [ 84%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo,   spaces -expected1] RERUN [ 84%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo,   spaces -expected1] FAILED [ 84%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[-expected2] RERUN [ 85%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[-expected2] RERUN [ 85%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[-expected2] RERUN [ 85%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[-expected2] FAILED [ 85%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, -expected3] RERUN [ 87%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, -expected3] RERUN [ 87%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, -expected3] RERUN [ 87%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, -expected3] FAILED [ 87%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["One Font", Two-expected4] RERUN [ 89%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["One Font", Two-expected4] RERUN [ 89%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["One Font", Two-expected4] RERUN [ 89%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["One Font", Two-expected4] FAILED [ 89%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts'-expected5] RERUN [ 91%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts'-expected5] RERUN [ 91%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts'-expected5] RERUN [ 91%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts'-expected5] FAILED [ 91%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts', 'Three'-expected6] RERUN [ 92%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts', 'Three'-expected6] RERUN [ 92%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts', 'Three'-expected6] RERUN [ 92%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts', 'Three'-expected6] FAILED [ 92%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["Weird font name: '"-expected7] RERUN [ 94%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["Weird font name: '"-expected7] RERUN [ 94%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["Weird font name: '"-expected7] RERUN [ 94%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["Weird font name: '"-expected7] FAILED [ 94%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families0-family] RERUN [ 96%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families0-family] RERUN [ 96%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families0-family] RERUN [ 96%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families0-family] FAILED [ 96%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families1-family1, family2] RERUN [ 98%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families1-family1, family2] RERUN [ 98%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families1-family1, family2] RERUN [ 98%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families1-family1, family2] FAILED [ 98%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str_hypothesis RERUN [100%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str_hypothesis RERUN [100%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str_hypothesis RERUN [100%]
+tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str_hypothesis FAILED [100%]
+
+=================================== FAILURES ===================================
+______________ TestFontFamilies.test_from_str[foo, bar-expected0] ______________
+tests/unit/config/test_configutils.py:314: in test_from_str
+    assert list(configutils.FontFamilies.from_str(family_str)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+___________ TestFontFamilies.test_from_str[foo,   spaces -expected1] ___________
+tests/unit/config/test_configutils.py:314: in test_from_str
+    assert list(configutils.FontFamilies.from_str(family_str)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+__________________ TestFontFamilies.test_from_str[-expected2] __________________
+tests/unit/config/test_configutils.py:314: in test_from_str
+    assert list(configutils.FontFamilies.from_str(family_str)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+_______________ TestFontFamilies.test_from_str[foo, -expected3] ________________
+tests/unit/config/test_configutils.py:314: in test_from_str
+    assert list(configutils.FontFamilies.from_str(family_str)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+__________ TestFontFamilies.test_from_str["One Font", Two-expected4] ___________
+tests/unit/config/test_configutils.py:314: in test_from_str
+    assert list(configutils.FontFamilies.from_str(family_str)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+__________ TestFontFamilies.test_from_str[One, 'Two Fonts'-expected5] __________
+tests/unit/config/test_configutils.py:314: in test_from_str
+    assert list(configutils.FontFamilies.from_str(family_str)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+_____ TestFontFamilies.test_from_str[One, 'Two Fonts', 'Three'-expected6] ______
+tests/unit/config/test_configutils.py:314: in test_from_str
+    assert list(configutils.FontFamilies.from_str(family_str)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+________ TestFontFamilies.test_from_str["Weird font name: '"-expected7] ________
+tests/unit/config/test_configutils.py:314: in test_from_str
+    assert list(configutils.FontFamilies.from_str(family_str)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+________________ TestFontFamilies.test_to_str[families0-family] ________________
+tests/unit/config/test_configutils.py:321: in test_to_str
+    assert str(configutils.FontFamilies(families)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+___________ TestFontFamilies.test_to_str[families1-family1, family2] ___________
+tests/unit/config/test_configutils.py:321: in test_to_str
+    assert str(configutils.FontFamilies(families)) == expected
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+__________________ TestFontFamilies.test_from_str_hypothesis ___________________
+tests/unit/config/test_configutils.py:324: in test_from_str_hypothesis
+    def test_from_str_hypothesis(self, family_str):
+tests/unit/config/test_configutils.py:325: in test_from_str_hypothesis
+    families = configutils.FontFamilies.from_str(family_str)
+E   AttributeError: module 'qutebrowser.config.configutils' has no attribute 'FontFamilies'
+E   Falsifying example: test_from_str_hypothesis(
+E       self=<test_configutils.TestFontFamilies object at 0x7787d9f70150>,
+E       family_str='',  # or any other generated value
+E   )
+=========================== short test summary info ============================
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, bar-expected0]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo,   spaces -expected1]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[-expected2]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[foo, -expected3]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["One Font", Two-expected4]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts'-expected5]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str[One, 'Two Fonts', 'Three'-expected6]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str["Weird font name: '"-expected7]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families0-family]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_to_str[families1-family1, family2]
+FAILED tests/unit/config/test_configutils.py::TestFontFamilies::test_from_str_hypothesis
+=================== 11 failed, 46 passed, 33 rerun in 3.09s ====================

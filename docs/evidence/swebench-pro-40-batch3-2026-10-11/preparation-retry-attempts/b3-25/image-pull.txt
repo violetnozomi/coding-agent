@@ -1,0 +1,76 @@
+instance_qutebrowser__qutebrowser-ef5ba1a0360b39f9eff027fbdc57f363597c3c3b-v363c8a7e5ccdf6968fc7ab84a2053ac78036691d: Pulling from scaleapi/swe-bench_pro-v2
+dad67da3f26b: Pulling fs layer
+799440a7bae7: Pulling fs layer
+9596beeb5a6d: Pulling fs layer
+15658014cd85: Pulling fs layer
+dcccccc71058: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+de6dc7e3d0d8: Pulling fs layer
+8b4fdfb67480: Pulling fs layer
+276c7eca0cf7: Pulling fs layer
+bf0a3b44240a: Pulling fs layer
+f4219202f199: Pulling fs layer
+f62b87be5b11: Pulling fs layer
+aac7be326b8d: Pulling fs layer
+e0608628d20d: Pulling fs layer
+072da05eddb9: Pulling fs layer
+0252f5c48156: Pulling fs layer
+dcccccc71058: Waiting
+4f4fb700ef54: Waiting
+bf0a3b44240a: Waiting
+de6dc7e3d0d8: Waiting
+f4219202f199: Waiting
+8b4fdfb67480: Waiting
+f62b87be5b11: Waiting
+276c7eca0cf7: Waiting
+aac7be326b8d: Waiting
+e0608628d20d: Waiting
+0252f5c48156: Waiting
+072da05eddb9: Waiting
+15658014cd85: Waiting
+799440a7bae7: Verifying Checksum
+799440a7bae7: Download complete
+9596beeb5a6d: Verifying Checksum
+9596beeb5a6d: Download complete
+dad67da3f26b: Verifying Checksum
+dad67da3f26b: Download complete
+15658014cd85: Download complete
+dad67da3f26b: Pull complete
+799440a7bae7: Pull complete
+9596beeb5a6d: Pull complete
+15658014cd85: Pull complete
+dcccccc71058: Verifying Checksum
+dcccccc71058: Download complete
+dcccccc71058: Pull complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
+4f4fb700ef54: Pull complete
+276c7eca0cf7: Verifying Checksum
+276c7eca0cf7: Download complete
+bf0a3b44240a: Verifying Checksum
+bf0a3b44240a: Download complete
+f4219202f199: Verifying Checksum
+f4219202f199: Download complete
+f62b87be5b11: Download complete
+aac7be326b8d: Download complete
+e0608628d20d: Verifying Checksum
+e0608628d20d: Download complete
+8b4fdfb67480: Verifying Checksum
+8b4fdfb67480: Download complete
+de6dc7e3d0d8: Download complete
+de6dc7e3d0d8: Pull complete
+8b4fdfb67480: Pull complete
+276c7eca0cf7: Pull complete
+bf0a3b44240a: Pull complete
+f4219202f199: Pull complete
+f62b87be5b11: Pull complete
+aac7be326b8d: Pull complete
+e0608628d20d: Pull complete
+0252f5c48156: Verifying Checksum
+0252f5c48156: Download complete
+072da05eddb9: Download complete
+072da05eddb9: Pull complete
+0252f5c48156: Pull complete
+Digest: sha256:0b1787e9b1776e154fc401be1634db50f1cbdb324eeb4fbca8ffe6625c6cb1e3
+Status: Downloaded newer image for ghcr.io/scaleapi/swe-bench_pro-v2:instance_qutebrowser__qutebrowser-ef5ba1a0360b39f9eff027fbdc57f363597c3c3b-v363c8a7e5ccdf6968fc7ab84a2053ac78036691d
+ghcr.io/scaleapi/swe-bench_pro-v2:instance_qutebrowser__qutebrowser-ef5ba1a0360b39f9eff027fbdc57f363597c3c3b-v363c8a7e5ccdf6968fc7ab84a2053ac78036691d

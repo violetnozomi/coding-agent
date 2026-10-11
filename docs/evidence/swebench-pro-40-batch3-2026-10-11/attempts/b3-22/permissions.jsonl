@@ -1,0 +1,13 @@
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la && git log --oneline -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"github\" --include=*.yml internal/ config/ examples/ 2>/dev/null | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git diff", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git log --oneline -8 2>&1 | head; echo ---; git status --short 2>&1 | head -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'TestLoad' -count=1 2>&1 | tail -40", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'TestLoad' -count=1 -vet=off 2>&1 | tail -40", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run TestLoad -count=1 -vet=off '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -count=1 -vet=off 2>&1 | tail -30", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'TestLoad|TestDefault|TestConfig|TestValidate|TestAuthentication' -count=1 -vet=off 2>&1 | tail -20", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'TestLoad|TestDefault|TestConfig|TestValidate|TestAuthentication' -count=1 -vet=off 2>&1 | tail -20", "timeout": 120}, "allowed": true}

@@ -1,0 +1,10 @@
+{
+  "number": 26,
+  "instance_id": "instance_gravitational__teleport-eda668c30d9d3b56d9c69197b120b01013611186",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "blocked",
+  "error": "RuntimeError('remaining_global_budget_stop')",
+  "physical_requests": 0
+}

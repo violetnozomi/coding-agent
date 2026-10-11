@@ -1,0 +1,12 @@
+{
+  "source_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:0e3a2913c0217f90e1c6241c22adfe0ccfb51ff78a3660b3d6d9ba86665d6dd2",
+  "source_image_id": "sha256:343d824bb4806a7dbaa95c567b58bd2e563e07bc954f12da2de8139675f29609",
+  "source_size_bytes": 4875854438,
+  "project_python": "3.9.2",
+  "agent_python": "3.13",
+  "agent_executable": "/opt/nz-agent/bin/python3.13",
+  "agent_image": "nz-pro20-b3-17:isolated-agent",
+  "agent_image_id": "sha256:a881530b1a371dc6fc0f77eff7f4200a9e7f12bf413acd29fd55072f8144d499",
+  "user_authorized_isolation": "补隔离 Agent Python（建议）",
+  "original_project_toolchain_unchanged": true
+}

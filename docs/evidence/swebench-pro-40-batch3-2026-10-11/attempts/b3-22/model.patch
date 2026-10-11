@@ -1,0 +1,295 @@
+diff --git a/internal/config/authentication.go b/internal/config/authentication.go
+index db156442..3d580ce7 100644
+--- a/internal/config/authentication.go
++++ b/internal/config/authentication.go
+@@ -4,6 +4,7 @@ import (
+ 	"fmt"
+ 	"net/url"
+ 	"slices"
++	"sort"
+ 	"strings"
+ 	"testing"
+ 	"time"
+@@ -402,7 +403,25 @@ func (a AuthenticationMethodOIDCConfig) info() AuthenticationMethodInfo {
+ 	return info
+ }
+ 
+-func (a AuthenticationMethodOIDCConfig) validate() error { return nil }
++func (a AuthenticationMethodOIDCConfig) validate() error {
++	// ensure each provider has the required credentials configured.
++	// validate the providers in a deterministic order so that error
++	// messages are stable across runs.
++	providers := make([]string, 0, len(a.Providers))
++	for provider := range a.Providers {
++		providers = append(providers, provider)
++	}
++
++	sort.Strings(providers)
++
++	for _, provider := range providers {
++		if err := a.Providers[provider].validate(provider); err != nil {
++			return err
++		}
++	}
++
++	return nil
++}
+ 
+ // AuthenticationOIDCProvider configures provider credentials
+ type AuthenticationMethodOIDCProvider struct {
+@@ -414,6 +433,23 @@ type AuthenticationMethodOIDCProvider struct {
+ 	UsePKCE         bool     `json:"usePKCE,omitempty" mapstructure:"use_pkce" yaml:"use_pkce,omitempty"`
+ }
+ 
++func (a AuthenticationMethodOIDCProvider) validate(provider string) error {
++	for _, field := range []struct {
++		name  string
++		value string
++	}{
++		{"client_id", a.ClientID},
++		{"client_secret", a.ClientSecret},
++		{"redirect_address", a.RedirectAddress},
++	} {
++		if field.value == "" {
++			return errProviderWrap(provider, errFieldRequired(field.name))
++		}
++	}
++
++	return nil
++}
++
+ // AuthenticationCleanupSchedule is used to configure a cleanup goroutine.
+ type AuthenticationCleanupSchedule struct {
+ 	Interval    time.Duration `json:"interval,omitempty" mapstructure:"interval" yaml:"interval,omitempty"`
+@@ -482,9 +518,22 @@ func (a AuthenticationMethodGithubConfig) info() AuthenticationMethodInfo {
+ }
+ 
+ func (a AuthenticationMethodGithubConfig) validate() error {
++	for _, field := range []struct {
++		name  string
++		value string
++	}{
++		{"client_id", a.ClientId},
++		{"client_secret", a.ClientSecret},
++		{"redirect_address", a.RedirectAddress},
++	} {
++		if field.value == "" {
++			return errProviderWrap("github", errFieldRequired(field.name))
++		}
++	}
++
+ 	// ensure scopes contain read:org if allowed organizations is not empty
+ 	if len(a.AllowedOrganizations) > 0 && !slices.Contains(a.Scopes, "read:org") {
+-		return fmt.Errorf("scopes must contain read:org when allowed_organizations is not empty")
++		return errProviderWrap("github", errFieldWrap("scopes", errReadOrgScopeRequired))
+ 	}
+ 
+ 	return nil
+diff --git a/internal/config/config_test.go b/internal/config/config_test.go
+index 98868e65..ede5cbe3 100644
+--- a/internal/config/config_test.go
++++ b/internal/config/config_test.go
+@@ -448,7 +448,37 @@ func TestLoad(t *testing.T) {
+ 		{
+ 			name:    "authentication github requires read:org scope when allowing orgs",
+ 			path:    "./testdata/authentication/github_no_org_scope.yml",
+-			wantErr: errors.New("scopes must contain read:org when allowed_organizations is not empty"),
++			wantErr: errors.New("provider \"github\": field \"scopes\": must contain read:org when allowed_organizations is not empty"),
++		},
++		{
++			name:    "authentication github missing client_id",
++			path:    "./testdata/authentication/github_missing_client_id.yml",
++			wantErr: errors.New("provider \"github\": field \"client_id\": non-empty value is required"),
++		},
++		{
++			name:    "authentication github missing client_secret",
++			path:    "./testdata/authentication/github_missing_client_secret.yml",
++			wantErr: errors.New("provider \"github\": field \"client_secret\": non-empty value is required"),
++		},
++		{
++			name:    "authentication github missing redirect_address",
++			path:    "./testdata/authentication/github_missing_redirect_address.yml",
++			wantErr: errors.New("provider \"github\": field \"redirect_address\": non-empty value is required"),
++		},
++		{
++			name:    "authentication oidc missing client_id",
++			path:    "./testdata/authentication/oidc_missing_client_id.yml",
++			wantErr: errors.New("provider \"foo\": field \"client_id\": non-empty value is required"),
++		},
++		{
++			name:    "authentication oidc missing client_secret",
++			path:    "./testdata/authentication/oidc_missing_client_secret.yml",
++			wantErr: errors.New("provider \"foo\": field \"client_secret\": non-empty value is required"),
++		},
++		{
++			name:    "authentication oidc missing redirect_address",
++			path:    "./testdata/authentication/oidc_missing_redirect_address.yml",
++			wantErr: errors.New("provider \"foo\": field \"redirect_address\": non-empty value is required"),
+ 		},
+ 		{
+ 			name: "advanced",
+diff --git a/internal/config/errors.go b/internal/config/errors.go
+index 8716850b..90c0ea00 100644
+--- a/internal/config/errors.go
++++ b/internal/config/errors.go
+@@ -5,7 +5,10 @@ import (
+ 	"fmt"
+ )
+ 
+-const fieldErrFmt = "field %q: %w"
++const (
++	fieldErrFmt    = "field %q: %w"
++	providerErrFmt = "provider %q: %w"
++)
+ 
+ var (
+ 	// errValidationRequired is returned when a required value is
+@@ -13,6 +16,9 @@ var (
+ 	errValidationRequired = errors.New("non-empty value is required")
+ 	// errPositiveNonZeroDuration is returned when a negative or zero time.Duration is provided.
+ 	errPositiveNonZeroDuration = errors.New("positive non-zero duration required")
++	// errReadOrgScopeRequired is returned when allowed_organizations is configured
++	// but the associated read:org scope has not been supplied.
++	errReadOrgScopeRequired = errors.New("must contain read:org when allowed_organizations is not empty")
+ )
+ 
+ func errFieldWrap(field string, err error) error {
+@@ -22,3 +28,7 @@ func errFieldWrap(field string, err error) error {
+ func errFieldRequired(field string) error {
+ 	return errFieldWrap(field, errValidationRequired)
+ }
++
++func errProviderWrap(provider string, err error) error {
++	return fmt.Errorf(providerErrFmt, provider, err)
++}
+diff --git a/internal/config/testdata/authentication/github_missing_client_id.yml b/internal/config/testdata/authentication/github_missing_client_id.yml
+new file mode 100644
+index 00000000..f39b1cb9
+--- /dev/null
++++ b/internal/config/testdata/authentication/github_missing_client_id.yml
+@@ -0,0 +1,14 @@
++authentication:
++  required: true
++  session:
++    domain: "http://localhost:8080"
++    secure: false
++  methods:
++    github:
++      enabled: true
++      client_secret: "bcdefgh"
++      redirect_address: "http://localhost:8080"
++      scopes:
++        - "user:email"
++      allowed_organizations:
++        - "github.com/flipt-io"
+diff --git a/internal/config/testdata/authentication/github_missing_client_secret.yml b/internal/config/testdata/authentication/github_missing_client_secret.yml
+new file mode 100644
+index 00000000..7596ac33
+--- /dev/null
++++ b/internal/config/testdata/authentication/github_missing_client_secret.yml
+@@ -0,0 +1,14 @@
++authentication:
++  required: true
++  session:
++    domain: "http://localhost:8080"
++    secure: false
++  methods:
++    github:
++      enabled: true
++      client_id: "abcdefg"
++      redirect_address: "http://localhost:8080"
++      scopes:
++        - "user:email"
++      allowed_organizations:
++        - "github.com/flipt-io"
+diff --git a/internal/config/testdata/authentication/github_missing_redirect_address.yml b/internal/config/testdata/authentication/github_missing_redirect_address.yml
+new file mode 100644
+index 00000000..4c2b37ef
+--- /dev/null
++++ b/internal/config/testdata/authentication/github_missing_redirect_address.yml
+@@ -0,0 +1,14 @@
++authentication:
++  required: true
++  session:
++    domain: "http://localhost:8080"
++    secure: false
++  methods:
++    github:
++      enabled: true
++      client_id: "abcdefg"
++      client_secret: "bcdefgh"
++      scopes:
++        - "user:email"
++      allowed_organizations:
++        - "github.com/flipt-io"
+diff --git a/internal/config/testdata/authentication/github_no_org_scope.yml b/internal/config/testdata/authentication/github_no_org_scope.yml
+index 55006eff..2e78ddb1 100644
+--- a/internal/config/testdata/authentication/github_no_org_scope.yml
++++ b/internal/config/testdata/authentication/github_no_org_scope.yml
+@@ -6,6 +6,9 @@ authentication:
+   methods:
+     github:
+       enabled: true
++      client_id: "abcdefg"
++      client_secret: "bcdefgh"
++      redirect_address: "http://localhost:8080"
+       scopes:
+         - "user:email"
+       allowed_organizations:
+diff --git a/internal/config/testdata/authentication/oidc_missing_client_id.yml b/internal/config/testdata/authentication/oidc_missing_client_id.yml
+new file mode 100644
+index 00000000..45dcacf0
+--- /dev/null
++++ b/internal/config/testdata/authentication/oidc_missing_client_id.yml
+@@ -0,0 +1,13 @@
++authentication:
++  required: true
++  session:
++    domain: "http://localhost:8080"
++    secure: false
++  methods:
++    oidc:
++      enabled: true
++      providers:
++        foo:
++          issuer_url: "http://accounts.google.com"
++          client_secret: "bcdefgh"
++          redirect_address: "http://localhost:8080"
+diff --git a/internal/config/testdata/authentication/oidc_missing_client_secret.yml b/internal/config/testdata/authentication/oidc_missing_client_secret.yml
+new file mode 100644
+index 00000000..a342e34b
+--- /dev/null
++++ b/internal/config/testdata/authentication/oidc_missing_client_secret.yml
+@@ -0,0 +1,13 @@
++authentication:
++  required: true
++  session:
++    domain: "http://localhost:8080"
++    secure: false
++  methods:
++    oidc:
++      enabled: true
++      providers:
++        foo:
++          issuer_url: "http://accounts.google.com"
++          client_id: "abcdefg"
++          redirect_address: "http://localhost:8080"
+diff --git a/internal/config/testdata/authentication/oidc_missing_redirect_address.yml b/internal/config/testdata/authentication/oidc_missing_redirect_address.yml
+new file mode 100644
+index 00000000..63731998
+--- /dev/null
++++ b/internal/config/testdata/authentication/oidc_missing_redirect_address.yml
+@@ -0,0 +1,13 @@
++authentication:
++  required: true
++  session:
++    domain: "http://localhost:8080"
++    secure: false
++  methods:
++    oidc:
++      enabled: true
++      providers:
++        foo:
++          issuer_url: "http://accounts.google.com"
++          client_id: "abcdefg"
++          client_secret: "bcdefgh"

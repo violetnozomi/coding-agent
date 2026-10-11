@@ -1,0 +1,320 @@
+[
+  {
+    "tool_call_id": "call_00_ubPoNIt87jr7YpABkeIi7135",
+    "input": {
+      "command": "ls -la /workspace 2>/dev/null | head -50; echo \"---APP---\"; ls -la /app 2>/dev/null | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_I0mAxgpJb435gqO4GP227112",
+    "input": {
+      "command": "cd /workspace && cat package.json | head -80 && echo \"---\" && ls test/utils | head -60"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_2iwSGtaWI8rk68gdTDqj8925",
+    "input": {
+      "command": "ls test/utils/ | head -80",
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_IjclRSmWbYTYpb8rlbjj6403",
+    "input": {
+      "command": "ls; echo \"--- test ---\"; ls test 2>/dev/null | head; echo \"--- find pillify tests ---\"; find . -path ./node_modules -prune -o -name \"*pillify*\" -print -o -name \"*tooltipify*\" -print 2>/dev/null",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_iHAFuu5C87fjKZJRfln53742",
+    "input": {
+      "command": "cd /workspace && node -e \"console.log(require('react/package.json').version, require('react-dom/package.json').version)\" && grep -n '\"react' package.json && ls node_modules/react-dom/client.js 2>/dev/null; ls node_modules/react-dom/ | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_anBjtqv9AudZp0rkaPUI2552",
+    "input": {
+      "command": "cd /workspace && sed -n '1,60p' src/utils/ReactUtils.tsx"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_L1HIUH8SPEWm4RP575m20794",
+    "input": {
+      "command": "ls node_modules/react-dom/ | head",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "LICENSE\nREADME.md\ncjs\nclient.js\nindex.js\nnode_modules\npackage.json\nprofiling.js\nserver.browser.js\nserver.js"
+  },
+  {
+    "tool_call_id": "call_01_HxbZX0bqBFRECf8bEqXX3580",
+    "input": {
+      "command": "ls test/test-utils/",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "audio.ts\nbeacon.ts\ncall.ts\nclient.ts\ncomposer.ts\nconsole.ts\ndate.ts\nevents.ts\nindex.ts\njest-matrix-react.tsx\nlocation.ts\noidc.ts\nplatform.ts\npoll.ts\npredictableRandom.ts\npushRules.ts\nrelations.ts\nroom.ts\ntest-utils.ts\nthreads.ts\nutilities.ts\nwrappers.tsx"
+  },
+  {
+    "tool_call_id": "call_01_EOq7O2lLPCKbi5H40d0U3127",
+    "input": {
+      "command": "ls; echo ---; cat jest.config.js 2>/dev/null | head -60",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_ET_681asXxCHcHZgLlkrBoD0833",
+    "input": {
+      "command": "ls /workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "AUTHORS.rst\nCHANGELOG.md\nCONTRIBUTING.md\nDockerfile\nLICENSE-AGPL-3.0\nLICENSE-GPL-3.0\nREADME.md\n__mocks__\nbabel.config.js\nbook.toml\nbuild_config.sample.yaml\ncode_style.md\ncomponents.json\nconfig.sample.json\ncontribute.json\ndebian\ndocs\nelement.io\njest.config.ts\nlocalazy.json\nmodule_system\nnginx\nnode_modules\npackage.json\nplaywright\nplaywright.config.ts\nrecorder-worklet-loader.js\nrelease_config.yaml\nres\nscripts\nsonar-project.properties\nsrc\ntest\ntsconfig.json\ntsconfig.module_system.json\nwebpack.config.js\nyarn.lock"
+  },
+  {
+    "tool_call_id": "call_00_QxXrnCeUUGFFH8e4R1ei6113",
+    "input": {
+      "command": "cat jest.config.ts",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/*\nCopyright 2024 New Vector Ltd.\nCopyright 2023 The Matrix.org Foundation C.I.C.\n\nSPDX-License-Identifier: AGPL-3.0-only OR GPL-3.0-only\nPlease see LICENSE files in the repository root for full details.\n*/\n\nimport { env } from \"process\";\n\nimport type { Config } from \"jest\";\n\nconst config: Config = {\n    testEnvironment: \"jsdom\",\n    testEnvironmentOptions: {\n        url: \"http://localhost/\",\n    },\n    testMatch: [\"<rootDir>/test/**/*-test.[tj]s?(x)\"],\n    globalSetup: \"<rootDir>/test/globalSetup.ts\",\n    setupFiles: [\"jest-canvas-mock\", \"web-streams-polyfill/polyfill\"],\n    setupFilesAfterEnv: [\"<rootDir>/test/setupTests.ts\"],\n    moduleNameMapper: {\n        \"\\\\.(css|scss|pcss)$\": \"<rootDir>/__mocks__/cssMock.js\",\n        \"\\\\.(gif|png|ttf|woff2)$\": \"<rootDir>/__mocks__/imageMock.js\",\n        \"\\\\.svg$\": \"<rootDir>/__mocks__/svg.js\",\n        \"\\\\$webapp/i18n/languages.json\": \"<rootDir>/__mocks__/languages.json\",\n        \"^react$\": \"<rootDir>/node_modules/react\",\n        \"^react-dom$\": \"<rootDir>/node_modules/react-dom\",\n        \"^matrix-js-sdk$\": \"<rootDir>/node_modules/matrix-js-sdk/src\",\n        \"^matrix-react-sdk$\": \"<rootDir>/src\",\n        \"decoderWorker\\\\.min\\\\.js\": \"<rootDir>/__mocks__/empty.js\",\n        \"decoderWorker\\\\.min\\\\.wasm\": \"<rootDir>/__mocks__/empty.js\",\n        \"waveWorker\\\\.min\\\\.js\": \"<rootDir>/__mocks__/empty.js\",\n        \"context-filter-polyfill\": \"<rootDir>/__mocks__/empty.js\",\n        \"FontManager.ts\": \"<rootDir>/__mocks__/FontManager.js\",\n        \"workers/(.+)Factory\": \"<rootDir>/__mocks__/workerFactoryMock.js\",\n        \"^!!raw-loader!.*\": \"jest-raw-loader\",\n        \"recorderWorkletFactory\": \"<rootDir>/__mocks__/empty.js\",\n        \"^fetch-mock$\": \"<rootDir>/node_modules/fetch-mock\",\n    },\n    transformIgnorePatterns: [\"/node_modules/(?!matrix-js-sdk).+$\"],\n    collectCoverageFrom: [\n        \"<rootDir>/src/**/*.{js,ts,tsx}\",\n        // getSessionLock is piped into a different JS context via stringification, and the coverage functionality is\n        // not available in that contest. So, turn off coverage instrumentation for it.\n        \"!<rootDir>/src/utils/SessionLock.ts\",\n        // Coverage chokes on type definition files\n        \"!<rootDir>/src/**/*.d.ts\",\n    ],\n    coverageReporters: [\"text-summary\", \"lcov\"],\n    testResultsProcessor: \"@casualbot/jest-sonar-reporter\",\n    prettierPath: null,\n    moduleDirectories: [\"node_modules\", \"test/test-utils\"],\n};\n\n// if we're running under GHA, enable the GHA reporter\nif (env[\"GITHUB_ACTIONS\"] !== undefined) {\n    const reporters: Config[\"reporters\"] = [[\"github-actions\", { silent: false }], \"summary\"];\n\n    // if we're running against the develop branch, also enable the slow test reporter\n    if (env[\"GITHUB_REF\"] == \"refs/heads/develop\") {\n        reporters.push(\"<rootDir>/test/slowReporter.cjs\");\n    }\n    config.reporters = reporters;\n}\n\nexport default config;"
+  },
+  {
+    "tool_call_id": "call_01_LQtuWF1FC2tJKgcufwxR0078",
+    "input": {
+      "command": "ls test; echo ---; cat test/setupTests.ts 2>/dev/null | head -60",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "@types\nCreateCrossSigning-test.ts\napp-tests\ncomponents\nglobalSetup.ts\njest-mocks.ts\nsetup\nsetupTests.ts\nslowReporter.cjs\ntest-utils\nunit-tests\n---\n/*\nCopyright 2024 New Vector Ltd.\nCopyright 2022 The Matrix.org Foundation C.I.C.\n\nSPDX-License-Identifier: AGPL-3.0-only OR GPL-3.0-only\nPlease see LICENSE files in the repository root for full details.\n*/\n\nimport \"@testing-library/jest-dom\";\nimport \"blob-polyfill\";\nimport { randomString } from \"matrix-js-sdk/src/randomstring\";\nimport { mocked } from \"jest-mock\";\n\nimport { PredictableRandom } from \"./test-utils/predictableRandom\"; // https://github.com/jsdom/jsdom/issues/2555\n\ndeclare global {\n    // eslint-disable-next-line no-var\n    var IS_REACT_ACT_ENVIRONMENT: boolean;\n}\n\nglobalThis.IS_REACT_ACT_ENVIRONMENT = true;\n\n// Fake random strings to give a predictable snapshot for IDs\njest.mock(\"matrix-js-sdk/src/randomstring\");\nbeforeEach(() => {\n    const chars = \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\";\n    const mockRandom = new PredictableRandom();\n    mocked(randomString).mockImplementation((len) => {\n        let ret = \"\";\n        for (let i = 0; i < len; ++i) {\n            const v = mockRandom.get() * chars.length;\n            const m = ((v % chars.length) + chars.length) % chars.length; // account for negative modulo\n            ret += chars.charAt(Math.floor(m));\n        }\n        return ret;\n    });\n});\n\n// Very carefully enable the mocks for everything else in\n// a specific order. We use this order to ensure we properly\n// establish an application state that actually works.\n//\n// These are also require() calls to make sure they get called\n// synchronously.\n/* eslint-disable @typescript-eslint/no-require-imports */\nrequire(\"./setup/setupManualMocks\"); // must be first\nrequire(\"./setup/setupLanguage\");\nrequire(\"./setup/setupConfig\");"
+  },
+  {
+    "tool_call_id": "call_00_n7qdgATxInUINKy6im3R5282",
+    "input": {
+      "command": "ls test/unit-tests/components/views/messages/ | head -40",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "CallEvent-test.tsx\nDateSeparator-test.tsx\nDecryptionFailureBody-test.tsx\nDownloadActionButton-test.tsx\nEncryptionEvent-test.tsx\nJumpToDatePicker-test.tsx\nLegacyCallEvent-test.tsx\nMBeaconBody-test.tsx\nMFileBody-test.tsx\nMImageBody-test.tsx\nMKeyVerificationRequest-test.tsx\nMLocationBody-test.tsx\nMPollBody-test.tsx\nMPollEndBody-test.tsx\nMStickerBody-test.tsx\nMVideoBody-test.tsx\nMessageActionBar-test.tsx\nMessageEvent-test.tsx\nMessageTimestamp-test.tsx\nPinnedMessageBadge-test.tsx\nReactionsRowButton-test.tsx\nRoomPredecessorTile-test.tsx\nTextualBody-test.tsx\n__snapshots__\nshared"
+  },
+  {
+    "tool_call_id": "call_00_DnRnQ0CBm3qdZLHvExvf7917",
+    "input": {
+      "command": "grep -n \"pill\\|Pill\\|@room\\|reactRoots\\|tooltip\" test/unit-tests/components/views/messages/TextualBody-test.tsx | head -60",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "166:        // If pills were rendered within a Portal/same shadow DOM then it'd be easier to test\n175:        it(\"should not pillify MXIDs\", () => {\n184:        it(\"should pillify an MXID permalink\", () => {\n189:                `\"Chat with <span><bdi><a class=\"mx_Pill mx_UserPill mx_UserPill_me\" href=\"https://matrix.to/#/@user:example.com\"><span aria-label=\"Profile picture\" aria-hidden=\"true\" data-testid=\"avatar-img\" data-type=\"round\" data-color=\"2\" class=\"_avatar_mcap2_17 mx_BaseAvatar\" style=\"--cpd-avatar-size: 16px;\"><img loading=\"lazy\" alt=\"\" src=\"mxc://avatar.url/image.png\" referrerpolicy=\"no-referrer\" class=\"_image_mcap2_50\" data-type=\"round\" width=\"16px\" height=\"16px\"></span><span class=\"mx_Pill_text\">Member</span></a></bdi></span>\"`,\n193:        it(\"should not pillify room aliases\", () => {\n202:        it(\"should pillify a room alias permalink\", () => {\n207:                `\"Visit <span><bdi><a class=\"mx_Pill mx_RoomPill\" href=\"https://matrix.to/#/#room:example.com\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1em\" height=\"1em\" fill=\"currentColor\" viewBox=\"0 0 24 24\" class=\"mx_Pill_LinkIcon mx_BaseAvatar\"><path d=\"M12 19.071c-.978.978-2.157 1.467-3.536 1.467-1.378 0-2.557-.489-3.535-1.467-.978-.978-1.467-2.157-1.467-3.536 0-1.378.489-2.557 1.467-3.535L7.05 9.879c.2-.2.436-.3.707-.3.271 0 .507.1.707.3.2.2.301.436.301.707 0 .27-.1.506-.3.707l-2.122 2.121a2.893 2.893 0 0 0-.884 2.122c0 .824.295 1.532.884 2.12.59.59 1.296.885 2.121.885s1.533-.295 2.122-.884l2.121-2.121c.2-.2.436-.301.707-.301.271 0 .507.1.707.3.2.2.3.437.3.708 0 .27-.1.506-.3.707L12 19.07Zm-1.414-4.243c-.2.2-.436.3-.707.3a.967.967 0 0 1-.707-.3.969.969 0 0 1-.301-.707c0-.27.1-.507.3-.707l4.243-4.242c.2-.2.436-.301.707-.301.271 0 .507.1.707.3.2.2.3.437.3.708 0 .27-.1.506-.3.707l-4.242 4.242Zm6.364-.707c-.2.2-.436.3-.707.3a.968.968 0 0 1-.707-.3.969.969 0 0 1-.301-.707c0-.27.1-.507.3-.707l2.122-2.121c.59-.59.884-1.297.884-2.122s-.295-1.532-.884-2.12a2.893 2.893 0 0 0-2.121-.885c-.825 0-1.532.295-2.122.884l-2.121 2.121c-.2.2-.436.301-.707.301a.968.968 0 0 1-.707-.3.97.97 0 0 1-.3-.708c0-.27.1-.506.3-.707L12 4.93c.978-.978 2.157-1.467 3.536-1.467 1.378 0 2.557.489 3.535 1.467.978.978 1.467 2.157 1.467 3.535 0 1.38-.489 2.558-1.467 3.536l-2.121 2.121Z\"></path></svg><span class=\"mx_Pill_text\">#room:example.com</span></a></bdi></span>\"`,\n211:        it(\"should pillify a permalink to a message in the same room with the label »Message from Member«\", () => {\n218:        it(\"should pillify a permalink to an unknown message in the same room with the label »Message«\", () => {\n225:        it(\"should pillify a permalink to an event in another room with the label »Message in Room 2«\", () => {\n293:        // If pills were rendered within a Portal/same shadow DOM then it'd be easier to test\n294:        it(\"pills get injected correctly into the DOM\", () => {\n302:        it(\"pills do not appear in code blocks\", () => {\n304:                \"`@room`\\n```\\n@room\\n```\",\n305:                \"<p><code>@room</code></p>\\n<pre><code>@room\\n</code></pre>\\n\",\n308:            expect(container).toHaveTextContent(\"@room 1@room\");\n313:        it(\"pills do not appear for event permalinks with a custom label\", () => {\n325:        it(\"pills appear for event permalinks without a custom label\", () => {\n335:        it(\"pills appear for room links with vias\", () => {\n347:        it(\"pills appear for an MXID permalink\", () => {"
+  },
+  {
+    "tool_call_id": "call_01_c8U8WQbiK2ABtq0bfeN16826",
+    "input": {
+      "command": "grep -rn \"pillifyLinks\\|tooltipifyLinks\\|unmountPills\\|unmountTooltips\\|ReactRootManager\" test | head -40",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_gesKZoDfNK911YStyFBD0022",
+    "input": {
+      "command": "yarn jest test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | tail -60",
+      "workdir": "/workspace",
+      "timeout": 300
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_MCk4mZ6PcVvvUXSGCzhl5635",
+    "input": {
+      "command": "yarn jest test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | tail -60",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_w2Hc1zuEB0imga80xgtT5878",
+    "input": {
+      "command": "yarn jest test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_4vAww2cwTJfQS6K1lwsr6548",
+    "input": {
+      "command": "yarn jest test/unit-tests/utils/tooltipify-test.tsx 2>&1 | head -120",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_0wR2DBAiGlso1rVZHmhX2867",
+    "input": {
+      "command": "yarn jest test/unit-tests/utils/tooltipify-test.tsx 2>&1 | grep -A 30 \"●\" | head -120",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_PTa0SKyxLL04G6oQSrKt2545",
+    "input": {
+      "command": "yarn jest test/unit-tests/utils/tooltipify-test.tsx 2>&1 | grep -v \"console.error\" | sed -n '1,200p' | grep -n \"\" | grep -iE \"✕|✓|●|Expected|Received|Number of calls|toEqual|toBe|Test Suites|Tests:\" | head -60",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "175:    ✓ does nothing for empty element (18 ms)\n176:    ✓ wraps single anchor (8 ms)\n177:    ✓ ignores node (2 ms)\n178:    ✓ does not re-wrap if called multiple times (4 ms)\n180:Test Suites: 1 passed, 1 total\n181:Tests:       4 passed, 4 total\n184:Ran all test suites matching /test\\/unit-tests\\/utils\\/tooltipify-test.tsx/i."
+  },
+  {
+    "tool_call_id": "call_00_uubAL48gRRtoeLOj3zmD0991",
+    "input": {
+      "command": "yarn jest test/unit-tests/utils/pillify-test.tsx 2>&1 | grep -v \"console.error\" | sed -n '1,300p' | grep -iE \"✕|✓|●|Expected|Received|Test Suites|Tests:\" | head -60",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_zjS474HiM1I9gWqfX3ia7245",
+    "input": {
+      "command": "yarn jest test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | grep -iE \"✕|✓|●|Expected|Received|Test Suites|Tests:\" | head -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "● Console\n  ● Console\nTest Suites: 2 passed, 2 total\nTests:       8 passed, 8 total\nRan all test suites matching /test\\/unit-tests\\/utils\\/pillify-test.tsx|test\\/unit-tests\\/utils\\/tooltipify-test.tsx/i."
+  },
+  {
+    "tool_call_id": "call_00_ET_xI4yPoCvWKdSh0u7y3Ax6475",
+    "input": {
+      "command": "yarn jest test/unit-tests/utils/react-test.tsx test/unit-tests/utils/pillify-test.tsx test/unit-tests/utils/tooltipify-test.tsx 2>&1 | grep -iE \"✕|✓|●|Expected|Received|Test Suites|Tests:\" | head -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "● Console\n  ● Console\nTest Suites: 3 passed, 3 total\nTests:       12 passed, 12 total\nRan all test suites matching /test\\/unit-tests\\/utils\\/react-test.tsx|test\\/unit-tests\\/utils\\/pillify-test.tsx|test\\/unit-tests\\/utils\\/tooltipify-test.tsx/i."
+  },
+  {
+    "tool_call_id": "call_00_yiZvUsoPBJf3nAtmAH677113",
+    "input": {
+      "command": "yarn jest test/unit-tests/components/views/messages/TextualBody-test.tsx 2>&1 | grep -iE \"✕|Test Suites|Tests:\" | head -20",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "Test Suites: 1 passed, 1 total\nTests:       23 passed, 23 total\nRan all test suites matching /test\\/unit-tests\\/components\\/views\\/messages\\/TextualBody-test.tsx/i."
+  },
+  {
+    "tool_call_id": "call_01_dGcMm2W1vvVFYbp2KhPz2288",
+    "input": {
+      "command": "npx tsc --noEmit -p tsconfig.json 2>&1 | grep -iE \"react.tsx|pillify|tooltipify|TextualBody|EditHistoryMessage\" | head -20; echo \"tsc-done\"",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

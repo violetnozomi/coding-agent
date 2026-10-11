@@ -1,0 +1,256 @@
+[
+  {
+    "tool_call_id": "call_00_S0osRsDl9wxbuikwG7e34240",
+    "input": {
+      "command": "cd /workspace && ls -la && git log --oneline -5 2>/dev/null | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_NjtqgEnVOGhiKWJu2q5q1884",
+    "input": {
+      "command": "cd /workspace && git log --oneline -8 && git status --short | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_ZQY1sRm0cVpjxa3l7I0b1681",
+    "input": {
+      "command": "cd /workspace && sed -n '1,60p' internal/storage/oplock/sql/oplock.go 2>/dev/null; echo \"---\"; grep -rn \"func New\" internal/storage/oplock/sql/*.go | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_FWWwsg6Er3rWaSZI2Y5a0971",
+    "input": {
+      "command": "cd /workspace && ls internal/storage/oplock/ && echo \"---sql---\" && sed -n '1,60p' internal/storage/oplock/sql/sql.go 2>/dev/null || find internal/storage/oplock -name '*.go' | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_9j3XgbxzmYdu2xVXGfyP7532",
+    "input": {
+      "command": "go version"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go version go1.24.3 linux/amd64"
+  },
+  {
+    "tool_call_id": "call_00_YH58Juz2o7TDYkOA5D3n2332",
+    "input": {
+      "command": "cd /workspace && ls internal/storage/oplock/sql/"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Uo10ZdgeCuPo3J09dtvO6691",
+    "input": {
+      "command": "cd /workspace && go build ./internal/... 2>&1 | head -40",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_8ewWRANyibTs1BZJ4XIk4481",
+    "input": {
+      "command": "cd /workspace && go build ./internal/cmd/... ./internal/config/... ./internal/cleanup/... 2>&1 | head -40",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_qwT9jG0Ou2QRTifEv0LD5558",
+    "input": {
+      "command": "cd /workspace && go build ./internal/config/ ./internal/cleanup/ ./internal/cmd/",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-3",
+    "input": {
+      "command": "go test ./internal/cleanup -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/cleanup\t0.006s [no tests to run]"
+  },
+  {
+    "tool_call_id": "call_00_b4fbumXDJPkS4OwwUA583715",
+    "input": {
+      "_nz_runtime_verification_stage": "static",
+      "command": "go build ./internal/config ./internal/cleanup ./internal/cmd && echo BUILD_OK",
+      "timeout": 120
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_bpHIh5BcN0Kc9LzlBABr5455",
+    "input": {
+      "command": "cd /workspace && GOFLAGS=-p=1 go build ./internal/config ./internal/cleanup 2>&1 | tail -20; echo \"EXIT=$?\"",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_txqxpVQ54kv8V1yxUuGq5006",
+    "input": {
+      "_nz_runtime_verification_stage": "static",
+      "command": "cd /workspace && go vet ./internal/config 2>&1 | tail -20; echo EXIT=$?",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_HtohGMavceULI0I1UEh16876",
+    "input": {
+      "_nz_runtime_verification_stage": "static",
+      "command": "cd /workspace && go test ./internal/config -run '^$' 2>&1 | tail -15",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_SvPeUEFdl9Z3BbSfz2rp2587",
+    "input": {
+      "_nz_runtime_verification_stage": "static",
+      "command": "cd /workspace && go test -count=1 ./internal/config ./internal/cleanup 2>&1 | tail -25",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_EX4J0bgLEMoQ08MvaZbK0088",
+    "input": {
+      "command": "cd /workspace && GOFLAGS=-p=1 GOMAXPROCS=1 go build ./internal/config/ ./internal/cleanup/ && echo BUILD_OK",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_pTZpy30PkwiuPpxi3zdu3446",
+    "input": {
+      "_nz_runtime_verification_stage": "static",
+      "command": "cd /workspace && go test ./internal/config/... -run '^$' 2>&1 | tail -20",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_BOeX8ekcST9SQHmQgWbx3680",
+    "input": {
+      "_nz_runtime_verification_stage": "static",
+      "command": "go test ./internal/config -run '^$'",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_NVyWbTskQbLjWxUuGwwS8965",
+    "input": {
+      "_nz_runtime_verification_stage": "static",
+      "command": "go test ./internal/config -run '^$'",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/config\t(cached) [no tests to run]"
+  },
+  {
+    "tool_call_id": "call_00_v7u58MO4dY1ywf5NrpWy9621",
+    "input": {
+      "_nz_runtime_verification_stage": "static",
+      "command": "go test ./internal/cmd -run '^$'",
+      "timeout": 120
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-4",
+    "input": {
+      "command": "go test ./internal/cleanup -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/cleanup\t(cached) [no tests to run]"
+  }
+]

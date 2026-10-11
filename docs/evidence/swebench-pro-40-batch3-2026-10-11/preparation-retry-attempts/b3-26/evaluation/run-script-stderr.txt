@@ -1,0 +1,12 @@
+# github.com/gravitational/teleport/lib/kube/proxy [github.com/gravitational/teleport/lib/kube/proxy.test]
+lib/kube/proxy/forwarder_test.go:653:21: undefined: kubeClusterEndpoint
+lib/kube/proxy/forwarder_test.go:653:83: sess.kubeClusterEndpoints undefined (type *clusterSession has no field or method kubeClusterEndpoints)
+lib/kube/proxy/forwarder_test.go:671:21: undefined: kubeClusterEndpoint
+lib/kube/proxy/forwarder_test.go:671:85: sess.kubeClusterEndpoints undefined (type *clusterSession has no field or method kubeClusterEndpoints)
+lib/kube/proxy/forwarder_test.go:685:72: undefined: kubeClusterEndpoint
+lib/kube/proxy/forwarder_test.go:695:26: undefined: kubeClusterEndpoint
+lib/kube/proxy/forwarder_test.go:719:21: undefined: kubeClusterEndpoint
+lib/kube/proxy/forwarder_test.go:719:78: sess.kubeClusterEndpoints undefined (type *clusterSession has no field or method kubeClusterEndpoints)
+lib/kube/proxy/forwarder_test.go:743:16: sess.dial undefined (type *clusterSession has no field or method dial, but does have Dial)
+lib/kube/proxy/forwarder_test.go:747:6: sess.kubeClusterEndpoints undefined (type *clusterSession has no field or method kubeClusterEndpoints)
+lib/kube/proxy/forwarder_test.go:747:6: too many errors

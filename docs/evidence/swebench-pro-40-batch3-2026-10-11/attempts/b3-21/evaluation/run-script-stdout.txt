@@ -1,0 +1,29 @@
+Running selected tests: scripts/tests/test_affiliate_server.py
+============================= test session starts ==============================
+platform linux -- Python 3.11.1, pytest-7.4.4, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pyproject.toml
+plugins: anyio-4.10.0, rerunfailures-15.1, cov-4.1.0, asyncio-0.23.6
+asyncio: mode=Mode.STRICT
+collecting ... collected 17 items
+
+scripts/tests/test_affiliate_server.py::test_ol_editions_and_amz_books PASSED [  5%]
+scripts/tests/test_affiliate_server.py::test_get_editions_for_books PASSED [ 11%]
+scripts/tests/test_affiliate_server.py::test_get_pending_books PASSED    [ 17%]
+scripts/tests/test_affiliate_server.py::test_get_isbns_from_book PASSED  [ 23%]
+scripts/tests/test_affiliate_server.py::test_get_isbns_from_books PASSED [ 29%]
+scripts/tests/test_affiliate_server.py::test_prioritized_identifier_equality_set_uniqueness PASSED [ 35%]
+scripts/tests/test_affiliate_server.py::test_prioritized_identifier_serialize_to_json PASSED [ 41%]
+scripts/tests/test_affiliate_server.py::test_make_cache_key[isbn_or_asin0-9780747532699] PASSED [ 47%]
+scripts/tests/test_affiliate_server.py::test_make_cache_key[isbn_or_asin1-9780747532699] PASSED [ 52%]
+scripts/tests/test_affiliate_server.py::test_make_cache_key[isbn_or_asin2-B06XYHVXVJ] PASSED [ 58%]
+scripts/tests/test_affiliate_server.py::test_make_cache_key[isbn_or_asin3-] PASSED [ 64%]
+scripts/tests/test_affiliate_server.py::test_make_cache_key[isbn_or_asin4-] PASSED [ 70%]
+scripts/tests/test_affiliate_server.py::test_unpack_isbn[0123456789-expected0] PASSED [ 76%]
+scripts/tests/test_affiliate_server.py::test_unpack_isbn[0-.123456789-expected1] PASSED [ 82%]
+scripts/tests/test_affiliate_server.py::test_unpack_isbn[9780123456786-expected2] PASSED [ 88%]
+scripts/tests/test_affiliate_server.py::test_unpack_isbn[9-.780123456786-expected3] PASSED [ 94%]
+scripts/tests/test_affiliate_server.py::test_unpack_isbn[B012346789-expected4] PASSED [100%]
+
+============================== 17 passed in 0.32s ==============================

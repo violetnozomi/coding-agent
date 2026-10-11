@@ -1,0 +1,116 @@
+[
+  {
+    "tool_call_id": "call_00_yUsrPQyEKcjTsSdSaX5k3632",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3 && git diff --stat && git stash list"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_39S7eUsyP65sVt4O4JGA8647",
+    "input": {
+      "command": "cd /workspace && python -m pytest tests/unit/config/test_qtargs.py -q 2>&1 | tail -20",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_DIGRI2vhWw3faICyOguP0763",
+    "input": {
+      "command": "python -m pytest tests/unit/config/test_qtargs.py -q 2>&1 | tail -20",
+      "workdir": "/workspace",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "........................................................................ [ 87%]\n..........                                                               [100%]\n82 passed in 0.40s"
+  },
+  {
+    "tool_call_id": "call_00_uyNsSHFU69OY8uaCBnSF6638",
+    "input": {
+      "command": "python -m pytest tests/unit/config/test_qtargs.py -q 2>&1 | tail -30",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "........................................................................ [ 81%]\n................                                                         [100%]\n88 passed in 0.43s"
+  },
+  {
+    "tool_call_id": "call_00_Ck7AuRlrnhzVhJ5ZLlf83674",
+    "input": {
+      "command": "python -m pytest tests/unit/config -q 2>&1 | tail -10",
+      "timeout": 180,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_hiMghUmqhctRKgNi5RZn1100",
+    "input": {
+      "command": "python -m flake8 tests/unit/config/test_qtargs.py qutebrowser/config/qtargs.py 2>&1 | head -20; python -m mypy qutebrowser/config/qtargs.py 2>&1 | tail -5",
+      "timeout": 180,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_mSyUN0KkDN6S85SpdHtL3088",
+    "input": {
+      "command": "python -m flake8 tests/unit/config/test_qtargs.py qutebrowser/config/qtargs.py 2>&1 | head -20",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_CBy3jBw4oLoL4mOXqmaH2035",
+    "input": {
+      "command": "python -m mypy qutebrowser/config/qtargs.py 2>&1 | tail -5",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ntMiD2Ft1HwHW4zRULbX8893",
+    "input": {
+      "command": "git --no-pager diff 2>&1 | head -120",
+      "timeout": 60,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "diff --git a/qutebrowser/config/qtargs.py b/qutebrowser/config/qtargs.py\nindex d6375f331..de0fbe199 100644\n--- a/qutebrowser/config/qtargs.py\n+++ b/qutebrowser/config/qtargs.py\n@@ -29,6 +29,10 @@ from qutebrowser.misc import objects\n from qutebrowser.utils import usertypes, qtutils, utils\n \n \n+_ENABLE_FEATURES = '--enable-features='\n+_DISABLE_FEATURES = '--disable-features='\n+\n+\n def qt_args(namespace: argparse.Namespace) -> List[str]:\n     \"\"\"Get the Qt QApplication arguments based on an argparse namespace.\n \n@@ -54,8 +58,11 @@ def qt_args(namespace: argparse.Namespace) -> List[str]:\n         return argv\n \n     feature_flags = [flag for flag in argv\n-                     if flag.startswith('--enable-features=')]\n-    argv = [flag for flag in argv if not flag.startswith('--enable-features=')]\n+                     if flag.startswith(_ENABLE_FEATURES)]\n+    # --disable-features flags are propagated unmodified and kept separate\n+    # from the merged --enable-features flag.\n+    argv = [flag for flag in argv\n+            if not flag.startswith(_ENABLE_FEATURES)]\n     argv += list(_qtwebengine_args(namespace, feature_flags))\n \n     return argv\n@@ -68,7 +75,7 @@ def _qtwebengine_enabled_features(feature_flags: Sequence[str]) -> Iterator[str]\n         feature_flags: Existing flags passed via the commandline.\n     \"\"\"\n     for flag in feature_flags:\n-        prefix = '--enable-features='\n+        prefix = _ENABLE_FEATURES\n         assert flag.startswith(prefix), flag\n         flag = flag[len(prefix):]\n         yield from iter(flag.split(','))\n@@ -159,7 +166,7 @@ def _qtwebengine_args(\n \n     enabled_features = list(_qtwebengine_enabled_features(feature_flags))\n     if enabled_features:\n-        yield '--enable-features=' + ','.join(enabled_features)\n+        yield _ENABLE_FEATURES + ','.join(enabled_features)\n \n     yield from _qtwebengine_settings_args()\n \ndiff --git a/tests/unit/config/test_qtargs.py b/tests/unit/config/test_qtargs.py\nindex b38fab41d..1ad6ad0e5 100644\n--- a/tests/unit/config/test_qtargs.py\n+++ b/tests/unit/config/test_qtargs.py\n@@ -383,6 +383,65 @@ class TestQtArgs:\n         assert combined_flag in args\n         assert overlay_flag not in args\n \n+    def test_feature_prefix_constants(self):\n+        assert qtargs._ENABLE_FEATURES == '--enable-features='\n+        assert qtargs._DISABLE_FEATURES == '--disable-features='\n+\n+    @pytest.mark.parametrize('via_commandline', [True, False])\n+    @pytest.mark.parametrize('passed_features', [\n+        'SomeFeature',\n+        'Feature1,Feature2',\n+    ])\n+    def test_disable_features_flag(self, config_stub, monkeypatch, parser,\n+                                   via_commandline, passed_features):\n+        \"\"\"A --disable-features flag must be kept as a separate, unmodified flag.\"\"\"\n+        monkeypatch.setattr(qtargs.objects, 'backend',\n+                            usertypes.Backend.QtWebEngine)\n+        monkeypatch.setattr(qtargs.utils, 'is_mac', False)\n+        # Avoid WebRTC pipewire feature\n+        monkeypatch.setattr(qtargs.utils, 'is_linux', False)\n+        # Avoid overlay scrollbar feature\n+        config_stub.val.scrolling.bar = 'never'\n+\n+        stripped_prefix = 'disable-features='\n+        config_flag = stripped_prefix + passed_features\n+        config_stub.val.qt.args = ([] if via_commandline else [config_flag])\n+\n+        parsed = parser.parse_args(['--qt-flag', config_flag]\n+                                   if via_commandline else [])\n+        args = qtargs.qt_args(parsed)\n+\n+        prefix = '--' + stripped_prefix\n+        expected = prefix + passed_features\n+        assert args.count(expected) == 1\n+        # No enable-features flag should be injected when there is nothing\n+        # to enable.\n+        assert not any(a.startswith('--enable-features=') for a in args)\n+\n+    def test_enable_and_disable_features(self, config_stub, monkeypatch, parser):\n+        \"\"\"Enable and disable flags should both be present and kept apart.\"\"\"\n+        monkeypatch.setat... (truncated)"
+  }
+]

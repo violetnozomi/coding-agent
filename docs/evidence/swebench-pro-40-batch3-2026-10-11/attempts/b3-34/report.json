@@ -1,0 +1,10 @@
+{
+  "number": 34,
+  "instance_id": "instance_ansible__ansible-e0c91af45fa9af575d10fd3e724ebc59d2b2d6ac-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "blocked",
+  "error": "RuntimeError('remaining_global_budget_stop')",
+  "physical_requests": 0
+}

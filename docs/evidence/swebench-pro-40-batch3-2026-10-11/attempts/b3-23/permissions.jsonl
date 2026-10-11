@@ -1,0 +1,2 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && git status --short"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '2580,2660p' qutebrowser/config/configdata.yml && echo ---- && grep -n \"default_family\" -A15 qutebrowser/config/configdata.yml | head -60"}, "allowed": false}

@@ -1,0 +1,87 @@
+diff --git a/openlibrary/catalog/add_book/match.py b/openlibrary/catalog/add_book/match.py
+index bfc7d0130..81eb233ba 100644
+--- a/openlibrary/catalog/add_book/match.py
++++ b/openlibrary/catalog/add_book/match.py
+@@ -44,22 +44,69 @@ def editions_match(rec: dict, existing):
+     ):
+         if existing.get(f):
+             rec2[f] = existing[f]
+-    # Transfer authors as Dicts str: str
+-    if existing.authors:
+-        rec2['authors'] = []
+-    for a in existing.authors:
+-        while a.type.key == '/type/redirect':
+-            a = web.ctx.site.get(a.location)
+-        if a.type.key == '/type/author':
+-            author = {'name': a['name']}
+-            if birth := a.get('birth_date'):
+-                author['birth_date'] = birth
+-            if death := a.get('death_date'):
+-                author['death_date'] = death
+-            rec2['authors'].append(author)
++    # Transfer authors as Dicts str: str, aggregating authors from both the
++    # edition and its associated Work(s).
++    rec2['authors'] = authors_from_edition_and_work(existing)
+     return threshold_match(rec, rec2, THRESHOLD)
+ 
+ 
++def get_author_dict(author) -> dict | None:
++    """
++    Convert an author Thing (or author key) into a comparable dict.
++
++    :param author: An author Thing, an author key str, or None.
++    :rtype: dict|None
++    :return: A dict with 'name' (and birth/death dates if present), or None
++        if the value does not resolve to an author.
++    """
++    if isinstance(author, str):
++        author = web.ctx.site.get(author)
++    if not author:
++        return None
++    while author.type.key == '/type/redirect':
++        author = web.ctx.site.get(author.location)
++    if author.type.key != '/type/author':
++        return None
++    result = {'name': author['name']}
++    if birth := author.get('birth_date'):
++        result['birth_date'] = birth
++    if death := author.get('death_date'):
++        result['death_date'] = death
++    return result
++
++
++def authors_from_edition_and_work(existing) -> list[dict]:
++    """
++    Aggregate author data from an edition and its associated Work(s).
++
++    Authors may be recorded on either the Edition or the Work, so both are
++    consulted to give edition matching the most complete author information.
++
++    :param Thing existing: Edition object to extract authors from.
++    :rtype: list[dict]
++    :return: Deduplicated list of author dicts (name, optional dates).
++    """
++    authors: list = list(existing.get('authors') or [])
++    for work in existing.get('works') or []:
++        for role in work.get('authors') or []:
++            if hasattr(role, 'get') and role.get('author'):
++                authors.append(role.get('author'))
++            else:
++                authors.append(role)
++
++    author_dicts: list[dict] = []
++    seen: set[tuple] = set()
++    for a in authors:
++        if not (author := get_author_dict(a)):
++            continue
++        key = (author['name'], author.get('birth_date'), author.get('death_date'))
++        if key in seen:
++            continue
++        seen.add(key)
++        author_dicts.append(author)
++    return author_dicts
++
++
+ def normalize(s: str) -> str:
+     """
+     Normalizes a title for matching purposes, not display,

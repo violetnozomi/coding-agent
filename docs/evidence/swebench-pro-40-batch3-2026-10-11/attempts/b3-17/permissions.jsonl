@@ -1,0 +1,7 @@
+{"tool": "bash", "input": {"command": "cd /workspace && ls && git log --oneline -3 && git status"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"ForwardAgent\" --include=*.go lib tool integration | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && head -5 integration/integration_test.go integration/helpers.go lib/client/session.go 2>&1 | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1580,1660p' tool/tsh/tsh.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls lib/client/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && head -20 integration/integration_test.go && echo ---- && head -20 integration/helpers.go && echo ---- && cat lib/client/session_windows.go | head -40"}, "allowed": false}

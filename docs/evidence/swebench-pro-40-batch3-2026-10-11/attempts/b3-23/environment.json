@@ -1,0 +1,14 @@
+{
+  "source_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:72e2ef58cefde8ca7a6d70de13c04bc2df9d5f9b3365bd5e28a23a5e4cbfaef6",
+  "source_image_id": "sha256:77ddfb33deefad5bbd446f1b52cc71690dd0fb25d5173c9473290f1f77237df9",
+  "project_python": "3.11.13",
+  "agent_wheel_platforms": [
+    "manylinux_2_28_x86_64",
+    "manylinux_2_17_x86_64",
+    "manylinux2014_x86_64"
+  ],
+  "source_size_bytes": 1472302578,
+  "source_created_for_this_round": true,
+  "agent_image": "nz-pro20-b3-23:20261011",
+  "agent_image_id": "sha256:e172a2251c96f9adf210386648e8d9b9ca412cdefbcf06d28455e856beac4fd3"
+}

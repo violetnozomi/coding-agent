@@ -1,0 +1,5 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 2>/dev/null; echo \"---\"; git status 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls /workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git status --short | head -50; echo \"---\"; git log --oneline -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && wc -l lib/kube/proxy/auth.go lib/kube/proxy/auth_test.go lib/kube/proxy/forwarder.go lib/kube/proxy/forwarder_test.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"clusterSession\\|kubeClusterEndpoint\\|newClusterSession\\|getKubeCreds\\|endpoint{\" lib/kube/proxy/auth.go | head -60"}, "allowed": false}

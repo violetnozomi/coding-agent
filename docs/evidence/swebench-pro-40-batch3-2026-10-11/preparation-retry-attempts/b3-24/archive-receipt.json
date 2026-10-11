@@ -1,0 +1,7 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/p2/b3-24/container-evidence.tar.gz",
+  "sha256": "3777fad2932baf06f23ee94d46d6c66223544d5cb17eeb74ca52052b7740acfe",
+  "bytes": 20139511,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/archives/batch3-instance_qutebrowser__qutebrowser-36ade4bba504eb96f05d32ceab9972df7eb17bcc-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+  "retains_raw_container_session_and_artifacts": true
+}
