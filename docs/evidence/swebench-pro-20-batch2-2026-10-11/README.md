@@ -24,3 +24,7 @@ python docs/evidence/swebench-pro-20-batch2-2026-10-11/run-parallel.py execute
 第 09、10 题因原始 512 MiB 归档配额不足而留下 delivery error，原报告没有改写。完整源记录与可重建索引保留，在磁盘核验后使用 2 GiB 有界配额归档，并逐文件验证哈希；没有重新调用模型或改动补丁与成绩。
 
 准备失败的零请求实例将等待原阶段完全结算，再按同批剩余额度补做；不重试付费失败题，不重置 50 元授权。费用续接离线回归 [continuation-test-results.txt](continuation-test-results.txt) 为 4 passed，ModelRelay 回归见 [preflight-test-results.txt](preflight-test-results.txt)。
+
+第一阶段已闭账：590 次实际主请求、0 次出站辅助请求，usage 均已结算，费用估算 31.584376 元。16 题已实际尝试，官方独立验收 15 通过、1 未通过；4 题因准备问题仍为零请求。原终态和归档错误保持原状，未重跑失败模型任务。
+
+启动补做命令：`python docs/evidence/swebench-pro-20-batch2-2026-10-11/run-parallel.py resume-preparation`。同批总授权仍为 50 元，新阶段仅 18.415624 元剩余额度。原账本哈希 `b2fcdc651faec6856f37a68f3bce164347e6902ab624e0c2a52fa4e36c759923`；原件保持只读，补做轨迹写入独立 preparation-retry 目录。

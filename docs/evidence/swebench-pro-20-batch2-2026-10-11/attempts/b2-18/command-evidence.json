@@ -1,0 +1,210 @@
+[
+  {
+    "tool_call_id": "call_00_FIWWJarwF5FDrZrG4wds4947",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /app 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_uLM5ZFH0Gp0Aolim46M12807",
+    "input": {
+      "command": "ls /workspace/lib/config/database.go /workspace/tool/teleport/common/teleport.go 2>&1; echo \"---\"; find /workspace -maxdepth 2 -name \"go.mod\" 2>/dev/null"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/workspace/lib/config/database.go\n/workspace/tool/teleport/common/teleport.go\n---\n/workspace/go.mod\n/workspace/api/go.mod"
+  },
+  {
+    "tool_call_id": "call_00_XqmPe2Cb7kSD9hSdmLrg2285",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3 && git status --short | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_b1xF2ElSPRxNZgqwZRQ95348",
+    "input": {
+      "command": "cd /workspace && ls tool/teleport/common/ && sed -n '1,120p' tool/teleport/common/teleport.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Ey6wDgvVv0jF9ULqOB250164",
+    "input": {
+      "command": "cd /workspace && sed -n '1,140p' lib/config/database.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_fKEI6iD6TNNwucVNHswB8685",
+    "input": {
+      "command": "cd /workspace && git diff --stat && git diff lib/config/database.go | head -80"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_rvEuTL5YVr99S3DHIvk07005",
+    "input": {
+      "command": "cd /workspace && go build ./lib/config/... ./tool/teleport/common/... 2>&1 | head -30",
+      "timeout": 300
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_iAXFfb7B5XOJNjkswbUj3199",
+    "input": {
+      "command": "go build ./lib/config/... ./tool/teleport/common/...",
+      "workdir": "/workspace",
+      "timeout": 300
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_XX8HtjwbHeB6GE8XPABO5281",
+    "input": {
+      "command": "go build ./lib/config/... ./tool/teleport/common/...",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_muQmkLpLm6uZ0D75T6189137",
+    "input": {
+      "command": "ulimit -u 2>/dev/null; GOFLAGS=-p=1 GOMAXPROCS=1 go vet ./lib/config/ 2>&1 | tail -20",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_TjfQ3q2a3a1V2VwxlSlP8496",
+    "input": {
+      "command": "go build -p 2 ./lib/config/ 2>&1 | tail -20",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_7E1pFwomeRiVbgZKqBy91481",
+    "input": {
+      "command": "go build -p 1 ./lib/config/ 2>&1 | tail -20",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(go completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_eif6l6ZyV4XuRW9O5ZNU2878",
+    "input": {
+      "command": "go build -p 1 ./tool/teleport/common/ 2>&1 | tail -20",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(go completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_d4qvZzPfW6gCq2tnie083911",
+    "input": {
+      "command": "go test -p 1 -count=1 -run TestMakeDatabaseConfig ./lib/config/ 2>&1 | tail -30",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgithub.com/gravitational/teleport/lib/config\t0.021s"
+  },
+  {
+    "tool_call_id": "call_00_xPryu6fMerJFjKeocKjA5642",
+    "input": {
+      "command": "go test -p 1 -count=1 -run TestMakeDatabaseConfig ./lib/config/ 2>&1 | tail -30",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgithub.com/gravitational/teleport/lib/config\t0.019s"
+  },
+  {
+    "tool_call_id": "call_00_rvrv6Adx6Na5XzaHXRsP3022",
+    "input": {
+      "command": "go test -p 1 -count=1 ./tool/teleport/common/ 2>&1 | tail -30",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_rIbkFs1SCtkXhN9AAlRH1456",
+    "input": {
+      "command": "go test -p 1 -count=1 -v -run 'TestMakeDatabaseConfig' ./lib/config/ 2>&1 | grep -E 'RUN|PASS|FAIL|ok' | head -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "=== RUN   TestMakeDatabaseConfig\n=== RUN   TestMakeDatabaseConfig/Global\n=== RUN   TestMakeDatabaseConfig/RDSAutoDiscovery\n=== RUN   TestMakeDatabaseConfig/RedshiftAutoDiscovery\n=== RUN   TestMakeDatabaseConfig/StaticDatabase\n=== RUN   TestMakeDatabaseConfig/StaticDatabase/CloudAndActiveDirectoryFields\n=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields\n=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields/Name\n=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields/Protocol\n=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields/URI\n=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields/InvalidTags\n--- PASS: TestMakeDatabaseConfig (0.00s)\n    --- PASS: TestMakeDatabaseConfig/Global (0.00s)\n    --- PASS: TestMakeDatabaseConfig/RDSAutoDiscovery (0.00s)\n    --- PASS: TestMakeDatabaseConfig/RedshiftAutoDiscovery (0.00s)\n    --- PASS: TestMakeDatabaseConfig/StaticDatabase (0.00s)\n        --- PASS: TestMakeDatabaseConfig/StaticDatabase/CloudAndActiveDirectoryFields (0.00s)\n        --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields (0.00s)\n            --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields/Name (0.00s)\n            --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields/Protocol (0.00s)\n            --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields/URI (0.00s)\n            --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields/InvalidTags (0.00s)\nPASS\nok  \tgithub.com/gravitational/teleport/lib/config\t0.056s"
+  }
+]

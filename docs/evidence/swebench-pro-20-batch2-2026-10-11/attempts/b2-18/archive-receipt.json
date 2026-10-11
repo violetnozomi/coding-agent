@@ -1,0 +1,7 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/live/b2-18/container-evidence.tar.gz",
+  "sha256": "8255f4f3f09138fedec263702627534f32a4797c1d3c4741e18d466e7727b403",
+  "bytes": 62926446,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/archives/batch2-instance_gravitational__teleport-e6895d8934f6e484341034869901145fbc025e72-vce94f93ad1030e3136852817f2423c1b3ac37bc4",
+  "retains_raw_container_session_and_artifacts": true
+}

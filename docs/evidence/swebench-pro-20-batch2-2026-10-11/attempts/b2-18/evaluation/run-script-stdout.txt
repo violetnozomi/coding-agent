@@ -1,0 +1,374 @@
+Running selected tests: TestApplyConfigNoneEnabled TestMakeSampleFileConfig TestFileConfigCheck TestApplyConfig TestSampleConfig TestBackendDefaults TestTextFormatter TestMakeDatabaseConfig TestParseKey TestProxyKube TestConfigReading TestDebugFlag TestDatabaseConfig TestPermitUserEnvironment TestDuration TestAuthenticationConfig_Parse_StaticToken TestSSHSection TestX11Config TestAuthSection TestTrustedClusters TestWindowsDesktopService TestParseCachePolicy TestAuthenticationSection TestAuthenticationConfig_Parse_nilU2F TestBooleanParsing TestProxyConfigurationVersion TestLicenseFile TestTLSCert TestApplyKeyStoreConfig TestFIPS TestLabelParsing TestAppsCLF TestDatabaseCLIFlags TestJSONFormatter TestPostgresPublicAddr TestTunnelStrategy
+=== RUN   TestSampleConfig
+=== RUN   TestSampleConfig/ACMEEnabled
+=== RUN   TestSampleConfig/public_and_web_addr
+=== RUN   TestSampleConfig/public_and_web_addr_with_default_port
+=== RUN   TestSampleConfig/key_file_missing
+=== RUN   TestSampleConfig/load_x509_key_pair_failed
+=== RUN   TestSampleConfig/cluster_name_missing
+=== RUN   TestSampleConfig/ACMEEnabled_conflict_with_key_file
+--- PASS: TestSampleConfig (0.00s)
+    --- PASS: TestSampleConfig/ACMEEnabled (0.00s)
+    --- PASS: TestSampleConfig/public_and_web_addr (0.00s)
+    --- PASS: TestSampleConfig/public_and_web_addr_with_default_port (0.00s)
+    --- PASS: TestSampleConfig/key_file_missing (0.00s)
+    --- PASS: TestSampleConfig/load_x509_key_pair_failed (0.00s)
+    --- PASS: TestSampleConfig/cluster_name_missing (0.00s)
+    --- PASS: TestSampleConfig/ACMEEnabled_conflict_with_key_file (0.00s)
+=== RUN   TestBooleanParsing
+--- PASS: TestBooleanParsing (0.00s)
+=== RUN   TestDuration
+--- PASS: TestDuration (0.00s)
+=== RUN   TestConfigReading
+--- PASS: TestConfigReading (0.00s)
+=== RUN   TestLabelParsing
+--- PASS: TestLabelParsing (0.00s)
+=== RUN   TestTrustedClusters
+2026-10-11T12:38:58Z DEBU             reading trusted cluster key file ../../fixtures/trusted_clusters/cluster-a config/configuration.go:1618
+2026-10-11T12:38:58Z DEBU             reading trusted cluster key file non-existing config/configuration.go:1618
+2026-10-11T12:38:58Z DEBU             reading trusted cluster key file ../../fixtures/trusted_clusters/cluster-a config/configuration.go:1618
+2026-10-11T12:38:58Z DEBU             reading trusted cluster key file ../../fixtures/trusted_clusters/cluster-a config/configuration.go:1618
+--- PASS: TestTrustedClusters (0.00s)
+=== RUN   TestFileConfigCheck
+--- PASS: TestFileConfigCheck (0.00s)
+=== RUN   TestApplyConfig
+--- PASS: TestApplyConfig (0.00s)
+=== RUN   TestApplyConfigNoneEnabled
+--- PASS: TestApplyConfigNoneEnabled (0.00s)
+=== RUN   TestPostgresPublicAddr
+=== RUN   TestPostgresPublicAddr/postgres_public_address_with_port_set
+=== RUN   TestPostgresPublicAddr/when_port_not_set,_defaults_to_web_proxy_public_port
+=== RUN   TestPostgresPublicAddr/when_port_and_public_addr_not_set,_defaults_to_web_proxy_listen_port
+=== RUN   TestPostgresPublicAddr/when_port_and_listen/public_addrs_not_set,_defaults_to_web_proxy_default_port
+=== RUN   TestPostgresPublicAddr/when_PostgresAddr_is_provided_with_port,_the_explicitly_provided_port_should_be_use
+=== RUN   TestPostgresPublicAddr/when_PostgresAddr_is_provided_without_port,_defaults_PostgresPort_should_be_used
+--- PASS: TestPostgresPublicAddr (0.00s)
+    --- PASS: TestPostgresPublicAddr/postgres_public_address_with_port_set (0.00s)
+    --- PASS: TestPostgresPublicAddr/when_port_not_set,_defaults_to_web_proxy_public_port (0.00s)
+    --- PASS: TestPostgresPublicAddr/when_port_and_public_addr_not_set,_defaults_to_web_proxy_listen_port (0.00s)
+    --- PASS: TestPostgresPublicAddr/when_port_and_listen/public_addrs_not_set,_defaults_to_web_proxy_default_port (0.00s)
+    --- PASS: TestPostgresPublicAddr/when_PostgresAddr_is_provided_with_port,_the_explicitly_provided_port_should_be_use (0.00s)
+    --- PASS: TestPostgresPublicAddr/when_PostgresAddr_is_provided_without_port,_defaults_PostgresPort_should_be_used (0.00s)
+=== RUN   TestBackendDefaults
+--- PASS: TestBackendDefaults (0.00s)
+=== RUN   TestTunnelStrategy
+=== RUN   TestTunnelStrategy/Ensure_default_is_used_when_no_tunnel_strategy_is_given
+=== RUN   TestTunnelStrategy/Ensure_default_parameters_are_used_for_proxy_peering_strategy
+=== RUN   TestTunnelStrategy/Ensure_proxy_peering_strategy_parameters_are_set
+=== RUN   TestTunnelStrategy/Ensure_tunnel_strategy_cannot_take_unknown_parameters
+--- PASS: TestTunnelStrategy (0.00s)
+    --- PASS: TestTunnelStrategy/Ensure_default_is_used_when_no_tunnel_strategy_is_given (0.00s)
+    --- PASS: TestTunnelStrategy/Ensure_default_parameters_are_used_for_proxy_peering_strategy (0.00s)
+    --- PASS: TestTunnelStrategy/Ensure_proxy_peering_strategy_parameters_are_set (0.00s)
+    --- PASS: TestTunnelStrategy/Ensure_tunnel_strategy_cannot_take_unknown_parameters (0.00s)
+=== RUN   TestParseKey
+--- PASS: TestParseKey (0.00s)
+=== RUN   TestParseCachePolicy
+--- PASS: TestParseCachePolicy (0.00s)
+=== RUN   TestPermitUserEnvironment
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+--- PASS: TestPermitUserEnvironment (0.00s)
+=== RUN   TestDebugFlag
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+--- PASS: TestDebugFlag (0.00s)
+=== RUN   TestLicenseFile
+--- PASS: TestLicenseFile (0.00s)
+=== RUN   TestFIPS
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z WARN             Second factor settings will have no affect because local authentication is disabled. Update file configuration and remove "second_factor" field to get rid of this error message. config/configuration.go:591
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z WARN             Second factor settings will have no affect because local authentication is disabled. Update file configuration and remove "second_factor" field to get rid of this error message. config/configuration.go:591
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z WARN             Second factor settings will have no affect because local authentication is disabled. Update file configuration and remove "second_factor" field to get rid of this error message. config/configuration.go:591
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z WARN             Second factor settings will have no affect because local authentication is disabled. Update file configuration and remove "second_factor" field to get rid of this error message. config/configuration.go:591
+--- PASS: TestFIPS (0.00s)
+=== RUN   TestProxyKube
+=== RUN   TestProxyKube/not_configured
+=== RUN   TestProxyKube/legacy_format,_no_local_cluster
+=== RUN   TestProxyKube/legacy_format,_with_local_cluster
+=== RUN   TestProxyKube/new_format
+=== RUN   TestProxyKube/new_and_old_formats
+=== RUN   TestProxyKube/new_format_and_old_explicitly_disabled
+=== RUN   TestProxyKube/v2_kube_service_should_be_enabled_by_default
+--- PASS: TestProxyKube (0.00s)
+    --- PASS: TestProxyKube/not_configured (0.00s)
+    --- PASS: TestProxyKube/legacy_format,_no_local_cluster (0.00s)
+    --- PASS: TestProxyKube/legacy_format,_with_local_cluster (0.00s)
+    --- PASS: TestProxyKube/new_format (0.00s)
+    --- PASS: TestProxyKube/new_and_old_formats (0.00s)
+    --- PASS: TestProxyKube/new_format_and_old_explicitly_disabled (0.00s)
+    --- PASS: TestProxyKube/v2_kube_service_should_be_enabled_by_default (0.00s)
+=== RUN   TestProxyConfigurationVersion
+=== RUN   TestProxyConfigurationVersion/v2_config_with_default_web_address
+=== RUN   TestProxyConfigurationVersion/v2_config_with_custom_web_address
+=== RUN   TestProxyConfigurationVersion/v1_config_should_generate_default_listener_addresses
+--- PASS: TestProxyConfigurationVersion (0.00s)
+    --- PASS: TestProxyConfigurationVersion/v2_config_with_default_web_address (0.00s)
+    --- PASS: TestProxyConfigurationVersion/v2_config_with_custom_web_address (0.00s)
+    --- PASS: TestProxyConfigurationVersion/v1_config_should_generate_default_listener_addresses (0.00s)
+=== RUN   TestWindowsDesktopService
+=== PAUSE TestWindowsDesktopService
+=== RUN   TestAppsCLF
+=== RUN   TestAppsCLF/role_provided,_valid_name_and_uri
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== RUN   TestAppsCLF/role_provided,_name_not_provided
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== RUN   TestAppsCLF/role_provided,_uri_not_provided
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== RUN   TestAppsCLF/valid_name_and_uri
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== RUN   TestAppsCLF/invalid_name
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== RUN   TestAppsCLF/missing_uri
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+--- PASS: TestAppsCLF (0.00s)
+    --- PASS: TestAppsCLF/role_provided,_valid_name_and_uri (0.00s)
+    --- PASS: TestAppsCLF/role_provided,_name_not_provided (0.00s)
+    --- PASS: TestAppsCLF/role_provided,_uri_not_provided (0.00s)
+    --- PASS: TestAppsCLF/valid_name_and_uri (0.00s)
+    --- PASS: TestAppsCLF/invalid_name (0.00s)
+    --- PASS: TestAppsCLF/missing_uri (0.00s)
+=== RUN   TestDatabaseConfig
+=== RUN   TestDatabaseConfig/valid_database_config
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== RUN   TestDatabaseConfig/missing_database_name
+2026-10-11T12:38:58Z             INFO not using a config file config/configuration.go:175
+=== RUN   TestDatabaseConfig/unsupported_database_protocol
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== RUN   TestDatabaseConfig/missing_database_uri
+2026-10-11T12:38:58Z             INFO not using a config file config/configuration.go:175
+=== RUN   TestDatabaseConfig/invalid_database_uri_(missing_port)
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+--- PASS: TestDatabaseConfig (0.00s)
+    --- PASS: TestDatabaseConfig/valid_database_config (0.00s)
+    --- PASS: TestDatabaseConfig/missing_database_name (0.00s)
+    --- PASS: TestDatabaseConfig/unsupported_database_protocol (0.00s)
+    --- PASS: TestDatabaseConfig/missing_database_uri (0.00s)
+    --- PASS: TestDatabaseConfig/invalid_database_uri_(missing_port) (0.00s)
+=== RUN   TestDatabaseCLIFlags
+=== RUN   TestDatabaseCLIFlags/valid_database_config
+=== PAUSE TestDatabaseCLIFlags/valid_database_config
+=== RUN   TestDatabaseCLIFlags/unsupported_database_protocol
+=== PAUSE TestDatabaseCLIFlags/unsupported_database_protocol
+=== RUN   TestDatabaseCLIFlags/missing_database_uri
+=== PAUSE TestDatabaseCLIFlags/missing_database_uri
+=== RUN   TestDatabaseCLIFlags/invalid_database_uri_(missing_port)
+=== PAUSE TestDatabaseCLIFlags/invalid_database_uri_(missing_port)
+=== RUN   TestDatabaseCLIFlags/RDS_database
+=== PAUSE TestDatabaseCLIFlags/RDS_database
+=== RUN   TestDatabaseCLIFlags/Redshift_database
+=== PAUSE TestDatabaseCLIFlags/Redshift_database
+=== RUN   TestDatabaseCLIFlags/Cloud_SQL_database
+=== PAUSE TestDatabaseCLIFlags/Cloud_SQL_database
+=== RUN   TestDatabaseCLIFlags/SQL_Server
+=== PAUSE TestDatabaseCLIFlags/SQL_Server
+=== RUN   TestDatabaseCLIFlags/MySQL_version
+=== PAUSE TestDatabaseCLIFlags/MySQL_version
+=== CONT  TestDatabaseCLIFlags/valid_database_config
+=== CONT  TestDatabaseCLIFlags/Redshift_database
+=== CONT  TestDatabaseCLIFlags/SQL_Server
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== CONT  TestDatabaseCLIFlags/RDS_database
+=== CONT  TestDatabaseCLIFlags/unsupported_database_protocol
+=== CONT  TestDatabaseCLIFlags/Cloud_SQL_database
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== CONT  TestDatabaseCLIFlags/invalid_database_uri_(missing_port)
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+=== CONT  TestDatabaseCLIFlags/missing_database_uri
+=== CONT  TestDatabaseCLIFlags/MySQL_version
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+2026-10-11T12:38:58Z INFO             not using a config file config/configuration.go:175
+--- PASS: TestDatabaseCLIFlags (0.00s)
+    --- PASS: TestDatabaseCLIFlags/valid_database_config (0.00s)
+    --- PASS: TestDatabaseCLIFlags/Redshift_database (0.00s)
+    --- PASS: TestDatabaseCLIFlags/Cloud_SQL_database (0.00s)
+    --- PASS: TestDatabaseCLIFlags/RDS_database (0.00s)
+    --- PASS: TestDatabaseCLIFlags/SQL_Server (0.00s)
+    --- PASS: TestDatabaseCLIFlags/unsupported_database_protocol (0.00s)
+    --- PASS: TestDatabaseCLIFlags/invalid_database_uri_(missing_port) (0.00s)
+    --- PASS: TestDatabaseCLIFlags/missing_database_uri (0.00s)
+    --- PASS: TestDatabaseCLIFlags/MySQL_version (0.00s)
+=== RUN   TestTextFormatter
+=== RUN   TestTextFormatter/invalid_key_(does_not_exist)
+=== RUN   TestTextFormatter/valid_keys_and_formatting
+--- PASS: TestTextFormatter (0.00s)
+    --- PASS: TestTextFormatter/invalid_key_(does_not_exist) (0.00s)
+    --- PASS: TestTextFormatter/valid_keys_and_formatting (0.00s)
+=== RUN   TestJSONFormatter
+=== RUN   TestJSONFormatter/invalid_key_(does_not_exist)
+=== RUN   TestJSONFormatter/valid_keys_and_formatting
+--- PASS: TestJSONFormatter (0.00s)
+    --- PASS: TestJSONFormatter/invalid_key_(does_not_exist) (0.00s)
+    --- PASS: TestJSONFormatter/valid_keys_and_formatting (0.00s)
+=== RUN   TestTLSCert
+=== RUN   TestTLSCert/read_deprecated_DB_cert_field
+2026-10-11T12:38:58Z WARN             ca_cert_file is deprecated, please use tls.ca_cert_file instead for test-db-1. config/configuration.go:1213
+=== RUN   TestTLSCert/read_DB_cert_field
+--- PASS: TestTLSCert (0.00s)
+    --- PASS: TestTLSCert/read_deprecated_DB_cert_field (0.00s)
+    --- PASS: TestTLSCert/read_DB_cert_field (0.00s)
+=== RUN   TestApplyKeyStoreConfig
+=== RUN   TestApplyKeyStoreConfig/handle_nil_configuration
+=== RUN   TestApplyKeyStoreConfig/correct_config
+=== RUN   TestApplyKeyStoreConfig/correct_config_with_pin_file
+=== RUN   TestApplyKeyStoreConfig/err_when_pin_and_pin_path_configured
+=== RUN   TestApplyKeyStoreConfig/err_when_pkcs11_world_writable
+=== RUN   TestApplyKeyStoreConfig/err_when_pin_file_world-readable
+--- PASS: TestApplyKeyStoreConfig (0.00s)
+    --- PASS: TestApplyKeyStoreConfig/handle_nil_configuration (0.00s)
+    --- PASS: TestApplyKeyStoreConfig/correct_config (0.00s)
+    --- PASS: TestApplyKeyStoreConfig/correct_config_with_pin_file (0.00s)
+    --- PASS: TestApplyKeyStoreConfig/err_when_pin_and_pin_path_configured (0.00s)
+    --- PASS: TestApplyKeyStoreConfig/err_when_pkcs11_world_writable (0.00s)
+    --- PASS: TestApplyKeyStoreConfig/err_when_pin_file_world-readable (0.00s)
+=== RUN   TestMakeDatabaseConfig
+=== RUN   TestMakeDatabaseConfig/Global
+=== RUN   TestMakeDatabaseConfig/RDSAutoDiscovery
+=== RUN   TestMakeDatabaseConfig/RedshiftAutoDiscovery
+=== RUN   TestMakeDatabaseConfig/StaticDatabase
+=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields
+=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields/Protocol
+=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields/URI
+=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields/InvalidTags
+=== RUN   TestMakeDatabaseConfig/StaticDatabase/MissingFields/Name
+--- PASS: TestMakeDatabaseConfig (0.00s)
+    --- PASS: TestMakeDatabaseConfig/Global (0.00s)
+    --- PASS: TestMakeDatabaseConfig/RDSAutoDiscovery (0.00s)
+    --- PASS: TestMakeDatabaseConfig/RedshiftAutoDiscovery (0.00s)
+    --- PASS: TestMakeDatabaseConfig/StaticDatabase (0.00s)
+        --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields (0.00s)
+            --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields/Protocol (0.00s)
+            --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields/URI (0.00s)
+            --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields/InvalidTags (0.00s)
+            --- PASS: TestMakeDatabaseConfig/StaticDatabase/MissingFields/Name (0.00s)
+=== RUN   TestAuthSection
+=== PAUSE TestAuthSection
+=== RUN   TestAuthenticationSection
+=== PAUSE TestAuthenticationSection
+=== RUN   TestAuthenticationConfig_Parse_StaticToken
+=== PAUSE TestAuthenticationConfig_Parse_StaticToken
+=== RUN   TestAuthenticationConfig_Parse_nilU2F
+--- PASS: TestAuthenticationConfig_Parse_nilU2F (0.00s)
+=== RUN   TestSSHSection
+=== PAUSE TestSSHSection
+=== RUN   TestX11Config
+=== RUN   TestX11Config/default
+=== RUN   TestX11Config/x11_disabled
+=== RUN   TestX11Config/x11_enabled
+=== RUN   TestX11Config/display_offset_set
+=== RUN   TestX11Config/display_offset_value_capped
+=== RUN   TestX11Config/max_display_set
+=== RUN   TestX11Config/max_display_value_capped
+=== RUN   TestX11Config/max_display_smaller_than_display_offset
+--- PASS: TestX11Config (0.00s)
+    --- PASS: TestX11Config/default (0.00s)
+    --- PASS: TestX11Config/x11_disabled (0.00s)
+    --- PASS: TestX11Config/x11_enabled (0.00s)
+    --- PASS: TestX11Config/display_offset_set (0.00s)
+    --- PASS: TestX11Config/display_offset_value_capped (0.00s)
+    --- PASS: TestX11Config/max_display_set (0.00s)
+    --- PASS: TestX11Config/max_display_value_capped (0.00s)
+    --- PASS: TestX11Config/max_display_smaller_than_display_offset (0.00s)
+=== RUN   TestMakeSampleFileConfig
+=== RUN   TestMakeSampleFileConfig/Default_roles
+=== RUN   TestMakeSampleFileConfig/Node_role
+=== RUN   TestMakeSampleFileConfig/App_role
+=== RUN   TestMakeSampleFileConfig/App_name_and_URI_are_mandatory
+=== RUN   TestMakeSampleFileConfig/Proxy_role
+=== RUN   TestMakeSampleFileConfig/App_role_included_when_flag_AppName_is_added
+=== RUN   TestMakeSampleFileConfig/Multiple_roles
+=== RUN   TestMakeSampleFileConfig/Auth_server
+=== RUN   TestMakeSampleFileConfig/Data_dir
+=== RUN   TestMakeSampleFileConfig/Token
+=== RUN   TestMakeSampleFileConfig/Token,_method_not_specified
+=== RUN   TestMakeSampleFileConfig/App_name_and_URI
+=== RUN   TestMakeSampleFileConfig/Node_labels
+=== RUN   TestMakeSampleFileConfig/Node_labels_-_invalid
+=== RUN   TestMakeSampleFileConfig/CAPin
+--- PASS: TestMakeSampleFileConfig (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Default_roles (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Node_role (0.00s)
+    --- PASS: TestMakeSampleFileConfig/App_role (0.00s)
+    --- PASS: TestMakeSampleFileConfig/App_name_and_URI_are_mandatory (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Proxy_role (0.00s)
+    --- PASS: TestMakeSampleFileConfig/App_role_included_when_flag_AppName_is_added (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Multiple_roles (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Auth_server (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Data_dir (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Token (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Token,_method_not_specified (0.00s)
+    --- PASS: TestMakeSampleFileConfig/App_name_and_URI (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Node_labels (0.00s)
+    --- PASS: TestMakeSampleFileConfig/Node_labels_-_invalid (0.00s)
+    --- PASS: TestMakeSampleFileConfig/CAPin (0.00s)
+=== CONT  TestWindowsDesktopService
+=== CONT  TestAuthenticationSection
+=== CONT  TestAuthSection
+=== CONT  TestAuthenticationConfig_Parse_StaticToken
+=== CONT  TestSSHSection
+=== RUN   TestWindowsDesktopService/NOK_-_invalid_static_host_addr
+=== RUN   TestAuthSection/Default
+=== RUN   TestWindowsDesktopService/NOK_-_invalid_host_label_key
+=== RUN   TestWindowsDesktopService/NOK_-_invalid_host_label_regexp
+=== RUN   TestWindowsDesktopService/NOK_-_invalid_label_key_for_LDAP_attribute
+=== RUN   TestAuthenticationSection/Local_auth_with_OTP
+=== RUN   TestAuthenticationConfig_Parse_StaticToken/file_path_on_windows
+=== RUN   TestSSHSection/default
+=== RUN   TestAuthenticationConfig_Parse_StaticToken/literal_string
+--- PASS: TestAuthenticationConfig_Parse_StaticToken (0.00s)
+    --- PASS: TestAuthenticationConfig_Parse_StaticToken/file_path_on_windows (0.00s)
+    --- PASS: TestAuthenticationConfig_Parse_StaticToken/literal_string (0.00s)
+=== RUN   TestAuthSection/Enabled
+=== RUN   TestSSHSection/explicitly_enabled
+=== RUN   TestWindowsDesktopService/OK_-_valid_config
+--- PASS: TestWindowsDesktopService (0.00s)
+    --- PASS: TestWindowsDesktopService/NOK_-_invalid_static_host_addr (0.00s)
+    --- PASS: TestWindowsDesktopService/NOK_-_invalid_host_label_key (0.00s)
+    --- PASS: TestWindowsDesktopService/NOK_-_invalid_host_label_regexp (0.00s)
+    --- PASS: TestWindowsDesktopService/NOK_-_invalid_label_key_for_LDAP_attribute (0.00s)
+    --- PASS: TestWindowsDesktopService/OK_-_valid_config (0.00s)
+=== RUN   TestAuthenticationSection/Local_auth_without_OTP
+=== RUN   TestAuthSection/Disabled
+=== RUN   TestSSHSection/diasbled
+=== RUN   TestAuthenticationSection/Local_auth_with_u2f
+=== RUN   TestAuthSection/Idle_timeout_message
+=== RUN   TestSSHSection/Port_forwarding_is_enabled
+=== RUN   TestAuthenticationSection/Local_auth_with_Webauthn
+=== RUN   TestAuthSection/Message_of_the_Day
+=== RUN   TestSSHSection/Port_forwarding_is_disabled
+=== RUN   TestAuthenticationSection/Local_auth_with_disabled_Webauthn
+=== RUN   TestAuthSection/Web_idle_timeout
+=== RUN   TestSSHSection/Port_forwarding_invalid_value
+=== RUN   TestAuthSection/Web_idle_timeout_(invalid)
+=== RUN   TestAuthenticationSection/Local_auth_with_passwordless_connector
+--- PASS: TestSSHSection (0.00s)
+    --- PASS: TestSSHSection/default (0.00s)
+    --- PASS: TestSSHSection/explicitly_enabled (0.00s)
+    --- PASS: TestSSHSection/diasbled (0.00s)
+    --- PASS: TestSSHSection/Port_forwarding_is_enabled (0.00s)
+    --- PASS: TestSSHSection/Port_forwarding_is_disabled (0.00s)
+    --- PASS: TestSSHSection/Port_forwarding_invalid_value (0.00s)
+--- PASS: TestAuthenticationSection (0.00s)
+    --- PASS: TestAuthenticationSection/Local_auth_with_OTP (0.00s)
+    --- PASS: TestAuthenticationSection/Local_auth_without_OTP (0.00s)
+    --- PASS: TestAuthenticationSection/Local_auth_with_u2f (0.00s)
+    --- PASS: TestAuthenticationSection/Local_auth_with_Webauthn (0.00s)
+    --- PASS: TestAuthenticationSection/Local_auth_with_disabled_Webauthn (0.00s)
+    --- PASS: TestAuthenticationSection/Local_auth_with_passwordless_connector (0.00s)
+--- PASS: TestAuthSection (0.00s)
+    --- PASS: TestAuthSection/Default (0.00s)
+    --- PASS: TestAuthSection/Enabled (0.00s)
+    --- PASS: TestAuthSection/Disabled (0.00s)
+    --- PASS: TestAuthSection/Idle_timeout_message (0.00s)
+    --- PASS: TestAuthSection/Message_of_the_Day (0.00s)
+    --- PASS: TestAuthSection/Web_idle_timeout (0.00s)
+    --- PASS: TestAuthSection/Web_idle_timeout_(invalid) (0.00s)
+PASS
+ok  	github.com/gravitational/teleport/lib/config	0.035s

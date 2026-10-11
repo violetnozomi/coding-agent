@@ -1,0 +1,13 @@
+{
+  "number": 19,
+  "instance_id": "instance_internetarchive__openlibrary-1be7de788a444f6255e89c10ef6aa608550604a8-v29f82c9cf21d57b242f8d8b0e541525d259e2d63",
+  "attempt": 1,
+  "agent_status": "completed",
+  "resolved": true,
+  "agent_started_epoch": 1791721446.712613,
+  "agent_finished_epoch": 1791721841.9838042,
+  "status": "attempted",
+  "patch_sha256": "0db9761b9d923ee7f36c382bad744e855161e359641da09ff58108fb68dd585e",
+  "eval_status": "graded",
+  "physical_requests": 39
+}

@@ -1,0 +1,616 @@
+{
+  "tests": [
+    {
+      "name": "TestSampleConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSampleConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSampleConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSampleConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSampleConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSampleConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSampleConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSampleConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestBooleanParsing",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDuration",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestConfigReading",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestLabelParsing",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTrustedClusters",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestFileConfigCheck",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestApplyConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestApplyConfigNoneEnabled",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPostgresPublicAddr",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPostgresPublicAddr",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPostgresPublicAddr",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPostgresPublicAddr",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPostgresPublicAddr",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPostgresPublicAddr",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPostgresPublicAddr",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestBackendDefaults",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTunnelStrategy",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTunnelStrategy",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTunnelStrategy",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTunnelStrategy",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTunnelStrategy",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestParseKey",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestParseCachePolicy",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPermitUserEnvironment",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDebugFlag",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestLicenseFile",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestFIPS",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyKube",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyKube",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyKube",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyKube",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyKube",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyKube",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyKube",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyKube",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyConfigurationVersion",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyConfigurationVersion",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyConfigurationVersion",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestProxyConfigurationVersion",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestWindowsDesktopService",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAppsCLF",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAppsCLF",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAppsCLF",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAppsCLF",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAppsCLF",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAppsCLF",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAppsCLF",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseCLIFlags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTextFormatter",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTextFormatter",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTextFormatter",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestJSONFormatter",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestJSONFormatter",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestJSONFormatter",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTLSCert",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTLSCert",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTLSCert",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestApplyKeyStoreConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestApplyKeyStoreConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestApplyKeyStoreConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestApplyKeyStoreConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestApplyKeyStoreConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestApplyKeyStoreConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestApplyKeyStoreConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeDatabaseConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationConfig_Parse_StaticToken",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationConfig_Parse_nilU2F",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSSHSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestX11Config",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestX11Config",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestX11Config",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestX11Config",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestX11Config",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestX11Config",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestX11Config",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestX11Config",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestX11Config",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeSampleFileConfig",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestWindowsDesktopService",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestWindowsDesktopService",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestWindowsDesktopService",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestWindowsDesktopService",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationConfig_Parse_StaticToken",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSSHSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationConfig_Parse_StaticToken",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSSHSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestWindowsDesktopService",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSSHSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSSHSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSSHSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSSHSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthSection",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAuthenticationSection",
+      "status": "PASSED"
+    }
+  ]
+}

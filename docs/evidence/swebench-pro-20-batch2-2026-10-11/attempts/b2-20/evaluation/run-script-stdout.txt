@@ -1,0 +1,81 @@
+Running selected tests: test/units/executor/test_play_iterator.py test/units/plugins/strategy/test_linear.py
+# pytest would be preferred but using project's native test runner instead
+Running test: test/units/executor/test_play_iterator.py
+[32mConfigured locale: C.UTF-8[0m
+[35mWARNING: Using locale "C.UTF-8" instead of "en_US.UTF-8". Tests which depend on the locale may behave unexpectedly.[0m
+[32mCreating container database.[0m
+Installing requirements for Python 3.11
+[32mStream command with data: /usr/local/bin/python[0m
+Execute command: /usr/local/bin/python /tmp/ansible-test-ev_pzuzm-pip.py install --disable-pip-version-check -r requirements/ansible.txt -r requirements/units.txt -c requirements/constraints.txt
+Execute command: /usr/local/bin/python /tmp/ansible-test-ev_pzuzm-pip.py install --disable-pip-version-check -r test/units/requirements.txt -c requirements/constraints.txt
+[32mRun command: /usr/local/bin/python /app/test/lib/ansible_test/_util/target/tools/yamlcheck.py[0m
+Unit test controller with Python 3.11
+[32mInitializing "/tmp/ansible-test-hn398nac-injector" as the temporary injector directory.[0m
+[32mInjecting "/tmp/python-kc5au8i6-ansible/python" as a execv wrapper for the "/usr/local/bin/python" interpreter.[0m
+[32mStream command: pytest -r a -n 4 --color yes -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest/config/default.ini --junit-xml /app/test/results/junit/python3.11-controller-units.xml --strict-markers --rootdir /app --confcutdir /app --durations=25 -v test/units/executor/test_play_iterator.py[0m
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.11.13, pytest-8.3.3, pluggy-1.5.0 -- /usr/local/bin/python
+rootdir: /app
+configfile: test/lib/ansible_test/_data/pytest/config/default.ini
+plugins: xdist-3.6.1, mock-3.14.0, anyio-4.10.0, rerunfailures-14.0, forked-1.6.0
+created: 4/4 workers
+4 workers [4 items]
+
+scheduling tests via LoadScheduling
+
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_host_state 
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator 
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator_nested_blocks 
+test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator_add_tasks 
+[gw1][36m [ 25%] [0m[32mPASSED[0m test/units/executor/test_play_iterator.py::TestPlayIterator::test_host_state 
+[gw2][36m [ 50%] [0m[32mPASSED[0m test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator_add_tasks 
+[gw0][36m [ 75%] [0m[32mPASSED[0m test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator 
+[gw3][36m [100%] [0m[32mPASSED[0m test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator_nested_blocks 
+
+- generated xml file: /app/test/results/junit/python3.11-controller-units.xml --
+============================= slowest 25 durations =============================
+0.19s call     test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator_nested_blocks
+0.11s call     test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator
+0.11s call     test/units/executor/test_play_iterator.py::TestPlayIterator::test_play_iterator_add_tasks
+
+(9 durations < 0.005s hidden.  Use -vv to show these durations.)
+[32m============================== [32m[1m4 passed[0m[32m in 0.97s[0m[32m ===============================[0m
+[35mWARNING: Reviewing previous 1 warning(s):[0m
+[35mWARNING: Using locale "C.UTF-8" instead of "en_US.UTF-8". Tests which depend on the locale may behave unexpectedly.[0m
+Running test: test/units/plugins/strategy/test_linear.py
+[32mConfigured locale: C.UTF-8[0m
+[35mWARNING: Using locale "C.UTF-8" instead of "en_US.UTF-8". Tests which depend on the locale may behave unexpectedly.[0m
+[32mCreating container database.[0m
+Installing requirements for Python 3.11
+[32mStream command with data: /usr/local/bin/python[0m
+Execute command: /usr/local/bin/python /tmp/ansible-test-sxwyc1gw-pip.py install --disable-pip-version-check -r requirements/ansible.txt -r requirements/units.txt -c requirements/constraints.txt
+Execute command: /usr/local/bin/python /tmp/ansible-test-sxwyc1gw-pip.py install --disable-pip-version-check -r test/units/requirements.txt -c requirements/constraints.txt
+[32mRun command: /usr/local/bin/python /app/test/lib/ansible_test/_util/target/tools/yamlcheck.py[0m
+Unit test controller with Python 3.11
+[32mInitializing "/tmp/ansible-test-ldwh2sft-injector" as the temporary injector directory.[0m
+[32mInjecting "/tmp/python-vtro3fmp-ansible/python" as a execv wrapper for the "/usr/local/bin/python" interpreter.[0m
+[32mStream command: pytest -r a -n 4 --color yes -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest/config/default.ini --junit-xml /app/test/results/junit/python3.11-controller-units.xml --strict-markers --rootdir /app --confcutdir /app --durations=25 -v test/units/plugins/strategy/test_linear.py[0m
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.11.13, pytest-8.3.3, pluggy-1.5.0 -- /usr/local/bin/python
+rootdir: /app
+configfile: test/lib/ansible_test/_data/pytest/config/default.ini
+plugins: xdist-3.6.1, mock-3.14.0, anyio-4.10.0, rerunfailures-14.0, forked-1.6.0
+created: 4/4 workers
+4 workers [2 items]
+
+scheduling tests via LoadScheduling
+
+test/units/plugins/strategy/test_linear.py::TestStrategyLinear::test_noop 
+test/units/plugins/strategy/test_linear.py::TestStrategyLinear::test_noop_64999 
+[gw0][36m [ 50%] [0m[32mPASSED[0m test/units/plugins/strategy/test_linear.py::TestStrategyLinear::test_noop 
+[gw1][36m [100%] [0m[32mPASSED[0m test/units/plugins/strategy/test_linear.py::TestStrategyLinear::test_noop_64999 
+
+- generated xml file: /app/test/results/junit/python3.11-controller-units.xml --
+============================= slowest 25 durations =============================
+0.01s call     test/units/plugins/strategy/test_linear.py::TestStrategyLinear::test_noop_64999
+0.01s call     test/units/plugins/strategy/test_linear.py::TestStrategyLinear::test_noop
+
+(4 durations < 0.005s hidden.  Use -vv to show these durations.)
+[32m============================== [32m[1m2 passed[0m[32m in 0.77s[0m[32m ===============================[0m
+[35mWARNING: Reviewing previous 1 warning(s):[0m
+[35mWARNING: Using locale "C.UTF-8" instead of "en_US.UTF-8". Tests which depend on the locale may behave unexpectedly.[0m

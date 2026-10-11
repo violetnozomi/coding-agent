@@ -1,0 +1,92 @@
+instance_ansible__ansible-d6d2251929c84c3aa883bad7db0f19cc9ff0339e-v30a923fb5c164d6cd18280c02422f75e611e8fb2: Pulling from scaleapi/swe-bench_pro-v2
+3dae71ba6b94: Pulling fs layer
+91e6593878cc: Pulling fs layer
+c229bae17638: Pulling fs layer
+befce1679853: Pulling fs layer
+63d3275d7266: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+9ed30f15a269: Pulling fs layer
+7518581969b2: Pulling fs layer
+f552d555b811: Pulling fs layer
+e1ed962424d4: Pulling fs layer
+30a97193b5f2: Pulling fs layer
+9595d055206d: Pulling fs layer
+a4ec074f0dc5: Pulling fs layer
+8bd5ed81310b: Pulling fs layer
+2453578b4260: Pulling fs layer
+12a9e37027ad: Pulling fs layer
+e5d00464e328: Pulling fs layer
+c648538c0877: Pulling fs layer
+7518581969b2: Waiting
+f552d555b811: Waiting
+ba09ab3a7332: Pulling fs layer
+e1ed962424d4: Waiting
+30a97193b5f2: Waiting
+9595d055206d: Waiting
+a4ec074f0dc5: Waiting
+2453578b4260: Waiting
+8bd5ed81310b: Waiting
+12a9e37027ad: Waiting
+e5d00464e328: Waiting
+ba09ab3a7332: Waiting
+c648538c0877: Waiting
+befce1679853: Waiting
+63d3275d7266: Waiting
+4f4fb700ef54: Waiting
+9ed30f15a269: Waiting
+91e6593878cc: Verifying Checksum
+91e6593878cc: Download complete
+c229bae17638: Verifying Checksum
+c229bae17638: Download complete
+3dae71ba6b94: Verifying Checksum
+3dae71ba6b94: Download complete
+befce1679853: Verifying Checksum
+befce1679853: Download complete
+3dae71ba6b94: Pull complete
+91e6593878cc: Pull complete
+63d3275d7266: Verifying Checksum
+63d3275d7266: Download complete
+c229bae17638: Pull complete
+befce1679853: Pull complete
+63d3275d7266: Pull complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Pull complete
+f552d555b811: Verifying Checksum
+e1ed962424d4: Download complete
+30a97193b5f2: Verifying Checksum
+30a97193b5f2: Download complete
+9595d055206d: Verifying Checksum
+9595d055206d: Download complete
+a4ec074f0dc5: Verifying Checksum
+a4ec074f0dc5: Download complete
+9ed30f15a269: Verifying Checksum
+9ed30f15a269: Download complete
+9ed30f15a269: Pull complete
+8bd5ed81310b: Verifying Checksum
+8bd5ed81310b: Download complete
+12a9e37027ad: Verifying Checksum
+12a9e37027ad: Download complete
+e5d00464e328: Verifying Checksum
+e5d00464e328: Download complete
+2453578b4260: Verifying Checksum
+2453578b4260: Download complete
+c648538c0877: Verifying Checksum
+c648538c0877: Download complete
+7518581969b2: Download complete
+7518581969b2: Pull complete
+f552d555b811: Pull complete
+e1ed962424d4: Pull complete
+30a97193b5f2: Pull complete
+9595d055206d: Pull complete
+a4ec074f0dc5: Pull complete
+8bd5ed81310b: Pull complete
+2453578b4260: Pull complete
+12a9e37027ad: Pull complete
+e5d00464e328: Pull complete
+c648538c0877: Pull complete
+ba09ab3a7332: Verifying Checksum
+ba09ab3a7332: Download complete
+ba09ab3a7332: Pull complete
+Digest: sha256:e166b276e68be4ef541ea2c2ff817d75ef46c589c3f1d204703755384ced07fd
+Status: Downloaded newer image for ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d6d2251929c84c3aa883bad7db0f19cc9ff0339e-v30a923fb5c164d6cd18280c02422f75e611e8fb2
+ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d6d2251929c84c3aa883bad7db0f19cc9ff0339e-v30a923fb5c164d6cd18280c02422f75e611e8fb2

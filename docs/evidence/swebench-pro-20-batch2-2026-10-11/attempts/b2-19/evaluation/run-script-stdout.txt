@@ -1,0 +1,109 @@
+Running selected tests: openlibrary/catalog/merge/tests/test_merge_marc.py openlibrary/tests/catalog/test_utils.py openlibrary/catalog/add_book/tests/test_match.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.2, pytest-7.4.0, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pyproject.toml
+plugins: anyio-4.10.0, asyncio-0.21.1, xdist-3.8.0, rerunfailures-15.1, cov-4.1.0
+asyncio: mode=Mode.STRICT
+collecting ... collected 66 items
+
+openlibrary/catalog/merge/tests/test_merge_marc.py::test_add_db_name PASSED [  1%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::test_expand_record PASSED [  3%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::test_expand_record_publish_country PASSED [  4%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::test_expand_record_transfer_fields PASSED [  6%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::test_expand_record_isbn PASSED [  7%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::TestAuthors::test_compare_authors_by_statement XFAILre_author, Current
+merge_marc.compare_authors() does NOT take by_statement into account.)   [  9%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::TestAuthors::test_author_contrib PASSED [ 10%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::TestTitles::test_build_titles PASSED [ 12%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::TestTitles::test_build_titles_ampersand PASSED [ 13%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::TestTitles::test_build_titles_complex PASSED [ 15%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::test_compare_publisher PASSED [ 16%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::TestRecordMatching::test_match_without_ISBN PASSED [ 18%]
+openlibrary/catalog/merge/tests/test_merge_marc.py::TestRecordMatching::test_match_low_threshold PASSED [ 19%]
+openlibrary/tests/catalog/test_utils.py::test_author_dates_match PASSED  [ 21%]
+openlibrary/tests/catalog/test_utils.py::test_flip_name PASSED           [ 22%]
+openlibrary/tests/catalog/test_utils.py::test_pick_first_date PASSED     [ 24%]
+openlibrary/tests/catalog/test_utils.py::test_pick_best_name PASSED      [ 25%]
+openlibrary/tests/catalog/test_utils.py::test_pick_best_author PASSED    [ 27%]
+openlibrary/tests/catalog/test_utils.py::test_match_with_bad_chars PASSED [ 28%]
+openlibrary/tests/catalog/test_utils.py::test_strip_count PASSED         [ 30%]
+openlibrary/tests/catalog/test_utils.py::test_remove_trailing_dot PASSED [ 31%]
+openlibrary/tests/catalog/test_utils.py::test_mk_norm[Hello I'm a  title.-helloi'matitle0] PASSED [ 33%]
+openlibrary/tests/catalog/test_utils.py::test_mk_norm[Hello I'm a  title.-helloi'matitle1] PASSED [ 34%]
+openlibrary/tests/catalog/test_utils.py::test_mk_norm[Forgotten Titles: A Novel.-forgottentitlesanovel] PASSED [ 36%]
+openlibrary/tests/catalog/test_utils.py::test_mk_norm[Kit\u0101b Yat\u012bmat ud-Dahr-kit\u0101byat\u012bmatuddahr] PASSED [ 37%]
+openlibrary/tests/catalog/test_utils.py::test_mk_norm_equality[Your Baby's First Word Will Be DADA-Your baby's first word will be DADA] PASSED [ 39%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[1999-01-1999] PASSED [ 40%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[1999-19990] PASSED [ 42%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[01-1999-1999] PASSED [ 43%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[May 5, 1999-1999] PASSED [ 45%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[May 5, 19999-None] PASSED [ 46%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[1999-01-01-1999] PASSED [ 48%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[1999/1/1-1999] PASSED [ 50%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[01-01-1999-1999] PASSED [ 51%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[1/1/1999-1999] PASSED [ 53%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[199-None] PASSED [ 54%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[19990101-None] PASSED [ 56%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[None-None] PASSED [ 57%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[1999-19991] PASSED [ 59%]
+openlibrary/tests/catalog/test_utils.py::test_publication_year[19999-None] PASSED [ 60%]
+openlibrary/tests/catalog/test_utils.py::test_published_in_future_year[1-True] PASSED [ 62%]
+openlibrary/tests/catalog/test_utils.py::test_published_in_future_year[0-False] PASSED [ 63%]
+openlibrary/tests/catalog/test_utils.py::test_published_in_future_year[-1-False] PASSED [ 65%]
+openlibrary/tests/catalog/test_utils.py::test_publication_too_old_and_not_exempt[1399 is too old for an Amazon source-rec0-True] PASSED [ 66%]
+openlibrary/tests/catalog/test_utils.py::test_publication_too_old_and_not_exempt[1400 is acceptable for an Amazon source-rec1-False] PASSED [ 68%]
+openlibrary/tests/catalog/test_utils.py::test_publication_too_old_and_not_exempt[1401 is acceptable for an Amazon source-rec2-False] PASSED [ 69%]
+openlibrary/tests/catalog/test_utils.py::test_publication_too_old_and_not_exempt[1399 is acceptable for an IA source-rec3-False] PASSED [ 71%]
+openlibrary/tests/catalog/test_utils.py::test_publication_too_old_and_not_exempt[1400 is acceptable for an IA source-rec4-False] PASSED [ 72%]
+openlibrary/tests/catalog/test_utils.py::test_publication_too_old_and_not_exempt[1401 is acceptable for an IA source-rec5-False] PASSED [ 74%]
+openlibrary/tests/catalog/test_utils.py::test_independently_published[publishers0-True] PASSED [ 75%]
+openlibrary/tests/catalog/test_utils.py::test_independently_published[publishers1-True] PASSED [ 77%]
+openlibrary/tests/catalog/test_utils.py::test_independently_published[publishers2-False] PASSED [ 78%]
+openlibrary/tests/catalog/test_utils.py::test_needs_isbn_and_lacks_one[rec0-False] PASSED [ 80%]
+openlibrary/tests/catalog/test_utils.py::test_needs_isbn_and_lacks_one[rec1-False] PASSED [ 81%]
+openlibrary/tests/catalog/test_utils.py::test_needs_isbn_and_lacks_one[rec2-True] PASSED [ 83%]
+openlibrary/tests/catalog/test_utils.py::test_needs_isbn_and_lacks_one[rec3-True] PASSED [ 84%]
+openlibrary/tests/catalog/test_utils.py::test_needs_isbn_and_lacks_one[rec4-False] PASSED [ 86%]
+openlibrary/tests/catalog/test_utils.py::test_needs_isbn_and_lacks_one[rec5-True] PASSED [ 87%]
+openlibrary/tests/catalog/test_utils.py::test_is_promise_item[rec0-True] PASSED [ 89%]
+openlibrary/tests/catalog/test_utils.py::test_is_promise_item[rec1-False] PASSED [ 90%]
+openlibrary/tests/catalog/test_utils.py::test_is_promise_item[rec2-False] PASSED [ 92%]
+openlibrary/tests/catalog/test_utils.py::test_is_promise_item[rec3-False] PASSED [ 93%]
+openlibrary/tests/catalog/test_utils.py::test_get_missing_field[Returns an empty list if no fields are missing-rec0-expected0] PASSED [ 95%]
+openlibrary/tests/catalog/test_utils.py::test_get_missing_field[Catches a missing required field-rec1-expected1] PASSED [ 96%]
+openlibrary/tests/catalog/test_utils.py::test_get_missing_field[Catches multiple missing required fields-rec2-expected2] PASSED [ 98%]
+openlibrary/catalog/add_book/tests/test_match.py::test_editions_match_identical_record PASSED [100%]
+
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/web/webapi.py:6
+  /usr/local/lib/python3.12/site-packages/web/webapi.py:6: DeprecationWarning: 'cgi' is deprecated and slated for removal in Python 3.13
+    import cgi
+
+../usr/local/lib/python3.12/site-packages/babel/messages/checkers.py:160
+  /usr/local/lib/python3.12/site-packages/babel/messages/checkers.py:160: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
+    from pkg_resources import working_set
+
+../usr/local/lib/python3.12/site-packages/genshi/compat.py:141
+  /usr/local/lib/python3.12/site-packages/genshi/compat.py:141: DeprecationWarning: ast.Ellipsis is deprecated and will be removed in Python 3.14; use ast.Constant instead
+    _ast_Ellipsis = ast.Ellipsis
+
+../usr/local/lib/python3.12/site-packages/genshi/compat.py:142
+  /usr/local/lib/python3.12/site-packages/genshi/compat.py:142: DeprecationWarning: ast.Str is deprecated and will be removed in Python 3.14; use ast.Constant instead
+    _ast_Str = ast.Str
+
+openlibrary/catalog/add_book/tests/test_match.py::test_editions_match_identical_record
+  /usr/local/lib/python3.12/site-packages/dateutil/tz/tz.py:37: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    EPOCH = datetime.datetime.utcfromtimestamp(0)
+
+openlibrary/catalog/add_book/tests/test_match.py: 50 warnings
+  /app/openlibrary/mocks/mock_infobase.py:73: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    timestamp = timestamp or datetime.datetime.utcnow()
+
+openlibrary/catalog/add_book/tests/test_match.py::test_editions_match_identical_record
+  /app/openlibrary/mocks/mock_infobase.py:92: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    timestamp = timestamp or datetime.datetime.utcnow()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 65 passed, 1 xfailed, 56 warnings in 0.27s ==================

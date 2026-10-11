@@ -1,0 +1,16 @@
+{"tool": "bash", "input": {"command": "ls /workspace/lib/config/database.go /workspace/tool/teleport/common/teleport.go 2>&1; echo \"---\"; find /workspace -maxdepth 2 -name \"go.mod\" 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls tool/teleport/common/ && sed -n '1,120p' tool/teleport/common/teleport.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,140p' lib/config/database.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git diff --stat && git diff lib/config/database.go | head -80"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./lib/config/... ./tool/teleport/common/... 2>&1 | head -30", "timeout": 300}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./lib/config/... ./tool/teleport/common/...", "workdir": "/workspace", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build ./lib/config/... ./tool/teleport/common/...", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ulimit -u 2>/dev/null; GOFLAGS=-p=1 GOMAXPROCS=1 go vet ./lib/config/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build -p 2 ./lib/config/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build -p 1 ./lib/config/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build -p 1 ./tool/teleport/common/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 -run TestMakeDatabaseConfig ./lib/config/ 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 -run TestMakeDatabaseConfig ./lib/config/ 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 ./tool/teleport/common/ 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 -v -run 'TestMakeDatabaseConfig' ./lib/config/ 2>&1 | grep -E 'RUN|PASS|FAIL|ok' | head -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}

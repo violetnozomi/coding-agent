@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "ls /workspace | head -50"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls lib/ansible/plugins/strategy/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls test/units/executor/ test/units/plugins/strategy/ 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && wc -l test/units/executor/test_play_iterator.py test/units/plugins/strategy/test_linear.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls changelogs/fragments/ | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hello"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,60p' lib/ansible/playbook/block.py | head -5; echo ...; grep -n \"def get_tasks\" -A 12 lib/ansible/playbook/block.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"def get_hosts_left\" -A 25 lib/ansible/plugins/strategy/__init__.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git status --short", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git log --oneline -5", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest test/units/executor/test_play_iterator.py -x -q 2>&1 | tail -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest test/units/executor/test_play_iterator.py -q 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/executor/play_iterator.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/executor/play_iterator.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/executor/play_iterator.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest test/units/executor/test_play_iterator.py test/units/plugins/strategy/test_linear.py -q 2>&1 | tail -40", "workdir": "/workspace"}, "allowed": true}
