@@ -1,0 +1,52 @@
+{
+  "as_of": "closed pending phase, before remaining tasks",
+  "authorized_total_cny": 50,
+  "phases": [
+    {
+      "phase": "live",
+      "ledger_sha256": "ed56eebe58f1d9bcf6c773388d2cdc6cdc171c81b59ad78b2504424909ed3bdb",
+      "physical_requests": 103,
+      "known_usage_requests": 103,
+      "known_reported_usage_estimate_cny": 3.52470736,
+      "retained_unknown_reservation_cny": 0,
+      "occupied_estimate_cny": 3.52470736
+    },
+    {
+      "phase": "next",
+      "ledger_sha256": "205eb3d2e9d147ed476821f3d43dcc932175a7fa9308d7033230177f600d5768",
+      "physical_requests": 179,
+      "known_usage_requests": 179,
+      "known_reported_usage_estimate_cny": 7.73058664,
+      "retained_unknown_reservation_cny": 0,
+      "occupied_estimate_cny": 7.73058664
+    },
+    {
+      "phase": "pending",
+      "ledger_sha256": "bd43961ac3b332c04ed939983dabe38e2050da8d372d0c3838e204af2e63a615",
+      "physical_requests": 17,
+      "known_usage_requests": 16,
+      "known_reported_usage_estimate_cny": 1.34561096,
+      "retained_unknown_reservation_cny": 3.190104,
+      "occupied_estimate_cny": 4.53571496
+    }
+  ],
+  "known_reported_usage_estimate_cny": 12.60090496,
+  "retained_unknown_reservation_cny": 3.190104,
+  "occupied_estimate_cny": 15.79100896,
+  "actual_provider_bill_cny": null,
+  "unknown_usage_must_not_be_zero": true,
+  "authorization_text": "第八题跑不过就跑剩下的啊",
+  "remaining_tasks": [
+    "05",
+    "11",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20"
+  ],
+  "remaining_authorized_cny": 34.20899104
+}

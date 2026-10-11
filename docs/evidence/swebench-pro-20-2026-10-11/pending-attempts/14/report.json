@@ -1,0 +1,12 @@
+{
+  "instance_id": "instance_qutebrowser__qutebrowser-52708364b5f91e198defb022d1a5b4b3ebd9b563-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/14",
+  "preparation_retry_not_agent_retry": true,
+  "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/14",
+  "status": "blocked",
+  "error": "RuntimeError('accounting_stop')",
+  "physical_requests": 0
+}

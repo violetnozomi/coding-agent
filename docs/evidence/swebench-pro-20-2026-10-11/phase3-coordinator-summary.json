@@ -1,0 +1,146 @@
+{
+  "tasks": [
+    {
+      "instance_id": "instance_gravitational__teleport-bb562408da4adeae16e025be65e170959d1ec492-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+      "attempt": 1,
+      "agent_status": "missing_result",
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/08",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/08",
+      "status": "attempt_or_delivery_error",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "error": "URLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1032)'))",
+      "physical_requests": 17
+    },
+    {
+      "instance_id": "instance_protonmail__webclients-2f66db85455f4b22a47ffd853738f679b439593c",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/11",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/11",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    },
+    {
+      "instance_id": "instance_protonmail__webclients-0ec14e36ceb01ba45602a563e12352af8171ed39",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/05",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/05",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-8a5a63af6e0be406aa6c8c9b6d5f28b2f1b6af5a-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/13",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/13",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-52708364b5f91e198defb022d1a5b4b3ebd9b563-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/14",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/14",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-7161f7b876773a911afdd804b281e52681cb7321",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/15",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/15",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    },
+    {
+      "instance_id": "instance_protonmail__webclients-1917e37f5d9941a3459ce4b0177e201e2d94a622",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/16",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/16",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    },
+    {
+      "instance_id": "instance_NodeBB__NodeBB-f9ce92df988db7c1ae55d9ef96d247d27478bc70-vf2cf3cbd463b7ad942381f1c6d077626485a1e9e",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/17",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/17",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-e010b2a13697de70170033902ba2e27a1e1acbe9-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/18",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/18",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    },
+    {
+      "instance_id": "instance_gravitational__teleport-326fd1d7be87b03998dbc53bc706fdef90f5065c-v626ec2a48416b10a88641359a169d99e935ff037",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/19",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/19",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-d8162c226a9d576f094dc1830c4c1ffd0be2dd17-v76304ecdb3a5954fcf13feb710e8c40fcf24b73c",
+      "attempt": 0,
+      "agent_status": null,
+      "resolved": null,
+      "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/20",
+      "preparation_retry_not_agent_retry": true,
+      "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/next/20",
+      "status": "blocked",
+      "error": "RuntimeError('accounting_stop')",
+      "physical_requests": 0
+    }
+  ],
+  "physical_requests": 17,
+  "estimated_cost_occupied_cny": 4.53571496,
+  "accounting_failures": {
+    "swebench-pro-v2": {
+      "attempt_id": "30f3acc34afa44879ac2549b445131b3",
+      "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca"
+    }
+  },
+  "aggregate_estimated_cost_cny": 15.79100896
+}

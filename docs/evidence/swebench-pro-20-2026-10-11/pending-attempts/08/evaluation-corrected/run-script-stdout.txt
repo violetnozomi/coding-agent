@@ -1,0 +1,4 @@
+Running selected tests: TestCursorFinalizer TestBasics TestConcurrentFanout
+{"Time":"2026-10-11T08:55:08.505162725Z","Action":"start","Package":"github.com/gravitational/teleport/lib/utils/fanoutbuffer"}
+{"Time":"2026-10-11T08:55:08.505209133Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/fanoutbuffer","Output":"FAIL\tgithub.com/gravitational/teleport/lib/utils/fanoutbuffer [build failed]\n"}
+{"Time":"2026-10-11T08:55:08.505213654Z","Action":"fail","Package":"github.com/gravitational/teleport/lib/utils/fanoutbuffer","Elapsed":0}

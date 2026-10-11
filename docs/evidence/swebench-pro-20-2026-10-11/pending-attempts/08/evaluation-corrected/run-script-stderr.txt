@@ -1,0 +1,10 @@
+# github.com/gravitational/teleport/lib/utils/fanoutbuffer [github.com/gravitational/teleport/lib/utils/fanoutbuffer.test]
+lib/utils/fanoutbuffer/buffer_test.go:82:9: undefined: NewBuffer
+lib/utils/fanoutbuffer/buffer_test.go:82:24: undefined: Config
+lib/utils/fanoutbuffer/buffer_test.go:148:9: undefined: NewBuffer
+lib/utils/fanoutbuffer/buffer_test.go:148:24: undefined: Config
+lib/utils/fanoutbuffer/buffer_test.go:214:26: undefined: ErrGracePeriodExceeded
+lib/utils/fanoutbuffer/buffer_test.go:221:9: undefined: NewBuffer
+lib/utils/fanoutbuffer/buffer_test.go:221:24: undefined: Config
+lib/utils/fanoutbuffer/buffer_test.go:227:18: undefined: Cursor
+lib/utils/fanoutbuffer/buffer_test.go:238:18: undefined: Cursor

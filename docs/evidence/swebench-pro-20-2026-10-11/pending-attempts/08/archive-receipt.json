@@ -1,0 +1,12 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/pending/08/container-evidence.tar.gz",
+  "sha256": "3fb9f7f8f9deb801bfe786e78f314f01775867a1a35445f8fa31e8ae9089ea0c",
+  "bytes": 206346593,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/archives/pending-recovered-instance_gravitational__teleport-bb562408da4adeae16e025be65e170959d1ec492-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+  "retains_raw_container_session_and_artifacts": true,
+  "recovered_after_delivery_error": true,
+  "native_final_export_absent": true,
+  "source_evidence_bytes": 1181462561,
+  "recovery_source_quota_bytes": 2147483648,
+  "quota_exception_reason": "本次原始证据超原归档函数512MiB，当前持久盘足够；仅此已终止实例有界归档，不删原始轨迹。"
+}

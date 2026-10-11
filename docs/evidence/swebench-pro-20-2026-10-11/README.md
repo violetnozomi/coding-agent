@@ -1,6 +1,6 @@
 # SWE-bench Pro 20 题：任务与记录要求
 
-状态：**主模型请求已取消额外输出限制，9 题已结束并归档，其余 11 题正在首次接续**。截至前两阶段关闭，已返回 usage 的保守峰时估算 11.255294 元，剩余约 38.744706 元；当前阶段新增费用另在实时账本记录，估算不是账单。各阶段旧账目和原始记录保留，见末尾续接说明和 [逐题结果](current-outcomes.json)。
+状态：**10 题已有付费尝试，剩余 10 题继续首次运行；单题失败不重跑，也不阻断下一题**。关闭的前三阶段共 299 个实际请求，298 个返回有效 usage；已知用量的保守峰时估算 12.60090496 元，第 08 题超时请求另保留 3.190104 元未知费用预留，合计占用 15.79100896 元，后续可用 34.20899104 元。未知费用不是零，估算不是账单。见 [逐题结果](current-outcomes.json) 和 [费用交接](phase3-accounting-handoff.json)。
 
 ## 本轮目标
 
@@ -135,3 +135,11 @@ Agent 使用无网络、非 root、只读容器根目录、独立 HOME 和工作
 当前已有的大镜像优先使用后回收，再准备缺失镜像，固定名单和题号不变；排序只依据镜像缓存，不依据成绩。只清理本轮构建日志可归属的失败容器/中间镜像，以及已归档的离线 SDK 临时镜像，不清理用户或其他项目资源。原阶段闭账与人工干预见 provider-default-output 中的 phase2-summary、phase2-ledger 与 coordinator-preparation-restart 原件。
 
 第 08 题真实第 9 次主请求没有 max_tokens/max_completion_tokens，Provider 报告输出 36287 token，finish_reason=tool_calls，账本正常结算。见 [原始身份与 usage](provider-default-output/observed-long-output-36287.json)。这不是功能通过证据；该任务仍在运行，长响应后的搜索耗时保留在轨迹。第 07/09/10/12 题的 learning.md 补充冻结补丁对应的复盘要点，不向正在运行的 Agent 提供提示。
+
+## 第 08 题结束后继续剩余题
+
+用户明确要求“第八题跑不过就跑剩下的啊”。不重跑第 08 题，未返回 usage 的第 17 个请求完整保留费用预留。剩余首次尝试为 05、11、13–20；按已有镜像先执行 11，再执行其他题，不按成绩换题。执行命令：`python docs/evidence/swebench-pro-20-2026-10-11/continue-unattempted.py --after-task-timeout --execute`。
+
+第 08 题原始 Agent 超时、最终导出缺失、官方文件下载失败各自保留；原 Session 日志恢复有明确来源，不伪造 run_end。原冻结空补丁在新原始镜像上独立复评，官方结果未通过，没有新增模型调用。完整证据见 [第 08 题](pending-attempts/08/learning.md)。
+
+续跑只在已经结束的单题边界，允许已结算且全额保留费用的 request_timeout 不阻断未尝试题；原题仍不可重发。超预留、冲突或非法 usage、总预算和空间止损保留。此次离线费用交接回归 16 passed；不是 Core 编码能力的测试结论。

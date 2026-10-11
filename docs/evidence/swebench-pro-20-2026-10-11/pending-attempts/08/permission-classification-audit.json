@@ -1,0 +1,17 @@
+{
+  "evidence_level": "original permission callback plus isolated classification replay; not a model task rerun",
+  "production_source_sha256": "56ee984b4ebeb5aebaeccaae899b866a8c29a78f0b8d3f7cbf3ef3ceed30180c",
+  "results": [
+    {
+      "command": "grep -rln \"clockwork.NewFakeClock\" lib/ | head -5",
+      "strict_private_tool_input_violation": "private NZ-Coder path '.nz-coder' is forbidden in SWE-bench strict mode",
+      "executed": false
+    },
+    {
+      "command": "grep -rn \"errGracePeriodExceeded\\|ErrGracePeriodExceeded\\|fanoutbuffer\" lib/ 2>/dev/null | head; echo \"exit:$?\"; grep -n \"jonboulle/clockwork\" go.sum | head",
+      "strict_private_tool_input_violation": "private NZ-Coder path '.nz-coder' is forbidden in SWE-bench strict mode",
+      "executed": false
+    }
+  ],
+  "scope": "仅核对已拒绝调用的原因；没有更改权限、执行建议命令、补丁或模型提示。误拦截假设仍需后续针对解析边界核验。"
+}

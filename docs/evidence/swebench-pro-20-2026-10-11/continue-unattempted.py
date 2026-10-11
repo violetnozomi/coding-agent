@@ -17,7 +17,71 @@ spec.loader.exec_module(pro)
 OUT = pro.OUT
 
 
-def remaining_plan(*, preparation_retry=False):
+def remaining_plan(*, preparation_retry=False, after_task_timeout=False):
+    if after_task_timeout:
+        plan = remaining_plan(preparation_retry=True)
+        if Path("/proc/1998161").exists():
+            raise RuntimeError("pending_coordinator_still_running")
+        stage = OUT / "pending"
+        raw = (stage / "ledger.jsonl").read_bytes()
+        events = [json.loads(line) for line in raw.splitlines()]
+        summary = json.loads((stage / "summary.json").read_text())
+        grant = events[0]["fee_authorization"]
+        if (grant["predecessor_ledger_sha256"] != plan["predecessor_ledger_sha256"]
+                or abs(grant["cost_limit"] - plan["remaining"]["cost_cny"]) > 1e-8):
+            raise RuntimeError("pending_fee_chain_mismatch")
+        admissions = {e["attempt_id"]: e for e in events if e["event"] == "admitted"}
+        settled = [e for e in events if e["event"] == "settled"]
+        if (len(admissions) != sum(e["event"] == "admitted" for e in events)
+                or len(settled) != len(admissions)
+                or {e["attempt_id"] for e in settled} != set(admissions)):
+            raise RuntimeError("pending_requests_not_uniquely_settled")
+        unknown = []
+        occupied = 0.0
+        for event in settled:
+            if event.get("reservation_retained"):
+                if not retained_task_timeout(event):
+                    raise RuntimeError("unrecognized_pending_accounting_failure")
+                amount = admissions[event["attempt_id"]]["estimated_cost_reserved_cny"]
+                if not isinstance(amount, (int, float)) or not 0 < amount <= grant["cost_limit"]:
+                    raise RuntimeError("pending_timeout_reservation_invalid")
+                unknown.append({"attempt_id": event["attempt_id"], "reserved_cost_cny": amount,
+                                "unit": admissions[event["attempt_id"]]["unit"], "usage": None})
+                occupied += amount
+            else:
+                if (event.get("contract_failed") or not event.get("usage_valid")
+                        or event.get("usage") is None or event.get("estimated_cost_reported_cny") is None):
+                    raise RuntimeError("pending_usage_invalid")
+                occupied += event["estimated_cost_reported_cny"]
+        if (len(admissions) != summary["physical_requests"]
+                or abs(occupied - summary["estimated_cost_occupied_cny"]) > 1e-8):
+            raise RuntimeError("pending_summary_ledger_mismatch")
+        outcomes = {e["instance_id"]: e for e in summary["tasks"]}
+        if set(outcomes) != {c["task"]["instance_id"] for c in plan["tasks"]}:
+            raise RuntimeError("pending_task_reports_incomplete")
+        remaining_tasks = []
+        for candidate in plan["tasks"]:
+            identifier = candidate["task"]["instance_id"]
+            if outcomes[identifier]["attempt"]:
+                continue
+            if any(e["unit"] == identifier for e in admissions.values()):
+                raise RuntimeError("pending_zero_attempt_has_provider_request")
+            remaining_tasks.append({**candidate, "previous_preparation_record": str(stage / candidate["number"])})
+        # 未知费用完整占用原预留；只运行从未调用过模型的题，不重试超时请求。
+        plan["used"]["requests"] += len(admissions)
+        plan["used"]["cost_cny"] += occupied
+        for key, usage_key in (("input_total", "prompt_tokens"), ("output_total", "completion_tokens")):
+            plan["used"][key] += sum(e["usage"][usage_key] for e in settled if e.get("usage") is not None)
+        plan["used"]["usage_totals_complete"] = not unknown
+        plan["remaining"] = {"requests": plan["original_limits"]["requests"] - plan["used"]["requests"],
+                             "cost_cny": 50 - plan["used"]["cost_cny"]}
+        plan["tasks"] = remaining_tasks
+        digest = hashlib.sha256(raw).hexdigest()
+        plan["source_fee_ledger_chain_sha256"].append(digest)
+        plan["predecessor_ledger_sha256"] = digest
+        plan["retained_unknown_requests"] = unknown
+        plan["task_timeout_continuation_authorization"] = "第八题跑不过就跑剩下的啊；原人民币50元总预算保持，未知请求保留全额预留，不重跑已尝试题。"
+        return plan
     # 原协调器完全结束才可补做，避免两个独立账本同时占用同一授权。
     if Path("/proc/1368343").exists():
         raise RuntimeError("original_coordinator_still_running")
@@ -126,6 +190,30 @@ def remaining_plan(*, preparation_retry=False):
     return plan
 
 
+def retained_task_timeout(event):
+    return (event.get("status") == "request_timeout" and event.get("usage") is None
+            and event.get("reported_usage") is None and event.get("reservation_retained") is True
+            and not event.get("usage_conflict")
+            and not event.get("input_over_reservation") and not event.get("output_over_reservation"))
+
+
+def settle_failed_unit_boundary(ledger, run):
+    # 单题已经停止、请求已结算后才允许下一题；当前题的歧义与费用预留不释放。
+    with ledger.lock:
+        for experiment, failure in list(ledger.failed_contracts.items()):
+            attempt = ledger.attempts[failure["attempt_id"]]
+            calls = [a for a in ledger.attempts.values() if a["run"] == run]
+            if (attempt["run"] != run or not retained_task_timeout(attempt)
+                    or any(a["status"] == "reserved" for a in calls)):
+                continue
+            ledger._record("task_timeout_closed_continue_remaining", experiment=experiment, run=run,
+                           attempt_id=failure["attempt_id"], usage=None,
+                           retained_cost_cny=attempt["estimated_cost_reserved_cny"],
+                           same_run_retry_allowed=False,
+                           authorization="第八题跑不过就跑剩下的啊；保留未知费用，继续固定未尝试题")
+            del ledger.failed_contracts[experiment]
+
+
 def isolated_image(row, slot):
     image = row["configuration"]["environment"]["docker_image"]
     if pro.command(["docker", "image", "inspect", image], check=False).returncode:
@@ -157,9 +245,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--preparation-retry", action="store_true")
+    parser.add_argument("--after-task-timeout", action="store_true")
     args = parser.parse_args()
-    plan = remaining_plan(preparation_retry=args.preparation_retry)
-    pro.save(OUT / ("preparation-retry-plan.json" if args.preparation_retry else "continuation-plan.json"), plan)
+    retry = args.preparation_retry or args.after_task_timeout
+    plan = remaining_plan(preparation_retry=retry, after_task_timeout=args.after_task_timeout)
+    plan_name = "remaining-after-timeout-plan.json" if args.after_task_timeout else ("preparation-retry-plan.json" if retry else "continuation-plan.json")
+    pro.save(OUT / plan_name, plan)
     print(json.dumps({"remaining": plan["remaining"], "unattempted": [t["number"] for t in plan["tasks"]]}, ensure_ascii=False), flush=True)
     if not args.execute or not plan["tasks"]:
         return
@@ -176,16 +267,16 @@ def main():
     key = dotenv_values(pro.ROOT / ".env").get("API_KEY")
     if not key:
         raise RuntimeError("authorized_host_key_unavailable")
-    if args.preparation_retry:
+    if retry:
         for candidate in plan["tasks"]:
             image = candidate["task"]["configuration"]["environment"]["docker_image"]
             candidate["already_cached_image"] = not pro.command(["docker", "image", "inspect", image], check=False).returncode
         # 先用完已有大镜像并回收，再准备缺失镜像；题号和题面不变。
         plan["tasks"].sort(key=lambda candidate: not candidate["already_cached_image"])
         plan["execution_order_reason"] = "cached_environments_first_to_reclaim_owned_space; not_based_on_task_results"
-        pro.save(OUT / "preparation-retry-plan.json", plan)
+        pro.save(OUT / plan_name, plan)
         print("ENVIRONMENT_ORDER " + json.dumps([c["number"] for c in plan["tasks"]]), flush=True)
-    live = OUT / ("pending" if args.preparation_retry else "next")
+    live = OUT / ("rest" if args.after_task_timeout else ("pending" if retry else "next"))
     live.mkdir()
     grant = json.loads((OUT / "live/authorization-used.json").read_text())
     grant.update(cost_limit=plan["remaining"]["cost_cny"], scope=[t["task"]["instance_id"] for t in plan["tasks"]],
@@ -195,8 +286,12 @@ def main():
         authorized_superseded_stop=plan["authorized_superseded_stop"],
         authorization_text=grant["authorization_text"] + f" 用户看到8001停止原因后回复继续进行，并进一步要求：你别设限制行吗？主请求不传max_tokens，按官方容量预留费用；沿用50元总预算，仅补做{len(plan['tasks'])}个尚未尝试实例。")
     pro.save(live / "authorization-used.json", grant)
-    if args.preparation_retry:
+    if retry:
         grant["source_fee_ledger_chain_sha256"] = plan["source_fee_ledger_chain_sha256"]
+        if args.after_task_timeout:
+            grant["retained_unknown_requests"] = plan["retained_unknown_requests"]
+            grant["task_timeout_continuation_authorization"] = plan["task_timeout_continuation_authorization"]
+            grant["authorization_text"] += " " + plan["task_timeout_continuation_authorization"]
         pro.save(live / "authorization-used.json", grant)
     limits = RelayLimits(requests=plan["remaining"]["requests"], input_per_request=1000000,
         input_total=__import__("math").ceil(grant["cost_limit"] / grant["prices_cny_per_million"]["cached_input"] * 1000000),
@@ -222,7 +317,7 @@ def main():
             slot.mkdir()
             report = {"instance_id": task["instance_id"], "attempt": 0, "agent_status": None, "resolved": None,
                 "original_preparation_record": str(OUT / "live" / slot.name), "preparation_retry_not_agent_retry": True}
-            if args.preparation_retry:
+            if retry:
                 report["previous_preparation_record"] = candidate["previous_preparation_record"]
             pro.save(slot / "identity.json", report)
             print("START " + slot.name + " " + task["instance_id"], flush=True)
@@ -252,6 +347,8 @@ def main():
             except Exception as exc:
                 report.update(status="blocked" if case is None else "attempt_or_delivery_error", error=repr(exc))
             finally:
+                if args.after_task_timeout:
+                    settle_failed_unit_boundary(ledger, slot.name)
                 report["physical_requests"] = sum(a["run"] == slot.name for a in ledger.attempts.values())
                 if tag:
                     pro.command(["docker", "image", "rm", tag], log=slot / "image-cleanup.txt", check=False)

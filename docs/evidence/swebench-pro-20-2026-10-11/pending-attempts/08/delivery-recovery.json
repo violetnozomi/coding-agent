@@ -1,0 +1,28 @@
+{
+  "phase": "pending",
+  "original_report_unchanged": true,
+  "ledger_sha256": "bd43961ac3b332c04ed939983dabe38e2050da8d372d0c3838e204af2e63a615",
+  "known_current_phase_estimate_cny": 1.34561096,
+  "unknown_usage_attempt_id": "30f3acc34afa44879ac2549b445131b3",
+  "retained_unknown_reservation_cny": 3.190104,
+  "known_all_phases_estimate_cny": 12.60090496,
+  "all_phases_occupied_estimate_cny": 15.79100896,
+  "initial_grade_was_not_run": true,
+  "initial_grade_failure": "official_verifier_download_SSL_EOF",
+  "paid_model_requests_during_recovery": 0,
+  "native_final_export_absent": true,
+  "frozen_patch_bytes": 0,
+  "raw_journal_source": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/pending/08/case/home/.local/state/nz-coder/workspaces/840ffd51e892d9a17e1ff65b425492856a765e51d3ff7cd375ea00d7ff5f40be/sessions/_artifacts/pro20-08/runtime/runs/pro20-08__20261011_074018_d7cf9b7e.jsonl",
+  "raw_journal_sha256": "9a43b4e38e52272e565ac63adacc196ae87e3310ab58e7beb5b1df2be795aa45",
+  "raw_journal_rows": 328,
+  "run_end_present": false,
+  "archive_complete": true,
+  "independent_evaluation": {
+    "status": "graded",
+    "returncode": 1,
+    "reward": "0",
+    "resolved": false,
+    "fresh_original_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:61f8b6b16c108b93eede0e2b85d21dcca6386640a97492115b9ef0c8bbe3b5e1",
+    "unchanged_official_verifier": true
+  }
+}
