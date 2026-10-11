@@ -1,6 +1,6 @@
 # SWE-bench Pro 20 题：任务与记录要求
 
-状态：**计量止损，尚未完成 20 题**。固定名单中 4 题实际尝试、2 题环境准备受阻、14 题未运行。真实请求 103 次，usage 峰时估算人民币 3.52470736 元；不是账单。详见本页末尾最终检查点和 [逐题结果](current-outcomes.json)。
+状态：**已按用户要求取消额外主请求输出限制，继续固定名单中尚未尝试的 16 题**。此前 4 题不重跑。原计量停止与首阶段费用记录保留；当前阶段的逐题轨迹另存 continuation-attempts，不覆盖旧记录。见本页末尾续跑口径和 [逐题结果](current-outcomes.json)。
 
 ## 本轮目标
 
@@ -111,3 +111,14 @@ Agent 使用无网络、非 root、只读容器根目录、独立 HOME 和工作
 同时发现 Agent 启动用的 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` 仍会影响项目子进程。本轮仅在 Agent 导入后移除这一覆盖和原已移除的 PYTHONPATH；第 06 题与成功隔离 smoke 留存 harness_revision=3 事实。第 03 题的 revision=2 不追认使用新设置；第 01/02 题 revision=1 不追认修正。对照不是无环境混杂的固定工具链实验，不据此归因整体 Core 能力变化。
 
 本轮停止于已保存原始轨迹、冻结补丁及有效/未知项。继续 16 道尚未尝试题之前，须解决并确认超预留停止后的处理口径；已尝试四题不自动重跑。
+
+
+## 用户授权续跑与主请求默认输出
+
+用户在 8000/8001 停止后明确回复“继续进行”，随后要求“你别设限制行吗？”。当前阶段主请求省略 `max_tokens`，由 Provider 采用其默认值；这不是无限输出。官方 [请求参数](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/) 列出的最大输出容量 393216，仅用于宿主费用预留，不写入模型请求。实际 thinking/effort 仍未设置，保留非流式。Core 内部输出预留 65536、上下文容量 1000000；这与原阶段显式 8000 的条件不同，不按同配置对照解释成绩。
+
+总授权仍为人民币 50 元。原阶段实际 usage 的保守峰时估算 3.52470736 元不清零，新账本仅承接剩余 46.47529264 元，且核验旧账本哈希、唯一结算与具体 8001 事件。未尝试的固定题号为 04、05、07—20；已尝试的 01、02、03、06 不重跑。不追加收费授权，不自动重复失败 Agent。费用未知、缺失 usage、超官方容量或预算不足仍停止后续调用。
+
+[回归结果](provider-default-output/test-results.txt)：85 passed、3 skipped；跳过项是未选择完整资源的旧审查测试和两个计数资源测试，没有自动下载或调用收费模型。真实 SDK 的受控检查在 Ansible 原始项目 Python 3.8 环境读取与执行命令，3 个实际主请求均没有 max_tokens，0 个收费请求；[入口检查](provider-default-output/runtime-smoke-verification.json) 和 [账目续接检查](provider-default-output/continuation-verification.json) 留存。初次归档重用了旧 smoke 名称而冲突；未重跑工具，改为独立归档名保存同次执行证据。
+
+运行命令 `python docs/evidence/swebench-pro-20-2026-10-11/continue-unattempted.py --execute`。新原件位于私有 next 目录，公开记录逐题放在 continuation-attempts。原先的 [首阶段结果](initial-outcomes.json)、原账本和原停止证据保持不变；最新汇总只替换已经有新报告的未尝试题目。每题终止、功能验收、usage、辅助拒绝与环境阻断分别记录。仍保留原任务轮次、安全、隔离和记录边界；本次只移除人为的主请求输出上限。
