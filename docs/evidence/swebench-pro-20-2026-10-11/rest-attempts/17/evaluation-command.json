@@ -1,0 +1,23 @@
+[
+  "docker",
+  "run",
+  "--name",
+  "nz-pro20-grade-17",
+  "--init",
+  "--pull=never",
+  "--memory=4g",
+  "--cpus=2",
+  "--env",
+  "HOME=/tmp/grade-home",
+  "--mount",
+  "type=bind,source=/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/evaluator-only/instance_NodeBB__NodeBB-f9ce92df988db7c1ae55d9ef96d247d27478bc70-vf2cf3cbd463b7ad942381f1c6d077626485a1e9e/tests,target=/tests,readonly",
+  "--mount",
+  "type=bind,source=/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/rest/17/model.patch,target=/tmp/model.patch,readonly",
+  "--mount",
+  "type=bind,source=/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/rest/17/evaluation,target=/logs/verifier",
+  "--entrypoint",
+  "/bin/bash",
+  "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:cc8c9217344bf50df0a4276abad046538bb20e5c2f2815a1b2e201871c5cf364",
+  "-c",
+  "mkdir -p /tmp/grade-home; cd /app 2>/dev/null || cd /testbed; if [ -s /tmp/model.patch ]; then git apply --check /tmp/model.patch && git apply /tmp/model.patch || exit 97; fi; bash /tests/test.sh; result=$?; chmod -R a+rX /logs/verifier; exit $result"
+]

@@ -1,0 +1,9 @@
+{
+  "image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_NodeBB__NodeBB-f9ce92df988db7c1ae55d9ef96d247d27478bc70-vf2cf3cbd463b7ad942381f1c6d077626485a1e9e",
+  "digest": "sha256:cc8c9217344bf50df0a4276abad046538bb20e5c2f2815a1b2e201871c5cf364",
+  "index_digest": "sha256:cc8c9217344bf50df0a4276abad046538bb20e5c2f2815a1b2e201871c5cf364",
+  "compressed_bytes": 979050077,
+  "estimated_required_bytes": 4500417093,
+  "free_bytes": 27085230080,
+  "estimate_is_not_exact": true
+}

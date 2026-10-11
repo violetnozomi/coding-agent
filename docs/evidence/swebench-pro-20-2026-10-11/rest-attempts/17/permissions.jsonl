@@ -1,0 +1,16 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -8 && echo \"---\" && git status --short && echo \"---BRANCH---\" && git branch -a 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat config.json 2>/dev/null | head -40 && echo \"---PUBLIC---\" && ls -la public/uploads 2>/dev/null && echo \"---BUILD?---\" && ls -la build 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la public/uploads 2>/dev/null; echo \"---\"; ls -la public/uploads/system 2>/dev/null | head; echo \"---FILES---\"; ls public/uploads/files 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls test/ | head -60 && echo \"---MOCKS---\" && ls test/mocks 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && npx eslint src/controllers/admin/uploads.js test/uploads.js 2>&1 | tail -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && node --check src/controllers/admin/uploads.js && node --check test/uploads.js && echo \"SYNTAX OK\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "node --check src/controllers/admin/uploads.js; echo exit=$?"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git --no-pager diff --stat 2>&1 | tail -10"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && node -e \"const c=require('./config.json'); console.log(JSON.stringify(c.database||c, null, 1).slice(0,500))\" 2>&1 | head -20; echo \"---PKG---\"; node -e \"console.log(JSON.stringify(require('./package.json').scripts,null,1))\" 2>&1 | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la config.json && head -30 config.json"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && (redis-cli -h 127.0.0.1 ping 2>&1 | head -2); ls build/public 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && timeout 110 npx mocha test/uploads.js --reporter dot 2>&1 | tail -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && timeout 110 node node_modules/.bin/mocha test/uploads.js --reporter dot 2>&1 | tail -45", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && node node_modules/.bin/mocha test/uploads.js --reporter dot", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hello"}, "allowed": true}
+{"tool": "bash", "input": {"command": "node --check test/uploads.js; echo exit=$?"}, "allowed": true}

@@ -1,0 +1,876 @@
+Running selected tests: test/uploads.js
+PONG
+info: configJSON
+info: {
+    "url": "http://127.0.0.1:4567/forum",
+    "secret": "abcdef",
+    "database": "redis",
+    "port": "4567",
+    "redis": {
+        "host": "127.0.0.1",
+        "port": 6379,
+        "password": "",
+        "database": 0
+    },
+    "test_database": {
+        "host": "127.0.0.1",
+        "database": 1,
+        "port": 6379
+    }
+}
+info: database config redis {"database":1,"host":"127.0.0.1","port":6379}
+info: environment development
+info: test_database flushed
+info: Populating database with default configs, if not already set...
+
+info: Giving default global privileges...
+
+info: Enabling default plugins
+
+info: [install/enableDefaultPlugins] activating default plugins {"0":"nodebb-plugin-dbsearch","1":"nodebb-widget-essentials","2":"nodebb-plugin-composer-default"}
+info: [themes] Using theme nodebb-theme-persona
+info: [plugins] Plugins OK
+info: [api] Adding 0 route(s) to `api/v3/plugins`
+info: [router] Routes added
+info: 🎉 NodeBB Ready
+info: 🤝 Enabling 'trust proxy'
+info: 📡 NodeBB is now listening on: 0.0.0.0:4567
+info: 🔗 Canonical URL: http://127.0.0.1:4567/forum
+error: POST /forum/api/post/upload
+Error: [[error:upload-ratelimit-reached]]
+    at /app/src/middleware/uploads.js:28:15
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async /app/src/middleware/helpers.js:15:5
+[api] Exception caught, error with stack trace follows:
+Error: [[error:invalid-image-dimensions]]
+    at image.checkDimensions (/app/src/image.js:128:9)
+    at async uploadAsImage (/app/src/controllers/uploads.js:66:2)
+    at async /app/src/controllers/uploads.js:55:11
+    at async uploadsController.upload (/app/src/controllers/uploads.js:38:16)
+    at async uploadsController.uploadPost (/app/src/controllers/uploads.js:52:2)
+    at async /app/src/routes/helpers.js:80:5error: Error: pngload_buffer: end of stream
+[api] Exception caught, error with stack trace follows:
+Error: Input file contains unsupported image formaterror: POST /forum/api/admin/category/uploadpicture
+Error: [[error:invalid-image-type, image/png&#44; image/jpeg&#44; image/pjpeg&#44; image/jpg&#44; image/gif&#44; image/svg+xml]]
+    at validateUpload (/app/src/controllers/admin/uploads.js:234:9)
+    at uploadsController.uploadCategoryPicture (/app/src/controllers/admin/uploads.js:124:8)
+    at /app/src/routes/helpers.js:80:11
+    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+    at Immediate.next (/app/node_modules/express/lib/router/route.js:149:13)
+    at process.processImmediate (node:internal/timers:476:21)
+    at process.callbackTrampoline (node:internal/async_hooks:128:17)
+error: POST /forum/api/admin/category/uploadpicture
+Error: [[error:invalid-json]]
+    at uploadsController.uploadCategoryPicture (/app/src/controllers/admin/uploads.js:121:15)
+    at /app/src/routes/helpers.js:80:11
+    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+    at Immediate.next (/app/node_modules/express/lib/router/route.js:149:13)
+    at process.processImmediate (node:internal/timers:476:21)
+    at process.callbackTrampoline (node:internal/async_hooks:128:17)
+error: POST /forum/api/admin/upload/file
+Error: [[error:invalid-path]]
+    at uploadsController.uploadFile (/app/src/controllers/admin/uploads.js:203:10)
+    at /app/src/routes/helpers.js:80:11
+    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+    at Immediate.next (/app/node_modules/express/lib/router/route.js:149:13)
+    at process.processImmediate (node:internal/timers:476:21)
+    at process.callbackTrampoline (node:internal/async_hooks:128:17)
+error: POST /forum/api/admin/upload/file
+Error: [[error:invalid-path]]
+    at uploadsController.uploadFile (/app/src/controllers/admin/uploads.js:203:10)
+    at async /app/src/routes/helpers.js:80:5
+[api] Exception caught, error with stack trace follows:
+Error: [[error:folder-exists]]
+    at /app/src/middleware/assert.js:119:56
+    at async /app/src/middleware/helpers.js:15:5[api] Exception caught, error with stack trace follows:
+Error: [[error:invalid-path]]
+    at /app/src/middleware/assert.js:100:56
+    at /app/src/middleware/helpers.js:15:11
+    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/app/node_modules/express/lib/router/route.js:149:13)
+    at middleware.checkRequired (/app/src/middleware/index.js:293:10)
+    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/app/node_modules/express/lib/router/route.js:149:13)
+    at /app/src/middleware/admin.js:65:10
+    at async /app/src/middleware/helpers.js:15:5info: test_database flushed
+info: Populating database with default configs, if not already set...
+
+info: Giving default global privileges...
+
+info: Enabling default plugins
+
+info: [install/enableDefaultPlugins] activating default plugins {"0":"nodebb-plugin-dbsearch","1":"nodebb-widget-essentials","2":"nodebb-plugin-composer-default"}
+{
+  "stats": {
+    "suites": 8,
+    "tests": 42,
+    "passes": 42,
+    "pending": 0,
+    "failures": 0,
+    "start": "2026-10-11T10:15:52.082Z",
+    "end": "2026-10-11T10:15:52.798Z",
+    "duration": 716
+  },
+  "tests": [
+    {
+      "title": "should fail if the user exceeds the upload rate limit threshold",
+      "fullTitle": "Upload Controllers regular user uploads rate limits should fail if the user exceeds the upload rate limit threshold",
+      "file": "/app/test/uploads.js",
+      "duration": 55,
+      "currentRetry": 0,
+      "speed": "medium",
+      "err": {}
+    },
+    {
+      "title": "should upload an image to a post",
+      "fullTitle": "Upload Controllers regular user uploads should upload an image to a post",
+      "file": "/app/test/uploads.js",
+      "duration": 16,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload an image to a post and then delete the upload",
+      "fullTitle": "Upload Controllers regular user uploads should upload an image to a post and then delete the upload",
+      "file": "/app/test/uploads.js",
+      "duration": 7,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow deleting if path is not correct",
+      "fullTitle": "Upload Controllers regular user uploads should not allow deleting if path is not correct",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow deleting if path is not correct",
+      "fullTitle": "Upload Controllers regular user uploads should not allow deleting if path is not correct",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should resize and upload an image to a post",
+      "fullTitle": "Upload Controllers regular user uploads should resize and upload an image to a post",
+      "file": "/app/test/uploads.js",
+      "duration": 10,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should resize and upload an image to a post and replace original",
+      "fullTitle": "Upload Controllers regular user uploads should resize and upload an image to a post and replace original",
+      "file": "/app/test/uploads.js",
+      "duration": 7,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload a file to a post",
+      "fullTitle": "Upload Controllers regular user uploads should upload a file to a post",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload image to post if image dimensions are too big",
+      "fullTitle": "Upload Controllers regular user uploads should fail to upload image to post if image dimensions are too big",
+      "file": "/app/test/uploads.js",
+      "duration": 5,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload image to post if image is broken",
+      "fullTitle": "Upload Controllers regular user uploads should fail to upload image to post if image is broken",
+      "file": "/app/test/uploads.js",
+      "duration": 4,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail if file is not an image",
+      "fullTitle": "Upload Controllers regular user uploads should fail if file is not an image",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail if file is not an image",
+      "fullTitle": "Upload Controllers regular user uploads should fail if file is not an image",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail if file is not an image",
+      "fullTitle": "Upload Controllers regular user uploads should fail if file is not an image",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail if file is missing",
+      "fullTitle": "Upload Controllers regular user uploads should fail if file is missing",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow non image uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow non image uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow non image uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow non image uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow svg uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow svg uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow non image uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow non image uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow non image uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow non image uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow svg uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow svg uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should delete users uploads if account is deleted",
+      "fullTitle": "Upload Controllers regular user uploads should delete users uploads if account is deleted",
+      "file": "/app/test/uploads.js",
+      "duration": 16,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload site logo",
+      "fullTitle": "Upload Controllers admin uploads should upload site logo",
+      "file": "/app/test/uploads.js",
+      "duration": 10,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload invalid file type",
+      "fullTitle": "Upload Controllers admin uploads should fail to upload invalid file type",
+      "file": "/app/test/uploads.js",
+      "duration": 5,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload category image with invalid json params",
+      "fullTitle": "Upload Controllers admin uploads should fail to upload category image with invalid json params",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload category image",
+      "fullTitle": "Upload Controllers admin uploads should upload category image",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload default avatar",
+      "fullTitle": "Upload Controllers admin uploads should upload default avatar",
+      "file": "/app/test/uploads.js",
+      "duration": 4,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload og image",
+      "fullTitle": "Upload Controllers admin uploads should upload og image",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload favicon",
+      "fullTitle": "Upload Controllers admin uploads should upload favicon",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload touch icon",
+      "fullTitle": "Upload Controllers admin uploads should upload touch icon",
+      "file": "/app/test/uploads.js",
+      "duration": 35,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload regular file",
+      "fullTitle": "Upload Controllers admin uploads should upload regular file",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload regular file in wrong directory",
+      "fullTitle": "Upload Controllers admin uploads should fail to upload regular file in wrong directory",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload regular file if directory does not exist",
+      "fullTitle": "Upload Controllers admin uploads should fail to upload regular file if directory does not exist",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should create a folder",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should create a folder",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to create a folder if it already exists",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should fail to create a folder if it already exists",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to create a folder as a non-admin",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should fail to create a folder as a non-admin",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to create a folder in wrong directory",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should fail to create a folder in wrong directory",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should use basename of given folderName to create new folder",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should use basename of given folderName to create new folder",
+      "file": "/app/test/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to delete a file as a non-admin",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should fail to delete a file as a non-admin",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should return files with no post associated with them",
+      "fullTitle": "Upload Controllers library methods .getOrphans() should return files with no post associated with them",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not touch orphans if not configured to do so",
+      "fullTitle": "Upload Controllers library methods .cleanOrphans() should not touch orphans if not configured to do so",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not touch orphans if they are newer than the configured expiry",
+      "fullTitle": "Upload Controllers library methods .cleanOrphans() should not touch orphans if they are newer than the configured expiry",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should delete orphans older than the configured number of days",
+      "fullTitle": "Upload Controllers library methods .cleanOrphans() should delete orphans older than the configured number of days",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    }
+  ],
+  "pending": [],
+  "failures": [],
+  "passes": [
+    {
+      "title": "should fail if the user exceeds the upload rate limit threshold",
+      "fullTitle": "Upload Controllers regular user uploads rate limits should fail if the user exceeds the upload rate limit threshold",
+      "file": "/app/test/uploads.js",
+      "duration": 55,
+      "currentRetry": 0,
+      "speed": "medium",
+      "err": {}
+    },
+    {
+      "title": "should upload an image to a post",
+      "fullTitle": "Upload Controllers regular user uploads should upload an image to a post",
+      "file": "/app/test/uploads.js",
+      "duration": 16,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload an image to a post and then delete the upload",
+      "fullTitle": "Upload Controllers regular user uploads should upload an image to a post and then delete the upload",
+      "file": "/app/test/uploads.js",
+      "duration": 7,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow deleting if path is not correct",
+      "fullTitle": "Upload Controllers regular user uploads should not allow deleting if path is not correct",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow deleting if path is not correct",
+      "fullTitle": "Upload Controllers regular user uploads should not allow deleting if path is not correct",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should resize and upload an image to a post",
+      "fullTitle": "Upload Controllers regular user uploads should resize and upload an image to a post",
+      "file": "/app/test/uploads.js",
+      "duration": 10,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should resize and upload an image to a post and replace original",
+      "fullTitle": "Upload Controllers regular user uploads should resize and upload an image to a post and replace original",
+      "file": "/app/test/uploads.js",
+      "duration": 7,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload a file to a post",
+      "fullTitle": "Upload Controllers regular user uploads should upload a file to a post",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload image to post if image dimensions are too big",
+      "fullTitle": "Upload Controllers regular user uploads should fail to upload image to post if image dimensions are too big",
+      "file": "/app/test/uploads.js",
+      "duration": 5,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload image to post if image is broken",
+      "fullTitle": "Upload Controllers regular user uploads should fail to upload image to post if image is broken",
+      "file": "/app/test/uploads.js",
+      "duration": 4,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail if file is not an image",
+      "fullTitle": "Upload Controllers regular user uploads should fail if file is not an image",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail if file is not an image",
+      "fullTitle": "Upload Controllers regular user uploads should fail if file is not an image",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail if file is not an image",
+      "fullTitle": "Upload Controllers regular user uploads should fail if file is not an image",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail if file is missing",
+      "fullTitle": "Upload Controllers regular user uploads should fail if file is missing",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow non image uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow non image uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow non image uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow non image uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow svg uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow svg uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow non image uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow non image uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow non image uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow non image uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not allow svg uploads",
+      "fullTitle": "Upload Controllers regular user uploads should not allow svg uploads",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should delete users uploads if account is deleted",
+      "fullTitle": "Upload Controllers regular user uploads should delete users uploads if account is deleted",
+      "file": "/app/test/uploads.js",
+      "duration": 16,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload site logo",
+      "fullTitle": "Upload Controllers admin uploads should upload site logo",
+      "file": "/app/test/uploads.js",
+      "duration": 10,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload invalid file type",
+      "fullTitle": "Upload Controllers admin uploads should fail to upload invalid file type",
+      "file": "/app/test/uploads.js",
+      "duration": 5,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload category image with invalid json params",
+      "fullTitle": "Upload Controllers admin uploads should fail to upload category image with invalid json params",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload category image",
+      "fullTitle": "Upload Controllers admin uploads should upload category image",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload default avatar",
+      "fullTitle": "Upload Controllers admin uploads should upload default avatar",
+      "file": "/app/test/uploads.js",
+      "duration": 4,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload og image",
+      "fullTitle": "Upload Controllers admin uploads should upload og image",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload favicon",
+      "fullTitle": "Upload Controllers admin uploads should upload favicon",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload touch icon",
+      "fullTitle": "Upload Controllers admin uploads should upload touch icon",
+      "file": "/app/test/uploads.js",
+      "duration": 35,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should upload regular file",
+      "fullTitle": "Upload Controllers admin uploads should upload regular file",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload regular file in wrong directory",
+      "fullTitle": "Upload Controllers admin uploads should fail to upload regular file in wrong directory",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to upload regular file if directory does not exist",
+      "fullTitle": "Upload Controllers admin uploads should fail to upload regular file if directory does not exist",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should create a folder",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should create a folder",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to create a folder if it already exists",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should fail to create a folder if it already exists",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to create a folder as a non-admin",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should fail to create a folder as a non-admin",
+      "file": "/app/test/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to create a folder in wrong directory",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should fail to create a folder in wrong directory",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should use basename of given folderName to create new folder",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should use basename of given folderName to create new folder",
+      "file": "/app/test/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should fail to delete a file as a non-admin",
+      "fullTitle": "Upload Controllers admin uploads ACP uploads screen should fail to delete a file as a non-admin",
+      "file": "/app/test/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should return files with no post associated with them",
+      "fullTitle": "Upload Controllers library methods .getOrphans() should return files with no post associated with them",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not touch orphans if not configured to do so",
+      "fullTitle": "Upload Controllers library methods .cleanOrphans() should not touch orphans if not configured to do so",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not touch orphans if they are newer than the configured expiry",
+      "fullTitle": "Upload Controllers library methods .cleanOrphans() should not touch orphans if they are newer than the configured expiry",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should delete orphans older than the configured number of days",
+      "fullTitle": "Upload Controllers library methods .cleanOrphans() should delete orphans older than the configured number of days",
+      "file": "/app/test/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    }
+  ]
+}

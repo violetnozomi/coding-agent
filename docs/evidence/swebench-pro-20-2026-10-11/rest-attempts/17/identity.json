@@ -1,0 +1,9 @@
+{
+  "instance_id": "instance_NodeBB__NodeBB-f9ce92df988db7c1ae55d9ef96d247d27478bc70-vf2cf3cbd463b7ad942381f1c6d077626485a1e9e",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/17",
+  "preparation_retry_not_agent_retry": true,
+  "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/pending/17"
+}

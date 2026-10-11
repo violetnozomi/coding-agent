@@ -1,0 +1,39 @@
+diff --git a/src/controllers/admin/uploads.js b/src/controllers/admin/uploads.js
+index fc6ee9c1f1..51ea5c86a6 100644
+--- a/src/controllers/admin/uploads.js
++++ b/src/controllers/admin/uploads.js
+@@ -198,6 +198,11 @@ uploadsController.uploadFile = async function (req, res, next) {
+ 	}
+ 
+ 	try {
++		const folderPath = path.join(nconf.get('upload_path'), params.folder || '');
++		if (!folderPath.startsWith(nconf.get('upload_path')) || !await file.exists(folderPath)) {
++			throw new Error('[[error:invalid-path]]');
++		}
++
+ 		const data = await file.saveFileToLocal(uploadedFile.name, params.folder, uploadedFile.path);
+ 		res.json([{ url: data.url }]);
+ 	} catch (err) {
+diff --git a/test/uploads.js b/test/uploads.js
+index a8e48afac5..09b84f7ba2 100644
+--- a/test/uploads.js
++++ b/test/uploads.js
+@@ -400,6 +400,18 @@ describe('Upload Controllers', () => {
+ 			assert.strictEqual(body.error, '[[error:invalid-path]]');
+ 		});
+ 
++		it('should fail to upload regular file in non-existent directory', async () => {
++			const { response, body } = await helpers.uploadFile(`${nconf.get('url')}/api/admin/upload/file`, path.join(__dirname, '../test/files/test.png'), {
++				params: JSON.stringify({
++					folder: 'does-not-exist',
++				}),
++			}, jar, csrf_token);
++
++			assert.equal(response.statusCode, 500);
++			assert.strictEqual(body.error, '[[error:invalid-path]]');
++			assert(!file.existsSync(path.join(nconf.get('upload_path'), 'does-not-exist', 'test.png')));
++		});
++
+ 		describe('ACP uploads screen', () => {
+ 			it('should create a folder', async () => {
+ 				const { response } = await helpers.createFolder('', 'myfolder', jar, csrf_token);
