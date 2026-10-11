@@ -1,0 +1,12 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n 350,600p qutebrowser/config/configtypes.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n 140,240p qutebrowser/config/configtypes.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && wc -l tests/unit/config/test_configtypes.py && grep -n \"^class Test\" tests/unit/config/test_configtypes.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"_get_setting_types_quickref\" -A 40 scripts/dev/src2asciidoc.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n 1,60p doc/changelog.asciidoc"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls qutebrowser/mainwindow/statusbar/ && grep -rn \"StatusbarWidget\\|statusbar.widgets\" tests/ | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile qutebrowser/config/configtypes.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile qutebrowser/config/configtypes.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"get_setting_types_quickref\" -A 30 scripts/dev/src2asciidoc.py | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile qutebrowser/config/configtypes.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"\nfrom qutebrowser.config import configtypes, configexc, configdata\nvt = configtypes.ValidValues({'url':'u'},{'scroll':'s'},{'progress':'p'})\nt = configtypes.String(valid_values=vt)\nsw = configtypes.StatusbarWidget(valid_values=vt)\nfor v in ['url','scroll','text:hello','text:foo bar']:\n    print(repr(v), sw.to_py(v))\nfor v in ['text','foo:bar','bogus','text:']:\n    try:\n        print(repr(v), sw.to_py(v))\n    except configexc.ValidationError as e:\n        print(repr(v), 'ERR', e)\nprint(sw.complete())\nconfigdata.init()\nopt = configdata.DATA['statusbar.widgets']\nprint(type(opt.typ.valtype).__name__, opt.typ.valtype.get_valid_values())\nprint(opt.typ.to_py(opt.default))\nprint(opt.typ.to_py(['text:hi','url']))\n\" 2>&1 | tail -20"}, "allowed": false}

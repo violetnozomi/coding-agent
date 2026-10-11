@@ -1,0 +1,178 @@
+diff --git a/qutebrowser/config/configdata.yml b/qutebrowser/config/configdata.yml
+index 1c0f03d37..8bb1ad99d 100644
+--- a/qutebrowser/config/configdata.yml
++++ b/qutebrowser/config/configdata.yml
+@@ -1917,7 +1917,7 @@ statusbar.widgets:
+   type:
+     name: List
+     valtype:
+-      name: String
++      name: StatusbarWidget
+       valid_values:
+         - url: "Current page URL."
+         - scroll: "Percentage of the current page position like `10%`."
+diff --git a/qutebrowser/config/configtypes.py b/qutebrowser/config/configtypes.py
+index 49a1f0356..faad948b7 100644
+--- a/qutebrowser/config/configtypes.py
++++ b/qutebrowser/config/configtypes.py
+@@ -1996,3 +1996,54 @@ class UrlPattern(BaseType):
+             return urlmatch.UrlPattern(value)
+         except urlmatch.ParseError as e:
+             raise configexc.ValidationError(value, str(e))
++
++
++class StatusbarWidget(BaseType):
++
++    """A widget in the statusbar.
++
++    This is either one of the predefined widgets (as given via valid_values),
++    or a custom text widget using the ``text:$CONTENT`` syntax.
++
++    Attributes:
++        valid_values: The valid values for the predefined widgets.
++    """
++
++    _PREFIX = 'text:'
++
++    def __init__(
++            self, *,
++            none_ok: bool = False,
++            completions: _Completions = None,
++            valid_values: ValidValues = None,
++    ) -> None:
++        super().__init__(none_ok=none_ok, completions=completions)
++        self.valid_values = valid_values
++
++    def _validate_valid_values(self, value: str) -> None:
++        """Validate a statusbar widget value.
++
++        Values starting with ``text:`` are custom text widgets, everything
++        else needs to be one of the predefined widgets in valid_values.
++        """
++        if value.startswith(self._PREFIX):
++            content = value[len(self._PREFIX):]
++            if not content:
++                raise configexc.ValidationError(
++                    value, "must have text after {!r}!".format(self._PREFIX))
++            return
++        super()._validate_valid_values(value)
++
++    def to_py(self, value: _StrUnset) -> _StrUnsetNone:
++        self._basic_py_validation(value, str)
++        if isinstance(value, usertypes.Unset):
++            return value
++        elif not value:
++            return None
++
++        self._validate_valid_values(value)
++        return value
++
++    def __repr__(self) -> str:
++        return utils.get_repr(self, none_ok=self.none_ok,
++                              valid_values=self.valid_values)
+diff --git a/qutebrowser/mainwindow/statusbar/bar.py b/qutebrowser/mainwindow/statusbar/bar.py
+index 0f6cd9fbc..6f7d6586e 100644
+--- a/qutebrowser/mainwindow/statusbar/bar.py
++++ b/qutebrowser/mainwindow/statusbar/bar.py
+@@ -200,6 +200,7 @@ class StatusBar(QWidget):
+         self.tabindex = tabindex.TabIndex()
+         self.keystring = keystring.KeyString()
+         self.prog = progress.Progress(self)
++        self._text_widgets = []
+         self._draw_widgets()
+ 
+         config.instance.changed.connect(self._on_config_changed)
+@@ -227,6 +228,13 @@ class StatusBar(QWidget):
+             widget.hide()
+             self._hbox.removeWidget(widget)
+ 
++        # Remove custom text widgets, they're recreated below
++        for widget in self._text_widgets:
++            widget.hide()
++            self._hbox.removeWidget(widget)
++            widget.deleteLater()
++        self._text_widgets = []
++
+         tab = self._current_tab()
+ 
+         # Read the list and set widgets accordingly
+@@ -257,6 +265,12 @@ class StatusBar(QWidget):
+                 self.prog.enabled = True
+                 if tab:
+                     self.prog.on_tab_changed(tab)
++            elif segment.startswith('text:'):
++                widget = textbase.TextBase(elidemode=Qt.ElideNone)
++                widget.setText(segment[len('text:'):])
++                self._text_widgets.append(widget)
++                self._hbox.addWidget(widget)
++                widget.show()
+ 
+     @pyqtSlot()
+     def maybe_hide(self):
+diff --git a/tests/unit/config/test_configtypes.py b/tests/unit/config/test_configtypes.py
+index 28c52a1e0..8e20daceb 100644
+--- a/tests/unit/config/test_configtypes.py
++++ b/tests/unit/config/test_configtypes.py
+@@ -533,6 +533,62 @@ class TestString:
+         assert klass(valid_values=valid_values).complete() == expected
+ 
+ 
++class TestStatusbarWidget:
++
++    @pytest.fixture
++    def klass(self):
++        return configtypes.StatusbarWidget
++
++    @pytest.fixture
++    def typ(self, klass):
++        return klass(valid_values=configtypes.ValidValues(
++            'url', 'scroll', 'progress'))
++
++    @pytest.mark.parametrize('value', [
++        # Predefined widgets
++        'url',
++        'scroll',
++        'progress',
++        # Custom text widgets
++        'text:hello',
++        'text:hello world',
++        'text:url',
++    ])
++    def test_to_py_valid(self, typ, value):
++        assert typ.to_py(value) == value
++
++    @pytest.mark.parametrize('value', [
++        # Malformed prefix / missing content
++        'text',
++        'text:',
++        'text foo',
++        # Unknown prefix
++        'foo:bar',
++        # Unknown widget
++        'unknown',
++    ])
++    def test_to_py_invalid(self, typ, value):
++        with pytest.raises(configexc.ValidationError):
++            typ.to_py(value)
++
++    def test_from_str_valid(self, typ):
++        assert typ.from_str('text:hello') == 'text:hello'
++        assert typ.from_str('url') == 'url'
++
++    def test_from_str_invalid(self, typ):
++        with pytest.raises(configexc.ValidationError):
++            typ.from_str('text')
++
++    def test_no_valid_values(self, klass):
++        typ = klass()
++        assert typ.to_py('text:hello') == 'text:hello'
++        assert typ.to_py('anything') == 'anything'
++
++    def test_valid_values(self, typ):
++        assert typ.valid_values == configtypes.ValidValues(
++            'url', 'scroll', 'progress')
++
++
+ class ListSubclass(configtypes.List):
+ 
+     """A subclass of List which we use in tests. Similar to FlagList.
