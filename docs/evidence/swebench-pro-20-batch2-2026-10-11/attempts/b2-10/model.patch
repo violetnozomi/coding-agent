@@ -1,0 +1,309 @@
+diff --git a/applications/drive/src/app/store/_links/extendedAttributes.test.ts b/applications/drive/src/app/store/_links/extendedAttributes.test.ts
+index fcf95960f..02c58eeed 100644
+--- a/applications/drive/src/app/store/_links/extendedAttributes.test.ts
++++ b/applications/drive/src/app/store/_links/extendedAttributes.test.ts
+@@ -43,26 +43,37 @@ describe('extended attrbiutes', () => {
+     });
+ 
+     it('creates the struct from the file', () => {
+-        const testCases: [File, { width: number; height: number } | undefined, object][] = [
++        const testCases: [
++            File,
++            { width: number; height: number } | undefined,
++            { sha1: string } | undefined,
++            object
++        ][] = [
+             [
+                 testFile('testfile.txt', 123),
+                 undefined,
++                undefined,
+                 {
+                     Common: {
+                         ModificationTime: '2009-02-13T23:31:30.000Z',
+                         Size: 123,
+                         BlockSizes: [123],
++                        Digests: undefined,
+                     },
+                 },
+             ],
+             [
+                 testFile('testfile.txt', FILE_CHUNK_SIZE * 2 + 123),
+                 { width: 100, height: 200 },
++                { sha1: 'abcdef' },
+                 {
+                     Common: {
+                         ModificationTime: '2009-02-13T23:31:30.000Z',
+                         Size: FILE_CHUNK_SIZE * 2 + 123,
+                         BlockSizes: [FILE_CHUNK_SIZE, FILE_CHUNK_SIZE, 123],
++                        Digests: {
++                            SHA1: 'abcdef',
++                        },
+                     },
+                     Media: {
+                         Width: 100,
+@@ -71,8 +82,8 @@ describe('extended attrbiutes', () => {
+                 },
+             ],
+         ];
+-        testCases.forEach(([input, media, expectedAttributes]) => {
+-            const xattrs = createFileExtendedAttributes(input, media);
++        testCases.forEach(([input, media, digests, expectedAttributes]) => {
++            const xattrs = createFileExtendedAttributes({ file: input, media, digests });
+             expect(xattrs).toMatchObject(expectedAttributes);
+         });
+     });
+diff --git a/applications/drive/src/app/store/_links/extendedAttributes.ts b/applications/drive/src/app/store/_links/extendedAttributes.ts
+index 1c28c566b..b825383d9 100644
+--- a/applications/drive/src/app/store/_links/extendedAttributes.ts
++++ b/applications/drive/src/app/store/_links/extendedAttributes.ts
+@@ -2,14 +2,27 @@ import { CryptoProxy, PrivateKeyReference, PublicKeyReference, VERIFICATION_STAT
+ import { FILE_CHUNK_SIZE } from '@proton/shared/lib/drive/constants';
+ import { decryptSigned } from '@proton/shared/lib/keys/driveKeys';
+ 
+-interface ExtendedAttributes {
++/**
++ * Recursively makes every property of a type optional, leaving primitives and
++ * arrays untouched. This is used to describe inputs which may only be partially
++ * known, such as serialized extended attributes where any field can be missing.
++ */
++export type DeepPartial<T> = T extends object
++    ? T extends Array<infer U>
++        ? Array<DeepPartial<U>>
++        : { [P in keyof T]?: DeepPartial<T[P]> }
++    : T;
++
++export type CanonicalDigestName = 'SHA1';
++
++export type Digests = { [Name in CanonicalDigestName]?: string };
++
++export interface ExtendedAttributes {
+     Common: {
+         ModificationTime?: string;
+         Size?: number;
+         BlockSizes?: number[];
+-        Digests?: {
+-            SHA1?: string;
+-        };
++        Digests?: Digests;
+     };
+     Media?: {
+         Width: number;
+@@ -17,14 +30,12 @@ interface ExtendedAttributes {
+     };
+ }
+ 
+-interface ParsedExtendedAttributes {
++export interface ParsedExtendedAttributes {
+     Common: {
+         ModificationTime?: number;
+         Size?: number;
+         BlockSizes?: number[];
+-        Digests?: {
+-            SHA1?: string;
+-        };
++        Digests?: Digests;
+     };
+     Media?: {
+         Width: number;
+@@ -32,6 +43,47 @@ interface ParsedExtendedAttributes {
+     };
+ }
+ 
++/**
++ * Extended attributes can come from an untrusted or incomplete source, so any
++ * part of the structure may be missing or malformed.
++ */
++export type MaybeExtendedAttributes = DeepPartial<ExtendedAttributes>;
++
++export interface XAttrCreateParams {
++    file: File;
++    digests?: {
++        sha1: string;
++    };
++    media?: {
++        width: number;
++        height: number;
++    };
++}
++
++const CANONICAL_DIGEST_NAMES: CanonicalDigestName[] = ['SHA1'];
++
++function toCanonicalDigestName(name: string): CanonicalDigestName | undefined {
++    const upperCasedName = name.toUpperCase();
++    return CANONICAL_DIGEST_NAMES.find((canonicalName) => canonicalName === upperCasedName);
++}
++
++function normalizeDigests(digests: XAttrCreateParams['digests']): Digests | undefined {
++    if (digests === undefined) {
++        return undefined;
++    }
++    const normalized: Digests = {};
++    let hasDigest = false;
++    for (const [name, value] of Object.entries(digests)) {
++        const canonicalName = toCanonicalDigestName(name);
++        if (canonicalName === undefined || typeof value !== 'string') {
++            continue;
++        }
++        normalized[canonicalName] = value;
++        hasDigest = true;
++    }
++    return hasDigest ? normalized : undefined;
++}
++
+ export async function encryptFolderExtendedAttributes(
+     modificationTime: Date,
+     nodePrivateKey: PrivateKeyReference,
+@@ -53,28 +105,14 @@ export async function encryptFileExtendedAttributes(
+     file: File,
+     nodePrivateKey: PrivateKeyReference,
+     addressPrivateKey: PrivateKeyReference,
+-    media?: {
+-        width: number;
+-        height: number;
+-    },
+-    digests?: {
+-        sha1: string;
+-    }
++    media?: XAttrCreateParams['media'],
++    digests?: XAttrCreateParams['digests']
+ ) {
+-    const xattr = createFileExtendedAttributes(file, media, digests);
++    const xattr = createFileExtendedAttributes({ file, media, digests });
+     return encryptExtendedAttributes(xattr, nodePrivateKey, addressPrivateKey);
+ }
+ 
+-export function createFileExtendedAttributes(
+-    file: File,
+-    media?: {
+-        width: number;
+-        height: number;
+-    },
+-    digests?: {
+-        sha1: string;
+-    }
+-): ExtendedAttributes {
++export function createFileExtendedAttributes({ file, media, digests }: XAttrCreateParams): ExtendedAttributes {
+     const blockSizes = new Array(Math.floor(file.size / FILE_CHUNK_SIZE));
+     blockSizes.fill(FILE_CHUNK_SIZE);
+     blockSizes.push(file.size % FILE_CHUNK_SIZE);
+@@ -84,11 +122,7 @@ export function createFileExtendedAttributes(
+             ModificationTime: dateToIsoString(new Date(file.lastModified)),
+             Size: file.size,
+             BlockSizes: blockSizes,
+-            Digests: digests
+-                ? {
+-                      SHA1: digests.sha1,
+-                  }
+-                : undefined,
++            Digests: normalizeDigests(digests),
+         },
+         Media: media
+             ? {
+@@ -131,9 +165,14 @@ export async function decryptExtendedAttributes(
+ }
+ 
+ export function parseExtendedAttributes(xattrString: string): ParsedExtendedAttributes {
+-    let xattr = {};
++    let xattr: MaybeExtendedAttributes = {};
+     try {
+-        xattr = JSON.parse(xattrString);
++        const parsed = JSON.parse(xattrString);
++        if (parsed !== null && typeof parsed === 'object') {
++            xattr = parsed;
++        } else {
++            console.warn(`XAttr "${xattrString}" is not a JSON object`);
++        }
+     } catch (err) {
+         console.warn(`XAttr "${xattrString}" is not valid JSON`);
+     }
+@@ -148,14 +187,13 @@ export function parseExtendedAttributes(xattrString: string): ParsedExtendedAttr
+     };
+ }
+ 
+-function parseModificationTime(xattr: any): number | undefined {
+-    const modificationTime = xattr?.Common?.ModificationTime;
++function parseModificationTime(xattr: MaybeExtendedAttributes): number | undefined {
++    const modificationTime = xattr.Common?.ModificationTime;
+     if (modificationTime === undefined) {
+         return undefined;
+     }
+     const modificationDate = new Date(modificationTime);
+-    // This is the best way to check if date is "Invalid Date". :shrug:
+-    if (JSON.stringify(modificationDate) === 'null') {
++    if (Number.isNaN(modificationDate.getTime())) {
+         console.warn(`XAttr modification time "${modificationTime}" is not valid`);
+         return undefined;
+     }
+@@ -167,8 +205,8 @@ function parseModificationTime(xattr: any): number | undefined {
+     return modificationTimestamp;
+ }
+ 
+-function parseSize(xattr: any): number | undefined {
+-    const size = xattr?.Common?.Size;
++function parseSize(xattr: MaybeExtendedAttributes): number | undefined {
++    const size = xattr.Common?.Size;
+     if (size === undefined) {
+         return undefined;
+     }
+@@ -179,8 +217,8 @@ function parseSize(xattr: any): number | undefined {
+     return size;
+ }
+ 
+-function parseBlockSizes(xattr: any): number[] | undefined {
+-    const blockSizes = xattr?.Common?.BlockSizes;
++function parseBlockSizes(xattr: MaybeExtendedAttributes): number[] | undefined {
++    const blockSizes = xattr.Common?.BlockSizes;
+     if (blockSizes === undefined) {
+         return undefined;
+     }
+@@ -195,8 +233,8 @@ function parseBlockSizes(xattr: any): number[] | undefined {
+     return blockSizes;
+ }
+ 
+-function parseMedia(xattr: any): { Width: number; Height: number } | undefined {
+-    const media = xattr?.Media;
++function parseMedia(xattr: MaybeExtendedAttributes): { Width: number; Height: number } | undefined {
++    const media = xattr.Media;
+     if (media === undefined || media.Width === undefined || media.Height === undefined) {
+         return undefined;
+     }
+@@ -216,21 +254,29 @@ function parseMedia(xattr: any): { Width: number; Height: number } | undefined {
+     };
+ }
+ 
+-function parseDigests(xattr: any): { SHA1: string } | undefined {
+-    const digests = xattr?.Common?.Digests;
+-    if (digests === undefined || digests.SHA1 === undefined) {
++function parseDigests(xattr: MaybeExtendedAttributes): Digests | undefined {
++    const digests = xattr.Common?.Digests;
++    if (digests === undefined) {
+         return undefined;
+     }
+ 
+-    const sha1 = digests.SHA1;
+-    if (typeof sha1 !== 'string') {
+-        console.warn(`XAttr digest SHA1 "${sha1}" is not valid`);
+-        return undefined;
++    const parsed: Digests = {};
++    let hasDigest = false;
++    for (const [name, value] of Object.entries(digests)) {
++        const canonicalName = toCanonicalDigestName(name);
++        if (canonicalName === undefined) {
++            console.warn(`XAttr digest "${name}" is not known`);
++            continue;
++        }
++        if (typeof value !== 'string') {
++            console.warn(`XAttr digest ${canonicalName} "${value}" is not valid`);
++            continue;
++        }
++        parsed[canonicalName] = value;
++        hasDigest = true;
+     }
+ 
+-    return {
+-        SHA1: sha1,
+-    };
++    return hasDigest ? parsed : undefined;
+ }
+ 
+ function dateToIsoString(date: Date) {

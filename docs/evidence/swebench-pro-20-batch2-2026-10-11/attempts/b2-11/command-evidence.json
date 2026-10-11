@@ -1,0 +1,330 @@
+[
+  {
+    "tool_call_id": "call_00_N1q3Uj3d5BkoPbB5chLF2109",
+    "input": {
+      "command": "ls /app 2>/dev/null; echo \"---\"; ls /workspace 2>/dev/null; echo \"---\"; pwd"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_1qClKjx2YWt8cmffaSm05679",
+    "input": {
+      "command": "pwd; ls -la"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_TF9lTzrz0R1rPxJkA9wX0724",
+    "input": {
+      "command": "ls internal; echo \"---\"; ls internal/cmd; echo \"---\"; ls internal/tracing 2>/dev/null || echo \"no tracing pkg\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "cache\ncleanup\ncmd\ncommon\nconfig\ncontainers\ncue\next\ngateway\ngitfs\ninfo\nmetrics\noci\nrelease\nserver\nstorage\ntelemetry\n---\nauth.go\ngrpc.go\ngrpc_test.go\nhttp.go\nhttp_test.go\nprotoc-gen-go-flipt-sdk\n---\nno tracing pkg"
+  },
+  {
+    "tool_call_id": "call_00_wsX1f012Iup7XadwYskU7689",
+    "input": {
+      "command": "head -5 go.mod; echo \"---\"; grep -n \"opentelemetry\" go.mod"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "module go.flipt.io/flipt\n\ngo 1.21\n\nrequire (\n---\n62:\tgo.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.47.0\n63:\tgo.opentelemetry.io/otel v1.22.0\n64:\tgo.opentelemetry.io/otel/exporters/jaeger v1.17.0\n65:\tgo.opentelemetry.io/otel/exporters/otlp/otlptrace v1.22.0\n66:\tgo.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.22.0\n67:\tgo.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0\n68:\tgo.opentelemetry.io/otel/exporters/prometheus v0.45.0\n69:\tgo.opentelemetry.io/otel/exporters/zipkin v1.22.0\n70:\tgo.opentelemetry.io/otel/metric v1.22.0\n71:\tgo.opentelemetry.io/otel/sdk v1.22.0\n72:\tgo.opentelemetry.io/otel/sdk/metric v1.22.0\n73:\tgo.opentelemetry.io/otel/trace v1.22.0\n232:\tgo.opentelemetry.io/proto/otlp v1.0.0 // indirect"
+  },
+  {
+    "tool_call_id": "call_00_hyOuw5dZQj2egrK0lgxW1683",
+    "input": {
+      "command": "grep -n \"url\\.\\|strconv\\.\\|resource\\.\\|semconv\\.\\|jaeger\\.\\|zipkin\\.\\|otlptrace\" internal/cmd/grpc.go"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "44:\t\"go.opentelemetry.io/otel/exporters/otlp/otlptrace\"\n45:\t\"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc\"\n46:\t\"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp\"\n160:\ttraceResource, err := resource.New(ctx, resource.WithSchemaURL(semconv.SchemaURL), resource.WithAttributes(\n161:\t\tsemconv.ServiceNameKey.String(\"flipt\"),\n162:\t\tsemconv.ServiceVersionKey.String(info.Version),\n164:\t\tresource.WithFromEnv(),\n472:\t\t\ttraceExp, traceExpErr = jaeger.New(jaeger.WithAgentEndpoint(\n473:\t\t\t\tjaeger.WithAgentHost(cfg.Tracing.Jaeger.Host),\n474:\t\t\t\tjaeger.WithAgentPort(strconv.FormatInt(int64(cfg.Tracing.Jaeger.Port), 10)),\n477:\t\t\ttraceExp, traceExpErr = zipkin.New(cfg.Tracing.Zipkin.Endpoint)\n479:\t\t\tu, err := url.Parse(cfg.Tracing.OTLP.Endpoint)\n485:\t\t\tvar client otlptrace.Client\n488:\t\t\t\tclient = otlptracehttp.NewClient(\n489:\t\t\t\t\totlptracehttp.WithEndpoint(u.Host+u.Path),\n490:\t\t\t\t\totlptracehttp.WithHeaders(cfg.Tracing.OTLP.Headers),\n494:\t\t\t\tclient = otlptracegrpc.NewClient(\n495:\t\t\t\t\totlptracegrpc.WithEndpoint(u.Host+u.Path),\n496:\t\t\t\t\totlptracegrpc.WithHeaders(cfg.Tracing.OTLP.Headers),\n498:\t\t\t\t\totlptracegrpc.WithInsecure(),\n502:\t\t\t\tclient = otlptracegrpc.NewClient(\n503:\t\t\t\t\totlptracegrpc.WithEndpoint(cfg.Tracing.OTLP.Endpoint),\n504:\t\t\t\t\totlptracegrpc.WithHeaders(cfg.Tracing.OTLP.Headers),\n506:\t\t\t\t\totlptracegrpc.WithInsecure(),\n510:\t\t\ttraceExp, traceExpErr = otlptrace.New(ctx, client)"
+  },
+  {
+    "tool_call_id": "call_00_u1yz7UrB8v3OVbyLJo5B2134",
+    "input": {
+      "command": "git status --porcelain; echo \"---\"; ls internal/tracing"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "M internal/cmd/grpc.go\n?? .nz-coder/\n?? internal/tracing/\n---\ntracing.go"
+  },
+  {
+    "tool_call_id": "call_00_i91Q3SuUsCAzEtKARAXd3055",
+    "input": {
+      "command": "git diff internal/cmd/grpc.go"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "diff --git a/internal/cmd/grpc.go b/internal/cmd/grpc.go\nindex 1519664d..0e4aa23b 100644\n--- a/internal/cmd/grpc.go\n+++ b/internal/cmd/grpc.go\n@@ -7,8 +7,6 @@ import (\n \t\"errors\"\n \t\"fmt\"\n \t\"net\"\n-\t\"net/url\"\n-\t\"strconv\"\n \t\"sync\"\n \t\"time\"\n \n@@ -38,17 +36,11 @@ import (\n \t\"go.flipt.io/flipt/internal/storage/sql/mysql\"\n \t\"go.flipt.io/flipt/internal/storage/sql/postgres\"\n \t\"go.flipt.io/flipt/internal/storage/sql/sqlite\"\n+\t\"go.flipt.io/flipt/internal/tracing\"\n \t\"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc\"\n \t\"go.opentelemetry.io/otel\"\n-\t\"go.opentelemetry.io/otel/exporters/jaeger\"\n-\t\"go.opentelemetry.io/otel/exporters/otlp/otlptrace\"\n-\t\"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc\"\n-\t\"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp\"\n-\t\"go.opentelemetry.io/otel/exporters/zipkin\"\n \t\"go.opentelemetry.io/otel/propagation\"\n-\t\"go.opentelemetry.io/otel/sdk/resource\"\n \ttracesdk \"go.opentelemetry.io/otel/sdk/trace\"\n-\tsemconv \"go.opentelemetry.io/otel/semconv/v1.4.0\"\n \t\"go.uber.org/zap\"\n \t\"go.uber.org/zap/zapcore\"\n \t\"google.golang.org/grpc\"\n@@ -157,25 +149,15 @@ func NewGRPCServer(\n \n \tlogger.Debug(\"store enabled\", zap.Stringer(\"store\", store))\n \n-\ttraceResource, err := resource.New(ctx, resource.WithSchemaURL(semconv.SchemaURL), resource.WithAttributes(\n-\t\tsemconv.ServiceNameKey.String(\"flipt\"),\n-\t\tsemconv.ServiceVersionKey.String(info.Version),\n-\t),\n-\t\tresource.WithFromEnv(),\n-\t)\n+\t// Initialize tracingProvider regardless of configuration. No extraordinary resources\n+\t// are consumed, or goroutines initialized until a SpanProcessor is registered.\n+\ttracingProvider, err := tracing.NewProvider(ctx, info.Version)\n \tif err != nil {\n \t\treturn nil, err\n \t}\n \n-\t// Initialize tracingProvider regardless of configuration. No extraordinary resources\n-\t// are consumed, or goroutines initialized until a SpanProcessor is registered.\n-\tvar tracingProvider = tracesdk.NewTracerProvider(\n-\t\ttracesdk.WithResource(traceResource),\n-\t\ttracesdk.WithSampler(tracesdk.AlwaysSample()),\n-\t)\n-\n \tif cfg.Tracing.Enabled {\n-\t\texp, traceExpShutdown, err := getTraceExporter(ctx, cfg)\n+\t\texp, traceExpShutdown, err := tracing.GetExporter(ctx, &cfg.Tracing)\n \t\tif err != nil {\n \t\t\treturn nil, fmt.Errorf(\"creating tracing exporter: %w\", err)\n \t\t}\n@@ -458,69 +440,6 @@ func (s *GRPCServer) onShutdown(fn errFunc) {\n \ts.shutdownFuncs = append(s.shutdownFuncs, fn)\n }\n \n-var (\n-\ttraceExpOnce sync.Once\n-\ttraceExp     tracesdk.SpanExporter\n-\ttraceExpFunc errFunc = func(context.Context) error { return nil }\n-\ttraceExpErr  error\n-)\n-\n-func getTraceExporter(ctx context.Context, cfg *config.Config) (tracesdk.SpanExporter, errFunc, error) {\n-\ttraceExpOnce.Do(func() {\n-\t\tswitch cfg.Tracing.Exporter {\n-\t\tcase config.TracingJaeger:\n-\t\t\ttraceExp, traceExpErr = jaeger.New(jaeger.WithAgentEndpoint(\n-\t\t\t\tjaeger.WithAgentHost(cfg.Tracing.Jaeger.Host),\n-\t\t\t\tjaeger.WithAgentPort(strconv.FormatInt(int64(cfg.Tracing.Jaeger.Port), 10)),\n-\t\t\t))\n-\t\tcase config.TracingZipkin:\n-\t\t\ttraceExp, traceExpErr = zipkin.New(cfg.Tracing.Zipkin.Endpoint)\n-\t\tcase config.TracingOTLP:\n-\t\t\tu, err := url.Parse(cfg.Tracing.OTLP.Endpoint)\n-\t\t\tif err != nil {\n-\t\t\t\ttraceExpErr = fmt.Errorf(\"parsing otlp endpoint: %w\", err)\n-\t\t\t\treturn\n-\t\t\t}\n-\n-\t\t\tvar client otlptrace.Client\n-\t\t\tswitch u.Scheme {\n-\t\t\tcase \"http\", \"https\":\n-\t\t\t\tclient = otlptracehttp.NewClient(\n-\t\t\t\t\totlptracehttp.WithEndpoint(u.Host+u.Path),\n-\t\t\t\t\totlptracehttp.WithHeaders(cfg.Tracing.OTLP.Headers),\n-\t\t\t\t)\n-\t\t\tcase \"grpc\":\n-\t\t\t\t// TODO: support additional configuration options\n-\t\t\t\tclient = otlptracegrpc.NewClient(\n-\t\t\t\t\totlptracegrpc.WithEndpoint(u.Host+u.Path),\n-\t\t\t\t\totlptracegrpc.WithHeaders(cfg.Tracing.OTLP.Headers),\n-\t\t\t\t\t// TODO: support TLS\n-\t\t\t\t\totlptracegrpc.WithInsecure(),\n-\t\t\t\t)\n-\t\t\tdefault:\n-\t\t\t\t// because of url parsing ambiguity, we'll assume that the endpoint is a host:port with no scheme\n-\t\t\t\tclient = otlptracegrpc.NewClient(\n-\t\t\t\t\totlptracegrpc.WithEndpoint(cfg.Tracing.OTLP.Endpoi... (truncated)"
+  },
+  {
+    "tool_call_id": "call_00_H3064Qz77kk8XWNdIDcW4348",
+    "input": {
+      "command": "grep -n \"config\\.\\|info\\.\" internal/cmd/grpc_test.go | head -20"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "17:\tcfg := &config.Config{}\n21:\ts, err := NewGRPCServer(ctx, zaptest.NewLogger(t), cfg, info.Flipt{}, false)"
+  },
+  {
+    "tool_call_id": "call_00_lBI6QTtoLGfAn1ZlIzGH9127",
+    "input": {
+      "command": "cd /workspace && go build ./internal/... 2>&1 | head -30",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_YawpAlfbyVlCMDPx4cwL8904",
+    "input": {
+      "command": "go build ./internal/... 2>&1 | head -30",
+      "timeout": 120
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_FiVc06LfUrDOfBIyx7Rp5389",
+    "input": {
+      "command": "ulimit -u 4096 2>/dev/null; export GOMAXPROCS=2 GOFLAGS=-p=1; go build ./internal/tracing/... ./internal/cmd/... 2>&1 | head -40",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ElStffDcMdaBxnEXCNcy8471",
+    "input": {
+      "command": "go vet ./internal/tracing/ 2>&1 | head -40",
+      "timeout": 120
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_lkSnO8ZRwTWfY8QPuxwP5310",
+    "input": {
+      "command": "GOFLAGS=-p=1 GOMAXPROCS=1 go vet ./internal/tracing/ 2>&1 | tail -40",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_NhuLd6GiUe5G0AV0F0BM3204",
+    "input": {
+      "command": "go build ./internal/tracing/ 2>&1 | head -40",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(go completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_9wbLHmcu8TtqfGE1K60n7638",
+    "input": {
+      "command": "go build ./internal/cmd/ 2>&1 | head -40",
+      "timeout": 120
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_syZgpTkOQ0Syzuzulhaw6171",
+    "input": {
+      "command": "go build -p 1 ./internal/cmd/ 2>&1 | head -40",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(go completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_p45orFTeZWcbmSk0jyiR1885",
+    "input": {
+      "command": "go test -p 1 ./internal/tracing/ 2>&1 | tail -40",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_xczhZu05JYyXEpT0ftoY1100",
+    "input": {
+      "command": "go test -p 1 -run 'TestNewResource|TestNewProvider|TestGetExporter' ./internal/tracing/ -v 2>&1 | tail -60",
+      "timeout": 120
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-4",
+    "input": {
+      "command": "go test ./internal/cmd -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_wpT49P6E6t0s4s8tSVyn6908",
+    "input": {
+      "command": "find / -path /proc -prune -o -type d -name \"jaeger@v1.17.0\" -print 2>/dev/null | head",
+      "timeout": 60
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-5",
+    "input": {
+      "command": "go test ./internal/cmd -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/cmd\t0.011s [no tests to run]"
+  },
+  {
+    "tool_call_id": "verification-stage-targeted-5",
+    "input": {
+      "command": "go test -p 1 -run 'TestNewResource|TestNewProvider|TestGetExporter' ./internal/tracing/ -v '2>' '&' 1",
+      "_nz_runtime_verification_stage": "targeted"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-targeted-6",
+    "input": {
+      "command": "go test -p 1 -run 'TestNewResource|TestNewProvider|TestGetExporter' ./internal/tracing/ -v '2>' '&' 1",
+      "_nz_runtime_verification_stage": "targeted"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-targeted-8",
+    "input": {
+      "command": "go test -p 1 -run 'TestNewResource|TestNewProvider|TestGetExporter' ./internal/tracing/ -v '2>' '&' 1",
+      "_nz_runtime_verification_stage": "targeted"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "=== RUN   TestNewResource\n--- PASS: TestNewResource (0.00s)\n=== RUN   TestNewResourceFromEnv\n--- PASS: TestNewResourceFromEnv (0.00s)\n=== RUN   TestNewProvider\n--- PASS: TestNewProvider (0.00s)\n=== RUN   TestGetExporter\n=== RUN   TestGetExporter/Jaeger\n=== RUN   TestGetExporter/Zipkin\n=== RUN   TestGetExporter/OTLP_HTTP\n=== RUN   TestGetExporter/OTLP_HTTPS\n=== RUN   TestGetExporter/OTLP_GRPC\n=== RUN   TestGetExporter/OTLP_default\n=== RUN   TestGetExporter/Unsupported_Exporter\n--- PASS: TestGetExporter (0.00s)\n    --- PASS: TestGetExporter/Jaeger (0.00s)\n    --- PASS: TestGetExporter/Zipkin (0.00s)\n    --- PASS: TestGetExporter/OTLP_HTTP (0.00s)\n    --- PASS: TestGetExporter/OTLP_HTTPS (0.00s)\n    --- PASS: TestGetExporter/OTLP_GRPC (0.00s)\n    --- PASS: TestGetExporter/OTLP_default (0.00s)\n    --- PASS: TestGetExporter/Unsupported_Exporter (0.00s)\nPASS\nok  \tgo.flipt.io/flipt/internal/tracing\t0.007s"
+  },
+  {
+    "tool_call_id": "call_00_bnr22ZTimBicq1lKEObb2747",
+    "input": {
+      "_nz_runtime_verification_stage": "targeted",
+      "command": "go test -p 1 -run 'TestNewGRPCServer' ./internal/cmd/ '2>' '&' 1 | tail -20"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-10",
+    "input": {
+      "command": "go test ./internal/cmd -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/cmd\t0.011s [no tests to run]"
+  },
+  {
+    "tool_call_id": "call_00_ndBJ0I8JiCyp8RIl1CX02441",
+    "input": {
+      "command": "go test -p 1 ./internal/cmd/ -run TestNewGRPCServer 2>&1 | tail",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/cmd\t(cached)"
+  },
+  {
+    "tool_call_id": "call_00_PD1p5cKUTANx4M7zDZMb6897",
+    "input": {
+      "command": "go test -p 1 -count=1 ./internal/cmd/ -run TestNewGRPCServer 2>&1 | tail",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/cmd\t0.056s"
+  }
+]

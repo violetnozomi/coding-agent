@@ -1,0 +1,3 @@
+Running selected tests: TestJSONSchema TestLogEncoding Test_mustBindEnv TestTracingExporter TestServeHTTP TestLoad TestDatabaseProtocol TestScheme TestCacheBackend
+FAIL	go.flipt.io/flipt/internal/config [setup failed]
+FAIL

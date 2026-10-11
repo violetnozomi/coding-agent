@@ -1,0 +1,208 @@
+diff --git a/tmpprobe/main.go b/tmpprobe/main.go
+new file mode 100644
+index 00000000..e90c5175
+--- /dev/null
++++ b/tmpprobe/main.go
+@@ -0,0 +1,31 @@
++package main
++
++import (
++	"fmt"
++	"time"
++
++	"github.com/jellydator/ttlcache/v3"
++)
++
++func main() {
++	c := ttlcache.New[string, string](ttlcache.WithDisableTouchOnHit[string, string]())
++	it := c.Set("a", "1", ttlcache.DefaultTTL)
++	fmt.Println("noTTL(DefaultTTL) expiresAt zero?", it.ExpiresAt().IsZero(), it.ExpiresAt())
++	fmt.Println("TTL:", it.TTL())
++
++	c2 := ttlcache.New[string, string](ttlcache.WithDisableTouchOnHit[string, string](), ttlcache.WithTTL[string, string](10*time.Millisecond))
++	it2 := c2.Set("a", "1", ttlcache.DefaultTTL)
++	fmt.Println("defaultTTL expiresAt zero?", it2.ExpiresAt().IsZero(), it2.ExpiresAt(), it2.TTL())
++
++	it3 := c.Set("b", "2", 10*time.Millisecond)
++	fmt.Println("explicit10ms expiresAt zero?", it3.ExpiresAt().IsZero(), "...")
++
++	// Keys after expiry without DeleteExpired
++	c3 := ttlcache.New[string, string](ttlcache.WithDisableTouchOnHit[string, string]())
++	c3.Set("x", "1", 10*time.Millisecond)
++	time.Sleep(30 * time.Millisecond)
++	fmt.Println("Keys after expiry (no DeleteExpired):", c3.Keys())
++	fmt.Println("Get after expiry:", c3.Get("x"))
++	fmt.Println("Keys after Get:", c3.Keys())
++	fmt.Println("Items len after Get:", len(c3.Items()))
++}
+diff --git a/utils/cache/simple_cache.go b/utils/cache/simple_cache.go
+index b416fd2f..f6dcde2c 100644
+--- a/utils/cache/simple_cache.go
++++ b/utils/cache/simple_cache.go
+@@ -2,6 +2,7 @@ package cache
+ 
+ import (
+ 	"errors"
++	"sync/atomic"
+ 	"time"
+ 
+ 	"github.com/jellydator/ttlcache/v3"
+@@ -13,6 +14,7 @@ type SimpleCache[K comparable, V any] interface {
+ 	Get(key K) (V, error)
+ 	GetWithLoader(key K, loader func(key K) (V, time.Duration, error)) (V, error)
+ 	Keys() []K
++	Values() []V
+ }
+ 
+ type Options struct {
+@@ -20,6 +22,11 @@ type Options struct {
+ 	DefaultTTL time.Duration
+ }
+ 
++// evictionInterval is the minimum amount of time between two consecutive
++// opportunistic evictions of expired items. It throttles how often the
++// (relatively expensive) sweep of the internal cache is performed.
++const evictionInterval = 10 * time.Millisecond
++
+ func NewSimpleCache[K comparable, V any](options ...Options) SimpleCache[K, V] {
+ 	opts := []ttlcache.Option[K, V]{
+ 		ttlcache.WithDisableTouchOnHit[K, V](),
+@@ -42,6 +49,24 @@ func NewSimpleCache[K comparable, V any](options ...Options) SimpleCache[K, V] {
+ 
+ type simpleCache[K comparable, V any] struct {
+ 	data *ttlcache.Cache[K, V]
++	// evictionDeadline holds the earliest time at which the next opportunistic
++	// eviction may run, throttling how often expired items are swept.
++	evictionDeadline atomic.Pointer[time.Time]
++}
++
++// evictExpired removes expired items from the underlying cache. It is
++// opportunistic: it only performs the sweep when the previous eviction
++// deadline has elapsed, so that frequent cache operations do not trigger an
++// eviction each time.
++func (c *simpleCache[K, V]) evictExpired() {
++	now := time.Now()
++	deadline := c.evictionDeadline.Load()
++	if deadline != nil && now.Before(*deadline) {
++		return
++	}
++	c.data.DeleteExpired()
++	next := now.Add(evictionInterval)
++	c.evictionDeadline.Store(&next)
+ }
+ 
+ func (c *simpleCache[K, V]) Add(key K, value V) error {
+@@ -49,6 +74,7 @@ func (c *simpleCache[K, V]) Add(key K, value V) error {
+ }
+ 
+ func (c *simpleCache[K, V]) AddWithTTL(key K, value V, ttl time.Duration) error {
++	c.evictExpired()
+ 	item := c.data.Set(key, value, ttl)
+ 	if item == nil {
+ 		return errors.New("failed to add item")
+@@ -57,6 +83,7 @@ func (c *simpleCache[K, V]) AddWithTTL(key K, value V, ttl time.Duration) error
+ }
+ 
+ func (c *simpleCache[K, V]) Get(key K) (V, error) {
++	c.evictExpired()
+ 	item := c.data.Get(key)
+ 	if item == nil {
+ 		var zero V
+@@ -66,6 +93,7 @@ func (c *simpleCache[K, V]) Get(key K) (V, error) {
+ }
+ 
+ func (c *simpleCache[K, V]) GetWithLoader(key K, loader func(key K) (V, time.Duration, error)) (V, error) {
++	c.evictExpired()
+ 	loaderWrapper := ttlcache.LoaderFunc[K, V](
+ 		func(t *ttlcache.Cache[K, V], key K) *ttlcache.Item[K, V] {
+ 			value, ttl, err := loader(key)
+@@ -83,6 +111,26 @@ func (c *simpleCache[K, V]) GetWithLoader(key K, loader func(key K) (V, time.Dur
+ 	return item.Value(), nil
+ }
+ 
++// Keys returns the keys of all active (non-expired) items in the cache.
+ func (c *simpleCache[K, V]) Keys() []K {
+-	return c.data.Keys()
++	c.evictExpired()
++	items := c.data.Items()
++	keys := make([]K, 0, len(items))
++	for key := range items {
++		keys = append(keys, key)
++	}
++	return keys
++}
++
++// Values returns the values of all active (non-expired) items in the cache.
++// Its behavior mirrors Keys, so identifiers and values always reflect the
++// same set of live entries.
++func (c *simpleCache[K, V]) Values() []V {
++	c.evictExpired()
++	items := c.data.Items()
++	values := make([]V, 0, len(items))
++	for _, item := range items {
++		values = append(values, item.Value())
++	}
++	return values
+ }
+diff --git a/utils/cache/simple_cache_test.go b/utils/cache/simple_cache_test.go
+index 3b25d306..4abc9017 100644
+--- a/utils/cache/simple_cache_test.go
++++ b/utils/cache/simple_cache_test.go
+@@ -61,6 +61,18 @@ var _ = Describe("SimpleCache", func() {
+ 			Expect(value).To(Equal("value"))
+ 		})
+ 
++		It("should expose the loaded value following the expected pattern", func() {
++			loader := func(key string) (string, time.Duration, error) {
++				return fmt.Sprintf("%s=value", key), 1 * time.Second, nil
++			}
++
++			value, err := cache.GetWithLoader("key", loader)
++			Expect(err).NotTo(HaveOccurred())
++			Expect(value).To(Equal("key=value"))
++			Expect(cache.Keys()).To(ConsistOf("key"))
++			Expect(cache.Values()).To(ConsistOf("key=value"))
++		})
++
+ 		It("should return the error returned by the loader function", func() {
+ 			loader := func(key string) (string, time.Duration, error) {
+ 				return "", 0, errors.New("some error")
+@@ -82,6 +94,38 @@ var _ = Describe("SimpleCache", func() {
+ 			keys := cache.Keys()
+ 			Expect(keys).To(ConsistOf("key1", "key2"))
+ 		})
++
++		It("should not return expired keys", func() {
++			err := cache.AddWithTTL("key", "value", 10*time.Millisecond)
++			Expect(err).NotTo(HaveOccurred())
++
++			time.Sleep(50 * time.Millisecond)
++
++			Expect(cache.Keys()).To(BeEmpty())
++		})
++	})
++
++	Describe("Values", func() {
++		It("should return all values", func() {
++			err := cache.Add("key1", "value1")
++			Expect(err).NotTo(HaveOccurred())
++
++			err = cache.Add("key2", "value2")
++			Expect(err).NotTo(HaveOccurred())
++
++			values := cache.Values()
++			Expect(values).To(ConsistOf("value1", "value2"))
++		})
++
++		It("should be consistent with Keys and not return expired values", func() {
++			err := cache.AddWithTTL("key", "value", 10*time.Millisecond)
++			Expect(err).NotTo(HaveOccurred())
++
++			time.Sleep(50 * time.Millisecond)
++
++			Expect(cache.Keys()).To(BeEmpty())
++			Expect(cache.Values()).To(BeEmpty())
++		})
+ 	})
+ 
+ 	Describe("Options", func() {

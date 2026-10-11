@@ -1,0 +1,278 @@
+# (c) 2012-2014, Michael DeHaan <michael.dehaan@gmail.com>
+#
+# This file is part of Ansible
+#
+# Ansible is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Ansible is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+import io
+import os
+import sys
+import traceback
+import typing as t
+
+from jinja2.exceptions import TemplateNotFound
+from multiprocessing.queues import Queue
+
+from ansible import context
+from ansible.errors import AnsibleConnectionFailure, AnsibleError
+from ansible.executor.task_executor import TaskExecutor
+from ansible.module_utils.common.collections import is_sequence
+from ansible.module_utils.common.text.converters import to_text
+from ansible.plugins.loader import init_plugin_loader
+from ansible.utils.display import Display
+from ansible.utils.multiprocessing import context as multiprocessing_context
+
+if t.TYPE_CHECKING:
+    from ansible.inventory.host import Host
+    from ansible.parsing.dataloader import DataLoader
+    from ansible.playbook.play_context import PlayContext
+    from ansible.playbook.task import Task
+    from ansible.vars.manager import VariableManager
+
+__all__ = ['WorkerProcess']
+
+display = Display()
+
+current_worker = None
+
+
+class WorkerQueue(Queue):
+    """Queue that raises AnsibleError items on get()."""
+    def get(self, *args, **kwargs):
+        result = super(WorkerQueue, self).get(*args, **kwargs)
+        if isinstance(result, AnsibleError):
+            raise result
+        return result
+
+
+class WorkerProcess(multiprocessing_context.Process):  # type: ignore[name-defined]
+    """
+    The worker thread class, which uses TaskExecutor to run tasks
+    read from a job queue and pushes results into a results queue
+    for reading later.
+    """
+
+    def __init__(
+        self,
+        *,
+        final_q: Queue,
+        task_vars: dict[str, t.Any],
+        host: Host,
+        task: Task,
+        play_context: PlayContext,
+        loader: DataLoader,
+        variable_manager: VariableManager,
+        shared_loader_obj: t.Any,
+        worker_id: int,
+        cliargs: t.Mapping[str, t.Any],
+    ) -> None:
+
+        super(WorkerProcess, self).__init__()
+        # takes a task queue manager as the sole param:
+        self._final_q = final_q
+        self._task_vars = task_vars
+        self._host = host
+        self._task = task
+        self._play_context = play_context
+        self._loader = loader
+        self._variable_manager = variable_manager
+        self._shared_loader_obj = shared_loader_obj
+        self._cliargs = cliargs
+
+        # NOTE: this works due to fork, if switching to threads this should change to per thread storage of temp files
+        # clear var to ensure we only delete files for this child
+        self._loader._tempfiles = set()
+
+        self.worker_queue = WorkerQueue(ctx=multiprocessing_context)
+        self.worker_id = worker_id
+
+    def _detach(self) -> None:
+        """
+        Isolate the worker from the parent process' terminal.
+
+        A new session (and therefore process group) is started and every
+        inherited standard file descriptor is redirected to the null device so
+        that the worker can no longer perform direct I/O against the parent's
+        terminal. All output is instead expected to flow through the display
+        queue/logging machinery.
+        """
+        # start a new session so the worker can no longer touch the terminal
+        # controlled by the parent process
+        os.setsid()
+
+        # point fd 0, 1, and 2 at the null device, so nothing that writes to the
+        # standard descriptors can leak to the parent's terminal
+        devnull_fd = os.open(os.devnull, os.O_RDWR)
+        os.dup2(devnull_fd, 0)
+        os.dup2(devnull_fd, 1)
+        os.dup2(devnull_fd, 2)
+
+        # controlled, in-memory streams for anything that writes to the legacy
+        # sys.std* objects
+        sys.stdout = io.StringIO()
+        sys.stderr = io.StringIO()
+
+        # reattach stdin to fd 0 and then close it, so fd 0 is not reusable and
+        # any later attempt to read stdin fails fast instead of hanging
+        sys.stdin = os.fdopen(0)
+        sys.stdin.close()
+
+    def _hard_exit(self, e):
+        """
+        There is no safe exception to return to higher level code that does not
+        risk an innocent try/except finding itself executing in the wrong
+        process. All code executing above WorkerProcess.run() on the stack
+        conceptually belongs to another program.
+        """
+
+        try:
+            display.debug(u"WORKER HARD EXIT: %s" % to_text(e))
+        except BaseException:
+            # If the cause of the fault is IOError being generated by stdio,
+            # attempting to log a debug message may trigger another IOError.
+            # Try printing once then give up.
+            pass
+
+        os._exit(1)
+
+    def run(self):
+        """
+        Wrap _run() to ensure no possibility an errant exception can cause
+        control to return to the StrategyBase task loop, or any other code
+        higher in the stack.
+
+        As multiprocessing in Python 2.x provides no protection, it is possible
+        a try/except added in far-away code can cause a crashed child process
+        to suddenly assume the role and prior state of its parent.
+        """
+        try:
+            # Ensure all Display calls are proxied over the controlled queue
+            # rather than being written to the parent's terminal.
+            display.set_queue(self._final_q)
+            # Isolate the worker from the parent's terminal before doing work.
+            self._detach()
+            return self._run()
+        except BaseException as e:
+            self._hard_exit(e)
+
+    def _run(self):
+        """
+        Called when the process is started.  Pushes the result onto the
+        results queue. We also remove the host from the blocked hosts list, to
+        signify that they are ready for their next task.
+        """
+
+        if multiprocessing_context.get_start_method() != 'fork':
+            # Non-fork start methods do not share the parent's memory, so the CLI
+            # context and the collection loader need to be re-established here.
+            context.CLIARGS = self._cliargs
+            collections_path = self._cliargs.get('collections_path') or []
+            if not is_sequence(collections_path):
+                # In some contexts ``collections_path`` is singular
+                collections_path = [collections_path]
+            init_plugin_loader(collections_path)
+
+        # import cProfile, pstats, StringIO
+        # pr = cProfile.Profile()
+        # pr.enable()
+
+        global current_worker
+        current_worker = self
+
+        try:
+            # execute the task and build a TaskResult from the result
+            display.debug("running TaskExecutor() for %s/%s" % (self._host, self._task))
+            executor_result = TaskExecutor(
+                self._host,
+                self._task,
+                self._task_vars,
+                self._play_context,
+                self._loader,
+                self._shared_loader_obj,
+                self._final_q,
+                self._variable_manager,
+            ).run()
+
+            display.debug("done running TaskExecutor() for %s/%s [%s]" % (self._host, self._task, self._task._uuid))
+            self._host.vars = dict()
+            self._host.groups = []
+
+            # put the result on the result queue
+            display.debug("sending task result for task %s" % self._task._uuid)
+            try:
+                self._final_q.send_task_result(
+                    self._host.name,
+                    self._task._uuid,
+                    executor_result,
+                    task_fields=self._task.dump_attrs(),
+                )
+            except Exception as e:
+                display.debug(f'failed to send task result ({e}), sending surrogate result')
+                self._final_q.send_task_result(
+                    self._host.name,
+                    self._task._uuid,
+                    # Overriding the task result, to represent the failure
+                    {
+                        'failed': True,
+                        'msg': f'{e}',
+                        'exception': traceback.format_exc(),
+                    },
+                    # The failure pickling may have been caused by the task attrs, omit for safety
+                    {},
+                )
+            display.debug("done sending task result for task %s" % self._task._uuid)
+
+        except AnsibleConnectionFailure:
+            self._host.vars = dict()
+            self._host.groups = []
+            self._final_q.send_task_result(
+                self._host.name,
+                self._task._uuid,
+                dict(unreachable=True),
+                task_fields=self._task.dump_attrs(),
+            )
+
+        except Exception as e:
+            if not isinstance(e, (IOError, EOFError, KeyboardInterrupt, SystemExit)) or isinstance(e, TemplateNotFound):
+                try:
+                    self._host.vars = dict()
+                    self._host.groups = []
+                    self._final_q.send_task_result(
+                        self._host.name,
+                        self._task._uuid,
+                        dict(failed=True, exception=to_text(traceback.format_exc()), stdout=''),
+                        task_fields=self._task.dump_attrs(),
+                    )
+                except Exception:
+                    display.debug(u"WORKER EXCEPTION: %s" % to_text(e))
+                    display.debug(u"WORKER TRACEBACK: %s" % to_text(traceback.format_exc()))
+                finally:
+                    self._clean_up()
+
+        display.debug("WORKER PROCESS EXITING")
+
+        # pr.disable()
+        # s = StringIO.StringIO()
+        # sortby = 'time'
+        # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+        # ps.print_stats()
+        # with open('worker_%06d.stats' % os.getpid(), 'w') as f:
+        #     f.write(s.getvalue())
+
+    def _clean_up(self):
+        # NOTE: see note in init about forks
+        # ensure we cleanup all temp files for this worker
+        self._loader.cleanup_all_tmp_files()

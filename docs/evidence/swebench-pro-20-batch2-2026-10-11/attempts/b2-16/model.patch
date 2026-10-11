@@ -1,0 +1,86 @@
+diff --git a/openlibrary/catalog/add_book/__init__.py b/openlibrary/catalog/add_book/__init__.py
+index 3cb3bb937..b76805e01 100644
+--- a/openlibrary/catalog/add_book/__init__.py
++++ b/openlibrary/catalog/add_book/__init__.py
+@@ -768,8 +768,9 @@ def normalize_import_record(rec: dict) -> None:
+         - Verifying required fields
+         - Ensuring source_records is a list
+         - Splitting subtitles out of the title field
+-        - Cleaning all ISBN and LCCN fields ('bibids'), and
+-        - Deduplicate authors.
++        - Cleaning all ISBN and LCCN fields ('bibids'),
++        - Deduplicate authors, and
++        - Removing placeholder field values.
+ 
+         NOTE: This function modifies the passed-in rec in place.
+     """
+@@ -801,6 +802,18 @@ def normalize_import_record(rec: dict) -> None:
+     # deduplicate authors
+     rec['authors'] = uniq(rec.get('authors', []), dicthash)
+ 
++    # Remove placeholder values left behind by import sources.
++    # These must be deleted after the authors have been deduplicated so
++    # that the placeholder is not re-added as an empty list.
++    placeholders = {
++        'publishers': ["????"],
++        'authors': [{"name": "????"}],
++        'publish_date': "????",
++    }
++    for field, placeholder in placeholders.items():
++        if rec.get(field) == placeholder:
++            del rec[field]
++
+ 
+ def validate_record(rec: dict) -> None:
+     """
+diff --git a/openlibrary/catalog/add_book/tests/test_add_book.py b/openlibrary/catalog/add_book/tests/test_add_book.py
+index 70545cca6..51f47cdc8 100644
+--- a/openlibrary/catalog/add_book/tests/test_add_book.py
++++ b/openlibrary/catalog/add_book/tests/test_add_book.py
+@@ -1475,3 +1475,46 @@ class TestNormalizeImportRecord:
+         normalize_import_record(rec=rec)
+         result = 'publish_date' in rec
+         assert result == expected
++
++    @pytest.mark.parametrize(
++        'field, value',
++        [
++            ('publishers', ["????"]),
++            ('authors', [{"name": "????"}]),
++            ('publish_date', "????"),
++        ],
++    )
++    def test_placeholder_values_are_deleted(self, field, value):
++        """Exact placeholder values should be removed during normalization."""
++        rec = {
++            'title': 'test book',
++            'source_records': ['ia:blob'],
++            field: value,
++        }
++        normalize_import_record(rec=rec)
++        assert field not in rec
++
++    @pytest.mark.parametrize(
++        'field, value',
++        [
++            ('publishers', ["Real Publisher"]),
++            ('authors', [{"name": "Real Author"}]),
++            ('publish_date', "2000-11-11"),
++            ('publishers', ["????", "Real Publisher"]),
++            ('authors', [{"name": "????"}, {"name": "Real Author"}]),
++            ('publish_date', "????-??"),
++        ],
++    )
++    def test_non_placeholder_values_are_preserved(self, field, value):
++        """Values that are not the exact placeholder should be untouched."""
++        rec = {
++            'title': 'test book',
++            'source_records': ['ia:blob'],
++            field: value,
++        }
++        before = dict(rec)
++        normalize_import_record(rec=rec)
++        assert rec[field] == value
++        # placeholder handling should not disturb the other fields
++        for key, val in before.items():
++            assert rec[key] == val

@@ -1,0 +1,449 @@
+diff --git a/src/components/views/rooms/MessageComposer.tsx b/src/components/views/rooms/MessageComposer.tsx
+index 152c592a02..6fe5923a29 100644
+--- a/src/components/views/rooms/MessageComposer.tsx
++++ b/src/components/views/rooms/MessageComposer.tsx
+@@ -584,6 +584,7 @@ export class MessageComposer extends React.Component<IProps, IState> {
+                                     setUpVoiceBroadcastPreRecording(
+                                         this.props.room,
+                                         MatrixClientPeg.get(),
++                                        SdkContextClass.instance.voiceBroadcastPlaybacksStore,
+                                         VoiceBroadcastRecordingsStore.instance(),
+                                         SdkContextClass.instance.voiceBroadcastPreRecordingStore,
+                                     );
+diff --git a/src/components/views/voip/PipView.tsx b/src/components/views/voip/PipView.tsx
+index 27f7798f11..40a59710d4 100644
+--- a/src/components/views/voip/PipView.tsx
++++ b/src/components/views/voip/PipView.tsx
+@@ -367,14 +367,14 @@ class PipView extends React.Component<IProps, IState> {
+         const pipMode = true;
+         let pipContent: CreatePipChildren | null = null;
+ 
+-        if (this.props.voiceBroadcastPreRecording) {
+-            pipContent = this.createVoiceBroadcastPreRecordingPipContent(this.props.voiceBroadcastPreRecording);
+-        }
+-
+         if (this.props.voiceBroadcastPlayback) {
+             pipContent = this.createVoiceBroadcastPlaybackPipContent(this.props.voiceBroadcastPlayback);
+         }
+ 
++        if (this.props.voiceBroadcastPreRecording) {
++            pipContent = this.createVoiceBroadcastPreRecordingPipContent(this.props.voiceBroadcastPreRecording);
++        }
++
+         if (this.props.voiceBroadcastRecording) {
+             pipContent = this.createVoiceBroadcastRecordingPipContent(this.props.voiceBroadcastRecording);
+         }
+diff --git a/src/voice-broadcast/models/VoiceBroadcastPreRecording.ts b/src/voice-broadcast/models/VoiceBroadcastPreRecording.ts
+index f1e956c600..10995e5d49 100644
+--- a/src/voice-broadcast/models/VoiceBroadcastPreRecording.ts
++++ b/src/voice-broadcast/models/VoiceBroadcastPreRecording.ts
+@@ -18,6 +18,7 @@ import { MatrixClient, Room, RoomMember } from "matrix-js-sdk/src/matrix";
+ import { TypedEventEmitter } from "matrix-js-sdk/src/models/typed-event-emitter";
+ 
+ import { IDestroyable } from "../../utils/IDestroyable";
++import { VoiceBroadcastPlaybacksStore } from "../stores/VoiceBroadcastPlaybacksStore";
+ import { VoiceBroadcastRecordingsStore } from "../stores/VoiceBroadcastRecordingsStore";
+ import { startNewVoiceBroadcastRecording } from "../utils/startNewVoiceBroadcastRecording";
+ 
+@@ -34,6 +35,7 @@ export class VoiceBroadcastPreRecording
+         public room: Room,
+         public sender: RoomMember,
+         private client: MatrixClient,
++        private playbacksStore: VoiceBroadcastPlaybacksStore,
+         private recordingsStore: VoiceBroadcastRecordingsStore,
+     ) {
+         super();
+@@ -43,6 +45,7 @@ export class VoiceBroadcastPreRecording
+         await startNewVoiceBroadcastRecording(
+             this.room,
+             this.client,
++            this.playbacksStore,
+             this.recordingsStore,
+         );
+         this.emit("dismiss", this);
+diff --git a/src/voice-broadcast/utils/setUpVoiceBroadcastPreRecording.ts b/src/voice-broadcast/utils/setUpVoiceBroadcastPreRecording.ts
+index 8bd211f612..8f8db42312 100644
+--- a/src/voice-broadcast/utils/setUpVoiceBroadcastPreRecording.ts
++++ b/src/voice-broadcast/utils/setUpVoiceBroadcastPreRecording.ts
+@@ -18,6 +18,7 @@ import { MatrixClient, Room } from "matrix-js-sdk/src/matrix";
+ 
+ import {
+     checkVoiceBroadcastPreConditions,
++    VoiceBroadcastPlaybacksStore,
+     VoiceBroadcastPreRecording,
+     VoiceBroadcastPreRecordingStore,
+     VoiceBroadcastRecordingsStore,
+@@ -26,6 +27,7 @@ import {
+ export const setUpVoiceBroadcastPreRecording = (
+     room: Room,
+     client: MatrixClient,
++    playbacksStore: VoiceBroadcastPlaybacksStore,
+     recordingsStore: VoiceBroadcastRecordingsStore,
+     preRecordingStore: VoiceBroadcastPreRecordingStore,
+ ): VoiceBroadcastPreRecording | null => {
+@@ -39,7 +41,14 @@ export const setUpVoiceBroadcastPreRecording = (
+     const sender = room.getMember(userId);
+     if (!sender) return null;
+ 
+-    const preRecording = new VoiceBroadcastPreRecording(room, sender, client, recordingsStore);
++    const currentPlayback = playbacksStore.getCurrent();
++
++    if (currentPlayback) {
++        currentPlayback.pause();
++        playbacksStore.clearCurrent();
++    }
++
++    const preRecording = new VoiceBroadcastPreRecording(room, sender, client, playbacksStore, recordingsStore);
+     preRecordingStore.setCurrent(preRecording);
+     return preRecording;
+ };
+diff --git a/src/voice-broadcast/utils/startNewVoiceBroadcastRecording.ts b/src/voice-broadcast/utils/startNewVoiceBroadcastRecording.ts
+index ae4e40c4a3..c1b667e364 100644
+--- a/src/voice-broadcast/utils/startNewVoiceBroadcastRecording.ts
++++ b/src/voice-broadcast/utils/startNewVoiceBroadcastRecording.ts
+@@ -21,6 +21,7 @@ import {
+     VoiceBroadcastInfoEventContent,
+     VoiceBroadcastInfoEventType,
+     VoiceBroadcastInfoState,
++    VoiceBroadcastPlaybacksStore,
+     VoiceBroadcastRecordingsStore,
+     VoiceBroadcastRecording,
+     getChunkLength,
+@@ -86,11 +87,19 @@ const startBroadcast = async (
+ export const startNewVoiceBroadcastRecording = async (
+     room: Room,
+     client: MatrixClient,
++    playbacksStore: VoiceBroadcastPlaybacksStore,
+     recordingsStore: VoiceBroadcastRecordingsStore,
+ ): Promise<VoiceBroadcastRecording | null> => {
+     if (!checkVoiceBroadcastPreConditions(room, client, recordingsStore)) {
+         return null;
+     }
+ 
++    const currentPlayback = playbacksStore.getCurrent();
++
++    if (currentPlayback) {
++        currentPlayback.pause();
++        playbacksStore.clearCurrent();
++    }
++
+     return startBroadcast(room, client, recordingsStore);
+ };
+diff --git a/test/components/views/voip/PipView-test.tsx b/test/components/views/voip/PipView-test.tsx
+index 1dcc617e64..b4649e57b3 100644
+--- a/test/components/views/voip/PipView-test.tsx
++++ b/test/components/views/voip/PipView-test.tsx
+@@ -184,6 +184,7 @@ describe("PipView", () => {
+             room,
+             alice,
+             client,
++            voiceBroadcastPlaybacksStore,
+             voiceBroadcastRecordingsStore,
+         );
+         voiceBroadcastPreRecordingStore.setCurrent(voiceBroadcastPreRecording);
+diff --git a/test/voice-broadcast/components/molecules/VoiceBroadcastPreRecordingPip-test.tsx b/test/voice-broadcast/components/molecules/VoiceBroadcastPreRecordingPip-test.tsx
+index 91658f26ed..da0618d553 100644
+--- a/test/voice-broadcast/components/molecules/VoiceBroadcastPreRecordingPip-test.tsx
++++ b/test/voice-broadcast/components/molecules/VoiceBroadcastPreRecordingPip-test.tsx
+@@ -21,6 +21,7 @@ import { act, render, RenderResult, screen } from "@testing-library/react";
+ import userEvent from "@testing-library/user-event";
+ 
+ import {
++    VoiceBroadcastPlaybacksStore,
+     VoiceBroadcastPreRecording,
+     VoiceBroadcastPreRecordingPip,
+     VoiceBroadcastRecordingsStore,
+@@ -43,6 +44,7 @@ describe("VoiceBroadcastPreRecordingPip", () => {
+     let renderResult: RenderResult;
+     let preRecording: VoiceBroadcastPreRecording;
+     let recordingsStore: VoiceBroadcastRecordingsStore;
++    let playbacksStore: VoiceBroadcastPlaybacksStore;
+     let client: MatrixClient;
+     let room: Room;
+     let sender: RoomMember;
+@@ -52,6 +54,7 @@ describe("VoiceBroadcastPreRecordingPip", () => {
+         room = new Room("!room@example.com", client, client.getUserId() || "");
+         sender = new RoomMember(room.roomId, client.getUserId() || "");
+         recordingsStore = new VoiceBroadcastRecordingsStore();
++        playbacksStore = new VoiceBroadcastPlaybacksStore();
+         mocked(requestMediaPermissions).mockReturnValue(new Promise<MediaStream>((r) => {
+             r({
+                 getTracks: () => [],
+@@ -76,6 +79,7 @@ describe("VoiceBroadcastPreRecordingPip", () => {
+             room,
+             sender,
+             client,
++            playbacksStore,
+             recordingsStore,
+         );
+     });
+diff --git a/test/voice-broadcast/models/VoiceBroadcastPreRecording-test.ts b/test/voice-broadcast/models/VoiceBroadcastPreRecording-test.ts
+index 3a9fc11065..26df0c3103 100644
+--- a/test/voice-broadcast/models/VoiceBroadcastPreRecording-test.ts
++++ b/test/voice-broadcast/models/VoiceBroadcastPreRecording-test.ts
+@@ -18,6 +18,7 @@ import { MatrixClient, Room, RoomMember } from "matrix-js-sdk/src/matrix";
+ 
+ import {
+     startNewVoiceBroadcastRecording,
++    VoiceBroadcastPlaybacksStore,
+     VoiceBroadcastPreRecording,
+     VoiceBroadcastRecordingsStore,
+ } from "../../../src/voice-broadcast";
+@@ -31,6 +32,7 @@ describe("VoiceBroadcastPreRecording", () => {
+     let room: Room;
+     let sender: RoomMember;
+     let recordingsStore: VoiceBroadcastRecordingsStore;
++    let playbacksStore: VoiceBroadcastPlaybacksStore;
+     let preRecording: VoiceBroadcastPreRecording;
+     let onDismiss: (voiceBroadcastPreRecording: VoiceBroadcastPreRecording) => void;
+ 
+@@ -39,11 +41,12 @@ describe("VoiceBroadcastPreRecording", () => {
+         room = new Room(roomId, client, client.getUserId() || "");
+         sender = new RoomMember(roomId, client.getUserId() || "");
+         recordingsStore = new VoiceBroadcastRecordingsStore();
++        playbacksStore = new VoiceBroadcastPlaybacksStore();
+     });
+ 
+     beforeEach(() => {
+         onDismiss = jest.fn();
+-        preRecording = new VoiceBroadcastPreRecording(room, sender, client, recordingsStore);
++        preRecording = new VoiceBroadcastPreRecording(room, sender, client, playbacksStore, recordingsStore);
+         preRecording.on("dismiss", onDismiss);
+     });
+ 
+@@ -56,6 +59,7 @@ describe("VoiceBroadcastPreRecording", () => {
+             expect(startNewVoiceBroadcastRecording).toHaveBeenCalledWith(
+                 room,
+                 client,
++                playbacksStore,
+                 recordingsStore,
+             );
+         });
+diff --git a/test/voice-broadcast/stores/VoiceBroadcastPreRecordingStore-test.ts b/test/voice-broadcast/stores/VoiceBroadcastPreRecordingStore-test.ts
+index 36983ae601..c1f2c9bf64 100644
+--- a/test/voice-broadcast/stores/VoiceBroadcastPreRecordingStore-test.ts
++++ b/test/voice-broadcast/stores/VoiceBroadcastPreRecordingStore-test.ts
+@@ -18,6 +18,7 @@ import { mocked } from "jest-mock";
+ import { MatrixClient, Room, RoomMember } from "matrix-js-sdk/src/matrix";
+ 
+ import {
++    VoiceBroadcastPlaybacksStore,
+     VoiceBroadcastPreRecording,
+     VoiceBroadcastPreRecordingStore,
+     VoiceBroadcastRecordingsStore,
+@@ -32,6 +33,7 @@ describe("VoiceBroadcastPreRecordingStore", () => {
+     let room: Room;
+     let sender: RoomMember;
+     let recordingsStore: VoiceBroadcastRecordingsStore;
++    let playbacksStore: VoiceBroadcastPlaybacksStore;
+     let store: VoiceBroadcastPreRecordingStore;
+     let preRecording1: VoiceBroadcastPreRecording;
+ 
+@@ -40,13 +42,14 @@ describe("VoiceBroadcastPreRecordingStore", () => {
+         room = new Room(roomId, client, client.getUserId() || "");
+         sender = new RoomMember(roomId, client.getUserId() || "");
+         recordingsStore = new VoiceBroadcastRecordingsStore();
++        playbacksStore = new VoiceBroadcastPlaybacksStore();
+     });
+ 
+     beforeEach(() => {
+         store = new VoiceBroadcastPreRecordingStore();
+         jest.spyOn(store, "emit");
+         jest.spyOn(store, "removeAllListeners");
+-        preRecording1 = new VoiceBroadcastPreRecording(room, sender, client, recordingsStore);
++        preRecording1 = new VoiceBroadcastPreRecording(room, sender, client, playbacksStore, recordingsStore);
+         jest.spyOn(preRecording1, "off");
+     });
+ 
+@@ -117,7 +120,7 @@ describe("VoiceBroadcastPreRecordingStore", () => {
+             beforeEach(() => {
+                 mocked(store.emit).mockClear();
+                 mocked(preRecording1.off).mockClear();
+-                preRecording2 = new VoiceBroadcastPreRecording(room, sender, client, recordingsStore);
++                preRecording2 = new VoiceBroadcastPreRecording(room, sender, client, playbacksStore, recordingsStore);
+                 store.setCurrent(preRecording2);
+             });
+ 
+diff --git a/test/voice-broadcast/utils/setUpVoiceBroadcastPreRecording-test.ts b/test/voice-broadcast/utils/setUpVoiceBroadcastPreRecording-test.ts
+index 0b05d26912..f1796659d7 100644
+--- a/test/voice-broadcast/utils/setUpVoiceBroadcastPreRecording-test.ts
++++ b/test/voice-broadcast/utils/setUpVoiceBroadcastPreRecording-test.ts
+@@ -19,6 +19,8 @@ import { MatrixClient, Room } from "matrix-js-sdk/src/matrix";
+ 
+ import {
+     checkVoiceBroadcastPreConditions,
++    VoiceBroadcastPlayback,
++    VoiceBroadcastPlaybacksStore,
+     VoiceBroadcastPreRecording,
+     VoiceBroadcastPreRecordingStore,
+     VoiceBroadcastRecordingsStore,
+@@ -34,11 +36,14 @@ describe("setUpVoiceBroadcastPreRecording", () => {
+     let userId: string;
+     let room: Room;
+     let preRecordingStore: VoiceBroadcastPreRecordingStore;
++    let playbacksStore: VoiceBroadcastPlaybacksStore;
+     let recordingsStore: VoiceBroadcastRecordingsStore;
+ 
+     const itShouldReturnNull = () => {
+         it("should return null", () => {
+-            expect(setUpVoiceBroadcastPreRecording(room, client, recordingsStore, preRecordingStore)).toBeNull();
++            expect(
++                setUpVoiceBroadcastPreRecording(room, client, playbacksStore, recordingsStore, preRecordingStore),
++            ).toBeNull();
+             expect(checkVoiceBroadcastPreConditions).toHaveBeenCalledWith(room, client, recordingsStore);
+         });
+     };
+@@ -52,6 +57,7 @@ describe("setUpVoiceBroadcastPreRecording", () => {
+ 
+         room = new Room(roomId, client, userId);
+         preRecordingStore = new VoiceBroadcastPreRecordingStore();
++        playbacksStore = new VoiceBroadcastPlaybacksStore();
+         recordingsStore = new VoiceBroadcastRecordingsStore();
+     });
+ 
+@@ -93,10 +99,41 @@ describe("setUpVoiceBroadcastPreRecording", () => {
+             });
+ 
+             it("should create a voice broadcast pre-recording", () => {
+-                const result = setUpVoiceBroadcastPreRecording(room, client, recordingsStore, preRecordingStore);
++                const result = setUpVoiceBroadcastPreRecording(
++                    room,
++                    client,
++                    playbacksStore,
++                    recordingsStore,
++                    preRecordingStore,
++                );
+                 expect(checkVoiceBroadcastPreConditions).toHaveBeenCalledWith(room, client, recordingsStore);
+                 expect(result).toBeInstanceOf(VoiceBroadcastPreRecording);
+             });
++
++            describe("and there is a voice broadcast playback", () => {
++                let playback: VoiceBroadcastPlayback;
++
++                beforeEach(() => {
++                    playback = { pause: jest.fn() } as unknown as VoiceBroadcastPlayback;
++                    jest.spyOn(playbacksStore, "getCurrent").mockReturnValue(playback);
++                    jest.spyOn(playbacksStore, "clearCurrent");
++                });
++
++                it("should pause and clear the current playback", () => {
++                    setUpVoiceBroadcastPreRecording(
++                        room,
++                        client,
++                        playbacksStore,
++                        recordingsStore,
++                        preRecordingStore,
++                    );
++                    expect(playback.pause).toHaveBeenCalled();
++                    expect(playbacksStore.clearCurrent).toHaveBeenCalled();
++                    expect(mocked(playback.pause).mock.invocationCallOrder[0]).toBeLessThan(
++                        mocked(playbacksStore.clearCurrent).mock.invocationCallOrder[0],
++                    );
++                });
++            });
+         });
+     });
+ });
+diff --git a/test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts b/test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts
+index 1873a4b513..1192c2d712 100644
+--- a/test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts
++++ b/test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts
+@@ -22,6 +22,8 @@ import {
+     startNewVoiceBroadcastRecording,
+     VoiceBroadcastInfoEventType,
+     VoiceBroadcastInfoState,
++    VoiceBroadcastPlayback,
++    VoiceBroadcastPlaybacksStore,
+     VoiceBroadcastRecordingsStore,
+     VoiceBroadcastRecording,
+ } from "../../../src/voice-broadcast";
+@@ -38,6 +40,7 @@ describe("startNewVoiceBroadcastRecording", () => {
+     const roomId = "!room:example.com";
+     const otherUserId = "@other:example.com";
+     let client: MatrixClient;
++    let playbacksStore: VoiceBroadcastPlaybacksStore;
+     let recordingsStore: VoiceBroadcastRecordingsStore;
+     let room: Room;
+     let infoEvent: MatrixEvent;
+@@ -65,6 +68,11 @@ describe("startNewVoiceBroadcastRecording", () => {
+             }
+         });
+ 
++        playbacksStore = {
++            getCurrent: jest.fn(),
++            clearCurrent: jest.fn(),
++        } as unknown as VoiceBroadcastPlaybacksStore;
++
+         recordingsStore = {
+             setCurrent: jest.fn(),
+             getCurrent: jest.fn(),
+@@ -121,7 +129,7 @@ describe("startNewVoiceBroadcastRecording", () => {
+                     }, 0);
+                     return { event_id: infoEvent.getId() };
+                 });
+-                const recording = await startNewVoiceBroadcastRecording(room, client, recordingsStore);
++                const recording = await startNewVoiceBroadcastRecording(room, client, playbacksStore, recordingsStore);
+ 
+                 expect(client.sendStateEvent).toHaveBeenCalledWith(
+                     roomId,
+@@ -138,13 +146,32 @@ describe("startNewVoiceBroadcastRecording", () => {
+             });
+         });
+ 
++        describe("when there is a voice broadcast playback", () => {
++            let playback: VoiceBroadcastPlayback;
++
++            beforeEach(() => {
++                playback = { pause: jest.fn() } as unknown as VoiceBroadcastPlayback;
++                mocked(playbacksStore.getCurrent).mockReturnValue(playback);
++            });
++
++            it("should pause and clear the current playback", async () => {
++                await startNewVoiceBroadcastRecording(room, client, playbacksStore, recordingsStore);
++
++                expect(playback.pause).toHaveBeenCalled();
++                expect(playbacksStore.clearCurrent).toHaveBeenCalled();
++                expect(mocked(playback.pause).mock.invocationCallOrder[0]).toBeLessThan(
++                    mocked(playbacksStore.clearCurrent).mock.invocationCallOrder[0],
++                );
++            });
++        });
++
+         describe("when there is already a current voice broadcast", () => {
+             beforeEach(async () => {
+                 mocked(recordingsStore.getCurrent).mockReturnValue(
+                     new VoiceBroadcastRecording(infoEvent, client),
+                 );
+ 
+-                result = await startNewVoiceBroadcastRecording(room, client, recordingsStore);
++                result = await startNewVoiceBroadcastRecording(room, client, playbacksStore, recordingsStore);
+             });
+ 
+             it("should not start a voice broadcast", () => {
+@@ -167,7 +194,7 @@ describe("startNewVoiceBroadcastRecording", () => {
+                     ),
+                 ]);
+ 
+-                result = await startNewVoiceBroadcastRecording(room, client, recordingsStore);
++                result = await startNewVoiceBroadcastRecording(room, client, playbacksStore, recordingsStore);
+             });
+ 
+             it("should not start a voice broadcast", () => {
+@@ -190,7 +217,7 @@ describe("startNewVoiceBroadcastRecording", () => {
+                     ),
+                 ]);
+ 
+-                result = await startNewVoiceBroadcastRecording(room, client, recordingsStore);
++                result = await startNewVoiceBroadcastRecording(room, client, playbacksStore, recordingsStore);
+             });
+ 
+             it("should not start a voice broadcast", () => {
+@@ -206,7 +233,7 @@ describe("startNewVoiceBroadcastRecording", () => {
+     describe("when the current user is not allowed to send voice broadcast info state events", () => {
+         beforeEach(async () => {
+             mocked(room.currentState.maySendStateEvent).mockReturnValue(false);
+-            result = await startNewVoiceBroadcastRecording(room, client, recordingsStore);
++            result = await startNewVoiceBroadcastRecording(room, client, playbacksStore, recordingsStore);
+         });
+ 
+         it("should not start a voice broadcast", () => {

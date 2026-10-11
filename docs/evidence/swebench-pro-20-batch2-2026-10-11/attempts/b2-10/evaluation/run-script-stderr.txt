@@ -1,0 +1,11 @@
+PASS src/app/store/_links/extendedAttributes.test.ts
+  extended attrbiutes
+    ✓ creates the struct from the folder (1 ms)
+    ✓ creates the struct from the file (3 ms)
+    ✓ parses the struct (2 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       3 passed, 3 total
+Snapshots:   0 total
+Time:        2.023 s
+Ran all test suites matching /applications\/drive\/src\/app\/store\/_links\/extendedAttributes.test.ts/i.

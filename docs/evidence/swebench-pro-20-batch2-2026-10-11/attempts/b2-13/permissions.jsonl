@@ -1,0 +1,7 @@
+{"tool": "bash", "input": {"command": "ls /workspace/test/voice-broadcast/utils/ /workspace/test/voice-broadcast/models/ 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && cat package.json | head -60 && ls node_modules/.bin/ | grep -i jest"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls /workspace | head -40; echo ---; grep -n \"\\\"test\\\"\\|jest\" /workspace/package.json | head -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && ls node_modules/jest-extended 2>/dev/null && echo yes || echo no; grep -rn \"jest-extended\" package.json test/setupTests.ts 2>/dev/null; ls test/ | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && yarn jest test/voice-broadcast/utils/setUpVoiceBroadcastPreRecording-test.ts test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts 2>&1 | tail -50", "timeout": 300}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && yarn jest --silent test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts 2>&1 | tail -40", "timeout": 300}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && npx tsc --noEmit -p tsconfig.json 2>&1 | head -60", "timeout": 600}, "allowed": false}

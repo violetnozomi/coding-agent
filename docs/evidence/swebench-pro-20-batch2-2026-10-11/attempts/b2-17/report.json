@@ -1,0 +1,10 @@
+{
+  "number": 17,
+  "instance_id": "instance_protonmail__webclients-09fcf0dbdb87fa4f4a27700800ee4a3caed8b413",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "blocked",
+  "error": "RuntimeError('insufficient_storage_for_image_and_retained_evidence')",
+  "physical_requests": 0
+}

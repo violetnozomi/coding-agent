@@ -1,0 +1,10 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/live/b2-09/container-evidence.tar.gz",
+  "sha256": "7650e017a902df8f316a89ddb605aa37eb59bffee357266ada528606360b38af",
+  "bytes": 126204153,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/archives/batch2-instance_ansible__ansible-5e88cd9972f10b66dd97e1ee684c910c6a2dd25e-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+  "retains_raw_container_session_and_artifacts": true,
+  "source_bytes": 1426300127,
+  "source_bytes_limit": 2147483648,
+  "all_regular_files_verified": 10171
+}

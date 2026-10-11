@@ -1,0 +1,35 @@
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la && git log --oneline -5 2>/dev/null | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls utils/cache/ && cat go.mod | head -30 && go env GOMODCACHE"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat go.mod"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pwd"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc github.com/jellydator/ttlcache/v3 2>&1 | head -60"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc github.com/jellydator/ttlcache/v3.Cache 2>&1 | head -60"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && go env GOPATH GOFLAGS GOMODCACHE GOPROXY 2>&1; ls vendor 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go env GOPATH GOMODCACHE GOPROXY GOFLAGS"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./utils/cache/... 2>&1 | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./utils/cache/", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc github.com/jellydator/ttlcache/v3.Cache", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc github.com/jellydator/ttlcache/v3.Item", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go list -m -f '{{.Dir}}' github.com/jellydator/ttlcache/v3 2>&1 | tail -3", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.Cache.Keys 2>/dev/null; echo \"=====GET=====\"; go doc -src github.com/jellydator/ttlcache/v3.Cache.Get 2>/dev/null; echo \"=====DELETEEXPIRED=====\"; go doc -src github.com/jellydator/ttlcache/v3.Cache.DeleteExpired 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.DefaultTTL 2>/dev/null; echo \"===NoTTL===\"; go doc -src github.com/jellydator/ttlcache/v3 2>/dev/null | grep -n -i \"ttl\" | head -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.Item.ExpiresAt 2>/dev/null; echo \"=====Set=====\"; go doc -src github.com/jellydator/ttlcache/v3.Cache.Set 2>/dev/null; echo \"=====item set=====\"; go doc -src github.com/jellydator/ttlcache/v3.Item.IsExpired 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.New 2>/dev/null | head -60", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git log --oneline -8; echo \"---status---\"; git status --short | head; echo \"---branch---\"; git branch -a 2>/dev/null | head", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.Cache.GetWithTTL 2>/dev/null; echo \"=== isExpiredUnsafe via Item ===\"; go doc -src github.com/jellydator/ttlcache/v3.Item.IsExpired 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.Cache.GetAndDelete 2>/dev/null; echo \"=== loader doc ===\"; go doc github.com/jellydator/ttlcache/v3.Loader 2>/dev/null; go doc github.com/jellydator/ttlcache/v3.WithLoader 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -la /workspace/.nz-coder 2>/dev/null; find /workspace/.nz-coder -type f 2>/dev/null | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go run ./tmpprobe/ 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.Cache.Items 2>/dev/null; echo \"=====getWithOpts=====\"; go doc -src github.com/jellydator/ttlcache/v3.Cache.get 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.Cache.delete 2>/dev/null; echo \"===evict===\"; go doc -src github.com/jellydator/ttlcache/v3.Cache.evict 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./tmpprobe -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '1,140p' core/scrobbler/play_tracker_test.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.Cache.Range 2>/dev/null; echo \"===Len===\"; go doc -src github.com/jellydator/ttlcache/v3.Cache.Len 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -src github.com/jellydator/ttlcache/v3.Cache.getWithOpts 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"SimpleCache\" --include=*.go scanner/ core/ utils/ 2>/dev/null", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./tmpprobe -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./utils/cache/... 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./utils/cache/ -run TestCache 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git show HEAD:utils/cache/simple_cache.go 2>&1 | head -80; echo \"===DIFFSTAT===\"; git status --short", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git show HEAD:utils/cache/simple_cache.go 2>&1 | sed -n '80,140p'", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n '1,20p' /workspace/utils/cache/simple_cache_test.go"}, "allowed": true}

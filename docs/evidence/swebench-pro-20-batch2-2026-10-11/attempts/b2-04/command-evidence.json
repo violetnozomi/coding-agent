@@ -1,0 +1,342 @@
+[
+  {
+    "tool_call_id": "call_00_GO5JVYCfuRlWTxAmQuQQ2663",
+    "input": {
+      "command": "ls -la /workspace 2>/dev/null && echo \"---APP---\" && ls -la /app 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_Fi3lyB8ux5kGWn6kGr264047",
+    "input": {
+      "command": "ls -la /workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_aATvLveqGWEYewtpMs8k3153",
+    "input": {
+      "command": "ls -R internal/config/testdata/tracing 2>/dev/null; echo \"---\"; ls internal/config/testdata/deprecated; echo \"---\"; cat internal/config/testdata/tracing/zipkin.yml; echo \"---\"; cat internal/config/testdata/deprecated/tracing_jaeger_enabled.yml; echo \"---\"; cat internal/config/testdata/default.yml"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "internal/config/testdata/tracing:\nzipkin.yml\n---\ncache_memory_enabled.yml\ncache_memory_items.yml\ndatabase_migrations_path.yml\ndatabase_migrations_path_legacy.yml\ntracing_jaeger_enabled.yml\nui_disabled.yml\n---\ntracing:\n  enabled: true\n  backend: zipkin\n  zipkin:\n    endpoint: http://localhost:9999/api/v2/spans\n---\ntracing:\n  jaeger:\n    enabled: true\n---\n# log:\n#   level: INFO\n#   grpc_level: ERROR\n\n# ui:\n#   enabled: true\n\n# cors:\n#   enabled: false\n#   allowed_origins: \"*\"\n\n# cache:\n#   enabled: false\n#   backend: memory\n#   ttl: 60s\n#   memory:\n#     eviction_interval: 5m # Evict Expired Items Every 5m\n\n# server:\n#   protocol: http\n#   host: 0.0.0.0\n#   https_port: 443\n#   http_port: 8080\n#   grpc_port: 9000\n\n# db:\n#   url: file:/var/opt/flipt/flipt.db"
+  },
+  {
+    "tool_call_id": "call_00_8iAh104irg6DeR0fBXhs6250",
+    "input": {
+      "command": "cd /workspace && grep -rn \"flipt.schema\" --include=*.go --include=Makefile --include=*.mk --include=*.yaml --include=*.yml --include=*.sh . | head -40; echo \"---GOMOD otel---\"; grep -n \"otel\\|otlp\" go.mod"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_bAFHDwgUUyCliveUwB7E2878",
+    "input": {
+      "command": "ls /root/go/pkg/mod/go.opentelemetry.io/otel/exporters/ 2>/dev/null; echo \"---\"; ls /root/go/pkg/mod/go.opentelemetry.io/otel/exporters/otlp 2>/dev/null; echo \"---GOPATH---\"; go env GOPATH GOMODCACHE GOFLAGS 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_PmbvGsSLJuFgFenTbn6T5872",
+    "input": {
+      "command": "cd /workspace && go env GOPATH GOMODCACHE 2>&1; echo \"---\"; ls $(go env GOMODCACHE)/go.opentelemetry.io/otel/exporters/ 2>&1"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_D5xPGPMY13O9VVhoBdZT4343",
+    "input": {
+      "command": "go env GOMODCACHE",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/go/pkg/mod"
+  },
+  {
+    "tool_call_id": "call_00_ET_vp757SaWjV8haFOHvKRP1582",
+    "input": {
+      "command": "ls /go/pkg/mod/go.opentelemetry.io/otel/exporters/ 2>&1; echo \"---otlp---\"; ls /go/pkg/mod/go.opentelemetry.io/otel/exporters/otlp/ 2>&1; echo \"---cache download---\"; ls /go/pkg/mod/cache/download/go.opentelemetry.io/otel/exporters/otlp/ 2>&1"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_x9wY4PdEEu2Bttlh0EVn2937",
+    "input": {
+      "command": "cd /workspace && ls vendor 2>&1 | head; echo \"---try go list---\"; go list -m go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc 2>&1 | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_YwgoYrqIHsNT4Q6auZZ96314",
+    "input": {
+      "command": "go list -m go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc 2>&1 | head",
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_MWMFYPYWANnYhHgattWh2824",
+    "input": {
+      "command": "GOFLAGS=-mod=mod go mod download go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.12.0 2>&1 | head; echo \"exit=$?\"",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_NCO6katPlEnVbuoNlPB07087",
+    "input": {
+      "command": "go env GOPROXY GONOSUMDB GOFLAGS 2>&1; echo \"---\"; ls /go/pkg/mod/cache/download/go.opentelemetry.io/otel/exporters/ 2>&1",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_W6EarKyVyLKuflgTvjpi2450",
+    "input": {
+      "command": "go build ./internal/config/... 2>&1 | head -20; echo \"exit=$?\"",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "exit=0"
+  },
+  {
+    "tool_call_id": "call_00_XjwFvgwJeM3WmWcLmtp51027",
+    "input": {
+      "command": "cd /workspace && cp go.mod /tmp/go.mod.bak 2>/dev/null; cp go.sum /tmp/go.sum.bak 2>/dev/null; GOFLAGS=-mod=mod GOPROXY=off go get go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.12.0 2>&1 | head -20; echo \"exit=${PIPESTATUS[0]}\"",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Gm14cqE2CTJvHlvl8a060629",
+    "input": {
+      "command": "GOFLAGS=-mod=mod GOPROXY=off go get go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.12.0 2>&1 | head -20; echo \"exit=${PIPESTATUS[0]}\"",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_bOGbYZIkeLZEk3UCayOY9023",
+    "input": {
+      "command": "git status --short",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "?? .nz-coder/"
+  },
+  {
+    "tool_call_id": "call_00_ADWdc5J1v038tG9c23le5699",
+    "input": {
+      "command": "go get -mod=mod go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.12.0 2>&1 | head -20",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_GRmH8h2243H8dLswCXNK4228",
+    "input": {
+      "command": "mkdir -p .probe && printf 'module probe\\n\\ngo 1.19\\n\\nrequire go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.12.0\\n' > .probe/go.mod && printf 'package main\\nimport (\\n_ \"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc\"\\n)\\nfunc main(){}\\n' > .probe/main.go && GOFLAGS=-mod=mod go build ./... 2>&1 | head -20",
+      "workdir": "/workspace/.probe"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_fv4UWhZdtcEe0dEryhwi2818",
+    "input": {
+      "command": "GOPROXY=off GOFLAGS=-mod=mod go mod download -x go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.12.0 2>&1 | tail -5",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-1",
+    "input": {
+      "command": "go test ./internal/config -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_6F5ZjQ5SQx7yJSK3BR8z5407",
+    "input": {
+      "command": "GOPROXY=off GOFLAGS=-mod=mod GONOSUMCHECK=1 GONOSUMDB='*' GOSUMDB=off go test ./internal/config -run '^$' 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_TlkFvJz0INfwAGG6tMu68832",
+    "input": {
+      "command": "rm -f internal/config/zz_probe.go && echo removed",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_tKORGB2MoBVScDyDDQt84718",
+    "input": {
+      "command": "ls internal/config/zz_probe.go 2>&1; GOPROXY=off GOFLAGS=-mod=mod GOSUMDB=off GONOSUMDB='*' go build ./internal/config/ 2>&1 | head -20; echo \"exit=${PIPESTATUS[0]}\"",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "internal/config/zz_probe.go\ngo: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.3.0\ninternal/config/zz_probe.go:4:2: open /go/pkg/mod/cache/download/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/@v/v1.3.0.lock: read-only file system\nexit=1"
+  },
+  {
+    "tool_call_id": "verification-stage-static-2",
+    "input": {
+      "command": "go test ./internal/config -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-3",
+    "input": {
+      "command": "go test ./internal/config -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_kvJw0x0WUu6MiDQXVGDZ8913",
+    "input": {
+      "command": "rm -f internal/config/zz_probe.go && ls internal/config/zz_probe.go 2>&1",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-4",
+    "input": {
+      "command": "go test ./internal/config -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_zsxviIdznU9pNQRuwprC1330",
+    "input": {
+      "command": "ls internal/config/zz_probe.go 2>&1; echo \"---HEAD---\"; sed -n '1,30p' internal/config/tracing.go",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "internal/config/zz_probe.go\n---HEAD---\npackage config\n\nimport (\n\t\"encoding/json\"\n\n\t\"github.com/spf13/viper\"\n)\n\n// cheers up the unparam linter\nvar _ defaulter = (*TracingConfig)(nil)\n\n// TracingConfig contains fields, which configure tracing telemetry\n// output destinations.\ntype TracingConfig struct {\n\tEnabled bool                `json:\"enabled,omitempty\" mapstructure:\"enabled\"`\n\tBackend TracingBackend      `json:\"backend,omitempty\" mapstructure:\"backend\"`\n\tJaeger  JaegerTracingConfig `json:\"jaeger,omitempty\" mapstructure:\"jaeger\"`\n\tZipkin  ZipkinTracingConfig `json:\"zipkin,omitempty\" mapstructure:\"zipkin\"`\n}\n\nfunc (c *TracingConfig) setDefaults(v *viper.Viper) {\n\tv.SetDefault(\"tracing\", map[string]any{\n\t\t\"enabled\": false,\n\t\t\"backend\": TracingJaeger,\n\t\t\"jaeger\": map[string]any{\n\t\t\t\"enabled\": false, // deprecated (see below)\n\t\t\t\"host\":    \"localhost\",\n\t\t\t\"port\":    6831,\n\t\t},\n\t\t\"zipkin\": map[string]any{"
+  },
+  {
+    "tool_call_id": "verification-stage-static-5",
+    "input": {
+      "command": "go test ./internal/config -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  }
+]

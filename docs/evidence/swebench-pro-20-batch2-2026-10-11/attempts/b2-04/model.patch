@@ -1,0 +1,11 @@
+diff --git a/internal/config/zz_probe.go b/internal/config/zz_probe.go
+new file mode 100644
+index 00000000..9543cc44
+--- /dev/null
++++ b/internal/config/zz_probe.go
+@@ -0,0 +1,5 @@
++package config
++
++import (
++	_ "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
++)

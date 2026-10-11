@@ -1,0 +1,307 @@
+[
+  {
+    "tool_call_id": "call_00_iIDBbbtRSOZNyyDJQ0oM5577",
+    "input": {
+      "command": "ls -la /workspace 2>/dev/null && echo \"---APP---\" && ls -la /app 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_xh3ZL5Cbm48CAIJvblJB1742",
+    "input": {
+      "command": "cat /workspace/package.json 2>/dev/null; echo \"---\"; cat /app/package.json 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_jns7uXOyGnUgw4pgEVtk6839",
+    "input": {
+      "command": "cat package.json"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "{\n    \"name\": \"root\",\n    \"private\": true,\n    \"license\": \"GPL-3.0\",\n    \"workspaces\": [\n        \"applications/*\",\n        \"packages/*\",\n        \"tests\",\n        \"utilities/*\"\n    ],\n    \"scripts\": {\n        \"app-versions\": \"bash utilities/app-versions/app-versions.sh\",\n        \"config-app\": \"(packages/config/install 2>/dev/null) || true\",\n        \"create-atom\": \"yarn workspace @proton/atoms create-atom\",\n        \"postinstall\": \"is-ci || (husky install; yarn run config-app)\",\n        \"start-all\": \"cd utilities/local-sso && bash ./run.sh\",\n        \"version\": \"yarn workspace version run version\"\n    },\n    \"resolutions\": {\n        \"@noble/ed25519@1.7.1\": \"patch:@noble/ed25519@npm:1.7.1#.yarn/patches/@noble-ed25519-npm-1.6.0-59c82563e0\",\n        \"@types/jest\": \"^27.5.2\",\n        \"@types/react\": \"^17.0.53\",\n        \"@types/react-dom\": \"^17.0.18\",\n        \"client-zip@2.3.0\": \"patch:client-zip@npm:2.3.0#.yarn/patches/client-zip-npm-2.3.0-366ca56ce9.patch\",\n        \"memfs\": \"^3.4.13\",\n        \"rfc2047@^2.0.1\": \"patch:rfc2047@npm%3A2.0.1#./.yarn/patches/rfc2047-npm-2.0.1-60a2a07c99.patch\",\n        \"safe-buffer\": \"^5.2.1\"\n    },\n    \"dependencies\": {\n        \"@proton/eslint-config-proton\": \"workspace:packages/eslint-config-proton\",\n        \"@proton/stylelint-config-proton\": \"workspace:packages/stylelint-config-proton\",\n        \"is-ci\": \"^3.0.1\",\n        \"stylelint-use-logical-spec\": \"^5.0.0\",\n        \"typescript\": \"^4.9.5\"\n    },\n    \"devDependencies\": {\n        \"@trivago/prettier-plugin-sort-imports\": \"^4.0.0\",\n        \"eslint-plugin-jsx-a11y\": \"^6.7.1\",\n        \"husky\": \"^8.0.3\",\n        \"lint-staged\": \"^13.1.0\",\n        \"prettier\": \"^2.8.3\",\n        \"sort-package-json\": \"^2.4.0\"\n    },\n    \"packageManager\": \"yarn@3.4.1\",\n    \"engines\": {\n        \"node\": \">= v18.14.0\"\n    }\n}"
+  },
+  {
+    "tool_call_id": "call_01_AR1dkEXOzl4TH34U1KCJ1401",
+    "input": {
+      "command": "cat applications/drive/package.json | head -60; echo \"---tsconfig---\"; cat applications/drive/tsconfig.json 2>/dev/null; echo \"---base---\"; cat tsconfig.base.json"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "{\n    \"name\": \"proton-drive\",\n    \"description\": \"Proton-drive\",\n    \"license\": \"GPL-3.0\",\n    \"author\": \"\",\n    \"main\": \"index.ts\",\n    \"scripts\": {\n        \"build\": \"cross-env NODE_ENV=production proton-pack build --appMode=sso\",\n        \"check-types\": \"tsc\",\n        \"i18n:getlatest\": \"proton-i18n upgrade\",\n        \"i18n:upgrade\": \"proton-i18n extract --verbose && proton-i18n crowdin -u --verbose\",\n        \"i18n:validate\": \"proton-i18n validate lint-functions\",\n        \"i18n:validate:context\": \"proton-i18n extract && proton-i18n validate\",\n        \"postinstall\": \"proton-pack config\",\n        \"lint\": \"eslint src --ext .js,.ts,.tsx --cache\",\n        \"pretty\": \"prettier --write  $(find src/app -type f -name '*.js' -o -name '*.ts' -o -name '*.tsx')\",\n        \"start\": \"proton-pack dev-server --appMode=standalone\",\n        \"test\": \"jest --runInBand --ci --coverage=false\",\n        \"test:dev\": \"jest --watch --coverage=false\"\n    },\n    \"dependencies\": {\n        \"@mattiasbuelens/web-streams-adapter\": \"0.1.0\",\n        \"@openpgp/web-stream-tools\": \"^0.0.13\",\n        \"@proton/components\": \"workspace:packages/components\",\n        \"@proton/crypto\": \"workspace:packages/crypto\",\n        \"@proton/pack\": \"workspace:packages/pack\",\n        \"@proton/polyfill\": \"workspace:packages/polyfill\",\n        \"@proton/shared\": \"workspace:packages/shared\",\n        \"@proton/styles\": \"workspace:packages/styles\",\n        \"@types/react\": \"^17.0.53\",\n        \"@types/react-dom\": \"^17.0.18\",\n        \"client-zip\": \"2.3.0\",\n        \"cross-env\": \"^7.0.3\",\n        \"ejs-webpack-loader\": \"^2.2.2\",\n        \"mime-types\": \"^2.1.35\",\n        \"path-browserify\": \"^1.0.1\",\n        \"react\": \"^17.0.2\",\n        \"react-dom\": \"^17.0.2\",\n        \"react-window\": \"^1.8.8\",\n        \"ttag\": \"^1.7.24\",\n        \"web-streams-polyfill\": \"^3.2.1\",\n        \"webpack\": \"^5.75.0\"\n    },\n    \"devDependencies\": {\n        \"@proton/eslint-config-proton\": \"workspace:packages/eslint-config-proton\",\n        \"@proton/i18n\": \"workspace:packages/i18n\",\n        \"@testing-library/jest-dom\": \"^5.16.5\",\n        \"@testing-library/react\": \"^12.1.5\",\n        \"@testing-library/react-hooks\": \"^8.0.1\",\n        \"@types/mime-types\": \"^2.1.1\",\n        \"@types/react-window\": \"^1.8.5\",\n        \"babel-plugin-transform-class-properties\": \"^6.24.1\",\n        \"babel-plugin-transform-require-context\": \"^0.1.1\",\n        \"cross-var\": \"^1.1.0\",\n        \"eslint\": \"^8.33.0\",\n        \"jest\": \"^28.1.3\",\n        \"jest-environment-jsdom\": \"^28.1.3\",\n        \"jest-junit\": \"^14.0.1\",\n        \"prettier\": \"^2.8.3\",\n        \"pretty-format\": \"^27.5.1\",\n---tsconfig---\n{\n    \"extends\": \"../../tsconfig.base.json\"\n}\n---base---\n{\n    \"compilerOptions\": {\n        \"allowJs\": true,\n        \"esModuleInterop\": true,\n        \"forceConsistentCasingInFileNames\": true,\n        \"incremental\": true,\n        \"jsx\": \"preserve\",\n        \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n        \"maxNodeModuleJsDepth\": 10,\n        \"module\": \"esnext\",\n        \"moduleResolution\": \"node\",\n        \"noEmit\": true,\n        \"noImplicitAny\": true,\n        \"noUnusedLocals\": true,\n        \"resolveJsonModule\": true,\n        \"strict\": true,\n        \"target\": \"es2021\",\n        \"skipLibCheck\": true,\n        \"types\": [\"webpack-env\", \"jest\"],\n        \"baseUrl\": \".\",\n        \"paths\": {\n            \"@proton/activation/*\": [\"./packages/activation/*\"],\n            \"@proton/atoms/*\": [\"./packages/atoms/*\"],\n            \"@proton/colors/*\": [\"./packages/colors/*\"],\n            \"@proton/components/*\": [\"./packages/components/*\"],\n            \"@proton/config/*\": [\"./packages/config/*\"],\n            \"@proton/cross-storage/*\": [\"./packages/cross-storage/*\"],\n            \"@proton/encrypted-search/*\": [\"./packages/encrypted-search/*\"],\n            \"@proton/eslint-config-proton/*\": [\"./packages/eslint-config-proton/*\"],\n            \"@proton/hooks/*\": [\"./packages/hooks/*\"],\n            \"@proton/i18n/*\": [\"./packages/i18n/*\"],\n            \"@proton/key-transparency/*\": [\"./packages/key-transparency/... (truncated)"
+  },
+  {
+    "tool_call_id": "call_00_ktInVCc2NLUTPHvGQ95l5415",
+    "input": {
+      "command": "cd /workspace && git log --oneline -8 2>/dev/null; echo \"---status---\"; git status --short 2>/dev/null | head; echo \"---branch---\"; git branch --show-current 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_2nW8ZziG9AmVSQ0I8I4L3837",
+    "input": {
+      "command": "cd /workspace && git diff -- applications/drive/src/app/store/_links/extendedAttributes.ts | head -200"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_3JtCDqICbP2J4vb9LCRY5802",
+    "input": {
+      "command": "cd /workspace && git show HEAD:applications/drive/src/app/store/_links/extendedAttributes.ts"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_0S3zvnWxlVLdDDHylbrS2531",
+    "input": {
+      "command": "cd /workspace && ls applications/drive/ && cat applications/drive/jest.config.js 2>/dev/null; cat applications/drive/jest.config.ts 2>/dev/null; ls applications/drive/*.js 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_SPeUaHcbHM9NAIz1I94b4742",
+    "input": {
+      "command": "cd /workspace/applications/drive && ls -a | head -40 && cat jest.config.js 2>/dev/null || true"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_graotBLtWanTzw8k85zT0489",
+    "input": {
+      "command": "yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -40",
+      "workdir": "applications/drive",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "PASS src/app/store/_links/extendedAttributes.test.ts\n  extended attrbiutes\n    ✓ creates the struct from the folder (1 ms)\n    ✓ creates the struct from the file (1 ms)\n    ✓ parses the struct (3 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       3 passed, 3 total\nSnapshots:   0 total\nTime:        2.336 s\nRan all test suites matching /src\\/app\\/store\\/_links\\/extendedAttributes.test.ts/i."
+  },
+  {
+    "tool_call_id": "call_00_Wx9DLGmtXByxCkauOERO7055",
+    "input": {
+      "command": "yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -30",
+      "timeout": 180,
+      "workdir": "applications/drive"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_4hj0GFj7WIMukPjFInuJ3428",
+    "input": {
+      "command": "yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -30",
+      "timeout": 120,
+      "workdir": "applications/drive"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "PASS src/app/store/_links/extendedAttributes.test.ts\n  extended attrbiutes\n    ✓ creates the struct from the folder (1 ms)\n    ✓ creates the struct from the file\n    ✓ parses the struct (1 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       3 passed, 3 total\nSnapshots:   0 total\nTime:        0.73 s, estimated 2 s\nRan all test suites matching /src\\/app\\/store\\/_links\\/extendedAttributes.test.ts/i."
+  },
+  {
+    "tool_call_id": "call_00_EbPW6yLodGH7bRfpsec24756",
+    "input": {
+      "command": "timeout 118 yarn tsc --noEmit 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "applications/drive"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_76qpybIP5MjNihhSoJ8L8757",
+    "input": {
+      "command": "ls node_modules/.bin/tsc node_modules/typescript/bin/tsc 2>&1"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "node_modules/.bin/tsc\nnode_modules/typescript/bin/tsc"
+  },
+  {
+    "tool_call_id": "call_00_oDEU4UfFNNdDcrRAIiML7658",
+    "input": {
+      "command": "timeout 115 node_modules/.bin/tsc --noEmit -p applications/drive/tsconfig.json 2>&1 | grep -i \"extendedAttributes\" | head -30; echo \"EXIT_DONE\"",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_BWWNcC5jIF4Zz49i0ud46806",
+    "input": {
+      "command": "timeout 115 ./node_modules/.bin/tsc --noEmit -p applications/drive/tsconfig.json 2>&1 | head -40",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_3qzT76ftGY884egSL3Fe4464",
+    "input": {
+      "command": "./node_modules/.bin/tsc --version"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Bxja3LivDvbPo7TWdwtV5942",
+    "input": {
+      "command": "yarn workspace proton-drive check-types 2>&1 | head -40",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(yarn completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_ZL93SaOxyzPLOadboeXW7901",
+    "input": {
+      "command": "yarn workspace proton-drive check-types > /tmp/tsc.log 2>&1; echo \"EXIT=$?\"; tail -20 /tmp/tsc.log",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_tKIIUjhvN6CSL1p54pw76043",
+    "input": {
+      "command": "yarn workspace proton-drive check-types > tsc.log 2>&1; echo \"EXIT=$?\"; tail -20 tsc.log",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "EXIT=0"
+  },
+  {
+    "tool_call_id": "call_00_uh3dv8MOJBfnk6g3SGxR7464",
+    "input": {
+      "command": "rm -f tsc.log && yarn workspace proton-drive check-types 2>&1 | tail -5; echo \"TSC_EXIT=${PIPESTATUS[0]}\"",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_UaMe1LoQGvjdMQ6BfDLX6554",
+    "input": {
+      "command": "ls tsc.log 2>&1; echo \"---\"; yarn workspace proton-drive check-types 2>&1 | tail -5; echo \"TSC_DONE\"",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "tsc.log\n---\nTSC_DONE"
+  },
+  {
+    "tool_call_id": "call_00_LMFrilMPtmzu0JANwPyc3197",
+    "input": {
+      "command": "rm -f tsc.log; git status --short"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_tBwuiIbupVOx0Qnd4RYF2491",
+    "input": {
+      "command": "rm -f tsc.log && yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -12",
+      "timeout": 120,
+      "workdir": "applications/drive"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_dLThydxHzblKoNJI6GLz0999",
+    "input": {
+      "command": "rm tsc.log"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ZSCv37DYkV0FQsFhincH0009",
+    "input": {
+      "command": "rm -f tsc.log; git status --short; echo \"---\"; yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -12",
+      "timeout": 120,
+      "workdir": "applications/drive"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

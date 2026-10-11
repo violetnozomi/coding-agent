@@ -1,0 +1,206 @@
+[
+  {
+    "tool_call_id": "call_00_Gl6ODyxxdOZNTFCpDJ8f2727",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /app 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_5kmmdxXSnLZL4HRDlvI30283",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 && git status --porcelain | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_3B2H3UIkfyFuT2AJGeWY8244",
+    "input": {
+      "command": "cd /workspace && grep -rn \"def tag_copy\" lib/ansible/module_utils/_internal/_datatag/__init__.py"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_GdXtb0fghwVHCqiG30EZ5416",
+    "input": {
+      "command": "cd /workspace && python -c \"\nprint(repr(str(b'Hello')))\nprint(repr(str(b'Hello', encoding='utf-8')))\nprint(repr(str(object=b'Hello')))\nprint(repr(str(encoding='utf-8')))\nprint(repr(str()))\n\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_SYbBtoVDFc2r1vw11RRw1034",
+    "input": {
+      "command": "cd /workspace && python3 -c \"print(repr(str(b'Hello')))\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_eSeGuc6CjdI6FEIpdHDK0818",
+    "input": {
+      "command": "echo hi"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "hi"
+  },
+  {
+    "tool_call_id": "call_00_ET_IOVDRMM3IG9R02DwdVp26786",
+    "input": {
+      "command": "cd /workspace && python3 -c 'print(repr(str(b\"Hello\")), repr(str(b\"Hello\", encoding=\"utf-8\")))'"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_K0a2AJtFHqvmkRPESKF81244",
+    "input": {
+      "command": "python3 --version"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "Python 3.11.13"
+  },
+  {
+    "tool_call_id": "call_00_9C0WdRj7jwXFQvN4T9Nr7872",
+    "input": {
+      "command": "python3 -c \"print(repr(str(object='x')), repr(str(b'Hello')), repr(str(b'Hello', encoding='utf-8')))\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "'x' \"b'Hello'\" 'Hello'"
+  },
+  {
+    "tool_call_id": "call_00_ErnkXsr3BHb3pb5mMbiV9347",
+    "input": {
+      "command": "python3 -c \"print(repr(str(encoding='utf-8')))\" 2>&1 | tail -2"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "''"
+  },
+  {
+    "tool_call_id": "call_01_0xeFp3fHiDdy1CoVeZL49039",
+    "input": {
+      "command": "cd /workspace && python3 -c \"\nimport ansible.parsing.yaml.objects as o\nprint([n for n in dir(o) if not n.startswith('__')])\n\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-1",
+    "input": {
+      "command": "python -m py_compile lib/ansible/parsing/yaml/objects.py",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(python completed with no output)"
+  },
+  {
+    "tool_call_id": "verification-stage-static-2",
+    "input": {
+      "command": "python -m py_compile lib/ansible/parsing/yaml/objects.py",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(python completed with no output)"
+  },
+  {
+    "tool_call_id": "call_01_EHVG02ysugMlHvmaGHh44815",
+    "input": {
+      "_nz_runtime_verification_stage": "static",
+      "command": "python -m py_compile lib/ansible/template/__init__.py && echo OK"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "OK"
+  },
+  {
+    "tool_call_id": "call_00_kFM2ycAOnRnSha8OkVjI1178",
+    "input": {
+      "command": "cd /workspace && python -c \"\nfrom ansible.parsing.yaml.objects import AnsibleMapping, AnsibleUnicode, AnsibleSequence\nprint(AnsibleMapping() == {})\nprint(AnsibleMapping(dict(a=1), b=2) == dict(a=1,b=2))\nprint(AnsibleMapping(a=1) == dict(a=1))\nimport typing\nprint(AnsibleUnicode() == '')\nprint(AnsibleUnicode('x') == 'x')\nprint(AnsibleUnicode(object='y') == 'y')\nprint(AnsibleUnicode(b'Hello') == str(b'Hello'))\nprint(AnsibleUnicode(b'Hello', encoding='utf-8') == str(b'Hello', encoding='utf-8'))\nprint(AnsibleSequence() == [])\nprint(AnsibleSequence((1,2)) == [1,2])\n\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_JLl4O7AGZukwuf7T8aF22230",
+    "input": {
+      "command": "python -m pytest test/units/parsing/yaml/test_objects.py -q 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "..........                                                               [100%]\n10 passed in 0.01s"
+  },
+  {
+    "tool_call_id": "call_00_ET_bEy3lkwW5eysYKXRkJW51711",
+    "input": {
+      "command": "python -m pytest test/units/parsing/yaml/test_objects.py test/units/template/test_template.py -q 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_XmFWGNqUiZYzurnK99KR0754",
+    "input": {
+      "command": "python -c \"import ansible.parsing.yaml.objects as o; print(o.__file__)\"",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/app/lib/ansible/parsing/yaml/objects.py"
+  }
+]

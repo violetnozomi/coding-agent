@@ -1,0 +1,10 @@
+{
+  "number": 7,
+  "instance_id": "instance_flipt-io__flipt-a0cbc0cb65ae601270bdbe3f5313e2dfd49c80e4",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "blocked",
+  "error": "RuntimeError(\"command failed (1): ['docker', 'pull', 'ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-a0cbc0cb65ae601270bdbe3f5313e2dfd49c80e4']\")",
+  "physical_requests": 0
+}

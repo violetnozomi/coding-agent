@@ -1,0 +1,119 @@
+Running selected tests: test/integration/targets/deprecations/library/noisy.py test/units/template/test_template.py test/units/parsing/yaml/test_objects.py lib/ansible/plugins/test/core.py
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-8.3.5, pluggy-1.5.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pyproject.toml
+plugins: rerunfailures-15.0, mock-3.14.0, anyio-4.10.0
+collecting ... collected 76 items
+
+test/units/template/test_template.py::test_templar_do_template_trusted_template_str PASSED [  1%]
+test/units/template/test_template.py::test_templar_do_template_non_str PASSED [  2%]
+test/units/template/test_template.py::test_is_template[{{ 1 )}-True] PASSED [  3%]
+test/units/template/test_template.py::test_is_template[{{ 1 }}-False] PASSED [  5%]
+test/units/template/test_template.py::test_is_template[{{ invalid-True] PASSED [  6%]
+test/units/template/test_template.py::test_is_template[value3-True] PASSED [  7%]
+test/units/template/test_template.py::test_is_possibly_template[foo {{ 123 }} bar-overrides0-True] PASSED [  9%]
+test/units/template/test_template.py::test_is_possibly_template[}}-overrides1-False] PASSED [ 10%]
+test/units/template/test_template.py::test_is_possibly_template[<< blah >>-overrides2-True] PASSED [ 11%]
+test/units/template/test_template.py::test_is_possibly_template_override_merge PASSED [ 13%]
+test/units/template/test_template.py::test_templar_template_non_template_str PASSED [ 14%]
+test/units/template/test_template.py::test_templar_template_untrusted_template PASSED [ 15%]
+test/units/template/test_template.py::test_templar_template_fail_on_undefined_truthy_falsey PASSED [ 17%]
+test/units/template/test_template.py::test_templar_template_convert_bare[somevar-True-somevar value] PASSED [ 18%]
+test/units/template/test_template.py::test_templar_template_convert_bare[123 | int-True-123] PASSED [ 19%]
+test/units/template/test_template.py::test_templar_template_convert_bare[bogusvar.somevar-True-bogusvar.somevar] PASSED [ 21%]
+test/units/template/test_template.py::test_templar_template_convert_bare[somevar.bogusvar-True-AnsibleUndefinedVariable] PASSED [ 22%]
+test/units/template/test_template.py::test_templar_template_convert_bare[somevar.bogusvar-False-somevar.bogusvar] PASSED [ 23%]
+test/units/template/test_template.py::test_templar_template_convert_bare[1notavar-True-1notavar] PASSED [ 25%]
+test/units/template/test_template.py::test_templar_template_convert_bare[somevar | notafilter-True-AnsibleTemplateError] PASSED [ 26%]
+test/units/template/test_template.py::test_templar_template_convert_bare_truthy_falsey PASSED [ 27%]
+test/units/template/test_template.py::test_templar_template_convert_data PASSED [ 28%]
+test/units/template/test_template.py::test_templar_template_disable_lookups PASSED [ 30%]
+test/units/template/test_template.py::test_resolve_variable_expression PASSED [ 31%]
+test/units/template/test_template.py::test_evaluate_expression PASSED    [ 32%]
+test/units/template/test_template.py::test_evaluate_conditional PASSED   [ 34%]
+test/units/template/test_template.py::test_from_template_engine PASSED   [ 35%]
+test/units/template/test_template.py::test_basedir PASSED                [ 36%]
+test/units/template/test_template.py::test_environment PASSED            [ 38%]
+test/units/template/test_template.py::test_available_variables PASSED    [ 39%]
+test/units/template/test_template.py::test_loader PASSED                 [ 40%]
+test/units/template/test_template.py::test_copy_with_new_env_environment_class PASSED [ 42%]
+test/units/template/test_template.py::test_copy_with_new_env_overrides PASSED [ 43%]
+test/units/template/test_template.py::test_copy_with_new_env_invalid_overrides PASSED [ 44%]
+test/units/template/test_template.py::test_copy_with_new_env_available_variables PASSED [ 46%]
+test/units/template/test_template.py::test_copy_with_new_searchpath PASSED [ 47%]
+test/units/template/test_template.py::test_set_temporary_context_overrides PASSED [ 48%]
+test/units/template/test_template.py::test_set_temporary_context_searchpath PASSED [ 50%]
+test/units/template/test_template.py::test_set_temporary_context_available_variables PASSED [ 51%]
+test/units/template/test_template.py::test_trust_as_template[yep] PASSED [ 52%]
+test/units/template/test_template.py::test_trust_as_template[<lambda>] PASSED [ 53%]
+test/units/template/test_template.py::test_trust_as_template[value2] PASSED [ 55%]
+test/units/template/test_template.py::test_trust_as_template[value3] PASSED [ 56%]
+test/units/template/test_template.py::test_not_is_trusted_as_template[None] PASSED [ 57%]
+test/units/template/test_template.py::test_not_is_trusted_as_template[123] PASSED [ 59%]
+test/units/template/test_template.py::test_not_is_trusted_as_template[value2] PASSED [ 60%]
+test/units/template/test_template.py::test_not_is_trusted_as_template[value3] PASSED [ 61%]
+test/units/template/test_template.py::test_trust_as_template_errors[123-TypeError-cannot be applied to] PASSED [ 63%]
+test/units/template/test_template.py::test_trust_as_template_errors[hey-NotTaggableError-is not taggable] PASSED [ 64%]
+test/units/template/test_template.py::test_templar_finalize_lazy PASSED  [ 65%]
+test/units/template/test_template.py::test_templar_finalize_undefined PASSED [ 67%]
+test/units/template/test_template.py::test_set_temporary_context_with_none PASSED [ 68%]
+test/units/template/test_template.py::test_copy_with_new_env_with_none PASSED [ 69%]
+test/units/parsing/yaml/test_objects.py::test_ansible_mapping PASSED     [ 71%]
+test/units/parsing/yaml/test_objects.py::test_tagged_ansible_mapping PASSED [ 72%]
+test/units/parsing/yaml/test_objects.py::test_ansible_unicode PASSED     [ 73%]
+test/units/parsing/yaml/test_objects.py::test_tagged_ansible_unicode PASSED [ 75%]
+test/units/parsing/yaml/test_objects.py::test_ansible_sequence PASSED    [ 76%]
+test/units/parsing/yaml/test_objects.py::test_tagged_ansible_sequence PASSED [ 77%]
+test/units/parsing/yaml/test_objects.py::test_ansible_vault_encrypted_unicode PASSED [ 78%]
+test/units/parsing/yaml/test_objects.py::test_tagged_ansible_vault_encrypted_unicode PASSED [ 80%]
+test/units/parsing/yaml/test_objects.py::test_invalid_attribute PASSED   [ 81%]
+test/units/parsing/yaml/test_objects.py::test_non_ansible_attribute PASSED [ 82%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleMapping-args0-kwargs0-expected0] PASSED [ 84%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleMapping-args1-kwargs1-expected1] PASSED [ 85%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleMapping-args2-kwargs2-expected2] PASSED [ 86%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleUnicode-args3-kwargs3-] PASSED [ 88%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleUnicode-args4-kwargs4-Hello] PASSED [ 89%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleUnicode-args5-kwargs5-Hello] PASSED [ 90%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleUnicode-args6-kwargs6-b'Hello'] PASSED [ 92%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleUnicode-args7-kwargs7-Hello] PASSED [ 93%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleSequence-args8-kwargs8-expected8] PASSED [ 94%]
+test/units/parsing/yaml/test_objects.py::test_objects[_AnsibleSequence-args9-kwargs9-expected9] PASSED [ 96%]
+lib/ansible/plugins/test/core.py::test_defined <- ../usr/local/lib/python3.11/site-packages/jinja2/tests.py RERUN [ 97%]
+lib/ansible/plugins/test/core.py::test_defined <- ../usr/local/lib/python3.11/site-packages/jinja2/tests.py RERUN [ 97%]
+lib/ansible/plugins/test/core.py::test_defined <- ../usr/local/lib/python3.11/site-packages/jinja2/tests.py RERUN [ 97%]
+lib/ansible/plugins/test/core.py::test_defined <- ../usr/local/lib/python3.11/site-packages/jinja2/tests.py ERROR [ 97%]
+lib/ansible/plugins/test/core.py::test_undefined <- ../usr/local/lib/python3.11/site-packages/jinja2/tests.py RERUN [ 98%]
+lib/ansible/plugins/test/core.py::test_undefined <- ../usr/local/lib/python3.11/site-packages/jinja2/tests.py RERUN [ 98%]
+lib/ansible/plugins/test/core.py::test_undefined <- ../usr/local/lib/python3.11/site-packages/jinja2/tests.py RERUN [ 98%]
+lib/ansible/plugins/test/core.py::test_undefined <- ../usr/local/lib/python3.11/site-packages/jinja2/tests.py ERROR [ 98%]
+lib/ansible/plugins/test/core.py::TestModule::tests PASSED               [100%]
+
+==================================== ERRORS ====================================
+________________________ ERROR at setup of test_defined ________________________
+file /usr/local/lib/python3.11/site-packages/jinja2/tests.py, line 30
+  def test_defined(value: t.Any) -> bool:
+E       fixture 'value' not found
+>       available fixtures: anyio_backend, anyio_backend_name, anyio_backend_options, cache, capfd, capfdbinary, caplog, capsys, capsysbinary, class_mocker, doctest_namespace, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, mocker, module_mocker, monkeypatch, package_mocker, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, session_mocker, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/usr/local/lib/python3.11/site-packages/jinja2/tests.py:30
+_______________________ ERROR at setup of test_undefined _______________________
+file /usr/local/lib/python3.11/site-packages/jinja2/tests.py, line 47
+  def test_undefined(value: t.Any) -> bool:
+E       fixture 'value' not found
+>       available fixtures: anyio_backend, anyio_backend_name, anyio_backend_options, cache, capfd, capfdbinary, caplog, capsys, capsysbinary, class_mocker, doctest_namespace, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, mocker, module_mocker, monkeypatch, package_mocker, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, session_mocker, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/usr/local/lib/python3.11/site-packages/jinja2/tests.py:47
+=============================== warnings summary ===============================
+lib/ansible/plugins/test/core.py::TestModule::tests
+  /usr/local/lib/python3.11/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but lib/ansible/plugins/test/core.py::TestModule::tests returned {'failed': <function failed at 0x74e9413ac400>, 'failure': <function failed at 0x74e9413ac400>, 'succeeded': <function success at 0x74e9413ac4a0>, 'success': <function success at 0x74e9413ac4a0>, 'successful': <function success at 0x74e9413ac4a0>, 'reachable': <function reachable at 0x74e9413ad9e0>, 'unreachable': <function unreachable at 0x74e9413ad940>, 'timedout': <function timedout at 0x74e9413b3740>, 'changed': <function changed at 0x74e9413ada80>, 'change': <function changed at 0x74e9413ada80>, 'skipped': <function skipped at 0x74e9413adb20>, 'skip': <function skipped at 0x74e9413adb20>, 'finished': <function finished at 0x74e9413adc60>, 'started': <function started at 0x74e9413adbc0>, 'match': <function match at 0x74e9413adee0>, 'search': <function search at 0x74e9413adf80>, 'regex': <function regex at 0x74e9413add00>, 'version_compare': <function version_compare at 0x74e9413ae020>, 'version': <function version_compare at 0x74e9413ae020>, 'any': <built-in function any>, 'all': <built-in function all>, 'truthy': <function truthy at 0x74e9413ae0c0>, 'falsy': <function falsy at 0x74e9413ae160>, 'vault_encrypted': <function vault_encrypted at 0x74e9413adda0>, 'vaulted_file': <function vaulted_file at 0x74e9413ade40>, 'defined': <function test_defined at 0x74e9413ae200>, 'undefined': <function test_undefined at 0x74e9413ae2a0>}, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR lib/ansible/plugins/test/core.py::test_defined
+ERROR lib/ansible/plugins/test/core.py::test_undefined
+=============== 74 passed, 1 warning, 2 errors, 6 rerun in 0.13s ===============

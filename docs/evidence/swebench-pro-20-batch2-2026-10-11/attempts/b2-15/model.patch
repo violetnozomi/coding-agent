@@ -1,0 +1,155 @@
+diff --git a/lib/ansible/parsing/yaml/objects.py b/lib/ansible/parsing/yaml/objects.py
+index d8d6a2a646..bf62190976 100644
+--- a/lib/ansible/parsing/yaml/objects.py
++++ b/lib/ansible/parsing/yaml/objects.py
+@@ -12,21 +12,41 @@ from ansible.parsing import vault as _vault
+ class _AnsibleMapping(dict):
+     """Backwards compatibility type."""
+ 
+-    def __new__(cls, value):
+-        return _datatag.AnsibleTagHelper.tag_copy(value, dict(value))
++    def __new__(cls, value=None, /, **kwargs):
++        # Match the base `dict` construction patterns: no argument yields an empty mapping, an initial
++        # mapping/iterable may be given, and additional keyword pairs may be supplied alongside it.
++        if value is None:
++            value = {}
++
++        src = value
++        result = dict(value, **kwargs)
++
++        return _datatag.AnsibleTagHelper.tag_copy(src, result)
+ 
+ 
+ class _AnsibleUnicode(str):
+     """Backwards compatibility type."""
+ 
+-    def __new__(cls, value):
+-        return _datatag.AnsibleTagHelper.tag_copy(value, str(value))
++    def __new__(cls, *args, **kwargs):
++        # Delegate to `str` so that the value can be supplied positionally or via the `object` keyword, and so that
++        # `encoding`/`errors` are only forwarded when the caller explicitly supplied them (no hardcoded defaults).
++        if args:
++            src = args[0]
++        elif 'object' in kwargs:
++            src = kwargs['object']
++        else:
++            src = ''
++
++        value = str(*args, **kwargs)
++
++        return _datatag.AnsibleTagHelper.tag_copy(src, value)
+ 
+ 
+ class _AnsibleSequence(list):
+     """Backwards compatibility type."""
+ 
+-    def __new__(cls, value):
++    def __new__(cls, value=()):
++        # No argument yields an empty list; an iterable yields a list equal to that iterable.
+         return _datatag.AnsibleTagHelper.tag_copy(value, list(value))
+ 
+ 
+diff --git a/lib/ansible/template/__init__.py b/lib/ansible/template/__init__.py
+index b9e466c4e4..dd3bf4eb35 100644
+--- a/lib/ansible/template/__init__.py
++++ b/lib/ansible/template/__init__.py
+@@ -159,6 +159,9 @@ class Templar:
+                 version='2.23',
+             )
+ 
++        # Unset (None) override values are ignored, preserving the current configuration.
++        context_overrides = {key: value for key, value in context_overrides.items() if value is not None}
++
+         if context_overrides:
+             _display.deprecated(
+                 msg='Passing Jinja environment overrides to `copy_with_new_env` is deprecated.',
+@@ -213,7 +216,7 @@ class Templar:
+                     original[key] = getattr(target, key)
+                     setattr(target, key, value)
+ 
+-            self._overrides = self._overrides.merge(context_overrides)
++            self._overrides = self._overrides.merge({key: value for key, value in context_overrides.items() if value is not None})
+ 
+             yield
+         finally:
+diff --git a/test/units/parsing/yaml/test_objects.py b/test/units/parsing/yaml/test_objects.py
+index 409a9effd4..e9d296ff08 100644
+--- a/test/units/parsing/yaml/test_objects.py
++++ b/test/units/parsing/yaml/test_objects.py
+@@ -80,6 +80,76 @@ def test_tagged_ansible_sequence() -> None:
+     assert AnsibleTagHelper.tags(result) == AnsibleTagHelper.tags(value)
+ 
+ 
++def test_ansible_mapping_empty() -> None:
++    from ansible.parsing.yaml.objects import AnsibleMapping
++
++    result = AnsibleMapping()
++
++    assert type(result) is AnsibleMapping  # pylint: disable=unidiomatic-typecheck
++    assert result == {}
++
++
++def test_ansible_mapping_kwargs() -> None:
++    from ansible.parsing.yaml.objects import AnsibleMapping
++
++    result = AnsibleMapping(dict(a=1), b=2)
++
++    assert result == dict(a=1, b=2)
++
++
++def test_ansible_unicode_empty() -> None:
++    from ansible.parsing.yaml.objects import AnsibleUnicode
++
++    result = AnsibleUnicode()
++
++    assert type(result) is AnsibleUnicode  # pylint: disable=unidiomatic-typecheck
++    assert result == ''
++
++
++def test_ansible_unicode_object_kwarg() -> None:
++    from ansible.parsing.yaml.objects import AnsibleUnicode
++
++    result = AnsibleUnicode(object='hello')
++
++    assert result == 'hello'
++
++
++def test_ansible_unicode_bytes_no_encoding() -> None:
++    from ansible.parsing.yaml.objects import AnsibleUnicode
++
++    # No explicit encoding: must match `str(...)` exactly, i.e. the bytes-repr form.
++    result = AnsibleUnicode(b'Hello')
++
++    assert result == str(b'Hello')
++    assert result == "b'Hello'"
++
++
++def test_ansible_unicode_bytes_with_encoding() -> None:
++    from ansible.parsing.yaml.objects import AnsibleUnicode
++
++    result = AnsibleUnicode(b'Hello', encoding='utf-8')
++
++    assert result == str(b'Hello', encoding='utf-8')
++    assert result == 'Hello'
++
++
++def test_ansible_sequence_empty() -> None:
++    from ansible.parsing.yaml.objects import AnsibleSequence
++
++    result = AnsibleSequence()
++
++    assert type(result) is AnsibleSequence  # pylint: disable=unidiomatic-typecheck
++    assert result == []
++
++
++def test_ansible_sequence_iterable() -> None:
++    from ansible.parsing.yaml.objects import AnsibleSequence
++
++    result = AnsibleSequence((1, 2, 3))
++
++    assert result == [1, 2, 3]
++
++
+ def test_ansible_vault_encrypted_unicode() -> None:
+     from ansible.parsing.yaml.objects import AnsibleVaultEncryptedUnicode
+ 

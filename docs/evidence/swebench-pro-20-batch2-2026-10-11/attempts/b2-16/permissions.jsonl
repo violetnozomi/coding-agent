@@ -1,0 +1,6 @@
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -k \"placeholder or non_placeholder or normalize\" -q 2>&1 | tail -20", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -k \"placeholder or non_placeholder or normalize\" -q 2>&1 | tail -25", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -k \"placeholder or non_placeholder or normalize\" -q 2>&1 | tail -8", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -q 2>&1 | tail -5", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/catalog/add_book/tests/test_add_book.py -q 2>&1 | tail -5", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace diff"}, "allowed": true}

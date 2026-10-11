@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "TestNewResourceDefault",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestGetTraceExporter",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestNewProvider",
+      "status": "PASSED"
+    }
+  ]
+}

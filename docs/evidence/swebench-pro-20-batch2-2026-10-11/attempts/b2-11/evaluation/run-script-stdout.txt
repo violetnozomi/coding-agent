@@ -1,0 +1,30 @@
+Running selected tests: TestGetTraceExporter TestNewResourceDefault TestNewProvider
+testing: warning: no tests to run
+PASS
+ok  	go.flipt.io/flipt/internal/cmd	0.011s [no tests to run]
+=== RUN   TestNewResourceDefault
+=== RUN   TestNewResourceDefault/with_envs
+=== RUN   TestNewResourceDefault/default
+--- PASS: TestNewResourceDefault (0.00s)
+    --- PASS: TestNewResourceDefault/with_envs (0.00s)
+    --- PASS: TestNewResourceDefault/default (0.00s)
+=== RUN   TestGetTraceExporter
+=== RUN   TestGetTraceExporter/Jaeger
+=== RUN   TestGetTraceExporter/Zipkin
+=== RUN   TestGetTraceExporter/OTLP_HTTP
+=== RUN   TestGetTraceExporter/OTLP_HTTPS
+=== RUN   TestGetTraceExporter/OTLP_GRPC
+=== RUN   TestGetTraceExporter/OTLP_default
+=== RUN   TestGetTraceExporter/Unsupported_Exporter
+--- PASS: TestGetTraceExporter (0.00s)
+    --- PASS: TestGetTraceExporter/Jaeger (0.00s)
+    --- PASS: TestGetTraceExporter/Zipkin (0.00s)
+    --- PASS: TestGetTraceExporter/OTLP_HTTP (0.00s)
+    --- PASS: TestGetTraceExporter/OTLP_HTTPS (0.00s)
+    --- PASS: TestGetTraceExporter/OTLP_GRPC (0.00s)
+    --- PASS: TestGetTraceExporter/OTLP_default (0.00s)
+    --- PASS: TestGetTraceExporter/Unsupported_Exporter (0.00s)
+=== RUN   TestNewProvider
+--- PASS: TestNewProvider (0.00s)
+PASS
+ok  	go.flipt.io/flipt/internal/tracing	0.008s

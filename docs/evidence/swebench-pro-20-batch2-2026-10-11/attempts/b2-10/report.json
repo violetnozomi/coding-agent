@@ -1,0 +1,14 @@
+{
+  "number": 10,
+  "instance_id": "instance_protonmail__webclients-4feccbc9990980aee26ea29035f8f931d6089895",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": true,
+  "agent_started_epoch": 1791719423.309719,
+  "agent_finished_epoch": 1791720043.8612478,
+  "status": "attempt_or_delivery_error",
+  "patch_sha256": "9d2e06ca8c8be9195adc67f6192a0528ac7674bc4e3d90b1f8e5b0a8adc6ca19",
+  "eval_status": "graded",
+  "error": "OSError('container_evidence_quota_or_free_space_exhausted; source retained')",
+  "physical_requests": 40
+}

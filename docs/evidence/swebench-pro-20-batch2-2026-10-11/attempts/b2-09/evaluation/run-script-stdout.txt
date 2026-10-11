@@ -1,0 +1,15 @@
+Running selected tests: test/units/modules/network/netvisor/test_pn_user.py
+Running selected tests with pytest...
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-8.4.1, pluggy-1.6.0 -- /usr/local/bin/python3.11
+cachedir: .pytest_cache
+rootdir: /app
+configfile: tox.ini
+plugins: anyio-4.10.0, xdist-3.8.0, mock-3.14.1, rerunfailures-15.1, forked-1.6.0
+collecting ... collected 3 items
+
+test/units/modules/network/netvisor/test_pn_user.py::TestUserModule::test_user_create PASSED [ 33%]
+test/units/modules/network/netvisor/test_pn_user.py::TestUserModule::test_user_delete PASSED [ 66%]
+test/units/modules/network/netvisor/test_pn_user.py::TestUserModule::test_user_modify PASSED [100%]
+
+============================== 3 passed in 0.05s ===============================

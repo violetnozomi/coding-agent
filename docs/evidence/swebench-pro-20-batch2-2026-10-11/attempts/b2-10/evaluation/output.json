@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "src/app/store/_links/extendedAttributes.test.ts | creates the struct from the folder",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/extendedAttributes.test.ts | creates the struct from the file",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/extendedAttributes.test.ts | parses the struct",
+      "status": "PASSED"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# go.flipt.io/flipt/internal/config
+internal/config/zz_probe.go:4:2: missing go.sum entry for module providing package go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc (imported by go.flipt.io/flipt/internal/config); to add:
+	go get go.flipt.io/flipt/internal/config

@@ -1,0 +1,10 @@
+{
+  "number": 8,
+  "instance_id": "instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "blocked",
+  "error": "RuntimeError(\"command failed (1): ['docker', 'pull', 'ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37']\")",
+  "physical_requests": 0
+}

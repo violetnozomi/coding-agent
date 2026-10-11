@@ -1,0 +1,23 @@
+{"tool": "bash", "input": {"command": "cat package.json"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cat applications/drive/package.json | head -60; echo \"---tsconfig---\"; cat applications/drive/tsconfig.json 2>/dev/null; echo \"---base---\"; cat tsconfig.base.json"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -8 2>/dev/null; echo \"---status---\"; git status --short 2>/dev/null | head; echo \"---branch---\"; git branch --show-current 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git diff -- applications/drive/src/app/store/_links/extendedAttributes.ts | head -200"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git show HEAD:applications/drive/src/app/store/_links/extendedAttributes.ts"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls applications/drive/ && cat applications/drive/jest.config.js 2>/dev/null; cat applications/drive/jest.config.ts 2>/dev/null; ls applications/drive/*.js 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace/applications/drive && ls -a | head -40 && cat jest.config.js 2>/dev/null || true"}, "allowed": false}
+{"tool": "bash", "input": {"command": "yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -40", "workdir": "applications/drive", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -30", "timeout": 180, "workdir": "applications/drive"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -30", "timeout": 120, "workdir": "applications/drive"}, "allowed": true}
+{"tool": "bash", "input": {"command": "timeout 118 yarn tsc --noEmit 2>&1 | tail -40", "timeout": 120, "workdir": "applications/drive"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls node_modules/.bin/tsc node_modules/typescript/bin/tsc 2>&1"}, "allowed": true}
+{"tool": "bash", "input": {"command": "timeout 115 node_modules/.bin/tsc --noEmit -p applications/drive/tsconfig.json 2>&1 | grep -i \"extendedAttributes\" | head -30; echo \"EXIT_DONE\"", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "timeout 115 ./node_modules/.bin/tsc --noEmit -p applications/drive/tsconfig.json 2>&1 | head -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "./node_modules/.bin/tsc --version"}, "allowed": false}
+{"tool": "bash", "input": {"command": "yarn workspace proton-drive check-types 2>&1 | head -40", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn workspace proton-drive check-types > tsc.log 2>&1; echo \"EXIT=$?\"; tail -20 tsc.log", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "rm -f tsc.log && yarn workspace proton-drive check-types 2>&1 | tail -5; echo \"TSC_EXIT=${PIPESTATUS[0]}\"", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls tsc.log 2>&1; echo \"---\"; yarn workspace proton-drive check-types 2>&1 | tail -5; echo \"TSC_DONE\"", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "rm -f tsc.log; git status --short"}, "allowed": false}
+{"tool": "bash", "input": {"command": "rm -f tsc.log && yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -12", "timeout": 120, "workdir": "applications/drive"}, "allowed": false}
+{"tool": "bash", "input": {"command": "rm tsc.log"}, "allowed": false}
+{"tool": "bash", "input": {"command": "rm -f tsc.log; git status --short; echo \"---\"; yarn jest src/app/store/_links/extendedAttributes.test.ts --coverage=false 2>&1 | tail -12", "timeout": 120, "workdir": "applications/drive"}, "allowed": false}

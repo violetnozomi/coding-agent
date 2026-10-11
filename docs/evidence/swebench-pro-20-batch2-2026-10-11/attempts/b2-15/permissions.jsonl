@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && git status --porcelain | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"def tag_copy\" lib/ansible/module_utils/_internal/_datatag/__init__.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"\nprint(repr(str(b'Hello')))\nprint(repr(str(b'Hello', encoding='utf-8')))\nprint(repr(str(object=b'Hello')))\nprint(repr(str(encoding='utf-8')))\nprint(repr(str()))\n\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 -c \"print(repr(str(b'Hello')))\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hi"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 -c 'print(repr(str(b\"Hello\")), repr(str(b\"Hello\", encoding=\"utf-8\")))'"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python3 --version"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 -c \"print(repr(str(object='x')), repr(str(b'Hello')), repr(str(b'Hello', encoding='utf-8')))\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 -c \"print(repr(str(encoding='utf-8')))\" 2>&1 | tail -2"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 -c \"\nimport ansible.parsing.yaml.objects as o\nprint([n for n in dir(o) if not n.startswith('__')])\n\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/parsing/yaml/objects.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/parsing/yaml/objects.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "python -m py_compile lib/ansible/template/__init__.py && echo OK"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"\nfrom ansible.parsing.yaml.objects import AnsibleMapping, AnsibleUnicode, AnsibleSequence\nprint(AnsibleMapping() == {})\nprint(AnsibleMapping(dict(a=1), b=2) == dict(a=1,b=2))\nprint(AnsibleMapping(a=1) == dict(a=1))\nimport typing\nprint(AnsibleUnicode() == '')\nprint(AnsibleUnicode('x') == 'x')\nprint(AnsibleUnicode(object='y') == 'y')\nprint(AnsibleUnicode(b'Hello') == str(b'Hello'))\nprint(AnsibleUnicode(b'Hello', encoding='utf-8') == str(b'Hello', encoding='utf-8'))\nprint(AnsibleSequence() == [])\nprint(AnsibleSequence((1,2)) == [1,2])\n\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest test/units/parsing/yaml/test_objects.py -q 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest test/units/parsing/yaml/test_objects.py test/units/template/test_template.py -q 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -c \"import ansible.parsing.yaml.objects as o; print(o.__file__)\"", "workdir": "/workspace"}, "allowed": true}

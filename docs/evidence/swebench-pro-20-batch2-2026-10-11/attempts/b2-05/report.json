@@ -1,0 +1,13 @@
+{
+  "number": 5,
+  "instance_id": "instance_navidrome__navidrome-3bc9e75b2843f91f6a1e9b604e321c2bd4fd442a",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": true,
+  "agent_started_epoch": 1791718523.3032286,
+  "agent_finished_epoch": 1791718903.6741931,
+  "status": "attempted",
+  "patch_sha256": "9d52fa949d05a1d21893c4fd32e0571fcce98523c053a92fa35f43d9bed2e8d7",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

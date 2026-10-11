@@ -1,0 +1,4 @@
+Running selected tests: src/app/store/_links/extendedAttributes.test.ts applications/drive/src/app/store/_links/extendedAttributes.test.ts
+Running test file: src/app/store/_links/extendedAttributes.test.ts
+Unknown test location: src/app/store/_links/extendedAttributes.test.ts
+Running test file: applications/drive/src/app/store/_links/extendedAttributes.test.ts

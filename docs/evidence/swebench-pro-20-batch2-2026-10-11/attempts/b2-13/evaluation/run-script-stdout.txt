@@ -1,0 +1,302 @@
+Running selected tests: test/components/views/messages/CallEvent-test.ts test/components/views/settings/devices/DeviceExpandDetailsButton-test.ts test/utils/localRoom/isRoomReady-test.ts test/settings/watchers/FontWatcher-test.ts test/utils/device/clientInformation-test.ts test/voice-broadcast/utils/setUpVoiceBroadcastPreRecording-test.ts test/voice-broadcast/models/VoiceBroadcastPreRecording-test.ts test/voice-broadcast/stores/VoiceBroadcastPreRecordingStore-test.ts test/components/views/rooms/RoomPreviewBar-test.ts test/components/views/voip/PipView-test.tsx test/components/views/right_panel/UserInfo-test.ts test/utils/membership-test.ts test/utils/location/locationEventGeoUri-test.ts test/components/views/context_menus/ThreadListContextMenu-test.ts test/components/views/beacon/BeaconListItem-test.ts test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts test/components/views/right_panel/PinnedMessagesCard-test.ts test/voice-broadcast/components/molecules/VoiceBroadcastPreRecordingPip-test.tsx test/components/views/location/Map-test.ts test/voice-broadcast/utils/findRoomLiveVoiceBroadcastFromUserAndDevice-test.ts test/components/views/elements/AppTile-test.ts
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+(node:2545) [DEP0044] DeprecationWarning: The `util.isArray` API is deprecated. Please use `Array.isArray()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS test/components/views/rooms/RoomPreviewBar-test.tsx (8.08 s)
+  <RoomPreviewBar />
+    ✓ renders joining message (15 ms)
+    ✓ renders rejecting message (2 ms)
+    ✓ renders loading message (2 ms)
+    ✓ renders not logged in message (3 ms)
+    ✓ should send room oob data to start login (55 ms)
+    ✓ renders kicked message (3 ms)
+    ✓ renders banned message (2 ms)
+    ✓ renders viewing room message when room an be previewed (2 ms)
+    ✓ renders viewing room message when room can not be previewed (4 ms)
+    with an error
+      ✓ renders room not found error (1 ms)
+      ✓ renders other errors (2 ms)
+    with an invite
+      without an invited email
+        for a non-dm room
+          ✓ renders invite message (6 ms)
+          ✓ renders join and reject action buttons correctly (3 ms)
+          ✓ renders reject and ignore action buttons when handler is provided (3 ms)
+          ✓ renders join and reject action buttons in reverse order when room can previewed (3 ms)
+          ✓ joins room on primary button click (3 ms)
+          ✓ rejects invite on secondary button click (3 ms)
+        for a dm room
+          ✓ renders invite message to a non-dm room (6 ms)
+          ✓ renders join and reject action buttons with correct labels (3 ms)
+      with an invited email
+        when client fails to get 3PIDs
+          ✓ renders error message (4 ms)
+          ✓ renders join button (2 ms)
+        when invitedEmail is not associated with current account
+          ✓ renders invite message with invited email (4 ms)
+          ✓ renders join button (2 ms)
+        when client has no identity server connected
+          ✓ renders invite message with invited email (5 ms)
+          ✓ renders join button (3 ms)
+        when client has an identity server connected
+          ✓ renders email mismatch message when invite email mxid doesnt match (5 ms)
+          ✓ renders invite message when invite email mxid match (4 ms)
+
+PASS test/components/views/elements/AppTile-test.tsx
+  AppTile
+    ✓ destroys non-persisted right panel widget on room change (11 ms)
+    ✓ distinguishes widgets with the same ID in different rooms (10 ms)
+    ✓ preserves non-persisted widget on container move (4 ms)
+    for a pinned widget
+      ✓ requiresClient should be true (14 ms)
+      ✓ clicking 'minimise' should send the widget to the right (5 ms)
+      ✓ clicking 'maximise' should send the widget to the center (4 ms)
+      for a maximised (centered) widget
+        ✓ clicking 'un-maximise' should send the widget to the top (3 ms)
+      with an existing widgetApi holding requiresClient = false
+        ✓ requiresClient should be false (4 ms)
+
+PASS test/components/views/voip/PipView-test.tsx
+  PipView
+    ✓ hides if there's no content (5 ms)
+    ✓ shows an active call with a maximise button (76 ms)
+    ✓ shows a persistent widget with pin and maximise buttons when viewing the room (16 ms)
+    ✓ shows a persistent widget with a return button when not viewing the room (6 ms)
+    when there is a voice broadcast recording and pre-recording
+      ✓ should render the voice broadcast recording PiP (13 ms)
+    when there is a voice broadcast playback and pre-recording
+      ✓ should render the voice broadcast pre-recording PiP (7 ms)
+    when there is a voice broadcast pre-recording
+      ✓ should render the voice broadcast pre-recording PiP (3 ms)
+    when viewing a room with a live voice broadcast
+      ✓ should render the voice broadcast playback pip (5 ms)
+      and the broadcast stops
+        ✓ should not render the voice broadcast playback pip (4 ms)
+      and leaving the room
+        ✓ should not render the voice broadcast playback pip (4 ms)
+
+PASS test/components/views/right_panel/PinnedMessagesCard-test.tsx
+  <PinnedMessagesCard />
+    ✓ updates when messages are pinned (36 ms)
+    ✓ updates when messages are unpinned (18 ms)
+    ✓ hides unpinnable events found in local timeline (5 ms)
+    ✓ hides unpinnable events not found in local timeline (4 ms)
+    ✓ accounts for edits (7 ms)
+    ✓ displays votes on polls not found in local timeline (16 ms)
+
+PASS test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts
+  startNewVoiceBroadcastRecording
+    when the current user is allowed to send voice broadcast info state events
+      when currently listening to a broadcast and there is no recording
+        ✓ should stop listen to the current broadcast and create a new recording (4 ms)
+      when there is already a current voice broadcast
+        ✓ should not start a voice broadcast (1 ms)
+        ✓ should show an info dialog (1 ms)
+      when there already is a live broadcast of the current user in the room
+        ✓ should not start a voice broadcast (1 ms)
+        ✓ should show an info dialog (1 ms)
+      when there already is a live broadcast of another user
+        ✓ should not start a voice broadcast (1 ms)
+        ✓ should show an info dialog
+    when the current user is not allowed to send voice broadcast info state events
+      ✓ should not start a voice broadcast (1 ms)
+      ✓ should show an info dialog (1 ms)
+
+PASS test/components/views/beacon/BeaconListItem-test.tsx
+  <BeaconListItem />
+    ✓ renders null when beacon is not live (3 ms)
+    ✓ renders null when beacon has no location (1 ms)
+    when a beacon is live and has locations
+      ✓ renders beacon info (8 ms)
+      non-self beacons
+        ✓ uses beacon description as beacon name (44 ms)
+        ✓ uses beacon owner mxid as beacon name for a beacon without description (3 ms)
+        ✓ renders location icon (3 ms)
+      self locations
+        ✓ renders beacon owner avatar (3 ms)
+        ✓ uses beacon owner name as beacon name (2 ms)
+      on location updates
+        ✓ updates last updated time on location updated (11 ms)
+      interactions
+        ✓ does not call onClick handler when clicking share button (3 ms)
+        ✓ calls onClick handler when clicking outside of share buttons (3 ms)
+
+(node:2545) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 WellKnown.client listeners added to [MockClientWithEventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(node:2545) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 error listeners added to [MockMap]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+PASS test/components/views/location/Map-test.tsx
+  <Map />
+    ✓ renders (6 ms)
+    onClientWellKnown emits
+      ✓ updates map style when style url is truthy (1 ms)
+      ✓ does not update map style when style url is truthy (1 ms)
+    map centering
+      ✓ does not try to center when no center uri provided (1 ms)
+      ✓ sets map center to centerGeoUri (1 ms)
+      ✓ handles invalid centerGeoUri (4 ms)
+      ✓ updates map center when centerGeoUri prop changes (2 ms)
+    map bounds
+      ✓ does not try to fit map bounds when no bounds provided (1 ms)
+      ✓ fits map to bounds (1 ms)
+      ✓ handles invalid bounds (1 ms)
+      ✓ updates map bounds when bounds prop changes (2 ms)
+    children
+      ✓ renders without children (1 ms)
+      ✓ renders children with map renderProp (2 ms)
+    onClick
+      ✓ eats clicks to maplibre attribution button (1 ms)
+      ✓ calls onClick (1 ms)
+
+PASS test/components/views/right_panel/UserInfo-test.tsx
+  <UserInfo />
+    ✓ closes on close button click (11 ms)
+    without a room
+      ✓ does not render space header (4 ms)
+      ✓ renders user info (3 ms)
+      ✓ renders encryption info panel without pending verification (5 ms)
+      ✓ renders encryption verification panel with pending verification (9 ms)
+      ✓ renders close button correctly when encryption panel with a pending verification request (3 ms)
+    with a room
+      ✓ renders user info (3 ms)
+      ✓ does not render space header when room is not a space room (16 ms)
+      ✓ renders space header when room is a space room (5 ms)
+      ✓ renders encryption info panel without pending verification (4 ms)
+      ✓ renders encryption verification panel with pending verification (8 ms)
+
+PASS test/components/views/messages/CallEvent-test.tsx
+  CallEvent
+    ✓ shows a message and duration if the call was ended (5 ms)
+    ✓ shows placeholder info if the call isn't loaded yet (13 ms)
+    ✓ shows call details and connection controls if the call is loaded (27 ms)
+
+PASS test/voice-broadcast/components/molecules/VoiceBroadcastPreRecordingPip-test.tsx
+  VoiceBroadcastPreRecordingPip
+    when rendered
+      ✓ should match the snapshot (8 ms)
+      and clicking the device label
+        ✓ should display the device selection (26 ms)
+        and selecting a device
+          ✓ should set it as current device (21 ms)
+          ✓ should not show the device selection (22 ms)
+
+PASS test/voice-broadcast/stores/VoiceBroadcastPreRecordingStore-test.ts
+  VoiceBroadcastPreRecordingStore
+    ✓ getCurrent() should return null
+    ✓ clearCurrent() should work
+    when setting a current recording
+      ✓ getCurrent() should return the recording
+      ✓ should emit a changed event with the recording
+      and calling destroy()
+        ✓ should remove all listeners
+        ✓ should deregister from the pre-recordings (1 ms)
+      and cancelling the pre-recording
+        ✓ should clear the current recording
+        ✓ should emit a changed event with null
+      and setting the same pre-recording again
+        ✓ should not emit a changed event
+      and setting another pre-recording
+        ✓ should deregister from the current pre-recording
+        ✓ getCurrent() should return the new recording (1 ms)
+        ✓ should emit a changed event with the new recording
+
+PASS test/utils/localRoom/isRoomReady-test.ts
+  isRoomReady
+    ✓ should return false if the room has no actual room id (1 ms)
+    for a room with an actual room id
+      ✓ it should return false
+      and the room is known to the client
+        ✓ it should return false (1 ms)
+        and all members have been invited or joined
+          ✓ it should return false (1 ms)
+          and a RoomHistoryVisibility event
+            ✓ it should return true
+            and an encrypted room
+              ✓ it should return false (1 ms)
+              and a room encryption state event
+                ✓ it should return true (1 ms)
+
+PASS test/voice-broadcast/utils/setUpVoiceBroadcastPreRecording-test.ts
+  setUpVoiceBroadcastPreRecording
+    when the preconditions fail
+      ✓ should return null (1 ms)
+    when the preconditions pass
+      and there is no user id
+        ✓ should return null (1 ms)
+      and there is no room member
+        ✓ should return null (1 ms)
+      and there is a room member and listening to another broadcast
+        ✓ should pause the current playback and create a voice broadcast pre-recording (1 ms)
+
+PASS test/utils/device/clientInformation-test.ts
+  recordClientInformation()
+    ✓ saves client information without url for electron clients (1 ms)
+    ✓ saves client information with url for non-electron clients
+  getDeviceClientInformation()
+    ✓ returns an empty object when no event exists for the device
+    ✓ returns client information for the device
+    ✓ excludes values with incorrect types
+
+PASS test/voice-broadcast/utils/findRoomLiveVoiceBroadcastFromUserAndDevice-test.ts
+  findRoomLiveVoiceBroadcastFromUserAndDevice
+    when there is no info event
+      ✓ should return null (1 ms)
+    when there is an info event without content
+      ✓ should return null
+    when there is a stopped info event
+      ✓ should return null
+    when there is a started info event from another device
+      ✓ should return null
+    when there is a started info event
+      ✓ should return this event
+
+PASS test/settings/watchers/FontWatcher-test.tsx
+  FontWatcher
+    ✓ should load font on start() (5 ms)
+    ✓ should load font on Action.OnLoggedIn (2 ms)
+    ✓ should reset font on Action.OnLoggedOut (3 ms)
+    Sets font as expected
+      ✓ encloses the fonts by double quotes and sets them as the system font (4 ms)
+      ✓ does not add double quotes if already present and sets the font as the system font (3 ms)
+      ✓ trims whitespace, encloses the fonts by double quotes, and sets them as the system font (2 ms)
+
+PASS test/components/views/context_menus/ThreadListContextMenu-test.tsx
+  ThreadListContextMenu
+    ✓ does not render the permalink (16 ms)
+    ✓ does render the permalink (13 ms)
+
+PASS test/voice-broadcast/models/VoiceBroadcastPreRecording-test.ts
+  VoiceBroadcastPreRecording
+    start
+      ✓ should start a new voice broadcast recording
+      ✓ should emit a dismiss event
+    cancel
+      ✓ should emit a dismiss event
+
+PASS test/utils/membership-test.ts
+  waitForMember
+    ✓ resolves with false if the timeout is reached (2 ms)
+    ✓ resolves with false if the timeout is reached, even if other RoomState.newMember events fire (30 ms)
+    ✓ resolves with true if RoomState.newMember fires (1 ms)
+
+PASS test/components/views/settings/devices/DeviceExpandDetailsButton-test.tsx
+  <DeviceExpandDetailsButton />
+    ✓ renders when not expanded (2 ms)
+    ✓ renders when expanded (1 ms)
+    ✓ calls onClick (1 ms)
+
+PASS test/utils/location/locationEventGeoUri-test.ts
+  locationEventGeoUri()
+    ✓ returns m.location uri when available (1 ms)
+    ✓ returns legacy uri when m.location content not found
+
+Test Suites: 21 passed, 21 total
+Tests:       156 passed, 156 total
+Snapshots:   25 passed, 25 total
+Time:        15.322 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+npm notice
+npm notice New major version of npm available! 10.9.2 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

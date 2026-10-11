@@ -1,0 +1,149 @@
+diff --git a/openlibrary/core/vendors.py b/openlibrary/core/vendors.py
+index da5748e14..99dfa0a72 100644
+--- a/openlibrary/core/vendors.py
++++ b/openlibrary/core/vendors.py
+@@ -219,6 +219,11 @@ class AmazonAPI:
+         images = getattr(product, 'images')
+         edition_info = item_info and getattr(item_info, 'content_info')
+         attribution = item_info and getattr(item_info, 'by_line_info')
++        languages = (
++            edition_info
++            and getattr(edition_info, 'languages', None)
++            and getattr(edition_info.languages, 'display_values', None)
++        )
+         price = (
+             getattr(product, 'offers')
+             and product.offers.listings
+@@ -316,6 +321,21 @@ class AmazonAPI:
+             ),
+         }
+ 
++        if languages:
++            # Amazon provides human-readable language names (e.g. "English").
++            # Pass them through verbatim and de-duplicate them while keeping
++            # their original order.
++            book['languages'] = list(
++                dict.fromkeys(
++                    display_value
++                    for display_value in (
++                        getattr(language, 'display_value', None)
++                        for language in languages
++                    )
++                    if display_value
++                )
++            )
++
+         if is_dvd(book):
+             return {}
+         return book
+@@ -491,6 +511,7 @@ def clean_amazon_metadata_for_load(metadata: dict) -> dict:
+         'isbn_10',
+         'isbn_13',
+         'physical_format',
++        'languages',
+     ]
+     conforming_metadata = {}
+     for k in conforming_fields:
+diff --git a/openlibrary/tests/core/test_vendors.py b/openlibrary/tests/core/test_vendors.py
+index 0389a96f8..266b9fd19 100644
+--- a/openlibrary/tests/core/test_vendors.py
++++ b/openlibrary/tests/core/test_vendors.py
+@@ -242,7 +242,8 @@ def test_clean_amazon_metadata_for_load_subtitle():
+         result.get('full_title')
+         == 'Killers of the Flower Moon : The Osage Murders and the Birth of the FBI'
+     )
+-    # TODO: test for, and implement languages
++    # Languages are passed through verbatim from the Amazon metadata.
++    assert result['languages'] == ['english']
+ 
+ 
+ def test_betterworldbooks_fmt():
+@@ -336,6 +337,24 @@ class Classifications:
+     binding: Binding
+ 
+ 
++@dataclass
++class LanguageType:
++    display_value: str | None
++
++
++@dataclass
++class Languages:
++    display_values: list[LanguageType] | None
++
++
++@dataclass
++class ContentInfo:
++    languages: Languages | None = None
++    publication_date: str | None = None
++    pages_count: str | None = None
++    edition: str | None = None
++
++
+ @dataclass
+ class Contributor:
+     locale: str | None
+@@ -395,6 +414,63 @@ def test_clean_amazon_metadata_does_not_load_DVDS_product_group(
+     assert result == expected
+ 
+ 
++def test_serialize_includes_languages() -> None:
++    """Languages from Amazon metadata are passed through verbatim."""
++    content_info = ContentInfo(
++        languages=Languages(
++            display_values=[
++                LanguageType('English'),
++                LanguageType('English'),
++                LanguageType('French'),
++            ]
++        )
++    )
++    item_info = ItemInfo(
++        classifications=None,
++        content_info=content_info,
++        by_line_info=None,
++        title='',
++    )
++    amazon_metadata = AmazonAPIReply(
++        item_info=item_info,
++        images='',
++        offers='',
++        asin='',
++    )
++    result = AmazonAPI.serialize(amazon_metadata)
++    # Duplicates removed, order and casing preserved, no code conversion.
++    assert result['languages'] == ['English', 'French']
++
++
++def test_serialize_omits_languages_when_absent() -> None:
++    """The languages key is not emitted when Amazon provides none."""
++    item_info = ItemInfo(
++        classifications=None,
++        content_info=ContentInfo(languages=None),
++        by_line_info=None,
++        title='',
++    )
++    amazon_metadata = AmazonAPIReply(
++        item_info=item_info,
++        images='',
++        offers='',
++        asin='',
++    )
++    result = AmazonAPI.serialize(amazon_metadata)
++    assert 'languages' not in result
++
++
++def test_clean_amazon_metadata_for_load_preserves_languages() -> None:
++    amazon = {
++        'title': 'The Sea Around Us',
++        'source_records': ['amazon:0190906766'],
++        'isbn_10': ['0190906766'],
++        'languages': ['English'],
++    }
++    result = clean_amazon_metadata_for_load(amazon)
++    assert result['languages'] == ['English']
++
++
+ def test_serialize_does_not_load_translators_as_authors() -> None:
+     """Ensure data load does not load translators as author and relies on fake API response objects"""
+     classification = None

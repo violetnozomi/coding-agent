@@ -1,0 +1,15 @@
+{"tool": "bash", "input": {"command": "pwd; ls"}, "allowed": false}
+{"tool": "bash", "input": {"command": "wc -l /workspace/lib/ansible/galaxy/collection.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status --short | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"child\" test/units/galaxy/ | head -30; echo \"===\"; grep -rn \"_is_child_path\\|is_child\" lib/ test/ 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/galaxy/collection.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/galaxy/collection.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/galaxy/collection.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest test/units/galaxy/test_collection.py -q 2>&1 | tail -40"}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "test", "command": "python -m pytest test/units/galaxy/test_collection.py -q 2>&1 | tail -40"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "test", "command": "grep -n \"def test_build_copy_symlink_target_inside_collection\" -A 30 test/units/galaxy/test_collection.py"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "test", "command": "cd /workspace && python -m pytest test/units/galaxy/test_collection.py -q -k \"symlink\" 2>&1 | tail -20; ls test/units/galaxy/"}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "test", "command": "cd /workspace && python -m pytest test/units/galaxy/test_collection.py -q -k symlink 2>&1 | tail -20"}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "test", "command": "cd /workspace && python -m pytest test/units/galaxy/test_collection.py -q --no-header -k \"symlink\" 2>&1 | tail -30"}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "test", "command": "cd /workspace && python -m pytest \"test/units/galaxy/test_collection.py::test_build_copy_symlink_target_inside_collection\" \"test/units/galaxy/test_collection.py::test_build_with_symlink_inside_collection\" \"test/units/galaxy/test_collection.py::test_build_ignore_symlink_target_outside_collection\" -q 2>&1 | tail -30"}, "allowed": false}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "test", "command": "cd /workspace && PYTHONPATH=/workspace/lib:/workspace/test python -m pytest test/units/galaxy/test_collection.py -q 2>&1 | tail -45"}, "allowed": false}

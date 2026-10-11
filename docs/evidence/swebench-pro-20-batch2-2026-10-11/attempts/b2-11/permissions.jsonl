@@ -1,0 +1,26 @@
+{"tool": "bash", "input": {"command": "pwd; ls -la"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls internal; echo \"---\"; ls internal/cmd; echo \"---\"; ls internal/tracing 2>/dev/null || echo \"no tracing pkg\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "head -5 go.mod; echo \"---\"; grep -n \"opentelemetry\" go.mod"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"url\\.\\|strconv\\.\\|resource\\.\\|semconv\\.\\|jaeger\\.\\|zipkin\\.\\|otlptrace\" internal/cmd/grpc.go"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git status --porcelain; echo \"---\"; ls internal/tracing"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff internal/cmd/grpc.go"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"config\\.\\|info\\.\" internal/cmd/grpc_test.go | head -20"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./internal/... 2>&1 | head -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./internal/... 2>&1 | head -30", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "ulimit -u 4096 2>/dev/null; export GOMAXPROCS=2 GOFLAGS=-p=1; go build ./internal/tracing/... ./internal/cmd/... 2>&1 | head -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "go vet ./internal/tracing/ 2>&1 | head -40", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "GOFLAGS=-p=1 GOMAXPROCS=1 go vet ./internal/tracing/ 2>&1 | tail -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./internal/tracing/ 2>&1 | head -40", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build ./internal/cmd/ 2>&1 | head -40", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build -p 1 ./internal/cmd/ 2>&1 | head -40", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 ./internal/tracing/ 2>&1 | tail -40", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -run 'TestNewResource|TestNewProvider|TestGetExporter' ./internal/tracing/ -v 2>&1 | tail -60", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/cmd -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/cmd -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -run 'TestNewResource|TestNewProvider|TestGetExporter' ./internal/tracing/ -v '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -run 'TestNewResource|TestNewProvider|TestGetExporter' ./internal/tracing/ -v '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -run 'TestNewResource|TestNewProvider|TestGetExporter' ./internal/tracing/ -v '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "targeted", "command": "go test -p 1 -run 'TestNewGRPCServer' ./internal/cmd/ '2>' '&' 1 | tail -20"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/cmd -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 ./internal/cmd/ -run TestNewGRPCServer 2>&1 | tail", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 ./internal/cmd/ -run TestNewGRPCServer 2>&1 | tail", "timeout": 120}, "allowed": true}

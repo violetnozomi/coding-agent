@@ -1,0 +1,100 @@
+instance_internetarchive__openlibrary-2abe28b472ffed563a87cfe83685b161b35263b0-v13642507b4fc1f8d234172bf8129942da2c2ca26: Pulling from scaleapi/swe-bench_pro-v2
+8a1e25ce7c4f: Pulling fs layer
+1103112ebfc4: Pulling fs layer
+e71929d49167: Pulling fs layer
+c529235f83c8: Pulling fs layer
+a47354887c31: Pulling fs layer
+df969da2534f: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+f3ad766ab6f8: Pulling fs layer
+47fa9e822265: Pulling fs layer
+5cdb7063ce30: Pulling fs layer
+aa8fb9399e7b: Pulling fs layer
+44f50e8a9139: Pulling fs layer
+1bcea7fe917d: Pulling fs layer
+8e7cc7fe1762: Pulling fs layer
+91273586f113: Pulling fs layer
+a37f422267a9: Pulling fs layer
+f0e39570bb3a: Pulling fs layer
+070320a3bcad: Pulling fs layer
+e46192a76b72: Pulling fs layer
+f3ad766ab6f8: Waiting
+2a5503444f0d: Pulling fs layer
+47fa9e822265: Waiting
+5cdb7063ce30: Waiting
+1bcea7fe917d: Waiting
+aa8fb9399e7b: Waiting
+8e7cc7fe1762: Waiting
+44f50e8a9139: Waiting
+91273586f113: Waiting
+a37f422267a9: Waiting
+f0e39570bb3a: Waiting
+2a5503444f0d: Waiting
+070320a3bcad: Waiting
+e46192a76b72: Waiting
+a47354887c31: Waiting
+df969da2534f: Waiting
+4f4fb700ef54: Waiting
+c529235f83c8: Waiting
+1103112ebfc4: Verifying Checksum
+1103112ebfc4: Download complete
+e71929d49167: Verifying Checksum
+e71929d49167: Download complete
+8a1e25ce7c4f: Verifying Checksum
+8a1e25ce7c4f: Download complete
+c529235f83c8: Verifying Checksum
+c529235f83c8: Download complete
+8a1e25ce7c4f: Pull complete
+1103112ebfc4: Pull complete
+e71929d49167: Pull complete
+c529235f83c8: Pull complete
+a47354887c31: Verifying Checksum
+a47354887c31: Download complete
+a47354887c31: Pull complete
+df969da2534f: Download complete
+df969da2534f: Pull complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
+4f4fb700ef54: Pull complete
+5cdb7063ce30: Verifying Checksum
+5cdb7063ce30: Download complete
+47fa9e822265: Verifying Checksum
+47fa9e822265: Download complete
+44f50e8a9139: Verifying Checksum
+44f50e8a9139: Download complete
+1bcea7fe917d: Verifying Checksum
+1bcea7fe917d: Download complete
+8e7cc7fe1762: Verifying Checksum
+8e7cc7fe1762: Download complete
+91273586f113: Verifying Checksum
+91273586f113: Download complete
+a37f422267a9: Verifying Checksum
+a37f422267a9: Download complete
+aa8fb9399e7b: Verifying Checksum
+aa8fb9399e7b: Download complete
+f0e39570bb3a: Verifying Checksum
+f0e39570bb3a: Download complete
+070320a3bcad: Verifying Checksum
+070320a3bcad: Download complete
+2a5503444f0d: Verifying Checksum
+2a5503444f0d: Download complete
+f3ad766ab6f8: Verifying Checksum
+f3ad766ab6f8: Download complete
+f3ad766ab6f8: Pull complete
+47fa9e822265: Pull complete
+5cdb7063ce30: Pull complete
+aa8fb9399e7b: Pull complete
+44f50e8a9139: Pull complete
+1bcea7fe917d: Pull complete
+8e7cc7fe1762: Pull complete
+91273586f113: Pull complete
+a37f422267a9: Pull complete
+f0e39570bb3a: Pull complete
+070320a3bcad: Pull complete
+e46192a76b72: Verifying Checksum
+e46192a76b72: Download complete
+e46192a76b72: Pull complete
+2a5503444f0d: Pull complete
+Digest: sha256:df9a9f72419f58075f0ec111be4df45ba7c2d3f9cfe952eaee00e814a7f28c2d
+Status: Downloaded newer image for ghcr.io/scaleapi/swe-bench_pro-v2:instance_internetarchive__openlibrary-2abe28b472ffed563a87cfe83685b161b35263b0-v13642507b4fc1f8d234172bf8129942da2c2ca26
+ghcr.io/scaleapi/swe-bench_pro-v2:instance_internetarchive__openlibrary-2abe28b472ffed563a87cfe83685b161b35263b0-v13642507b4fc1f8d234172bf8129942da2c2ca26

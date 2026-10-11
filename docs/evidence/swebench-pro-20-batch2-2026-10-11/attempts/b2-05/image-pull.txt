@@ -1,0 +1,98 @@
+instance_navidrome__navidrome-3bc9e75b2843f91f6a1e9b604e321c2bd4fd442a: Pulling from scaleapi/swe-bench_pro-v2
+cf05a52c0235: Pulling fs layer
+63964a8518f5: Pulling fs layer
+ca513cad200b: Pulling fs layer
+bb27318808bd: Pulling fs layer
+92b00dc8dfba: Pulling fs layer
+a9984258df29: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+e7a51c885a61: Pulling fs layer
+f0ffe8b56538: Pulling fs layer
+fed2d2f6a8c2: Pulling fs layer
+73aad7bfcd25: Pulling fs layer
+51e6f3382a99: Pulling fs layer
+cbf8842459eb: Pulling fs layer
+92205d3cb942: Pulling fs layer
+fb69d78a825a: Pulling fs layer
+c5121de2c3b4: Pulling fs layer
+fdec25174b1c: Pulling fs layer
+4f4fb700ef54: Waiting
+e7a51c885a61: Waiting
+fc1c0e4a4e7a: Pulling fs layer
+3c75fb30291f: Pulling fs layer
+f0ffe8b56538: Waiting
+73aad7bfcd25: Waiting
+fed2d2f6a8c2: Waiting
+cbf8842459eb: Waiting
+bb27318808bd: Waiting
+faca63c87798: Pulling fs layer
+51e6f3382a99: Waiting
+92205d3cb942: Waiting
+fb69d78a825a: Waiting
+fc1c0e4a4e7a: Waiting
+c5121de2c3b4: Waiting
+faca63c87798: Waiting
+fdec25174b1c: Waiting
+3c75fb30291f: Waiting
+92b00dc8dfba: Waiting
+a9984258df29: Waiting
+63964a8518f5: Verifying Checksum
+63964a8518f5: Download complete
+cf05a52c0235: Verifying Checksum
+cf05a52c0235: Download complete
+cf05a52c0235: Pull complete
+63964a8518f5: Pull complete
+ca513cad200b: Verifying Checksum
+ca513cad200b: Download complete
+ca513cad200b: Pull complete
+a9984258df29: Verifying Checksum
+a9984258df29: Download complete
+4f4fb700ef54: Download complete
+e7a51c885a61: Verifying Checksum
+e7a51c885a61: Download complete
+bb27318808bd: Verifying Checksum
+bb27318808bd: Download complete
+92b00dc8dfba: Verifying Checksum
+92b00dc8dfba: Download complete
+bb27318808bd: Pull complete
+92b00dc8dfba: Pull complete
+a9984258df29: Pull complete
+4f4fb700ef54: Pull complete
+e7a51c885a61: Pull complete
+fed2d2f6a8c2: Verifying Checksum
+fed2d2f6a8c2: Download complete
+f0ffe8b56538: Verifying Checksum
+f0ffe8b56538: Download complete
+f0ffe8b56538: Pull complete
+fed2d2f6a8c2: Pull complete
+cbf8842459eb: Verifying Checksum
+cbf8842459eb: Download complete
+92205d3cb942: Download complete
+73aad7bfcd25: Verifying Checksum
+73aad7bfcd25: Download complete
+73aad7bfcd25: Pull complete
+fb69d78a825a: Verifying Checksum
+fb69d78a825a: Download complete
+c5121de2c3b4: Verifying Checksum
+c5121de2c3b4: Download complete
+fdec25174b1c: Verifying Checksum
+fdec25174b1c: Download complete
+fc1c0e4a4e7a: Download complete
+51e6f3382a99: Verifying Checksum
+51e6f3382a99: Download complete
+51e6f3382a99: Pull complete
+cbf8842459eb: Pull complete
+92205d3cb942: Pull complete
+fb69d78a825a: Pull complete
+c5121de2c3b4: Pull complete
+fdec25174b1c: Pull complete
+fc1c0e4a4e7a: Pull complete
+faca63c87798: Verifying Checksum
+faca63c87798: Download complete
+3c75fb30291f: Verifying Checksum
+3c75fb30291f: Download complete
+3c75fb30291f: Pull complete
+faca63c87798: Pull complete
+Digest: sha256:778cdedb08ce28cc82a8402d32531ec4d1ea8f87774ccab15e344a21423d1087
+Status: Downloaded newer image for ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-3bc9e75b2843f91f6a1e9b604e321c2bd4fd442a
+ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-3bc9e75b2843f91f6a1e9b604e321c2bd4fd442a

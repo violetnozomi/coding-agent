@@ -1,0 +1,82 @@
+[
+  {
+    "tool_call_id": "call_00_sk5QYlCctE5uvJk74qji0999",
+    "input": {
+      "command": "ls /workspace/test/voice-broadcast/utils/ /workspace/test/voice-broadcast/models/ 2>/dev/null"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/workspace/test/voice-broadcast/models/:\nVoiceBroadcastPlayback-test.ts\nVoiceBroadcastPreRecording-test.ts\nVoiceBroadcastRecording-test.ts\n\n/workspace/test/voice-broadcast/utils/:\nVoiceBroadcastChunkEvents-test.ts\nVoiceBroadcastResumer-test.ts\n__snapshots__\nfindRoomLiveVoiceBroadcastFromUserAndDevice-test.ts\ngetChunkLength-test.ts\ngetMaxBroadcastLength-test.ts\nhasRoomLiveVoiceBroadcast-test.ts\nsetUpVoiceBroadcastPreRecording-test.ts\nshouldDisplayAsVoiceBroadcastRecordingTile-test.ts\nshouldDisplayAsVoiceBroadcastTile-test.ts\nstartNewVoiceBroadcastRecording-test.ts\ntest-utils.ts"
+  },
+  {
+    "tool_call_id": "call_00_BmLFlzQ2eT3eyEcZhNUV0030",
+    "input": {
+      "command": "cd /workspace && cat package.json | head -60 && ls node_modules/.bin/ | grep -i jest"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_qE7WGQtaVad9ctuYwUlM1158",
+    "input": {
+      "command": "ls /workspace | head -40; echo ---; grep -n \"\\\"test\\\"\\|jest\" /workspace/package.json | head -40"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_AisMM61DpjLhbbcuvxiH2140",
+    "input": {
+      "command": "cd /workspace && ls node_modules/jest-extended 2>/dev/null && echo yes || echo no; grep -rn \"jest-extended\" package.json test/setupTests.ts 2>/dev/null; ls test/ | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_5FoRRdDl7IYAsUVpe0e70944",
+    "input": {
+      "command": "cd /workspace && yarn jest test/voice-broadcast/utils/setUpVoiceBroadcastPreRecording-test.ts test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts 2>&1 | tail -50",
+      "timeout": 300
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_dwnRGUA079nNfViz1a2K5484",
+    "input": {
+      "command": "cd /workspace && yarn jest --silent test/voice-broadcast/utils/startNewVoiceBroadcastRecording-test.ts 2>&1 | tail -40",
+      "timeout": 300
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_VqZKuqkJKhIrshxHyanW1390",
+    "input": {
+      "command": "cd /workspace && npx tsc --noEmit -p tsconfig.json 2>&1 | head -60",
+      "timeout": 600
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "number": 13,
+  "instance_id": "instance_element-hq__element-web-459df4583e01e4744a52d45446e34183385442d6-vnan",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": true,
+  "agent_started_epoch": 1791720330.8437593,
+  "agent_finished_epoch": 1791720493.515838,
+  "status": "attempted",
+  "patch_sha256": "0c532eaa3a3690c7c249d89493407428babbc6144b34d79dc46289aed80d19ab",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

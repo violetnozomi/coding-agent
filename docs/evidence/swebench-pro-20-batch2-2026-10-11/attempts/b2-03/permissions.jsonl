@@ -1,0 +1,27 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls && echo \"---\" && git log --oneline -3"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat lib/ansible/plugins/loader.py | grep -n \"init_plugin_loader\" "}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n 80,115p lib/ansible/executor/task_executor.py && echo \"=== 980-1010\" && sed -n 975,1015p lib/ansible/executor/task_executor.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"WorkerProcess(\" lib/ test/ | head -30 && echo \"===\" && grep -rn \"new_stdin\" test/ | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pwd"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n 80,115p lib/ansible/executor/task_executor.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n 1000,1080p lib/ansible/executor/task_executor.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"new_stdin\\|connection_loader.get\\|cliargs\\|CLIARGS\\|collections_path\" lib/ansible/executor/task_executor.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n 1,60p lib/ansible/executor/task_queue_manager.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls test/units/executor/ && ls test/units/executor/process 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n 55,120p lib/ansible/plugins/connection/__init__.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n 1490,1545p lib/ansible/plugins/loader.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"def get_with_context\\|def get(\" lib/ansible/plugins/loader.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"cliargs\\|CLIARGS\\[\" lib/ansible/executor/ lib/ansible/plugins/strategy/__init__.py | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"CLIARGS\" lib/ansible/context.py | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"def __init__\" lib/ansible/plugins/connection/ssh.py lib/ansible/plugins/connection/winrm.py lib/ansible/plugins/connection/psrp.py lib/ansible/plugins/connection/local.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"import ansible; print(ansible.__version__)\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n 90,300p test/units/executor/test_task_executor.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"new_stdin\" test/units/plugins/connection/test_ssh.py test/units/plugins/connection/test_winrm.py test/units/plugins/connection/test_psrp.py lib/ansible/plugins/connection/__init__.py lib/ansible/executor/task_executor.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"connection\\|CLIARGS\\|cliargs\" lib/ansible/executor/task_queue_manager.py | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"WorkerProcess\" test/ 2>/dev/null; echo \"--- CLIArgs\"; grep -rn \"class CLIArgs\\|CLIARGS =\" lib/ansible/context.py lib/ansible/cli/__init__.py lib/ansible/module_utils/common/collections.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/executor/process/worker.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/executor/process/worker.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/executor/process/worker.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile lib/ansible/executor/process/worker.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
