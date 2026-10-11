@@ -1,0 +1,23 @@
+{
+  "authorization": "继续进行；你别设限制行吗？",
+  "aggregate_budget_cny": 50,
+  "previous_estimated_cost_cny": 3.52470736,
+  "continuation_estimated_budget_cny": 46.47529264,
+  "wire_max_tokens": null,
+  "provider_output_fee_reservation_tokens": 393216,
+  "main_internal_output_reserve_tokens": 65536,
+  "provider_context_tokens": 1000000,
+  "thinking": null,
+  "reasoning_effort": null,
+  "official_source": "https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/",
+  "source_checked": "2026-10-11",
+  "provider_default_is_provider_policy_not_unlimited_output": true,
+  "skip_previously_attempted": [
+    "01",
+    "02",
+    "03",
+    "06"
+  ],
+  "old_ledger_preserved": true,
+  "controlled_usage_not_online_efficiency_evidence": true
+}

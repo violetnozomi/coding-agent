@@ -79,6 +79,9 @@ def empirical_authorization_valid(grant) -> bool:
     if not isinstance(scope, list) or not scope or not all(isinstance(unit, str) for unit in scope):
         return False
     purpose = grant.get("purpose")
+    provider_reserve = grant.get("provider_output_reservation_tokens")
+    if "provider_output_reservation_tokens" in grant and (type(provider_reserve) is not int or provider_reserve < 1):
+        return False
     allowed_scope = (purpose == "review-effects-formal" and set(scope) <= {"u01", "u02", "u03", "u04", "a01"})
     if purpose == "swebench-verified":
         # 仍由宿主签发同一账本授权，仅增加冻结实例范围，不借用旧审查单元。
@@ -166,16 +169,20 @@ class RelayLedger:
             if not reason and key in self.seen:
                 reason = "duplicate_request_no_resend"
             output = payload.get("max_tokens")
+            empirical = self.empirical_authorization is not None
+            provider_reserve = self.empirical_authorization.get("provider_output_reservation_tokens") if empirical else None
+            provider_default = output is None and provider_reserve is not None and not binding.exact_output_limit
             choices = payload.get("n", 1)
             if not reason and (payload.get("model") != binding.model or type(choices) is not int or choices != 1):
                 reason = "model_or_choice_count_not_allowed"
-            if not reason and (not isinstance(output, int) or isinstance(output, bool) or output < 1
+            if not reason and not provider_default and (not isinstance(output, int) or isinstance(output, bool) or output < 1
                                or output > binding.output_limit
                                or (binding.exact_output_limit and output != binding.output_limit)):
                 reason = "frozen_output_limit_mismatch"
             if not reason and any(k in payload for k in ("url", "base_url", "endpoint", "max_completion_tokens")):
                 reason = "client_target_override_not_allowed"
-            empirical = self.empirical_authorization is not None
+            # 宿主可按 Provider 容量预留费用；原请求不注入输出限制。
+            output_reserved = max(output or 0, provider_reserve or 0) if not reason else 0
             count = accounting.reference_count if empirical else accounting.upper_bound
             digest = hashlib.sha256(raw).hexdigest()
             if not reason and empirical and (binding.experiment != self.empirical_authorization["purpose"]
@@ -194,9 +201,9 @@ class RelayLedger:
                 reason = "physical_request_cap_exhausted"
             if not reason and self.input_occupied + count > self.limits.input_total:
                 reason = "input_reservation_exhausted"
-            if not reason and self.output_occupied + output > self.limits.output_total:
+            if not reason and self.output_occupied + output_reserved > self.limits.output_total:
                 reason = "output_reservation_exhausted"
-            cost = self._estimated_cost(count, output) if not reason else 0.0
+            cost = self._estimated_cost(count, output_reserved) if not reason else 0.0
             if not reason and empirical and self.cost_occupied_cny + cost > self.empirical_authorization["cost_limit"]:
                 reason = "estimated_fee_reservation_exhausted"
             if reason:
@@ -205,7 +212,8 @@ class RelayLedger:
             attempt_id = uuid.uuid4().hex
             row = {"attempt_id": attempt_id, "experiment": binding.experiment, "bucket": binding.bucket,
                    "unit": binding.unit, "run": binding.run, "role": binding.role,
-                   "input_reserved": count, "output_reserved": output,
+                   "input_reserved": count, "output_requested": output, "output_reserved": output_reserved,
+                   "output_reservation_source": "provider_capacity" if provider_reserve else "request_limit",
                    "input_method": accounting.method, "input_exact": accounting.exact,
                    "evidence_level": accounting.evidence_level, "contract_id": accounting.contract_id,
                    "payload_sha256": digest, "status": "reserved", "usage": None}
@@ -216,7 +224,7 @@ class RelayLedger:
             self.attempts[attempt_id] = row
             self.counts[binding.bucket] = self.counts.get(binding.bucket, 0) + 1
             self.input_occupied += count
-            self.output_occupied += output
+            self.output_occupied += output_reserved
             self.cost_occupied_cny += cost
             return attempt_id
 
@@ -257,6 +265,7 @@ class RelayLedger:
             completion_claim = usage.get("completion_tokens") if isinstance(usage, dict) else None
             over_input = max(0, prompt_claim - row["input_reserved"]) if type(prompt_claim) is int and prompt_claim >= 0 else None
             over_output = max(0, completion_claim - row["output_reserved"]) if type(completion_claim) is int and completion_claim >= 0 else None
+            over_requested = max(0, completion_claim - row["output_requested"]) if type(completion_claim) is int and completion_claim >= 0 and type(row["output_requested"]) is int else None
             if conflicting_reports:
                 for report in conflicting_reports:
                     if not isinstance(report, dict):
@@ -276,6 +285,7 @@ class RelayLedger:
                           conflicting_reports=conflicting_reports,
                           usage_unknown_reason=None if trusted_usage is not None else ("missing_usage" if usage is None else "invalid_or_unsettled_usage"),
                           input_over_reservation=over_input, output_over_reservation=over_output,
+                          output_over_request_limit=over_requested,
                           reservation_retained=trusted_usage is None, ambiguous=ambiguous,
                           contract_failed=contract_failed, contract_id=row["contract_id"],
                           finish_reason=finish_reason, provider_model=provider_model, system_fingerprint=system_fingerprint)

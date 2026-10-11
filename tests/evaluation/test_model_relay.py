@@ -104,16 +104,18 @@ class FakeService:
 
 
 @contextmanager
-def running(tmp_path, *, mode="normal", limits=None, cap=2, output=64000, counter=fake_count, deadline=None):
+def running(tmp_path, *, mode="normal", limits=None, cap=2, output=64000, counter=fake_count, deadline=None, authorization=None, exact_output=True):
     fake = FakeService(mode)
     upstream = ThreadingHTTPServer(("127.0.0.1", 0), fake.handler())
     fake.server_port = upstream.server_port
     upstream.daemon_threads = True
     thread = threading.Thread(target=upstream.serve_forever, daemon=True)
     thread.start()
-    ledger = RelayLedger(tmp_path / "ledger.jsonl", limits or RelayLimits())
-    binding = RelayBinding("local-test", "autonomous", "r1", "main", cap, "local-model", output,
-                           deadline or time.monotonic() + 5)
+    ledger = RelayLedger(tmp_path / "ledger.jsonl", limits or RelayLimits(output_total=1000000 if authorization else 100000), empirical_authorization=authorization)
+    binding = RelayBinding(authorization["purpose"] if authorization else "local-test",
+                           authorization["scope"][0] if authorization else "autonomous", "r1", "main", cap,
+                           authorization["model"] if authorization else "local-model", output,
+                           deadline or time.monotonic() + 5, exact_output)
     path = tmp_path / "relay.sock"
     relay = RelayServer(path, ledger=ledger, binding=binding,
                         upstream=f"http://127.0.0.1:{upstream.server_port}/v1/chat/completions", counter=counter)
@@ -133,9 +135,11 @@ def running(tmp_path, *, mode="normal", limits=None, cap=2, output=64000, counte
         ledger.close()
 
 
-def post(path, *, nonce=None, model="local-model", output=64000, stream=False, extra=None, headers=None):
+def post(path, *, nonce=None, model="local-model", output=64000, stream=False, extra=None, headers=None, omit_output=False):
     payload = {"model": model, "messages": [{"role": "user", "content": "local"}],
                "max_tokens": output, "stream": stream, **(extra or {})}
+    if omit_output:
+        payload.pop("max_tokens")
     with httpx.Client(transport=httpx.HTTPTransport(uds=str(path)), trust_env=False, timeout=4) as client:
         return client.post("http://localhost/v1/chat/completions", json=payload,
                            headers={"X-NZ-Call-Id": nonce or uuid.uuid4().hex, **(headers or {})})
@@ -148,6 +152,91 @@ def test_n_plus_one_and_client_role_forgery_do_not_add_budget(tmp_path):
         assert post(path).status_code == 429
         assert len(fake.requests) == len(ledger.attempts) == 2
         assert set(ledger.counts) == {binding.bucket}
+
+
+def provider_output_grant(reservation=393216):
+    return {"purpose": "swebench-pro-v2", "model": "deepseek-flash", "account": "offline-test",
+            "scope": ["instance_example__project-" + "a" * 40], "instance_manifest_sha256": "a" * 64,
+            "authorization_text": "offline fixture", "input_mode": "empirical", "empirical_risk_accepted": True,
+            "contract_id": "local-fake-v1", "cost_currency": "CNY", "cost_limit": 50,
+            "valid_from": time.time() - 1, "valid_until": time.time() + 60,
+            "prices_cny_per_million": {"input": 2, "cached_input": 0.04, "output": 8},
+            "provider_output_reservation_tokens": reservation}
+
+
+def reference_count(raw, _payload):
+    return InputAccounting(None, "local-byte-reference", contract_id="local-fake-v1",
+                           payload_sha256=hashlib.sha256(raw).hexdigest(), reference_count=len(raw))
+
+
+def test_provider_default_output_uses_fee_reservation_without_setting_wire_limit(tmp_path):
+    with running(tmp_path, mode="length", output=393216, counter=reference_count,
+                 authorization=provider_output_grant(), exact_output=False) as (fake, ledger, binding, path):
+        fake.completion = 8001
+        assert post(path, model=binding.model, omit_output=True).status_code == 200
+        row = next(iter(ledger.attempts.values()))
+        assert row["output_reserved"] == 393216
+        assert row["output_requested"] is None
+        assert row["output_over_request_limit"] is None
+        assert row["output_over_reservation"] == 0
+        assert row["usage"]["completion_tokens"] == ledger.output_occupied == 8001
+        assert ledger.cost_occupied_cny == pytest.approx(
+            ((row["usage"]["prompt_tokens"] - 3) * 2 + 3 * .04 + 8001 * 8) / 1_000_000)
+        assert not ledger.failed_contracts
+        fake.completion = 64000
+        assert post(path, model=binding.model, omit_output=True).status_code == 200
+        assert all("max_tokens" not in p for p in fake.requests)
+        assert post(path, model=binding.model, output=393217).status_code == 429
+        assert len(fake.requests) == 2
+
+
+def test_report_above_requested_limit_within_paid_reservation_does_not_stop(tmp_path):
+    with running(tmp_path, output=8000, counter=reference_count,
+                 authorization=provider_output_grant()) as (fake, ledger, binding, path):
+        fake.completion = 8001
+        assert post(path, model=binding.model, output=8000).status_code == 200
+        assert post(path, model=binding.model, output=8000).status_code == 200
+        assert len(fake.requests) == 2 and not ledger.failed_contracts
+        assert next(iter(ledger.attempts.values()))["output_over_request_limit"] == 1
+
+
+@pytest.mark.parametrize("boundary", ["output", "fee"])
+def test_provider_capacity_reservation_counts_against_total_budget(tmp_path, boundary):
+    authorization = provider_output_grant()
+    if boundary == "fee":
+        authorization["cost_limit"] = .065
+    limits = RelayLimits(output_total=64000 if boundary == "output" else 1000000)
+    with running(tmp_path, output=393216, limits=limits, counter=reference_count,
+                 authorization=authorization, exact_output=False) as (fake, ledger, binding, path):
+        assert post(path, model=binding.model, omit_output=True).status_code == 429
+        assert not fake.requests and not ledger.attempts
+
+
+@pytest.mark.parametrize("reservation", [0, -1, True, 1.5, "393216", None])
+def test_invalid_provider_reservation_cannot_open_an_empirical_ledger(tmp_path, reservation):
+    with pytest.raises(ValueError, match="invalid_empirical_authorization"):
+        RelayLedger(tmp_path / "ledger", RelayLimits(), empirical_authorization=provider_output_grant(reservation))
+
+
+@pytest.mark.parametrize("mode", ["missing", "over_input", "above_capacity"])
+def test_provider_default_never_relaxes_unknown_usage_or_unreserved_cost(tmp_path, mode):
+    counter = lambda raw, p: InputAccounting(None, "local-reference", contract_id="local-fake-v1",
+        payload_sha256=hashlib.sha256(raw).hexdigest(), reference_count=100)
+    with running(tmp_path, mode="normal" if mode == "above_capacity" else mode, output=393216,
+                 counter=counter, authorization=provider_output_grant(), exact_output=False) as (fake, ledger, binding, path):
+        fake.completion = 393217 if mode == "above_capacity" else 7
+        assert post(path, model=binding.model, omit_output=True).status_code == 200
+        assert post(path, model=binding.model, omit_output=True).status_code == 429
+        assert len(fake.requests) == 1
+        row = next(iter(ledger.attempts.values()))
+        assert row["contract_failed"]
+        if mode == "missing":
+            assert row["usage"] is None
+            assert ledger.output_occupied == 393216
+        elif mode == "over_input":
+            assert row["input_over_reservation"] == 50
+        else:
+            assert row["output_over_reservation"] == 1
 
 
 @pytest.mark.parametrize("lim,reason", [(RelayLimits(requests=1), "physical_request"),

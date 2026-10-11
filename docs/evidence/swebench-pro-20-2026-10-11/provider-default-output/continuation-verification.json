@@ -1,0 +1,11 @@
+{
+  "checks": {
+    "authorized_known_stop_keeps_original_cost_and_token_usage": true,
+    "changed_ledger_denied": "previous_ledger_changed_after_stop_audit",
+    "missing_usage_denied": "previous_usage_not_valid_for_continuation",
+    "different_output_failure_denied": "previous_failure_not_the_authorized_output_margin_case",
+    "second_failure_denied": "unrecognized_previous_accounting_stop"
+  },
+  "paid_model_calls": 0,
+  "predecessor_real_ledger_not_modified": true
+}

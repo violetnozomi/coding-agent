@@ -1,0 +1,7 @@
+........................................................................ [ 81%]
+........s.....ss                                                         [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/evaluation/test_empirical_review_execution.py:201: frozen runtime / official tokenizer not selected; no downloads or remote model calls
+SKIPPED [1] tests/evaluation/test_deepseek_counting.py:41: official V4.1 resource not prepared: set NZ_DEEPSEEK_V41_TOKENIZER and audited recipe PYTHONPATH; no automatic download
+SKIPPED [1] tests/evaluation/test_deepseek_counting.py:76: official V4.1 resource not prepared: set NZ_DEEPSEEK_V41_TOKENIZER and audited recipe PYTHONPATH; no automatic download
+85 passed, 3 skipped in 43.04s

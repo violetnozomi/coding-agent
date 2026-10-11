@@ -55,7 +55,10 @@ def main():
 
     def request_kwargs(self, call):
         purpose.set(call.purpose.value)
-        return original(self, call)
+        fields = original(self, call)
+        if config.get("provider_default_output") and call.purpose.value == "coding":
+            fields.pop("max_tokens", None)
+        return fields
 
     gateway.ProductionModelGateway._request_kwargs = request_kwargs
 

@@ -175,12 +175,15 @@ def run_case(slot, case, image, ledger, counter, *, key=None, upstream=None, smo
     from nz_coder.evaluation.model_relay import RelayBinding, RelayServer
     servers = []
     name = "nz-pro20-agent-" + slot.name
+    default_output = json.loads((case / "input/run.json").read_text()).get("provider_default_output", False)
+    authorization = ledger.empirical_authorization
     deadline = time.monotonic() + (900 if smoke else 3000)
     try:
         for role, cap in (("main", 4 if smoke else 40), ("auxiliary", 4 if smoke else 6)):
             server = RelayServer(case / "sockets" / (role + ".sock"), ledger=ledger,
-                binding=RelayBinding("local-smoke" if smoke else "swebench-pro-v2", slot.name if smoke else slot_task(slot),
-                    slot.name, role, cap, MODEL, 8000, deadline, False),
+                binding=RelayBinding(authorization["purpose"] if authorization else "local-smoke",
+                    slot_task(slot) if authorization else slot.name,
+                    slot.name, role, cap, MODEL, 393216 if default_output else 8000, deadline, False),
                 upstream=upstream or "https://api.deepseek.com/v1/chat/completions", counter=counter,
                 remote_authorized=not smoke, api_key=key, trace_directory=slot / "private-provider")
             threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -195,9 +198,11 @@ def run_case(slot, case, image, ledger, counter, *, key=None, upstream=None, smo
             argv += ["--mount", f"type=bind,source={src},target={target}" + (",readonly" if readonly else "")]
         for k, v in {"HOME": "/home/agent", "TMPDIR": "/tmp", "PYTHONPATH": "/runtime:/opt/nz-site",
                 "PYTHONDONTWRITEBYTECODE": "1", "MODEL_ID": MODEL, "GOENV": "/home/agent/.config/go/env", "MAX_AGENT_TURNS": "3" if smoke else "40",
-                "MAX_OUTPUT_TOKENS": "8000", "NZ_PROVIDER_MAX_RETRIES": "0", "GOCACHE": "/tmp/go-build-cache",
+                "MAX_OUTPUT_TOKENS": "65536" if default_output else "8000", "NZ_PROVIDER_MAX_RETRIES": "0", "GOCACHE": "/tmp/go-build-cache",
                 "GOPROXY": "off", "GOTOOLCHAIN": "local", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"}.items():
             argv += ["--env", k + "=" + v]
+        if default_output:
+            argv += ["--env", "MAX_CONTEXT_TOKENS=1000000"]
         argv += [image, agent_python, "/driver/entry.py"]
         save(slot / "launch.json", argv)
         start = time.monotonic()
