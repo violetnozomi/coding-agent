@@ -1,0 +1,14 @@
+Running selected tests: scripts/monitoring/tests/test_utils_py.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.2, pytest-8.3.5, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pyproject.toml
+plugins: anyio-4.10.0, cov-6.1.1, asyncio-0.26.0, rerunfailures-15.1
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+scripts/monitoring/tests/test_utils_py.py::test_bash_run PASSED          [ 50%]
+scripts/monitoring/tests/test_utils_py.py::test_limit_server PASSED      [100%]
+
+============================== 2 passed in 0.07s ===============================

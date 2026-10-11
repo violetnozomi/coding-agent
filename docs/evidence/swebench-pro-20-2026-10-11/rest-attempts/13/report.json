@@ -1,0 +1,13 @@
+{
+  "instance_id": "instance_internetarchive__openlibrary-8a5a63af6e0be406aa6c8c9b6d5f28b2f1b6af5a-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+  "attempt": 1,
+  "agent_status": "completed",
+  "resolved": true,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/13",
+  "preparation_retry_not_agent_retry": true,
+  "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/pending/13",
+  "status": "attempted",
+  "patch_sha256": "50c4b96bc82e5f88852796eaa9f4507ea1770563da49c0a6d9215321b31a2b5a",
+  "eval_status": "graded",
+  "physical_requests": 39
+}

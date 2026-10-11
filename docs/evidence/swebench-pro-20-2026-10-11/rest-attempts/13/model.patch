@@ -1,0 +1,233 @@
+diff --git a/scripts/monitoring/monitor.py b/scripts/monitoring/monitor.py
+index fa898853c..7a53f989c 100644
+--- a/scripts/monitoring/monitor.py
++++ b/scripts/monitoring/monitor.py
+@@ -3,9 +3,10 @@
+ Defines various monitoring jobs, that check the health of the system.
+ """
+ 
++import asyncio
+ import os
+ 
+-from scripts.monitoring.utils import OlBlockingScheduler, bash_run, limit_server
++from scripts.monitoring.utils import OlAsyncIOScheduler, bash_run, limit_server
+ 
+ HOST = os.getenv("HOSTNAME")  # eg "ol-www0.us.archive.org"
+ 
+@@ -13,7 +14,7 @@ if not HOST:
+     raise ValueError("HOSTNAME environment variable not set.")
+ 
+ SERVER = HOST.split(".")[0]  # eg "ol-www0"
+-scheduler = OlBlockingScheduler()
++scheduler = OlAsyncIOScheduler()
+ 
+ 
+ @limit_server(["ol-web*", "ol-covers0"], scheduler)
+@@ -83,15 +84,21 @@ def log_top_ip_counts():
+     )
+ 
+ 
+-# Print out all jobs
+-jobs = scheduler.get_jobs()
+-print(f"{len(jobs)} job(s) registered:", flush=True)
+-for job in jobs:
+-    print(job, flush=True)
++async def main():
++    # Print out all jobs
++    jobs = scheduler.get_jobs()
++    print(f"{len(jobs)} job(s) registered:", flush=True)
++    for job in jobs:
++        print(job, flush=True)
+ 
+-# Start the scheduler
+-print(f"Monitoring started ({HOST})", flush=True)
+-try:
++    # Start the scheduler
++    print(f"Monitoring started ({HOST})", flush=True)
+     scheduler.start()
+-except (KeyboardInterrupt, SystemExit):
+-    scheduler.shutdown()
++    try:
++        await asyncio.Event().wait()
++    except (KeyboardInterrupt, SystemExit):
++        scheduler.shutdown()
++
++
++if __name__ == "__main__":
++    asyncio.run(main())
+diff --git a/scripts/monitoring/tests/test_utils_py.py b/scripts/monitoring/tests/test_utils_py.py
+index 246ed5440..6aa7bf7be 100644
+--- a/scripts/monitoring/tests/test_utils_py.py
++++ b/scripts/monitoring/tests/test_utils_py.py
+@@ -1,6 +1,13 @@
+ from unittest.mock import patch
+ 
+-from scripts.monitoring.utils import OlBlockingScheduler, bash_run, limit_server
++from apscheduler.schedulers.asyncio import AsyncIOScheduler
++
++from scripts.monitoring.utils import (
++    OlAsyncIOScheduler,
++    OlBlockingScheduler,
++    bash_run,
++    limit_server,
++)
+ 
+ 
+ def test_bash_run():
+@@ -57,8 +64,36 @@ def test_limit_server():
+         sample_job()
+         assert scheduler.get_job("sample_job") is not None
+ 
++
++def test_ol_async_io_scheduler_is_asyncio_based():
++    assert issubclass(OlAsyncIOScheduler, AsyncIOScheduler)
++
++
++def test_limit_server_async_scheduler():
++    with patch("os.environ.get", return_value="allowed-server"):
++        scheduler = OlAsyncIOScheduler()
++
++        @limit_server(["allowed-server"], scheduler)
++        @scheduler.scheduled_job("interval", seconds=60)
++        def sample_job():
++            pass
++
++        sample_job()
++        assert scheduler.get_job("sample_job") is not None
++
++    with patch("os.environ.get", return_value="other-server"):
++        scheduler = OlAsyncIOScheduler()
++
++        @limit_server(["allowed-server"], scheduler)
++        @scheduler.scheduled_job("interval", seconds=60)
++        def sample_job():
++            pass
++
++        sample_job()
++        assert scheduler.get_job("sample_job") is None
++
+     with patch("os.environ.get", return_value="ol-web0.us.archive.org"):
+-        scheduler = OlBlockingScheduler()
++        scheduler = OlAsyncIOScheduler()
+ 
+         @limit_server(["ol-web0"], scheduler)
+         @scheduler.scheduled_job("interval", seconds=60)
+diff --git a/scripts/monitoring/utils.py b/scripts/monitoring/utils.py
+index 1bc45c456..72339638a 100644
+--- a/scripts/monitoring/utils.py
++++ b/scripts/monitoring/utils.py
+@@ -1,7 +1,7 @@
++import contextlib
+ import fnmatch
+ import os
+ import subprocess
+-import typing
+ 
+ from apscheduler.events import (
+     EVENT_JOB_ERROR,
+@@ -9,18 +9,31 @@ from apscheduler.events import (
+     EVENT_JOB_SUBMITTED,
+     JobEvent,
+ )
++from apscheduler.jobstores.base import JobLookupError
++from apscheduler.schedulers.asyncio import AsyncIOScheduler
++from apscheduler.schedulers.base import BaseScheduler
+ from apscheduler.schedulers.blocking import BlockingScheduler
+ from apscheduler.util import undefined
+ 
+ 
+-class OlBlockingScheduler(BlockingScheduler):
++def _job_id(func, id):
++    # Default the job id to the function name to avoid duplicating it everywhere
++    return id or func.__name__
++
++
++class _OlSchedulerMixin:
++    """Shared behaviour for Open Library schedulers.
++
++    Jobs added through this scheduler default their id to the wrapped function's
++    name so they can be retrieved with ``scheduler.get_job("<function name>")``.
++    """
++
+     def __init__(self):
+         super().__init__({'apscheduler.timezone': 'UTC'})
+         self.add_listener(
+             job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_SUBMITTED
+         )
+ 
+-    @typing.override
+     def add_job(
+         self,
+         func,
+@@ -43,8 +56,7 @@ class OlBlockingScheduler(BlockingScheduler):
+             trigger,
+             args,
+             kwargs,
+-            # Override to avoid duplicating the function name everywhere
+-            id or func.__name__,
++            _job_id(func, id),
+             name,
+             misfire_grace_time,
+             coalesce,
+@@ -57,6 +69,14 @@ class OlBlockingScheduler(BlockingScheduler):
+         )
+ 
+ 
++class OlBlockingScheduler(_OlSchedulerMixin, BlockingScheduler):
++    """A blocking scheduler that defaults job ids to the function name."""
++
++
++class OlAsyncIOScheduler(_OlSchedulerMixin, AsyncIOScheduler):
++    """An asyncio-based scheduler that defaults job ids to the function name."""
++
++
+ def job_listener(event: JobEvent):
+     if event.code == EVENT_JOB_SUBMITTED:
+         print(f"Job {event.job_id} has started.", flush=True)
+@@ -99,22 +119,37 @@ def bash_run(cmd: str, sources: list[str] | None = None, capture_output=False):
+     )
+ 
+ 
+-def limit_server(allowed_servers: list[str], scheduler: BlockingScheduler):
++def limit_server(allowed_hosts: list[str], scheduler: BaseScheduler):
+     """
+-    Decorate that un-registers a job if the server does not match any of the allowed servers.
+-
+-    :param allowed_servers: List of allowed servers. Can include `*` for globbing, eg "ol-web*"
++    Decorator that only keeps a job registered on allowed hosts.
++
++    The current host is read from the ``HOSTNAME`` environment variable (rather
++    than via socket lookups so it can be controlled in tests/deploys). Jobs are
++    registered as usual via ``scheduler.scheduled_job(...)``; if the current host
++    does not match any of the allowed patterns the job is un-registered again.
++
++    :param allowed_hosts: List of allowed hosts. Supports exact names and simple
++        prefix wildcards, eg "ol-web*" or "allowed-server*". A short host also
++        matches its fully qualified domain name, eg "ol-web0" matches
++        "ol-web0.us.archive.org".
++    :param scheduler: The scheduler the job was registered with.
+     """
+ 
+     def decorator(func):
+         hostname = os.environ.get("HOSTNAME")
+         assert hostname
+-        server = hostname
+-        if hostname.endswith(".us.archive.org"):
+-            server = hostname.split(".")[0]
+ 
+-        if not any(fnmatch.fnmatch(server, pattern) for pattern in allowed_servers):
+-            scheduler.remove_job(func.__name__)
++        # Compare both the full hostname and its short (un-qualified) form so a
++        # pattern like "ol-web0" matches "ol-web0.us.archive.org".
++        candidates = {hostname, hostname.split(".")[0]}
++        if not any(
++            fnmatch.fnmatch(host, pattern)
++            for host in candidates
++            for pattern in allowed_hosts
++        ):
++            with contextlib.suppress(JobLookupError):
++                # The job was never registered (eg limit_server used on its own).
++                scheduler.remove_job(_job_id(func, None))
+         return func
+ 
+     return decorator

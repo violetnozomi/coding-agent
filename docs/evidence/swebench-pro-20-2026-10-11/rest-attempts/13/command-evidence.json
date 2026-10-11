@@ -1,0 +1,412 @@
+[
+  {
+    "tool_call_id": "call_00_ctM9QCjRlfN8uqpwicFi5579",
+    "input": {
+      "command": "ls /app 2>/dev/null && echo \"---APP EXISTS---\"; ls /workspace | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_qnszD8YUffEOVvn7g3dS0558",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 2>/dev/null; echo \"---\"; python -c \"import apscheduler; print(apscheduler.__version__)\" 2>&1; echo \"---\"; git status --short | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_WL0rveoDKE7cWxxJBdxG0836",
+    "input": {
+      "command": "echo hello; python --version; python -c \"import apscheduler, apscheduler.schedulers.asyncio as a; print(apscheduler.__version__)\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "hello\nPython 3.12.2\n3.11.0"
+  },
+  {
+    "tool_call_id": "call_00_frPrtNRyTJixuxXR27FQ4259",
+    "input": {
+      "command": "cd /workspace && python -m pytest scripts/monitoring/tests/test_utils_py.py -q 2>&1 | tail -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_IYUIRLcBoyhRrtbD8o2L8347",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3; echo \"---STATUS---\"; git status --short"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_XrAA5PfycUeZh1rJY3C73709",
+    "input": {
+      "command": "python -m pytest scripts/monitoring/tests/test_utils_py.py -q"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/usr/local/lib/python3.12/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option \"asyncio_default_fixture_loop_scope\" is unset.\nThe event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: \"function\", \"class\", \"module\", \"package\", \"session\"\n\n  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))\n..                                                                       [100%]\n2 passed in 0.04s"
+  },
+  {
+    "tool_call_id": "call_00_T63i1gLvssVwPNGDCuoS9672",
+    "input": {
+      "command": "python -c \"import apscheduler.schedulers.asyncio as a, inspect; print(inspect.getsource(a))\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "import asyncio\nfrom functools import partial, wraps\n\nfrom apscheduler.schedulers.base import BaseScheduler\nfrom apscheduler.util import maybe_ref\n\n\ndef run_in_event_loop(func):\n    @wraps(func)\n    def wrapper(self, *args, **kwargs):\n        wrapped = partial(func, self, *args, **kwargs)\n        self._eventloop.call_soon_threadsafe(wrapped)\n\n    return wrapper\n\n\nclass AsyncIOScheduler(BaseScheduler):\n    \"\"\"\n    A scheduler that runs on an asyncio (:pep:`3156`) event loop.\n\n    The default executor can run jobs based on native coroutines (``async def``).\n\n    Extra options:\n\n    ============== =============================================================\n    ``event_loop`` AsyncIO event loop to use (defaults to the global event loop)\n    ============== =============================================================\n    \"\"\"\n\n    _eventloop = None\n    _timeout = None\n\n    def start(self, paused=False):\n        if not self._eventloop:\n            self._eventloop = asyncio.get_running_loop()\n\n        super().start(paused)\n\n    @run_in_event_loop\n    def shutdown(self, wait=True):\n        super().shutdown(wait)\n        self._stop_timer()\n\n    def _configure(self, config):\n        self._eventloop = maybe_ref(config.pop(\"event_loop\", None))\n        super()._configure(config)\n\n    def _start_timer(self, wait_seconds):\n        self._stop_timer()\n        if wait_seconds is not None:\n            self._timeout = self._eventloop.call_later(wait_seconds, self.wakeup)\n\n    def _stop_timer(self):\n        if self._timeout:\n            self._timeout.cancel()\n            del self._timeout\n\n    @run_in_event_loop\n    def wakeup(self):\n        self._stop_timer()\n        wait_seconds = self._process_jobs()\n        self._start_timer(wait_seconds)\n\n    def _create_default_executor(self):\n        from apscheduler.executors.asyncio import AsyncIOExecutor\n\n        return AsyncIOExecutor()"
+  },
+  {
+    "tool_call_id": "call_00_dSobwSkLZn5RxhRFhmes7559",
+    "input": {
+      "command": "git --no-pager log --oneline -5"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "9d9f3a199 Merge pull request #10900 from internetarchive/web-book-privs\nd46645b00 Change privs for adding web books\n550da4381 Add `FULFILLED` special access status (#10899)\n09b6b5e1f add test to validate template files are compileable (#2900)\n975c2a4d0 (RUF012) Fixed mutable class Defaults- Task 1  (#10283)"
+  },
+  {
+    "tool_call_id": "call_00_xhNdMllTr4Tg0gHFo6cj5719",
+    "input": {
+      "command": "python - <<'EOF'\nimport inspect\nfrom apscheduler.schedulers.base import BaseScheduler\nprint(inspect.getsource(BaseScheduler.scheduled_job))\nprint(\"=== add_job ===\")\nprint(inspect.getsource(BaseScheduler.add_job))\nEOF"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "def scheduled_job(\n        self,\n        trigger,\n        args=None,\n        kwargs=None,\n        id=None,\n        name=None,\n        misfire_grace_time=undefined,\n        coalesce=undefined,\n        max_instances=undefined,\n        next_run_time=undefined,\n        jobstore=\"default\",\n        executor=\"default\",\n        **trigger_args,\n    ):\n        \"\"\"\n        scheduled_job(trigger, args=None, kwargs=None, id=None, \\\n            name=None, misfire_grace_time=undefined, \\\n            coalesce=undefined, max_instances=undefined, \\\n            next_run_time=undefined, jobstore='default', \\\n            executor='default',**trigger_args)\n\n        A decorator version of :meth:`add_job`, except that ``replace_existing`` is always\n        ``True``.\n\n        .. important:: The ``id`` argument must be given if scheduling a job in a persistent job\n        store. The scheduler cannot, however, enforce this requirement.\n\n        \"\"\"\n\n        def inner(func):\n            self.add_job(\n                func,\n                trigger,\n                args,\n                kwargs,\n                id,\n                name,\n                misfire_grace_time,\n                coalesce,\n                max_instances,\n                next_run_time,\n                jobstore,\n                executor,\n                True,\n                **trigger_args,\n            )\n            return func\n\n        return inner\n\n=== add_job ===\n    def add_job(\n        self,\n        func,\n        trigger=None,\n        args=None,\n        kwargs=None,\n        id=None,\n        name=None,\n        misfire_grace_time=undefined,\n        coalesce=undefined,\n        max_instances=undefined,\n        next_run_time=undefined,\n        jobstore=\"default\",\n        executor=\"default\",\n        replace_existing=False,\n        **trigger_args,\n    ):\n        \"\"\"\n        add_job(func, trigger=None, args=None, kwargs=None, id=None, \\\n            name=None, misfire_grace_time=undefined, coalesce=undefined, \\\n            max_instances=undefined, next_run_time=undefined, \\\n            jobstore='default', executor='default', \\\n            replace_existing=False, **trigger_args)\n\n        Adds the given job to the job list and wakes up the scheduler if it's already running.\n\n        Any option that defaults to ``undefined`` will be replaced with the corresponding default\n        value when the job is scheduled (which happens when the scheduler is started, or\n        immediately if the scheduler is already running).\n\n        The ``func`` argument can be given either as a callable object or a textual reference in\n        the ``package.module:some.object`` format, where the first half (separated by ``:``) is an\n        importable module and the second half is a reference to the callable object, relative to\n        the module.\n\n        The ``trigger`` argument can either be:\n          #. the alias name of the trigger (e.g. ``date``, ``interval`` or ``cron``), in which case\n            any extra keyword arguments to this method are passed on to the trigger's constructor\n          #. an instance of a trigger class\n\n        :param func: callable (or a textual reference to one) to run at the given time\n        :param str|apscheduler.triggers.base.BaseTrigger trigger: trigger that determines when\n            ``func`` is called\n        :param list|tuple args: list of positional arguments to call func with\n        :param dict kwargs: dict of keyword arguments to call func with\n        :param str|unicode id: explicit identifier for the job (for modifying it later)\n        :param str|unicode name: textual description of the job\n        :param int misfire_grace_time: seconds after the designated runtime that the job is still\n            allowed to be run (or ``None`` to allow the job to run no matter how late it is)\n        :param bool coalesce: run once instead of many times if the scheduler determines that the\n            job should be run more than once in succession\n        :param int max_instances: ma... (truncated)"
+  },
+  {
+    "tool_call_id": "call_00_skG1j1gEuIeq4GDh0UPA9496",
+    "input": {
+      "command": "python - <<'EOF'\nimport inspect\nfrom apscheduler.schedulers.base import BaseScheduler\nprint(inspect.getsource(BaseScheduler.remove_job))\nprint(\"=== _lookup_job ===\")\nprint(inspect.getsource(BaseScheduler._lookup_job))\nEOF"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "def remove_job(self, job_id, jobstore=None):\n        \"\"\"\n        Removes a job, preventing it from being run any more.\n\n        :param str|unicode job_id: the identifier of the job\n        :param str|unicode jobstore: alias of the job store that contains the job\n        :raises JobLookupError: if the job was not found\n\n        \"\"\"\n        jobstore_alias = None\n        with self._jobstores_lock:\n            # Check if the job is among the pending jobs\n            if self.state == STATE_STOPPED:\n                for i, (job, alias, replace_existing) in enumerate(self._pending_jobs):\n                    if job.id == job_id and jobstore in (None, alias):\n                        del self._pending_jobs[i]\n                        jobstore_alias = alias\n                        break\n            else:\n                # Otherwise, try to remove it from each store until it succeeds or we run out of\n                # stores to check\n                for alias, store in self._jobstores.items():\n                    if jobstore in (None, alias):\n                        try:\n                            store.remove_job(job_id)\n                            jobstore_alias = alias\n                            break\n                        except JobLookupError:\n                            continue\n\n        if jobstore_alias is None:\n            raise JobLookupError(job_id)\n\n        # Notify listeners that a job has been removed\n        event = JobEvent(EVENT_JOB_REMOVED, job_id, jobstore_alias)\n        self._dispatch_event(event)\n\n        self._logger.info(\"Removed job %s\", job_id)\n\n=== _lookup_job ===\n    def _lookup_job(self, job_id, jobstore_alias):\n        \"\"\"\n        Finds a job by its ID.\n\n        :type job_id: str\n        :param str jobstore_alias: alias of a job store to look in\n        :return tuple[Job, str]: a tuple of job, jobstore alias (jobstore alias is None in case of\n            a pending job)\n        :raises JobLookupError: if no job by the given ID is found.\n\n        \"\"\"\n        if self.state == STATE_STOPPED:\n            # Check if the job is among the pending jobs\n            for job, alias, replace_existing in self._pending_jobs:\n                if job.id == job_id:\n                    return job, None\n        else:\n            # Look in all job stores\n            for alias, store in self._jobstores.items():\n                if jobstore_alias in (None, alias):\n                    job = store.lookup_job(job_id)\n                    if job is not None:\n                        return job, alias\n\n        raise JobLookupError(job_id)"
+  },
+  {
+    "tool_call_id": "call_01_YGGILsWmy4PbaW6fGkpr2594",
+    "input": {
+      "command": "python - <<'EOF'\nimport inspect\nfrom apscheduler.schedulers.asyncio import AsyncIOScheduler\nprint(inspect.getsource(AsyncIOScheduler.__init__) if '__init__' in AsyncIOScheduler.__dict__ else \"no own init\")\nfrom apscheduler.schedulers.base import BaseScheduler\nprint(inspect.getsource(BaseScheduler.__init__))\nEOF"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "no own init\n    def __init__(self, gconfig={}, **options):\n        super().__init__()\n        self._executors = {}\n        self._executors_lock = self._create_lock()\n        self._jobstores = {}\n        self._jobstores_lock = self._create_lock()\n        self._listeners = []\n        self._listeners_lock = self._create_lock()\n        self._pending_jobs = []\n        self.state = STATE_STOPPED\n        self.configure(gconfig, **options)"
+  },
+  {
+    "tool_call_id": "call_00_7KB7QdZnOmZ2HUWyzYoj7105",
+    "input": {
+      "command": "git --no-pager log --oneline -8 -- scripts/monitoring/"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "d11c313b1 Update log_workers_cur_fn monitor to also list some ia fetching methods\nf828f4c94 Add top ip monitoring\n9ba9a1401 Add APScheduler to monitoring requirements\nf4dfa190d [pre-commit.ci] auto fixes from pre-commit.com hooks\n196a381d8 Fix failing test\n26ccabbfa Rename test_utils.py to avoid naming conflict\n303834ce0 Add testing for monitoring utils.sh\n9bbcf1151 Add some monitoring unit tests"
+  },
+  {
+    "tool_call_id": "call_01_hCPekgbd8yTFvXZHT6j76873",
+    "input": {
+      "command": "ls scripts/monitoring/tests/; echo \"---\"; sed -n '1,80p' scripts/monitoring/tests/test_utils_sh.py"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "__pycache__\nsample_covers_nginx_logs.log\ntest_utils_py.py\ntest_utils_sh.py\n---\nimport tempfile\n\nfrom scripts.monitoring.utils import bash_run\n\n\ndef test_bash_run():\n    # Test without sources\n    output = bash_run(\"echo 'Hello, World!'\", capture_output=True)\n    assert output.stdout.strip() == \"Hello, World!\"\n\n    # Test with sources\n    with (\n        tempfile.NamedTemporaryFile(mode='w', delete_on_close=False) as source1,\n        tempfile.NamedTemporaryFile(mode='w', delete_on_close=False) as source2,\n    ):\n        source1.write(\"export VAR1=source1\")\n        source2.write(\"export VAR2=source2\")\n        source1.close()\n        source2.close()\n\n        output = bash_run(\n            \"echo $VAR1 $VAR2\",\n            sources=[source1.name, source2.name],\n            capture_output=True,\n        )\n        assert output.stdout.strip() == \"source1 source2\"\n\n\ndef test_log_recent_bot_traffic():\n    with (\n        tempfile.NamedTemporaryFile(mode='w', delete_on_close=False) as aliases_fp,\n        tempfile.NamedTemporaryFile(delete_on_close=False) as nc_fp,\n    ):\n        # alias the docker command to return some noise\n        aliases_fp.write(\n            f\"\"\"\n                docker() {{\n                    cat scripts/monitoring/tests/sample_covers_nginx_logs.log\n                }}\n                export -f docker\n\n                nc() {{\n                    # Read stdin and write to nc_fp\n                    cat >> {nc_fp.name}\n                }}\n                export -f nc\n\n                date() {{\n                    echo \"1741054377\"\n                }}\n            \"\"\"\n        )\n        aliases_fp.close()\n        nc_fp.close()\n\n        bash_run(\n            \"log_recent_bot_traffic stats.ol-covers0.bot_traffic openlibrary-covers_nginx-1\",\n            sources=[aliases_fp.name, \"utils.sh\"],\n        )\n\n        with open(nc_fp.name) as f:\n            expected_output = \"\"\"\nstats.ol-covers0.bot_traffic.gptbot 2 1741054377\nstats.ol-covers0.bot_traffic.other 0 1741054377\nstats.ol-covers0.bot_traffic.non_bot 6 1741054377\n            \"\"\".strip()\n            assert f.read().strip() == expected_output\n\n\ndef test_log_recent_http_statuses():\n    with (\n        tempfile.NamedTemporaryFile(mode='w', delete_on_close=False) as aliases_fp,\n        tempfile.NamedTemporaryFile(delete_on_close=False) as nc_fp,\n    ):\n        # alias the docker command to return some noise\n        aliases_fp.write(\n            f\"\"\"\n                docker() {{\n                    cat scripts/monitoring/tests/sample_covers_nginx_logs.log\n                }}"
+  },
+  {
+    "tool_call_id": "call_00_11DwxEiF7OJcWTwgGnPN0721",
+    "input": {
+      "command": "python - <<'EOF'\nimport inspect\nfrom apscheduler.schedulers.base import BaseScheduler\nprint(inspect.getsource(BaseScheduler.get_job))\nprint(inspect.getsource(BaseScheduler.get_jobs))\nEOF"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "def get_job(self, job_id, jobstore=None):\n        \"\"\"\n        Returns the Job that matches the given ``job_id``.\n\n        :param str|unicode job_id: the identifier of the job\n        :param str|unicode jobstore: alias of the job store that most likely contains the job\n        :return: the Job by the given ID, or ``None`` if it wasn't found\n        :rtype: Job\n\n        \"\"\"\n        with self._jobstores_lock:\n            try:\n                return self._lookup_job(job_id, jobstore)[0]\n            except JobLookupError:\n                return\n\n    def get_jobs(self, jobstore=None, pending=None):\n        \"\"\"\n        Returns a list of pending jobs (if the scheduler hasn't been started yet) and scheduled\n        jobs, either from a specific job store or from all of them.\n\n        If the scheduler has not been started yet, only pending jobs can be returned because the\n        job stores haven't been started yet either.\n\n        :param str|unicode jobstore: alias of the job store\n        :param bool pending: **DEPRECATED**\n        :rtype: list[Job]\n\n        \"\"\"\n        if pending is not None:\n            warnings.warn(\n                'The \"pending\" option is deprecated -- get_jobs() always returns '\n                \"scheduled jobs if the scheduler has been started and pending jobs \"\n                \"otherwise\",\n                DeprecationWarning,\n            )\n\n        with self._jobstores_lock:\n            jobs = []\n            if self.state == STATE_STOPPED:\n                for job, alias, replace_existing in self._pending_jobs:\n                    if jobstore is None or alias == jobstore:\n                        jobs.append(job)\n            else:\n                for alias, store in self._jobstores.items():\n                    if jobstore is None or alias == jobstore:\n                        jobs.extend(store.get_all_jobs())\n\n            return jobs"
+  },
+  {
+    "tool_call_id": "call_00_PScKVCcqe1nnNM6m6KnG9336",
+    "input": {
+      "command": "git --no-pager log --all --oneline | head -20"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_l4NlMHb3DejBrdw71gcJ3677",
+    "input": {
+      "command": "git --no-pager branch -a | head -30"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "* main"
+  },
+  {
+    "tool_call_id": "call_01_Jet2YxXfhRvdGAu94jnO5048",
+    "input": {
+      "command": "git --no-pager status --short -- scripts/monitoring/ ; echo \"---diff---\"; git --no-pager diff -- scripts/monitoring/ | head -60"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "---diff---"
+  },
+  {
+    "tool_call_id": "call_00_lQYAZMkrKSDsHCCBM2Yq2124",
+    "input": {
+      "command": "python - <<'EOF'\nimport apscheduler.jobstores.base as b\nprint([n for n in dir(b) if 'Lookup' in n or 'Error' in n])\nfrom apscheduler.jobstores.base import JobLookupError\nprint(JobLookupError)\nimport apscheduler.schedulers.asyncio as a\nprint(a.AsyncIOScheduler)\nEOF"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "['ConflictingIdError', 'JobLookupError', 'TransientJobError']\n<class 'apscheduler.jobstores.base.JobLookupError'>\n<class 'apscheduler.schedulers.asyncio.AsyncIOScheduler'>"
+  },
+  {
+    "tool_call_id": "call_00_t3EQG3gf6iqEUVzDV4IV9937",
+    "input": {
+      "command": "python -m pytest scripts/monitoring/tests/test_utils_py.py -q 2>&1 | tail -15"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/usr/local/lib/python3.12/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option \"asyncio_default_fixture_loop_scope\" is unset.\nThe event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: \"function\", \"class\", \"module\", \"package\", \"session\"\n\n  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))\n..                                                                       [100%]\n2 passed in 0.03s"
+  },
+  {
+    "tool_call_id": "call_01_oQIABD9p8pCQeySoaHQq0916",
+    "input": {
+      "command": "python -m ruff check scripts/monitoring/utils.py 2>&1 | tail -30; echo \"---py_compile---\"; python -m py_compile scripts/monitoring/utils.py && echo OK"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "warning: The top-level linter settings are deprecated in favour of their counterparts in the `lint` section. Please update the following options in `pyproject.toml`:\n  - 'ignore' -> 'lint.ignore'\n  - 'select' -> 'lint.select'\n  - 'mccabe' -> 'lint.mccabe'\n  - 'pylint' -> 'lint.pylint'\n  - 'per-file-ignores' -> 'lint.per-file-ignores'\nscripts/monitoring/utils.py:182:13: SIM105 Use `contextlib.suppress(JobLookupError)` instead of `try`-`except`-`pass`\n    |\n180 |               for pattern in allowed_hosts\n181 |           ):\n182 | /             try:\n183 | |                 scheduler.remove_job(_job_id(func, None))\n184 | |             except JobLookupError:\n185 | |                 # The job was never registered (eg limit_server used on its own).\n186 | |                 pass\n    | |____________________^ SIM105\n187 |           return func\n    |\n    = help: Replace with `contextlib.suppress(JobLookupError)`\n\nFound 1 error.\n---py_compile---\nOK"
+  },
+  {
+    "tool_call_id": "call_00_cbhUf1iGKr0gyfuJgE6Q7693",
+    "input": {
+      "command": "sed -n '1,60p' scripts/monitoring/utils.py"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "import contextlib\nimport fnmatch\nimport os\nimport subprocess\nimport typing\n\nfrom apscheduler.events import (\n    EVENT_JOB_ERROR,\n    EVENT_JOB_EXECUTED,\n    EVENT_JOB_SUBMITTED,\n    JobEvent,\n)\nfrom apscheduler.jobstores.base import JobLookupError\nfrom apscheduler.schedulers.asyncio import AsyncIOScheduler\nfrom apscheduler.schedulers.base import BaseScheduler\nfrom apscheduler.schedulers.blocking import BlockingScheduler\nfrom apscheduler.util import undefined\n\n\ndef _job_id(func, id):\n    # Default the job id to the function name to avoid duplicating it everywhere\n    return id or func.__name__\n\n\nclass OlBlockingScheduler(BlockingScheduler):\n    def __init__(self):\n        super().__init__({'apscheduler.timezone': 'UTC'})\n        self.add_listener(\n            job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_SUBMITTED\n        )\n\n    @typing.override\n    def add_job(\n        self,\n        func,\n        trigger=None,\n        args=None,\n        kwargs=None,\n        id=None,\n        name=None,\n        misfire_grace_time=undefined,\n        coalesce=undefined,\n        max_instances=undefined,\n        next_run_time=undefined,\n        jobstore=\"default\",\n        executor=\"default\",\n        replace_existing=False,\n        **trigger_args,\n    ):\n        return super().add_job(\n            func,\n            trigger,\n            args,\n            kwargs,\n            _job_id(func, id),\n            name,\n            misfire_grace_time,\n            coalesce,\n            max_instances,\n            next_run_time,"
+  },
+  {
+    "tool_call_id": "call_01_RyJSESpwwR95CtDBsgf32161",
+    "input": {
+      "command": "sed -n '60,200p' scripts/monitoring/utils.py"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "next_run_time,\n            jobstore,\n            executor,\n            replace_existing,\n            **trigger_args,\n        )\n\n\nclass OlAsyncIOScheduler(AsyncIOScheduler):\n    \"\"\"An asyncio-based scheduler whose jobs default to the wrapped function's name.\"\"\"\n\n    def __init__(self):\n        super().__init__({'apscheduler.timezone': 'UTC'})\n        self.add_listener(\n            job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_SUBMITTED\n        )\n\n    @typing.override\n    def add_job(\n        self,\n        func,\n        trigger=None,\n        args=None,\n        kwargs=None,\n        id=None,\n        name=None,\n        misfire_grace_time=undefined,\n        coalesce=undefined,\n        max_instances=undefined,\n        next_run_time=undefined,\n        jobstore=\"default\",\n        executor=\"default\",\n        replace_existing=False,\n        **trigger_args,\n    ):\n        return super().add_job(\n            func,\n            trigger,\n            args,\n            kwargs,\n            _job_id(func, id),\n            name,\n            misfire_grace_time,\n            coalesce,\n            max_instances,\n            next_run_time,\n            jobstore,\n            executor,\n            replace_existing,\n            **trigger_args,\n        )\n\n\ndef job_listener(event: JobEvent):\n    if event.code == EVENT_JOB_SUBMITTED:\n        print(f\"Job {event.job_id} has started.\", flush=True)\n    elif event.code == EVENT_JOB_EXECUTED:\n        print(f\"Job {event.job_id} completed successfully.\", flush=True)\n    elif event.code == EVENT_JOB_ERROR:\n        print(f\"Job {event.job_id} failed.\", flush=True)\n\n\ndef bash_run(cmd: str, sources: list[str] | None = None, capture_output=False):\n    if not sources:\n        sources = []\n\n    source_paths = [\n        (\n            os.path.join(\"scripts\", \"monitoring\", source)\n            if not os.path.isabs(source)\n            else source\n        )\n        for source in sources\n    ]\n    bash_command = \"\\n\".join(\n        (\n            'set -e',\n            *(f'source \"{path}\"' for path in source_paths),\n            cmd,\n        )\n    )\n\n    return subprocess.run(\n        [\n            \"bash\",\n            \"-c\",\n            bash_command,\n        ],\n        check=True,\n        # Mainly for testing:\n        capture_output=capture_output,\n        text=capture_output if capture_output else None,\n    )\n\n\ndef limit_server(allowed_hosts: list[str], scheduler: BaseScheduler):\n    \"\"\"\n    Decorator that only keeps a job registered on allowed hosts.\n\n    The current host is read from the ``HOSTNAME`` environment variable (rather\n    than via socket lookups so it can be controlled in tests/deploys). Jobs are\n    registered as usual via ``scheduler.scheduled_job(...)``; if the current host\n    does not match any of the allowed patterns the job is un-registered again.\n\n    :param allowed_hosts: List of allowed hosts. Supports exact names and simple\n        prefix wildcards, eg \"ol-web*\" or \"allowed-server*\". A short host also\n        matches its fully qualified domain name, eg \"ol-web0\" matches\n        \"ol-web0.us.archive.org\".\n    :param scheduler: The scheduler the job was registered with.\n    \"\"\"\n\n    def decorator(func):\n        hostname = os.environ.get(\"HOSTNAME\")\n        assert hostname\n\n        # Compare both the full hostname and its short (un-qualified) form so a\n        # pattern like \"ol-web0\" matches \"ol-web0.us.archive.org\".\n        candidates = {hostname, hostname.split(\".\")[0]}\n        if not any(\n            fnmatch.fnmatch(host, pattern)\n            for host in candidates\n            for pattern in allowed_hosts\n        ):\n            with contextlib.suppress(JobLookupError):\n                # The job was never registered (eg limit_server used on its own).\n                scheduler.remove_job(_job_id(func, None))\n        return func\n\n    return decorator"
+  },
+  {
+    "tool_call_id": "call_00_8mXAmRyc5bIuiDJetard2789",
+    "input": {
+      "command": "python -m ruff check scripts/monitoring/utils.py 2>&1 | tail -20"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_qXKb7jpzATUnRNJJMTui2550",
+    "input": {
+      "command": "python -m pytest scripts/monitoring/tests/test_utils_py.py -q 2>&1 | tail -8"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/usr/local/lib/python3.12/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option \"asyncio_default_fixture_loop_scope\" is unset.\nThe event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: \"function\", \"class\", \"module\", \"package\", \"session\"\n\n  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))\n..                                                                       [100%]\n2 passed in 0.03s"
+  },
+  {
+    "tool_call_id": "verification-stage-static-5",
+    "input": {
+      "command": "python -m py_compile scripts/monitoring/utils.py",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(python completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_0lRerZZApHmQFidxtrjy0561",
+    "input": {
+      "command": "python -m ruff check scripts/monitoring/utils.py 2>&1 | tail -3; echo \"=== tests ===\"; python -m pytest scripts/monitoring/tests/ -q 2>&1 | tail -6"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "- 'pylint' -> 'lint.pylint'\n  - 'per-file-ignores' -> 'lint.per-file-ignores'\nAll checks passed!\n=== tests ===\n/usr/local/lib/python3.12/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option \"asyncio_default_fixture_loop_scope\" is unset.\nThe event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: \"function\", \"class\", \"module\", \"package\", \"session\"\n\n  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))\n.....                                                                    [100%]\n5 passed in 0.09s"
+  },
+  {
+    "tool_call_id": "call_01_7qivgC6WNkI3qWCpaPA72747",
+    "input": {
+      "command": "python - <<'EOF'\nimport asyncio, os\nfrom unittest.mock import patch\nfrom scripts.monitoring.utils import OlAsyncIOScheduler, limit_server\nfrom apscheduler.schedulers.asyncio import AsyncIOScheduler\n\nassert issubclass(OlAsyncIOScheduler, AsyncIOScheduler), \"must inherit AsyncIOScheduler\"\n\nasync def main():\n    for host, allowed, expected in [\n        (\"allowed-server\", [\"allowed-server\"], True),\n        (\"other-server\", [\"allowed-server\"], False),\n        (\"allowed-server0\", [\"allowed-server*\"], True),\n        (\"ol-web0.us.archive.org\", [\"ol-web0\"], True),\n    ]:\n        with patch(\"os.environ.get\", return_value=host):\n            sched = OlAsyncIOScheduler()\n\n            @limit_server(allowed, sched)\n            @sched.scheduled_job(\"interval\", seconds=60)\n            def sample_job():\n                pass\n\n            sample_job()\n            got = sched.get_job(\"sample_job\") is not None\n            assert got == expected, (host, allowed, expected, got)\n    # real env var path\n    assert \"HOSTNAME\" in os.environ or True\n    print(\"async scheduler checks OK\")\n\nasyncio.run(main())\nEOF"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_jWeYXJhVNkAaetpaAU7C7144",
+    "input": {
+      "command": "python -m pytest scripts/monitoring/tests/test_utils_py.py -q 2>&1 | tail -5"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: \"function\", \"class\", \"module\", \"package\", \"session\"\n\n  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))\n....                                                                     [100%]\n4 passed in 0.04s"
+  },
+  {
+    "tool_call_id": "call_01_ET_qcRMKNyFTT4lSc6756kc2033",
+    "input": {
+      "command": "python -m ruff check scripts/monitoring/utils.py scripts/monitoring/tests/test_utils_py.py 2>&1 | tail -3"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "- 'pylint' -> 'lint.pylint'\n  - 'per-file-ignores' -> 'lint.per-file-ignores'\nAll checks passed!"
+  },
+  {
+    "tool_call_id": "verification-stage-static-7",
+    "input": {
+      "command": "python -m py_compile scripts/monitoring/utils.py",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(python completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_5S4oSs7CAtMnveNhQN7C4703",
+    "input": {
+      "command": "python -m py_compile scripts/monitoring/monitor.py && echo \"monitor OK\"; python -m ruff check scripts/monitoring/ 2>&1 | tail -5"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "monitor OK\n  - 'select' -> 'lint.select'\n  - 'mccabe' -> 'lint.mccabe'\n  - 'pylint' -> 'lint.pylint'\n  - 'per-file-ignores' -> 'lint.per-file-ignores'\nAll checks passed!"
+  },
+  {
+    "tool_call_id": "call_01_QnO5ECBJWMKc3dzjDlgY6403",
+    "input": {
+      "command": "python -m pytest scripts/monitoring/tests/test_utils_py.py -q 2>&1 | tail -3; echo \"=== SERVER usage ===\"; grep -n \"SERVER\" scripts/monitoring/monitor.py"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))\n....                                                                     [100%]\n4 passed in 0.03s\n=== SERVER usage ===\n16:SERVER = HOST.split(\".\")[0]  # eg \"ol-www0\"\n24:    bash_run(f\"log_workers_cur_fn stats.{SERVER}.workers.cur_fn\", sources=[\"utils.sh\"])\n31:    match SERVER:\n39:            raise ValueError(f\"Unknown server: {SERVER}\")\n51:    match SERVER:\n59:            raise ValueError(f\"Unknown server: {SERVER}\")\n71:    match SERVER:\n79:            raise ValueError(f\"Unknown server: {SERVER}\")"
+  },
+  {
+    "tool_call_id": "verification-stage-targeted-7",
+    "input": {
+      "command": "python -m pytest scripts/monitoring/tests/test_utils_py.py -q",
+      "_nz_runtime_verification_stage": "targeted"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/usr/local/lib/python3.12/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option \"asyncio_default_fixture_loop_scope\" is unset.\nThe event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: \"function\", \"class\", \"module\", \"package\", \"session\"\n\n  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))\n....                                                                     [100%]\n4 passed in 0.03s"
+  },
+  {
+    "tool_call_id": "call_01_QNWh6KhSoDvdnpwzNxX99979",
+    "input": {
+      "command": "HOSTNAME=ol-web0.us.archive.org python -c \"import scripts.monitoring.monitor as m; print('jobs:', [j.id for j in m.scheduler.get_jobs()])\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_u6so2ivEfDgD4CjYdkOZ5701",
+    "input": {
+      "command": "cd /workspace && HOSTNAME=ol-web0.us.archive.org python -c \"import scripts.monitoring.monitor as m; print('jobs:', sorted(j.id for j in m.scheduler.get_jobs()))\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ygXSsXWfJtloBiJEoDpk1771",
+    "input": {
+      "command": "python -c \"\nimport os\nos.environ['HOSTNAME'] = 'ol-web0.us.archive.org'\nimport scripts.monitoring.monitor as m\nprint('jobs:', sorted(j.id for j in m.scheduler.get_jobs()))\n\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "jobs: ['log_workers_cur_fn']"
+  },
+  {
+    "tool_call_id": "call_00_TIkGt6GEDLqNBb34ZGTy1527",
+    "input": {
+      "command": "for h in ol-covers0 ol-www0.us.archive.org ol-db0; do python -c \"\nimport os\nos.environ['HOSTNAME'] = '$h'\nimport scripts.monitoring.monitor as m\nprint('$h ->', sorted(j.id for j in m.scheduler.get_jobs()))\n\"; done"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]
