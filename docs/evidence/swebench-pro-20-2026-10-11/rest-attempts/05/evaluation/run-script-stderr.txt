@@ -1,0 +1,42 @@
+PASS src/app/helpers/expiration.test.ts (115 MB heap size)
+  canSetExpiration
+    ✓ should return false if feature flag is false (1 ms)
+    ✓ should return false if user is free
+    ✓ should return true if feature flag is true and user is paid
+    ✓ should return false if labelIDs contains spam or trash
+  getExpirationTime
+    ✓ should return null if days is undefined (1 ms)
+    ✓ should return a Unix timestamp if days is > 0
+  getMinExpirationTime
+    ✓ should return undefined if date is not today
+    ✓ should return a Date if date is today
+    ✓ should return a Date with minutes set to 0 or 30
+    ✓ should return a older next interval from now with a difference of at least 30 minutes
+
+Test Suites: 1 passed, 1 total
+Tests:       10 passed, 10 total
+Snapshots:   0 total
+Time:        17.446 s
+Ran all test suites matching /src\/app\/helpers\/expiration.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+PASS src/app/helpers/expiration.test.ts (70 MB heap size)
+  canSetExpiration
+    ✓ should return false if feature flag is false (1 ms)
+    ✓ should return false if user is free
+    ✓ should return true if feature flag is true and user is paid
+    ✓ should return false if labelIDs contains spam or trash
+  getExpirationTime
+    ✓ should return null if days is undefined
+    ✓ should return a Unix timestamp if days is > 0 (1 ms)
+  getMinExpirationTime
+    ✓ should return undefined if date is not today
+    ✓ should return a Date if date is today
+    ✓ should return a Date with minutes set to 0 or 30
+    ✓ should return a older next interval from now with a difference of at least 30 minutes (1 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       10 passed, 10 total
+Snapshots:   0 total
+Time:        4.894 s
+Ran all test suites matching /applications\/mail\/src\/app\/helpers\/expiration.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

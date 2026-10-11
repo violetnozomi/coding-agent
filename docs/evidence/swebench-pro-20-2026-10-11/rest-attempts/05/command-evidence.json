@@ -1,0 +1,273 @@
+[
+  {
+    "tool_call_id": "call_00_F3WtjcwNKA1p1vEh41tQ2712",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /workspace/applications/mail/src/app/helpers/ 2>/dev/null | head -50"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "LICENSE\nREADME.md\napplications\nfindApp.config.mjs\nnode_modules\npackage.json\npackages\nplugin-postinstall.js\nrenovate.json\ntsconfig.base.json\nyarn.lock\n---\n__mocks__\naddresses.ts\nattachment\nautoDelete.ts\nbase64.ts\ncalendar\ncomposerPositioning.ts\nconversation.ts\ncounter.test.ts\ncounter.ts\ndate.test.ts\ndate.ts\ndedent.ts\ndisplaySignature.js\ndom.test.ts\ndom.ts\nelements.test.ts\nelements.ts\nencryptedSearch\nencryptionType.js\nencryptionType.test.ts\neo\nerrors.test.ts\nerrors.ts\nexpiration.test.ts\nexpiration.ts\nlabels.test.ts\nlabels.ts\nmail.test.ts\nmail.ts\nmailSettings.test.ts\nmailSettings.ts\nmailboxUrl.ts\nmessage\npaging.test.ts\npaging.ts\nparserHtml.test.ts\nparserHtml.ts\nrecipients.test.ts\nrecipients.ts\nschedule.test.ts\nschedule.ts\nsend\nsidebar.test.ts\nsidebar.ts\nstring.test.ts\nstring.ts\ntest\ntextToHtml.test.ts\ntextToHtml.ts"
+  },
+  {
+    "tool_call_id": "call_01_jBAiV1Nr07hKoJhtHqXN6922",
+    "input": {
+      "command": "grep -n \"getMinExpirationTime\" applications/mail/src/app/components/message/modals/CustomExpirationModal.tsx"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "21:import { getMinExpirationTime } from '../../../helpers/expiration';\n112:                        min={getMinExpirationTime(date)}"
+  },
+  {
+    "tool_call_id": "call_00_2sj0lWmHRZXkNr982y7G7633",
+    "input": {
+      "command": "cd /workspace && sed -n '1,60p' applications/mail/package.json 2>/dev/null; ls applications/mail | head; cat applications/mail/jest.config.js 2>/dev/null | head -30"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_xC5FBlMQCkGI8vzgwyah1435",
+    "input": {
+      "command": "cd /workspace/applications/mail && npx jest src/app/helpers/expiration.test.ts 2>&1 | tail -50",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_c3LC9XCUphH9ilsMsYRo4936",
+    "input": {
+      "command": "echo hi"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "hi"
+  },
+  {
+    "tool_call_id": "call_00_OF7tu2dnIUcqIS8V0K6H0364",
+    "input": {
+      "command": "cd /workspace && yarn jest --config applications/mail/jest.config.js applications/mail/src/app/helpers/expiration.test.ts 2>&1 | tail -40",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_bmMXpJ7wdmNfHofmLrgK5976",
+    "input": {
+      "command": "npx jest --config jest.config.js src/app/helpers/expiration.test.ts 2>&1 | tail -40",
+      "workdir": "applications/mail",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_TZ06yZ9sZg3vIuuPJ3rl2246",
+    "input": {
+      "command": "grep -n '\"test\"' /workspace/applications/mail/package.json"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "19:        \"test\": \"jest --runInBand --logHeapUsage --forceExit\","
+  },
+  {
+    "tool_call_id": "call_00_PKwMDioryLfsllm7FWVb0855",
+    "input": {
+      "command": "node -e \"console.log('ok')\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok"
+  },
+  {
+    "tool_call_id": "call_01_e1ta99WbEoudeQ1hr1cp5557",
+    "input": {
+      "command": "node_modules/.bin/jest --version",
+      "workdir": "applications/mail"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_iu7aDyTodhvfMv5BcayY7630",
+    "input": {
+      "command": "ls node_modules/.bin | head -20",
+      "workdir": "applications/mail"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_mba2yM3hClRU3BZMl1Vl7642",
+    "input": {
+      "command": "ls /workspace/node_modules/.bin | grep -i jest"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_CBqfIdSed3ThNT3pNaQp0456",
+    "input": {
+      "command": "/workspace/node_modules/.bin/jest --config jest.config.js --coverage=false src/app/helpers/expiration.test.ts 2>&1 | tail -40",
+      "timeout": 180,
+      "workdir": "applications/mail"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Wb8gKo39b0Qd50pmzitm1913",
+    "input": {
+      "command": "/workspace/node_modules/.bin/jest src/app/helpers/expiration.test.ts",
+      "timeout": 180,
+      "workdir": "applications/mail"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_arjov4dalHXqt8dNEC1o4340",
+    "input": {
+      "command": "git status --short"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "M applications/mail/src/app/components/message/modals/CustomExpirationModal.tsx\n M applications/mail/src/app/helpers/expiration.test.ts\n M applications/mail/src/app/helpers/expiration.ts\n?? .nz-coder/"
+  },
+  {
+    "tool_call_id": "call_01_QFCaAqRvkiXGWgzrp5jo0154",
+    "input": {
+      "command": "git diff --stat"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": ".../message/modals/CustomExpirationModal.tsx       |  4 +-\n .../mail/src/app/helpers/expiration.test.ts        | 56 +++++++++++++++++++++-\n applications/mail/src/app/helpers/expiration.ts    | 26 +++++++++-\n 3 files changed, 82 insertions(+), 4 deletions(-)"
+  },
+  {
+    "tool_call_id": "call_00_E38Y3aNGQgg4J46KY1OP4392",
+    "input": {
+      "command": "node /workspace/node_modules/jest/bin/jest.js src/app/helpers/expiration.test.ts 2>&1 | tail -40",
+      "timeout": 180,
+      "workdir": "applications/mail"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_gSOx1810gWi4WwQ3Rd3H3857",
+    "input": {
+      "command": "node /workspace/node_modules/jest/bin/jest.js src/app/helpers/expiration.test.ts 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "applications/mail"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_f1TbT43BrL5ijyEWU3rf9479",
+    "input": {
+      "command": "cat > /tmp/check.test.ts <<'EOF'\nEOF\necho skip"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_L9izSYv08n44cepyKZzv5880",
+    "input": {
+      "command": "node -e \"\nconst {addMinutes, isToday, isSameDay} = require('/workspace/node_modules/date-fns');\nfunction getMinExpirationTime(date){\n  if(!isToday(date)) return undefined;\n  const limit = addMinutes(new Date(),30);\n  const interval = new Date(limit);\n  interval.setMinutes(limit.getMinutes()<30?0:30,0,0);\n  return interval.getTime()>=limit.getTime()?interval:addMinutes(interval,30);\n}\nconst cases=[new Date(2021,0,1,9,0,0),new Date(2021,0,1,9,20,0),new Date(2021,0,1,9,37,12),new Date(2021,0,1,9,45,30)];\nfor(const n of cases){ jest=null; }\n\" 2>&1 | tail -5"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_2aES7Dp4EtCZT5jnfYw46188",
+    "input": {
+      "command": "node /workspace/node_modules/jest/bin/jest.js --config jest.config.js --coverage=false --silent src/app/helpers/expiration.test.ts 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "applications/mail"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "PASS src/app/helpers/expiration.test.ts\n\nTest Suites: 1 passed, 1 total\nTests:       11 passed, 11 total\nSnapshots:   0 total\nTime:        1.075 s"
+  },
+  {
+    "tool_call_id": "call_00_a69B3G0Xdhp3hTkPG6sb6630",
+    "input": {
+      "command": "node /workspace/node_modules/jest/bin/jest.js --config jest.config.js --coverage=false --silent src/app/helpers/schedule.test.ts 2>&1 | tail -10",
+      "timeout": 120,
+      "workdir": "applications/mail"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "PASS src/app/helpers/schedule.test.ts\n\nTest Suites: 1 passed, 1 total\nTests:       5 passed, 5 total\nSnapshots:   0 total\nTime:        1.009 s"
+  },
+  {
+    "tool_call_id": "call_01_nBCCex6cGlxoRSVGIVP79282",
+    "input": {
+      "command": "sed -n '15,30p;105,120p' applications/mail/src/app/components/message/modals/CustomExpirationModal.tsx"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "TimeInput,\n    useUserSettings,\n} from '@proton/components';\nimport { getWeekStartsOn } from '@proton/shared/lib/settings/helper';\n\nimport { EXPIRATION_TIME_MAX_DAYS } from '../../../constants';\nimport { getMinExpirationTime } from '../../../helpers/expiration';\n\ninterface Props extends Omit<ModalProps, 'onSubmit'> {\n    onSubmit: (expirationDate: Date) => void;\n}\n\nconst CustomExpirationModal = ({ onSubmit, ...rest }: Props) => {\n    const { onClose } = rest;\n    const [userSettings] = useUserSettings();\n    const tomorrow = useRef<Date>(addDays(new Date(), 1));\n                    />\n                    <InputFieldTwo\n                        as={TimeInput}\n                        id=\"expiration-time\"\n                        label={c('Label attach to time input to select hours').t`Time`}\n                        onChange={handleDate}\n                        value={date}\n                        min={getMinExpirationTime(date)}\n                        max={isToday(date) ? endOfToday() : undefined}\n                        data-testid=\"message:expiration-time-input\"\n                        required\n                    />\n                </div>\n            </ModalTwoContent>\n            <ModalTwoFooter>\n                <Button type=\"reset\">{c('Action').t`Cancel`}</Button>"
+  }
+]

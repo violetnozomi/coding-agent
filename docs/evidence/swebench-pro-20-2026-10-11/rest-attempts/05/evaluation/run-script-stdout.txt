@@ -1,0 +1,1285 @@
+Running selected tests: src/app/helpers/expiration.test.ts applications/mail/src/app/helpers/expiration.test.ts
+Running test file in proton-mail workspace: src/app/helpers/expiration.test.ts
+---------------------------------------------------|---------|----------|---------|---------|-------------------
+File                                               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+---------------------------------------------------|---------|----------|---------|---------|-------------------
+All files                                          |    0.16 |     0.18 |    0.17 |    0.15 |                   
+ app/components/attachment                         |       0 |        0 |       0 |       0 |                   
+  AttachmentItem.tsx                               |       0 |        0 |       0 |       0 | 17-112            
+  AttachmentList.tsx                               |       0 |        0 |       0 |       0 | 43-257            
+  AttachmentPreview.tsx                            |       0 |        0 |       0 |       0 | 27-86             
+  AttachmentsButton.tsx                            |       0 |        0 |       0 |       0 | 17-38             
+ app/components/attachment/modals                  |       0 |        0 |       0 |       0 |                   
+  ConfirmDownloadAttachments.tsx                   |       0 |        0 |       0 |       0 | 16-44             
+ app/components/checklist                          |       0 |        0 |       0 |       0 |                   
+  GetStartedChecklist.tsx                          |       0 |        0 |       0 |       0 | 35-174            
+  GetStartedChecklistHeader.tsx                    |       0 |        0 |       0 |       0 | 14-19             
+  GetStartedChecklistModal.tsx                     |       0 |        0 |       0 |       0 | 23-67             
+  ModalGetMobileApp.tsx                            |       0 |      100 |       0 |       0 | 10-13             
+  ModalImportEmails.tsx                            |       0 |      100 |       0 |       0 | 8-9               
+  PaidUserGetStartedChecklist.tsx                  |       0 |        0 |       0 |       0 | 20-87             
+ app/components/composer                           |       0 |        0 |       0 |       0 |                   
+  Composer.tsx                                     |       0 |        0 |       0 |       0 | 61-237            
+  ComposerContent.tsx                              |       0 |        0 |       0 |       0 | 32-51             
+  ComposerExpirationTime.tsx                       |       0 |        0 |       0 |       0 | 15-25             
+  ComposerFrame.tsx                                |       0 |        0 |       0 |       0 | 26-149            
+  ComposerMeta.tsx                                 |       0 |        0 |       0 |       0 | 27-44             
+  ComposerTitleBar.tsx                             |       0 |        0 |       0 |       0 | 19-102            
+ app/components/composer/actions                   |       0 |        0 |       0 |       0 |                   
+  ComposerMoreActions.tsx                          |       0 |        0 |       0 |       0 | 26-55             
+  ComposerMoreOptionsDropdown.tsx                  |       0 |        0 |       0 |       0 | 27-51             
+  ComposerPasswordActions.tsx                      |       0 |        0 |       0 |       0 | 20-84             
+  ComposerSendButton.tsx                           |       0 |      100 |       0 |       0 | 12-13             
+  MoreActionsExtension.tsx                         |       0 |        0 |       0 |       0 | 27-113            
+ app/components/composer/actions/ComposerActions   |       0 |        0 |       0 |       0 |                   
+  ComposerActions.tsx                              |       0 |        0 |       0 |       0 | 47-120            
+  useComposerActionsText.tsx                       |       0 |        0 |       0 |       0 | 17-69             
+ app/components/composer/actions/scheduleSend      |       0 |        0 |       0 |       0 |                   
+  ScheduleSendActions.tsx                          |       0 |        0 |       0 |       0 | 40-210            
+  ScheduleSendSpotlight.tsx                        |       0 |      100 |       0 |       0 | 17-20             
+  helpers.tsx                                      |       0 |        0 |       0 |       0 | 8-52              
+  useScheduleSendFeature.ts                        |       0 |        0 |       0 |       0 | 4-11              
+  useScheduleSendSpotlight.ts                      |       0 |        0 |       0 |       0 | 8-13              
+ app/components/composer/addresses                 |       0 |        0 |       0 |       0 |                   
+  Addresses.tsx                                    |       0 |        0 |       0 |       0 | 25-119            
+  AddressesCCButton.tsx                            |       0 |        0 |       0 |       0 | 20-54             
+  AddressesContactsModal.tsx                       |       0 |        0 |       0 |       0 | 20-92             
+  AddressesEditor.tsx                              |       0 |        0 |       0 |       0 | 32-53             
+  AddressesGroupItem.tsx                           |       0 |        0 |       0 |       0 | 37-157            
+  AddressesGroupModal.tsx                          |       0 |        0 |       0 |       0 | 43-99             
+  AddressesInput.tsx                               |       0 |        0 |       0 |       0 | 46-227            
+  AddressesRecipientItem.tsx                       |       0 |        0 |       0 |       0 | 42-171            
+  AddressesSummary.tsx                             |       0 |        0 |       0 |       0 | 27-86             
+  AskForKeyPinningModal.tsx                        |       0 |        0 |       0 |       0 | 36-124            
+  SelectSender.tsx                                 |       0 |        0 |       0 |       0 | 33-91             
+  SendWithChangedPreferencesModal.tsx              |       0 |        0 |       0 |       0 | 13-28             
+  SendWithErrorsModal.tsx                          |       0 |        0 |       0 |       0 | 18-82             
+  SendWithExpirationModal.tsx                      |       0 |        0 |       0 |       0 | 15-47             
+  SendWithWarningsModal.tsx                        |       0 |        0 |       0 |       0 | 13-32             
+ app/components/composer/editor                    |       0 |        0 |       0 |       0 |                   
+  EditorToolbarExtension.tsx                       |       0 |        0 |       0 |       0 |                   
+  EditorWrapper.tsx                                |       0 |        0 |       0 |       0 | 50-278            
+ app/components/composer/modals                    |       0 |        0 |       0 |       0 |                   
+  ComposerExpirationModal.tsx                      |       0 |        0 |       0 |       0 | 44-222            
+  ComposerInnerModal.tsx                           |       0 |        0 |       0 |       0 | 26-52             
+  ComposerInnerModals.tsx                          |       0 |        0 |       0 |       0 | 33-107            
+  ComposerInsertImageModal.tsx                     |       0 |      100 |       0 |       0 | 14-35             
+  ComposerPasswordModal.tsx                        |       0 |        0 |       0 |       0 | 20-104            
+  ComposerScheduleSendModal.tsx                    |       0 |        0 |       0 |       0 | 30-157            
+  PasswordInnerModalForm.tsx                       |       0 |      100 |       0 |       0 | 10-59             
+  SendingFromDefaultAddressModal.tsx               |       0 |      100 |       0 |       0 | 12-13             
+  SendingOriginalMessageModal.tsx                  |       0 |      100 |       0 |       0 | 11-12             
+ app/components/composer/modals/InnerModal         |       0 |        0 |       0 |       0 |                   
+  InnerModalCloseButton.tsx                        |       0 |        0 |       0 |       0 | 11-14             
+  InnerModalContent.tsx                            |       0 |        0 |       0 |       0 | 15-29             
+  InnerModalFooter.tsx                             |       0 |        0 |       0 |       0 | 10-19             
+  InnerModalHeader.tsx                             |       0 |        0 |       0 |       0 | 18-28             
+  InnerModalScroll.tsx                             |       0 |        0 |       0 |       0 | 10-20             
+  InnerModalTitle.tsx                              |       0 |      100 |       0 |       0 | 10-11             
+ app/components/composer/quickReply                |       0 |        0 |       0 |       0 |                   
+  DeleteQuickReplyModal.tsx                        |       0 |      100 |       0 |       0 | 10-18             
+  NoAttachmentsModal.tsx                           |       0 |      100 |       0 |       0 | 13-14             
+  QuickReply.tsx                                   |       0 |        0 |       0 |       0 | 38-315            
+  QuickReplyContainer.tsx                          |       0 |        0 |       0 |       0 | 28-76             
+  QuickReplyType.tsx                               |       0 |        0 |       0 |       0 | 15-84             
+ app/components/composer/quickReply/tests          |       0 |        0 |       0 |       0 |                   
+  QuickReply.test.data.ts                          |       0 |        0 |       0 |       0 | 10-69             
+  QuickReply.test.helpers.tsx                      |       0 |        0 |       0 |       0 | 19-191            
+ app/components/composer/tests                     |       0 |        0 |       0 |       0 |                   
+  Composer.test.helpers.tsx                        |       0 |        0 |       0 |       0 | 27-131            
+ app/components/conversation                       |       0 |        0 |       0 |       0 |                   
+  ConversationErrorBanner.tsx                      |       0 |        0 |       0 |       0 | 11-32             
+  ConversationHeader.tsx                           |       0 |        0 |       0 |       0 | 16-31             
+  ConversationView.tsx                             |       0 |        0 |       0 |       0 | 30-193            
+  NumMessages.tsx                                  |       0 |        0 |       0 |       0 | 12-20             
+  TrashWarning.tsx                                 |       0 |        0 |       0 |       0 | 14-36             
+  UnreadMessages.tsx                               |       0 |        0 |       0 |       0 | 17-55             
+ app/components/dropdown                           |       0 |        0 |       0 |       0 |                   
+  CustomFilterDropdown.tsx                         |       0 |        0 |       0 |       0 | 22-226            
+  LabelDropdown.tsx                                |       0 |        0 |       0 |       0 | 40-428            
+  MoveDropdown.tsx                                 |       0 |        0 |       0 |       0 | 44-316            
+ app/components/eo                                 |       0 |        0 |       0 |       0 |                   
+  EORedirect.tsx                                   |       0 |        0 |       0 |       0 | 21-66             
+ app/components/eo/message                         |       0 |        0 |       0 |       0 |                   
+  EOExpirationTime.tsx                             |       0 |        0 |       0 |       0 | 24-72             
+  EOHeaderExpanded.tsx                             |       0 |        0 |       0 |       0 | 33-53             
+  EOMessageBody.tsx                                |       0 |        0 |       0 |       0 | 21-48             
+  EOMessageHeader.tsx                              |       0 |        0 |       0 |       0 | 19-47             
+  ViewEOMessage.tsx                                |       0 |        0 |       0 |       0 | 22-41             
+ app/components/eo/message/recipients              |       0 |      100 |       0 |       0 |                   
+  EORecipientSingle.tsx                            |       0 |      100 |       0 |       0 | 12-15             
+  EORecipientsList.tsx                             |       0 |      100 |       0 |       0 | 13-16             
+ app/components/eo/message/tests                   |       0 |      100 |       0 |       0 |                   
+  ViewEOMessage.test.helpers.tsx                   |       0 |      100 |       0 |       0 | 5-10              
+ app/components/eo/reply                           |       0 |        0 |       0 |       0 |                   
+  EOComposer.tsx                                   |       0 |        0 |       0 |       0 | 30-130            
+  EOReply.tsx                                      |       0 |        0 |       0 |       0 | 14-20             
+  EOReplyFooter.tsx                                |       0 |        0 |       0 |       0 | 25-77             
+  EOReplyHeader.tsx                                |       0 |      100 |       0 |       0 | 14-17             
+ app/components/eo/reply/tests                     |       0 |      100 |       0 |       0 |                   
+  EOReply.test.helpers.tsx                         |       0 |      100 |       0 |       0 | 8-44              
+ app/components/eo/unlock                          |       0 |        0 |       0 |       0 |                   
+  EOUnlock.tsx                                     |       0 |        0 |       0 |       0 | 19-37             
+  MessageDecryptForm.tsx                           |       0 |        0 |       0 |       0 | 13-33             
+ app/components/header                             |       0 |        0 |       0 |       0 |                   
+  ClearBrowserDataModal.tsx                        |       0 |      100 |       0 |       0 | 8-17              
+  MailDefaultHandlerModal.tsx                      |       0 |      100 |       0 |       0 | 10-19             
+  MailHeader.tsx                                   |       0 |        0 |       0 |       0 | 38-88             
+  MailHeaderSettingsButton.tsx                     |       0 |        0 |       0 |       0 | 21-99             
+  useEncryptedSearchToggleState.tsx                |       0 |        0 |       0 |       0 | 10-95             
+ app/components/header/search                      |       0 |        0 |       0 |       0 |                   
+  AdvancedSearch.tsx                               |       0 |        0 |       0 |       0 | 39-297            
+  MailSearch.tsx                                   |       0 |        0 |       0 |       0 | 39-103            
+  MailSearchInput.tsx                              |       0 |        0 |       0 |       0 | 15-29             
+  MailSearchSpotlight.tsx                          |       0 |        0 |       0 |       0 | 14-23             
+  SearchOverlay.tsx                                |       0 |        0 |       0 |       0 | 48-153            
+ app/components/header/search/AdvancedSearchFields |       0 |        0 |       0 |       0 |                   
+  EncryptedSearchField.tsx                         |       0 |        0 |       0 |       0 | 17-178            
+  LocationField.tsx                                |       0 |        0 |       0 |       0 | 15-54             
+  LocationFieldDropdown.tsx                        |       0 |        0 |       0 |       0 | 26-89             
+  SearchField.tsx                                  |       0 |        0 |       0 |       0 | 17-21             
+  useLocationFieldOptions.ts                       |       0 |        0 |       0 |       0 | 50-153            
+ app/components/layout                             |       0 |        0 |       0 |       0 |                   
+  PrivateLayout.tsx                                |       0 |        0 |       0 |       0 | 25-79             
+  PublicLayout.js                                  |       0 |      100 |       0 |       0 | 5-14              
+ app/components/list                               |       0 |        0 |       0 |       0 |                   
+  ESSlowToolbar.tsx                                |       0 |      100 |       0 |       0 | 10-35             
+  Item.tsx                                         |       0 |        0 |       0 |       0 | 21-142            
+  ItemAction.tsx                                   |       0 |        0 |       0 |       0 | 15-26             
+  ItemAttachmentIcon.tsx                           |       0 |        0 |       0 |       0 | 19-45             
+  ItemColumnLayout.tsx                             |       0 |        0 |       0 |       0 | 42-95             
+  ItemContextMenu.tsx                              |       0 |        0 |       0 |       0 | 33-159            
+  ItemDate.tsx                                     |       0 |        0 |       0 |       0 | 9-75              
+  ItemHoverButtons.tsx                             |       0 |        0 |       0 |       0 | 16-87             
+  ItemIcon.tsx                                     |       0 |        0 |       0 |       0 | 10-18             
+  ItemLabels.tsx                                   |       0 |        0 |       0 |       0 | 24-59             
+  ItemLocation.tsx                                 |       0 |        0 |       0 |       0 | 10-55             
+  ItemRowLayout.tsx                                |       0 |        0 |       0 |       0 | 37-76             
+  ItemSenders.tsx                                  |       0 |        0 |       0 |       0 | 24-74             
+  ItemStar.tsx                                     |       0 |        0 |       0 |       0 | 18-44             
+  ItemUnread.tsx                                   |       0 |        0 |       0 |       0 | 15-22             
+  List.tsx                                         |       0 |        0 |       0 |       0 | 53-340            
+  ListSettings.tsx                                 |       0 |      100 |       0 |       0 | 20-21             
+  MailUpsellBanner.tsx                             |       0 |        0 |       0 |       0 | 15-333            
+  ResizeHandle.tsx                                 |       0 |      100 |       0 |       0 | 12-13             
+  TaskRunningBanner.tsx                            |       0 |      100 |       0 |       0 | 10-11             
+  useEncryptedSearchList.tsx                       |       0 |        0 |       0 |       0 | 10-67             
+  useItemContextMenu.tsx                           |       0 |        0 |       0 |       0 | 21-80             
+  useScrollToTop.ts                                |       0 |        0 |       0 |       0 | 4-12              
+ app/components/list/auto-delete                   |       0 |        0 |       0 |       0 |                   
+  AutoDeleteBanner.tsx                             |       0 |        0 |       0 |       0 | 15-23             
+  useAutodeleteBanner.ts                           |       0 |        0 |       0 |       0 | 8-44              
+ app/components/list/auto-delete/variations        |       0 |        0 |       0 |       0 |                   
+  AutoDeleteEnabledBanner.tsx                      |       0 |        0 |       0 |       0 | 10-11             
+  AutoDeleteFreeBanner.tsx                         |       0 |        0 |       0 |       0 | 9-27              
+  AutoDeletePaidBanner.tsx                         |       0 |        0 |       0 |       0 | 9-42              
+ app/components/list/item-expiration               |       0 |        0 |       0 |       0 |                   
+  ItemExpiration.tsx                               |       0 |        0 |       0 |       0 | 19-39             
+  useItemExpiration.ts                             |       0 |        0 |       0 |       0 | 13-47             
+  useItemExpirationType.ts                         |       0 |        0 |       0 |       0 |                   
+ app/components/list/spy-tracker                   |       0 |        0 |       0 |       0 |                   
+  ItemSpyTrackerIcon.tsx                           |       0 |        0 |       0 |       0 | 20-68             
+  NumberOfElementsBubble.tsx                       |       0 |        0 |       0 |       0 | 10-11             
+  SpyTrackerIcon.tsx                               |       0 |        0 |       0 |       0 | 19-27             
+  SpyTrackerModal.tsx                              |       0 |        0 |       0 |       0 | 31-140            
+ app/components/message                            |       0 |        0 |       0 |       0 |                   
+  EncryptionStatusIcon.tsx                         |       0 |        0 |       0 |       0 | 16-61             
+  LoadContentSpotlight.tsx                         |       0 |      100 |       0 |       0 | 16-30             
+  MessageBody.tsx                                  |       0 |        0 |       0 |       0 | 36-113            
+  MessageBodyIframe.tsx                            |       0 |        0 |       0 |       0 | 44-142            
+  MessageBodyImage.tsx                             |       0 |        0 |       0 |       0 | 15-190            
+  MessageBodyImages.tsx                            |       0 |        0 |       0 |       0 | 15-29             
+  MessageFooter.tsx                                |       0 |      100 |       0 |       0 | 12-15             
+  MessageOnlyView.tsx                              |       0 |        0 |       0 |       0 | 35-139            
+  MessagePrintFooter.tsx                           |       0 |        0 |       0 |       0 | 20-69             
+  MessagePrintHeader.tsx                           |       0 |      100 |       0 |       0 | 18-22             
+  MessageView.tsx                                  |       0 |        0 |       0 |       0 | 74-370            
+  constants.ts                                     |       0 |      100 |     100 |       0 | 1-6               
+ app/components/message/extras                     |       0 |        0 |       0 |       0 |                   
+  ExtraAskResign.tsx                               |       0 |        0 |       0 |       0 | 20-47             
+  ExtraAutoReply.tsx                               |       0 |        0 |       0 |       0 | 14-19             
+  ExtraBlockedSender.tsx                           |       0 |        0 |       0 |       0 | 20-46             
+  ExtraDarkStyle.tsx                               |       0 |        0 |       0 |       0 | 18-38             
+  ExtraDecryptedSubject.tsx                        |       0 |        0 |       0 |       0 | 14-32             
+  ExtraErrors.tsx                                  |       0 |        0 |       0 |       0 | 12-59             
+  ExtraEvents.tsx                                  |       0 |        0 |       0 |       0 | 60-263            
+  ExtraExpirationSelfDestruction.tsx               |       0 |        0 |       0 |       0 | 17-44             
+  ExtraExpirationSentExpirationAutoDelete.tsx      |       0 |        0 |       0 |       0 | 12-15             
+  ExtraExpirationTime.tsx                          |       0 |        0 |       0 |       0 | 17-49             
+  ExtraImages.tsx                                  |       0 |        0 |       0 |       0 | 20-82             
+  ExtraPinKey.tsx                                  |       0 |        0 |       0 |       0 | 31-208            
+  ExtraReadReceipt.tsx                             |       0 |        0 |       0 |       0 | 14-44             
+  ExtraScheduledMessage.tsx                        |       0 |        0 |       0 |       0 | 35-144            
+  ExtraSpamScore.tsx                               |       0 |        0 |       0 |       0 | 21-113            
+  ExtraUnsubscribe.tsx                             |       0 |        0 |       0 |       0 | 54-290            
+ app/components/message/extras/calendar            |       0 |        0 |       0 |       0 |                   
+  EmailReminderWidget.tsx                          |       0 |        0 |       0 |       0 | 59-368            
+  EmailReminderWidgetSkeleton.tsx                  |       0 |      100 |       0 |       0 | 3-4               
+  EventReminderBanner.tsx                          |       0 |        0 |       0 |       0 | 15-32             
+  EventReminderText.tsx                            |       0 |        0 |       0 |       0 | 17-75             
+  ExtraEvent.tsx                                   |       0 |        0 |       0 |       0 | 57-348            
+  ExtraEventAddParticipantButton.tsx               |       0 |        0 |       0 |       0 | 30-137            
+  ExtraEventAlert.tsx                              |       0 |        0 |       0 |       0 | 20-185            
+  ExtraEventAttendeeButtons.tsx                    |       0 |        0 |       0 |       0 | 38-287            
+  ExtraEventButtons.tsx                            |       0 |        0 |       0 |       0 | 20-33             
+  ExtraEventDetails.tsx                            |       0 |        0 |       0 |       0 | 19-61             
+  ExtraEventHeader.tsx                             |       0 |        0 |       0 |       0 | 12-44             
+  ExtraEventImportButton.tsx                       |       0 |        0 |       0 |       0 | 24-97             
+  ExtraEventOrganizerButtons.tsx                   |       0 |        0 |       0 |       0 | 13-27             
+  ExtraEventParticipant.tsx                        |       0 |        0 |       0 |       0 | 11-16             
+  ExtraEventParticipants.tsx                       |       0 |        0 |       0 |       0 | 13-53             
+  ExtraEventSummary.tsx                            |       0 |        0 |       0 |       0 | 10-43             
+  ExtraEventTimeStatus.tsx                         |       0 |        0 |       0 |       0 | 12-22             
+  ExtraEventWarning.tsx                            |       0 |        0 |       0 |       0 | 18-78             
+  OpenInCalendarButton.tsx                         |       0 |        0 |       0 |       0 | 14-47             
+  useCalendarWidgetDrawerEvents.tsx                |       0 |        0 |       0 |       0 | 13-62             
+ app/components/message/header                     |       0 |        0 |       0 |       0 |                   
+  HeaderCollapsed.tsx                              |       0 |        0 |       0 |       0 | 40-66             
+  HeaderDropdown.tsx                               |       0 |        0 |       0 |       0 | 43-103            
+  HeaderExpanded.tsx                               |       0 |        0 |       0 |       0 | 67-193            
+  HeaderExtra.tsx                                  |       0 |        0 |       0 |       0 | 34-60             
+  HeaderMoreDropdown.tsx                           |       0 |        0 |       0 |       0 | 62-623            
+  HeaderTopPrivacyIcon.tsx                         |       0 |        0 |       0 |       0 | 27-78             
+ app/components/message/helpers                    |       0 |        0 |       0 |       0 |                   
+  getIframeHtml.ts                                 |       0 |        0 |       0 |       0 | 22-55             
+  getIframeSandboxAttributes.ts                    |       0 |        0 |       0 |       0 | 3-31              
+ app/components/message/hooks                      |       0 |        0 |       0 |       0 |                   
+  useIframeDispatchEvents.ts                       |       0 |        0 |       0 |       0 | 5-42              
+  useIframeShowBlockquote.ts                       |       0 |        0 |       0 |       0 | 14-54             
+  useInitIframeContent.ts                          |       0 |        0 |       0 |       0 | 21-108            
+  useMessageDarkStyles.ts                          |       0 |        0 |       0 |       0 | 11-48             
+  useObserveIframeHeight.ts                        |       0 |        0 |       0 |       0 | 7-64              
+ app/components/message/modals                     |       0 |        0 |       0 |       0 |                   
+  BlockSenderModal.tsx                             |       0 |        0 |       0 |       0 | 19-94             
+  ContactResignModal.tsx                           |       0 |        0 |       0 |       0 | 40-188            
+  CustomExpirationModal.tsx                        |       0 |        0 |       0 |       0 | 27-96             
+  GroupModal.tsx                                   |       0 |        0 |       0 |       0 | 22-46             
+  MessageDetailsModal.tsx                          |       0 |        0 |       0 |       0 | 45-106            
+  MessageHeadersModal.tsx                          |       0 |      100 |       0 |       0 | 15-24             
+  MessagePermanentDeleteModal.tsx                  |       0 |      100 |       0 |       0 | 14-28             
+  MessagePhishingModal.tsx                         |       0 |        0 |       0 |       0 | 12-43             
+  MessagePrintModal.tsx                            |       0 |      100 |       0 |       0 | 19-40             
+  MoveScheduledModal.tsx                           |       0 |        0 |       0 |       0 | 13-23             
+  MoveToSpamModal.tsx                              |       0 |        0 |       0 |       0 | 21-50             
+  SimplePublicKeyTable.tsx                         |       0 |        0 |       0 |       0 | 20-64             
+  TrustPublicKeyModal.tsx                          |       0 |        0 |       0 |       0 | 36-145            
+ app/components/message/recipients                 |       0 |        0 |       0 |       0 |                   
+  MailRecipientItemSingle.tsx                      |       0 |        0 |       0 |       0 | 48-227            
+  MailRecipientList.tsx                            |       0 |      100 |       0 |       0 | 18-31             
+  MailRecipients.tsx                               |       0 |        0 |       0 |       0 | 26-39             
+  RecipientItem.tsx                                |       0 |        0 |       0 |       0 | 36-106            
+  RecipientItemGroup.tsx                           |       0 |        0 |       0 |       0 | 38-115            
+  RecipientItemLayout.tsx                          |       0 |        0 |       0 |       0 | 45-121            
+  RecipientItemSingle.tsx                          |       0 |        0 |       0 |       0 | 33-68             
+  RecipientSimple.tsx                              |       0 |        0 |       0 |       0 | 17-24             
+  RecipientType.tsx                                |       0 |        0 |       0 |       0 | 9-14              
+  RecipientsDetails.tsx                            |       0 |        0 |       0 |       0 | 29-161            
+  RecipientsList.tsx                               |       0 |        0 |       0 |       0 | 20-32             
+  RecipientsSimple.tsx                             |       0 |        0 |       0 |       0 |                   
+ app/components/message/tests                      |       0 |        0 |       0 |       0 |                   
+  Message.test.helpers.tsx                         |       0 |        0 |       0 |       0 | 21-105            
+ app/components/notifications                      |       0 |        0 |       0 |       0 |                   
+  DecryptionErrorNotification.tsx                  |       0 |        0 |       0 |       0 | 13-48             
+  LoadingNotificationContent.tsx                   |       0 |        0 |       0 |       0 | 11-22             
+  MoveAllNotificationButton.tsx                    |       0 |        0 |       0 |       0 | 16-33             
+  SavingDraftNotification.tsx                      |       0 |        0 |       0 |       0 | 20-34             
+  SendingMessageNotification.tsx                   |       0 |        0 |       0 |       0 | 15-125            
+  UndoActionNotification.tsx                       |       0 |        0 |       0 |       0 | 13-21             
+  UndoNotificationButton.tsx                       |       0 |      100 |       0 |       0 | 11-12             
+ app/components/onboarding                         |       0 |        0 |       0 |       0 |                   
+  MailOnboardingModal.tsx                          |       0 |        0 |       0 |       0 | 15-21             
+  MailOnboardingWrapper.tsx                        |       0 |        0 |       0 |       0 | 13-47             
+ app/components/sidebar                            |       0 |        0 |       0 |       0 |                   
+  EditLabelContext.tsx                             |       0 |        0 |       0 |       0 | 20-126            
+  LocationAside.tsx                                |       0 |        0 |       0 |       0 | 18-53             
+  MailSidebar.tsx                                  |       0 |        0 |       0 |       0 | 38-100            
+  MailSidebarList.tsx                              |       0 |        0 |       0 |       0 | 43-298            
+  MailSidebarListActions.tsx                       |       0 |        0 |       0 |       0 | 24-40             
+  MailSidebarPrimaryButton.tsx                     |       0 |        0 |       0 |       0 | 10-33             
+  MailSidebarSystemFolders.tsx                     |       0 |        0 |       0 |       0 | 28-256            
+  SidebarFolder.tsx                                |       0 |        0 |       0 |       0 | 25-80             
+  SidebarFolders.tsx                               |       0 |        0 |       0 |       0 | 22-62             
+  SidebarItem.tsx                                  |       0 |        0 |       0 |       0 | 31-153            
+  SidebarLabelActions.tsx                          |       0 |        0 |       0 |       0 | 15-50             
+  SidebarLabels.tsx                                |       0 |        0 |       0 |       0 | 18-54             
+  SidebarVersion.tsx                               |       0 |      100 |       0 |       0 | 5-6               
+ app/components/simpleLogin                        |       0 |        0 |       0 |       0 |                   
+  SimpleLoginModal.tsx                             |       0 |        0 |       0 |       0 | 27-74             
+ app/components/toolbar                            |       0 |        0 |       0 |       0 |                   
+  DeleteButton.tsx                                 |       0 |        0 |       0 |       0 | 12-29             
+  EmptyButton.tsx                                  |       0 |        0 |       0 |       0 | 12-58             
+  FilterActions.tsx                                |       0 |        0 |       0 |       0 | 17-117            
+  LabelsAndFolders.tsx                             |       0 |        0 |       0 |       0 | 21-97             
+  MoreActions.tsx                                  |       0 |        0 |       0 |       0 | 26-74             
+  MoreDropdown.tsx                                 |       0 |        0 |       0 |       0 | 18-217            
+  MoveButtons.tsx                                  |       0 |        0 |       0 |       0 | 10-144            
+  NavigationControls.tsx                           |       0 |        0 |       0 |       0 | 20-79             
+  PagingControls.tsx                               |       0 |        0 |       0 |       0 | 23-121            
+  ReadUnreadButtons.tsx                            |       0 |        0 |       0 |       0 | 12-69             
+  SelectAll.tsx                                    |       0 |        0 |       0 |       0 | 18-71             
+  SortDropdown.tsx                                 |       0 |        0 |       0 |       0 | 10-105            
+  SortDropdownMenu.tsx                             |       0 |        0 |       0 |       0 | 10-80             
+  Toolbar.tsx                                      |       0 |        0 |       0 |       0 | 21-93             
+  ToolbarDropdown.tsx                              |       0 |        0 |       0 |       0 | 45-110            
+ app/components/view                               |       0 |        0 |       0 |       0 |                   
+  EmptyView.tsx                                    |       0 |        0 |       0 |       0 | 23-76             
+  PlaceholderView.tsx                              |       0 |        0 |       0 |       0 | 19-31             
+  SelectionPane.tsx                                |       0 |        0 |       0 |       0 | 29-186            
+  SimpleLoginPlaceholder.tsx                       |       0 |        0 |       0 |       0 | 11-36             
+  WelcomePane.tsx                                  |       0 |        0 |       0 |       0 | 26-81             
+ app/containers                                    |       0 |        0 |       0 |       0 |                   
+  ComposeProvider.tsx                              |       0 |      100 |       0 |       0 | 7-27              
+  ComposerContainer.tsx                            |       0 |        0 |       0 |       0 | 25-97             
+  EncryptedSearchProvider.tsx                      |       0 |        0 |       0 |       0 | 50-294            
+  LegacyMessagesMigrationContainer.tsx             |       0 |      100 |       0 |       0 | 8-36              
+  MailStartupModals.tsx                            |       0 |        0 |       0 |       0 | 21-61             
+  PageContainer.tsx                                |       0 |        0 |       0 |       0 | 45-141            
+ app/containers/checklists                         |       0 |        0 |       0 |       0 |                   
+  ChecklistsProvider.tsx                           |       0 |      100 |       0 |       0 | 10-11             
+  GetStartedChecklistProvider.tsx                  |       0 |        0 |       0 |       0 | 10-56             
+  PaidUserChecklistProvider.tsx                    |       0 |      100 |       0 |       0 | 21-43             
+  index.ts                                         |       0 |        0 |       0 |       0 |                   
+  useChecklist.ts                                  |       0 |        0 |       0 |       0 | 23-56             
+ app/containers/mailbox                            |       0 |        0 |       0 |       0 |                   
+  MailboxContainer.tsx                             |       0 |        0 |       0 |       0 | 79-413            
+  MailboxContainerProvider.tsx                     |       0 |        0 |       0 |       0 | 29-70             
+ app/containers/mailbox/tests                      |       0 |        0 |       0 |       0 |                   
+  Mailbox.test.helpers.tsx                         |       0 |        0 |       0 |       0 | 20-169            
+ app/helpers                                       |    3.34 |     3.78 |    2.81 |    3.32 |                   
+  addresses.ts                                     |       0 |        0 |       0 |       0 | 9-56              
+  autoDelete.ts                                    |     100 |      100 |     100 |     100 |                   
+  base64.ts                                        |       0 |        0 |       0 |       0 | 3-5               
+  composerPositioning.ts                           |       0 |        0 |       0 |       0 | 3-97              
+  conversation.ts                                  |       0 |        0 |       0 |       0 | 12-71             
+  counter.ts                                       |       0 |        0 |       0 |       0 | 8-74              
+  date.ts                                          |       0 |        0 |       0 |       0 | 6-31              
+  dedent.ts                                        |       0 |        0 |       0 |       0 | 5-26              
+  displaySignature.js                              |       0 |        0 |       0 |       0 | 4-54              
+  dom.ts                                           |       0 |        0 |       0 |       0 | 5-44              
+  elements.ts                                      |       0 |        0 |       0 |       0 | 29-206            
+  encryptionType.js                                |       0 |        0 |       0 |       0 | 15-85             
+  errors.ts                                        |       0 |        0 |       0 |       0 | 10-30             
+  expiration.ts                                    |   95.45 |    76.19 |     100 |   95.23 | 14                
+  labels.ts                                        |       0 |        0 |       0 |       0 | 18-310            
+  mail.ts                                          |       0 |        0 |       0 |       0 | 8-35              
+  mailSettings.ts                                  |       0 |        0 |       0 |       0 | 10-20             
+  mailboxUrl.ts                                    |       0 |        0 |       0 |       0 | 20-139            
+  paging.ts                                        |       0 |        0 |       0 |       0 | 3-21              
+  parserHtml.ts                                    |       0 |        0 |       0 |       0 | 5-92              
+  recipients.ts                                    |       0 |        0 |       0 |       0 | 13-32             
+  schedule.ts                                      |       0 |        0 |       0 |       0 | 3-29              
+  sidebar.ts                                       |       0 |        0 |       0 |       0 | 5-10              
+  string.ts                                        |       0 |        0 |       0 |       0 | 1-81              
+  textToHtml.ts                                    |       0 |        0 |       0 |       0 | 9-147             
+  upload.ts                                        |       0 |        0 |       0 |       0 | 29-92             
+  url.ts                                           |       0 |        0 |       0 |       0 | 13-107            
+ app/helpers/attachment                            |       0 |        0 |       0 |       0 |                   
+  attachment.ts                                    |       0 |        0 |       0 |       0 | 6-34              
+  attachmentConverter.ts                           |       0 |        0 |       0 |       0 | 7-101             
+  attachmentDownloader.ts                          |       0 |        0 |       0 |       0 | 24-129            
+  attachmentLoader.ts                              |       0 |        0 |       0 |       0 | 20-151            
+  attachmentUploader.ts                            |       0 |        0 |       0 |       0 | 44-242            
+ app/helpers/calendar                              |       0 |        0 |       0 |       0 |                   
+  emailReminder.ts                                 |       0 |        0 |       0 |       0 | 5-11              
+  invite.ts                                        |       0 |        0 |       0 |       0 | 138-731           
+  inviteApi.ts                                     |       0 |        0 |       0 |       0 | 109-998           
+  inviteLink.tsx                                   |       0 |        0 |       0 |       0 | 14-154            
+  summary.ts                                       |       0 |        0 |       0 |       0 | 9-536             
+ app/helpers/eo                                    |       0 |      100 |       0 |       0 |                   
+  eoUrl.ts                                         |       0 |        0 |       0 |       0 |                   
+  message.ts                                       |       0 |      100 |       0 |       0 | 9-16              
+ app/helpers/message                               |       0 |        0 |       0 |       0 |                   
+  cleanMessage.tsx                                 |       0 |        0 |       0 |       0 | 8-34              
+  icon.ts                                          |       0 |        0 |       0 |       0 | 15-506            
+  messageAttachPublicKey.ts                        |       0 |        0 |       0 |       0 | 12-55             
+  messageBlockquote.ts                             |       0 |        0 |       0 |       0 | 1-124             
+  messageContent.ts                                |       0 |        0 |       0 |       0 | 16-183            
+  messageDataUrl.ts                                |       0 |        0 |       0 |       0 | 12-50             
+  messageDecrypt.ts                                |       0 |        0 |       0 |       0 | 20-251            
+  messageDraft.ts                                  |       0 |        0 |       0 |       0 | 40-369            
+  messageEmbeddeds.ts                              |       0 |        0 |       0 |       0 | 12-236            
+  messageExpandable.ts                             |       0 |        0 |       0 |       0 | 17-74             
+  messageExpirationTime.ts                         |       0 |        0 |       0 |       0 | 7-45              
+  messageExport.ts                                 |       0 |        0 |       0 |       0 | 19-187            
+  messageHead.ts                                   |       0 |        0 |       0 |       0 | 1-8               
+  messageImages.ts                                 |       0 |        0 |       0 |       0 | 23-227            
+  messageKeys.ts                                   |       0 |        0 |       0 |       0 | 16-76             
+  messageRead.ts                                   |       0 |        0 |       0 |       0 | 7-20              
+  messageRecipients.ts                             |       0 |        0 |       0 |       0 | 23-255            
+  messageRemotes.ts                                |       0 |        0 |       0 |       0 | 6-132             
+  messageSignature.ts                              |       0 |        0 |       0 |       0 | 15-183            
+  messages.ts                                      |       0 |        0 |       0 |       0 | 19-104            
+ app/helpers/message/__fixtures__                  |       0 |      100 |     100 |       0 |                   
+  messageBlockquote.fixtures.ts                    |       0 |      100 |     100 |       0 | 7-1004            
+  messageHead.fixtures.ts                          |       0 |      100 |     100 |       0 | 1                 
+ app/helpers/send                                  |       0 |        0 |       0 |       0 |                   
+  sendEncrypt.ts                                   |       0 |        0 |       0 |       0 | 13-282            
+  sendFormatter.ts                                 |       0 |        0 |       0 |       0 | 6-54              
+  sendMimeBuilder.ts                               |       0 |        0 |       0 |       0 | 20-205            
+  sendSubPackages.ts                               |       0 |        0 |       0 |       0 | 11-157            
+  sendTopPackages.ts                               |       0 |        0 |       0 |       0 | 17-110            
+ app/helpers/test                                  |       0 |        0 |       0 |       0 |                   
+  api.ts                                           |       0 |        0 |       0 |       0 | 10-82             
+  assertion.ts                                     |       0 |        0 |       0 |       0 | 1-33              
+  cache.ts                                         |       0 |      100 |       0 |       0 | 15-51             
+  calendar.ts                                      |       0 |        0 |       0 |       0 | 15-97             
+  contact.ts                                       |       0 |        0 |       0 |       0 | 18-63             
+  crypto.ts                                        |       0 |        0 |       0 |       0 | 9-152             
+  event-manager.ts                                 |       0 |      100 |       0 |       0 | 5-12              
+  helper.ts                                        |       0 |        0 |       0 |       0 | 23-115            
+  message.ts                                       |       0 |        0 |       0 |       0 | 17-138            
+  notifications.tsx                                |       0 |        0 |       0 |       0 | 21-33             
+  pinKeys.tsx                                      |       0 |        0 |       0 |       0 | 13-85             
+  render.tsx                                       |       0 |        0 |       0 |       0 | 45-175            
+ app/helpers/test/eo                               |       0 |        0 |       0 |       0 |                   
+  EORender.tsx                                     |       0 |        0 |       0 |       0 | 32-86             
+  helpers.tsx                                      |       0 |        0 |       0 |       0 | 17-109            
+ app/helpers/transforms                            |       0 |        0 |       0 |       0 |                   
+  transformBase.ts                                 |       0 |        0 |       0 |       0 | 3-66              
+  transformEmbedded.ts                             |       0 |        0 |       0 |       0 | 19-91             
+  transformEscape.ts                               |       0 |        0 |       0 |       0 | 7-68              
+  transformLinks.ts                                |       0 |        0 |       0 |       0 | 3-72              
+  transformRemote.ts                               |       0 |        0 |       0 |       0 | 21-139            
+  transformStyleAttributes.ts                      |       0 |        0 |       0 |       0 | 1-22              
+  transformStylesheet.ts                           |       0 |        0 |       0 |       0 | 1-11              
+  transformWelcome.ts                              |       0 |        0 |       0 |       0 | 1-7               
+  transforms.ts                                    |       0 |        0 |       0 |       0 | 32-83             
+ app/hooks                                         |       0 |        0 |       0 |       0 |                   
+  useAddressesInputDrag.ts                         |       0 |        0 |       0 |       0 | 10-184            
+  useAttachment.ts                                 |       0 |      100 |       0 |       0 | 7-9               
+  useBase64Cache.ts                                |       0 |        0 |       0 |       0 | 4-15              
+  useBlockSender.tsx                               |       0 |        0 |       0 |       0 | 22-91             
+  useClickMailContent.tsx                          |       0 |      100 |       0 |       0 | 5-34              
+  useDebouncedAction.ts                            |       0 |        0 |       0 |       0 | 5-6               
+  useDeepMemo.ts                                   |       0 |        0 |       0 |       0 | 9-20              
+  useDelaySendSeconds.tsx                          |       0 |        0 |       0 |       0 | 3-6               
+  useDownload.tsx                                  |       0 |        0 |       0 |       0 | 31-187            
+  useDraft.tsx                                     |       0 |        0 |       0 |       0 | 25-110            
+  useElementBreakpoints.ts                         |       0 |        0 |       0 |       0 | 3-32              
+  useExpiration.ts                                 |       0 |        0 |       0 |       0 | 15-54             
+  useExpirationCheck.ts                            |       0 |        0 |       0 |       0 | 8-16              
+  useExpiringElement.ts                            |       0 |        0 |       0 |       0 | 7-50              
+  useHasScroll.ts                                  |       0 |        0 |       0 |       0 | 6-38              
+  useInviteButtons.ts                              |       0 |        0 |       0 |       0 | 72-349            
+  useLabelActions.ts                               |       0 |        0 |       0 |       0 | 7-51              
+  useLongLivingState.ts                            |       0 |        0 |       0 |       0 | 9-26              
+  useMoveSystemFolders.helpers.ts                  |       0 |        0 |       0 |       0 | 32-350            
+  useMoveSystemFolders.ts                          |       0 |        0 |       0 |       0 | 56-124            
+  usePaging.ts                                     |       0 |        0 |       0 |       0 | 5-27              
+  usePlaceholders.ts                               |       0 |        0 |       0 |       0 | 8-25              
+  usePromise.ts                                    |       0 |        0 |       0 |       0 | 14-62             
+  useResizeMessageView.ts                          |       0 |        0 |       0 |       0 | 7-142             
+  useSendInfo.tsx                                  |       0 |        0 |       0 |       0 | 29-416            
+  useShouldMoveOut.ts                              |       0 |        0 |       0 |       0 | 8-16              
+  useShowUpsellBanner.ts                           |       0 |        0 |       0 |       0 | 7-75              
+  useSignatures.ts                                 |       0 |        0 |       0 |       0 | 6-18              
+ app/hooks/actions                                 |       0 |        0 |       0 |       0 |                   
+  useApplyLabels.tsx                               |       0 |        0 |       0 |       0 | 21-201            
+  useCreateFilters.tsx                             |       0 |        0 |       0 |       0 | 30-159            
+  useEmptyLabel.tsx                                |       0 |        0 |       0 |       0 | 23-98             
+  useMarkAs.tsx                                    |       0 |        0 |       0 |       0 | 23-133            
+  useMoveAll.tsx                                   |       0 |      100 |       0 |       0 | 12-46             
+  useMoveToFolder.tsx                              |       0 |        0 |       0 |       0 | 33-368            
+  usePermanentDelete.tsx                           |       0 |        0 |       0 |       0 | 17-200            
+  useStar.tsx                                      |       0 |        0 |       0 |       0 | 14-48             
+ app/hooks/composer                                |       0 |        0 |       0 |       0 |                   
+  useAttachments.ts                                |       0 |        0 |       0 |       0 | 47-267            
+  useAutoSave.tsx                                  |       0 |        0 |       0 |       0 | 15-112            
+  useCloseHandler.tsx                              |       0 |        0 |       0 |       0 | 33-152            
+  useCompose.tsx                                   |       0 |        0 |       0 |       0 | 60-207            
+  useComposerContent.tsx                           |       0 |        0 |       0 |       0 | 76-654            
+  useComposerDrag.ts                               |       0 |        0 |       0 |       0 | 31-152            
+  useComposerHotkeys.tsx                           |       0 |        0 |       0 |       0 | 36-162            
+  useComposerInnerModals.tsx                       |       0 |        0 |       0 |       0 | 22-81             
+  useDraftSenderVerification.tsx                   |       0 |        0 |       0 |       0 | 18-57             
+  useExternalExpiration.ts                         |       0 |        0 |       0 |       0 | 7-13              
+  useHandleMessageAlreadySent.tsx                  |       0 |      100 |       0 |       0 | 16-47             
+  useQuickReplyFocus.tsx                           |       0 |        0 |       0 |       0 | 3-33              
+  useScheduleSend.tsx                              |       0 |        0 |       0 |       0 | 33-123            
+  useSendHandler.tsx                               |       0 |        0 |       0 |       0 | 45-252            
+  useSendMessage.tsx                               |       0 |        0 |       0 |       0 | 50-256            
+  useSendModifications.tsx                         |       0 |        0 |       0 |       0 | 17-68             
+  useSendVerifications.tsx                         |       0 |        0 |       0 |       0 | 31-280            
+ app/hooks/contact                                 |       0 |        0 |       0 |       0 |                   
+  useContacts.ts                                   |       0 |      100 |       0 |       0 | 11-28             
+  useContactsListener.ts                           |       0 |        0 |       0 |       0 | 28-80             
+  useRecipientLabel.ts                             |       0 |        0 |       0 |       0 | 18-66             
+ app/hooks/conversation                            |       0 |        0 |       0 |       0 |                   
+  useClickOutsideFocusedMessage.ts                 |       0 |        0 |       0 |       0 | 3-36              
+  useConversation.ts                               |       0 |        0 |       0 |       0 | 25-147            
+  useConversationFocus.tsx                         |       0 |        0 |       0 |       0 | 12-104            
+  useConversationHotkeys.tsx                       |       0 |        0 |       0 |       0 | 19-98             
+ app/hooks/eo                                      |       0 |        0 |       0 |       0 |                   
+  useEOAttachments.ts                              |       0 |        0 |       0 |       0 | 28-124            
+  useInitializeEOMessage.ts                        |       0 |        0 |       0 |       0 | 35-146            
+  useLoadEOImages.ts                               |       0 |      100 |       0 |       0 | 16-65             
+  useLoadEOMessage.ts                              |       0 |        0 |       0 |       0 | 19-85             
+  useLoadEOToken.ts                                |       0 |        0 |       0 |       0 | 18-41             
+  useSendEO.tsx                                    |       0 |        0 |       0 |       0 | 39-166            
+ app/hooks/events                                  |       0 |        0 |       0 |       0 |                   
+  useConversationsEvents.tsx                       |       0 |        0 |       0 |       0 | 17-71             
+  useElementsEvents.ts                             |       0 |        0 |       0 |       0 | 19-95             
+  useMessagesEvents.ts                             |       0 |        0 |       0 |       0 | 8-25              
+ app/hooks/incomingDefaults                        |       0 |        0 |       0 |       0 |                   
+  useIncomingDefaults.ts                           |       0 |      100 |       0 |       0 | 11-15             
+  useIncomingDefaultsEvents.ts                     |       0 |        0 |       0 |       0 | 8-16              
+  useIncomingDefaultsLoad.ts                       |       0 |        0 |       0 |       0 | 8-13              
+ app/hooks/mailbox                                 |       0 |        0 |       0 |       0 |                   
+  useApplyEncryptedSearch.ts                       |       0 |        0 |       0 |       0 | 38-107            
+  useElements.ts                                   |       0 |        0 |       0 |       0 | 65-219            
+  useFolderNavigationHotkeys.ts                    |       0 |        0 |       0 |       0 | 11-107            
+  useMailboxFavicon.ts                             |       0 |        0 |       0 |       0 | 16-32             
+  useMailboxFocus.tsx                              |       0 |        0 |       0 |       0 | 15-124            
+  useMailboxHotkeys.tsx                            |       0 |        0 |       0 |       0 | 25-455            
+  useMailboxPageTitle.ts                           |       0 |        0 |       0 |       0 | 21-44             
+  useNewEmailNotification.ts                       |       0 |        0 |       0 |       0 | 16-55             
+  usePageHotkeys.tsx                               |       0 |        0 |       0 |       0 | 15-71             
+  usePreLoadElements.ts                            |       0 |        0 |       0 |       0 | 21-55             
+  useWelcomeFlag.ts                                |       0 |        0 |       0 |       0 | 9-28              
+ app/hooks/message                                 |       0 |        0 |       0 |       0 |                   
+  useGetMessageKeys.ts                             |       0 |      100 |       0 |       0 | 15-21             
+  useInitializeMessage.tsx                         |       0 |        0 |       0 |       0 | 47-202            
+  useKeyVerification.tsx                           |       0 |        0 |       0 |       0 | 11-60             
+  useLoadImages.ts                                 |       0 |      100 |       0 |       0 | 28-94             
+  useLoadMessage.ts                                |       0 |      100 |       0 |       0 | 10-25             
+  useMessage.ts                                    |       0 |        0 |       0 |       0 | 13-92             
+  useMessageHotkeys.tsx                            |       0 |        0 |       0 |       0 | 21-324            
+  useMessageTrackers.tsx                           |       0 |        0 |       0 |       0 | 18-121            
+  useResignContact.ts                              |       0 |        0 |       0 |       0 | 11-25             
+  useSaveDraft.ts                                  |       0 |        0 |       0 |       0 | 21-153            
+  useVerifyMessage.ts                              |       0 |        0 |       0 |       0 | 19-90             
+ app/hooks/optimistic                              |       0 |        0 |       0 |       0 |                   
+  useOptimisticApplyLabels.ts                      |       0 |        0 |       0 |       0 | 31-212            
+  useOptimisticDelete.ts                           |       0 |        0 |       0 |       0 | 30-112            
+  useOptimisticEmptyLabel.ts                       |       0 |        0 |       0 |       0 | 28-89             
+  useOptimisticMarkAs.ts                           |       0 |        0 |       0 |       0 | 30-229            
+ app/hooks/simpleLogin                             |       0 |        0 |       0 |       0 |                   
+  useSimpleLoginExtension.tsx                      |       0 |        0 |       0 |       0 | 8-108             
+  useSimpleLoginTelemetry.ts                       |       0 |        0 |       0 |       0 | 10-60             
+ app/logic                                         |       0 |        0 |       0 |       0 |                   
+  actions.ts                                       |       0 |      100 |     100 |       0 | 3                 
+  store.ts                                         |       0 |        0 |       0 |       0 | 17-99             
+ app/logic/attachments                             |       0 |      100 |       0 |       0 |                   
+  attachmentsActions.ts                            |       0 |      100 |     100 |       0 | 5-9               
+  attachmentsReducers.ts                           |       0 |      100 |       0 |       0 | 8-16              
+  attachmentsSelectors.ts                          |       0 |      100 |       0 |       0 | 5-11              
+  attachmentsSlice.ts                              |       0 |      100 |       0 |       0 | 8-15              
+  attachmentsTypes.ts                              |       0 |        0 |       0 |       0 |                   
+ app/logic/composers                               |       0 |        0 |       0 |       0 |                   
+  composerSelectors.ts                             |       0 |      100 |       0 |       0 | 5-10              
+  composerTypes.ts                                 |       0 |        0 |       0 |       0 |                   
+  composersSlice.ts                                |       0 |        0 |       0 |       0 | 7-34              
+ app/logic/contacts                                |       0 |        0 |       0 |       0 |                   
+  contactsActions.ts                               |       0 |      100 |     100 |       0 | 5                 
+  contactsReducers.ts                              |       0 |        0 |       0 |       0 | 11-61             
+  contactsSelectors.ts                             |       0 |      100 |       0 |       0 | 3-7               
+  contactsSlice.ts                                 |       0 |      100 |       0 |       0 | 8-24              
+  contactsTypes.ts                                 |       0 |        0 |       0 |       0 |                   
+ app/logic/conversations                           |       0 |        0 |       0 |       0 |                   
+  conversationsActions.ts                          |       0 |        0 |       0 |       0 | 12-72             
+  conversationsReducers.ts                         |       0 |        0 |       0 |       0 | 33-321            
+  conversationsSelectors.ts                        |       0 |      100 |       0 |       0 | 5-15              
+  conversationsSlice.ts                            |       0 |      100 |       0 |       0 | 44-67             
+  conversationsTypes.ts                            |       0 |        0 |       0 |       0 |                   
+ app/logic/elements                                |       0 |        0 |       0 |       0 |                   
+  elementsActions.ts                               |       0 |        0 |       0 |       0 | 27-156            
+  elementsReducers.ts                              |       0 |        0 |       0 |       0 | 29-313            
+  elementsSelectors.ts                             |       0 |        0 |       0 |       0 | 29-272            
+  elementsSlice.ts                                 |       0 |        0 |       0 |       0 | 58-134            
+  elementsTypes.ts                                 |       0 |        0 |       0 |       0 |                   
+ app/logic/elements/helpers                        |       0 |        0 |       0 |       0 |                   
+  elementBypassFilters.ts                          |       0 |        0 |       0 |       0 | 4-37              
+  elementQuery.ts                                  |       0 |        0 |       0 |       0 | 12-93             
+  elementTotal.ts                                  |       0 |        0 |       0 |       0 | 5-20              
+ app/logic/eo                                      |       0 |        0 |       0 |       0 |                   
+  eoActions.ts                                     |       0 |        0 |       0 |       0 | 25-114            
+  eoReducers.ts                                    |       0 |        0 |       0 |       0 | 25-188            
+  eoSelectors.ts                                   |       0 |      100 |       0 |       0 | 5-17              
+  eoSlice.ts                                       |       0 |      100 |       0 |       0 | 27-52             
+  eoStore.ts                                       |       0 |      100 |       0 |       0 | 5-10              
+  eoType.ts                                        |       0 |        0 |       0 |       0 |                   
+ app/logic/incomingDefaults                        |       0 |        0 |       0 |       0 |                   
+  incomingDefaultsActions.ts                       |       0 |      100 |       0 |       0 | 23-96             
+  incomingDefaultsReducer.ts                       |       0 |        0 |       0 |       0 | 10-85             
+  incomingDefaultsSelectors.ts                     |       0 |      100 |       0 |       0 | 7-23              
+  incomingDefaultsSlice.ts                         |       0 |      100 |       0 |       0 | 7-23              
+  incomingDefaultsTypes.ts                         |       0 |        0 |       0 |       0 |                   
+ app/logic/messages                                |       0 |        0 |       0 |       0 |                   
+  messagesSelectors.ts                             |       0 |        0 |       0 |       0 | 7-22              
+  messagesSlice.ts                                 |       0 |      100 |       0 |       0 | 20-80             
+  messagesTypes.ts                                 |       0 |        0 |       0 |       0 |                   
+ app/logic/messages/draft                          |       0 |        0 |       0 |       0 |                   
+  messagesDraftActions.ts                          |       0 |      100 |       0 |       0 | 9-56              
+  messagesDraftReducers.ts                         |       0 |        0 |       0 |       0 | 23-234            
+ app/logic/messages/expire                         |       0 |        0 |       0 |       0 |                   
+  messagesExpireActions.ts                         |       0 |      100 |       0 |       0 | 7-13              
+  messagesExpireReducers.ts                        |       0 |        0 |       0 |       0 | 6-63              
+ app/logic/messages/helpers                        |       0 |        0 |       0 |       0 |                   
+  messagesReducer.ts                               |       0 |        0 |       0 |       0 | 15-54             
+ app/logic/messages/images                         |       0 |        0 |       0 |       0 |                   
+  messagesImagesActions.ts                         |       0 |        0 |       0 |       0 | 18-123            
+  messagesImagesReducers.ts                        |       0 |        0 |       0 |       0 | 23-288            
+ app/logic/messages/optimistic                     |       0 |        0 |       0 |       0 |                   
+  messagesOptimisticActions.ts                     |       0 |      100 |     100 |       0 | 7-19              
+  messagesOptimisticReducers.ts                    |       0 |        0 |       0 |       0 | 11-55             
+ app/logic/messages/read                           |       0 |        0 |       0 |       0 |                   
+  messagesReadActions.ts                           |       0 |        0 |       0 |       0 | 19-62             
+  messagesReadReducers.ts                          |       0 |        0 |       0 |       0 | 21-226            
+ app/logic/messages/scheduled                      |       0 |        0 |       0 |       0 |                   
+  scheduledActions.ts                              |       0 |      100 |     100 |       0 | 3-5               
+  scheduledReducers.ts                             |       0 |        0 |       0 |       0 | 6-42              
+ app/models                                        |       0 |      100 |     100 |       0 |                   
+  address.ts                                       |       0 |      100 |     100 |       0 | 5                 
+  contact.ts                                       |       0 |        0 |       0 |       0 |                   
+  conversation.ts                                  |       0 |        0 |       0 |       0 |                   
+  crypto.ts                                        |       0 |        0 |       0 |       0 |                   
+  element.ts                                       |       0 |        0 |       0 |       0 |                   
+  encryptedSearch.ts                               |       0 |        0 |       0 |       0 |                   
+  event.ts                                         |       0 |        0 |       0 |       0 |                   
+  tools.ts                                         |       0 |        0 |       0 |       0 |                   
+  utils.ts                                         |       0 |        0 |       0 |       0 |                   
+ assets/favicons                                   |       0 |      100 |     100 |       0 |                   
+  index.ts                                         |       0 |      100 |     100 |       0 | 103               
+---------------------------------------------------|---------|----------|---------|---------|-------------------
+Running test file in proton-mail workspace: applications/mail/src/app/helpers/expiration.test.ts
+---------------------------------------------------|---------|----------|---------|---------|-------------------
+File                                               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+---------------------------------------------------|---------|----------|---------|---------|-------------------
+All files                                          |    0.16 |     0.18 |    0.17 |    0.15 |                   
+ app/components/attachment                         |       0 |        0 |       0 |       0 |                   
+  AttachmentItem.tsx                               |       0 |        0 |       0 |       0 | 17-112            
+  AttachmentList.tsx                               |       0 |        0 |       0 |       0 | 43-257            
+  AttachmentPreview.tsx                            |       0 |        0 |       0 |       0 | 27-86             
+  AttachmentsButton.tsx                            |       0 |        0 |       0 |       0 | 17-38             
+ app/components/attachment/modals                  |       0 |        0 |       0 |       0 |                   
+  ConfirmDownloadAttachments.tsx                   |       0 |        0 |       0 |       0 | 16-44             
+ app/components/checklist                          |       0 |        0 |       0 |       0 |                   
+  GetStartedChecklist.tsx                          |       0 |        0 |       0 |       0 | 35-174            
+  GetStartedChecklistHeader.tsx                    |       0 |        0 |       0 |       0 | 14-19             
+  GetStartedChecklistModal.tsx                     |       0 |        0 |       0 |       0 | 23-67             
+  ModalGetMobileApp.tsx                            |       0 |      100 |       0 |       0 | 10-13             
+  ModalImportEmails.tsx                            |       0 |      100 |       0 |       0 | 8-9               
+  PaidUserGetStartedChecklist.tsx                  |       0 |        0 |       0 |       0 | 20-87             
+ app/components/composer                           |       0 |        0 |       0 |       0 |                   
+  Composer.tsx                                     |       0 |        0 |       0 |       0 | 61-237            
+  ComposerContent.tsx                              |       0 |        0 |       0 |       0 | 32-51             
+  ComposerExpirationTime.tsx                       |       0 |        0 |       0 |       0 | 15-25             
+  ComposerFrame.tsx                                |       0 |        0 |       0 |       0 | 26-149            
+  ComposerMeta.tsx                                 |       0 |        0 |       0 |       0 | 27-44             
+  ComposerTitleBar.tsx                             |       0 |        0 |       0 |       0 | 19-102            
+ app/components/composer/actions                   |       0 |        0 |       0 |       0 |                   
+  ComposerMoreActions.tsx                          |       0 |        0 |       0 |       0 | 26-55             
+  ComposerMoreOptionsDropdown.tsx                  |       0 |        0 |       0 |       0 | 27-51             
+  ComposerPasswordActions.tsx                      |       0 |        0 |       0 |       0 | 20-84             
+  ComposerSendButton.tsx                           |       0 |      100 |       0 |       0 | 12-13             
+  MoreActionsExtension.tsx                         |       0 |        0 |       0 |       0 | 27-113            
+ app/components/composer/actions/ComposerActions   |       0 |        0 |       0 |       0 |                   
+  ComposerActions.tsx                              |       0 |        0 |       0 |       0 | 47-120            
+  useComposerActionsText.tsx                       |       0 |        0 |       0 |       0 | 17-69             
+ app/components/composer/actions/scheduleSend      |       0 |        0 |       0 |       0 |                   
+  ScheduleSendActions.tsx                          |       0 |        0 |       0 |       0 | 40-210            
+  ScheduleSendSpotlight.tsx                        |       0 |      100 |       0 |       0 | 17-20             
+  helpers.tsx                                      |       0 |        0 |       0 |       0 | 8-52              
+  useScheduleSendFeature.ts                        |       0 |        0 |       0 |       0 | 4-11              
+  useScheduleSendSpotlight.ts                      |       0 |        0 |       0 |       0 | 8-13              
+ app/components/composer/addresses                 |       0 |        0 |       0 |       0 |                   
+  Addresses.tsx                                    |       0 |        0 |       0 |       0 | 25-119            
+  AddressesCCButton.tsx                            |       0 |        0 |       0 |       0 | 20-54             
+  AddressesContactsModal.tsx                       |       0 |        0 |       0 |       0 | 20-92             
+  AddressesEditor.tsx                              |       0 |        0 |       0 |       0 | 32-53             
+  AddressesGroupItem.tsx                           |       0 |        0 |       0 |       0 | 37-157            
+  AddressesGroupModal.tsx                          |       0 |        0 |       0 |       0 | 43-99             
+  AddressesInput.tsx                               |       0 |        0 |       0 |       0 | 46-227            
+  AddressesRecipientItem.tsx                       |       0 |        0 |       0 |       0 | 42-171            
+  AddressesSummary.tsx                             |       0 |        0 |       0 |       0 | 27-86             
+  AskForKeyPinningModal.tsx                        |       0 |        0 |       0 |       0 | 36-124            
+  SelectSender.tsx                                 |       0 |        0 |       0 |       0 | 33-91             
+  SendWithChangedPreferencesModal.tsx              |       0 |        0 |       0 |       0 | 13-28             
+  SendWithErrorsModal.tsx                          |       0 |        0 |       0 |       0 | 18-82             
+  SendWithExpirationModal.tsx                      |       0 |        0 |       0 |       0 | 15-47             
+  SendWithWarningsModal.tsx                        |       0 |        0 |       0 |       0 | 13-32             
+ app/components/composer/editor                    |       0 |        0 |       0 |       0 |                   
+  EditorToolbarExtension.tsx                       |       0 |        0 |       0 |       0 |                   
+  EditorWrapper.tsx                                |       0 |        0 |       0 |       0 | 50-278            
+ app/components/composer/modals                    |       0 |        0 |       0 |       0 |                   
+  ComposerExpirationModal.tsx                      |       0 |        0 |       0 |       0 | 44-222            
+  ComposerInnerModal.tsx                           |       0 |        0 |       0 |       0 | 26-52             
+  ComposerInnerModals.tsx                          |       0 |        0 |       0 |       0 | 33-107            
+  ComposerInsertImageModal.tsx                     |       0 |      100 |       0 |       0 | 14-35             
+  ComposerPasswordModal.tsx                        |       0 |        0 |       0 |       0 | 20-104            
+  ComposerScheduleSendModal.tsx                    |       0 |        0 |       0 |       0 | 30-157            
+  PasswordInnerModalForm.tsx                       |       0 |      100 |       0 |       0 | 10-59             
+  SendingFromDefaultAddressModal.tsx               |       0 |      100 |       0 |       0 | 12-13             
+  SendingOriginalMessageModal.tsx                  |       0 |      100 |       0 |       0 | 11-12             
+ app/components/composer/modals/InnerModal         |       0 |        0 |       0 |       0 |                   
+  InnerModalCloseButton.tsx                        |       0 |        0 |       0 |       0 | 11-14             
+  InnerModalContent.tsx                            |       0 |        0 |       0 |       0 | 15-29             
+  InnerModalFooter.tsx                             |       0 |        0 |       0 |       0 | 10-19             
+  InnerModalHeader.tsx                             |       0 |        0 |       0 |       0 | 18-28             
+  InnerModalScroll.tsx                             |       0 |        0 |       0 |       0 | 10-20             
+  InnerModalTitle.tsx                              |       0 |      100 |       0 |       0 | 10-11             
+ app/components/composer/quickReply                |       0 |        0 |       0 |       0 |                   
+  DeleteQuickReplyModal.tsx                        |       0 |      100 |       0 |       0 | 10-18             
+  NoAttachmentsModal.tsx                           |       0 |      100 |       0 |       0 | 13-14             
+  QuickReply.tsx                                   |       0 |        0 |       0 |       0 | 38-315            
+  QuickReplyContainer.tsx                          |       0 |        0 |       0 |       0 | 28-76             
+  QuickReplyType.tsx                               |       0 |        0 |       0 |       0 | 15-84             
+ app/components/composer/quickReply/tests          |       0 |        0 |       0 |       0 |                   
+  QuickReply.test.data.ts                          |       0 |        0 |       0 |       0 | 10-69             
+  QuickReply.test.helpers.tsx                      |       0 |        0 |       0 |       0 | 19-191            
+ app/components/composer/tests                     |       0 |        0 |       0 |       0 |                   
+  Composer.test.helpers.tsx                        |       0 |        0 |       0 |       0 | 27-131            
+ app/components/conversation                       |       0 |        0 |       0 |       0 |                   
+  ConversationErrorBanner.tsx                      |       0 |        0 |       0 |       0 | 11-32             
+  ConversationHeader.tsx                           |       0 |        0 |       0 |       0 | 16-31             
+  ConversationView.tsx                             |       0 |        0 |       0 |       0 | 30-193            
+  NumMessages.tsx                                  |       0 |        0 |       0 |       0 | 12-20             
+  TrashWarning.tsx                                 |       0 |        0 |       0 |       0 | 14-36             
+  UnreadMessages.tsx                               |       0 |        0 |       0 |       0 | 17-55             
+ app/components/dropdown                           |       0 |        0 |       0 |       0 |                   
+  CustomFilterDropdown.tsx                         |       0 |        0 |       0 |       0 | 22-226            
+  LabelDropdown.tsx                                |       0 |        0 |       0 |       0 | 40-428            
+  MoveDropdown.tsx                                 |       0 |        0 |       0 |       0 | 44-316            
+ app/components/eo                                 |       0 |        0 |       0 |       0 |                   
+  EORedirect.tsx                                   |       0 |        0 |       0 |       0 | 21-66             
+ app/components/eo/message                         |       0 |        0 |       0 |       0 |                   
+  EOExpirationTime.tsx                             |       0 |        0 |       0 |       0 | 24-72             
+  EOHeaderExpanded.tsx                             |       0 |        0 |       0 |       0 | 33-53             
+  EOMessageBody.tsx                                |       0 |        0 |       0 |       0 | 21-48             
+  EOMessageHeader.tsx                              |       0 |        0 |       0 |       0 | 19-47             
+  ViewEOMessage.tsx                                |       0 |        0 |       0 |       0 | 22-41             
+ app/components/eo/message/recipients              |       0 |      100 |       0 |       0 |                   
+  EORecipientSingle.tsx                            |       0 |      100 |       0 |       0 | 12-15             
+  EORecipientsList.tsx                             |       0 |      100 |       0 |       0 | 13-16             
+ app/components/eo/message/tests                   |       0 |      100 |       0 |       0 |                   
+  ViewEOMessage.test.helpers.tsx                   |       0 |      100 |       0 |       0 | 5-10              
+ app/components/eo/reply                           |       0 |        0 |       0 |       0 |                   
+  EOComposer.tsx                                   |       0 |        0 |       0 |       0 | 30-130            
+  EOReply.tsx                                      |       0 |        0 |       0 |       0 | 14-20             
+  EOReplyFooter.tsx                                |       0 |        0 |       0 |       0 | 25-77             
+  EOReplyHeader.tsx                                |       0 |      100 |       0 |       0 | 14-17             
+ app/components/eo/reply/tests                     |       0 |      100 |       0 |       0 |                   
+  EOReply.test.helpers.tsx                         |       0 |      100 |       0 |       0 | 8-44              
+ app/components/eo/unlock                          |       0 |        0 |       0 |       0 |                   
+  EOUnlock.tsx                                     |       0 |        0 |       0 |       0 | 19-37             
+  MessageDecryptForm.tsx                           |       0 |        0 |       0 |       0 | 13-33             
+ app/components/header                             |       0 |        0 |       0 |       0 |                   
+  ClearBrowserDataModal.tsx                        |       0 |      100 |       0 |       0 | 8-17              
+  MailDefaultHandlerModal.tsx                      |       0 |      100 |       0 |       0 | 10-19             
+  MailHeader.tsx                                   |       0 |        0 |       0 |       0 | 38-88             
+  MailHeaderSettingsButton.tsx                     |       0 |        0 |       0 |       0 | 21-99             
+  useEncryptedSearchToggleState.tsx                |       0 |        0 |       0 |       0 | 10-95             
+ app/components/header/search                      |       0 |        0 |       0 |       0 |                   
+  AdvancedSearch.tsx                               |       0 |        0 |       0 |       0 | 39-297            
+  MailSearch.tsx                                   |       0 |        0 |       0 |       0 | 39-103            
+  MailSearchInput.tsx                              |       0 |        0 |       0 |       0 | 15-29             
+  MailSearchSpotlight.tsx                          |       0 |        0 |       0 |       0 | 14-23             
+  SearchOverlay.tsx                                |       0 |        0 |       0 |       0 | 48-153            
+ app/components/header/search/AdvancedSearchFields |       0 |        0 |       0 |       0 |                   
+  EncryptedSearchField.tsx                         |       0 |        0 |       0 |       0 | 17-178            
+  LocationField.tsx                                |       0 |        0 |       0 |       0 | 15-54             
+  LocationFieldDropdown.tsx                        |       0 |        0 |       0 |       0 | 26-89             
+  SearchField.tsx                                  |       0 |        0 |       0 |       0 | 17-21             
+  useLocationFieldOptions.ts                       |       0 |        0 |       0 |       0 | 50-153            
+ app/components/layout                             |       0 |        0 |       0 |       0 |                   
+  PrivateLayout.tsx                                |       0 |        0 |       0 |       0 | 25-79             
+  PublicLayout.js                                  |       0 |      100 |       0 |       0 | 5-14              
+ app/components/list                               |       0 |        0 |       0 |       0 |                   
+  ESSlowToolbar.tsx                                |       0 |      100 |       0 |       0 | 10-35             
+  Item.tsx                                         |       0 |        0 |       0 |       0 | 21-142            
+  ItemAction.tsx                                   |       0 |        0 |       0 |       0 | 15-26             
+  ItemAttachmentIcon.tsx                           |       0 |        0 |       0 |       0 | 19-45             
+  ItemColumnLayout.tsx                             |       0 |        0 |       0 |       0 | 42-95             
+  ItemContextMenu.tsx                              |       0 |        0 |       0 |       0 | 33-159            
+  ItemDate.tsx                                     |       0 |        0 |       0 |       0 | 9-75              
+  ItemHoverButtons.tsx                             |       0 |        0 |       0 |       0 | 16-87             
+  ItemIcon.tsx                                     |       0 |        0 |       0 |       0 | 10-18             
+  ItemLabels.tsx                                   |       0 |        0 |       0 |       0 | 24-59             
+  ItemLocation.tsx                                 |       0 |        0 |       0 |       0 | 10-55             
+  ItemRowLayout.tsx                                |       0 |        0 |       0 |       0 | 37-76             
+  ItemSenders.tsx                                  |       0 |        0 |       0 |       0 | 24-74             
+  ItemStar.tsx                                     |       0 |        0 |       0 |       0 | 18-44             
+  ItemUnread.tsx                                   |       0 |        0 |       0 |       0 | 15-22             
+  List.tsx                                         |       0 |        0 |       0 |       0 | 53-340            
+  ListSettings.tsx                                 |       0 |      100 |       0 |       0 | 20-21             
+  MailUpsellBanner.tsx                             |       0 |        0 |       0 |       0 | 15-333            
+  ResizeHandle.tsx                                 |       0 |      100 |       0 |       0 | 12-13             
+  TaskRunningBanner.tsx                            |       0 |      100 |       0 |       0 | 10-11             
+  useEncryptedSearchList.tsx                       |       0 |        0 |       0 |       0 | 10-67             
+  useItemContextMenu.tsx                           |       0 |        0 |       0 |       0 | 21-80             
+  useScrollToTop.ts                                |       0 |        0 |       0 |       0 | 4-12              
+ app/components/list/auto-delete                   |       0 |        0 |       0 |       0 |                   
+  AutoDeleteBanner.tsx                             |       0 |        0 |       0 |       0 | 15-23             
+  useAutodeleteBanner.ts                           |       0 |        0 |       0 |       0 | 8-44              
+ app/components/list/auto-delete/variations        |       0 |        0 |       0 |       0 |                   
+  AutoDeleteEnabledBanner.tsx                      |       0 |        0 |       0 |       0 | 10-11             
+  AutoDeleteFreeBanner.tsx                         |       0 |        0 |       0 |       0 | 9-27              
+  AutoDeletePaidBanner.tsx                         |       0 |        0 |       0 |       0 | 9-42              
+ app/components/list/item-expiration               |       0 |        0 |       0 |       0 |                   
+  ItemExpiration.tsx                               |       0 |        0 |       0 |       0 | 19-39             
+  useItemExpiration.ts                             |       0 |        0 |       0 |       0 | 13-47             
+  useItemExpirationType.ts                         |       0 |        0 |       0 |       0 |                   
+ app/components/list/spy-tracker                   |       0 |        0 |       0 |       0 |                   
+  ItemSpyTrackerIcon.tsx                           |       0 |        0 |       0 |       0 | 20-68             
+  NumberOfElementsBubble.tsx                       |       0 |        0 |       0 |       0 | 10-11             
+  SpyTrackerIcon.tsx                               |       0 |        0 |       0 |       0 | 19-27             
+  SpyTrackerModal.tsx                              |       0 |        0 |       0 |       0 | 31-140            
+ app/components/message                            |       0 |        0 |       0 |       0 |                   
+  EncryptionStatusIcon.tsx                         |       0 |        0 |       0 |       0 | 16-61             
+  LoadContentSpotlight.tsx                         |       0 |      100 |       0 |       0 | 16-30             
+  MessageBody.tsx                                  |       0 |        0 |       0 |       0 | 36-113            
+  MessageBodyIframe.tsx                            |       0 |        0 |       0 |       0 | 44-142            
+  MessageBodyImage.tsx                             |       0 |        0 |       0 |       0 | 15-190            
+  MessageBodyImages.tsx                            |       0 |        0 |       0 |       0 | 15-29             
+  MessageFooter.tsx                                |       0 |      100 |       0 |       0 | 12-15             
+  MessageOnlyView.tsx                              |       0 |        0 |       0 |       0 | 35-139            
+  MessagePrintFooter.tsx                           |       0 |        0 |       0 |       0 | 20-69             
+  MessagePrintHeader.tsx                           |       0 |      100 |       0 |       0 | 18-22             
+  MessageView.tsx                                  |       0 |        0 |       0 |       0 | 74-370            
+  constants.ts                                     |       0 |      100 |     100 |       0 | 1-6               
+ app/components/message/extras                     |       0 |        0 |       0 |       0 |                   
+  ExtraAskResign.tsx                               |       0 |        0 |       0 |       0 | 20-47             
+  ExtraAutoReply.tsx                               |       0 |        0 |       0 |       0 | 14-19             
+  ExtraBlockedSender.tsx                           |       0 |        0 |       0 |       0 | 20-46             
+  ExtraDarkStyle.tsx                               |       0 |        0 |       0 |       0 | 18-38             
+  ExtraDecryptedSubject.tsx                        |       0 |        0 |       0 |       0 | 14-32             
+  ExtraErrors.tsx                                  |       0 |        0 |       0 |       0 | 12-59             
+  ExtraEvents.tsx                                  |       0 |        0 |       0 |       0 | 60-263            
+  ExtraExpirationSelfDestruction.tsx               |       0 |        0 |       0 |       0 | 17-44             
+  ExtraExpirationSentExpirationAutoDelete.tsx      |       0 |        0 |       0 |       0 | 12-15             
+  ExtraExpirationTime.tsx                          |       0 |        0 |       0 |       0 | 17-49             
+  ExtraImages.tsx                                  |       0 |        0 |       0 |       0 | 20-82             
+  ExtraPinKey.tsx                                  |       0 |        0 |       0 |       0 | 31-208            
+  ExtraReadReceipt.tsx                             |       0 |        0 |       0 |       0 | 14-44             
+  ExtraScheduledMessage.tsx                        |       0 |        0 |       0 |       0 | 35-144            
+  ExtraSpamScore.tsx                               |       0 |        0 |       0 |       0 | 21-113            
+  ExtraUnsubscribe.tsx                             |       0 |        0 |       0 |       0 | 54-290            
+ app/components/message/extras/calendar            |       0 |        0 |       0 |       0 |                   
+  EmailReminderWidget.tsx                          |       0 |        0 |       0 |       0 | 59-368            
+  EmailReminderWidgetSkeleton.tsx                  |       0 |      100 |       0 |       0 | 3-4               
+  EventReminderBanner.tsx                          |       0 |        0 |       0 |       0 | 15-32             
+  EventReminderText.tsx                            |       0 |        0 |       0 |       0 | 17-75             
+  ExtraEvent.tsx                                   |       0 |        0 |       0 |       0 | 57-348            
+  ExtraEventAddParticipantButton.tsx               |       0 |        0 |       0 |       0 | 30-137            
+  ExtraEventAlert.tsx                              |       0 |        0 |       0 |       0 | 20-185            
+  ExtraEventAttendeeButtons.tsx                    |       0 |        0 |       0 |       0 | 38-287            
+  ExtraEventButtons.tsx                            |       0 |        0 |       0 |       0 | 20-33             
+  ExtraEventDetails.tsx                            |       0 |        0 |       0 |       0 | 19-61             
+  ExtraEventHeader.tsx                             |       0 |        0 |       0 |       0 | 12-44             
+  ExtraEventImportButton.tsx                       |       0 |        0 |       0 |       0 | 24-97             
+  ExtraEventOrganizerButtons.tsx                   |       0 |        0 |       0 |       0 | 13-27             
+  ExtraEventParticipant.tsx                        |       0 |        0 |       0 |       0 | 11-16             
+  ExtraEventParticipants.tsx                       |       0 |        0 |       0 |       0 | 13-53             
+  ExtraEventSummary.tsx                            |       0 |        0 |       0 |       0 | 10-43             
+  ExtraEventTimeStatus.tsx                         |       0 |        0 |       0 |       0 | 12-22             
+  ExtraEventWarning.tsx                            |       0 |        0 |       0 |       0 | 18-78             
+  OpenInCalendarButton.tsx                         |       0 |        0 |       0 |       0 | 14-47             
+  useCalendarWidgetDrawerEvents.tsx                |       0 |        0 |       0 |       0 | 13-62             
+ app/components/message/header                     |       0 |        0 |       0 |       0 |                   
+  HeaderCollapsed.tsx                              |       0 |        0 |       0 |       0 | 40-66             
+  HeaderDropdown.tsx                               |       0 |        0 |       0 |       0 | 43-103            
+  HeaderExpanded.tsx                               |       0 |        0 |       0 |       0 | 67-193            
+  HeaderExtra.tsx                                  |       0 |        0 |       0 |       0 | 34-60             
+  HeaderMoreDropdown.tsx                           |       0 |        0 |       0 |       0 | 62-623            
+  HeaderTopPrivacyIcon.tsx                         |       0 |        0 |       0 |       0 | 27-78             
+ app/components/message/helpers                    |       0 |        0 |       0 |       0 |                   
+  getIframeHtml.ts                                 |       0 |        0 |       0 |       0 | 22-55             
+  getIframeSandboxAttributes.ts                    |       0 |        0 |       0 |       0 | 3-31              
+ app/components/message/hooks                      |       0 |        0 |       0 |       0 |                   
+  useIframeDispatchEvents.ts                       |       0 |        0 |       0 |       0 | 5-42              
+  useIframeShowBlockquote.ts                       |       0 |        0 |       0 |       0 | 14-54             
+  useInitIframeContent.ts                          |       0 |        0 |       0 |       0 | 21-108            
+  useMessageDarkStyles.ts                          |       0 |        0 |       0 |       0 | 11-48             
+  useObserveIframeHeight.ts                        |       0 |        0 |       0 |       0 | 7-64              
+ app/components/message/modals                     |       0 |        0 |       0 |       0 |                   
+  BlockSenderModal.tsx                             |       0 |        0 |       0 |       0 | 19-94             
+  ContactResignModal.tsx                           |       0 |        0 |       0 |       0 | 40-188            
+  CustomExpirationModal.tsx                        |       0 |        0 |       0 |       0 | 27-96             
+  GroupModal.tsx                                   |       0 |        0 |       0 |       0 | 22-46             
+  MessageDetailsModal.tsx                          |       0 |        0 |       0 |       0 | 45-106            
+  MessageHeadersModal.tsx                          |       0 |      100 |       0 |       0 | 15-24             
+  MessagePermanentDeleteModal.tsx                  |       0 |      100 |       0 |       0 | 14-28             
+  MessagePhishingModal.tsx                         |       0 |        0 |       0 |       0 | 12-43             
+  MessagePrintModal.tsx                            |       0 |      100 |       0 |       0 | 19-40             
+  MoveScheduledModal.tsx                           |       0 |        0 |       0 |       0 | 13-23             
+  MoveToSpamModal.tsx                              |       0 |        0 |       0 |       0 | 21-50             
+  SimplePublicKeyTable.tsx                         |       0 |        0 |       0 |       0 | 20-64             
+  TrustPublicKeyModal.tsx                          |       0 |        0 |       0 |       0 | 36-145            
+ app/components/message/recipients                 |       0 |        0 |       0 |       0 |                   
+  MailRecipientItemSingle.tsx                      |       0 |        0 |       0 |       0 | 48-227            
+  MailRecipientList.tsx                            |       0 |      100 |       0 |       0 | 18-31             
+  MailRecipients.tsx                               |       0 |        0 |       0 |       0 | 26-39             
+  RecipientItem.tsx                                |       0 |        0 |       0 |       0 | 36-106            
+  RecipientItemGroup.tsx                           |       0 |        0 |       0 |       0 | 38-115            
+  RecipientItemLayout.tsx                          |       0 |        0 |       0 |       0 | 45-121            
+  RecipientItemSingle.tsx                          |       0 |        0 |       0 |       0 | 33-68             
+  RecipientSimple.tsx                              |       0 |        0 |       0 |       0 | 17-24             
+  RecipientType.tsx                                |       0 |        0 |       0 |       0 | 9-14              
+  RecipientsDetails.tsx                            |       0 |        0 |       0 |       0 | 29-161            
+  RecipientsList.tsx                               |       0 |        0 |       0 |       0 | 20-32             
+  RecipientsSimple.tsx                             |       0 |        0 |       0 |       0 |                   
+ app/components/message/tests                      |       0 |        0 |       0 |       0 |                   
+  Message.test.helpers.tsx                         |       0 |        0 |       0 |       0 | 21-105            
+ app/components/notifications                      |       0 |        0 |       0 |       0 |                   
+  DecryptionErrorNotification.tsx                  |       0 |        0 |       0 |       0 | 13-48             
+  LoadingNotificationContent.tsx                   |       0 |        0 |       0 |       0 | 11-22             
+  MoveAllNotificationButton.tsx                    |       0 |        0 |       0 |       0 | 16-33             
+  SavingDraftNotification.tsx                      |       0 |        0 |       0 |       0 | 20-34             
+  SendingMessageNotification.tsx                   |       0 |        0 |       0 |       0 | 15-125            
+  UndoActionNotification.tsx                       |       0 |        0 |       0 |       0 | 13-21             
+  UndoNotificationButton.tsx                       |       0 |      100 |       0 |       0 | 11-12             
+ app/components/onboarding                         |       0 |        0 |       0 |       0 |                   
+  MailOnboardingModal.tsx                          |       0 |        0 |       0 |       0 | 15-21             
+  MailOnboardingWrapper.tsx                        |       0 |        0 |       0 |       0 | 13-47             
+ app/components/sidebar                            |       0 |        0 |       0 |       0 |                   
+  EditLabelContext.tsx                             |       0 |        0 |       0 |       0 | 20-126            
+  LocationAside.tsx                                |       0 |        0 |       0 |       0 | 18-53             
+  MailSidebar.tsx                                  |       0 |        0 |       0 |       0 | 38-100            
+  MailSidebarList.tsx                              |       0 |        0 |       0 |       0 | 43-298            
+  MailSidebarListActions.tsx                       |       0 |        0 |       0 |       0 | 24-40             
+  MailSidebarPrimaryButton.tsx                     |       0 |        0 |       0 |       0 | 10-33             
+  MailSidebarSystemFolders.tsx                     |       0 |        0 |       0 |       0 | 28-256            
+  SidebarFolder.tsx                                |       0 |        0 |       0 |       0 | 25-80             
+  SidebarFolders.tsx                               |       0 |        0 |       0 |       0 | 22-62             
+  SidebarItem.tsx                                  |       0 |        0 |       0 |       0 | 31-153            
+  SidebarLabelActions.tsx                          |       0 |        0 |       0 |       0 | 15-50             
+  SidebarLabels.tsx                                |       0 |        0 |       0 |       0 | 18-54             
+  SidebarVersion.tsx                               |       0 |      100 |       0 |       0 | 5-6               
+ app/components/simpleLogin                        |       0 |        0 |       0 |       0 |                   
+  SimpleLoginModal.tsx                             |       0 |        0 |       0 |       0 | 27-74             
+ app/components/toolbar                            |       0 |        0 |       0 |       0 |                   
+  DeleteButton.tsx                                 |       0 |        0 |       0 |       0 | 12-29             
+  EmptyButton.tsx                                  |       0 |        0 |       0 |       0 | 12-58             
+  FilterActions.tsx                                |       0 |        0 |       0 |       0 | 17-117            
+  LabelsAndFolders.tsx                             |       0 |        0 |       0 |       0 | 21-97             
+  MoreActions.tsx                                  |       0 |        0 |       0 |       0 | 26-74             
+  MoreDropdown.tsx                                 |       0 |        0 |       0 |       0 | 18-217            
+  MoveButtons.tsx                                  |       0 |        0 |       0 |       0 | 10-144            
+  NavigationControls.tsx                           |       0 |        0 |       0 |       0 | 20-79             
+  PagingControls.tsx                               |       0 |        0 |       0 |       0 | 23-121            
+  ReadUnreadButtons.tsx                            |       0 |        0 |       0 |       0 | 12-69             
+  SelectAll.tsx                                    |       0 |        0 |       0 |       0 | 18-71             
+  SortDropdown.tsx                                 |       0 |        0 |       0 |       0 | 10-105            
+  SortDropdownMenu.tsx                             |       0 |        0 |       0 |       0 | 10-80             
+  Toolbar.tsx                                      |       0 |        0 |       0 |       0 | 21-93             
+  ToolbarDropdown.tsx                              |       0 |        0 |       0 |       0 | 45-110            
+ app/components/view                               |       0 |        0 |       0 |       0 |                   
+  EmptyView.tsx                                    |       0 |        0 |       0 |       0 | 23-76             
+  PlaceholderView.tsx                              |       0 |        0 |       0 |       0 | 19-31             
+  SelectionPane.tsx                                |       0 |        0 |       0 |       0 | 29-186            
+  SimpleLoginPlaceholder.tsx                       |       0 |        0 |       0 |       0 | 11-36             
+  WelcomePane.tsx                                  |       0 |        0 |       0 |       0 | 26-81             
+ app/containers                                    |       0 |        0 |       0 |       0 |                   
+  ComposeProvider.tsx                              |       0 |      100 |       0 |       0 | 7-27              
+  ComposerContainer.tsx                            |       0 |        0 |       0 |       0 | 25-97             
+  EncryptedSearchProvider.tsx                      |       0 |        0 |       0 |       0 | 50-294            
+  LegacyMessagesMigrationContainer.tsx             |       0 |      100 |       0 |       0 | 8-36              
+  MailStartupModals.tsx                            |       0 |        0 |       0 |       0 | 21-61             
+  PageContainer.tsx                                |       0 |        0 |       0 |       0 | 45-141            
+ app/containers/checklists                         |       0 |        0 |       0 |       0 |                   
+  ChecklistsProvider.tsx                           |       0 |      100 |       0 |       0 | 10-11             
+  GetStartedChecklistProvider.tsx                  |       0 |        0 |       0 |       0 | 10-56             
+  PaidUserChecklistProvider.tsx                    |       0 |      100 |       0 |       0 | 21-43             
+  index.ts                                         |       0 |        0 |       0 |       0 |                   
+  useChecklist.ts                                  |       0 |        0 |       0 |       0 | 23-56             
+ app/containers/mailbox                            |       0 |        0 |       0 |       0 |                   
+  MailboxContainer.tsx                             |       0 |        0 |       0 |       0 | 79-413            
+  MailboxContainerProvider.tsx                     |       0 |        0 |       0 |       0 | 29-70             
+ app/containers/mailbox/tests                      |       0 |        0 |       0 |       0 |                   
+  Mailbox.test.helpers.tsx                         |       0 |        0 |       0 |       0 | 20-169            
+ app/helpers                                       |    3.34 |     3.78 |    2.81 |    3.32 |                   
+  addresses.ts                                     |       0 |        0 |       0 |       0 | 9-56              
+  autoDelete.ts                                    |     100 |      100 |     100 |     100 |                   
+  base64.ts                                        |       0 |        0 |       0 |       0 | 3-5               
+  composerPositioning.ts                           |       0 |        0 |       0 |       0 | 3-97              
+  conversation.ts                                  |       0 |        0 |       0 |       0 | 12-71             
+  counter.ts                                       |       0 |        0 |       0 |       0 | 8-74              
+  date.ts                                          |       0 |        0 |       0 |       0 | 6-31              
+  dedent.ts                                        |       0 |        0 |       0 |       0 | 5-26              
+  displaySignature.js                              |       0 |        0 |       0 |       0 | 4-54              
+  dom.ts                                           |       0 |        0 |       0 |       0 | 5-44              
+  elements.ts                                      |       0 |        0 |       0 |       0 | 29-206            
+  encryptionType.js                                |       0 |        0 |       0 |       0 | 15-85             
+  errors.ts                                        |       0 |        0 |       0 |       0 | 10-30             
+  expiration.ts                                    |   95.45 |    76.19 |     100 |   95.23 | 14                
+  labels.ts                                        |       0 |        0 |       0 |       0 | 18-310            
+  mail.ts                                          |       0 |        0 |       0 |       0 | 8-35              
+  mailSettings.ts                                  |       0 |        0 |       0 |       0 | 10-20             
+  mailboxUrl.ts                                    |       0 |        0 |       0 |       0 | 20-139            
+  paging.ts                                        |       0 |        0 |       0 |       0 | 3-21              
+  parserHtml.ts                                    |       0 |        0 |       0 |       0 | 5-92              
+  recipients.ts                                    |       0 |        0 |       0 |       0 | 13-32             
+  schedule.ts                                      |       0 |        0 |       0 |       0 | 3-29              
+  sidebar.ts                                       |       0 |        0 |       0 |       0 | 5-10              
+  string.ts                                        |       0 |        0 |       0 |       0 | 1-81              
+  textToHtml.ts                                    |       0 |        0 |       0 |       0 | 9-147             
+  upload.ts                                        |       0 |        0 |       0 |       0 | 29-92             
+  url.ts                                           |       0 |        0 |       0 |       0 | 13-107            
+ app/helpers/attachment                            |       0 |        0 |       0 |       0 |                   
+  attachment.ts                                    |       0 |        0 |       0 |       0 | 6-34              
+  attachmentConverter.ts                           |       0 |        0 |       0 |       0 | 7-101             
+  attachmentDownloader.ts                          |       0 |        0 |       0 |       0 | 24-129            
+  attachmentLoader.ts                              |       0 |        0 |       0 |       0 | 20-151            
+  attachmentUploader.ts                            |       0 |        0 |       0 |       0 | 44-242            
+ app/helpers/calendar                              |       0 |        0 |       0 |       0 |                   
+  emailReminder.ts                                 |       0 |        0 |       0 |       0 | 5-11              
+  invite.ts                                        |       0 |        0 |       0 |       0 | 138-731           
+  inviteApi.ts                                     |       0 |        0 |       0 |       0 | 109-998           
+  inviteLink.tsx                                   |       0 |        0 |       0 |       0 | 14-154            
+  summary.ts                                       |       0 |        0 |       0 |       0 | 9-536             
+ app/helpers/eo                                    |       0 |      100 |       0 |       0 |                   
+  eoUrl.ts                                         |       0 |        0 |       0 |       0 |                   
+  message.ts                                       |       0 |      100 |       0 |       0 | 9-16              
+ app/helpers/message                               |       0 |        0 |       0 |       0 |                   
+  cleanMessage.tsx                                 |       0 |        0 |       0 |       0 | 8-34              
+  icon.ts                                          |       0 |        0 |       0 |       0 | 15-506            
+  messageAttachPublicKey.ts                        |       0 |        0 |       0 |       0 | 12-55             
+  messageBlockquote.ts                             |       0 |        0 |       0 |       0 | 1-124             
+  messageContent.ts                                |       0 |        0 |       0 |       0 | 16-183            
+  messageDataUrl.ts                                |       0 |        0 |       0 |       0 | 12-50             
+  messageDecrypt.ts                                |       0 |        0 |       0 |       0 | 20-251            
+  messageDraft.ts                                  |       0 |        0 |       0 |       0 | 40-369            
+  messageEmbeddeds.ts                              |       0 |        0 |       0 |       0 | 12-236            
+  messageExpandable.ts                             |       0 |        0 |       0 |       0 | 17-74             
+  messageExpirationTime.ts                         |       0 |        0 |       0 |       0 | 7-45              
+  messageExport.ts                                 |       0 |        0 |       0 |       0 | 19-187            
+  messageHead.ts                                   |       0 |        0 |       0 |       0 | 1-8               
+  messageImages.ts                                 |       0 |        0 |       0 |       0 | 23-227            
+  messageKeys.ts                                   |       0 |        0 |       0 |       0 | 16-76             
+  messageRead.ts                                   |       0 |        0 |       0 |       0 | 7-20              
+  messageRecipients.ts                             |       0 |        0 |       0 |       0 | 23-255            
+  messageRemotes.ts                                |       0 |        0 |       0 |       0 | 6-132             
+  messageSignature.ts                              |       0 |        0 |       0 |       0 | 15-183            
+  messages.ts                                      |       0 |        0 |       0 |       0 | 19-104            
+ app/helpers/message/__fixtures__                  |       0 |      100 |     100 |       0 |                   
+  messageBlockquote.fixtures.ts                    |       0 |      100 |     100 |       0 | 7-1004            
+  messageHead.fixtures.ts                          |       0 |      100 |     100 |       0 | 1                 
+ app/helpers/send                                  |       0 |        0 |       0 |       0 |                   
+  sendEncrypt.ts                                   |       0 |        0 |       0 |       0 | 13-282            
+  sendFormatter.ts                                 |       0 |        0 |       0 |       0 | 6-54              
+  sendMimeBuilder.ts                               |       0 |        0 |       0 |       0 | 20-205            
+  sendSubPackages.ts                               |       0 |        0 |       0 |       0 | 11-157            
+  sendTopPackages.ts                               |       0 |        0 |       0 |       0 | 17-110            
+ app/helpers/test                                  |       0 |        0 |       0 |       0 |                   
+  api.ts                                           |       0 |        0 |       0 |       0 | 10-82             
+  assertion.ts                                     |       0 |        0 |       0 |       0 | 1-33              
+  cache.ts                                         |       0 |      100 |       0 |       0 | 15-51             
+  calendar.ts                                      |       0 |        0 |       0 |       0 | 15-97             
+  contact.ts                                       |       0 |        0 |       0 |       0 | 18-63             
+  crypto.ts                                        |       0 |        0 |       0 |       0 | 9-152             
+  event-manager.ts                                 |       0 |      100 |       0 |       0 | 5-12              
+  helper.ts                                        |       0 |        0 |       0 |       0 | 23-115            
+  message.ts                                       |       0 |        0 |       0 |       0 | 17-138            
+  notifications.tsx                                |       0 |        0 |       0 |       0 | 21-33             
+  pinKeys.tsx                                      |       0 |        0 |       0 |       0 | 13-85             
+  render.tsx                                       |       0 |        0 |       0 |       0 | 45-175            
+ app/helpers/test/eo                               |       0 |        0 |       0 |       0 |                   
+  EORender.tsx                                     |       0 |        0 |       0 |       0 | 32-86             
+  helpers.tsx                                      |       0 |        0 |       0 |       0 | 17-109            
+ app/helpers/transforms                            |       0 |        0 |       0 |       0 |                   
+  transformBase.ts                                 |       0 |        0 |       0 |       0 | 3-66              
+  transformEmbedded.ts                             |       0 |        0 |       0 |       0 | 19-91             
+  transformEscape.ts                               |       0 |        0 |       0 |       0 | 7-68              
+  transformLinks.ts                                |       0 |        0 |       0 |       0 | 3-72              
+  transformRemote.ts                               |       0 |        0 |       0 |       0 | 21-139            
+  transformStyleAttributes.ts                      |       0 |        0 |       0 |       0 | 1-22              
+  transformStylesheet.ts                           |       0 |        0 |       0 |       0 | 1-11              
+  transformWelcome.ts                              |       0 |        0 |       0 |       0 | 1-7               
+  transforms.ts                                    |       0 |        0 |       0 |       0 | 32-83             
+ app/hooks                                         |       0 |        0 |       0 |       0 |                   
+  useAddressesInputDrag.ts                         |       0 |        0 |       0 |       0 | 10-184            
+  useAttachment.ts                                 |       0 |      100 |       0 |       0 | 7-9               
+  useBase64Cache.ts                                |       0 |        0 |       0 |       0 | 4-15              
+  useBlockSender.tsx                               |       0 |        0 |       0 |       0 | 22-91             
+  useClickMailContent.tsx                          |       0 |      100 |       0 |       0 | 5-34              
+  useDebouncedAction.ts                            |       0 |        0 |       0 |       0 | 5-6               
+  useDeepMemo.ts                                   |       0 |        0 |       0 |       0 | 9-20              
+  useDelaySendSeconds.tsx                          |       0 |        0 |       0 |       0 | 3-6               
+  useDownload.tsx                                  |       0 |        0 |       0 |       0 | 31-187            
+  useDraft.tsx                                     |       0 |        0 |       0 |       0 | 25-110            
+  useElementBreakpoints.ts                         |       0 |        0 |       0 |       0 | 3-32              
+  useExpiration.ts                                 |       0 |        0 |       0 |       0 | 15-54             
+  useExpirationCheck.ts                            |       0 |        0 |       0 |       0 | 8-16              
+  useExpiringElement.ts                            |       0 |        0 |       0 |       0 | 7-50              
+  useHasScroll.ts                                  |       0 |        0 |       0 |       0 | 6-38              
+  useInviteButtons.ts                              |       0 |        0 |       0 |       0 | 72-349            
+  useLabelActions.ts                               |       0 |        0 |       0 |       0 | 7-51              
+  useLongLivingState.ts                            |       0 |        0 |       0 |       0 | 9-26              
+  useMoveSystemFolders.helpers.ts                  |       0 |        0 |       0 |       0 | 32-350            
+  useMoveSystemFolders.ts                          |       0 |        0 |       0 |       0 | 56-124            
+  usePaging.ts                                     |       0 |        0 |       0 |       0 | 5-27              
+  usePlaceholders.ts                               |       0 |        0 |       0 |       0 | 8-25              
+  usePromise.ts                                    |       0 |        0 |       0 |       0 | 14-62             
+  useResizeMessageView.ts                          |       0 |        0 |       0 |       0 | 7-142             
+  useSendInfo.tsx                                  |       0 |        0 |       0 |       0 | 29-416            
+  useShouldMoveOut.ts                              |       0 |        0 |       0 |       0 | 8-16              
+  useShowUpsellBanner.ts                           |       0 |        0 |       0 |       0 | 7-75              
+  useSignatures.ts                                 |       0 |        0 |       0 |       0 | 6-18              
+ app/hooks/actions                                 |       0 |        0 |       0 |       0 |                   
+  useApplyLabels.tsx                               |       0 |        0 |       0 |       0 | 21-201            
+  useCreateFilters.tsx                             |       0 |        0 |       0 |       0 | 30-159            
+  useEmptyLabel.tsx                                |       0 |        0 |       0 |       0 | 23-98             
+  useMarkAs.tsx                                    |       0 |        0 |       0 |       0 | 23-133            
+  useMoveAll.tsx                                   |       0 |      100 |       0 |       0 | 12-46             
+  useMoveToFolder.tsx                              |       0 |        0 |       0 |       0 | 33-368            
+  usePermanentDelete.tsx                           |       0 |        0 |       0 |       0 | 17-200            
+  useStar.tsx                                      |       0 |        0 |       0 |       0 | 14-48             
+ app/hooks/composer                                |       0 |        0 |       0 |       0 |                   
+  useAttachments.ts                                |       0 |        0 |       0 |       0 | 47-267            
+  useAutoSave.tsx                                  |       0 |        0 |       0 |       0 | 15-112            
+  useCloseHandler.tsx                              |       0 |        0 |       0 |       0 | 33-152            
+  useCompose.tsx                                   |       0 |        0 |       0 |       0 | 60-207            
+  useComposerContent.tsx                           |       0 |        0 |       0 |       0 | 76-654            
+  useComposerDrag.ts                               |       0 |        0 |       0 |       0 | 31-152            
+  useComposerHotkeys.tsx                           |       0 |        0 |       0 |       0 | 36-162            
+  useComposerInnerModals.tsx                       |       0 |        0 |       0 |       0 | 22-81             
+  useDraftSenderVerification.tsx                   |       0 |        0 |       0 |       0 | 18-57             
+  useExternalExpiration.ts                         |       0 |        0 |       0 |       0 | 7-13              
+  useHandleMessageAlreadySent.tsx                  |       0 |      100 |       0 |       0 | 16-47             
+  useQuickReplyFocus.tsx                           |       0 |        0 |       0 |       0 | 3-33              
+  useScheduleSend.tsx                              |       0 |        0 |       0 |       0 | 33-123            
+  useSendHandler.tsx                               |       0 |        0 |       0 |       0 | 45-252            
+  useSendMessage.tsx                               |       0 |        0 |       0 |       0 | 50-256            
+  useSendModifications.tsx                         |       0 |        0 |       0 |       0 | 17-68             
+  useSendVerifications.tsx                         |       0 |        0 |       0 |       0 | 31-280            
+ app/hooks/contact                                 |       0 |        0 |       0 |       0 |                   
+  useContacts.ts                                   |       0 |      100 |       0 |       0 | 11-28             
+  useContactsListener.ts                           |       0 |        0 |       0 |       0 | 28-80             
+  useRecipientLabel.ts                             |       0 |        0 |       0 |       0 | 18-66             
+ app/hooks/conversation                            |       0 |        0 |       0 |       0 |                   
+  useClickOutsideFocusedMessage.ts                 |       0 |        0 |       0 |       0 | 3-36              
+  useConversation.ts                               |       0 |        0 |       0 |       0 | 25-147            
+  useConversationFocus.tsx                         |       0 |        0 |       0 |       0 | 12-104            
+  useConversationHotkeys.tsx                       |       0 |        0 |       0 |       0 | 19-98             
+ app/hooks/eo                                      |       0 |        0 |       0 |       0 |                   
+  useEOAttachments.ts                              |       0 |        0 |       0 |       0 | 28-124            
+  useInitializeEOMessage.ts                        |       0 |        0 |       0 |       0 | 35-146            
+  useLoadEOImages.ts                               |       0 |      100 |       0 |       0 | 16-65             
+  useLoadEOMessage.ts                              |       0 |        0 |       0 |       0 | 19-85             
+  useLoadEOToken.ts                                |       0 |        0 |       0 |       0 | 18-41             
+  useSendEO.tsx                                    |       0 |        0 |       0 |       0 | 39-166            
+ app/hooks/events                                  |       0 |        0 |       0 |       0 |                   
+  useConversationsEvents.tsx                       |       0 |        0 |       0 |       0 | 17-71             
+  useElementsEvents.ts                             |       0 |        0 |       0 |       0 | 19-95             
+  useMessagesEvents.ts                             |       0 |        0 |       0 |       0 | 8-25              
+ app/hooks/incomingDefaults                        |       0 |        0 |       0 |       0 |                   
+  useIncomingDefaults.ts                           |       0 |      100 |       0 |       0 | 11-15             
+  useIncomingDefaultsEvents.ts                     |       0 |        0 |       0 |       0 | 8-16              
+  useIncomingDefaultsLoad.ts                       |       0 |        0 |       0 |       0 | 8-13              
+ app/hooks/mailbox                                 |       0 |        0 |       0 |       0 |                   
+  useApplyEncryptedSearch.ts                       |       0 |        0 |       0 |       0 | 38-107            
+  useElements.ts                                   |       0 |        0 |       0 |       0 | 65-219            
+  useFolderNavigationHotkeys.ts                    |       0 |        0 |       0 |       0 | 11-107            
+  useMailboxFavicon.ts                             |       0 |        0 |       0 |       0 | 16-32             
+  useMailboxFocus.tsx                              |       0 |        0 |       0 |       0 | 15-124            
+  useMailboxHotkeys.tsx                            |       0 |        0 |       0 |       0 | 25-455            
+  useMailboxPageTitle.ts                           |       0 |        0 |       0 |       0 | 21-44             
+  useNewEmailNotification.ts                       |       0 |        0 |       0 |       0 | 16-55             
+  usePageHotkeys.tsx                               |       0 |        0 |       0 |       0 | 15-71             
+  usePreLoadElements.ts                            |       0 |        0 |       0 |       0 | 21-55             
+  useWelcomeFlag.ts                                |       0 |        0 |       0 |       0 | 9-28              
+ app/hooks/message                                 |       0 |        0 |       0 |       0 |                   
+  useGetMessageKeys.ts                             |       0 |      100 |       0 |       0 | 15-21             
+  useInitializeMessage.tsx                         |       0 |        0 |       0 |       0 | 47-202            
+  useKeyVerification.tsx                           |       0 |        0 |       0 |       0 | 11-60             
+  useLoadImages.ts                                 |       0 |      100 |       0 |       0 | 28-94             
+  useLoadMessage.ts                                |       0 |      100 |       0 |       0 | 10-25             
+  useMessage.ts                                    |       0 |        0 |       0 |       0 | 13-92             
+  useMessageHotkeys.tsx                            |       0 |        0 |       0 |       0 | 21-324            
+  useMessageTrackers.tsx                           |       0 |        0 |       0 |       0 | 18-121            
+  useResignContact.ts                              |       0 |        0 |       0 |       0 | 11-25             
+  useSaveDraft.ts                                  |       0 |        0 |       0 |       0 | 21-153            
+  useVerifyMessage.ts                              |       0 |        0 |       0 |       0 | 19-90             
+ app/hooks/optimistic                              |       0 |        0 |       0 |       0 |                   
+  useOptimisticApplyLabels.ts                      |       0 |        0 |       0 |       0 | 31-212            
+  useOptimisticDelete.ts                           |       0 |        0 |       0 |       0 | 30-112            
+  useOptimisticEmptyLabel.ts                       |       0 |        0 |       0 |       0 | 28-89             
+  useOptimisticMarkAs.ts                           |       0 |        0 |       0 |       0 | 30-229            
+ app/hooks/simpleLogin                             |       0 |        0 |       0 |       0 |                   
+  useSimpleLoginExtension.tsx                      |       0 |        0 |       0 |       0 | 8-108             
+  useSimpleLoginTelemetry.ts                       |       0 |        0 |       0 |       0 | 10-60             
+ app/logic                                         |       0 |        0 |       0 |       0 |                   
+  actions.ts                                       |       0 |      100 |     100 |       0 | 3                 
+  store.ts                                         |       0 |        0 |       0 |       0 | 17-99             
+ app/logic/attachments                             |       0 |      100 |       0 |       0 |                   
+  attachmentsActions.ts                            |       0 |      100 |     100 |       0 | 5-9               
+  attachmentsReducers.ts                           |       0 |      100 |       0 |       0 | 8-16              
+  attachmentsSelectors.ts                          |       0 |      100 |       0 |       0 | 5-11              
+  attachmentsSlice.ts                              |       0 |      100 |       0 |       0 | 8-15              
+  attachmentsTypes.ts                              |       0 |        0 |       0 |       0 |                   
+ app/logic/composers                               |       0 |        0 |       0 |       0 |                   
+  composerSelectors.ts                             |       0 |      100 |       0 |       0 | 5-10              
+  composerTypes.ts                                 |       0 |        0 |       0 |       0 |                   
+  composersSlice.ts                                |       0 |        0 |       0 |       0 | 7-34              
+ app/logic/contacts                                |       0 |        0 |       0 |       0 |                   
+  contactsActions.ts                               |       0 |      100 |     100 |       0 | 5                 
+  contactsReducers.ts                              |       0 |        0 |       0 |       0 | 11-61             
+  contactsSelectors.ts                             |       0 |      100 |       0 |       0 | 3-7               
+  contactsSlice.ts                                 |       0 |      100 |       0 |       0 | 8-24              
+  contactsTypes.ts                                 |       0 |        0 |       0 |       0 |                   
+ app/logic/conversations                           |       0 |        0 |       0 |       0 |                   
+  conversationsActions.ts                          |       0 |        0 |       0 |       0 | 12-72             
+  conversationsReducers.ts                         |       0 |        0 |       0 |       0 | 33-321            
+  conversationsSelectors.ts                        |       0 |      100 |       0 |       0 | 5-15              
+  conversationsSlice.ts                            |       0 |      100 |       0 |       0 | 44-67             
+  conversationsTypes.ts                            |       0 |        0 |       0 |       0 |                   
+ app/logic/elements                                |       0 |        0 |       0 |       0 |                   
+  elementsActions.ts                               |       0 |        0 |       0 |       0 | 27-156            
+  elementsReducers.ts                              |       0 |        0 |       0 |       0 | 29-313            
+  elementsSelectors.ts                             |       0 |        0 |       0 |       0 | 29-272            
+  elementsSlice.ts                                 |       0 |        0 |       0 |       0 | 58-134            
+  elementsTypes.ts                                 |       0 |        0 |       0 |       0 |                   
+ app/logic/elements/helpers                        |       0 |        0 |       0 |       0 |                   
+  elementBypassFilters.ts                          |       0 |        0 |       0 |       0 | 4-37              
+  elementQuery.ts                                  |       0 |        0 |       0 |       0 | 12-93             
+  elementTotal.ts                                  |       0 |        0 |       0 |       0 | 5-20              
+ app/logic/eo                                      |       0 |        0 |       0 |       0 |                   
+  eoActions.ts                                     |       0 |        0 |       0 |       0 | 25-114            
+  eoReducers.ts                                    |       0 |        0 |       0 |       0 | 25-188            
+  eoSelectors.ts                                   |       0 |      100 |       0 |       0 | 5-17              
+  eoSlice.ts                                       |       0 |      100 |       0 |       0 | 27-52             
+  eoStore.ts                                       |       0 |      100 |       0 |       0 | 5-10              
+  eoType.ts                                        |       0 |        0 |       0 |       0 |                   
+ app/logic/incomingDefaults                        |       0 |        0 |       0 |       0 |                   
+  incomingDefaultsActions.ts                       |       0 |      100 |       0 |       0 | 23-96             
+  incomingDefaultsReducer.ts                       |       0 |        0 |       0 |       0 | 10-85             
+  incomingDefaultsSelectors.ts                     |       0 |      100 |       0 |       0 | 7-23              
+  incomingDefaultsSlice.ts                         |       0 |      100 |       0 |       0 | 7-23              
+  incomingDefaultsTypes.ts                         |       0 |        0 |       0 |       0 |                   
+ app/logic/messages                                |       0 |        0 |       0 |       0 |                   
+  messagesSelectors.ts                             |       0 |        0 |       0 |       0 | 7-22              
+  messagesSlice.ts                                 |       0 |      100 |       0 |       0 | 20-80             
+  messagesTypes.ts                                 |       0 |        0 |       0 |       0 |                   
+ app/logic/messages/draft                          |       0 |        0 |       0 |       0 |                   
+  messagesDraftActions.ts                          |       0 |      100 |       0 |       0 | 9-56              
+  messagesDraftReducers.ts                         |       0 |        0 |       0 |       0 | 23-234            
+ app/logic/messages/expire                         |       0 |        0 |       0 |       0 |                   
+  messagesExpireActions.ts                         |       0 |      100 |       0 |       0 | 7-13              
+  messagesExpireReducers.ts                        |       0 |        0 |       0 |       0 | 6-63              
+ app/logic/messages/helpers                        |       0 |        0 |       0 |       0 |                   
+  messagesReducer.ts                               |       0 |        0 |       0 |       0 | 15-54             
+ app/logic/messages/images                         |       0 |        0 |       0 |       0 |                   
+  messagesImagesActions.ts                         |       0 |        0 |       0 |       0 | 18-123            
+  messagesImagesReducers.ts                        |       0 |        0 |       0 |       0 | 23-288            
+ app/logic/messages/optimistic                     |       0 |        0 |       0 |       0 |                   
+  messagesOptimisticActions.ts                     |       0 |      100 |     100 |       0 | 7-19              
+  messagesOptimisticReducers.ts                    |       0 |        0 |       0 |       0 | 11-55             
+ app/logic/messages/read                           |       0 |        0 |       0 |       0 |                   
+  messagesReadActions.ts                           |       0 |        0 |       0 |       0 | 19-62             
+  messagesReadReducers.ts                          |       0 |        0 |       0 |       0 | 21-226            
+ app/logic/messages/scheduled                      |       0 |        0 |       0 |       0 |                   
+  scheduledActions.ts                              |       0 |      100 |     100 |       0 | 3-5               
+  scheduledReducers.ts                             |       0 |        0 |       0 |       0 | 6-42              
+ app/models                                        |       0 |      100 |     100 |       0 |                   
+  address.ts                                       |       0 |      100 |     100 |       0 | 5                 
+  contact.ts                                       |       0 |        0 |       0 |       0 |                   
+  conversation.ts                                  |       0 |        0 |       0 |       0 |                   
+  crypto.ts                                        |       0 |        0 |       0 |       0 |                   
+  element.ts                                       |       0 |        0 |       0 |       0 |                   
+  encryptedSearch.ts                               |       0 |        0 |       0 |       0 |                   
+  event.ts                                         |       0 |        0 |       0 |       0 |                   
+  tools.ts                                         |       0 |        0 |       0 |       0 |                   
+  utils.ts                                         |       0 |        0 |       0 |       0 |                   
+ assets/favicons                                   |       0 |      100 |     100 |       0 |                   
+  index.ts                                         |       0 |      100 |     100 |       0 | 103               
+---------------------------------------------------|---------|----------|---------|---------|-------------------

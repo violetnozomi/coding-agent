@@ -1,0 +1,8 @@
+{
+  "agent_bootstrap_pythonpath": "/runtime:/opt/nz-site",
+  "project_child_pythonpath": null,
+  "agent_bootstrap_pytest_disable_plugin_autoload": "1",
+  "project_child_pytest_disable_plugin_autoload": null,
+  "project_dependency_isolation": "remove_agent_only_bootstrap_path_and_plugin_override",
+  "harness_revision": 3
+}

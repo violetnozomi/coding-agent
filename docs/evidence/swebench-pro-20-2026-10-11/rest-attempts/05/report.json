@@ -1,0 +1,14 @@
+{
+  "instance_id": "instance_protonmail__webclients-0ec14e36ceb01ba45602a563e12352af8171ed39",
+  "attempt": 1,
+  "agent_status": "completed",
+  "resolved": true,
+  "original_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/live/05",
+  "preparation_retry_not_agent_retry": true,
+  "previous_preparation_record": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/pending/05",
+  "status": "attempt_or_delivery_error",
+  "patch_sha256": "fdafecce7aed41636cff31cb0258608af4c12e3c17e41f7532474409d5769c9b",
+  "eval_status": "graded",
+  "error": "OSError('container_evidence_quota_or_free_space_exhausted; source retained')",
+  "physical_requests": 29
+}
