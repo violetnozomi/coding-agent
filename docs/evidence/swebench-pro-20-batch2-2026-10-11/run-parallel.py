@@ -13,6 +13,7 @@ from pathlib import Path
 import shutil
 import sys
 import threading
+import tempfile
 import time
 import tomllib
 
@@ -121,6 +122,16 @@ def preparation_remainder(source, manifest):
             "source_ledger_sha256": hashlib.sha256(raw).hexdigest(), "tasks": tasks}
 
 
+def run_case_with_short_path(slot, case, *args, **kwargs):
+    # 证据目录可较长；只缩短临时连接名，挂载仍指向同一份任务文件。
+    with tempfile.TemporaryDirectory(prefix="nz-pro-b2-") as directory:
+        alias = Path(directory) / "case"
+        alias.symlink_to(case.resolve(), target_is_directory=True)
+        pro.save(slot / "case-path-alias.json", {"temporary_alias": str(alias), "actual_case": str(case),
+                                               "workspace_identity_unchanged": True})
+        return pro.run_case(slot, alias, *args, **kwargs)
+
+
 def execute(retry_preparation=False):
     from dotenv import dotenv_values
     from nz_coder.evaluation.deepseek_counting import DeepSeekV41Counter
@@ -143,7 +154,15 @@ def execute(retry_preparation=False):
     cost_limit = plan["remaining_cny"] if plan else 50
     if not tasks or cost_limit <= 3.145728:
         raise RuntimeError("no_unattempted_tasks_or_remaining_fee")
-    live = OUT / ("preparation-retry" if retry_preparation else "live")
+    interrupted = OUT / "preparation-retry"
+    if retry_preparation and interrupted.exists():
+        previous_rows = [json.loads(line) for line in (interrupted / "ledger.jsonl").read_text().splitlines()]
+        if any(row["event"] == "admitted" for row in previous_rows):
+            raise RuntimeError("interrupted_preparation_has_paid_requests")
+        marker = json.loads((interrupted / "preparation-interruption.json").read_text())
+        if not marker["no_sdk_launch_in_any_slot"] or marker["paid_requests"] != 0:
+            raise RuntimeError("interrupted_preparation_not_proven_unstarted")
+    live = OUT / ("p2" if retry_preparation else "live")
     live.mkdir(exist_ok=False)
     grant = {"purpose": "swebench-pro-v2", "model": pro.MODEL,
         "scope": [task["instance_id"] for _, task in tasks], "instance_manifest_sha256": digest,
@@ -157,6 +176,8 @@ def execute(retry_preparation=False):
         grant.update(original_total_authorization_cny=50, previous_used_cny=plan["used_cny"],
                      predecessor_ledger_sha256=plan["source_ledger_sha256"],
                      preparation_retry_not_paid_agent_retry=True)
+        if interrupted.exists():
+            grant["zero_request_preparation_ledger_sha256"] = hashlib.sha256((interrupted / "ledger.jsonl").read_bytes()).hexdigest()
         pro.save(live / "continuation-plan.json", plan)
     limits = RelayLimits(requests=plan["remaining_requests"] if plan else 920, input_per_request=1000000,
         input_total=math.ceil(cost_limit / .04 * 1000000), output_total=math.ceil(cost_limit / 8 * 1000000), request_seconds=600)
@@ -217,7 +238,7 @@ def execute(retry_preparation=False):
                 config["provider_default_output"] = True
                 pro.save(case / "input/run.json", config)
             report.update(attempt=1, agent_started_epoch=time.time())
-            pro.run_case(slot, case, tag, ledger, count, key=key, agent_python=executable)
+            run_case_with_short_path(slot, case, tag, ledger, count, key=key, agent_python=executable)
             report["agent_finished_epoch"] = time.time()
             patch = pro.freeze(slot, case)
             result_path = case / "result/result.json"

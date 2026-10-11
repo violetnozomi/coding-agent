@@ -74,3 +74,48 @@ def test_preparation_retry_rejects_changed_previous_fee_summary(tmp_path):
     (tmp_path / "summary.json").write_text(json.dumps(summary))
     with pytest.raises(RuntimeError, match="previous_fee_summary_mismatch"):
         parallel.preparation_remainder(tmp_path, manifest)
+
+
+def test_long_evidence_path_binds_real_relays_without_changing_mount_identity(tmp_path, monkeypatch):
+    case = tmp_path / ("evidence-" + "x" * 90) / "case"
+    for name in ("input", "sockets", "workspace", "result", "home", "tmp", "driver"):
+        (case / name).mkdir(parents=True, exist_ok=True)
+    (case / "input/run.json").write_text('{"provider_default_output": true}')
+    slot = case.parent
+    (slot / "identity.json").write_text('{"instance_id": "offline"}')
+    monkeypatch.setattr(parallel.pro, "OUT", tmp_path)
+    monkeypatch.setattr(parallel.pro, "command", lambda *args, **kwargs: None)
+    mounts = []
+
+    class DockerProcess:
+        returncode = 0
+
+        def __init__(self, argv, **kwargs):
+            for arg in argv:
+                if arg.startswith("type=bind,source="):
+                    source, target = arg.removeprefix("type=bind,source=").split(",target=", 1)
+                    mounts.append((source, target.split(",")[0]))
+                    if target.startswith("/workspace"):
+                        assert Path(source).samefile(case / "workspace")
+                    if target.startswith("/model"):
+                        assert (Path(source) / "main.sock").exists()
+                        assert (Path(source) / "auxiliary.sock").exists()
+                        assert len(str(Path(source) / "auxiliary.sock").encode()) < 108
+
+        def poll(self):
+            return 0
+
+        def wait(self, **kwargs):
+            return 0
+
+    monkeypatch.setattr(parallel.pro.subprocess, "Popen", DockerProcess)
+    ledger = RelayLedger(tmp_path / "offline-ledger.jsonl", RelayLimits())
+    run = getattr(parallel, "run_case_with_short_path", parallel.pro.run_case)
+    try:
+        run(slot, case, "offline-image", ledger, lambda *args: None,
+            smoke=True, upstream="http://127.0.0.1:9/v1/chat/completions")
+        assert ledger.attempts == {}
+        assert mounts
+        assert json.loads((slot / "agent-exit.json").read_text())["returncode"] == 0
+    finally:
+        ledger.close()
