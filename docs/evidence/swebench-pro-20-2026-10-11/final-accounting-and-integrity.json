@@ -1,0 +1,258 @@
+{
+  "fixed_task_count": 20,
+  "actual_agent_attempts": 20,
+  "official_passed": 17,
+  "official_failed": 3,
+  "official_unknown": 0,
+  "agent_status_counts": {
+    "completed": 9,
+    "max_turns": 9,
+    "error": 1,
+    "missing_result": 1
+  },
+  "physical_main_requests": 662,
+  "physical_auxiliary_requests": 0,
+  "known_usage_requests": 661,
+  "unknown_usage_requests": 1,
+  "known_reported_usage_estimate_cny": 35.72062032,
+  "retained_unknown_reservation_cny": 3.190104,
+  "occupied_estimate_cny": 38.91072432,
+  "authorized_total_cny": 50,
+  "unused_authorization_cny": 11.08927568,
+  "actual_provider_bill_cny": null,
+  "token_totals_complete": false,
+  "known_token_totals": {
+    "prompt_tokens": 18381850,
+    "completion_tokens": 925224,
+    "total_tokens": 19307074
+  },
+  "unknown_requests": [
+    {
+      "attempt_id": "30f3acc34afa44879ac2549b445131b3",
+      "run": "08",
+      "status": "request_timeout",
+      "reserved_cny": 3.190104
+    }
+  ],
+  "local_rejection_count_not_provider_calls": 19,
+  "local_rejection_reasons": {
+    "input_token_bound_unknown": 19
+  },
+  "wire_config_counts": {
+    "stream_unset": 662,
+    "explicit_output_limit": 103,
+    "thinking_unset": 662,
+    "reasoning_effort_unset": 662,
+    "provider_default_output": 559
+  },
+  "ledger_sources": [
+    {
+      "phase": "live",
+      "ledger_sha256": "ed56eebe58f1d9bcf6c773388d2cdc6cdc171c81b59ad78b2504424909ed3bdb",
+      "physical_requests": 103
+    },
+    {
+      "phase": "next",
+      "ledger_sha256": "205eb3d2e9d147ed476821f3d43dcc932175a7fa9308d7033230177f600d5768",
+      "physical_requests": 179
+    },
+    {
+      "phase": "pending",
+      "ledger_sha256": "bd43961ac3b332c04ed939983dabe38e2050da8d372d0c3838e204af2e63a615",
+      "physical_requests": 17
+    },
+    {
+      "phase": "rest",
+      "ledger_sha256": "ba97304c3ae0ba91186dadf856eea2f461977a23d3a531c9fe5a847cc77eb118",
+      "physical_requests": 363
+    }
+  ],
+  "records": [
+    {
+      "number": 1,
+      "instance_id": "instance_future-architect__vuls-2923cbc645fbc7a37d50398eb2ab8febda8c3264",
+      "public_record": "attempts/01",
+      "archive_sha256": "36997e065b4768461a94fbf373823645ef46864c8433a450f9c4a8a01d7d4167",
+      "patch_sha256": "9f06ffea2d0645cdc06c81d47fb28636cf623d1402e3a5c68534ab7b8c12d5b5",
+      "raw_requests_and_responses_verified": 16,
+      "official_grade_source": "attempts/01/evaluation-result.json"
+    },
+    {
+      "number": 2,
+      "instance_id": "instance_internetarchive__openlibrary-dbbd9d539c6d4fd45d5be9662aa19b6d664b5137-v08d8e8889ec945ab821fb156c04c7d2e2810debb",
+      "public_record": "attempts/02",
+      "archive_sha256": "c32dd596a43413907005015001ccca05509511c7fc8af0caf66fadec7ddb440f",
+      "patch_sha256": "ef02acf857a49a6a555ef0315bce0800e4eadffade9152c261076de5bbb8a129",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "attempts/02/evaluation-corrected-result.json"
+    },
+    {
+      "number": 3,
+      "instance_id": "instance_internetarchive__openlibrary-9cd47f4dc21e273320d9e30d889c864f8cb20ccf-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+      "public_record": "attempts/03",
+      "archive_sha256": "852695a9b56b6b7c7376911afc5320fc0c4a93a0619e1e1a232f96e0e99af4ef",
+      "patch_sha256": "3f13b902fc845fb669c005074d3e37388d681f6b7a319dd87427a04520103324",
+      "raw_requests_and_responses_verified": 36,
+      "official_grade_source": "attempts/03/evaluation-corrected-result.json"
+    },
+    {
+      "number": 4,
+      "instance_id": "instance_ansible__ansible-395e5e20fab9cad517243372fa3c3c5d9e09ab2a-v7eee2454f617569fd6889f2211f75bc02a35f9f8",
+      "public_record": "continuation-attempts/04",
+      "archive_sha256": "bf67800a44d5d05b2c7487228243c1ffd0701e7bd8e970568e2717914a2fdf9a",
+      "patch_sha256": "fdcbe0c041c4cfaa75fdf48255881757744a87bf43057db11569a636128a8d20",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "continuation-attempts/04/evaluation-result.json"
+    },
+    {
+      "number": 5,
+      "instance_id": "instance_protonmail__webclients-0ec14e36ceb01ba45602a563e12352af8171ed39",
+      "public_record": "rest-attempts/05",
+      "archive_sha256": "035399b4a098bd2cefd55230e3a631bfaae3893771f0b5795094431fcfdc593f",
+      "patch_sha256": "fdafecce7aed41636cff31cb0258608af4c12e3c17e41f7532474409d5769c9b",
+      "raw_requests_and_responses_verified": 29,
+      "official_grade_source": "rest-attempts/05/evaluation-result.json"
+    },
+    {
+      "number": 6,
+      "instance_id": "instance_future-architect__vuls-01441351c3407abfc21c48a38e28828e1b504e0c",
+      "public_record": "attempts/06",
+      "archive_sha256": "f2ea7fbd5b2775f717b6fc35eda2894c6fdb414bd8a63dafccc80eec6c8c35ff",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "raw_requests_and_responses_verified": 11,
+      "official_grade_source": "attempts/06/evaluation-result.json"
+    },
+    {
+      "number": 7,
+      "instance_id": "instance_future-architect__vuls-030b2e03525d68d74cb749959aac2d7f3fc0effa",
+      "public_record": "continuation-attempts/07",
+      "archive_sha256": "bc0df1694f395159ffe20d5abf1d530b84213f8f13fc692a42919e8a65fe007f",
+      "patch_sha256": "6570bf0a7626bba67250ea07b891e08a53c8400e5e7f3265b655a74ebd0df812",
+      "raw_requests_and_responses_verified": 27,
+      "official_grade_source": "continuation-attempts/07/evaluation-result.json"
+    },
+    {
+      "number": 8,
+      "instance_id": "instance_gravitational__teleport-bb562408da4adeae16e025be65e170959d1ec492-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+      "public_record": "pending-attempts/08",
+      "archive_sha256": "3fb9f7f8f9deb801bfe786e78f314f01775867a1a35445f8fa31e8ae9089ea0c",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "raw_requests_and_responses_verified": 17,
+      "official_grade_source": "pending-attempts/08/evaluation-corrected-result.json"
+    },
+    {
+      "number": 9,
+      "instance_id": "instance_future-architect__vuls-e3c27e1817d68248043bd09d63cc31f3344a6f2c",
+      "public_record": "continuation-attempts/09",
+      "archive_sha256": "bf46b42f50a539e8137c2e19d0b8d14997c3b1ef3e8f784e6e0fcf12a1a9534a",
+      "patch_sha256": "1e4b69a87cdb3bfdda0dd7c9cc214e7eaed4dca8bd9d6fe3b348c73af0c69ab6",
+      "raw_requests_and_responses_verified": 35,
+      "official_grade_source": "continuation-attempts/09/evaluation-result.json"
+    },
+    {
+      "number": 10,
+      "instance_id": "instance_ansible__ansible-d9f1866249756efc264b00ff7497e92c11a9885f-v0f01c69f1e2528b935359cfe578530722bca2c59",
+      "public_record": "continuation-attempts/10",
+      "archive_sha256": "8827e61952e3b9c77fa2881f8b51d4d4952f7cb28cc9b0117edaf95c654a1710",
+      "patch_sha256": "4b331c1e27e6f3d96eaf86653174cfd7cd0351291ba762992aa452e2e1bdb61d",
+      "raw_requests_and_responses_verified": 37,
+      "official_grade_source": "continuation-attempts/10/evaluation-result.json"
+    },
+    {
+      "number": 11,
+      "instance_id": "instance_protonmail__webclients-2f66db85455f4b22a47ffd853738f679b439593c",
+      "public_record": "rest-attempts/11",
+      "archive_sha256": "e620563bc1eb7e3f5c42b8b2013ba9c8f5d72fa9f1c86eb48e6d653a79d81fa3",
+      "patch_sha256": "25bbdc1431078658e78e92dd2184c4b57d73841643772b644b259d15d5536ab5",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "rest-attempts/11/evaluation-result.json"
+    },
+    {
+      "number": 12,
+      "instance_id": "instance_qutebrowser__qutebrowser-cf06f4e3708f886032d4d2a30108c2fddb042d81-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "public_record": "continuation-attempts/12",
+      "archive_sha256": "8e7e4d15d4511345a40f9c7a7eac6577a57459d2dbd1eaca87c5c68f37c717c7",
+      "patch_sha256": "1772bd6405ce6b73b33d4ee57237e2fb7199b7960ce45b71c5e17fe493d732f9",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "continuation-attempts/12/evaluation-result.json"
+    },
+    {
+      "number": 13,
+      "instance_id": "instance_internetarchive__openlibrary-8a5a63af6e0be406aa6c8c9b6d5f28b2f1b6af5a-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+      "public_record": "rest-attempts/13",
+      "archive_sha256": "e4f9157f37f7385bebba852bef96056b813877cda0464141e99e3bc8da054028",
+      "patch_sha256": "50c4b96bc82e5f88852796eaa9f4507ea1770563da49c0a6d9215321b31a2b5a",
+      "raw_requests_and_responses_verified": 39,
+      "official_grade_source": "rest-attempts/13/evaluation-result.json"
+    },
+    {
+      "number": 14,
+      "instance_id": "instance_qutebrowser__qutebrowser-52708364b5f91e198defb022d1a5b4b3ebd9b563-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "public_record": "rest-attempts/14",
+      "archive_sha256": "f5703b5d5d2fe172bbb0ea06ebc18f97a0c62ca8675f66eb21adf097b536d3a5",
+      "patch_sha256": "134ea6c0cfcc9d07d83d1ab3d21c9262728e9b86c2cb21e52c5392e4e6672c02",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "rest-attempts/14/evaluation-result.json"
+    },
+    {
+      "number": 15,
+      "instance_id": "instance_flipt-io__flipt-7161f7b876773a911afdd804b281e52681cb7321",
+      "public_record": "rest-attempts/15",
+      "archive_sha256": "1f8c7f4ed0afd413c7dacd6a4aa37a42f80bd34bfca46e3622bd0e57d51778e6",
+      "patch_sha256": "adefa29bc2c0599f4f51c28fdb5402bfd0c433d856f6644dffbdf666e5a8dc06",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "rest-attempts/15/evaluation-result.json"
+    },
+    {
+      "number": 16,
+      "instance_id": "instance_protonmail__webclients-1917e37f5d9941a3459ce4b0177e201e2d94a622",
+      "public_record": "rest-attempts/16",
+      "archive_sha256": "e113fcc038610c0278d1ccaf8011566765c5487dba04d48288f4d7468533174b",
+      "patch_sha256": "f641d4b5c9963481e92c30f4fab0dd3bbb84c2552d1fc6a0e99e156c1ac7eafa",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "rest-attempts/16/evaluation-result.json"
+    },
+    {
+      "number": 17,
+      "instance_id": "instance_NodeBB__NodeBB-f9ce92df988db7c1ae55d9ef96d247d27478bc70-vf2cf3cbd463b7ad942381f1c6d077626485a1e9e",
+      "public_record": "rest-attempts/17",
+      "archive_sha256": "ef24f48e1bd91f7ba2b7fa448b33888f6e02fcce3b401bf316c7da82df960a59",
+      "patch_sha256": "3162a3b3c9edf90a8eb377030ef2f99388c52087dab2d9bbfe5f153f8767c369",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "rest-attempts/17/evaluation-result.json"
+    },
+    {
+      "number": 18,
+      "instance_id": "instance_internetarchive__openlibrary-e010b2a13697de70170033902ba2e27a1e1acbe9-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+      "public_record": "rest-attempts/18",
+      "archive_sha256": "6d0ac07f9dd5c364e2abf8efa20841c73855b3082f48afa5b8e448ccbe77b930",
+      "patch_sha256": "8dae37f539f66be55bcfbeaee9de87fdce1f61a08baebc19d5a102f251962179",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "rest-attempts/18/evaluation-result.json"
+    },
+    {
+      "number": 19,
+      "instance_id": "instance_gravitational__teleport-326fd1d7be87b03998dbc53bc706fdef90f5065c-v626ec2a48416b10a88641359a169d99e935ff037",
+      "public_record": "rest-attempts/19",
+      "archive_sha256": "d3964095e79245cabebf965647931b4147f13484d0a9e45fa7f6f84a50134681",
+      "patch_sha256": "6ea343ddc5e4dedf7ce947d8995369db3ddcff617423432540040bbc157f01d1",
+      "raw_requests_and_responses_verified": 40,
+      "official_grade_source": "rest-attempts/19/evaluation-result.json"
+    },
+    {
+      "number": 20,
+      "instance_id": "instance_internetarchive__openlibrary-d8162c226a9d576f094dc1830c4c1ffd0be2dd17-v76304ecdb3a5954fcf13feb710e8c40fcf24b73c",
+      "public_record": "rest-attempts/20",
+      "archive_sha256": "b9a8f43f90cfacb934eda137d90919fd3310fd036e5db79ef21186afaa96d253",
+      "patch_sha256": "72befbbd42c271c12e44d114cd015e1c0e7595283a4348624a7308c864b8e512",
+      "raw_requests_and_responses_verified": 15,
+      "official_grade_source": "rest-attempts/20/evaluation-result.json"
+    }
+  ],
+  "public_files_secret_scanned": 788,
+  "all_requests_unique_and_settled": true,
+  "raw_response_completeness_is_not_assumed": true,
+  "no_agent_attempt_retry": true,
+  "no_host_patch_or_model_hints": true,
+  "round_finished_no_further_paid_calls": true
+}

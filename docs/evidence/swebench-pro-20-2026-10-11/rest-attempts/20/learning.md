@@ -1,6 +1,6 @@
 # 第 20 题：区分非 ISBN 的 ASIN，并保留来源优先级
 
-OpenLibrary 实例 `d8162c226a9d576f094dc1830c4c1ffd0be2dd17`。一次真实 Agent 尝试，15 个主请求、0 个辅助请求，约 42 秒，Agent 正常 completed，官方独立验收通过。实际费用与已返回 usage 的保守估算在 [task-outcome.json](task-outcome.json) 分开记录；估算不是账单。
+OpenLibrary 实例 `d8162c226a9d576f094dc1830c4c1ffd0be2dd17`。一次真实 Agent 尝试，15 个主请求、0 个辅助请求，约 42 秒，Agent 正常 completed，官方独立验收通过。已返回 usage 的保守峰时估算为 0.26343648 元，见 [task-outcome.json](task-outcome.json)；没有取得供应商账单，估算不是实际费用。
 
 ## 修改依据
 
