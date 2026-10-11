@@ -1,0 +1,7 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/live/b2-02/container-evidence.tar.gz",
+  "sha256": "0897242ec04861ad62cb2b333cd3676572d04a712394fef96f07ae87de776843",
+  "bytes": 14813570,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch2-2026-10-11/archives/batch2-instance_navidrome__navidrome-6c6223f2f9db2c8c253e0d40a192e3519c9037d1",
+  "retains_raw_container_session_and_artifacts": true
+}

@@ -1,0 +1,33 @@
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"\nfor v,m in [(10,359),(10,255),(20,255),(30,255),(40,255)]:\n    f=float(v)*(m/100)\n    print(v,m,repr(f),int(f),round(f))\n\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git --no-pager diff --stat && python3 -c \"print(int(10*2.55), round(10*2.55), int(20*2.55), round(20*2.55), round(10*(359/100)), int(10*(359/100)), round(100*(359/100)))\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "pwd"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 -V"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace diff"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace log --oneline -5"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace log --oneline -3 -- tests/unit/config/test_configtypes.py && git -C /workspace log -1 --format='%H %ad' "}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --all --oneline | head -20 && echo \"--- branches ---\" && git branch -a && echo \"--- tags ---\" && git tag | tail -20 && echo \"--- stash ---\" && git stash list"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git -C /workspace log --all --oneline | head -30"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace status --short"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 - <<'EOF'\nvals = ['10%','20%','30%','40%','100%']\nfor v in vals:\n    n = float(v[:-1])\n    print(v, 'hue', repr(n*359/100), int(n*359/100), round(n*359/100),\n          '| 255', repr(n*255/100), int(n*255/100), round(n*255/100))\nprint('1.0 ->', repr(float('1.0')*255), round(float('1.0')*255))\nEOF"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 -c \"import PyQt5; print(PyQt5.__file__)\" 2>&1 | head -3; python3 -c \"from PyQt5.QtGui import QColor; print(QColor.fromHsv(36,25,25).getHsv())\" 2>&1 | head -3"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -a /workspace/.nz-coder 2>/dev/null; ls /workspace/.nz-coder/* 2>/dev/null | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python3 -c \"import qutebrowser, sys; print(qutebrowser.__file__)\" 2>&1 | head -3"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && timeout 300 python3 -m pytest tests/unit/config/test_configtypes.py -k QtColor -x -q 2>&1 | tail -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "python3 -m pytest tests/unit/config/test_configtypes.py -k QtColor -q"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python3 -m pytest tests/unit/config/test_configtypes.py -k QtColor -q -o addopts=\"\" -p no:cacheprovider"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 -c \"\nfrom qutebrowser.config.configtypes import QtColor\nfrom PyQt5.QtGui import QColor\nc = QtColor().to_py('hsv(100%,100%,100%)')\nprint('got', c.getHsv(), c.getRgb())\ne = QColor.fromHsv(359,255,255)\nprint('exp', e.getHsv(), e.getRgb())\nprint('eq', c==e)\nprint('parse', QtColor()._parse_value('100%',359), QtColor()._parse_value('10%',359), QtColor()._parse_value('10%'))\n\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 -m pytest \"tests/unit/config/test_configtypes.py::TestQtColor::test_valid[hsv(100%,100%,100%)-expected8]\" -q -o addopts=\"\" -p no:cacheprovider 2>&1 | tail -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 .nz_debug_color.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile qutebrowser/config/configtypes.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "cd /workspace && python -c \"\nprint(repr(100*2.55), int(100*2.55))\nprint(repr(100*255/100), int(100*255/100))\nprint(repr(10*255/100), int(10*255/100))\nprint(repr(10*359/100), int(10*359/100))\nprint(repr(100*359/100), int(100*359/100))\nprint(repr(20*255/100), int(20*255/100))\nprint(repr(30*255/100), int(30*255/100))\nprint(repr(40*255/100), int(40*255/100))\n\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python3 -m pytest tests/unit/config/test_configtypes.py -k \"QtColor and test_valid\" -q -o addopts=\"\" -p no:cacheprovider 2>&1 | tail -25"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile qutebrowser/config/configtypes.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python nz_debug_hue.py"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "python - <<'PY'\nprint(100 * (359/100), int(100*(359/100)))\nprint(10 * (359/100), int(10*(359/100)), round(10*(359/100)))\nprint(10 * (255/100), int(10*(255/100)), round(10*(255/100)))\nprint(20 * (255/100), int(20*(255/100)), round(20*(255/100)))\nprint(30 * (255/100), int(30*(255/100)), round(30*(255/100)))\nprint(40 * (255/100), int(40*(255/100)), round(40*(255/100)))\nprint(100 * (255/100), int(100*(255/100)))\nPY"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pytest tests/unit/config/test_configtypes.py::TestAll::test_from_str_hypothesis", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "python -c \"\nprint(repr(359/100))\nprint(repr(100*(359/100)), int(100*(359/100)))\nprint(repr(100*359/100), int(100*359/100))\nprint(repr(10*(359/100)), int(10*(359/100)))\nprint(repr(10*359/100), int(10*359/100))\nprint(repr(255/100))\nprint(repr(100*(255/100)), int(100*(255/100)))\n\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "pytest tests/unit/config/test_configtypes.py::TestAll::test_from_str_hypothesis", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git --no-pager log --all --oneline -- qutebrowser/config/configtypes.py 2>&1 | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git --no-pager log --all --oneline --grep=hue -i 2>&1 | head -20; echo \"===\"; git --no-pager stash list"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python nz_probe.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pytest tests/unit/config/test_configtypes.py::TestAll::test_from_str_hypothesis", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}

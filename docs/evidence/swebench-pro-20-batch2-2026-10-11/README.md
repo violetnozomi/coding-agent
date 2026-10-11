@@ -18,3 +18,5 @@ python docs/evidence/swebench-pro-20-batch2-2026-10-11/run-parallel.py execute
 ```
 
 准备和测试结果由本批实际执行记录补充；运行结束、Agent 完成、实际测试通过和官方验收分别报告，不合并为同一结论。
+
+首批检查点：第 1、2 题均已完成官方验收并通过；Agent 状态分别为 `max_turns`、`completed`。原件与学习入口见 [第 1 题](attempts/b2-01/README.md)、[第 2 题](attempts/b2-02/README.md)。其余题仍执行中，本检查点不代表整批完成。

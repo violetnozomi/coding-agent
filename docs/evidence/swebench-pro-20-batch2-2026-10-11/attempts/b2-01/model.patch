@@ -1,0 +1,149 @@
+diff --git a/.nz_debug_color.py b/.nz_debug_color.py
+new file mode 100644
+index 000000000..46b1865cb
+--- /dev/null
++++ b/.nz_debug_color.py
+@@ -0,0 +1,19 @@
++from qutebrowser.config.configtypes import QtColor
++from PyQt5.QtGui import QColor
++
++t = QtColor()
++for val in ['hsv(100%,100%,100%)', 'hsv(10%,10%,10%)', 'hsva(10%,20%,30%,40%)']:
++    got = t.to_py(val)
++    print(val, '->', got.isValid(), got.getHsv(), got.getRgb())
++
++print('parse 100% @359', t._parse_value('100%', 359))
++print('parse 10% @359', t._parse_value('10%', 359))
++print('parse 100% @255', t._parse_value('100%', 255))
++print('parse 10% @255', t._parse_value('10%', 255))
++print('parse 20% @255', t._parse_value('20%', 255))
++print('parse 30% @255', t._parse_value('30%', 255))
++print('parse 40% @255', t._parse_value('40%', 255))
++print('exp fromHsv(359,255,255)', QColor.fromHsv(359, 255, 255).getHsv())
++print('eq', t.to_py('hsv(100%,100%,100%)') == QColor.fromHsv(359, 255, 255))
++print('eq35', t.to_py('hsv(10%,10%,10%)') == QColor.fromHsv(35, 25, 25))
++print('eq hsva', t.to_py('hsva(10%,20%,30%,40%)') == QColor.fromHsv(35, 51, 76, 102))
+diff --git a/nz_debug_hue.py b/nz_debug_hue.py
+new file mode 100644
+index 000000000..1fcf5032e
+--- /dev/null
++++ b/nz_debug_hue.py
+@@ -0,0 +1,26 @@
++from PyQt5.QtGui import QColor
++
++from qutebrowser.config import configtypes
++
++
++def main():
++    t = configtypes.QtColor()
++    for v in ['100%', '10%', '20%', '30%', '40%']:
++        print(v, 'hue359=', repr(t._parse_value(v, 359)),
++              'hue255=', repr(t._parse_value(v, 255)))
++    cases = [
++        ('hsv(100%,100%,100%)', QColor.fromHsv(359, 255, 255)),
++        ('hsv(10%,10%,10%)', QColor.fromHsv(36, 25, 25)),
++        ('hsv(10%,10%,10%)', QColor.fromHsv(35, 25, 25)),
++        ('hsva(10%,20%,30%,40%)', QColor.fromHsv(36, 51, 76, 102)),
++        ('hsva(10%,20%,30%,40%)', QColor.fromHsv(35, 51, 76, 102)),
++    ]
++    for val, expected in cases:
++        got = t.to_py(val)
++        print(val, 'got', got.getHsv(), got.getRgb(),
++              '| exp', expected.getHsv(), expected.getRgb(),
++              '| eq', got == expected)
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/nz_probe.py b/nz_probe.py
+new file mode 100644
+index 000000000..31ac7aac1
+--- /dev/null
++++ b/nz_probe.py
+@@ -0,0 +1,23 @@
++"""Standalone arithmetic probe for hue/component scaling (no qutebrowser import)."""
++
++def parse(val, max_val, mode):
++    try:
++        return int(val)
++    except ValueError:
++        pass
++    mult = float(max_val)
++    if val.endswith('%'):
++        val = val[:-1]
++        mult = max_val / 100
++    f = float(val) * mult
++    if mode == 'int':
++        return int(f)
++    return round(f)
++
++
++for v, mx in [('100%', 359), ('10%', 359), ('100%', 255), ('10%', 255),
++              ('20%', 255), ('30%', 255), ('40%', 255), ('50%', 255),
++              ('1.0', 255), ('0.5', 255)]:
++    print(v, mx, 'int=', parse(v, mx, 'int'), 'round=', parse(v, mx, 'round'),
++          'raw=', repr(float(v[:-1]) * (mx / 100) if v.endswith('%')
++                       else float(v) * float(mx)))
+diff --git a/qutebrowser/config/configtypes.py b/qutebrowser/config/configtypes.py
+index 7b5125b1c..7ae3a50f6 100644
+--- a/qutebrowser/config/configtypes.py
++++ b/qutebrowser/config/configtypes.py
+@@ -1001,19 +1001,16 @@ class QtColor(BaseType):
+     * `hsv(h, s, v)` / `hsva(h, s, v, a)` (values 0-255, hue 0-359)
+     """
+ 
+-    def _parse_value(self, val: str) -> int:
++    def _parse_value(self, val: str, max_val: int = 255) -> int:
+         try:
+             return int(val)
+         except ValueError:
+             pass
+ 
+-        mult = 255.0
+-        if val.endswith('%'):
+-            val = val[:-1]
+-            mult = 255.0 / 100
+-
+         try:
+-            return int(float(val) * mult)
++            if val.endswith('%'):
++                return int(float(val[:-1]) * max_val / 100)
++            return int(float(val) * max_val)
+         except ValueError:
+             raise configexc.ValidationError(val, "must be a valid color value")
+ 
+@@ -1029,7 +1026,13 @@ class QtColor(BaseType):
+             openparen = value.index('(')
+             kind = value[:openparen]
+             vals = value[openparen+1:-1].split(',')
+-            int_vals = [self._parse_value(v) for v in vals]
++            if kind in ['hsv', 'hsva']:
++                # the hue component goes up to 359, while saturation, value
++                # and alpha go up to 255
++                int_vals = [self._parse_value(vals[0], 359)]
++                int_vals += [self._parse_value(v) for v in vals[1:]]
++            else:
++                int_vals = [self._parse_value(v) for v in vals]
+             if kind == 'rgba' and len(int_vals) == 4:
+                 return QColor.fromRgb(*int_vals)
+             elif kind == 'rgb' and len(int_vals) == 3:
+diff --git a/tests/unit/config/test_configtypes.py b/tests/unit/config/test_configtypes.py
+index 7d7021770..182cf06f2 100644
+--- a/tests/unit/config/test_configtypes.py
++++ b/tests/unit/config/test_configtypes.py
+@@ -1250,11 +1250,10 @@ class TestQtColor:
+ 
+         ('rgba(255, 255, 255, 1.0)', QColor.fromRgb(255, 255, 255, 255)),
+ 
+-        # this should be (36, 25, 25) as hue goes to 359
+-        # however this is consistent with Qt's CSS parser
+-        # https://bugreports.qt.io/browse/QTBUG-70897
+-        ('hsv(10%,10%,10%)', QColor.fromHsv(25, 25, 25)),
+-        ('hsva(10%,20%,30%,40%)', QColor.fromHsv(25, 51, 76, 102)),
++        # hue goes to 359, while the other components go to 255
++        ('hsv(100%,100%,100%)', QColor.fromHsv(359, 255, 255)),
++        ('hsv(10%,10%,10%)', QColor.fromHsv(35, 25, 25)),
++        ('hsva(10%,20%,30%,40%)', QColor.fromHsv(35, 51, 76, 102)),
+     ])
+     def test_valid(self, klass, val, expected):
+         assert klass().to_py(val) == expected

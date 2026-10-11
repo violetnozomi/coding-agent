@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status --short"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -8 -- core/media_streamer.go core/media_streamer_Internal_test.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls core | head -50 && echo --- && git log --oneline -1 2>&1 | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./core/... 2>&1 | head -20 && go test ./core/ -run 'TestCore' -count=1 2>&1 | tail -30", "timeout": 300}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./core/ -count=1 2>&1 | tail -30", "workdir": "/workspace", "timeout": 300}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./core/ -run 'TestSuite' -count=1 2>&1 | tail -30", "timeout": 300, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./core/ -count=1 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./core/ -run TestCore -count=1 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff", "timeout": 30, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -l core/media_streamer.go", "timeout": 30, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./core/ -run TestCore -count=1 -args -ginkgo.focus=\"selectTranscodingOptions\" 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go vet ./core/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./core/ -run TestCore -count=1 -v -args -ginkgo.focus=\"selectTranscodingOptions\" 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./core/ -run TestCore -count=1 2>&1 | tail -5", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./core -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./core -run TestCore -count=1 -args -ginkgo.focus=\"selectTranscodingOptions\" 2>&1 | tail -12", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./core -run TestCore -count=1 -v -args -ginkgo.focus=\"MaxBitRate even when it is higher\" 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
