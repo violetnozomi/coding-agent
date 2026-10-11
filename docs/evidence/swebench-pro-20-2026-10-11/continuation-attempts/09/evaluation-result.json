@@ -1,0 +1,8 @@
+{
+  "status": "graded",
+  "returncode": 0,
+  "reward": "1",
+  "resolved": true,
+  "fresh_original_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:02003a37ca496c9f882b352ef5d6fb83f894d516b92d79d73cca11e76f5dd77f",
+  "unchanged_official_verifier": true
+}

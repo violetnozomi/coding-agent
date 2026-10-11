@@ -1,0 +1,19 @@
+Running selected tests: Test_ensure/host_invalid _container_invalid Test_ensure/host_already_set _container_generate Test_ensure/host_generate _container_generate Test_ensure/host_already_set _container_already_set Test_ensure/host_generate _container_already_set Test_ensure/only_host _new Test_ensure Test_ensure/only_host _already_set
+=== RUN   Test_ensure
+=== RUN   Test_ensure/only_host,_already_set
+=== RUN   Test_ensure/only_host,_new
+=== RUN   Test_ensure/host_generate,_container_generate
+=== RUN   Test_ensure/host_already_set,_container_generate
+=== RUN   Test_ensure/host_already_set,_container_already_set
+=== RUN   Test_ensure/host_generate,_container_already_set
+=== RUN   Test_ensure/host_invalid,_container_invalid
+--- PASS: Test_ensure (0.00s)
+    --- PASS: Test_ensure/only_host,_already_set (0.00s)
+    --- PASS: Test_ensure/only_host,_new (0.00s)
+    --- PASS: Test_ensure/host_generate,_container_generate (0.00s)
+    --- PASS: Test_ensure/host_already_set,_container_generate (0.00s)
+    --- PASS: Test_ensure/host_already_set,_container_already_set (0.00s)
+    --- PASS: Test_ensure/host_generate,_container_already_set (0.00s)
+    --- PASS: Test_ensure/host_invalid,_container_invalid (0.00s)
+PASS
+ok  	github.com/future-architect/vuls/saas	0.007s

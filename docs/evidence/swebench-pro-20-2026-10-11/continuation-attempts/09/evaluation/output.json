@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "name": "Test_ensure",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_ensure/only_host,_already_set",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_ensure/only_host,_new",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_ensure/host_generate,_container_generate",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_ensure/host_already_set,_container_generate",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_ensure/host_already_set,_container_already_set",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_ensure/host_generate,_container_already_set",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_ensure/host_invalid,_container_invalid",
+      "status": "PASSED"
+    }
+  ]
+}

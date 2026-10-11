@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "ls /workspace && echo \"---\" && ls /workspace/* 2>/dev/null | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "find /workspace -type d -name saas 2>/dev/null; echo \"---\"; find /workspace -type d -name models 2>/dev/null | head"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"func (r ScanResult) IsContainer\\|type ScanResults\\|func.*ScanResults\" /workspace/models/*.go | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"UUIDs\\|type ServerInfo\" /workspace/config/*.go | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go vet ./saas/ 2>&1 | head -30 && echo \"---BUILD---\" && go build ./saas/ ./subcmds/ 2>&1 | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go vet ./saas/ 2>&1 | head -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build ./saas/ ./subcmds/ 2>&1 | head -30; echo \"EXIT=$?\"", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build -p 1 ./saas/ 2>&1 | head -30; echo \"EXIT=${PIPESTATUS[0]}\"", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 ./saas/ 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -l saas/ ; go vet -p 1 ./saas/ 2>&1 | head -20; echo \"VET=$?\"", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "gofmt -l saas/", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test -p 1 -run 'TestEnsure|TestGetOrCreateServerUUID' ./saas/ 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -d saas/uuid.go saas/uuid_test.go | head -40", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./saas -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -l saas/uuid.go saas/uuid_test.go; echo \"done\"", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test -p 1 -v -run 'TestEnsure|TestEnsureGenerateError|TestGetOrCreateServerUUID' ./saas/ 2>&1 | tail -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build -p 1 ./subcmds/ 2>&1 | head -20; echo \"EXIT=${PIPESTATUS[0]}\"", "workdir": "/workspace"}, "allowed": true}

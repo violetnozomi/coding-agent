@@ -1,0 +1,316 @@
+diff --git a/saas/uuid.go b/saas/uuid.go
+index f1bf1d8..278d93e 100644
+--- a/saas/uuid.go
++++ b/saas/uuid.go
+@@ -49,57 +49,13 @@ func EnsureUUIDs(configPath string, results models.ScanResults) (err error) {
+ 		return results[i].ServerName < results[j].ServerName
+ 	})
+ 
+-	re := regexp.MustCompile(reUUID)
+-	for i, r := range results {
+-		server := c.Conf.Servers[r.ServerName]
+-		if server.UUIDs == nil {
+-			server.UUIDs = map[string]string{}
+-		}
+-
+-		name := ""
+-		if r.IsContainer() {
+-			name = fmt.Sprintf("%s@%s", r.Container.Name, r.ServerName)
+-			serverUUID, err := getOrCreateServerUUID(r, server)
+-			if err != nil {
+-				return err
+-			}
+-			if serverUUID != "" {
+-				server.UUIDs[r.ServerName] = serverUUID
+-			}
+-		} else {
+-			name = r.ServerName
+-		}
+-
+-		if id, ok := server.UUIDs[name]; ok {
+-			ok := re.MatchString(id)
+-			if !ok || err != nil {
+-				util.Log.Warnf("UUID is invalid. Re-generate UUID %s: %s", id, err)
+-			} else {
+-				if r.IsContainer() {
+-					results[i].Container.UUID = id
+-					results[i].ServerUUID = server.UUIDs[r.ServerName]
+-				} else {
+-					results[i].ServerUUID = id
+-				}
+-				// continue if the UUID has already assigned and valid
+-				continue
+-			}
+-		}
+-
+-		// Generate a new UUID and set to config and scan result
+-		serverUUID, err := uuid.GenerateUUID()
+-		if err != nil {
+-			return err
+-		}
+-		server.UUIDs[name] = serverUUID
+-		c.Conf.Servers[r.ServerName] = server
+-
+-		if r.IsContainer() {
+-			results[i].Container.UUID = serverUUID
+-			results[i].ServerUUID = server.UUIDs[r.ServerName]
+-		} else {
+-			results[i].ServerUUID = serverUUID
+-		}
++	needsOverwrite, err := ensure(c.Conf.Servers, configPath, results, uuid.GenerateUUID)
++	if err != nil {
++		return xerrors.Errorf("Failed to ensure UUIDs: %w", err)
++	} else if !needsOverwrite {
++		// Every valid UUID is already assigned to the scan results, so there is
++		// no need to regenerate a UUID or to overwrite config.toml.
++		return nil
+ 	}
+ 
+ 	for name, server := range c.Conf.Servers {
+@@ -147,6 +103,85 @@ func EnsureUUIDs(configPath string, results models.ScanResults) (err error) {
+ 	return ioutil.WriteFile(realPath, []byte(str), 0600)
+ }
+ 
++// ensure assigns UUIDs to the scan results of hosts and containers.
++//
++// For a host, the UUID is stored in the per-server UUIDs map under the key
++// equal to the host's ServerName. For a container, the UUID is stored under
++// "<containerName>@<serverName>" and the UUID of the container's host is also
++// ensured under the ServerName key.
++//
++// An existing UUID that matches reUUID is reused as is and is never
++// regenerated. When a UUID is missing or invalid, generateFunc is used to
++// create a new one, which is stored in servers and applied to scanResults.
++//
++// It mutates servers and scanResults in place and returns needsOverwrite=true
++// when at least one UUID was added or replaced. It returns needsOverwrite=false
++// when every required UUID was already present and valid.
++func ensure(servers map[string]c.ServerInfo, path string, scanResults models.ScanResults, generateFunc func() (string, error)) (needsOverwrite bool, err error) {
++	re := regexp.MustCompile(reUUID)
++	for i, r := range scanResults {
++		server, found := servers[r.ServerName]
++		if !found {
++			util.Log.Warnf("The server %s is not found in %s", r.ServerName, path)
++		}
++		if server.UUIDs == nil {
++			server.UUIDs = map[string]string{}
++		}
++
++		if r.IsContainer() {
++			// The UUID of the container's host is required as well.
++			if id, ok := server.UUIDs[r.ServerName]; ok && re.MatchString(id) {
++				scanResults[i].ServerUUID = id
++			} else {
++				if ok {
++					util.Log.Warnf("UUID of %s is invalid in %s. Re-generate UUID: %s", r.ServerName, path, id)
++				}
++				id, err := generateFunc()
++				if err != nil {
++					return false, xerrors.Errorf("Failed to generate UUID: %w", err)
++				}
++				server.UUIDs[r.ServerName] = id
++				scanResults[i].ServerUUID = id
++				needsOverwrite = true
++			}
++
++			name := fmt.Sprintf("%s@%s", r.Container.Name, r.ServerName)
++			if id, ok := server.UUIDs[name]; ok && re.MatchString(id) {
++				scanResults[i].Container.UUID = id
++			} else {
++				if ok {
++					util.Log.Warnf("UUID of %s is invalid in %s. Re-generate UUID: %s", r.Container.Name, path, id)
++				}
++				id, err := generateFunc()
++				if err != nil {
++					return false, xerrors.Errorf("Failed to generate UUID: %w", err)
++				}
++				server.UUIDs[name] = id
++				scanResults[i].Container.UUID = id
++				needsOverwrite = true
++			}
++		} else {
++			if id, ok := server.UUIDs[r.ServerName]; ok && re.MatchString(id) {
++				scanResults[i].ServerUUID = id
++			} else {
++				if ok {
++					util.Log.Warnf("UUID of %s is invalid in %s. Re-generate UUID: %s", r.ServerName, path, id)
++				}
++				id, err := generateFunc()
++				if err != nil {
++					return false, xerrors.Errorf("Failed to generate UUID: %w", err)
++				}
++				server.UUIDs[r.ServerName] = id
++				scanResults[i].ServerUUID = id
++				needsOverwrite = true
++			}
++		}
++
++		servers[r.ServerName] = server
++	}
++	return needsOverwrite, nil
++}
++
+ func cleanForTOMLEncoding(server c.ServerInfo, def c.ServerInfo) c.ServerInfo {
+ 	if reflect.DeepEqual(server.Optional, def.Optional) {
+ 		server.Optional = nil
+diff --git a/saas/uuid_test.go b/saas/uuid_test.go
+index 75fd428..e6f3b64 100644
+--- a/saas/uuid_test.go
++++ b/saas/uuid_test.go
+@@ -1,6 +1,7 @@
+ package saas
+ 
+ import (
++	"errors"
+ 	"testing"
+ 
+ 	"github.com/future-architect/vuls/config"
+@@ -49,5 +50,148 @@ func TestGetOrCreateServerUUID(t *testing.T) {
+ 			t.Errorf("%s : expected isDefault %t got %s", testcase, v.isDefault, uuid)
+ 		}
+ 	}
++}
++
++func TestEnsure(t *testing.T) {
++	const (
++		hostUUID      = "11111111-1111-1111-1111-111111111111"
++		containerUUID = "22222222-2222-2222-2222-222222222222"
++		generated     = "33333333-3333-3333-3333-333333333333"
++		invalid       = "not-a-uuid"
++	)
++
++	generate := func() (string, error) { return generated, nil }
++
++	cases := map[string]struct {
++		servers        map[string]config.ServerInfo
++		scanResults    models.ScanResults
++		expectedServer map[string]string
++		expectedSrvUID string
++		expectedCtrUID string
++		expectedOvr    bool
++	}{
++		"host with valid uuid is reused": {
++			servers: map[string]config.ServerInfo{
++				"hoge": {UUIDs: map[string]string{"hoge": hostUUID}},
++			},
++			scanResults: models.ScanResults{
++				{ServerName: "hoge"},
++			},
++			expectedServer: map[string]string{"hoge": hostUUID},
++			expectedSrvUID: hostUUID,
++			expectedOvr:    false,
++		},
++		"host with missing uuid is generated": {
++			servers: map[string]config.ServerInfo{
++				"hoge": {},
++			},
++			scanResults: models.ScanResults{
++				{ServerName: "hoge"},
++			},
++			expectedServer: map[string]string{"hoge": generated},
++			expectedSrvUID: generated,
++			expectedOvr:    true,
++		},
++		"host with invalid uuid is regenerated": {
++			servers: map[string]config.ServerInfo{
++				"hoge": {UUIDs: map[string]string{"hoge": invalid}},
++			},
++			scanResults: models.ScanResults{
++				{ServerName: "hoge"},
++			},
++			expectedServer: map[string]string{"hoge": generated},
++			expectedSrvUID: generated,
++			expectedOvr:    true,
++		},
++		"container with valid uuids is reused": {
++			servers: map[string]config.ServerInfo{
++				"hoge": {UUIDs: map[string]string{
++					"hoge":       hostUUID,
++					"fuga@hoge": containerUUID,
++				}},
++			},
++			scanResults: models.ScanResults{
++				{ServerName: "hoge", Container: models.Container{ContainerID: "abc", Name: "fuga"}},
++			},
++			expectedServer: map[string]string{"hoge": hostUUID, "fuga@hoge": containerUUID},
++			expectedSrvUID: hostUUID,
++			expectedCtrUID: containerUUID,
++			expectedOvr:    false,
++		},
++		"container with missing uuids is generated": {
++			servers: map[string]config.ServerInfo{
++				"hoge": {},
++			},
++			scanResults: models.ScanResults{
++				{ServerName: "hoge", Container: models.Container{ContainerID: "abc", Name: "fuga"}},
++			},
++			expectedServer: map[string]string{"hoge": generated, "fuga@hoge": generated},
++			expectedSrvUID: generated,
++			expectedCtrUID: generated,
++			expectedOvr:    true,
++		},
++		"container with invalid container uuid is regenerated": {
++			servers: map[string]config.ServerInfo{
++				"hoge": {UUIDs: map[string]string{
++					"hoge":       hostUUID,
++					"fuga@hoge": invalid,
++				}},
++			},
++			scanResults: models.ScanResults{
++				{ServerName: "hoge", Container: models.Container{ContainerID: "abc", Name: "fuga"}},
++			},
++			expectedServer: map[string]string{"hoge": hostUUID, "fuga@hoge": generated},
++			expectedSrvUID: hostUUID,
++			expectedCtrUID: generated,
++			expectedOvr:    true,
++		},
++		"host and container mixed": {
++			servers: map[string]config.ServerInfo{
++				"hoge": {UUIDs: map[string]string{
++					"hoge":       hostUUID,
++					"fuga@hoge": containerUUID,
++				}},
++			},
++			scanResults: models.ScanResults{
++				{ServerName: "hoge"},
++				{ServerName: "hoge", Container: models.Container{ContainerID: "abc", Name: "fuga"}},
++			},
++			expectedServer: map[string]string{"hoge": hostUUID, "fuga@hoge": containerUUID},
++			expectedOvr:    false,
++		},
++	}
+ 
++	for name, tc := range cases {
++		t.Run(name, func(t *testing.T) {
++			needsOverwrite, err := ensure(tc.servers, "config.toml", tc.scanResults, generate)
++			if err != nil {
++				t.Fatalf("unexpected error: %+v", err)
++			}
++			if needsOverwrite != tc.expectedOvr {
++				t.Errorf("needsOverwrite: expected %t, got %t", tc.expectedOvr, needsOverwrite)
++			}
++			for k, want := range tc.expectedServer {
++				if got := tc.servers["hoge"].UUIDs[k]; got != want {
++					t.Errorf("servers[hoge].UUIDs[%s]: expected %s, got %s", k, want, got)
++				}
++			}
++			if tc.expectedSrvUID != "" && tc.scanResults[0].ServerUUID != tc.expectedSrvUID {
++				t.Errorf("ServerUUID: expected %s, got %s", tc.expectedSrvUID, tc.scanResults[0].ServerUUID)
++			}
++			if tc.expectedCtrUID != "" && tc.scanResults[0].Container.UUID != tc.expectedCtrUID {
++				t.Errorf("Container.UUID: expected %s, got %s", tc.expectedCtrUID, tc.scanResults[0].Container.UUID)
++			}
++		})
++	}
++}
++
++func TestEnsureGenerateError(t *testing.T) {
++	servers := map[string]config.ServerInfo{"hoge": {}}
++	results := models.ScanResults{{ServerName: "hoge"}}
++	_, err := ensure(servers, "config.toml", results, func() (string, error) {
++		return "", errors.New("generate failed")
++	})
++	if err == nil {
++		t.Fatal("expected an error when UUID generation fails")
++	}
+ }
