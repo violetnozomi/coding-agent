@@ -1,0 +1,223 @@
+[
+  {
+    "tool_call_id": "call_01_h6ZcxOzBIDSl4Tl7dvus9366",
+    "input": {
+      "command": "ls /app && cat /app/go.mod | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_XTE83YuqYSNd94H2poMr1356",
+    "input": {
+      "command": "ls -la /workspace && cat /workspace/go.mod 2>/dev/null | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_4M4QU0MjI6WeVG86CxH49202",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3 && git status"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_H0NnP5qOYKFCEqGwVSpl1312",
+    "input": {
+      "command": "cd /workspace && grep -rn \"go-retryablehttp\" go.mod && grep -rn \"audit/webhook\\|audit/template\" internal/config/ | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_jQRZ7QodMLzvW1C2G22q9830",
+    "input": {
+      "command": "cd /workspace && grep -n \"go-retryablehttp\" go.mod go.sum | head; ls $(go env GOMODCACHE)/github.com/hashicorp/ 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_QRCrzPvDzJU9FNUndRgr8688",
+    "input": {
+      "command": "cd /workspace && go env GOMODCACHE GOFLAGS"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_4tR8E6oeXBVAJOfultdI1738",
+    "input": {
+      "command": "go version"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go version go1.24.3 linux/amd64"
+  },
+  {
+    "tool_call_id": "call_00_8uSQHwRkLY68ZXoqtONZ8564",
+    "input": {
+      "command": "go env GOMODCACHE",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/go/pkg/mod"
+  },
+  {
+    "tool_call_id": "call_00_ET_gCtUrnUiFt1cJk12k9jP4085",
+    "input": {
+      "command": "sed -n 420,480p /go/pkg/mod/github.com/hashicorp/go-retryablehttp@v0.7.7/client.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_0s5wutTUtgwSsi6AdW8x1959",
+    "input": {
+      "command": "head -20 internal/server/audit/audit.go; echo ---; go doc github.com/hashicorp/go-retryablehttp LeveledLogger; echo ---; go doc github.com/hashicorp/go-retryablehttp Client | head -40",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "package audit\n\nimport (\n\t\"context\"\n\t\"errors\"\n\t\"fmt\"\n\t\"io\"\n\n\t\"github.com/hashicorp/go-multierror\"\n\tsdktrace \"go.opentelemetry.io/otel/sdk/trace\"\n\t\"go.uber.org/zap\"\n)\n\n// Sink is the abstraction for various audit sink configurations\n// that Flipt will support.\ntype Sink interface {\n\tSendAudits(context.Context, []Event) error\n\tio.Closer\n\tfmt.Stringer\n}\n---\npackage retryablehttp // import \"github.com/hashicorp/go-retryablehttp\"\n\ntype LeveledLogger interface {\n\tError(msg string, keysAndValues ...interface{})\n\tInfo(msg string, keysAndValues ...interface{})\n\tDebug(msg string, keysAndValues ...interface{})\n\tWarn(msg string, keysAndValues ...interface{})\n}\n    LeveledLogger is an interface that can be implemented by any logger or a\n    logger wrapper to provide leveled logging. The methods accept a message\n    string and a variadic number of key-value pairs. For log.Printf style\n    formatting where message string contains a format specifier, use Logger\n    interface.\n\n---\npackage retryablehttp // import \"github.com/hashicorp/go-retryablehttp\"\n\ntype Client struct {\n\tHTTPClient *http.Client // Internal HTTP client.\n\tLogger     interface{}  // Customer logger instance. Can be either Logger or LeveledLogger\n\n\tRetryWaitMin time.Duration // Minimum time to wait\n\tRetryWaitMax time.Duration // Maximum time to wait\n\tRetryMax     int           // Maximum number of retries\n\n\t// RequestLogHook allows a user-supplied function to be called\n\t// before each retry.\n\tRequestLogHook RequestLogHook\n\n\t// ResponseLogHook allows a user-supplied function to be called\n\t// with the response from each HTTP request executed.\n\tResponseLogHook ResponseLogHook\n\n\t// CheckRetry specifies the policy for handling retries, and is called\n\t// after each request. The default policy is DefaultRetryPolicy.\n\tCheckRetry CheckRetry\n\n\t// Backoff specifies the policy for how long to wait between retries\n\tBackoff Backoff\n\n\t// ErrorHandler specifies the custom error handler to use, if any\n\tErrorHandler ErrorHandler\n\n\t// PrepareRetry can prepare the request for retry operation, for example re-sign it\n\tPrepareRetry PrepareRetry\n\n\t// Has unexported fields.\n}\n    Client is used to make HTTP requests. It adds additional functionality like\n    automatic retries to tolerate minor outages.\n\nfunc NewClient() *Client\nfunc (c *Client) Do(req *Request) (*http.Response, error)\nfunc (c *Client) Get(url string) (*http.Response, error)\nfunc (c *Client) Head(url string) (*http.Response, error)"
+  },
+  {
+    "tool_call_id": "call_00_ejcJnMRTvdc1106pxuH42018",
+    "input": {
+      "command": "git log --oneline -5; echo ---; git status --short | head",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "25a5f278 chore: set goreleaser versions (#3381)\n17d1044b chore: prep for 1.48 release (#3380)\nba51da9c feat(ofrep): implement bulk evaluation for OFREP (#3364)\n03b1358d fix(cors): add missing from default allowed CORS headers (#3378)\nde7d445b chore(deps): bump github.com/docker/docker in /_tools (#3376)\n---\n?? .nz-coder/"
+  },
+  {
+    "tool_call_id": "verification-stage-static-6",
+    "input": {
+      "command": "go test ./internal/cmd -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_nsL1Eww796pvTz0WtB7c9820",
+    "input": {
+      "_nz_runtime_verification_stage": "targeted",
+      "command": "GOMAXPROCS=2 go vet -p 1 ./internal/server/audit/template/... 2>&1 | tail -30",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_nZRkffFJgMvy96WJbVzD9069",
+    "input": {
+      "command": "go build -p 2 ./internal/server/audit/... 2>&1 | tail -30",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(go completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_geqBLuYJ4MBkOtlWQ5Ts4898",
+    "input": {
+      "command": "go test -p 1 ./internal/server/audit/template/... ./internal/server/audit/webhook/... 2>&1 | tail -40",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_ZpLVZDmSrde3uSlSPg2j5248",
+    "input": {
+      "command": "go test -p 1 -run 'TestNewLeveledLogger|TestLeveledLogger|TestConstructorWebhookTemplate|TestExecuter' ./internal/server/audit/template/ 2>&1 | tail -40",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_QNLuPZ5aMu08fXi4Rngw3270",
+    "input": {
+      "command": "go test -p 1 -count=1 -run 'TestNewLeveledLogger|TestLeveledLogger|TestConstructorWebhookTemplate|TestExecuter' ./internal/server/audit/template/ 2>&1 | tail -40",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/server/audit/template\t0.017s"
+  },
+  {
+    "tool_call_id": "call_00_txexEFiHzF3BeLaSiELM7215",
+    "input": {
+      "command": "go test -p 1 -count=1 -run 'TestConstructorWebhookClient|TestSendAudit' ./internal/server/audit/webhook/ 2>&1 | tail -40",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/server/audit/webhook\t0.011s"
+  },
+  {
+    "tool_call_id": "call_01_fOprx1YXpmdjIHb4eJfs2871",
+    "input": {
+      "command": "go build -p 1 ./... 2>&1 | tail -20",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(go completed with no output)"
+  }
+]

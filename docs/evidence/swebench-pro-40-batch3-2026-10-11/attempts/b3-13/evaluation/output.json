@@ -1,0 +1,64 @@
+{
+  "tests": [
+    {
+      "name": "TestDisplay/unix_socket",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/unix_socket#01",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/unix_socket#02",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/unix_socket_with_screen_number",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/localhost",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/some_ip_address",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/invalid_ip_address",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/empty",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/no_display_number",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/negative_display_number",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/negative_screen_number",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/invalid_characters",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/invalid_unix_socket",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay/unix_socket_full_path",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDisplay",
+      "status": "PASSED"
+    }
+  ]
+}

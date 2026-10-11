@@ -1,0 +1,140 @@
+{
+  "tests": [
+    {
+      "name": "TestFetchDatabaseCreds",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestFailedLogin",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOIDCLogin",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestRelogin",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMakeClient",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestIdentityRead",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestFormatConnectCommand",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestFormatConnectCommand/no_default_user/database_are_specified",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestFormatConnectCommand/default_user_is_specified",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestFormatConnectCommand/default_database_is_specified",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestFormatConnectCommand/default_user/database_are_specified",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestFormatConnectCommand/unsupported_database_protocol",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestReadClusterFlag",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestReadClusterFlag/nothing_set",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestReadClusterFlag/TELEPORT_SITE_set",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestReadClusterFlag/TELEPORT_CLUSTER_set",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestReadClusterFlag/TELEPORT_SITE_and_TELEPORT_CLUSTER_set,_prefer_TELEPORT_CLUSTER",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestReadClusterFlag/TELEPORT_SITE_and_TELEPORT_CLUSTER_and_CLI_flag_is_set,_prefer_CLI",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestKubeConfigUpdate",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestKubeConfigUpdate/selected_cluster",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestKubeConfigUpdate/no_selected_cluster",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestKubeConfigUpdate/invalid_selected_cluster",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestKubeConfigUpdate/no_kube_clusters",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestKubeConfigUpdate/no_tsh_path",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions/Space_Delimited",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions/Equals_Sign_Delimited",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions/Invalid_key",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions/Incomplete_option",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions/AddKeysToAgent_Invalid_Value",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions/Forward_Agent_Yes",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions/Forward_Agent_No",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions/Forward_Agent_Local",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestOptions/Forward_Agent_InvalidValue",
+      "status": "PASSED"
+    }
+  ]
+}

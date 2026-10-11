@@ -1,0 +1,493 @@
+diff --git a/src/desktop/DesktopDownloadManager.ts b/src/desktop/DesktopDownloadManager.ts
+index a2064c321..0afff5ca2 100644
+--- a/src/desktop/DesktopDownloadManager.ts
++++ b/src/desktop/DesktopDownloadManager.ts
+@@ -12,11 +12,9 @@ import type * as FsModule from "fs"
+ import type {DateProvider} from "../calendar/date/CalendarUtils.js"
+ import {CancelledError} from "../api/common/error/CancelledError.js"
+ import {BuildConfigKey, DesktopConfigKey} from "./config/ConfigKeys.js"
+-import {WriteStream} from "fs-extra"
+ // Make sure to only import the type
+ import type {DownloadTaskResponse} from "../native/common/FileApp.js"
+ import type http from "http"
+-import type * as stream from "stream"
+ 
+ type FsExports = typeof FsModule
+ type ElectronExports = typeof Electron.CrossProcessExports
+@@ -65,6 +63,9 @@ export class DesktopDownloadManager {
+ 
+ 	/**
+ 	 * Download file into the encrypted files directory.
++	 *
++	 * The write stream is created before the response is known so that the download can be piped into
++	 * it as soon as the first bytes arrive.
+ 	 */
+ 	async downloadNative(
+ 		sourceUrl: string,
+@@ -74,36 +75,60 @@ export class DesktopDownloadManager {
+ 			accessToken: string
+ 		},
+ 	): Promise<DownloadTaskResponse> {
+-		// Propagate error in initial request if it occurs (I/O errors and such)
+-		const response = await this._net.executeRequest(sourceUrl, {
+-			method: "GET",
+-			timeout: 20000,
+-			headers,
+-		})
+-
+-		// Must always be set for our types of requests
+-		const statusCode = assertNotNull(response.statusCode)
+-
+-		let encryptedFilePath
+-		if (statusCode == 200) {
+-			const downloadDirectory = await this.getTutanotaTempDirectory("download")
+-			encryptedFilePath = path.join(downloadDirectory, fileName)
+-			await this.pipeIntoFile(response, encryptedFilePath)
+-		} else {
+-			encryptedFilePath = null
+-		}
+-
+-		const result = {
+-			statusCode: statusCode,
+-			encryptedFileUri: encryptedFilePath,
+-			errorId: getHttpHeader(response.headers, "error-id"),
+-			precondition: getHttpHeader(response.headers, "precondition"),
+-			suspensionTime: getHttpHeader(response.headers, "suspension-time") ?? getHttpHeader(response.headers, "retry-after"),
+-		}
++		const downloadDirectory = await this.getTutanotaTempDirectory("download")
++		const filePath = path.join(downloadDirectory, fileName)
++
++		const fileStream: FsModule.WriteStream = this._fs.createWriteStream(filePath, {emitClose: true})
++		// Close the stream once it was written to completion. Closing makes it emit "close", which is
++		// when we consider the download to be finished.
++		fileStream.on("finish", () => fileStream.close())
++
++		return new Promise<DownloadTaskResponse>((resolve, reject) => {
++			// Remove the partially written file and reject the download promise afterwards. Any listener
++			// that could resolve the download is discarded first so that we can be sure to only reject.
++			const cleanup = (error: Error): void => {
++				fileStream.removeAllListeners("close")
++				fileStream.on("close", () => {
++					fileStream.removeAllListeners("close")
++					this._fs.promises
++						.unlink(filePath)
++						.catch(() => {
++						})
++						.then(() => reject(error))
++				})
++				fileStream.close()
++			}
+ 
+-		console.log("Download finished", result.statusCode, result.suspensionTime)
++			const request = this._net.request(sourceUrl, {
++				method: "GET",
++				headers,
++				timeout: 20000,
++			})
+ 
+-		return result
++			request.on("error", (error) => cleanup(error))
++			request.on("response", (response: http.IncomingMessage) => {
++				// Must always be set for our types of requests
++				const statusCode = assertNotNull(response.statusCode)
++
++				if (statusCode !== 200) {
++					cleanup(new Error(String(statusCode)))
++					return
++				}
++
++				fileStream.on("close", () => {
++					resolve({
++						statusCode: statusCode,
++						encryptedFileUri: filePath,
++						errorId: getHttpHeader(response.headers, "error-id"),
++						precondition: getHttpHeader(response.headers, "precondition"),
++						suspensionTime: getHttpHeader(response.headers, "suspension-time") ?? getHttpHeader(response.headers, "retry-after"),
++					})
++				})
++				response.on("error", (error) => cleanup(error))
++				response.pipe(fileStream, {end: true})
++			})
++			request.end()
++		})
+ 	}
+ 
+ 	/**
+@@ -194,23 +219,6 @@ export class DesktopDownloadManager {
+ 			})
+ 		}
+ 	}
+-
+-	private async pipeIntoFile(response: stream.Readable, encryptedFilePath: string) {
+-		const fileStream: WriteStream = this._fs.createWriteStream(encryptedFilePath, {emitClose: true})
+-		try {
+-			await pipeStream(response, fileStream)
+-			await closeFileStream(fileStream)
+-		} catch (e) {
+-			// Close first, delete second
+-			// Also yes, we do need to close it manually:
+-			// > One important caveat is that if the Readable stream emits an error during processing, the Writable destination is not closed automatically.
+-			// > If an error occurs, it will be necessary to manually close each stream in order to prevent memory leaks.
+-			// see https://nodejs.org/api/stream.html#readablepipedestination-options
+-			await closeFileStream(fileStream)
+-			await this._fs.promises.unlink(encryptedFilePath)
+-			throw e
+-		}
+-	}
+ }
+ 
+ function getHttpHeader(headers: http.IncomingHttpHeaders, name: string): string | null {
+@@ -221,19 +229,4 @@ function getHttpHeader(headers: http.IncomingHttpHeaders, name: string): string
+ 	} else {
+ 		return value ?? null
+ 	}
+-}
+-
+-function pipeStream(stream: stream.Readable, into: stream.Writable): Promise<void> {
+-	return new Promise((resolve, reject) => {
+-		stream.pipe(into)
+-			  .on("finish", resolve)
+-			  .on("error", reject)
+-	})
+-}
+-
+-function closeFileStream(stream: FsModule.WriteStream): Promise<void> {
+-	return new Promise((resolve) => {
+-		stream.on("close", resolve)
+-		stream.close()
+-	})
+ }
+\ No newline at end of file
+diff --git a/src/desktop/DesktopNetworkClient.ts b/src/desktop/DesktopNetworkClient.ts
+index 72075b7ed..c7d07527f 100644
+--- a/src/desktop/DesktopNetworkClient.ts
++++ b/src/desktop/DesktopNetworkClient.ts
+@@ -26,15 +26,6 @@ export class DesktopNetworkClient {
+ 		return this.getModule(url).request(url, opts)
+ 	}
+ 
+-	executeRequest(url: string, opts: ClientRequestOptions): Promise<http.IncomingMessage> {
+-		return new Promise<http.IncomingMessage>((resolve, reject) => {
+-			this.request(url, opts)
+-				.on("response", resolve)
+-				.on("error", reject)
+-				.end()
+-		})
+-	}
+-
+ 	private getModule(url: string): typeof import("http") | typeof import("https") {
+ 		if (url.startsWith("https")) {
+ 			return https
+diff --git a/test/client/desktop/DesktopDownloadManagerTest.ts b/test/client/desktop/DesktopDownloadManagerTest.ts
+index f1427fb86..c8e941229 100644
+--- a/test/client/desktop/DesktopDownloadManagerTest.ts
++++ b/test/client/desktop/DesktopDownloadManagerTest.ts
+@@ -76,16 +76,30 @@ o.spec("DesktopDownloadManagerTest", function () {
+ 			},
+ 		}
+ 		const net = {
+-			async executeRequest(url, opts) {
+-				console.log("net.Response", net.Response, typeof net.Response)
+-				const r = new net.Response(200)
+-				console.log("net.Response()", r, typeof r)
+-				return r
++			request(url, opts) {
++				return new net.Request()
+ 			},
++			Request: n.classify({
++				prototype: {
++					callbacks: {},
++					on: function (ev, cb) {
++						this.callbacks[ev] = cb
++						return this
++					},
++					end: function () {
++						if (this.callbacks["end"]) this.callbacks["end"]()
++					},
++					abort: function () {
++						if (this.callbacks["error"]) this.callbacks["error"](new Error("aborted"))
++					},
++				},
++				statics: {},
++			}),
+ 			Response: n.classify({
+ 				prototype: {
+ 					constructor: function (statusCode) {
+ 						this.statusCode = statusCode
++						this.headers = {}
+ 					},
+ 					callbacks: {},
+ 					on: function (ev, cb) {
+@@ -97,7 +111,10 @@ o.spec("DesktopDownloadManagerTest", function () {
+ 					destroy: function (e) {
+ 						this.callbacks["error"](e)
+ 					},
+-					pipe: function () {
++					pipe: function (dest, opts) {
++						if (dest && typeof dest.end === "function") {
++							dest.end()
++						}
+ 						return this
+ 					},
+ 					headers: {},
+@@ -289,30 +306,22 @@ o.spec("DesktopDownloadManagerTest", function () {
+ 	o.spec("downloadNative", async function () {
+ 		o("no error", async function () {
+ 			const mocks = standardMocks()
++			const dl = makeMockedDownloadManager(mocks)
+ 			const response = new mocks.netMock.Response(200)
+-			response.on = (eventName, cb) => {
+-				if (eventName === "finish") cb()
+-			}
+-			mocks.netMock.executeRequest = o.spy(() => response)
+-
+-			const expectedFilePath = "/tutanota/tmp/path/download/nativelyDownloadedFile"
++			// simulate the transfer completing: piping into the write stream ends it
++			response.pipe = o.spy((dest, opts) => {
++				dest.end()
++				return response
++			})
+ 
+-			const dl = makeMockedDownloadManager(mocks)
+-			const downloadResult = await dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
++			const promise = dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
+ 				v: "foo",
+ 				accessToken: "bar",
+ 			})
+-			o(downloadResult).deepEquals({
+-				statusCode: 200,
+-				errorId: null,
+-				precondition: null,
+-				suspensionTime: null,
+-				encryptedFileUri: expectedFilePath
+-			})
+-
+-			const ws = WriteStream.mockedInstances[0]
++			await delay(1)
+ 
+-			o(mocks.netMock.executeRequest.args).deepEquals([
++			o(mocks.netMock.request.callCount).equals(1)
++			o(mocks.netMock.request.args).deepEquals([
+ 				"some://url/file",
+ 				{
+ 					method: "GET",
+@@ -321,142 +330,125 @@ o.spec("DesktopDownloadManagerTest", function () {
+ 						accessToken: "bar",
+ 					},
+ 					timeout: 20000,
+-				}
++				},
+ 			])
+ 
++			const expectedFilePath = "/tutanota/tmp/path/download/nativelyDownloadedFile"
+ 			o(mocks.fsMock.createWriteStream.callCount).equals(1)
+ 			o(mocks.fsMock.createWriteStream.args).deepEquals([expectedFilePath, {emitClose: true}])
+ 
++			// the response arrives only after the request was finalized
++			const request = mocks.netMock.Request.mockedInstances[0]
++			request.callbacks["response"](response)
++
++			const downloadResult = await promise
++			o(downloadResult).deepEquals({
++				statusCode: 200,
++				errorId: null,
++				precondition: null,
++				suspensionTime: null,
++				encryptedFileUri: expectedFilePath,
++			})
++
++			const ws = WriteStream.mockedInstances[0]
+ 			o(response.pipe.callCount).equals(1)
+ 			o(response.pipe.args[0]).deepEquals(ws)
+-			o(ws.close.callCount).equals(1)
++			o(ws.on.callCount).equals(2)("finish and close handlers registered")
++			o(ws.close.callCount).equals(1)("stream is closed")
+ 		})
+ 
+-		o("404 error gets returned", async function () {
++		o("404 error rejects with the status code", async function () {
+ 			const mocks = standardMocks()
+ 			const dl = makeMockedDownloadManager(mocks)
+-			const res = new mocks.netMock.Response(404)
+-			const errorId = "123"
+-			res.headers["error-id"] = errorId
+-			mocks.netMock.executeRequest = () => res
++			const response = new mocks.netMock.Response(404)
++			response.headers["error-id"] = "123"
+ 
+-			const result = await dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
++			const promise = dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
+ 				v: "foo",
+ 				accessToken: "bar",
+ 			})
++			await delay(1)
++			const request = mocks.netMock.Request.mockedInstances[0]
++			request.callbacks["response"](response)
+ 
+-			o(result).deepEquals({
+-				statusCode: 404,
+-				errorId,
+-				precondition: null,
+-				suspensionTime: null,
+-				encryptedFileUri: null,
+-			})
+-			o(mocks.fsMock.createWriteStream.callCount).equals(0)("createStream calls")
++			const error = await assertThrows(Error, () => promise)
++			o(error.message).equals("404")
++
++			o(mocks.fsMock.createWriteStream.callCount).equals(1)("createStream calls")
++			const ws = WriteStream.mockedInstances[0]
++			o(ws.on.callCount).equals(2)("finish handler + fresh close handler")
++			o(ws.removeAllListeners.callCount).equals(2)("close listeners discarded twice")
++			o(ws.removeAllListeners.args[0]).equals("close")
++			o(ws.close.callCount).equals(1)("stream is closed")
++			o(mocks.fsMock.promises.unlink.callCount).equals(1)("partial file removed")
++			o(mocks.fsMock.promises.unlink.args[0]).equals("/tutanota/tmp/path/download/nativelyDownloadedFile")
+ 		})
+ 
+-		o("retry-after", async function () {
++		o("retry-after rejects with the status code", async function () {
+ 			const mocks = standardMocks()
+ 			const dl = makeMockedDownloadManager(mocks)
+-			const res = new mocks.netMock.Response(TooManyRequestsError.CODE)
+-			const errorId = "123"
+-			res.headers["error-id"] = errorId
+-			const retryAFter = "20"
+-			res.headers["retry-after"] = retryAFter
+-			mocks.netMock.executeRequest = () => res
+-
+-			const result = await dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
++			const response = new mocks.netMock.Response(TooManyRequestsError.CODE)
++			response.headers["error-id"] = "123"
++			response.headers["retry-after"] = "20"
++
++			const promise = dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
+ 				v: "foo",
+ 				accessToken: "bar",
+ 			})
++			await delay(1)
++			const request = mocks.netMock.Request.mockedInstances[0]
++			request.callbacks["response"](response)
+ 
+-			o(result).deepEquals({
+-				statusCode: TooManyRequestsError.CODE,
+-				errorId,
+-				precondition: null,
+-				suspensionTime: retryAFter,
+-				encryptedFileUri: null,
+-			})
+-			o(mocks.fsMock.createWriteStream.callCount).equals(0)("createStream calls")
++			const error = await assertThrows(Error, () => promise)
++			o(error.message).equals(String(TooManyRequestsError.CODE))
++			o(mocks.fsMock.createWriteStream.callCount).equals(1)("createStream calls")
+ 		})
+ 
+-		o("suspension", async function () {
++		o("IO error during download", async function () {
+ 			const mocks = standardMocks()
+ 			const dl = makeMockedDownloadManager(mocks)
+-			const res = new mocks.netMock.Response(TooManyRequestsError.CODE)
+-			const errorId = "123"
+-			res.headers["error-id"] = errorId
+-			const retryAFter = "20"
+-			res.headers["suspension-time"] = retryAFter
+-			mocks.netMock.executeRequest = () => res
+-
+-			const result = await dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
++			const response = new mocks.netMock.Response(200)
++			// the response never completes, we error out instead
++			response.pipe = o.spy((dest, opts) => response)
++			const error = new Error("Test! I/O error")
++
++			const promise = dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
+ 				v: "foo",
+ 				accessToken: "bar",
+ 			})
++			await delay(1)
++			const request = mocks.netMock.Request.mockedInstances[0]
++			request.callbacks["response"](response)
++			response.callbacks["error"](error)
+ 
+-			o(result).deepEquals({
+-				statusCode: TooManyRequestsError.CODE,
+-				errorId,
+-				precondition: null,
+-				suspensionTime: retryAFter,
+-				encryptedFileUri: null,
+-			})
+-			o(mocks.fsMock.createWriteStream.callCount).equals(0)("createStream calls")
++			const returnedError = await assertThrows(Error, () => promise)
++			o(returnedError).equals(error)
++
++			o(mocks.fsMock.createWriteStream.callCount).equals(1)("createStream calls")
++			const ws = WriteStream.mockedInstances[0]
++			o(ws.close.callCount).equals(1)("stream is closed")
++			o(mocks.fsMock.promises.unlink.calls.map(c => c.args)).deepEquals([
++				["/tutanota/tmp/path/download/nativelyDownloadedFile"],
++			])("unlink")
+ 		})
+ 
+-		o("precondition", async function () {
++		o("request error rejects", async function () {
+ 			const mocks = standardMocks()
+ 			const dl = makeMockedDownloadManager(mocks)
+-			const res = new mocks.netMock.Response(PreconditionFailedError.CODE)
+-			const errorId = "123"
+-			res.headers["error-id"] = errorId
+-			const precondition = "a.2"
+-			res.headers["precondition"] = precondition
+-			mocks.netMock.executeRequest = () => res
+-
+-			const result = await dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
++			const error = new Error("request failed")
++
++			const promise = dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
+ 				v: "foo",
+ 				accessToken: "bar",
+ 			})
++			await delay(1)
++			const request = mocks.netMock.Request.mockedInstances[0]
++			request.callbacks["error"](error)
+ 
+-			o(result).deepEquals({
+-				statusCode: PreconditionFailedError.CODE,
+-				errorId,
+-				precondition: precondition,
+-				suspensionTime: null,
+-				encryptedFileUri: null,
+-			})
+-			o(mocks.fsMock.createWriteStream.callCount).equals(0)("createStream calls")
+-		})
+-
+-		o("IO error during downlaod", async function () {
+-			const mocks = standardMocks()
+-			const dl = makeMockedDownloadManager(mocks)
+-			const res = new mocks.netMock.Response(200)
+-			mocks.netMock.executeRequest = () => res
+-			const error = new Error("Test! I/O error")
+-
+-			res.on = function (eventName, callback) {
+-				if (eventName === "error") {
+-					callback(error)
+-				}
+-				return this
+-			}
+-
+-			const returnedError = await assertThrows(Error, () => dl.downloadNative("some://url/file", "nativelyDownloadedFile", {
+-					v: "foo",
+-					accessToken: "bar",
+-				})
+-			)
++			const returnedError = await assertThrows(Error, () => promise)
+ 			o(returnedError).equals(error)
+-
+ 			o(mocks.fsMock.createWriteStream.callCount).equals(1)("createStream calls")
+-			const ws = WriteStream.mockedInstances[0]
+-			o(ws.close.callCount).equals(1)("stream is closed")
+-			o(mocks.fsMock.promises.unlink.calls.map(c => c.args)).deepEquals([
+-				["/tutanota/tmp/path/download/nativelyDownloadedFile"]
+-			])("unlink")
++			o(mocks.fsMock.promises.unlink.callCount).equals(1)("partial file removed")
+ 		})
+ 	})
+ 

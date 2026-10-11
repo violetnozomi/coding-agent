@@ -1,0 +1,102 @@
+diff --git a/internal/server/auth/middleware.go b/internal/server/auth/middleware.go
+index c11a60d1..58808dbd 100644
+--- a/internal/server/auth/middleware.go
++++ b/internal/server/auth/middleware.go
+@@ -2,6 +2,7 @@ package auth
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"net/http"
+ 	"strings"
+ 	"time"
+@@ -110,6 +111,18 @@ func UnaryInterceptor(logger *zap.Logger, authenticator Authenticator, o ...cont
+ 			logger.Error("unauthenticated",
+ 				zap.String("reason", "error retrieving authentication for client token"),
+ 				zap.Error(err))
++
++			// an error caused by the request context being canceled or timing out is
++			// not an authentication failure. Classify it accordingly so that callers
++			// can distinguish it from a genuine unauthenticated response. Both
++			// sentinels are matched through any wrapping the storage layer applied.
++			switch {
++			case errors.Is(err, context.Canceled):
++				return ctx, status.Error(codes.Canceled, err.Error())
++			case errors.Is(err, context.DeadlineExceeded):
++				return ctx, status.Error(codes.DeadlineExceeded, err.Error())
++			}
++
+ 			return ctx, errUnauthenticated
+ 		}
+ 
+diff --git a/internal/server/middleware/grpc/middleware.go b/internal/server/middleware/grpc/middleware.go
+index 2b182c1a..3cfec926 100644
+--- a/internal/server/middleware/grpc/middleware.go
++++ b/internal/server/middleware/grpc/middleware.go
+@@ -4,6 +4,7 @@ import (
+ 	"context"
+ 	"crypto/md5"
+ 	"encoding/json"
++	"errors"
+ 	"fmt"
+ 	"time"
+ 
+@@ -49,13 +50,14 @@ func ErrorUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnarySe
+ 		return
+ 	}
+ 
+-	// given already a *status.Error then forward unchanged
+-	if _, ok := status.FromError(err); ok {
+-		return
+-	}
+-
+ 	code := codes.Internal
+ 	switch {
++	// contexts which have been canceled or have exceeded their deadline are
++	// classified explicitly. Errors wrapping either sentinel are matched too.
++	case errors.Is(err, context.Canceled):
++		code = codes.Canceled
++	case errors.Is(err, context.DeadlineExceeded):
++		code = codes.DeadlineExceeded
+ 	case errs.AsMatch[errs.ErrNotFound](err):
+ 		code = codes.NotFound
+ 	case errs.AsMatch[errs.ErrInvalid](err),
+diff --git a/internal/server/middleware/grpc/middleware_test.go b/internal/server/middleware/grpc/middleware_test.go
+index b5afe5c7..3251200d 100644
+--- a/internal/server/middleware/grpc/middleware_test.go
++++ b/internal/server/middleware/grpc/middleware_test.go
+@@ -2,6 +2,7 @@ package grpc_middleware
+ 
+ import (
+ 	"context"
++	"fmt"
+ 	"testing"
+ 	"time"
+ 
+@@ -108,6 +109,26 @@ func TestErrorUnaryInterceptor(t *testing.T) {
+ 			wantErr:  errors.NewErrorf[errors.ErrUnauthenticated]("user %q not found", "foo"),
+ 			wantCode: codes.Unauthenticated,
+ 		},
++		{
++			name:     "context canceled error",
++			wantErr:  context.Canceled,
++			wantCode: codes.Canceled,
++		},
++		{
++			name:     "wrapped context canceled error",
++			wantErr:  fmt.Errorf("something went wrong: %w", context.Canceled),
++			wantCode: codes.Canceled,
++		},
++		{
++			name:     "context deadline exceeded error",
++			wantErr:  context.DeadlineExceeded,
++			wantCode: codes.DeadlineExceeded,
++		},
++		{
++			name:     "wrapped context deadline exceeded error",
++			wantErr:  fmt.Errorf("something went wrong: %w", context.DeadlineExceeded),
++			wantCode: codes.DeadlineExceeded,
++		},
+ 		{
+ 			name:     "other error",
+ 			wantErr:  errors.New("foo"),

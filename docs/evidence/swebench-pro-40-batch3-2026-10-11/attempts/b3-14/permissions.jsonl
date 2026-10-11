@@ -1,0 +1,5 @@
+{"tool": "bash", "input": {"command": "find . -name \"*wikidata*\" -not -path \"./node_modules/*\" 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest openlibrary/tests/core/test_wikidata.py -q 2>&1 | tail -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -c \"import sys; print(sys.version)\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest openlibrary/tests/core/test_wikidata.py -q 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace diff --stat; git -C /workspace diff"}, "allowed": true}

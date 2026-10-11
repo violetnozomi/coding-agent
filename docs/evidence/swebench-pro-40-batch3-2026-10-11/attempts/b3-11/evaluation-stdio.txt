@@ -1,0 +1,12 @@
+/tmp/model.patch:43: trailing whitespace.
+		group_concat(f.album_artist_id, ' ') as album_artist_ids, 
+warning: 1 line adds whitespace errors.
+Resetting test-space to base state (full test-code surface)...
+Applying test patch...
+Checking patch persistence/album_repository_test.go...
+Applied patch persistence/album_repository_test.go cleanly.
+Required tests: 1
+Passed tests: 1
+Required tests that passed: 1
+
+RESULT: PASSED

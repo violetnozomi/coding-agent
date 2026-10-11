@@ -1,0 +1,111 @@
+diff --git a/qutebrowser/browser/shared.py b/qutebrowser/browser/shared.py
+index 384a69c30..f06b47825 100644
+--- a/qutebrowser/browser/shared.py
++++ b/qutebrowser/browser/shared.py
+@@ -159,6 +159,39 @@ _JS_LOGMAP_MESSAGE: Mapping[usertypes.JsLogLevel, Callable[[str], None]] = {
+ }
+ 
+ 
++def _js_log_to_ui(
++    level: usertypes.JsLogLevel,
++    source: str,
++    line: int,
++    msg: str,
++) -> bool:
++    """Log a JS message to the UI, if configured to do so.
++
++    Return:
++        True if the message was shown to the user, False otherwise.
++    """
++    levels = config.cache['content.javascript.log_message.levels']
++    for pattern, level_names in levels.items():
++        if level.name in level_names and fnmatch.fnmatchcase(source, pattern):
++            break
++    else:
++        return False
++
++    excludes = config.cache['content.javascript.log_message.excludes']
++    for pattern, exclude_patterns in excludes.items():
++        if not fnmatch.fnmatchcase(source, pattern):
++            continue
++        if any(fnmatch.fnmatchcase(msg, exclude_pattern)
++               for exclude_pattern in exclude_patterns):
++            return False
++        break
++
++    logstring = f"[{source}:{line}] {msg}"
++    func = _JS_LOGMAP_MESSAGE[level]
++    func(f"JS: {logstring}")
++    return True
++
++
+ def javascript_log_message(
+     level: usertypes.JsLogLevel,
+     source: str,
+@@ -166,14 +199,10 @@ def javascript_log_message(
+     msg: str,
+ ) -> None:
+     """Display a JavaScript log message."""
+-    logstring = f"[{source}:{line}] {msg}"
+-
+-    for pattern, levels in config.cache['content.javascript.log_message'].items():
+-        if level.name in levels and fnmatch.fnmatchcase(source, pattern):
+-            func = _JS_LOGMAP_MESSAGE[level]
+-            func(f"JS: {logstring}")
+-            return
++    if _js_log_to_ui(level, source, line, msg):
++        return
+ 
++    logstring = f"[{source}:{line}] {msg}"
+     logger = _JS_LOGMAP[config.cache['content.javascript.log'][level.name]]
+     logger(logstring)
+ 
+diff --git a/qutebrowser/config/configdata.yml b/qutebrowser/config/configdata.yml
+index 220712e2d..c0f8f3655 100644
+--- a/qutebrowser/config/configdata.yml
++++ b/qutebrowser/config/configdata.yml
+@@ -941,6 +941,9 @@ content.javascript.log:
+     `error`.
+ 
+ content.javascript.log_message:
++  renamed: content.javascript.log_message.levels
++
++content.javascript.log_message.levels:
+   type:
+     name: Dict
+     keytype: String
+@@ -950,6 +953,7 @@ content.javascript.log_message:
+         - info: Show JS info as messages.
+         - warning: Show JS warnings as messages.
+         - error: Show JS errors as messages.
++    none_ok: true
+   default:
+     "qute:*": ["error"]
+     "userscript:*": ["error"]
+@@ -963,6 +967,26 @@ content.javascript.log_message:
+     By default, errors happening in qutebrowser internally or in userscripts are
+     shown to the user.
+ 
++content.javascript.log_message.excludes:
++  type:
++    name: Dict
++    keytype: String
++    valtype:
++      name: List
++      valtype: String
++    none_ok: true
++  default: {}
++  desc: >-
++    Javascript message sources/patterns to not show in the qutebrowser UI.
++
++    When a JavaScript message is logged from a location matching the glob
++    pattern given in the key, and the message itself matches one of the glob
++    patterns in the value, it's not surfaced as a message in the qutebrowser UI.
++
++    The patterns are matched against the message content, so they can be used to
++    hide recurring, non-actionable errors such as Content Security Policy
++    violations reported by userscripts.
++
+ content.javascript.modal_dialog:
+   type: Bool
+   default: false

@@ -1,0 +1,108 @@
+[
+  {
+    "tool_call_id": "call_00_3nV5c2L85ytHPuBebEX61001",
+    "input": {
+      "command": "ls -la /workspace && echo \"---\" && ls -la /app 2>/dev/null | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_DsiilyXmgoQyqmaNR02I8181",
+    "input": {
+      "command": "ls -la /workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_F1sWl2wNVLI2f4doaNIv5095",
+    "input": {
+      "command": "go test ./scanner/ -run TestViaHTTP -v 2>&1 | tail -30",
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_NBuMjWZ3WJ7dooTlsqRn6859",
+    "input": {
+      "command": "go test -vet=off ./scanner/ -run TestViaHTTP -v 2>&1 | tail -10",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "=== RUN   TestViaHTTP\n--- PASS: TestViaHTTP (0.00s)\nPASS\nok  \tgithub.com/future-architect/vuls/scanner\t(cached)"
+  },
+  {
+    "tool_call_id": "call_00_p4Q1pI9ZN4l1zqDvhhex9518",
+    "input": {
+      "command": "go build ./scanner/ && go test -vet=off ./scanner/ -run TestViaHTTP 2>&1 | tail -5",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgithub.com/future-architect/vuls/scanner\t0.008s"
+  },
+  {
+    "tool_call_id": "call_00_ukuLDn20KSUKxua14om60837",
+    "input": {
+      "command": "go test ./scanner/ -run TestViaHTTP 2>&1 | tail -5",
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_S6rHvO81UNSVmUhUllHM0073",
+    "input": {
+      "command": "go test -vet=off ./scanner/... 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_vBDNXnaJZOOVVa4G1OOA7997",
+    "input": {
+      "command": "go test -vet=off ./scanner/ -run TestViaHTTP -count=1 -v 2>&1 | tail -10",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "=== RUN   TestViaHTTP\n--- PASS: TestViaHTTP (0.00s)\nPASS\nok  \tgithub.com/future-architect/vuls/scanner\t0.005s"
+  },
+  {
+    "tool_call_id": "call_00_YRcKcFuzG6OKunMpzq9O8243",
+    "input": {
+      "command": "git --no-pager diff",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "diff --git a/scanner/serverapi.go b/scanner/serverapi.go\nindex 9692d6e..9cc3261 100644\n--- a/scanner/serverapi.go\n+++ b/scanner/serverapi.go\n@@ -162,9 +162,6 @@ func ViaHTTP(header http.Header, body string, toLocalFile bool) (models.ScanResu\n \t}\n \n \tkernelVersion := header.Get(\"X-Vuls-Kernel-Version\")\n-\tif family == constant.Debian && kernelVersion == \"\" {\n-\t\treturn models.ScanResult{}, errKernelVersionHeader\n-\t}\n \n \tserverName := header.Get(\"X-Vuls-Server-Name\")\n \tif toLocalFile && serverName == \"\" {\ndiff --git a/scanner/serverapi_test.go b/scanner/serverapi_test.go\nindex 672d2c3..80a785c 100644\n--- a/scanner/serverapi_test.go\n+++ b/scanner/serverapi_test.go\n@@ -40,7 +40,14 @@ func TestViaHTTP(t *testing.T) {\n \t\t\t\t\"X-Vuls-OS-Release\":     \"8\",\n \t\t\t\t\"X-Vuls-Kernel-Release\": \"2.6.32-695.20.3.el6.x86_64\",\n \t\t\t},\n-\t\t\twantErr: errKernelVersionHeader,\n+\t\t\texpectedResult: models.ScanResult{\n+\t\t\t\tFamily:  \"debian\",\n+\t\t\t\tRelease: \"8\",\n+\t\t\t\tRunningKernel: models.Kernel{\n+\t\t\t\t\tRelease: \"2.6.32-695.20.3.el6.x86_64\",\n+\t\t\t\t\tVersion: \"\",\n+\t\t\t\t},\n+\t\t\t},\n \t\t},\n \t\t{\n \t\t\theader: map[string]string{"
+  }
+]

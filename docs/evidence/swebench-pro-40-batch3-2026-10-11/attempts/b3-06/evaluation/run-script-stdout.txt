@@ -1,0 +1,21 @@
+Running selected tests: TestExecuter_JSON_Failure TestExecuter_Execute TestConstructorWebhookTemplate TestWebhookClient TestExecuter_Execute_toJson_valid_Json TestLeveledLogger TestConstructorWebhookClient
+=== RUN   TestConstructorWebhookTemplate
+--- PASS: TestConstructorWebhookTemplate (0.00s)
+=== RUN   TestExecuter_JSON_Failure
+--- PASS: TestExecuter_JSON_Failure (0.00s)
+=== RUN   TestExecuter_Execute
+    logger.go:146: 2026-10-11T16:07:20.942Z	DEBUG	performing request	{"method": "POST", "url": "http://127.0.0.1:38105"}
+--- PASS: TestExecuter_Execute (0.00s)
+=== RUN   TestExecuter_Execute_toJson_valid_Json
+    logger.go:146: 2026-10-11T16:07:20.943Z	DEBUG	performing request	{"method": "POST", "url": "http://127.0.0.1:45741"}
+--- PASS: TestExecuter_Execute_toJson_valid_Json (0.00s)
+=== RUN   TestLeveledLogger
+--- PASS: TestLeveledLogger (0.00s)
+PASS
+ok  	go.flipt.io/flipt/internal/server/audit/template	0.010s
+=== RUN   TestConstructorWebhookClient
+--- PASS: TestConstructorWebhookClient (0.00s)
+=== RUN   TestWebhookClient
+--- PASS: TestWebhookClient (0.00s)
+PASS
+ok  	go.flipt.io/flipt/internal/server/audit/webhook	0.018s

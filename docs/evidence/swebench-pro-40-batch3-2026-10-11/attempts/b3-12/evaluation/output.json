@@ -1,0 +1,8 @@
+{
+  "tests": [
+    {
+      "name": "TestErrorUnaryInterceptor",
+      "status": "PASSED"
+    }
+  ]
+}

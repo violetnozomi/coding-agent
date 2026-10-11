@@ -1,0 +1,34 @@
+diff --git a/scanner/serverapi.go b/scanner/serverapi.go
+index 9692d6e..9cc3261 100644
+--- a/scanner/serverapi.go
++++ b/scanner/serverapi.go
+@@ -162,9 +162,6 @@ func ViaHTTP(header http.Header, body string, toLocalFile bool) (models.ScanResu
+ 	}
+ 
+ 	kernelVersion := header.Get("X-Vuls-Kernel-Version")
+-	if family == constant.Debian && kernelVersion == "" {
+-		return models.ScanResult{}, errKernelVersionHeader
+-	}
+ 
+ 	serverName := header.Get("X-Vuls-Server-Name")
+ 	if toLocalFile && serverName == "" {
+diff --git a/scanner/serverapi_test.go b/scanner/serverapi_test.go
+index 672d2c3..80a785c 100644
+--- a/scanner/serverapi_test.go
++++ b/scanner/serverapi_test.go
+@@ -40,7 +40,14 @@ func TestViaHTTP(t *testing.T) {
+ 				"X-Vuls-OS-Release":     "8",
+ 				"X-Vuls-Kernel-Release": "2.6.32-695.20.3.el6.x86_64",
+ 			},
+-			wantErr: errKernelVersionHeader,
++			expectedResult: models.ScanResult{
++				Family:  "debian",
++				Release: "8",
++				RunningKernel: models.Kernel{
++					Release: "2.6.32-695.20.3.el6.x86_64",
++					Version: "",
++				},
++			},
+ 		},
+ 		{
+ 			header: map[string]string{

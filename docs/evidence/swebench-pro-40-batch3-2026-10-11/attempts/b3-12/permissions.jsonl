@@ -1,0 +1,14 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && echo \"---\" && head -5 go.mod && echo \"---grpc version---\" && grep -n \"google.golang.org/grpc\" go.mod"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go version && git -C /workspace status --short | head -20"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,60p' internal/cmd/auth.go 2>/dev/null; echo \"---grep auth files---\"; ls internal/cmd/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"google.golang.org/grpc \" go.mod && grep -rn \"func FromError\" $(go env GOMODCACHE)/google.golang.org/grpc@*/status/status.go 2>/dev/null | head -3"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go env GOMODCACHE GOFLAGS"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git diff"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git --no-pager diff --stat HEAD; echo \"===\"; git --no-pager diff HEAD -- internal/server/middleware/grpc/middleware.go | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./internal/server/middleware/grpc -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/server/middleware/grpc -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/server/auth -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/server/auth -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "targeted", "command": "go test ./internal/server/middleware/grpc ./internal/server/auth 2>&1 | tail -30", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "targeted", "command": "go test ./internal/server/middleware/grpc -run TestErrorUnaryInterceptor -count=1 2>&1 | tail -20", "timeout": 120}, "allowed": true}

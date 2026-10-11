@@ -1,0 +1,5 @@
+Running selected tests: TestViaHTTP
+=== RUN   TestViaHTTP
+--- PASS: TestViaHTTP (0.00s)
+PASS
+ok  	github.com/future-architect/vuls/scanner	0.006s

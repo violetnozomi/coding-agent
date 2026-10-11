@@ -1,0 +1,16 @@
+{"tool": "bash", "input": {"command": "ls /workspace && echo \"---\" && ls /workspace/lib 2>/dev/null | head -50"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls /workspace/lib/client/ | head -40; echo ---; ls /workspace/lib/kube/kubeconfig 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls /workspace/tool/tsh/"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git checkout lib/kube/kubeconfig/kubeconfig.go && git status --short"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,70p' lib/kube/kubeconfig/kubeconfig.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '2340,2420p' lib/client/api.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./lib/kube/kubeconfig -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./lib/kube/kubeconfig -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go vet ./tool/tsh/ 2>&1 | head -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ulimit -u 4096 2>/dev/null; GOMAXPROCS=1 GOFLAGS=-p=1 go build ./tool/tsh/ 2>&1 | head -40", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "GOFLAGS=-p=1 go build ./tool/tsh 2>&1 | head -40", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "GOFLAGS=-p=1 go vet ./tool/tsh 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "gofmt -l tool/tsh/kube.go tool/tsh/tsh.go lib/kube/kubeconfig/kubeconfig.go", "timeout": 60, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "env GOMAXPROCS=1 GOFLAGS=-p=1 go build ./tool/tsh 2>&1 | tail -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./tool/tsh 2>&1 | tail -20", "timeout": 120}, "allowed": true}

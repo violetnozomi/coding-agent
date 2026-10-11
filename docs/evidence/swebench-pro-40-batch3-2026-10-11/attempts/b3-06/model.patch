@@ -1,0 +1,362 @@
+diff --git a/internal/cmd/grpc.go b/internal/cmd/grpc.go
+index 30dd5b83..fdcfe95f 100644
+--- a/internal/cmd/grpc.go
++++ b/internal/cmd/grpc.go
+@@ -16,7 +16,7 @@ import (
+ 	"go.opentelemetry.io/contrib/propagators/autoprop"
+ 
+ 	sq "github.com/Masterminds/squirrel"
+-	"github.com/hashicorp/go-retryablehttp"
++
+ 	"go.flipt.io/flipt/internal/cache"
+ 	"go.flipt.io/flipt/internal/cache/memory"
+ 	"go.flipt.io/flipt/internal/cache/redis"
+@@ -383,18 +383,12 @@ func NewGRPCServer(
+ 	}
+ 
+ 	if cfg.Audit.Sinks.Webhook.Enabled {
+-		httpClient := retryablehttp.NewClient()
+-
+-		if cfg.Audit.Sinks.Webhook.MaxBackoffDuration > 0 {
+-			httpClient.RetryWaitMax = cfg.Audit.Sinks.Webhook.MaxBackoffDuration
+-		}
+-
+ 		var webhookSink audit.Sink
+ 
+ 		// Enable basic webhook sink if URL is non-empty, otherwise enable template sink if the length of templates is greater
+ 		// than 0 for the webhook.
+ 		if cfg.Audit.Sinks.Webhook.URL != "" {
+-			webhookSink = webhook.NewSink(logger, webhook.NewWebhookClient(logger, cfg.Audit.Sinks.Webhook.URL, cfg.Audit.Sinks.Webhook.SigningSecret, httpClient))
++			webhookSink = webhook.NewSink(logger, webhook.NewWebhookClient(logger, cfg.Audit.Sinks.Webhook.URL, cfg.Audit.Sinks.Webhook.SigningSecret, cfg.Audit.Sinks.Webhook.MaxBackoffDuration))
+ 		} else if len(cfg.Audit.Sinks.Webhook.Templates) > 0 {
+ 			maxBackoffDuration := 15 * time.Second
+ 			if cfg.Audit.Sinks.Webhook.MaxBackoffDuration > 0 {
+diff --git a/internal/server/audit/template/executer.go b/internal/server/audit/template/executer.go
+index 72f8b154..1b1746c0 100644
+--- a/internal/server/audit/template/executer.go
++++ b/internal/server/audit/template/executer.go
+@@ -51,7 +51,7 @@ func NewWebhookTemplate(logger *zap.Logger, url, body string, headers map[string
+ 	}
+ 
+ 	httpClient := retryablehttp.NewClient()
+-	httpClient.Logger = logger
++	httpClient.Logger = NewLeveledLogger(logger)
+ 	httpClient.RetryWaitMax = maxBackoffDuration
+ 
+ 	return &webhookTemplate{
+diff --git a/internal/server/audit/template/executer_test.go b/internal/server/audit/template/executer_test.go
+index da2d75da..c69b6892 100644
+--- a/internal/server/audit/template/executer_test.go
++++ b/internal/server/audit/template/executer_test.go
+@@ -15,6 +15,7 @@ import (
+ 	"go.flipt.io/flipt/internal/server/audit"
+ 	"go.flipt.io/flipt/rpc/flipt"
+ 	"go.uber.org/zap"
++	"go.uber.org/zap/zaptest"
+ )
+ 
+ func TestConstructorWebhookTemplate(t *testing.T) {
+@@ -27,6 +28,55 @@ func TestConstructorWebhookTemplate(t *testing.T) {
+ 
+ 	assert.Equal(t, "https://flipt-webhook.io/webhook", template.url)
+ 	assert.Nil(t, template.headers)
++
++	// The retry client must be wired with the leveled logger adapter and the
++	// supplied maximum backoff duration.
++	require.NotNil(t, template.httpClient)
++	assert.IsType(t, &LeveledLogger{}, template.httpClient.Logger)
++	assert.Equal(t, 15*time.Second, template.httpClient.RetryWaitMax)
++}
++
++func TestConstructorWebhookTemplate_MalformedTemplate(t *testing.T) {
++	executer, err := NewWebhookTemplate(zap.NewNop(), "https://flipt-webhook.io/webhook", `{{ .Type `, nil, 15*time.Second)
++	require.Error(t, err)
++	assert.Nil(t, executer)
++}
++
++func TestExecuter_RetriesWithoutPanic(t *testing.T) {
++	tmpl, err := template.New("").Parse(`{"type": "{{ .Type }}", "action": "{{ .Action }}"}`)
++	require.NoError(t, err)
++
++	var attempts int
++
++	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		attempts++
++		w.WriteHeader(http.StatusInternalServerError)
++	}))
++
++	t.Cleanup(ts.Close)
++
++	client := retryablehttp.NewClient()
++	client.Logger = NewLeveledLogger(zaptest.NewLogger(t))
++	client.RetryWaitMin = time.Millisecond
++	client.RetryWaitMax = 5 * time.Millisecond
++	client.RetryMax = 2
++
++	wh := &webhookTemplate{
++		url:          ts.URL,
++		bodyTemplate: tmpl,
++		httpClient:   client,
++	}
++
++	// The retry client surfaces a non-2xx response as an error. The important
++	// behavior is that logging each retry attempt does not panic and that the
++	// configured number of attempts is made.
++	err = wh.Execute(context.TODO(), audit.Event{
++		Type:   string(flipt.SubjectFlag),
++		Action: string(flipt.ActionCreate),
++	})
++
++	require.Error(t, err)
++	assert.Equal(t, 3, attempts)
+ }
+ 
+ func TestExecuter_JSON_Failure(t *testing.T) {
+diff --git a/internal/server/audit/template/leveled_logger.go b/internal/server/audit/template/leveled_logger.go
+new file mode 100644
+index 00000000..708d824f
+--- /dev/null
++++ b/internal/server/audit/template/leveled_logger.go
+@@ -0,0 +1,76 @@
++package template
++
++import (
++	"fmt"
++
++	"github.com/hashicorp/go-retryablehttp"
++	"go.uber.org/zap"
++	"go.uber.org/zap/zapcore"
++)
++
++// LeveledLogger is a zap-backed implementation of retryablehttp.LeveledLogger.
++//
++// The retry client shipped by go-retryablehttp only accepts a value that
++// implements either its Logger or LeveledLogger interface. Passing a raw
++// *zap.Logger makes the client panic with "invalid logger type passed" as soon
++// as it tries to log a retry attempt, which takes the whole process down.
++// Wrapping the zap logger in this adapter keeps the retry client happy while
++// still emitting structured entries.
++type LeveledLogger struct {
++	logger *zap.Logger
++}
++
++// Ensure the adapter satisfies the interface expected by the retry client.
++var _ retryablehttp.LeveledLogger = (*LeveledLogger)(nil)
++
++// NewLeveledLogger wraps logger so that it can be used as the Logger field of a
++// go-retryablehttp client.
++func NewLeveledLogger(logger *zap.Logger) retryablehttp.LeveledLogger {
++	return &LeveledLogger{logger: logger}
++}
++
++// Debug emits a single DEBUG entry when that level is enabled.
++func (l *LeveledLogger) Debug(msg string, keyvals ...interface{}) {
++	l.log(zapcore.DebugLevel, msg, keyvals...)
++}
++
++// Info emits a single INFO entry when that level is enabled.
++func (l *LeveledLogger) Info(msg string, keyvals ...interface{}) {
++	l.log(zapcore.InfoLevel, msg, keyvals...)
++}
++
++// Warn emits a single WARN entry when that level is enabled.
++func (l *LeveledLogger) Warn(msg string, keyvals ...interface{}) {
++	l.log(zapcore.WarnLevel, msg, keyvals...)
++}
++
++// Error emits a single ERROR entry when that level is enabled.
++func (l *LeveledLogger) Error(msg string, keyvals ...interface{}) {
++	l.log(zapcore.ErrorLevel, msg, keyvals...)
++}
++
++// log emits exactly one entry for level when it is enabled on the underlying
++// core, and nothing at all when it is disabled.
++//
++// The message is handed to zap untouched (the level is never prepended). Each
++// supplied key/value pair becomes a structured field, with the pairs rendered
++// in the order they were supplied.
++func (l *LeveledLogger) log(level zapcore.Level, msg string, keyvals ...interface{}) {
++	if l.logger == nil || !l.logger.Core().Enabled(level) {
++		return
++	}
++
++	fields := make([]zap.Field, 0, (len(keyvals)+1)/2)
++	for i := 0; i < len(keyvals); i += 2 {
++		key := fmt.Sprint(keyvals[i])
++
++		var value interface{}
++		if i+1 < len(keyvals) {
++			value = keyvals[i+1]
++		}
++
++		fields = append(fields, zap.Any(key, value))
++	}
++
++	l.logger.Log(level, msg, fields...)
++}
+diff --git a/internal/server/audit/template/leveled_logger_test.go b/internal/server/audit/template/leveled_logger_test.go
+new file mode 100644
+index 00000000..2577a89a
+--- /dev/null
++++ b/internal/server/audit/template/leveled_logger_test.go
+@@ -0,0 +1,87 @@
++package template
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++	"go.uber.org/zap"
++	"go.uber.org/zap/zapcore"
++	"go.uber.org/zap/zaptest/observer"
++)
++
++func TestNewLeveledLogger(t *testing.T) {
++	core, logs := observer.New(zapcore.DebugLevel)
++
++	logger := NewLeveledLogger(zap.New(core))
++	require.NotNil(t, logger)
++
++	logger.Debug("debug message", "debug-key", "debug-value")
++	logger.Info("info message", "info-key", 1)
++	logger.Warn("warn message", "warn-key", true)
++	logger.Error("error message", "error-key", 1.5, "extra", "value")
++
++	entries := logs.All()
++	require.Len(t, entries, 4)
++
++	assert.Equal(t, "DEBUG", entries[0].Level.CapitalString())
++	assert.Equal(t, "debug message", entries[0].Message)
++	assert.Equal(t, map[string]any{"debug-key": "debug-value"}, entries[0].ContextMap())
++
++	assert.Equal(t, "INFO", entries[1].Level.CapitalString())
++	assert.Equal(t, "info message", entries[1].Message)
++	assert.Equal(t, map[string]any{"info-key": int64(1)}, entries[1].ContextMap())
++
++	assert.Equal(t, "WARN", entries[2].Level.CapitalString())
++	assert.Equal(t, "warn message", entries[2].Message)
++	assert.Equal(t, map[string]any{"warn-key": true}, entries[2].ContextMap())
++
++	assert.Equal(t, "ERROR", entries[3].Level.CapitalString())
++	assert.Equal(t, "error message", entries[3].Message)
++	assert.Equal(t, map[string]any{"error-key": 1.5, "extra": "value"}, entries[3].ContextMap())
++}
++
++func TestLeveledLogger_DisabledLevels(t *testing.T) {
++	core, logs := observer.New(zapcore.WarnLevel)
++
++	logger := NewLeveledLogger(zap.New(core))
++
++	logger.Debug("debug message", "key", "value")
++	logger.Info("info message", "key", "value")
++
++	assert.Empty(t, logs.All())
++
++	logger.Warn("warn message", "key", "value")
++	logger.Error("error message", "key", "value")
++
++	require.Len(t, logs.All(), 2)
++}
++
++func TestLeveledLogger_KeyValueOrder(t *testing.T) {
++	core, logs := observer.New(zapcore.InfoLevel)
++
++	logger := NewLeveledLogger(zap.New(core))
++	logger.Info("message", "a", "1", "b", "2", "c", "3")
++
++	entries := logs.All()
++	require.Len(t, entries, 1)
++
++	var keys []string
++	for _, field := range entries[0].Context {
++		keys = append(keys, field.Key)
++	}
++
++	assert.Equal(t, []string{"a", "b", "c"}, keys)
++}
++
++func TestLeveledLogger_NoKeyValues(t *testing.T) {
++	core, logs := observer.New(zapcore.InfoLevel)
++
++	logger := NewLeveledLogger(zap.New(core))
++	logger.Info("plain message")
++
++	entries := logs.All()
++	require.Len(t, entries, 1)
++	assert.Empty(t, entries[0].Context)
++	assert.Equal(t, "plain message", entries[0].Message)
++}
+diff --git a/internal/server/audit/webhook/client.go b/internal/server/audit/webhook/client.go
+index c75bf697..d052c5ae 100644
+--- a/internal/server/audit/webhook/client.go
++++ b/internal/server/audit/webhook/client.go
+@@ -8,9 +8,11 @@ import (
+ 	"encoding/json"
+ 	"fmt"
+ 	"net/http"
++	"time"
+ 
+ 	"github.com/hashicorp/go-retryablehttp"
+ 	"go.flipt.io/flipt/internal/server/audit"
++	"go.flipt.io/flipt/internal/server/audit/template"
+ 	"go.uber.org/zap"
+ )
+ 
+@@ -39,8 +41,16 @@ func (w *webhookClient) signPayload(payload []byte) []byte {
+ 	return h.Sum(nil)
+ }
+ 
+-// NewHTTPClient is the constructor for a HTTPClient.
+-func NewWebhookClient(logger *zap.Logger, url, signingSecret string, httpClient *retryablehttp.Client) Client {
++// NewWebhookClient is the constructor for a webhook Client.
++//
++// It builds its own retryable HTTP client, wiring the zap logger in through the
++// leveled logger adapter so the retry client can log retries without panicking
++// on an unsupported logger type.
++func NewWebhookClient(logger *zap.Logger, url, signingSecret string, maxBackoffDuration time.Duration) Client {
++	httpClient := retryablehttp.NewClient()
++	httpClient.Logger = template.NewLeveledLogger(logger)
++	httpClient.RetryWaitMax = maxBackoffDuration
++
+ 	return &webhookClient{
+ 		logger:        logger,
+ 		url:           url,
+diff --git a/internal/server/audit/webhook/client_test.go b/internal/server/audit/webhook/client_test.go
+index 0d8144f3..66b23336 100644
+--- a/internal/server/audit/webhook/client_test.go
++++ b/internal/server/audit/webhook/client_test.go
+@@ -6,17 +6,19 @@ import (
+ 	"net/http"
+ 	"net/http/httptest"
+ 	"testing"
++	"time"
+ 
+ 	"github.com/hashicorp/go-retryablehttp"
+ 	"github.com/stretchr/testify/assert"
+ 	"github.com/stretchr/testify/require"
+ 	"go.flipt.io/flipt/internal/server/audit"
++	"go.flipt.io/flipt/internal/server/audit/template"
+ 	"go.flipt.io/flipt/rpc/flipt"
+ 	"go.uber.org/zap"
+ )
+ 
+ func TestConstructorWebhookClient(t *testing.T) {
+-	client := NewWebhookClient(zap.NewNop(), "https://flipt-webhook.io/webhook", "", retryablehttp.NewClient())
++	client := NewWebhookClient(zap.NewNop(), "https://flipt-webhook.io/webhook", "", 15*time.Second)
+ 
+ 	require.NotNil(t, client)
+ 
+@@ -25,6 +27,12 @@ func TestConstructorWebhookClient(t *testing.T) {
+ 
+ 	assert.Equal(t, "https://flipt-webhook.io/webhook", whClient.url)
+ 	assert.Empty(t, whClient.signingSecret)
++
++	// The retry client must be wired up with the leveled logger adapter and the
++	// supplied maximum backoff duration.
++	require.NotNil(t, whClient.httpClient)
++	assert.IsType(t, &template.LeveledLogger{}, whClient.httpClient.Logger)
++	assert.Equal(t, 15*time.Second, whClient.httpClient.RetryWaitMax)
+ }
+ 
+ func TestWebhookClient(t *testing.T) {

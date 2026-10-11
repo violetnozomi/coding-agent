@@ -1,0 +1,12 @@
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la && cat go.mod 2>/dev/null | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,40p' persistence/album_repository_test.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./... 2>&1 | head -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./persistence/...", "workdir": "/workspace", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go vet ./persistence/... 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -p 1 -run TestPersistence ./persistence/ 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -p 1 ./persistence/ ./scanner/ ./server/subsonic/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./persistence -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -p 1 -v -run TestPersistence ./persistence/ 2>&1 | grep -iE 'getAlbumArtist|Various|Ran [0-9]+ of|SUCCESS|FAIL' | head -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff -- persistence/", "workdir": "/workspace"}, "allowed": true}

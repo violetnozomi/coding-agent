@@ -1,0 +1,178 @@
+[
+  {
+    "tool_call_id": "call_00_m5nN5Fmtpb7jtIVnEYsk7864",
+    "input": {
+      "command": "cd /workspace && ls -la && git log --oneline -5 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Gzj30kyHwKwHi1T8cybC4800",
+    "input": {
+      "command": "cd /workspace && go test ./lib/sshutils/x11/... 2>&1 | tail -30",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_OfVpMMiQE7puOTUjl0Py6830",
+    "input": {
+      "command": "cd /workspace/lib/sshutils/x11 && go test ./... 2>&1 | tail -40",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_OHjd2aFPRQMywSNZfa8k1975",
+    "input": {
+      "command": "go version",
+      "timeout": 30
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go version go1.23.1 linux/amd64"
+  },
+  {
+    "tool_call_id": "call_00_AcJLiJAfq2zAgxJViNAL7291",
+    "input": {
+      "command": "go test ./lib/sshutils/x11/... 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_VSi7Df8ga0VVGSbAo5Yn2288",
+    "input": {
+      "command": "go test -count=1 -run 'TestDisplaySocket|TestUnixSocketAbsolutePath|TestUnixSocketAbsolutePathMissing|TestParseDisplay' ./lib/sshutils/x11/ 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_GPdU6HjibYCR89ZwQwKq1038",
+    "input": {
+      "command": "git diff --stat && echo \"---\" && git diff lib/sshutils/x11/display_test.go | head -80",
+      "timeout": 30,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "lib/sshutils/x11/display.go      | 18 ++++++++++++++++++\n lib/sshutils/x11/display_test.go | 28 ++++++++++++++++++++++++++++\n 2 files changed, 46 insertions(+)\n---\ndiff --git a/lib/sshutils/x11/display_test.go b/lib/sshutils/x11/display_test.go\nindex d28edb551..f8fd98c73 100644\n--- a/lib/sshutils/x11/display_test.go\n+++ b/lib/sshutils/x11/display_test.go\n@@ -172,3 +172,31 @@ func TestDisplaySocket(t *testing.T) {\n \t\t})\n \t}\n }\n+\n+func TestUnixSocketAbsolutePath(t *testing.T) {\n+\tt.Parallel()\n+\n+\t// XQuartz on macOS places the X11 unix socket at an arbitrary absolute\n+\t// path and sets DISPLAY to \"<socket_path>:<display_number>\".\n+\tsockPath := filepath.Join(t.TempDir(), \"org.xquartz:0\")\n+\trequire.NoError(t, os.WriteFile(sockPath, []byte{}, 0o600))\n+\n+\tdisplay := Display{HostName: sockPath, DisplayNumber: 0}\n+\tunixSock, err := display.unixSocket()\n+\trequire.NoError(t, err)\n+\trequire.Equal(t, sockPath+\":0\", unixSock.String())\n+\n+\t// A tcp socket must never be resolved for an absolute path.\n+\t_, err = display.tcpSocket()\n+\trequire.Error(t, err)\n+}\n+\n+func TestUnixSocketAbsolutePathMissing(t *testing.T) {\n+\tt.Parallel()\n+\n+\t// An absolute path which does not exist on the filesystem must not be\n+\t// resolved as a unix socket.\n+\tdisplay := Display{HostName: filepath.Join(t.TempDir(), \"org.xquartz:0\"), DisplayNumber: 0}\n+\t_, err := display.unixSocket()\n+\trequire.Error(t, err)\n+}"
+  },
+  {
+    "tool_call_id": "call_00_XjLWtjywL1vViH0cCAsD0846",
+    "input": {
+      "command": "go test -count=1 -run 'TestDisplaySocket|TestUnixSocketAbsolutePath|TestUnixSocketAbsolutePathMissing' ./lib/sshutils/x11/ 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgithub.com/gravitational/teleport/lib/sshutils/x11\t0.005s"
+  },
+  {
+    "tool_call_id": "call_00_pY97kNsHsuN9xsELNUnY1558",
+    "input": {
+      "command": "gofmt -l lib/sshutils/x11/display.go lib/sshutils/x11/display_test.go; go vet ./lib/sshutils/x11/ 2>&1 | tail -20",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_2Wd27BCyf5v8gwYSgRCU0081",
+    "input": {
+      "command": "gofmt -l lib/sshutils/x11/display.go lib/sshutils/x11/display_test.go && echo \"gofmt clean\"",
+      "timeout": 60,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_sn37PCzZ8E8SrOsVQcc65808",
+    "input": {
+      "command": "gofmt -l lib/sshutils/x11/display.go lib/sshutils/x11/display_test.go",
+      "timeout": 60,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_1YQi32gq6keWNYgrTt4T9350",
+    "input": {
+      "command": "git diff lib/sshutils/x11/display.go",
+      "timeout": 30,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "diff --git a/lib/sshutils/x11/display.go b/lib/sshutils/x11/display.go\nindex 2fd6f6655..62849e75b 100644\n--- a/lib/sshutils/x11/display.go\n+++ b/lib/sshutils/x11/display.go\n@@ -124,6 +124,18 @@ func (d *Display) unixSocket() (*net.UnixAddr, error) {\n \t\tsockName := filepath.Join(x11SockDir(), fmt.Sprintf(\"X%d\", d.DisplayNumber))\n \t\treturn net.ResolveUnixAddr(\"unix\", sockName)\n \t}\n+\n+\t// Some X servers (such as XQuartz on macOS) use a unix socket located at an\n+\t// arbitrary path rather than the standard /tmp/.X11-unix directory. In that\n+\t// case $DISPLAY is set to \"<socket_path>:<display_number>\". If HostName is an\n+\t// absolute path and a matching socket exists on the filesystem, use it.\n+\tif strings.HasPrefix(d.HostName, \"/\") {\n+\t\tsockName := fmt.Sprintf(\"%s:%d\", d.HostName, d.DisplayNumber)\n+\t\tif _, err := os.Stat(sockName); err == nil {\n+\t\t\treturn net.ResolveUnixAddr(\"unix\", sockName)\n+\t\t}\n+\t}\n+\n \treturn nil, trace.BadParameter(\"display is not a unix socket\")\n }\n \n@@ -134,6 +146,12 @@ func (d *Display) tcpSocket() (*net.TCPAddr, error) {\n \t\treturn nil, trace.BadParameter(\"hostname can't be empty for an XServer tcp socket\")\n \t}\n \n+\t// A HostName beginning with \"/\" denotes a unix socket path, not a network\n+\t// host, so a tcp socket cannot be resolved for it.\n+\tif strings.HasPrefix(d.HostName, \"/\") {\n+\t\treturn nil, trace.BadParameter(\"hostname can't be an absolute path for an XServer tcp socket\")\n+\t}\n+\n \tport := fmt.Sprint(d.DisplayNumber + x11BasePort)\n \trawAddr := net.JoinHostPort(d.HostName, port)\n \taddr, err := net.ResolveTCPAddr(\"tcp\", rawAddr)"
+  },
+  {
+    "tool_call_id": "call_00_8vdUDdkiOghMXkpkKKQt2629",
+    "input": {
+      "command": "go test -count=1 -run 'TestDisplaySocket|TestUnixSocketAbsolutePath|TestUnixSocketAbsolutePathMissing|TestGetXDisplay|TestX11Socket|TestListen|TestDial' -v ./lib/sshutils/x11/ 2>&1 | tail -60",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "=== RUN   TestDisplaySocket\n=== RUN   TestDisplaySocket/unix_socket_no_hostname\n=== RUN   TestDisplaySocket/unix_socket_with_hostname\n=== RUN   TestDisplaySocket/localhost\n=== RUN   TestDisplaySocket/some_ip_address\n=== RUN   TestDisplaySocket/invalid_ip_address\n=== RUN   TestDisplaySocket/invalid_unix_socket\n--- PASS: TestDisplaySocket (0.00s)\n    --- PASS: TestDisplaySocket/unix_socket_no_hostname (0.00s)\n    --- PASS: TestDisplaySocket/unix_socket_with_hostname (0.00s)\n    --- PASS: TestDisplaySocket/localhost (0.00s)\n    --- PASS: TestDisplaySocket/some_ip_address (0.00s)\n    --- PASS: TestDisplaySocket/invalid_ip_address (0.00s)\n    --- PASS: TestDisplaySocket/invalid_unix_socket (0.00s)\n=== RUN   TestUnixSocketAbsolutePath\n=== PAUSE TestUnixSocketAbsolutePath\n=== RUN   TestUnixSocketAbsolutePathMissing\n=== PAUSE TestUnixSocketAbsolutePathMissing\n=== CONT  TestUnixSocketAbsolutePath\n=== CONT  TestUnixSocketAbsolutePathMissing\n--- PASS: TestUnixSocketAbsolutePath (0.00s)\n--- PASS: TestUnixSocketAbsolutePathMissing (0.00s)\nPASS\nok  \tgithub.com/gravitational/teleport/lib/sshutils/x11\t0.005s"
+  },
+  {
+    "tool_call_id": "verification-stage-static-4",
+    "input": {
+      "command": "go test ./lib/sshutils/x11 -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgithub.com/gravitational/teleport/lib/sshutils/x11\t0.004s [no tests to run]"
+  }
+]

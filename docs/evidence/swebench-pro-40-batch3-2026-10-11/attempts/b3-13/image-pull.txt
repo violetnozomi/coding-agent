@@ -1,0 +1,145 @@
+instance_gravitational__teleport-1b08e7d0dbe68fe530a0f08ad408ec198b7c53fc-vee9b09fb20c43af7e520f57e9239bbcf46b7113d: Pulling from scaleapi/swe-bench_pro-v2
+43c4264eed91: Pulling fs layer
+ab19dfae90ef: Pulling fs layer
+e7bff916ab0c: Pulling fs layer
+78cee99375e3: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+e926874a3859: Pulling fs layer
+a447a3fa4bf4: Pulling fs layer
+160ff38caab0: Pulling fs layer
+c1485fd2eed9: Pulling fs layer
+b9f510f61965: Pulling fs layer
+2b2a3d3d5213: Pulling fs layer
+1d4ab5972630: Pulling fs layer
+25641f2ff6ba: Pulling fs layer
+7f1a2f6aa382: Pulling fs layer
+85fd8bfd7afa: Pulling fs layer
+f4d787109856: Pulling fs layer
+06cfe5afbc99: Pulling fs layer
+e926874a3859: Waiting
+a447a3fa4bf4: Waiting
+160ff38caab0: Waiting
+78cee99375e3: Waiting
+b9f510f61965: Waiting
+2b2a3d3d5213: Waiting
+1d4ab5972630: Waiting
+25641f2ff6ba: Waiting
+7f1a2f6aa382: Waiting
+4f4fb700ef54: Waiting
+85fd8bfd7afa: Waiting
+f4d787109856: Waiting
+c1485fd2eed9: Waiting
+06cfe5afbc99: Waiting
+ab19dfae90ef: Verifying Checksum
+ab19dfae90ef: Download complete
+43c4264eed91: Verifying Checksum
+43c4264eed91: Download complete
+43c4264eed91: Pull complete
+ab19dfae90ef: Pull complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
+78cee99375e3: Download complete
+e926874a3859: Verifying Checksum
+e926874a3859: Download complete
+e7bff916ab0c: Verifying Checksum
+e7bff916ab0c: Download complete
+e7bff916ab0c: Pull complete
+78cee99375e3: Pull complete
+4f4fb700ef54: Pull complete
+e926874a3859: Pull complete
+c1485fd2eed9: Verifying Checksum
+c1485fd2eed9: Download complete
+b9f510f61965: Verifying Checksum
+b9f510f61965: Download complete
+2b2a3d3d5213: Verifying Checksum
+2b2a3d3d5213: Download complete
+1d4ab5972630: Verifying Checksum
+1d4ab5972630: Download complete
+25641f2ff6ba: Verifying Checksum
+25641f2ff6ba: Download complete
+7f1a2f6aa382: Verifying Checksum
+7f1a2f6aa382: Download complete
+a447a3fa4bf4: Verifying Checksum
+a447a3fa4bf4: Download complete
+a447a3fa4bf4: Pull complete
+85fd8bfd7afa: Retrying in 5 seconds
+85fd8bfd7afa: Retrying in 4 seconds
+85fd8bfd7afa: Retrying in 3 seconds
+85fd8bfd7afa: Retrying in 2 seconds
+85fd8bfd7afa: Retrying in 1 second
+f4d787109856: Retrying in 5 seconds
+f4d787109856: Retrying in 4 seconds
+f4d787109856: Retrying in 3 seconds
+160ff38caab0: Retrying in 5 seconds
+f4d787109856: Retrying in 2 seconds
+160ff38caab0: Retrying in 4 seconds
+f4d787109856: Retrying in 1 second
+160ff38caab0: Retrying in 3 seconds
+160ff38caab0: Retrying in 2 seconds
+160ff38caab0: Retrying in 1 second
+160ff38caab0: Retrying in 10 seconds
+f4d787109856: Retrying in 10 seconds
+85fd8bfd7afa: Retrying in 10 seconds
+160ff38caab0: Retrying in 9 seconds
+f4d787109856: Retrying in 9 seconds
+85fd8bfd7afa: Retrying in 9 seconds
+160ff38caab0: Retrying in 8 seconds
+f4d787109856: Retrying in 8 seconds
+85fd8bfd7afa: Retrying in 8 seconds
+160ff38caab0: Retrying in 7 seconds
+f4d787109856: Retrying in 7 seconds
+85fd8bfd7afa: Retrying in 7 seconds
+160ff38caab0: Retrying in 6 seconds
+f4d787109856: Retrying in 6 seconds
+85fd8bfd7afa: Retrying in 6 seconds
+160ff38caab0: Retrying in 5 seconds
+f4d787109856: Retrying in 5 seconds
+85fd8bfd7afa: Retrying in 5 seconds
+160ff38caab0: Retrying in 4 seconds
+f4d787109856: Retrying in 4 seconds
+85fd8bfd7afa: Retrying in 4 seconds
+160ff38caab0: Retrying in 3 seconds
+f4d787109856: Retrying in 3 seconds
+85fd8bfd7afa: Retrying in 3 seconds
+160ff38caab0: Retrying in 2 seconds
+f4d787109856: Retrying in 2 seconds
+85fd8bfd7afa: Retrying in 2 seconds
+160ff38caab0: Retrying in 1 second
+f4d787109856: Retrying in 1 second
+85fd8bfd7afa: Retrying in 1 second
+f4d787109856: Verifying Checksum
+f4d787109856: Download complete
+06cfe5afbc99: Verifying Checksum
+06cfe5afbc99: Download complete
+160ff38caab0: Retrying in 15 seconds
+160ff38caab0: Retrying in 14 seconds
+160ff38caab0: Retrying in 13 seconds
+160ff38caab0: Retrying in 12 seconds
+160ff38caab0: Retrying in 11 seconds
+160ff38caab0: Retrying in 10 seconds
+160ff38caab0: Retrying in 9 seconds
+160ff38caab0: Retrying in 8 seconds
+160ff38caab0: Retrying in 7 seconds
+160ff38caab0: Retrying in 6 seconds
+160ff38caab0: Retrying in 5 seconds
+160ff38caab0: Retrying in 4 seconds
+160ff38caab0: Retrying in 3 seconds
+160ff38caab0: Retrying in 2 seconds
+160ff38caab0: Retrying in 1 second
+85fd8bfd7afa: Verifying Checksum
+85fd8bfd7afa: Download complete
+160ff38caab0: Verifying Checksum
+160ff38caab0: Download complete
+160ff38caab0: Pull complete
+c1485fd2eed9: Pull complete
+b9f510f61965: Pull complete
+2b2a3d3d5213: Pull complete
+1d4ab5972630: Pull complete
+25641f2ff6ba: Pull complete
+7f1a2f6aa382: Pull complete
+85fd8bfd7afa: Pull complete
+f4d787109856: Pull complete
+06cfe5afbc99: Pull complete
+Digest: sha256:993987ec9e2fcd7bff38ea0b0129b6a36d0df10992c31bd89d8795d0d5e5ffa6
+Status: Downloaded newer image for ghcr.io/scaleapi/swe-bench_pro-v2:instance_gravitational__teleport-1b08e7d0dbe68fe530a0f08ad408ec198b7c53fc-vee9b09fb20c43af7e520f57e9239bbcf46b7113d
+ghcr.io/scaleapi/swe-bench_pro-v2:instance_gravitational__teleport-1b08e7d0dbe68fe530a0f08ad408ec198b7c53fc-vee9b09fb20c43af7e520f57e9239bbcf46b7113d

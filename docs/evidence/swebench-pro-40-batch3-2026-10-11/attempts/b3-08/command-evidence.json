@@ -1,0 +1,192 @@
+[
+  {
+    "tool_call_id": "call_01_ubXpnLjLZhJsIjyVVki08342",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /workspace/lib 2>/dev/null | head -50"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "CHANGELOG.md\nCODE_OF_CONDUCT.md\nCONTRIBUTING.md\nLICENSE\nMakefile\nREADME.md\nSECURITY.md\napi\nassets\nbuild\nbuild.assets\nconstants.go\ndoc.go\ndocker\ndocs\ndronegen\ne\nexamples\nfixtures\ngo.mod\ngo.sum\ngravitational.asc\nintegration\nlib\nmetrics.go\nrfd\nroles.go\nroles_test.go\ntool\nvagrant\nvendor\nversion.go\nversion.mk\nwebassets\n---\nasciitable\nauth\nbackend\nbenchmark\nbpf\ncache\ncgroup\nclient\nconfig\ndefaults\nevents\nfixtures\nfuzz\nhttplib\njwt\nkube\nlabels\nlimiter\nmodules\nmultiplexer\npam\nplugin\nreversetunnel\nruntimeflags.go\nsecret\nservice\nservices\nsession\nshell\nsrv\nsshca\nsshutils\nsystem\nteleagent\ntlsca\nutils\nweb"
+  },
+  {
+    "tool_call_id": "call_01_VIDJ4peYFGu7KnFLvwOB4280",
+    "input": {
+      "command": "ls /workspace/lib/client/ | head -40; echo ---; ls /workspace/lib/kube/kubeconfig 2>/dev/null"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_PuTzdLgmFqEAQzzl6SkR3663",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 && git status --short | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_0oW0KJzoDJIg4S7J8x4W2728",
+    "input": {
+      "command": "ls /workspace/tool/tsh/"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "access_request.go\napp.go\ndb.go\ndb_test.go\nhelp.go\nkube.go\nmfa.go\noptions.go\ntsh.go\ntsh_test.go"
+  },
+  {
+    "tool_call_id": "call_00_3YTQRguM11Tasg01uzYr8577",
+    "input": {
+      "command": "cd /workspace && git checkout lib/kube/kubeconfig/kubeconfig.go && git status --short"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_cukgTxT7vGrJl8tG0QMz4991",
+    "input": {
+      "command": "cd /workspace && sed -n '1,70p' lib/kube/kubeconfig/kubeconfig.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_IhqHSHWd8GMr30az8Yq90429",
+    "input": {
+      "command": "cd /workspace && sed -n '2340,2420p' lib/client/api.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-3",
+    "input": {
+      "command": "go test ./lib/kube/kubeconfig -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-4",
+    "input": {
+      "command": "go test ./lib/kube/kubeconfig -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_2UBxhfJKebbRq1AjhLtn2460",
+    "input": {
+      "command": "go vet ./tool/tsh/ 2>&1 | head -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_h0qGUQNJKEGBQ7uUd4Sp9258",
+    "input": {
+      "command": "ulimit -u 4096 2>/dev/null; GOMAXPROCS=1 GOFLAGS=-p=1 go build ./tool/tsh/ 2>&1 | head -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_yxfnrmy2l3zSLLBUH3KH2129",
+    "input": {
+      "command": "GOFLAGS=-p=1 go build ./tool/tsh 2>&1 | head -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_eF4u4OVNtdGPaBi23UFs2706",
+    "input": {
+      "command": "GOFLAGS=-p=1 go vet ./tool/tsh 2>&1 | tail -30",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_AgaNi7KqtChfqQWEnEKa1464",
+    "input": {
+      "command": "gofmt -l tool/tsh/kube.go tool/tsh/tsh.go lib/kube/kubeconfig/kubeconfig.go",
+      "timeout": 60,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Ba41ZjR6RXF5NC8zW8Bl4678",
+    "input": {
+      "command": "env GOMAXPROCS=1 GOFLAGS=-p=1 go build ./tool/tsh 2>&1 | tail -30",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_UQcUW90fNt2qlhziXDrv3068",
+    "input": {
+      "command": "go build ./tool/tsh 2>&1 | tail -20",
+      "timeout": 120
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  }
+]

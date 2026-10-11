@@ -1,0 +1,23 @@
+Running selected tests: TestErrorUnaryInterceptor
+=== RUN   TestErrorUnaryInterceptor
+=== RUN   TestErrorUnaryInterceptor/not_found_error
+=== RUN   TestErrorUnaryInterceptor/deadline_exceeded_error
+=== RUN   TestErrorUnaryInterceptor/context_cancelled_error
+=== RUN   TestErrorUnaryInterceptor/invalid_error
+=== RUN   TestErrorUnaryInterceptor/invalid_field
+=== RUN   TestErrorUnaryInterceptor/empty_field
+=== RUN   TestErrorUnaryInterceptor/unauthenticated_error
+=== RUN   TestErrorUnaryInterceptor/other_error
+=== RUN   TestErrorUnaryInterceptor/no_error
+--- PASS: TestErrorUnaryInterceptor (0.00s)
+    --- PASS: TestErrorUnaryInterceptor/not_found_error (0.00s)
+    --- PASS: TestErrorUnaryInterceptor/deadline_exceeded_error (0.00s)
+    --- PASS: TestErrorUnaryInterceptor/context_cancelled_error (0.00s)
+    --- PASS: TestErrorUnaryInterceptor/invalid_error (0.00s)
+    --- PASS: TestErrorUnaryInterceptor/invalid_field (0.00s)
+    --- PASS: TestErrorUnaryInterceptor/empty_field (0.00s)
+    --- PASS: TestErrorUnaryInterceptor/unauthenticated_error (0.00s)
+    --- PASS: TestErrorUnaryInterceptor/other_error (0.00s)
+    --- PASS: TestErrorUnaryInterceptor/no_error (0.00s)
+PASS
+ok  	go.flipt.io/flipt/internal/server/middleware/grpc	0.005s

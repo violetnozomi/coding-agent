@@ -1,0 +1,7 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-07/container-evidence.tar.gz",
+  "sha256": "58fca362746966bab3c7f984fd8e179bece006602cf2560882bc8996bf695d9e",
+  "bytes": 38173285,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/archives/batch3-instance_tutao__tutanota-51818218c6ae33de00cbea3a4d30daac8c34142e-vc4e41fd0029957297843cb9dec4a25c7c756f029",
+  "retains_raw_container_session_and_artifacts": true
+}

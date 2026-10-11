@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "TestConstructorWebhookTemplate",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestExecuter_JSON_Failure",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestExecuter_Execute",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestExecuter_Execute_toJson_valid_Json",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestLeveledLogger",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestConstructorWebhookClient",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestWebhookClient",
+      "status": "PASSED"
+    }
+  ]
+}

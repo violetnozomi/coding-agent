@@ -1,0 +1,7 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/live/b3-06/container-evidence.tar.gz",
+  "sha256": "38becfec6b7213b54b61f5ca17489b3844748a9679ad7aac454cc78b1ce4e25d",
+  "bytes": 21027542,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/archives/batch3-instance_flipt-io__flipt-8bd3604dc54b681f1f0f7dd52cbc70b3024184b6",
+  "retains_raw_container_session_and_artifacts": true
+}

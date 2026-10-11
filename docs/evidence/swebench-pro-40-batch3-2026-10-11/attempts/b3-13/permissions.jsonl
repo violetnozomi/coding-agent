@@ -1,0 +1,14 @@
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la && git log --oneline -5 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go test ./lib/sshutils/x11/... 2>&1 | tail -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace/lib/sshutils/x11 && go test ./... 2>&1 | tail -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "go version", "timeout": 30}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./lib/sshutils/x11/... 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -count=1 -run 'TestDisplaySocket|TestUnixSocketAbsolutePath|TestUnixSocketAbsolutePathMissing|TestParseDisplay' ./lib/sshutils/x11/ 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff --stat && echo \"---\" && git diff lib/sshutils/x11/display_test.go | head -80", "timeout": 30, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -count=1 -run 'TestDisplaySocket|TestUnixSocketAbsolutePath|TestUnixSocketAbsolutePathMissing' ./lib/sshutils/x11/ 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -l lib/sshutils/x11/display.go lib/sshutils/x11/display_test.go; go vet ./lib/sshutils/x11/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "gofmt -l lib/sshutils/x11/display.go lib/sshutils/x11/display_test.go && echo \"gofmt clean\"", "timeout": 60, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "gofmt -l lib/sshutils/x11/display.go lib/sshutils/x11/display_test.go", "timeout": 60, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git diff lib/sshutils/x11/display.go", "timeout": 30, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -count=1 -run 'TestDisplaySocket|TestUnixSocketAbsolutePath|TestUnixSocketAbsolutePathMissing|TestGetXDisplay|TestX11Socket|TestListen|TestDial' -v ./lib/sshutils/x11/ 2>&1 | tail -60", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./lib/sshutils/x11 -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}

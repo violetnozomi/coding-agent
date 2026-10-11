@@ -1,0 +1,71 @@
+Running selected tests: TestDisplay TestDisplay/unix_socket_full_path
+{"Time":"2026-10-11T16:37:49.823551323Z","Action":"start","Package":"github.com/gravitational/teleport/lib/sshutils/x11"}
+{"Time":"2026-10-11T16:37:49.838766777Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Output":"-test.shuffle 1791736669838717381\n"}
+{"Time":"2026-10-11T16:37:49.838857828Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay"}
+{"Time":"2026-10-11T16:37:49.838863469Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay","Output":"=== RUN   TestDisplay\n"}
+{"Time":"2026-10-11T16:37:49.838879958Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay","Output":"=== PAUSE TestDisplay\n"}
+{"Time":"2026-10-11T16:37:49.838883543Z","Action":"pause","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay"}
+{"Time":"2026-10-11T16:37:49.838898838Z","Action":"cont","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay"}
+{"Time":"2026-10-11T16:37:49.838902091Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay","Output":"=== CONT  TestDisplay\n"}
+{"Time":"2026-10-11T16:37:49.838931858Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket"}
+{"Time":"2026-10-11T16:37:49.838936673Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket","Output":"=== RUN   TestDisplay/unix_socket\n"}
+{"Time":"2026-10-11T16:37:49.83902519Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket","Output":"--- PASS: TestDisplay/unix_socket (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.83903119Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.839050475Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket#01"}
+{"Time":"2026-10-11T16:37:49.839053814Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket#01","Output":"=== RUN   TestDisplay/unix_socket#01\n"}
+{"Time":"2026-10-11T16:37:49.83909558Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket#01","Output":"--- PASS: TestDisplay/unix_socket#01 (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.839100518Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket#01","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.839115607Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket#02"}
+{"Time":"2026-10-11T16:37:49.839118665Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket#02","Output":"=== RUN   TestDisplay/unix_socket#02\n"}
+{"Time":"2026-10-11T16:37:49.878235389Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket#02","Output":"--- PASS: TestDisplay/unix_socket#02 (0.04s)\n"}
+{"Time":"2026-10-11T16:37:49.878253986Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket#02","Elapsed":0.04}
+{"Time":"2026-10-11T16:37:49.878263492Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket_with_screen_number"}
+{"Time":"2026-10-11T16:37:49.878265182Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket_with_screen_number","Output":"=== RUN   TestDisplay/unix_socket_with_screen_number\n"}
+{"Time":"2026-10-11T16:37:49.88069185Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket_with_screen_number","Output":"--- PASS: TestDisplay/unix_socket_with_screen_number (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.880706531Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket_with_screen_number","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.880719014Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/localhost"}
+{"Time":"2026-10-11T16:37:49.880721763Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/localhost","Output":"=== RUN   TestDisplay/localhost\n"}
+{"Time":"2026-10-11T16:37:49.880865865Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/localhost","Output":"--- PASS: TestDisplay/localhost (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.880872686Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/localhost","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.880883233Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/some_ip_address"}
+{"Time":"2026-10-11T16:37:49.88088442Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/some_ip_address","Output":"=== RUN   TestDisplay/some_ip_address\n"}
+{"Time":"2026-10-11T16:37:49.880925419Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/some_ip_address","Output":"--- PASS: TestDisplay/some_ip_address (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.880940062Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/some_ip_address","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.880948481Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_ip_address"}
+{"Time":"2026-10-11T16:37:49.880949674Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_ip_address","Output":"=== RUN   TestDisplay/invalid_ip_address\n"}
+{"Time":"2026-10-11T16:37:49.881005112Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_ip_address","Output":"--- PASS: TestDisplay/invalid_ip_address (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.881011936Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_ip_address","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.881019965Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/empty"}
+{"Time":"2026-10-11T16:37:49.881020991Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/empty","Output":"=== RUN   TestDisplay/empty\n"}
+{"Time":"2026-10-11T16:37:49.881050786Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/empty","Output":"--- PASS: TestDisplay/empty (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.881056714Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/empty","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.881068623Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/no_display_number"}
+{"Time":"2026-10-11T16:37:49.881069695Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/no_display_number","Output":"=== RUN   TestDisplay/no_display_number\n"}
+{"Time":"2026-10-11T16:37:49.881095405Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/no_display_number","Output":"--- PASS: TestDisplay/no_display_number (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.88110216Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/no_display_number","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.881111648Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/negative_display_number"}
+{"Time":"2026-10-11T16:37:49.881114132Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/negative_display_number","Output":"=== RUN   TestDisplay/negative_display_number\n"}
+{"Time":"2026-10-11T16:37:49.881138826Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/negative_display_number","Output":"--- PASS: TestDisplay/negative_display_number (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.881145266Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/negative_display_number","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.881157176Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/negative_screen_number"}
+{"Time":"2026-10-11T16:37:49.881158255Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/negative_screen_number","Output":"=== RUN   TestDisplay/negative_screen_number\n"}
+{"Time":"2026-10-11T16:37:49.881181075Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/negative_screen_number","Output":"--- PASS: TestDisplay/negative_screen_number (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.881187488Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/negative_screen_number","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.881196345Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_characters"}
+{"Time":"2026-10-11T16:37:49.881197668Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_characters","Output":"=== RUN   TestDisplay/invalid_characters\n"}
+{"Time":"2026-10-11T16:37:49.881221565Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_characters","Output":"--- PASS: TestDisplay/invalid_characters (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.881226454Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_characters","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.881233925Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_unix_socket"}
+{"Time":"2026-10-11T16:37:49.881235224Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_unix_socket","Output":"=== RUN   TestDisplay/invalid_unix_socket\n"}
+{"Time":"2026-10-11T16:37:49.88125825Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_unix_socket","Output":"--- PASS: TestDisplay/invalid_unix_socket (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.88126603Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/invalid_unix_socket","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.881278855Z","Action":"run","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket_full_path"}
+{"Time":"2026-10-11T16:37:49.88128019Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket_full_path","Output":"=== RUN   TestDisplay/unix_socket_full_path\n"}
+{"Time":"2026-10-11T16:37:49.88136144Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket_full_path","Output":"--- PASS: TestDisplay/unix_socket_full_path (0.00s)\n"}
+{"Time":"2026-10-11T16:37:49.881369155Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay/unix_socket_full_path","Elapsed":0}
+{"Time":"2026-10-11T16:37:49.881380581Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay","Output":"--- PASS: TestDisplay (0.04s)\n"}
+{"Time":"2026-10-11T16:37:49.88139983Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Test":"TestDisplay","Elapsed":0.04}
+{"Time":"2026-10-11T16:37:49.881402224Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Output":"PASS\n"}
+{"Time":"2026-10-11T16:37:49.882101428Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Output":"coverage: 21.1% of statements\n"}
+{"Time":"2026-10-11T16:37:50.884211115Z","Action":"output","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Output":"ok  \tgithub.com/gravitational/teleport/lib/sshutils/x11\t1.059s\tcoverage: 21.1% of statements\n"}
+{"Time":"2026-10-11T16:37:50.884240021Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/sshutils/x11","Elapsed":1.061}

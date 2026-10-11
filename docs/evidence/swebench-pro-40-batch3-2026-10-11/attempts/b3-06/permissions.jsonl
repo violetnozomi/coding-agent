@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace && cat /workspace/go.mod 2>/dev/null | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"go-retryablehttp\" go.mod && grep -rn \"audit/webhook\\|audit/template\" internal/config/ | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"go-retryablehttp\" go.mod go.sum | head; ls $(go env GOMODCACHE)/github.com/hashicorp/ 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go env GOMODCACHE GOFLAGS"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go version"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go env GOMODCACHE", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "head -20 internal/server/audit/audit.go; echo ---; go doc github.com/hashicorp/go-retryablehttp LeveledLogger; echo ---; go doc github.com/hashicorp/go-retryablehttp Client | head -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git log --oneline -5; echo ---; git status --short | head", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/cmd -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "targeted", "command": "GOMAXPROCS=2 go vet -p 1 ./internal/server/audit/template/... 2>&1 | tail -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build -p 2 ./internal/server/audit/... 2>&1 | tail -30", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 ./internal/server/audit/template/... ./internal/server/audit/webhook/... 2>&1 | tail -40", "timeout": 180}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -run 'TestNewLeveledLogger|TestLeveledLogger|TestConstructorWebhookTemplate|TestExecuter' ./internal/server/audit/template/ 2>&1 | tail -40", "timeout": 180}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 -run 'TestNewLeveledLogger|TestLeveledLogger|TestConstructorWebhookTemplate|TestExecuter' ./internal/server/audit/template/ 2>&1 | tail -40", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 -run 'TestConstructorWebhookClient|TestSendAudit' ./internal/server/audit/webhook/ 2>&1 | tail -40", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build -p 1 ./... 2>&1 | tail -20", "timeout": 120}, "allowed": true}

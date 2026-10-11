@@ -1,0 +1,69 @@
+[
+  {
+    "tool_call_id": "call_00_6xx2BKfz91VKfgUWhZh77810",
+    "input": {
+      "command": "pwd; ls; echo \"---\"; ls /app 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_NPCS6OWcVSKKXECBjNYI8060",
+    "input": {
+      "command": "find . -name \"*wikidata*\" -not -path \"./node_modules/*\" 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Btj4F3xmxaylTHGczAnP3916",
+    "input": {
+      "command": "cd /workspace && python -m pytest openlibrary/tests/core/test_wikidata.py -q 2>&1 | tail -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_DCohj3NFqyiV95l1n37d3934",
+    "input": {
+      "command": "python -c \"import sys; print(sys.version)\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "3.12.2 (main, Mar 12 2024, 11:13:18) [GCC 12.2.0]"
+  },
+  {
+    "tool_call_id": "call_00_ET_r81cCV5ifMO3uS9fkkcO4826",
+    "input": {
+      "command": "python -m pytest openlibrary/tests/core/test_wikidata.py -q 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "...........                                                              [100%]\n=============================== warnings summary ===============================\n../usr/local/lib/python3.12/site-packages/babel/messages/checkers.py:160\n  /usr/local/lib/python3.12/site-packages/babel/messages/checkers.py:160: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html\n    from pkg_resources import working_set\n\n../usr/local/lib/python3.12/site-packages/genshi/compat.py:141\n  /usr/local/lib/python3.12/site-packages/genshi/compat.py:141: DeprecationWarning: ast.Ellipsis is deprecated and will be removed in Python 3.14; use ast.Constant instead\n    _ast_Ellipsis = ast.Ellipsis\n\n../usr/local/lib/python3.12/site-packages/genshi/compat.py:142\n  /usr/local/lib/python3.12/site-packages/genshi/compat.py:142: DeprecationWarning: ast.Str is deprecated and will be removed in Python 3.14; use ast.Constant instead\n    _ast_Str = ast.Str\n\n../usr/local/lib/python3.12/site-packages/dateutil/tz/tz.py:37\n  /usr/local/lib/python3.12/site-packages/dateutil/tz/tz.py:37: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).\n    EPOCH = datetime.datetime.utcfromtimestamp(0)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n11 passed, 4 warnings in 0.05s"
+  },
+  {
+    "tool_call_id": "call_00_O7Ij4sZX4K2kUHOsxl9w3371",
+    "input": {
+      "command": "git -C /workspace diff --stat; git -C /workspace diff"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "openlibrary/core/wikidata.py            | 21 ++++++++++++++++++++-\n openlibrary/tests/core/test_wikidata.py | 33 +++++++++++++++++++++++++++++++++\n 2 files changed, 53 insertions(+), 1 deletion(-)\ndiff --git a/openlibrary/core/wikidata.py b/openlibrary/core/wikidata.py\nindex c20e101b7..f44b6431c 100644\n--- a/openlibrary/core/wikidata.py\n+++ b/openlibrary/core/wikidata.py\n@@ -32,10 +32,29 @@ class WikidataEntity:\n     labels: dict[str, str]\n     descriptions: dict[str, str]\n     aliases: dict[str, list[str]]\n-    statements: dict[str, dict]\n+    statements: dict[str, list[dict]]\n     sitelinks: dict[str, dict]\n     _updated: datetime  # This is when we fetched the data, not when the entity was changed in Wikidata\n \n+    def get_statement_values(self, property_id: str) -> list[str]:\n+        \"\"\"\n+        Get all the string values found at ``value.content`` for the statements\n+        of a given property.\n+\n+        Preserves the order of the statements and skips any statement that is\n+        missing the nested ``value`` key or the ``content`` key inside it.\n+        Returns an empty list when the property is not present or no statement\n+        has a usable value.\n+        \"\"\"\n+        values = []\n+        for statement in self.statements.get(property_id, []):\n+            value = statement.get('value')\n+            if not isinstance(value, dict):\n+                continue\n+            if 'content' in value:\n+                values.append(value['content'])\n+        return values\n+\n     def get_description(self, language: str = 'en') -> str | None:\n         \"\"\"If a description isn't available in the requested language default to English\"\"\"\n         return self.descriptions.get(language) or self.descriptions.get('en')\ndiff --git a/openlibrary/tests/core/test_wikidata.py b/openlibrary/tests/core/test_wikidata.py\nindex e448c7d85..26d71f8a6 100644\n--- a/openlibrary/tests/core/test_wikidata.py\n+++ b/openlibrary/tests/core/test_wikidata.py\n@@ -77,6 +77,39 @@ def test_get_wikidata_entity(\n             mock_get_from_cache.assert_not_called()\n \n \n+def test_get_statement_values() -> None:\n+    entity = createWikidataEntity()\n+    entity.statements = {\n+        'P31': [\n+            {'value': {'content': 'Q5'}},\n+            {'value': {'content': 'Q6'}},\n+        ],\n+        'P106': [\n+            {'value': {'content': 'Q1'}},\n+            {'value': {}},\n+            {'no_value_key': {}},\n+            {'value': {'content': 'Q2'}},\n+        ],\n+    }\n+\n+    # Preserves original order\n+    assert entity.get_statement_values('P31') == ['Q5', 'Q6']\n+    # Skips malformed statements, preserving order of the valid ones\n+    assert entity.get_statement_values('P106') == ['Q1', 'Q2']\n+\n+\n+def test_get_statement_values_missing_property() -> None:\n+    entity = createWikidataEntity()\n+    entity.statements = {}\n+    assert entity.get_statement_values('P31') == []\n+\n+\n+def test_get_statement_values_no_usable_value() -> None:\n+    entity = createWikidataEntity()\n+    entity.statements = {'P31': [{'value': {}}, {'no_value_key': {}}]}\n+    assert entity.get_statement_values('P31') == []\n+\n+\n def test_get_wikipedia_link() -> None:\n     # Create entity with both English and Spanish Wikipedia links\n     entity = createWikidataEntity()"
+  }
+]

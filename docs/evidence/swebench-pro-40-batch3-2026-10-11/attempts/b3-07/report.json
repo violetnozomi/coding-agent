@@ -1,0 +1,13 @@
+{
+  "number": 7,
+  "instance_id": "instance_tutao__tutanota-51818218c6ae33de00cbea3a4d30daac8c34142e-vc4e41fd0029957297843cb9dec4a25c7c756f029",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": false,
+  "agent_started_epoch": 1791734527.2876663,
+  "agent_finished_epoch": 1791735557.77182,
+  "status": "attempted",
+  "patch_sha256": "f053cdf33ae5237f3690181efedbc13c511e52373e216e6c9993157dafa24bdc",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

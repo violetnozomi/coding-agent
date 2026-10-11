@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "ls /workspace && cat /workspace/package.json 2>/dev/null | head -50"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 2>/dev/null && git status --short 2>/dev/null | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,80p' src/native/common/FileApp.ts | grep -n \"DownloadTaskResponse\" -A 12"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls test/client/desktop/ && grep -rn \"downloadNative\\|executeRequest\\|net.request\" test/client/desktop/ | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"desktop\" test/package.json 2>/dev/null; ls test; cat test/*.json 2>/dev/null | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"\\.download(\" src/ | grep -v node_modules | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"DownloadTaskResponse\\|downloadNative\\|encryptedFileUri\" src/ | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat tsconfig.json && cat tsconfig_common.json && cat test/tsconfig.json"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,60p' test/client/bootstrapTests-client.ts 2>/dev/null; echo ---; ls test/client | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && node -e \"console.log(require('./node_modules/@types/node/package.json').version)\" && grep -n \"class WriteStream\" -A 6 node_modules/@types/node/fs.d.ts | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"close(\" node_modules/@types/node/fs.d.ts | head -20; echo \"--- writable\"; grep -n \"close(\" node_modules/@types/node/stream.d.ts | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hello"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && ls -a | head -30; echo \"---build---\"; ls build 2>/dev/null | head; echo \"---git---\"; ls .git 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git diff --stat 2>&1 | tail -5; echo \"===\"; git rev-parse --short HEAD 2>&1"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git status --porcelain 2>&1 | head -20; echo \"===\"; git diff --stat 2>&1 | tail -10"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat packages/tutanota-test-utils/lib/TestUtils.ts 2>/dev/null | sed -n '1,60p'; echo \"=== ospec spy ===\"; sed -n '1,80p' node_modules/ospec/ospec.js | grep -n \"spy\" -A 20 | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && timeout 110 npx tsc --noEmit -p tsconfig.json 2>&1 | grep -E \"Desktop(DownloadManager|NetworkClient)\" | head -20; echo \"EXIT_DONE\"", "timeout": 115}, "allowed": false}

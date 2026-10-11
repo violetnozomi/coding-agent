@@ -1,0 +1,79 @@
+diff --git a/openlibrary/core/wikidata.py b/openlibrary/core/wikidata.py
+index c20e101b7..f44b6431c 100644
+--- a/openlibrary/core/wikidata.py
++++ b/openlibrary/core/wikidata.py
+@@ -32,10 +32,29 @@ class WikidataEntity:
+     labels: dict[str, str]
+     descriptions: dict[str, str]
+     aliases: dict[str, list[str]]
+-    statements: dict[str, dict]
++    statements: dict[str, list[dict]]
+     sitelinks: dict[str, dict]
+     _updated: datetime  # This is when we fetched the data, not when the entity was changed in Wikidata
+ 
++    def get_statement_values(self, property_id: str) -> list[str]:
++        """
++        Get all the string values found at ``value.content`` for the statements
++        of a given property.
++
++        Preserves the order of the statements and skips any statement that is
++        missing the nested ``value`` key or the ``content`` key inside it.
++        Returns an empty list when the property is not present or no statement
++        has a usable value.
++        """
++        values = []
++        for statement in self.statements.get(property_id, []):
++            value = statement.get('value')
++            if not isinstance(value, dict):
++                continue
++            if 'content' in value:
++                values.append(value['content'])
++        return values
++
+     def get_description(self, language: str = 'en') -> str | None:
+         """If a description isn't available in the requested language default to English"""
+         return self.descriptions.get(language) or self.descriptions.get('en')
+diff --git a/openlibrary/tests/core/test_wikidata.py b/openlibrary/tests/core/test_wikidata.py
+index e448c7d85..26d71f8a6 100644
+--- a/openlibrary/tests/core/test_wikidata.py
++++ b/openlibrary/tests/core/test_wikidata.py
+@@ -77,6 +77,39 @@ def test_get_wikidata_entity(
+             mock_get_from_cache.assert_not_called()
+ 
+ 
++def test_get_statement_values() -> None:
++    entity = createWikidataEntity()
++    entity.statements = {
++        'P31': [
++            {'value': {'content': 'Q5'}},
++            {'value': {'content': 'Q6'}},
++        ],
++        'P106': [
++            {'value': {'content': 'Q1'}},
++            {'value': {}},
++            {'no_value_key': {}},
++            {'value': {'content': 'Q2'}},
++        ],
++    }
++
++    # Preserves original order
++    assert entity.get_statement_values('P31') == ['Q5', 'Q6']
++    # Skips malformed statements, preserving order of the valid ones
++    assert entity.get_statement_values('P106') == ['Q1', 'Q2']
++
++
++def test_get_statement_values_missing_property() -> None:
++    entity = createWikidataEntity()
++    entity.statements = {}
++    assert entity.get_statement_values('P31') == []
++
++
++def test_get_statement_values_no_usable_value() -> None:
++    entity = createWikidataEntity()
++    entity.statements = {'P31': [{'value': {}}, {'no_value_key': {}}]}
++    assert entity.get_statement_values('P31') == []
++
++
+ def test_get_wikipedia_link() -> None:
+     # Create entity with both English and Spanish Wikipedia links
+     entity = createWikidataEntity()

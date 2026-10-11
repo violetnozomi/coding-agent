@@ -1,0 +1,73 @@
+diff --git a/lib/sshutils/x11/display.go b/lib/sshutils/x11/display.go
+index 2fd6f6655..62849e75b 100644
+--- a/lib/sshutils/x11/display.go
++++ b/lib/sshutils/x11/display.go
+@@ -124,6 +124,18 @@ func (d *Display) unixSocket() (*net.UnixAddr, error) {
+ 		sockName := filepath.Join(x11SockDir(), fmt.Sprintf("X%d", d.DisplayNumber))
+ 		return net.ResolveUnixAddr("unix", sockName)
+ 	}
++
++	// Some X servers (such as XQuartz on macOS) use a unix socket located at an
++	// arbitrary path rather than the standard /tmp/.X11-unix directory. In that
++	// case $DISPLAY is set to "<socket_path>:<display_number>". If HostName is an
++	// absolute path and a matching socket exists on the filesystem, use it.
++	if strings.HasPrefix(d.HostName, "/") {
++		sockName := fmt.Sprintf("%s:%d", d.HostName, d.DisplayNumber)
++		if _, err := os.Stat(sockName); err == nil {
++			return net.ResolveUnixAddr("unix", sockName)
++		}
++	}
++
+ 	return nil, trace.BadParameter("display is not a unix socket")
+ }
+ 
+@@ -134,6 +146,12 @@ func (d *Display) tcpSocket() (*net.TCPAddr, error) {
+ 		return nil, trace.BadParameter("hostname can't be empty for an XServer tcp socket")
+ 	}
+ 
++	// A HostName beginning with "/" denotes a unix socket path, not a network
++	// host, so a tcp socket cannot be resolved for it.
++	if strings.HasPrefix(d.HostName, "/") {
++		return nil, trace.BadParameter("hostname can't be an absolute path for an XServer tcp socket")
++	}
++
+ 	port := fmt.Sprint(d.DisplayNumber + x11BasePort)
+ 	rawAddr := net.JoinHostPort(d.HostName, port)
+ 	addr, err := net.ResolveTCPAddr("tcp", rawAddr)
+diff --git a/lib/sshutils/x11/display_test.go b/lib/sshutils/x11/display_test.go
+index d28edb551..85b8e9832 100644
+--- a/lib/sshutils/x11/display_test.go
++++ b/lib/sshutils/x11/display_test.go
+@@ -172,3 +172,32 @@ func TestDisplaySocket(t *testing.T) {
+ 		})
+ 	}
+ }
++
++func TestUnixSocketAbsolutePath(t *testing.T) {
++	t.Parallel()
++
++	// XQuartz on macOS places the X11 unix socket at an arbitrary absolute
++	// path and sets DISPLAY to "<socket_path>:<display_number>".
++	sockDir := t.TempDir()
++	sockPath := filepath.Join(sockDir, "org.xquartz")
++	require.NoError(t, os.WriteFile(sockPath+":0", []byte{}, 0o600))
++
++	display := Display{HostName: sockPath, DisplayNumber: 0}
++	unixSock, err := display.unixSocket()
++	require.NoError(t, err)
++	require.Equal(t, sockPath+":0", unixSock.String())
++
++	// A tcp socket must never be resolved for an absolute path.
++	_, err = display.tcpSocket()
++	require.Error(t, err)
++}
++
++func TestUnixSocketAbsolutePathMissing(t *testing.T) {
++	t.Parallel()
++
++	// An absolute path which does not exist on the filesystem must not be
++	// resolved as a unix socket.
++	display := Display{HostName: filepath.Join(t.TempDir(), "org.xquartz"), DisplayNumber: 0}
++	_, err := display.unixSocket()
++	require.Error(t, err)
++}

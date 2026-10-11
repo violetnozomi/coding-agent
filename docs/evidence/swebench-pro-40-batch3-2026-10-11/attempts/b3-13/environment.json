@@ -1,0 +1,14 @@
+{
+  "source_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:993987ec9e2fcd7bff38ea0b0129b6a36d0df10992c31bd89d8795d0d5e5ffa6",
+  "source_image_id": "sha256:21ad41cc6319387fd5d84eebf81afa4c50b1b136e1343271205e6847712bf669",
+  "project_python": "3.12.10",
+  "agent_wheel_platforms": [
+    "musllinux_1_2_x86_64",
+    "musllinux_1_1_x86_64",
+    "musllinux_1_0_x86_64"
+  ],
+  "source_size_bytes": 4813752534,
+  "source_created_for_this_round": true,
+  "agent_image": "nz-pro20-b3-13:20261011",
+  "agent_image_id": "sha256:e1c8c7ad87fa898f192f87972d27fbebb8f3d4bf1741d5093903c3b47803c489"
+}

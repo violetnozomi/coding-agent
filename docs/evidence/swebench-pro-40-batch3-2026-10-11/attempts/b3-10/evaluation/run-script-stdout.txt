@@ -1,0 +1,29 @@
+Running selected tests: tests/end2end/fixtures/webserver_sub.py tests/unit/browser/test_shared.py
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-7.1.2, pluggy-1.0.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+benchmark: 3.4.1 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+PyQt5 5.15.7 -- Qt runtime 5.15.2 -- Qt compiled 5.15.2
+hypothesis profile 'default' -> deadline=timedelta(milliseconds=600), suppress_health_check=[HealthCheck.function_scoped_fixture], database=DirectoryBasedExampleDatabase('/app/.hypothesis/examples')
+backend: QtWebEngine 5.15.2, based on Chromium 83.0.4103.122 (from ELF)
+rootdir: /app, configfile: pytest.ini
+plugins: repeat-0.9.1, forked-1.4.0, rerunfailures-10.2, benchmark-3.4.1, instafail-0.4.2, xvfb-2.0.0, xdist-2.5.0, anyio-4.10.0, qt-4.1.0, mock-3.8.2, bdd-6.0.1, cov-3.0.0, hypothesis-6.54.1
+collecting ... collected 13 items
+
+tests/unit/browser/test_shared.py::test_custom_headers[True-None-custom_headers0-expected0] PASSED [  7%]
+tests/unit/browser/test_shared.py::test_custom_headers[False-None-custom_headers1-expected1] PASSED [ 15%]
+tests/unit/browser/test_shared.py::test_custom_headers[None-None-custom_headers2-expected2] PASSED [ 23%]
+tests/unit/browser/test_shared.py::test_custom_headers[False-de, en-custom_headers3-expected3] PASSED [ 30%]
+tests/unit/browser/test_shared.py::test_custom_headers[False-None-custom_headers4-expected4] PASSED [ 38%]
+tests/unit/browser/test_shared.py::test_custom_headers[False-de, en-custom_headers5-expected5] PASSED [ 46%]
+tests/unit/browser/test_shared.py::test_js_log_to_ui[levels_setting0-excludes_setting0-JsLogLevel.error-qute:test-msg-False-None] PASSED [ 53%]
+tests/unit/browser/test_shared.py::test_js_log_to_ui[levels_setting1-excludes_setting1-JsLogLevel.error-qute:bla-msg-True-MessageLevel.error] PASSED [ 61%]
+tests/unit/browser/test_shared.py::test_js_log_to_ui[levels_setting2-excludes_setting2-JsLogLevel.error-qute:bla-notfiltered-True-MessageLevel.error] PASSED [ 69%]
+tests/unit/browser/test_shared.py::test_js_log_to_ui[levels_setting3-excludes_setting3-JsLogLevel.error-qute:bla-filtered-False-None] PASSED [ 76%]
+tests/unit/browser/test_shared.py::test_js_log_to_ui[levels_setting4-excludes_setting4-JsLogLevel.error-qute:bla-msg-True-MessageLevel.error] PASSED [ 84%]
+tests/unit/browser/test_shared.py::test_js_log_to_ui[levels_setting5-excludes_setting5-JsLogLevel.info-qute:bla-msg-False-None] PASSED [ 92%]
+tests/unit/browser/test_shared.py::test_js_log_to_ui[levels_setting6-excludes_setting6-JsLogLevel.info-qute:bla-msg-True-MessageLevel.info] PASSED [100%]
+
+============================== 13 passed in 0.29s ==============================
+XIO:  fatal IO error 0 (Success) on X server ":0"
+      after 32 requests (32 known processed) with 0 events remaining.

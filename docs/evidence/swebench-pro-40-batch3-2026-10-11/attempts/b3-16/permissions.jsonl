@@ -1,0 +1,8 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./scanner/ -run TestViaHTTP -v 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off ./scanner/ -run TestViaHTTP -v 2>&1 | tail -10", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build ./scanner/ && go test -vet=off ./scanner/ -run TestViaHTTP 2>&1 | tail -5", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./scanner/ -run TestViaHTTP 2>&1 | tail -5", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off ./scanner/... 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off ./scanner/ -run TestViaHTTP -count=1 -v 2>&1 | tail -10", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git --no-pager diff", "workdir": "/workspace"}, "allowed": true}
