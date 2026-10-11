@@ -19,12 +19,17 @@
 
 官方 [总说明](https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/README.md) 区分 V1 与 V2；[V2 流程](https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/README.md) 使用 Harbor 任务、隔离推理及新沙箱补丁复评。V1 脚本不是 V2 评分入口。
 
-- Pro 版本及 20 题固定名单：尚未冻结，已向用户询问 V2/V1。
-- 本轮 20 题总费用授权：尚未提供金额与币种，历史预算不沿用。
+- Pro 版本：用户已选择 **V2 公开集**。[20 题名单](selected-ids.txt) 按公开任务 ID 的固定哈希顺序抽样，不参考答案、难度字段或成绩。
+- 本轮 20 题总费用授权：用户回复 **“50元，deepseek-flash”**，即人民币 50 元，包含主模型及全部辅助调用。按用户明确请求名 `deepseek-flash` 记录，不沿用历史预算。尚未发送模型请求。
 - 模型与单题请求、时间、输出上限：尚未冻结。
 - 本机 Harbor：未安装；已有 swebench/datasets 不等于 Pro 评分环境已就绪。
-- 本机可用磁盘：检查时 `1,842,569,216` 字节，约 1.72 GiB。尚未确认能容纳任务镜像和完整记录；不删除历史证据或用户数据腾空间。
-- 本次新增付费请求：0。尚无已选题目或官方评分结果。
+- 本机可用磁盘：初查 `1,842,569,216` 字节，随后仅约 130 MiB。[首题镜像核验](image-preflight.json) 只读取匿名注册表 manifest：压缩层合计 `971,831,312` 字节，超过当时可用空间，未拉取镜像。解压、运行及完整记录还需要额外空间。
+- 当前状态：**blocked: insufficient_persistent_storage**。用户授权只读盘点 `pyh` 目录；未删除缓存、历史证据或用户文件。目录盘点保留在私有证据位置，不公开无关项目路径。
+- 本次新增付费请求：0。20 题均为 `not_run`，官方 resolved 为 `null`；这不是 20 次失败或 20 次尝试。
+
+[任务 manifest](task-manifest.json) 与 [SHA-256](task-manifest.sha256) 保存固定题目、配置和题面哈希。20 份公开题面及 `task.toml` 原件留存于受控目录 `/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-2026-10-11/public-tasks`，均逐文件核对固定提交的官方 `v2/SHA256SUMS`。没有下载答案或隐藏验证正文。
+
+官方 API 目录查询遇到 403 限流；改用官方校验和文件。raw 文件直连超时后，仅下载命令使用已有代理。镜像 manifest 经直连获取。上述准备网络请求不是模型调用。
 
 ## 每题必须保留的证据
 
