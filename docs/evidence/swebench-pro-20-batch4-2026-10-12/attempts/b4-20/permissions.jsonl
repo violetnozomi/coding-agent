@@ -1,0 +1,19 @@
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la && cat package.json | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 2>/dev/null; echo \"---\"; ls src/posts/ 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,60p' src/posts/index.js"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls src/posts/ && echo \"---INDEX---\" && cat src/posts/index.js"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '35,60p' install/data/defaults.json && echo \"=== lang ===\" && cat public/language/en-GB/admin/settings/uploads.json"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"require('../meta')\" src/posts/ | head; echo \"---\"; grep -rn \"meta.config\" src/posts/*.js | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls test/posts/ | head -40; echo \"---\"; cat test/mocks/databasemock.js | grep -n \"upload_path\\|upload_url\" | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "node --version"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git log --oneline -5"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"orphan\" --include=*.js --include=*.tpl --include=*.json src/ install/ test/ public/language/en-GB 2>/dev/null | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"upload_path\\b\" src/ --include=*.js | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat .mocharc* 2>/dev/null; echo \"---\"; cat config.json 2>/dev/null | head -30; echo \"--- redis?\"; (command -v redis-server && redis-cli ping) 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && head -40 config.json; echo \"===== mongo/redis status =====\"; (redis-cli ping 2>&1 | head -1); (mongosh --eval 'db.runCommand({ping:1})' 2>&1 | head -3) "}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && node -e \"const c=require('./config.json'); console.log(c.database, c.url, c.redis&&c.redis.host, c.mongo&&c.mongo.host)\" 2>&1 | head -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "node -e \"console.log(JSON.stringify(Object.keys(require('/workspace/config.json'))))\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace status --short"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && (redis-cli ping 2>&1 | head -2); echo \"exit=$?\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && node -e \"const c=require('./config.json'); console.log('db=',c.database)\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && cat config.json"}, "allowed": false}

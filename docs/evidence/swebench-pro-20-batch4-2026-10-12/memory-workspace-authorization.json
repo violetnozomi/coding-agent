@@ -1,0 +1,15 @@
+{
+  "authorized": true,
+  "authorization_text": "允许这两题使用临时内存工作区",
+  "numbers": [
+    9,
+    15
+  ],
+  "temporary_root": "/dev/shm/nz-pro-batch4-20261012",
+  "run_serially": true,
+  "persistent_evidence_root": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch4-2026-10-12",
+  "cleanup_only_after_raw_archive_receipt": true,
+  "cost_limit_cny": 50,
+  "additional_money_authorized": 0,
+  "epoch": 1791780906.506392
+}

@@ -1,0 +1,127 @@
+diff --git a/install/data/defaults.json b/install/data/defaults.json
+index 2eb0a15bb..623d018db 100644
+--- a/install/data/defaults.json
++++ b/install/data/defaults.json
+@@ -38,6 +38,7 @@
+     "registrationApprovalType": "normal",
+     "allowAccountDelete": 1,
+     "privateUploads": 0,
++    "preserveOrphanedUploads": 0,
+     "allowedFileExtensions": "png,jpg,bmp,txt",
+     "uploadRateLimitThreshold": 10,
+     "uploadRateLimitCooldown": 60,
+diff --git a/public/language/en-GB/admin/settings/uploads.json b/public/language/en-GB/admin/settings/uploads.json
+index ba9d012d8..8d94b9569 100644
+--- a/public/language/en-GB/admin/settings/uploads.json
++++ b/public/language/en-GB/admin/settings/uploads.json
+@@ -1,6 +1,7 @@
+ {
+ 	"posts": "Posts",
+ 	"private": "Make uploaded files private",
++	"preserve-orphaned-uploads": "Do not delete orphaned uploads when a post is purged",
+ 	"strip-exif-data": "Strip EXIF Data",
+ 	"private-extensions": "File extensions to make private",
+ 	"private-uploads-extensions-help": "Enter comma-separated list of file extensions to make private here (e.g. <code>pdf,xls,doc</code>). An empty list means all files are private.",
+diff --git a/public/language/en-US/admin/settings/uploads.json b/public/language/en-US/admin/settings/uploads.json
+index ba9d012d8..8d94b9569 100644
+--- a/public/language/en-US/admin/settings/uploads.json
++++ b/public/language/en-US/admin/settings/uploads.json
+@@ -1,6 +1,7 @@
+ {
+ 	"posts": "Posts",
+ 	"private": "Make uploaded files private",
++	"preserve-orphaned-uploads": "Do not delete orphaned uploads when a post is purged",
+ 	"strip-exif-data": "Strip EXIF Data",
+ 	"private-extensions": "File extensions to make private",
+ 	"private-uploads-extensions-help": "Enter comma-separated list of file extensions to make private here (e.g. <code>pdf,xls,doc</code>). An empty list means all files are private.",
+diff --git a/src/posts/delete.js b/src/posts/delete.js
+index 9cb26b286..99e6d4417 100644
+--- a/src/posts/delete.js
++++ b/src/posts/delete.js
+@@ -3,6 +3,7 @@
+ const _ = require('lodash');
+ 
+ const db = require('../database');
++const meta = require('../meta');
+ const topics = require('../topics');
+ const categories = require('../categories');
+ const user = require('../user');
+@@ -53,6 +54,11 @@ module.exports = function (Posts) {
+ 		const topicData = await topics.getTopicFields(postData.tid, ['tid', 'cid', 'pinned']);
+ 		postData.cid = topicData.cid;
+ 		await plugins.hooks.fire('filter:post.purge', { post: postData, pid: pid, uid: uid });
++
++		// Retrieve the list of uploads that were associated with this post before dissociating them,
++		// so that any uploads no longer referenced by another post can be removed from disk.
++		const uploads = await Posts.uploads.list(pid);
++
+ 		await Promise.all([
+ 			deletePostFromTopicUserNotification(postData, topicData),
+ 			deletePostFromCategoryRecentPosts(postData),
+@@ -63,11 +69,25 @@ module.exports = function (Posts) {
+ 			db.sortedSetsRemove(['posts:pid', 'posts:votes', 'posts:flagged'], pid),
+ 			Posts.uploads.dissociateAll(pid),
+ 		]);
++
++		if (!meta.config.preserveOrphanedUploads) {
++			const orphanedUploads = await filterOrphanedUploads(uploads);
++			await Posts.uploads.deleteFromDisk(orphanedUploads);
++		}
++
+ 		await flags.resolveFlag('post', pid, uid);
+ 		plugins.hooks.fire('action:post.purge', { post: postData, uid: uid });
+ 		await db.delete(`post:${pid}`);
+ 	};
+ 
++	async function filterOrphanedUploads(uploads) {
++		const orphanChecks = await Promise.all(uploads.map(async upload => ({
++			upload: upload,
++			isOrphan: await Posts.uploads.isOrphan(upload),
++		})));
++		return orphanChecks.filter(check => check.isOrphan).map(check => check.upload);
++	}
++
+ 	async function deletePostFromTopicUserNotification(postData, topicData) {
+ 		await db.sortedSetsRemove([
+ 			`tid:${postData.tid}:posts`,
+diff --git a/src/posts/uploads.js b/src/posts/uploads.js
+index 132a73fe1..934870f2f 100644
+--- a/src/posts/uploads.js
++++ b/src/posts/uploads.js
+@@ -128,6 +128,18 @@ module.exports = function (Posts) {
+ 		await Promise.all(current.map(async path => await Posts.uploads.dissociate(pid, path)));
+ 	};
+ 
++	Posts.uploads.deleteFromDisk = async function (filePaths) {
++		// Deletes the passed upload(s) from disk. Accepts a single path or an array of paths.
++		if (typeof filePaths === 'string') {
++			filePaths = [filePaths];
++		} else if (!Array.isArray(filePaths)) {
++			throw new Error(`[[error:wrong-parameter-type, filePaths, ${typeof filePaths}, array]]`);
++		}
++
++		filePaths = await _filterValidPaths(filePaths); // Only process files that exist and are within uploads directory
++		await Promise.all(filePaths.map(filePath => file.delete(_getFullPath(filePath))));
++	};
++
+ 	Posts.uploads.saveSize = async (filePaths) => {
+ 		filePaths = filePaths.filter((fileName) => {
+ 			const type = mime.getType(fileName);
+diff --git a/src/views/admin/settings/uploads.tpl b/src/views/admin/settings/uploads.tpl
+index 36edc6ff8..d82781581 100644
+--- a/src/views/admin/settings/uploads.tpl
++++ b/src/views/admin/settings/uploads.tpl
+@@ -13,6 +13,13 @@
+ 				</label>
+ 			</div>
+ 
++			<div class="checkbox">
++				<label class="mdl-switch mdl-js-switch mdl-js-ripple-effect">
++					<input class="mdl-switch__input" type="checkbox" data-field="preserveOrphanedUploads">
++					<span class="mdl-switch__label"><strong>[[admin/settings/uploads:preserve-orphaned-uploads]]</strong></span>
++				</label>
++			</div>
++
+ 			<div class="checkbox">
+ 				<label class="mdl-switch mdl-js-switch mdl-js-ripple-effect">
+ 					<input class="mdl-switch__input" type="checkbox" data-field="stripEXIFData">

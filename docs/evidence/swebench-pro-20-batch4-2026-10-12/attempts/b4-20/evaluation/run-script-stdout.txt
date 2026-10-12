@@ -1,0 +1,501 @@
+Running selected tests: test/posts/uploads.js
+PONG
+info: database config redis {"database":1,"host":"127.0.0.1","port":6379}
+info: environment development
+info: test_database flushed
+info: Populating database with default configs, if not already set...
+
+info: Giving default global privileges...
+
+info: Enabling default plugins
+
+info: [install/enableDefaultPlugins] activating default plugins {"0":"nodebb-plugin-dbsearch","1":"nodebb-widget-essentials"}
+info: [themes] Using theme nodebb-theme-persona
+info: [plugins] Plugins OK
+info: [api] Adding 0 route(s) to `api/v3/plugins`
+info: [router] Routes added
+info: NodeBB Ready
+info: Enabling 'trust proxy'
+info: NodeBB is now listening on: 0.0.0.0:4567
+error: [posts/uploads] Error while saving post upload sizes (abracadabra.png): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (shazam.jpg): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (whoa.gif): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (amazeballs.jpg): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (whoa.gif): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (amazeballs.jpg): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (test.bmp): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (abracadabra.png): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (test.bmp): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (abracadabra.png): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (test.bmp): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (test.bmp): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (abracadabra.png): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (abracadabra.png): Input file contains unsupported image format
+info: test_database flushed
+info: Populating database with default configs, if not already set...
+
+info: Giving default global privileges...
+
+info: Enabling default plugins
+
+info: [install/enableDefaultPlugins] activating default plugins {"0":"nodebb-plugin-dbsearch","1":"nodebb-widget-essentials"}
+error: [posts/uploads] Error while saving post upload sizes (abracadabra.png): Input file contains unsupported image format
+error: [posts/uploads] Error while saving post upload sizes (shazam.jpg): Input file contains unsupported image format
+info: test_database flushed
+info: Populating database with default configs, if not already set...
+
+info: Giving default global privileges...
+
+info: Enabling default plugins
+
+info: [install/enableDefaultPlugins] activating default plugins {"0":"nodebb-plugin-dbsearch","1":"nodebb-widget-essentials"}
+{
+  "stats": {
+    "suites": 11,
+    "tests": 24,
+    "passes": 24,
+    "pending": 0,
+    "failures": 0,
+    "start": "2026-10-12T04:54:44.076Z",
+    "end": "2026-10-12T04:54:44.481Z",
+    "duration": 405
+  },
+  "tests": [
+    {
+      "title": "should properly add new images to the post's zset",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.sync() should properly add new images to the post's zset",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should remove an image if it is edited out of the post",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.sync() should remove an image if it is edited out of the post",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 4,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should display the uploaded files for a specific post",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.list() should display the uploaded files for a specific post",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should return false if upload is not an orphan",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.isOrphan() should return false if upload is not an orphan",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should return true if upload is an orphan",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.isOrphan() should return true if upload is an orphan",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should add an image to the post's maintained list of uploads",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.associate() should add an image to the post's maintained list of uploads",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should allow arrays to be passed in",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.associate() should allow arrays to be passed in",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should save a reverse association of md5sum to pid",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.associate() should save a reverse association of md5sum to pid",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not associate a file that does not exist on the local disk",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.associate() should not associate a file that does not exist on the local disk",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should remove an image from the post's maintained list of uploads",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.dissociate() should remove an image from the post's maintained list of uploads",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should allow arrays to be passed in",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.dissociate() should allow arrays to be passed in",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should remove all images from a post's maintained list of uploads",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.dissociateAll() should remove all images from a post's maintained list of uploads",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not dissociate images on post deletion",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Dissociation on purge should not dissociate images on post deletion",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should dissociate images on post purge",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Dissociation on purge should dissociate images on post purge",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should purge the images from disk if the post is purged",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Deletion from disk on purge should purge the images from disk if the post is purged",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should leave the images behind if `preserveOrphanedUploads` is enabled",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Deletion from disk on purge should leave the images behind if `preserveOrphanedUploads` is enabled",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should leave images behind if they are used in another post",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Deletion from disk on purge should leave images behind if they are used in another post",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 4,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should work if you pass in a string path",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should work if you pass in a string path",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should throw an error if a non-string or non-array is passed",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should throw an error if a non-string or non-array is passed",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should delete the files passed in, from disk",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should delete the files passed in, from disk",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not delete files if they are not in `uploads/files/` (path traversal)",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should not delete files if they are not in `uploads/files/` (path traversal)",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should delete files even if they are not orphans",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should delete files even if they are not orphans",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should automatically sync uploads on topic create and reply",
+      "fullTitle": "test/posts/uploads.js::post uploads management should automatically sync uploads on topic create and reply",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should automatically sync uploads on post edit",
+      "fullTitle": "test/posts/uploads.js::post uploads management should automatically sync uploads on post edit",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    }
+  ],
+  "pending": [],
+  "failures": [],
+  "passes": [
+    {
+      "title": "should properly add new images to the post's zset",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.sync() should properly add new images to the post's zset",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should remove an image if it is edited out of the post",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.sync() should remove an image if it is edited out of the post",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 4,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should display the uploaded files for a specific post",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.list() should display the uploaded files for a specific post",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should return false if upload is not an orphan",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.isOrphan() should return false if upload is not an orphan",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should return true if upload is an orphan",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.isOrphan() should return true if upload is an orphan",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should add an image to the post's maintained list of uploads",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.associate() should add an image to the post's maintained list of uploads",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should allow arrays to be passed in",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.associate() should allow arrays to be passed in",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should save a reverse association of md5sum to pid",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.associate() should save a reverse association of md5sum to pid",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not associate a file that does not exist on the local disk",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.associate() should not associate a file that does not exist on the local disk",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should remove an image from the post's maintained list of uploads",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.dissociate() should remove an image from the post's maintained list of uploads",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should allow arrays to be passed in",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.dissociate() should allow arrays to be passed in",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should remove all images from a post's maintained list of uploads",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.dissociateAll() should remove all images from a post's maintained list of uploads",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not dissociate images on post deletion",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Dissociation on purge should not dissociate images on post deletion",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should dissociate images on post purge",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Dissociation on purge should dissociate images on post purge",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should purge the images from disk if the post is purged",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Deletion from disk on purge should purge the images from disk if the post is purged",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should leave the images behind if `preserveOrphanedUploads` is enabled",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Deletion from disk on purge should leave the images behind if `preserveOrphanedUploads` is enabled",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should leave images behind if they are used in another post",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::Deletion from disk on purge should leave images behind if they are used in another post",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 4,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should work if you pass in a string path",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should work if you pass in a string path",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should throw an error if a non-string or non-array is passed",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should throw an error if a non-string or non-array is passed",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should delete the files passed in, from disk",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should delete the files passed in, from disk",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 0,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should not delete files if they are not in `uploads/files/` (path traversal)",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should not delete files if they are not in `uploads/files/` (path traversal)",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should delete files even if they are not orphans",
+      "fullTitle": "test/posts/uploads.js::upload methods test/posts/uploads.js::.deleteFromDisk() should delete files even if they are not orphans",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 3,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should automatically sync uploads on topic create and reply",
+      "fullTitle": "test/posts/uploads.js::post uploads management should automatically sync uploads on topic create and reply",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 1,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    },
+    {
+      "title": "should automatically sync uploads on post edit",
+      "fullTitle": "test/posts/uploads.js::post uploads management should automatically sync uploads on post edit",
+      "file": "/app/test/posts/uploads.js",
+      "duration": 2,
+      "currentRetry": 0,
+      "speed": "fast",
+      "err": {}
+    }
+  ]
+}

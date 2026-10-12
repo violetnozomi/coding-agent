@@ -1,0 +1,13 @@
+{
+  "number": 20,
+  "instance_id": "instance_NodeBB__NodeBB-84dfda59e6a0e8a77240f939a7cb8757e6eaf945-v2c59007b1005cd5cd14cbb523ca5229db1fd2dd8",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": true,
+  "agent_started_epoch": 1791780563.5847542,
+  "agent_finished_epoch": 1791780878.9552908,
+  "status": "attempted",
+  "patch_sha256": "51179a5e1195d1b0817343b57d88d5621d8a2089f9632ff2a497558fba2bfe7a",
+  "eval_status": "graded",
+  "physical_requests": 40
+}
