@@ -1,0 +1,224 @@
+diff --git a/internal/config/config.go b/internal/config/config.go
+index 1333704..2153393 100644
+--- a/internal/config/config.go
++++ b/internal/config/config.go
+@@ -14,7 +14,7 @@ import (
+ 
+ var decodeHooks = mapstructure.ComposeDecodeHookFunc(
+ 	mapstructure.StringToTimeDurationHookFunc(),
+-	mapstructure.StringToSliceHookFunc(","),
++	stringToSliceHookFunc(),
+ 	stringToEnumHookFunc(stringToLogEncoding),
+ 	stringToEnumHookFunc(stringToCacheBackend),
+ 	stringToEnumHookFunc(stringToScheme),
+@@ -170,6 +170,37 @@ func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+ 	}
+ }
+ 
++// stringToSliceHookFunc returns a DecodeHookFunc that converts a string
++// sourced from configuration into a slice of strings.
++//
++// The string is split on unicode whitespace only (spaces, tabs and newlines),
++// with any run of consecutive whitespace treated as a single separator and any
++// leading or trailing whitespace ignored. Commas carry no special meaning and
++// are preserved as part of the surrounding token.
++// An empty (or whitespace-only) string decodes to an empty, non-nil slice.
++//
++// The hook only applies when the source value is a string and the target type
++// is []string. Any other source or target type is returned unchanged.
++func stringToSliceHookFunc() mapstructure.DecodeHookFuncType {
++	return func(
++		f reflect.Type,
++		t reflect.Type,
++		data interface{}) (interface{}, error) {
++		if f.Kind() != reflect.String {
++			return data, nil
++		}
++
++		if t != reflect.TypeOf([]string{}) {
++			return data, nil
++		}
++
++		// strings.Fields splits on unicode whitespace, collapsing runs of
++		// whitespace and ignoring leading/trailing whitespace. It returns a
++		// non-nil empty slice when there are no fields.
++		return strings.Fields(data.(string)), nil
++	}
++}
++
+ // stringToEnumHookFunc returns a DecodeHookFunc that converts strings to a target enum
+ func stringToEnumHookFunc[T constraints.Integer](mappings map[string]T) mapstructure.DecodeHookFunc {
+ 	return func(
+diff --git a/internal/config/config_test.go b/internal/config/config_test.go
+index 8dbe662..cf594fd 100644
+--- a/internal/config/config_test.go
++++ b/internal/config/config_test.go
+@@ -7,6 +7,8 @@ import (
+ 	"net/http"
+ 	"net/http/httptest"
+ 	"os"
++	"path/filepath"
++	"reflect"
+ 	"strings"
+ 	"testing"
+ 	"time"
+@@ -468,6 +470,146 @@ func TestLoad(t *testing.T) {
+ 	}
+ }
+ 
++func TestStringToSliceHookFunc(t *testing.T) {
++	hook := stringToSliceHookFunc()
++
++	stringType := reflect.TypeOf("")
++	sliceType := reflect.TypeOf([]string{})
++	intType := reflect.TypeOf(0)
++	anySliceType := reflect.TypeOf([]any{})
++
++	tests := []struct {
++		name   string
++		from   reflect.Type
++		to     reflect.Type
++		input  any
++		want   any
++		checkNil bool
++	}{
++		{
++			name:  "single value",
++			from:  stringType,
++			to:    sliceType,
++			input: "foo.com",
++			want:  []string{"foo.com"},
++		},
++		{
++			name:  "space separated",
++			from:  stringType,
++			to:    sliceType,
++			input: "foo.com bar.com baz.com",
++			want:  []string{"foo.com", "bar.com", "baz.com"},
++		},
++		{
++			name:  "consecutive whitespace collapses",
++			from:  stringType,
++			to:    sliceType,
++			input: "foo.com   bar.com\t\tbaz.com",
++			want:  []string{"foo.com", "bar.com", "baz.com"},
++		},
++		{
++			name:  "leading and trailing whitespace ignored",
++			from:  stringType,
++			to:    sliceType,
++			input: "\n  foo.com bar.com\t\n",
++			want:  []string{"foo.com", "bar.com"},
++		},
++		{
++			name:  "commas preserved",
++			from:  stringType,
++			to:    sliceType,
++			input: "foo.com,bar.com baz.com",
++			want:  []string{"foo.com,bar.com", "baz.com"},
++		},
++		{
++			name:     "empty string yields empty non-nil slice",
++			from:     stringType,
++			to:       sliceType,
++			input:    "",
++			want:     []string{},
++			checkNil: true,
++		},
++		{
++			name:     "whitespace only yields empty non-nil slice",
++			from:     stringType,
++			to:       sliceType,
++			input:    "   \t\n",
++			want:     []string{},
++			checkNil: true,
++		},
++		{
++			name:  "non string source unchanged",
++			from:  intType,
++			to:    sliceType,
++			input: 5,
++			want:  5,
++		},
++		{
++			name:  "non []string target unchanged",
++			from:  stringType,
++			to:    anySliceType,
++			input: "foo.com bar.com",
++			want:  "foo.com bar.com",
++		},
++		{
++			name:  "slice source unchanged",
++			from:  sliceType,
++			to:    sliceType,
++			input: []string{"foo.com", "bar.com"},
++			want:  []string{"foo.com", "bar.com"},
++		},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			got, err := hook(tt.from, tt.to, tt.input)
++			require.NoError(t, err)
++
++			if tt.checkNil {
++				slice, ok := got.([]string)
++				require.True(t, ok)
++				assert.NotNil(t, slice)
++			}
++
++			assert.Equal(t, tt.want, got)
++		})
++	}
++}
++
++func TestLoadCorsAllowedOriginsWhitespace(t *testing.T) {
++	base := `cors:
++  enabled: true
++  allowed_origins: "foo.com bar.com  baz.com"
++`
++
++	dir := t.TempDir()
++	path := filepath.Join(dir, "config.yml")
++	require.NoError(t, os.WriteFile(path, []byte(base), 0o600))
++
++	t.Run("YAML", func(t *testing.T) {
++		cfg, err := Load(path)
++			require.NoError(t, err)
++			assert.Equal(t, []string{"foo.com", "bar.com", "baz.com"}, cfg.Cors.AllowedOrigins)
++	})
++
++	t.Run("ENV", func(t *testing.T) {
++		backup := os.Environ()
++		defer func() {
++			os.Clearenv()
++			for _, env := range backup {
++				key, value, _ := strings.Cut(env, "=")
++				os.Setenv(key, value)
++			}
++		}()
++
++		t.Setenv("FLIPT_CORS_ALLOWED_ORIGINS", "foo.com bar.com  baz.com")
++
++		cfg, err := Load("./testdata/default.yml")
++		require.NoError(t, err)
++		assert.Equal(t, []string{"foo.com", "bar.com", "baz.com"}, cfg.Cors.AllowedOrigins)
++	})
++}
++
+ func TestServeHTTP(t *testing.T) {
+ 	var (
+ 		cfg = defaultConfig()
+diff --git a/internal/config/testdata/advanced.yml b/internal/config/testdata/advanced.yml
+index a07acc6..24eb5f5 100644
+--- a/internal/config/testdata/advanced.yml
++++ b/internal/config/testdata/advanced.yml
+@@ -8,7 +8,7 @@ ui:
+ 
+ cors:
+   enabled: true
+-  allowed_origins: "foo.com,bar.com"
++  allowed_origins: "foo.com bar.com"
+ 
+ cache:
+   enabled: true

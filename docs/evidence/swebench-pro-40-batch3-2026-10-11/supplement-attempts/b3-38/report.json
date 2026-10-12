@@ -1,0 +1,14 @@
+{
+  "number": 38,
+  "instance_id": "instance_gravitational__teleport-b8fbb2d1e90ffcde88ed5fe9920015c1be075788-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+  "attempt": 1,
+  "agent_status": "missing_result",
+  "resolved": true,
+  "agent_started_epoch": 1791769570.9222577,
+  "agent_finished_epoch": 1791772632.011877,
+  "status": "attempt_or_delivery_error",
+  "patch_sha256": "8e634d69c2f9f08014423fc3d41297336b731fe65d163c2e46385d7671c04214",
+  "eval_status": "graded",
+  "error": "FileNotFoundError(2, 'No such file or directory')",
+  "physical_requests": 31
+}

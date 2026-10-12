@@ -1,0 +1,10 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status --short | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls test/components/views/dialogs/spotlight/ | head -40 && echo \"---\" && ls test/components/views/rooms/ | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,40p' test/components/views/dialogs/spotlight/PublicRoomResultDetails-test.tsx"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls docs/features && grep -rn \"UIComponent\" docs res src/i18n 2>/dev/null | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls docs && ls docs/features 2>/dev/null; grep -rln \"UIComponent\" docs 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && npx tsc --noEmit -p tsconfig.json 2>&1 | head -30", "timeout": 300}, "allowed": false}
+{"tool": "bash", "input": {"command": "yarn jest test/components/views/rooms/RoomHeader-test.tsx 2>&1 | tail -30", "timeout": 300, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/components/views/rooms/RoomHeader-test.tsx 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/components/views/rooms/RoomHeader-test.tsx 2>&1 | tail -15", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "yarn jest test/components/views/rooms/RoomTile-test.tsx 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}

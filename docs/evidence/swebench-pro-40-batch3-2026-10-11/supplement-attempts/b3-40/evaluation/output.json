@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "TestIsOvalDefAffected",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestGetDefsByPackNameFromOvalDBArchError",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestGetDefsByPackNameViaHTTPArchError",
+      "status": "PASSED"
+    }
+  ]
+}

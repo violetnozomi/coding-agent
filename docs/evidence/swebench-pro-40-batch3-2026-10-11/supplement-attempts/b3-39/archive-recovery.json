@@ -1,0 +1,8 @@
+{
+  "original_delivery_error": "ValueError('trace bundle already exists: /home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/archives/batch3-instance_flipt-io__flipt-d966559200183b713cdf3ea5007a7e0ba86a5afb')",
+  "original_report_preserved": true,
+  "only_offline_archiving": true,
+  "model_calls": 0,
+  "tests_repeated": false,
+  "raw_archive_written": true
+}

@@ -1,0 +1,14 @@
+{
+  "number": 40,
+  "instance_id": "instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4",
+  "attempt": 1,
+  "agent_status": "completed",
+  "resolved": true,
+  "agent_started_epoch": 1791770042.1505241,
+  "agent_finished_epoch": 1791770257.6258276,
+  "status": "attempt_or_delivery_error",
+  "patch_sha256": "238c8510b101c39de4b982a492365dd2b7c84ced27b2eebba06f27166ea8398a",
+  "eval_status": "graded",
+  "error": "ValueError('trace bundle already exists: /home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/archives/batch3-instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4')",
+  "physical_requests": 36
+}

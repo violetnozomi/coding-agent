@@ -1,0 +1,13 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "sed -n '1,30p' internal/config/config.go; echo ---; sed -n '1,30p' internal/config/config_test.go"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"buildConfig\\|func Load\\|getConfigFile(\" cmd/flipt/*.go internal/config/config.go | head -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"buildConfig()\\|getStore()\\|Load(path)\" --include=*.go . ; echo \"== done\"; grep -n \"context\" cmd/flipt/bundle.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./cmd/flipt -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -l internal/config/config.go internal/config/config_test.go cmd/flipt/*.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go vet ./internal/config/ 2>&1 | head -20", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build -p 2 ./cmd/flipt/ 2>&1 | head -30", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./cmd/flipt -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "behavioral", "command": "go test ./internal/config/ -run 'TestLoad|Config' -count=1 2>&1 | tail -30", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "behavioral", "command": "go test ./internal/config/... -count=1 2>&1 | tail -20", "timeout": 180}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"context.Background()\\|Load(\" internal/config/config_test.go"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'TestLoad$' -count=1 -v 2>&1 | tail -15", "timeout": 120}, "allowed": true}

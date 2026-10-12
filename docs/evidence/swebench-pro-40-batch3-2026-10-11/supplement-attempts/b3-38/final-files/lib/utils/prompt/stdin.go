@@ -1,0 +1,229 @@
+/*
+Copyright 2021 Gravitational, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package prompt
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"os"
+	"strings"
+	"sync"
+)
+
+// maxReadSize is the size of the buffer used for each read from the underlying
+// reader. A single ReadContext call returns at most this many bytes, exactly
+// as produced by a single Read.
+const maxReadSize = 4096
+
+// errContextReaderClosed is returned by ContextReader.ReadContext and
+// ContextReader.ReadLineContext after Close was called.
+var errContextReaderClosed = errors.New("prompt: reader is closed")
+
+// ContextReader wraps an io.Reader and allows blocked reads to be canceled
+// with a context.
+//
+// Unlike reading from the underlying reader directly, canceling a ReadContext
+// call does not discard data that was already read from the underlying
+// reader. That data remains buffered and is returned by a subsequent
+// ReadContext call, which makes ContextReader safe to share between competing
+// prompt goroutines.
+//
+// ContextReader is safe for concurrent use.
+type ContextReader struct {
+	reader io.Reader
+
+	// mu protects all of the fields below.
+	mu sync.Mutex
+	// chunks holds data read from reader that was not yet returned by
+	// ReadContext.
+	chunks [][]byte
+	// err holds the terminal error returned by reader, if any. It is
+	// delivered after all buffered chunks.
+	err error
+	// closed is set by Close.
+	closed bool
+	// reading is true while a background Read call is in progress.
+	reading bool
+	// lineBuf holds bytes consumed by ReadLineContext that don't yet form a
+	// full line.
+	lineBuf []byte
+	// notify is closed and replaced whenever any of the state above changes.
+	// Closing it wakes up all blocked ReadContext callers.
+	notify chan struct{}
+
+	closeOnce sync.Once
+}
+
+// NewContextReader returns a new ContextReader wrapping r.
+func NewContextReader(r io.Reader) *ContextReader {
+	return &ContextReader{
+		reader: r,
+		notify: make(chan struct{}),
+	}
+}
+
+var (
+	stdinOnce sync.Once
+	stdin     *ContextReader
+)
+
+// Stdin returns a singleton ContextReader wrapping os.Stdin.
+//
+// Reading os.Stdin through this singleton lets multiple prompt goroutines
+// share a single reader, so that canceling a losing prompt doesn't consume or
+// split input meant for a different prompt.
+func Stdin() *ContextReader {
+	stdinOnce.Do(func() {
+		stdin = NewContextReader(os.Stdin)
+	})
+	return stdin
+}
+
+// ReadContext blocks until the next chunk of data is available and returns it.
+//
+// ReadContext returns whatever a single underlying Read produced, without any
+// line buffering.
+//
+// If ctx is canceled before any data is available, ReadContext returns nil and
+// ctx.Err() (context.Canceled for a plain context cancellation). Cancellation
+// doesn't discard data: any bytes read from the underlying reader stay
+// buffered for the next call.
+//
+// If the underlying reader returned an error, ReadContext returns nil and that
+// error once all buffered data was consumed. The error is returned unwrapped,
+// so errors.Is(err, io.EOF) still holds.
+//
+// After Close, ReadContext returns immediately with a non-nil error.
+func (r *ContextReader) ReadContext(ctx context.Context) ([]byte, error) {
+	// Return immediately if the context is already canceled and no data is
+	// pending. Doing this check inside the loop (rather than up front) makes
+	// sure buffered data is never dropped in favor of cancellation.
+	for {
+		r.mu.Lock()
+		if r.closed {
+			r.mu.Unlock()
+			return nil, errContextReaderClosed
+		}
+		if len(r.chunks) > 0 {
+			chunk := r.chunks[0]
+			r.chunks[0] = nil
+			r.chunks = r.chunks[1:]
+			r.mu.Unlock()
+			return chunk, nil
+		}
+		if r.err != nil {
+			err := r.err
+			r.mu.Unlock()
+			return nil, err
+		}
+		r.startReadLocked()
+		notify := r.notify
+		r.mu.Unlock()
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-notify:
+		}
+	}
+}
+
+// ReadLineContext reads a single line (terminated by '\n') using ctx to cancel
+// a blocked read. The returned line doesn't include the trailing newline (or
+// an optional preceding carriage return).
+//
+// Bytes that were read but don't yet form a complete line are kept inside the
+// ContextReader, so a canceled ReadLineContext can be safely retried and will
+// continue from where it left off.
+func (r *ContextReader) ReadLineContext(ctx context.Context) (string, error) {
+	for {
+		r.mu.Lock()
+		if i := bytes.IndexByte(r.lineBuf, '\n'); i >= 0 {
+			line := r.lineBuf[:i]
+			r.lineBuf = r.lineBuf[i+1:]
+			r.mu.Unlock()
+			return strings.TrimSuffix(string(line), "\r"), nil
+		}
+		r.mu.Unlock()
+
+		chunk, err := r.ReadContext(ctx)
+		if err != nil {
+			return "", err
+		}
+		r.mu.Lock()
+		r.lineBuf = append(r.lineBuf, chunk...)
+		r.mu.Unlock()
+	}
+}
+
+// Close releases the background resources used by the ContextReader and
+// unblocks all current and future ReadContext calls with a non-nil error.
+//
+// Close does not close the underlying reader.
+func (r *ContextReader) Close() {
+	r.closeOnce.Do(func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		r.closed = true
+		close(r.notify)
+		r.notify = make(chan struct{})
+	})
+}
+
+// startReadLocked starts a background read if one isn't already in progress.
+// Callers must hold r.mu.
+func (r *ContextReader) startReadLocked() {
+	if r.reading || r.closed {
+		return
+	}
+	r.reading = true
+	go r.read()
+}
+
+// read performs a single Read on the underlying reader and buffers the result.
+// It is only ever called with r.reading set to true.
+func (r *ContextReader) read() {
+	buf := make([]byte, maxReadSize)
+	n, err := r.reader.Read(buf)
+	var chunk []byte
+	if n > 0 {
+		chunk = make([]byte, n)
+		copy(chunk, buf[:n])
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.reading = false
+	if r.closed {
+		// Close was called while the read was in flight; don't buffer data
+		// that can never be returned. Still wake up waiters so they observe
+		// the closed state.
+		close(r.notify)
+		r.notify = make(chan struct{})
+		return
+	}
+	if len(chunk) > 0 {
+		r.chunks = append(r.chunks, chunk)
+	}
+	if err != nil {
+		r.err = err
+	}
+	close(r.notify)
+	r.notify = make(chan struct{})
+}

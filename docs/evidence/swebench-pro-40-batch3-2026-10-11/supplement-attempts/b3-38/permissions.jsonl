@@ -1,0 +1,9 @@
+{"tool": "bash", "input": {"command": "ls /workspace && echo \"---\" && ls /workspace/lib/utils/prompt/"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go version && head -5 go.mod"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go version"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && ls lib/utils/prompt/ && git log --oneline -5 2>&1 | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,60p' lib/auth/grpcserver_test.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls vendor/github.com/stretchr/testify/ && ls vendor/github.com/gravitational/trace/ | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./lib/utils/prompt -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./lib/utils/prompt -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}

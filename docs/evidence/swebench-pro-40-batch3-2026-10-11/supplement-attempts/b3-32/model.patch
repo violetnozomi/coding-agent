@@ -1,0 +1,212 @@
+diff --git a/lib/ansible/module_utils/basic.py b/lib/ansible/module_utils/basic.py
+index 608f39017d..f0d1672042 100644
+--- a/lib/ansible/module_utils/basic.py
++++ b/lib/ansible/module_utils/basic.py
+@@ -401,7 +401,11 @@ def _remove_values_conditions(value, no_log_strings, deferred_removals):
+ 
+ def remove_values(value, no_log_strings):
+     """ Remove strings in no_log_strings from value.  If value is a container
+-    type, then remove a lot more"""
++    type, then remove a lot more.
++
++    Mapping keys are left untouched: only the values held by a mapping are
++    sanitized.  Use :func:`sanitize_keys` if key names need to be redacted.
++    """
+     deferred_removals = deque()
+ 
+     no_log_strings = [to_native(s, errors='surrogate_or_strict') for s in no_log_strings]
+@@ -411,9 +415,11 @@ def remove_values(value, no_log_strings):
+         old_data, new_data = deferred_removals.popleft()
+         if isinstance(new_data, Mapping):
+             for old_key, old_elem in old_data.items():
+-                new_key = _remove_values_conditions(old_key, no_log_strings, deferred_removals)
++                # Only the values stored in a mapping are sanitized.  The keys
++                # are copied over verbatim so that callers can still look
++                # fields up by their original names.
+                 new_elem = _remove_values_conditions(old_elem, no_log_strings, deferred_removals)
+-                new_data[new_key] = new_elem
++                new_data[old_key] = new_elem
+         else:
+             for elem in old_data:
+                 new_elem = _remove_values_conditions(elem, no_log_strings, deferred_removals)
+@@ -427,6 +433,98 @@ def remove_values(value, no_log_strings):
+     return new_value
+ 
+ 
++def _sanitize_keys_conditions(value, deferred_removals):
++    """Helper function for :func:`sanitize_keys`.
++
++    Containers are copied into new (initially empty) containers which are
++    queued in ``deferred_removals`` so that their contents can be walked
++    iteratively.  Unlike :func:`_remove_values_conditions`, scalar values are
++    always returned untouched -- only mapping keys are sanitized, and that is
++    done by :func:`sanitize_keys` when it fills the queued containers.
++
++    :arg value: The value to inspect for container types.
++    :arg deferred_removals: deque used to hold nested containers that still
++        need to be iterated.  Each entry is a 3-tuple of
++        ``(old_data, new_data, is_mapping)``.
++    :returns: A new empty container if ``value`` is a container type,
++        otherwise ``value`` itself.
++    """
++    if isinstance(value, (text_type, binary_type)):
++        return value
++    elif isinstance(value, Mapping):
++        if isinstance(value, MutableMapping):
++            new_value = type(value)()
++        else:
++            new_value = {}  # Need a mutable value
++        deferred_removals.append((value, new_value, True))
++        return new_value
++    elif isinstance(value, Set):
++        if isinstance(value, MutableSet):
++            new_value = type(value)()
++        else:
++            new_value = set()  # Need a mutable value
++        deferred_removals.append((value, new_value, False))
++        return new_value
++    elif isinstance(value, Sequence):
++        if isinstance(value, MutableSequence):
++            new_value = type(value)()
++        else:
++            new_value = []  # Need a mutable value
++        deferred_removals.append((value, new_value, False))
++        return new_value
++    else:
++        return value
++
++
++def sanitize_keys(obj, no_log_strings, ignore_keys=frozenset()):
++    """Sanitize the keys in a container object by removing no_log values from key names.
++
++    This is a companion function to the :func:`remove_values` function that
++    sanitizes the values of a container object.  Mapping values, scalar values
++    and keys listed in ``ignore_keys`` are returned unchanged.  Keys are
++    redacted at any depth, including the keys of mappings held inside lists and
++    other mappings.
++
++    :arg obj: An object that contains the keys that should be sanitized
++    :arg no_log_strings: A set of strings that should be removed from the keys
++    :arg ignore_keys: A set of keys that should not be sanitized
++    :returns: A sanitized copy of the object
++    """
++    deferred_removals = deque()
++
++    no_log_strings = [to_native(s, errors='surrogate_or_strict') for s in no_log_strings]
++    new_value = _sanitize_keys_conditions(obj, deferred_removals)
++
++    while deferred_removals:
++        old_data, new_data, is_mapping = deferred_removals.popleft()
++
++        if is_mapping:
++            for old_key, old_elem in old_data.items():
++                if old_key in ignore_keys:
++                    new_key = old_key
++                else:
++                    new_key = remove_values(old_key, no_log_strings)
++                    # A container key would be turned into an unhashable value
++                    # by ``remove_values``, so leave such keys untouched.
++                    try:
++                        hash(new_key)
++                    except TypeError:
++                        new_key = old_key
++                new_elem = _sanitize_keys_conditions(old_elem, deferred_removals)
++                new_data[new_key] = new_elem
++        else:
++            for elem in old_data:
++                new_elem = _sanitize_keys_conditions(elem, deferred_removals)
++                if isinstance(new_data, MutableSequence):
++                    new_data.append(new_elem)
++                elif isinstance(new_data, MutableSet):
++                    new_data.add(new_elem)
++                else:
++                    raise TypeError('Unknown container type encountered when sanitizing keys')
++
++    return new_value
++
++
+ def heuristic_log_sanitize(data, no_log_values=None):
+     ''' Remove strings that look like passwords from log messages '''
+     # Currently filters:
+diff --git a/test/units/module_utils/basic/test_no_log.py b/test/units/module_utils/basic/test_no_log.py
+index 80f093bf4f..93c3c2c615 100644
+--- a/test/units/module_utils/basic/test_no_log.py
++++ b/test/units/module_utils/basic/test_no_log.py
+@@ -105,7 +105,7 @@ class TestRemoveValues(unittest.TestCase):
+                 'three': [
+                     OMIT, 'musketeers', None, {
+                         'ping': OMIT,
+-                        OMIT: [
++                        'base': [
+                             OMIT, 'raquets'
+                         ]
+                     }
+@@ -115,7 +115,7 @@ class TestRemoveValues(unittest.TestCase):
+         (
+             {'key-password': 'value-password'},
+             frozenset(['password']),
+-            {'key-********': 'value-********'},
++            {'key-password': 'value-********'},
+         ),
+         (
+             'This sentence has an enigma wrapped in a mystery inside of a secret. - mr mystery',
+diff --git a/verify_sanitize.py b/verify_sanitize.py
+new file mode 100644
+index 0000000000..3efd9287ee
+--- /dev/null
++++ b/verify_sanitize.py
+@@ -0,0 +1,54 @@
++from ansible.module_utils.basic import remove_values, sanitize_keys
++
++OMIT = 'VALUE_SPECIFIED_IN_NO_LOG_PARAMETER'
++
++assert remove_values({'key-password': 'value-password'}, frozenset(['password'])) == {'key-password': 'value-********'}
++assert remove_values({'password': 'x'}, frozenset(['password'])) == {'password': 'x'}
++assert remove_values({'password': 'password'}, frozenset(['password'])) == {'password': OMIT}
++assert remove_values({'a': {'pong': 'secret'}}, frozenset(['pong', 'secret'])) == {'a': {'pong': OMIT}}
++assert remove_values([{'base': ['balls', 'raquets']}], frozenset(['base', 'balls'])) == [{'base': [OMIT, 'raquets']}]
++r = remove_values({'one': 1, 'two': 'dos', 'three': ['amigos', 'musketeers', None,
++                  {'ping': 'pong', 'base': ['balls', 'raquets']}]},
++                  frozenset(['balls', 'base', 'pong', 'amigos']))
++assert r == {'one': 1, 'two': 'dos', 'three': [OMIT, 'musketeers', None, {'ping': OMIT, 'base': [OMIT, 'raquets']}]}, r
++assert remove_values([('a', 'b')], frozenset(['a'])) == [(OMIT, 'b')]
++try:
++    remove_values(object(), frozenset())
++    raise SystemExit('expected TypeError')
++except TypeError:
++    pass
++
++assert sanitize_keys({'key-password': 'value-password'}, frozenset(['password'])) == {'key-********': 'value-password'}
++assert sanitize_keys({'password': 'keep-value'}, frozenset(['password'])) == {OMIT: 'keep-value'}
++assert sanitize_keys({'key-password': 'v'}, frozenset(['password']), frozenset(['key-password'])) == {'key-password': 'v'}
++assert sanitize_keys({'passwordx': 1}, frozenset(['password']), frozenset(['password'])) == {'********x': 1}
++assert sanitize_keys(None, frozenset(['x'])) is None
++assert sanitize_keys(True, frozenset(['x'])) is True
++assert sanitize_keys(5, frozenset(['5'])) == 5
++assert sanitize_keys('password', frozenset(['password'])) == 'password'
++assert sanitize_keys([{'password': 1}], frozenset(['password'])) == [{OMIT: 1}]
++assert sanitize_keys(({'password': 1},), frozenset(['password'])) == ({OMIT: 1},)
++assert sanitize_keys({'password'}, frozenset(['password'])) == {OMIT}
++out = sanitize_keys({'a': {'password': {'password': 'v'}}}, frozenset(['password']))
++assert out == {'a': {OMIT: {OMIT: 'v'}}}, out
++nested_list = sanitize_keys([[{'password': 1}]], frozenset(['password']))
++assert nested_list == [[{OMIT: 1}]], nested_list
++assert sanitize_keys({'key': 'password'}, frozenset(['password'])) == {'key': 'password'}
++data = []
++inner = data
++for _ in range(10000):
++    nxt = []
++    inner.append(nxt)
++    inner = nxt
++inner.append({'password': 1})
++deep = sanitize_keys(data, frozenset(['password']))
++levels = 0
++cur = deep
++while cur:
++    assert isinstance(cur, list) and len(cur) == 1
++    cur = cur[0]
++    levels += 1
++assert cur == {OMIT: 1}
++assert levels == 10001, levels
++
++print('ALL OK')

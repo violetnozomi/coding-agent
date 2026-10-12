@@ -1,0 +1,10 @@
+{
+  "reason": "user_authorized_temporary_memory_workspace_for_large_tasks",
+  "stopped_coordinator": 817882,
+  "all_paid_requests_settled": true,
+  "large_tasks_have_no_sdk_launch_or_model_call": true,
+  "stopped_child_pids": [
+    817883
+  ],
+  "estimated_used_cny": 15.80626816
+}

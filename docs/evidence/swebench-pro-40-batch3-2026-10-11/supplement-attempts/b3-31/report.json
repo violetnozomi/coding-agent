@@ -1,0 +1,14 @@
+{
+  "number": 31,
+  "instance_id": "instance_flipt-io__flipt-518ec324b66a07fdd95464a5e9ca5fe7681ad8f9",
+  "attempt": 1,
+  "agent_status": "completed",
+  "resolved": true,
+  "agent_started_epoch": 1791768669.620043,
+  "agent_finished_epoch": 1791768814.4563181,
+  "status": "attempt_or_delivery_error",
+  "patch_sha256": "29cbdd8762dda90603d2fc18516479251271ce616adfd67604a12faf0d3ef8c8",
+  "eval_status": "graded",
+  "error": "ValueError('trace bundle already exists: /home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/archives/batch3-instance_flipt-io__flipt-518ec324b66a07fdd95464a5e9ca5fe7681ad8f9')",
+  "physical_requests": 30
+}

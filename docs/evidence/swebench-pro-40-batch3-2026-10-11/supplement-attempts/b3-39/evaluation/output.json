@@ -1,0 +1,64 @@
+{
+  "tests": [
+    {
+      "name": "TestAnalyticsClickhouseConfiguration",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestJSONSchema",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestScheme",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestCacheBackend",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestTracingExporter",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDatabaseProtocol",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestLogEncoding",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestLoad",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestServeHTTP",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMarshalYAML",
+      "status": "PASSED"
+    },
+    {
+      "name": "Test_mustBindEnv",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestGetConfigFile",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestStructTags",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestLoadContextPropagation",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestDefaultDatabaseRoot",
+      "status": "PASSED"
+    }
+  ]
+}

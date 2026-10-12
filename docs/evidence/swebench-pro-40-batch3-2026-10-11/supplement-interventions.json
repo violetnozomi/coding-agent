@@ -1,0 +1,16 @@
+{
+  "original_paid_tasks_repeated": false,
+  "host_patches_or_model_hints": false,
+  "initial_zero_model_resource_order_interruption": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/supplement-preparation-interrupted/preparation-interruption.json",
+  "new_authorization_cny": 50,
+  "memory_workspace_user_authorized": true,
+  "small_phase_main_requests": 305,
+  "small_phase_estimated_cost_cny": 15.80626816,
+  "large_phase_uses_remaining_new_authorization_cny": 34.19373184,
+  "timeout_case": 38,
+  "timeout_seconds": 3060.509325957013,
+  "timeout_case_official_acceptance": true,
+  "timeout_formal_result_missing": true,
+  "offline_archive_recovery_no_model_calls": true,
+  "source_core_and_native_entry_unchanged": true
+}

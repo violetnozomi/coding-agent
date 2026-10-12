@@ -323,11 +323,20 @@ def grade(slot, base, row, manifest, checksums):
 
 def archive_case(slot, case, task, mode, budget, archive):
     workspace = case / "workspace"
+    projection_root = case
+    if workspace.is_symlink():
+        receipt = json.loads((slot / "temporary-workspace.json").read_text())
+        target = workspace.resolve()
+        if target != Path(receipt["path"]) or target.parent != Path(receipt["root"]):
+            raise RuntimeError("temporary_workspace_identity_changed; source retained")
+        # 已批准内存工作区是此根目录的直接子项；继续使用原有归档边界校验。
+        projection_root = target.parent
+        workspace = target
     export = workspace / ".nz-coder/pro-export"
     export.mkdir(parents=True, exist_ok=True)
     shutil.copy2(case / "result/runtime.jsonl", export / "runtime.jsonl")
     shutil.copy2(case / "input/run.json", export / "run.json")
-    archived = archive(instance_id=mode + "-" + task["instance_id"], workdir=workspace, run_root=case,
+    archived = archive(instance_id=mode + "-" + task["instance_id"], workdir=workspace, run_root=projection_root,
         trace_path=export / "runtime.jsonl", public_input_path=export / "run.json",
         metadata={"container_session_id": "pro20-" + slot.name,
                   "session_available_in_separate_container_archive": True}, budget=budget)

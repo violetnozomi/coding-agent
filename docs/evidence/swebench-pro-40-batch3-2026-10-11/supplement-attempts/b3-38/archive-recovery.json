@@ -1,0 +1,12 @@
+{
+  "source": "retained_actual_runtime_journal",
+  "private_source": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/supplement/b3-38/case/home/.local/state/nz-coder/workspaces/6bd2bc06da4f8f67fbf90d1efb0700db6e039804546da8f5bab5e6341fb120ca/sessions/_artifacts/pro20-b3-38/runtime/runs/pro20-b3-38__20261012_014612_8a8eed1b.jsonl",
+  "source_sha256": "114f53e67e005ca9aa391f703aa1758499eaf1a4c34787ca3a18370150b38ef6",
+  "complete_lines_bytes": 418865,
+  "partial_tail_bytes": 0,
+  "formal_result_missing": true,
+  "outer_status": "timeout",
+  "synthetic_tool_results": false,
+  "model_calls": 0,
+  "tests_repeated": false
+}

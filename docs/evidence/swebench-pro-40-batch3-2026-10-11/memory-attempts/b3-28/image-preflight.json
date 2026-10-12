@@ -1,0 +1,9 @@
+{
+  "image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-01b519cd49e6a24d9a05d2eb97f54e420740072e",
+  "digest": "sha256:e54c87627ae0d0ba3854201644262883fa6e7251805d5f02c4642eea58da6566",
+  "index_digest": "sha256:fa8f832c40a85bea4c3d99a4b5f01035ef4d8629a4402058abb9d4588fa9ebb5",
+  "compressed_bytes": 6518064990,
+  "estimated_required_bytes": 23886969289,
+  "free_bytes": 24332185600,
+  "estimate_is_not_exact": true
+}

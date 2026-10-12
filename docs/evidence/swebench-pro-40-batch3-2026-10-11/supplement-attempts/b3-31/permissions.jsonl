@@ -1,0 +1,15 @@
+{"tool": "bash", "input": {"command": "ls /workspace && echo \"---\" && ls /workspace/internal/config 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls /workspace/internal/config/testdata && echo \"---\" && grep -n \"allowed_origins\\|StringToSlice\\|SliceTo\" -r /workspace/internal/config /workspace/internal/config/testdata 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"StringToSliceHookFunc\\|decodeHooks\" /workspace --include=*.go | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"\\[\\]string\" /workspace/internal/config --include=*.go | grep -v _test"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '1,40p' internal/config/testdata/advanced.yml && echo \"=== mapstructure version ===\" && grep mapstructure go.mod"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"mapstructure\" go.mod && ls $(go env GOMODCACHE)/github.com/mitchellh/ 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./internal/config/ && go test ./internal/config/ 2>&1 | tail -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./internal/config/ && go test ./internal/config/ 2>&1 | tail -40", "workdir": "/workspace", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'TestLoad' -count=1 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'TestStringToSliceHookFunc|TestLoadCorsAllowedOriginsWhitespace|TestLoad|TestServeHTTP' -count=1 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'TestStringToSliceHookFunc|TestLoadCorsAllowedOriginsWhitespace|TestLoad|TestServeHTTP' -count=1 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'Test' -count=1 2>&1 | tail -40", "timeout": 180, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -count=1 2>&1 | tail -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/config/ -run 'TestLoad|TestStringToSliceHookFunc|TestLoadCorsAllowedOriginsWhitespace|TestServeHTTP|TestDefault|TestAdvanced|TestCors' -count=1 -v 2>&1 | tail -60", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff --stat && git diff -- internal/config/config.go internal/config/testdata/advanced.yml", "workdir": "/workspace"}, "allowed": true}

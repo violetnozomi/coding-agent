@@ -1,0 +1,17 @@
+Running selected tests: TestIsOvalDefAffected TestGetDefsByPackNameFromOvalDBArchError TestGetDefsByPackNameViaHTTPArchError
+# github.com/mattn/go-sqlite3
+sqlite3-binding.c: In function 'sqlite3SelectNew':
+sqlite3-binding.c:128049:10: warning: function may return address of local variable [-Wreturn-local-addr]
+128049 |   return pNew;
+       |          ^~~~
+sqlite3-binding.c:128009:10: note: declared here
+128009 |   Select standin;
+       |          ^~~~~~~
+=== RUN   TestIsOvalDefAffected
+--- PASS: TestIsOvalDefAffected (0.00s)
+=== RUN   TestGetDefsByPackNameFromOvalDBArchError
+--- PASS: TestGetDefsByPackNameFromOvalDBArchError (0.00s)
+=== RUN   TestGetDefsByPackNameViaHTTPArchError
+--- PASS: TestGetDefsByPackNameViaHTTPArchError (0.00s)
+PASS
+ok  	github.com/future-architect/vuls/oval	0.007s

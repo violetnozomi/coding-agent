@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "TestStdin",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestContextReader/simple_read",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestContextReader/cancelled_read",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestContextReader/close_underlying_reader",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestContextReader/close_unblocks_reads",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestContextReader",
+      "status": "PASSED"
+    }
+  ]
+}

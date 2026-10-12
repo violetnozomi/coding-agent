@@ -1,0 +1,30 @@
+{
+  "purpose": "swebench-pro-v2",
+  "model": "deepseek-flash",
+  "scope": [
+    "instance_protonmail__webclients-708ed4a299711f0fa79a907cc5847cfd39c0fc71",
+    "instance_protonmail__webclients-01b519cd49e6a24d9a05d2eb97f54e420740072e"
+  ],
+  "instance_manifest_sha256": "a7f4e1750c24d430c7fcff55733b78151b7ad6eb845978f4082e397d16d79560",
+  "account": "project-env:DeepSeek",
+  "input_mode": "empirical",
+  "empirical_risk_accepted": true,
+  "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+  "cost_limit": 34.19373184,
+  "cost_currency": "CNY",
+  "authorization_text": "追加人民币50元，补齐原名单；允许临时内存工作区。只补27/28零模型任务，沿新增50元授权剩余额度继续，旧授权余款不携带。",
+  "valid_from": 1791772655.8383424,
+  "valid_until": 1791945456.8383434,
+  "prices_cny_per_million": {
+    "input": 2,
+    "cached_input": 0.04,
+    "output": 8
+  },
+  "provider_output_reservation_tokens": 393216,
+  "original_total_authorization_cny": 50,
+  "previous_used_cny": 15.80626816,
+  "predecessor_ledger_sha256": "86950928acaf134e703da5778f83945c444e5155d319c1d8d65674adb8ce4e05",
+  "preparation_retry_not_paid_agent_retry": true,
+  "new_authorization_cny": 50,
+  "closed_original_unused_not_carried": true
+}

@@ -1,0 +1,118 @@
+{
+  "tasks": [
+    [
+      27,
+      {
+        "instance_id": "instance_protonmail__webclients-708ed4a299711f0fa79a907cc5847cfd39c0fc71",
+        "instruction_sha256": "305c2a902cef78eeb065ea042cd0af025567855b46a693db535fbeb8e2d89ce0",
+        "task_config_sha256": "1fe979553271ea22816682015b191932964013af3eec12ddc51102d46f30a0bb",
+        "configuration": {
+          "schema_version": "1.4",
+          "artifacts": [],
+          "task": {
+            "name": "swebench-pro/instance_protonmail__webclients-708ed4a299711f0fa79a907cc5847cfd39c0fc71",
+            "version": "1.0.0",
+            "description": "",
+            "authors": [],
+            "keywords": []
+          },
+          "metadata": {
+            "author_name": "ScaleAI",
+            "author_email": "unknown",
+            "difficulty": "medium",
+            "category": "debugging",
+            "tags": [
+              "debugging",
+              "swe-bench-pro"
+            ]
+          },
+          "verifier": {
+            "network_mode": "public",
+            "timeout_sec": 3000.0,
+            "collect": [],
+            "env": {}
+          },
+          "agent": {
+            "network_mode": "no-network",
+            "timeout_sec": 3000.0
+          },
+          "environment": {
+            "network_mode": "public",
+            "build_timeout_sec": 1800.0,
+            "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-708ed4a299711f0fa79a907cc5847cfd39c0fc71",
+            "os": "linux",
+            "cpus": 1,
+            "memory_mb": 4096,
+            "storage_mb": 10240,
+            "mcp_servers": [],
+            "env": {}
+          },
+          "solution": {
+            "env": {}
+          }
+        }
+      }
+    ],
+    [
+      28,
+      {
+        "instance_id": "instance_protonmail__webclients-01b519cd49e6a24d9a05d2eb97f54e420740072e",
+        "instruction_sha256": "fe9821241ee01836badbccd5e196b1f44fd6338f368a29ab84cad75b42b426b8",
+        "task_config_sha256": "8d3ca67d278ea1044770ea01eb4857f441495efbb43e0cbc56b8c75ed31edc40",
+        "configuration": {
+          "schema_version": "1.4",
+          "artifacts": [],
+          "task": {
+            "name": "swebench-pro/instance_protonmail__webclients-01b519cd49e6a24d9a05d2eb97f54e420740072e",
+            "version": "1.0.0",
+            "description": "",
+            "authors": [],
+            "keywords": []
+          },
+          "metadata": {
+            "author_name": "ScaleAI",
+            "author_email": "unknown",
+            "difficulty": "medium",
+            "category": "debugging",
+            "tags": [
+              "debugging",
+              "swe-bench-pro"
+            ]
+          },
+          "verifier": {
+            "network_mode": "public",
+            "timeout_sec": 3000.0,
+            "collect": [],
+            "env": {}
+          },
+          "agent": {
+            "network_mode": "no-network",
+            "timeout_sec": 3000.0
+          },
+          "environment": {
+            "network_mode": "public",
+            "build_timeout_sec": 1800.0,
+            "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-01b519cd49e6a24d9a05d2eb97f54e420740072e",
+            "os": "linux",
+            "cpus": 1,
+            "memory_mb": 4096,
+            "storage_mb": 10240,
+            "mcp_servers": [],
+            "env": {}
+          },
+          "solution": {
+            "env": {}
+          }
+        }
+      }
+    ]
+  ],
+  "used_cny": 15.80626816,
+  "remaining_cny": 34.19373184,
+  "new_authorization_cny": 50,
+  "remaining_requests": 201,
+  "source_ledger_sha256": "86950928acaf134e703da5778f83945c444e5155d319c1d8d65674adb8ce4e05",
+  "execution_stage": "supplement-memory",
+  "temporary_workspace_root": "/dev/shm/nz-pro-batch3-supplement-20261012",
+  "authorization_text": "追加人民币50元，补齐原名单；允许临时内存工作区。只补27/28零模型任务，沿新增50元授权剩余额度继续，旧授权余款不携带。"
+}

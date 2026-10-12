@@ -1,0 +1,856 @@
+Running selected tests: TestTracingExporter TestLoad TestLoadContextPropagation TestLogEncoding TestServeHTTP TestDefaultDatabaseRoot TestMarshalYAML TestDatabaseProtocol TestCacheBackend TestGetConfigFile TestStructTags TestScheme TestJSONSchema Test_mustBindEnv TestAnalyticsClickhouseConfiguration
+=== RUN   TestAnalyticsClickhouseConfiguration
+--- PASS: TestAnalyticsClickhouseConfiguration (0.00s)
+=== RUN   TestJSONSchema
+--- PASS: TestJSONSchema (0.01s)
+=== RUN   TestScheme
+=== RUN   TestScheme/https
+=== RUN   TestScheme/http
+--- PASS: TestScheme (0.00s)
+    --- PASS: TestScheme/https (0.00s)
+    --- PASS: TestScheme/http (0.00s)
+=== RUN   TestCacheBackend
+=== RUN   TestCacheBackend/memory
+=== RUN   TestCacheBackend/redis
+--- PASS: TestCacheBackend (0.00s)
+    --- PASS: TestCacheBackend/memory (0.00s)
+    --- PASS: TestCacheBackend/redis (0.00s)
+=== RUN   TestTracingExporter
+=== RUN   TestTracingExporter/jaeger
+=== RUN   TestTracingExporter/zipkin
+=== RUN   TestTracingExporter/otlp
+--- PASS: TestTracingExporter (0.00s)
+    --- PASS: TestTracingExporter/jaeger (0.00s)
+    --- PASS: TestTracingExporter/zipkin (0.00s)
+    --- PASS: TestTracingExporter/otlp (0.00s)
+=== RUN   TestDatabaseProtocol
+=== RUN   TestDatabaseProtocol/postgres
+=== RUN   TestDatabaseProtocol/mysql
+=== RUN   TestDatabaseProtocol/sqlite
+=== RUN   TestDatabaseProtocol/cockroachdb
+=== RUN   TestDatabaseProtocol/libsql
+--- PASS: TestDatabaseProtocol (0.00s)
+    --- PASS: TestDatabaseProtocol/postgres (0.00s)
+    --- PASS: TestDatabaseProtocol/mysql (0.00s)
+    --- PASS: TestDatabaseProtocol/sqlite (0.00s)
+    --- PASS: TestDatabaseProtocol/cockroachdb (0.00s)
+    --- PASS: TestDatabaseProtocol/libsql (0.00s)
+=== RUN   TestLogEncoding
+=== RUN   TestLogEncoding/console
+=== RUN   TestLogEncoding/json
+--- PASS: TestLogEncoding (0.00s)
+    --- PASS: TestLogEncoding/console (0.00s)
+    --- PASS: TestLogEncoding/json (0.00s)
+=== RUN   TestLoad
+=== RUN   TestLoad/defaults_(YAML)
+=== RUN   TestLoad/defaults_(ENV)
+=== RUN   TestLoad/defaults_with_env_overrides_(YAML)
+    config_test.go:1125: Setting env 'FLIPT_LOG_LEVEL=DEBUG'
+    config_test.go:1125: Setting env 'FLIPT_SERVER_HTTP_PORT=8081'
+=== RUN   TestLoad/defaults_with_env_overrides_(ENV)
+    config_test.go:1172: Setting env 'FLIPT_LOG_LEVEL=DEBUG'
+    config_test.go:1172: Setting env 'FLIPT_SERVER_HTTP_PORT=8081'
+=== RUN   TestLoad/deprecated_tracing_jaeger_(YAML)
+=== RUN   TestLoad/deprecated_tracing_jaeger_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_TRACING_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_EXPORTER=jaeger'
+=== RUN   TestLoad/deprecated_autentication_excluding_metadata_(YAML)
+=== RUN   TestLoad/deprecated_autentication_excluding_metadata_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_EXCLUDE_METADATA=true'
+=== RUN   TestLoad/cache_no_backend_set_(YAML)
+=== RUN   TestLoad/cache_no_backend_set_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_CACHE_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_TTL=30m'
+=== RUN   TestLoad/cache_memory_(YAML)
+=== RUN   TestLoad/cache_memory_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_CACHE_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_BACKEND=memory'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_TTL=5m'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_MEMORY_EVICTION_INTERVAL=10m'
+=== RUN   TestLoad/cache_redis_(YAML)
+=== RUN   TestLoad/cache_redis_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_CACHE_TTL=60s'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_HOST=localhost'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_PORT=6378'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_POOL_SIZE=50'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_MIN_IDLE_CONN=2'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_REQUIRE_TLS=true'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_DB=1'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_PASSWORD=s3cr3t!'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_CONN_MAX_IDLE_TIME=10m'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_NET_TIMEOUT=500ms'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_BACKEND=redis'
+=== RUN   TestLoad/cache_redis_with_username_(YAML)
+=== RUN   TestLoad/cache_redis_with_username_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_CACHE_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_BACKEND=redis'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_TTL=60s'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_USERNAME=app'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_REDIS_PASSWORD=s3cr3t!'
+=== RUN   TestLoad/metrics_disabled_(YAML)
+=== RUN   TestLoad/metrics_disabled_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_METRICS_ENABLED=false'
+    config_test.go:1166: Setting env 'FLIPT_METRICS_EXPORTER=prometheus'
+=== RUN   TestLoad/metrics_OTLP_(YAML)
+=== RUN   TestLoad/metrics_OTLP_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_METRICS_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_METRICS_EXPORTER=otlp'
+    config_test.go:1166: Setting env 'FLIPT_METRICS_OTLP_ENDPOINT=http://localhost:9999'
+    config_test.go:1166: Setting env 'FLIPT_METRICS_OTLP_HEADERS_API-KEY=test-key'
+=== RUN   TestLoad/tracing_zipkin_(YAML)
+=== RUN   TestLoad/tracing_zipkin_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_TRACING_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_EXPORTER=zipkin'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_ZIPKIN_ENDPOINT=http://localhost:9999/api/v2/spans'
+=== RUN   TestLoad/tracing_with_wrong_sampling_ration_(YAML)
+    config_test.go:1132: sampling ratio should be a number between 0 and 1
+=== RUN   TestLoad/tracing_with_wrong_sampling_ration_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_TRACING_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_SAMPLING_RATIO=1.1'
+    config_test.go:1180: sampling ratio should be a number between 0 and 1
+=== RUN   TestLoad/tracing_with_wrong_propagator_(YAML)
+    config_test.go:1132: invalid propagator option: wrong_propagator
+=== RUN   TestLoad/tracing_with_wrong_propagator_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_TRACING_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_PROPAGATORS=wrong_propagator'
+    config_test.go:1180: invalid propagator option: wrong_propagator
+=== RUN   TestLoad/tracing_OTLP_(YAML)
+=== RUN   TestLoad/tracing_OTLP_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_TRACING_SAMPLING_RATIO=0.5'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_OTLP_ENDPOINT=http://localhost:9999'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_OTLP_HEADERS_API-KEY=test-key'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_EXPORTER=otlp'
+=== RUN   TestLoad/database_key/value_(YAML)
+=== RUN   TestLoad/database_key/value_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_DB_PROTOCOL=mysql'
+    config_test.go:1166: Setting env 'FLIPT_DB_HOST=localhost'
+    config_test.go:1166: Setting env 'FLIPT_DB_PORT=3306'
+    config_test.go:1166: Setting env 'FLIPT_DB_NAME=flipt'
+    config_test.go:1166: Setting env 'FLIPT_DB_USER=flipt'
+    config_test.go:1166: Setting env 'FLIPT_DB_PASSWORD=s3cr3t!'
+=== RUN   TestLoad/server_https_missing_cert_file_(YAML)
+    config_test.go:1132: field "server.cert_file": non-empty value is required
+=== RUN   TestLoad/server_https_missing_cert_file_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTPS_PORT=443'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTP_PORT=8080'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_GRPC_PORT=9000'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_PROTOCOL=https'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HOST=0.0.0.0'
+    config_test.go:1180: field "server.cert_file": non-empty value is required
+=== RUN   TestLoad/server_https_missing_cert_key_(YAML)
+    config_test.go:1132: field "server.cert_key": non-empty value is required
+=== RUN   TestLoad/server_https_missing_cert_key_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_SERVER_PROTOCOL=https'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HOST=0.0.0.0'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTPS_PORT=443'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTP_PORT=8080'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_GRPC_PORT=9000'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_CERT_FILE=./testdata/ssl_cert.pem'
+    config_test.go:1180: field "server.cert_key": non-empty value is required
+=== RUN   TestLoad/server_https_defined_but_not_found_cert_file_(YAML)
+    config_test.go:1132: field "server.cert_file": stat ./testdata/ssl_cert_not_exist.pem: no such file or directory
+=== RUN   TestLoad/server_https_defined_but_not_found_cert_file_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_SERVER_CERT_KEY=./testdata/ssl_cert_not_exist.key'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_PROTOCOL=https'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HOST=0.0.0.0'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTPS_PORT=443'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTP_PORT=8080'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_GRPC_PORT=9000'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_CERT_FILE=./testdata/ssl_cert_not_exist.pem'
+    config_test.go:1180: field "server.cert_file": stat ./testdata/ssl_cert_not_exist.pem: no such file or directory
+=== RUN   TestLoad/server_https_defined_but_not_found_cert_key_(YAML)
+    config_test.go:1132: field "server.cert_key": stat ./testdata/ssl_cert_not_exist.key: no such file or directory
+=== RUN   TestLoad/server_https_defined_but_not_found_cert_key_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_SERVER_PROTOCOL=https'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HOST=0.0.0.0'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTPS_PORT=443'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTP_PORT=8080'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_GRPC_PORT=9000'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_CERT_FILE=./testdata/ssl_cert.pem'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_CERT_KEY=./testdata/ssl_cert_not_exist.key'
+    config_test.go:1180: field "server.cert_key": stat ./testdata/ssl_cert_not_exist.key: no such file or directory
+=== RUN   TestLoad/database_protocol_required_(YAML)
+    config_test.go:1132: field "db.protocol": non-empty value is required
+=== RUN   TestLoad/database_protocol_required_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_DB_HOST=localhost'
+    config_test.go:1166: Setting env 'FLIPT_DB_PORT=3306'
+    config_test.go:1166: Setting env 'FLIPT_DB_NAME=flipt'
+    config_test.go:1166: Setting env 'FLIPT_DB_USER=flipt'
+    config_test.go:1166: Setting env 'FLIPT_DB_PASSWORD=s3cr3t!'
+    config_test.go:1180: field "db.protocol": non-empty value is required
+=== RUN   TestLoad/database_host_required_(YAML)
+    config_test.go:1132: field "db.host": non-empty value is required
+=== RUN   TestLoad/database_host_required_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_DB_USER=flipt'
+    config_test.go:1166: Setting env 'FLIPT_DB_PASSWORD=s3cr3t!'
+    config_test.go:1166: Setting env 'FLIPT_DB_PROTOCOL=mysql'
+    config_test.go:1166: Setting env 'FLIPT_DB_PORT=3306'
+    config_test.go:1166: Setting env 'FLIPT_DB_NAME=flipt'
+    config_test.go:1180: field "db.host": non-empty value is required
+=== RUN   TestLoad/database_name_required_(YAML)
+    config_test.go:1132: field "db.name": non-empty value is required
+=== RUN   TestLoad/database_name_required_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_DB_HOST=localhost'
+    config_test.go:1166: Setting env 'FLIPT_DB_PORT=3306'
+    config_test.go:1166: Setting env 'FLIPT_DB_USER=flipt'
+    config_test.go:1166: Setting env 'FLIPT_DB_PASSWORD=s3cr3t!'
+    config_test.go:1166: Setting env 'FLIPT_DB_PROTOCOL=mysql'
+    config_test.go:1180: field "db.name": non-empty value is required
+=== RUN   TestLoad/authentication_token_negative_interval_(YAML)
+    config_test.go:1132: field "authentication.methodtoken.cleanup.interval": positive non-zero duration required
+=== RUN   TestLoad/authentication_token_negative_interval_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_TOKEN_CLEANUP_INTERVAL=-1m'
+    config_test.go:1180: field "authentication.methodtoken.cleanup.interval": positive non-zero duration required
+=== RUN   TestLoad/authentication_token_zero_grace_period_(YAML)
+    config_test.go:1132: field "authentication.methodtoken.cleanup.interval": positive non-zero duration required
+=== RUN   TestLoad/authentication_token_zero_grace_period_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_TOKEN_CLEANUP_GRACE_PERIOD=0'
+    config_test.go:1180: field "authentication.methodtoken.cleanup.interval": positive non-zero duration required
+=== RUN   TestLoad/authentication_token_with_provided_bootstrap_token_(YAML)
+=== RUN   TestLoad/authentication_token_with_provided_bootstrap_token_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_TOKEN_BOOTSTRAP_TOKEN=s3cr3t!'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_TOKEN_BOOTSTRAP_EXPIRATION=24h'
+=== RUN   TestLoad/authentication_session_strip_domain_scheme/port_(YAML)
+=== RUN   TestLoad/authentication_session_strip_domain_scheme/port_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_TOKEN_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_ENABLED=true'
+=== RUN   TestLoad/authentication_kubernetes_defaults_when_enabled_(YAML)
+=== RUN   TestLoad/authentication_kubernetes_defaults_when_enabled_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_KUBERNETES_ENABLED=true'
+=== RUN   TestLoad/authentication_github_requires_read:org_scope_when_allowing_orgs_(YAML)
+    config_test.go:1132: provider "github": field "scopes": must contain read:org when allowed_organizations is not empty
+=== RUN   TestLoad/authentication_github_requires_read:org_scope_when_allowing_orgs_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_ID=client_id'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_SECRET=client_secret'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_REDIRECT_ADDRESS=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_SCOPES=user:email'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_ALLOWED_ORGANIZATIONS=github.com/flipt-io'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1180: provider "github": field "scopes": must contain read:org when allowed_organizations is not empty
+=== RUN   TestLoad/authentication_github_missing_client_id_(YAML)
+    config_test.go:1132: provider "github": field "client_id": non-empty value is required
+=== RUN   TestLoad/authentication_github_missing_client_id_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_SECRET=client_secret'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_REDIRECT_ADDRESS=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_SCOPES=user:email'
+    config_test.go:1180: provider "github": field "client_id": non-empty value is required
+=== RUN   TestLoad/authentication_github_missing_client_secret_(YAML)
+    config_test.go:1132: provider "github": field "client_secret": non-empty value is required
+=== RUN   TestLoad/authentication_github_missing_client_secret_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_ID=client_id'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_REDIRECT_ADDRESS=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_SCOPES=user:email'
+    config_test.go:1180: provider "github": field "client_secret": non-empty value is required
+=== RUN   TestLoad/authentication_github_missing_client_id_(YAML)#01
+    config_test.go:1132: provider "github": field "redirect_address": non-empty value is required
+=== RUN   TestLoad/authentication_github_missing_client_id_(ENV)#01
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_ID=client_id'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_SECRET=client_secret'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_SCOPES=user:email'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_ENABLED=true'
+    config_test.go:1180: provider "github": field "redirect_address": non-empty value is required
+=== RUN   TestLoad/authentication_github_has_non_declared_org_in_allowed_teams_(YAML)
+    config_test.go:1132: provider "github": field "allowed_teams": the organization 'my-other-org' was not declared in 'allowed_organizations' field
+=== RUN   TestLoad/authentication_github_has_non_declared_org_in_allowed_teams_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_ID=client_id'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_SECRET=client_secret'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_REDIRECT_ADDRESS=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_SCOPES=read:org'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_ALLOWED_ORGANIZATIONS=my-org'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_ALLOWED_TEAMS_MY-OTHER-ORG=my-team'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1180: provider "github": field "allowed_teams": the organization 'my-other-org' was not declared in 'allowed_organizations' field
+=== RUN   TestLoad/authentication_oidc_missing_client_id_(YAML)
+    config_test.go:1132: provider "foo": field "client_id": non-empty value is required
+=== RUN   TestLoad/authentication_oidc_missing_client_id_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_FOO_CLIENT_SECRET=client_secret'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_FOO_REDIRECT_ADDRESS=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_FOO_SCOPES=user:email'
+    config_test.go:1180: provider "foo": field "client_id": non-empty value is required
+=== RUN   TestLoad/authentication_oidc_missing_client_secret_(YAML)
+    config_test.go:1132: provider "foo": field "client_secret": non-empty value is required
+=== RUN   TestLoad/authentication_oidc_missing_client_secret_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_FOO_CLIENT_ID=client_id'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_FOO_REDIRECT_ADDRESS=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_FOO_SCOPES=user:email'
+    config_test.go:1180: provider "foo": field "client_secret": non-empty value is required
+=== RUN   TestLoad/authentication_oidc_missing_client_id_(YAML)#01
+    config_test.go:1132: provider "foo": field "redirect_address": non-empty value is required
+=== RUN   TestLoad/authentication_oidc_missing_client_id_(ENV)#01
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_FOO_CLIENT_ID=client_id'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_FOO_CLIENT_SECRET=client_secret'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_FOO_SCOPES=user:email'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1180: provider "foo": field "redirect_address": non-empty value is required
+=== RUN   TestLoad/authentication_jwt_public_key_file_or_jwks_url_required_(YAML)
+    config_test.go:1132: one of jwks_url or public_key_file is required
+=== RUN   TestLoad/authentication_jwt_public_key_file_or_jwks_url_required_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_JWT_ENABLED=true'
+    config_test.go:1180: one of jwks_url or public_key_file is required
+=== RUN   TestLoad/authentication_jwt_public_key_file_and_jwks_url_mutually_exclusive_(YAML)
+    config_test.go:1132: only one of jwks_url or public_key_file can be set
+=== RUN   TestLoad/authentication_jwt_public_key_file_and_jwks_url_mutually_exclusive_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_JWT_JWKS_URL=https://example.com/.well-known/jwks.json'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_JWT_PUBLIC_KEY_FILE=testdata/authentication/jwt_key_file.pem'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_JWT_ENABLED=true'
+    config_test.go:1180: only one of jwks_url or public_key_file can be set
+=== RUN   TestLoad/authentication_jwks_invalid_url_(YAML)
+    config_test.go:1132: field "jwks_url": parse " http://localhost:8080/.well-known/jwks.json": first path segment in URL cannot contain colon
+=== RUN   TestLoad/authentication_jwks_invalid_url_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_JWT_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_JWT_JWKS_URL= http://localhost:8080/.well-known/jwks.json'
+    config_test.go:1180: field "jwks_url": parse " http://localhost:8080/.well-known/jwks.json": first path segment in URL cannot contain colon
+=== RUN   TestLoad/authentication_jwt_public_key_file_not_found_(YAML)
+    config_test.go:1132: field "public_key_file": stat testdata/authentication/jwt_key_file.pem: no such file or directory
+=== RUN   TestLoad/authentication_jwt_public_key_file_not_found_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=http://localhost:8080'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_JWT_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_JWT_PUBLIC_KEY_FILE=testdata/authentication/jwt_key_file.pem'
+    config_test.go:1180: field "public_key_file": stat testdata/authentication/jwt_key_file.pem: no such file or directory
+=== RUN   TestLoad/advanced_(YAML)
+=== RUN   TestLoad/advanced_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_SINKS_LOG_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_SINKS_LOG_FILE=/path/to/logs.txt'
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_BUFFER_CAPACITY=10'
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_BUFFER_FLUSH_PERIOD=3m'
+    config_test.go:1166: Setting env 'FLIPT_LOG_LEVEL=WARN'
+    config_test.go:1166: Setting env 'FLIPT_LOG_FILE=testLogFile.txt'
+    config_test.go:1166: Setting env 'FLIPT_LOG_ENCODING=json'
+    config_test.go:1166: Setting env 'FLIPT_LOG_KEYS_LEVEL=level'
+    config_test.go:1166: Setting env 'FLIPT_LOG_KEYS_MESSAGE=msg'
+    config_test.go:1166: Setting env 'FLIPT_LOG_KEYS_TIME=time'
+    config_test.go:1166: Setting env 'FLIPT_CORS_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_CORS_ALLOWED_ORIGINS=foo.com bar.com  baz.com'
+    config_test.go:1166: Setting env 'FLIPT_CORS_ALLOWED_HEADERS=X-Some-Header X-Some-Other-Header'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_BACKEND=memory'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_TTL=60s'
+    config_test.go:1166: Setting env 'FLIPT_CACHE_MEMORY_EVICTION_INTERVAL=5m'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_EXPORTER=otlp'
+    config_test.go:1166: Setting env 'FLIPT_TRACING_OTLP_ENDPOINT=localhost:4318'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=https://github.com/flipt-io/flipt.git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REF=production'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_POLL_INTERVAL=5s'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_BASIC_USERNAME=user'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_BASIC_PASSWORD=pass'
+    config_test.go:1166: Setting env 'FLIPT_DB_URL=postgres://postgres@localhost:5432/flipt?sslmode=disable'
+    config_test.go:1166: Setting env 'FLIPT_DB_MAX_IDLE_CONN=10'
+    config_test.go:1166: Setting env 'FLIPT_DB_MAX_OPEN_CONN=50'
+    config_test.go:1166: Setting env 'FLIPT_DB_CONN_MAX_LIFETIME=30m'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_GRPC_PORT=9001'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_CERT_FILE=./testdata/ssl_cert.pem'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_CERT_KEY=./testdata/ssl_key.pem'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_PROTOCOL=https'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HOST=127.0.0.1'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTP_PORT=8081'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_HTTPS_PORT=8080'
+    config_test.go:1166: Setting env 'FLIPT_META_CHECK_FOR_UPDATES=false'
+    config_test.go:1166: Setting env 'FLIPT_META_TELEMETRY_ENABLED=false'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_REQUIRED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_CSRF_KEY=abcdefghijklmnopqrstuvwxyz1234567890'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_DOMAIN=auth.flipt.io'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_SESSION_SECURE=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_TOKEN_CLEANUP_INTERVAL=2h'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_TOKEN_CLEANUP_GRACE_PERIOD=48h'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_TOKEN_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_GOOGLE_CLIENT_SECRET=bcdefgh'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_GOOGLE_REDIRECT_ADDRESS=http://auth.flipt.io'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_GOOGLE_ISSUER_URL=http://accounts.google.com'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_PROVIDERS_GOOGLE_CLIENT_ID=abcdefg'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_CLEANUP_INTERVAL=2h'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_OIDC_CLEANUP_GRACE_PERIOD=48h'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_KUBERNETES_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_KUBERNETES_DISCOVERY_URL=https://some-other-k8s.namespace.svc'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_KUBERNETES_CA_PATH=/path/to/ca/certificate/ca.pem'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH=/path/to/sa/token'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_KUBERNETES_CLEANUP_GRACE_PERIOD=48h'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_KUBERNETES_CLEANUP_INTERVAL=2h'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_ID=abcdefg'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLIENT_SECRET=bcdefgh'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_REDIRECT_ADDRESS=http://auth.flipt.io'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLEANUP_INTERVAL=2h'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_CLEANUP_GRACE_PERIOD=48h'
+    config_test.go:1166: Setting env 'FLIPT_AUTHENTICATION_METHODS_GITHUB_ENABLED=true'
+=== RUN   TestLoad/version_v1_(YAML)
+=== RUN   TestLoad/version_v1_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_VERSION=1.0'
+=== RUN   TestLoad/buffer_size_invalid_capacity_(YAML)
+    config_test.go:1132: buffer capacity below 2 or above 10
+=== RUN   TestLoad/buffer_size_invalid_capacity_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_BUFFER_FLUSH_PERIOD=2m'
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_BUFFER_CAPACITY=1000'
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_SINKS_LOG_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_SINKS_LOG_FILE=./log.txt'
+    config_test.go:1180: buffer capacity below 2 or above 10
+=== RUN   TestLoad/flush_period_invalid_(YAML)
+    config_test.go:1132: flush period below 2 minutes or greater than 5 minutes
+=== RUN   TestLoad/flush_period_invalid_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_SINKS_LOG_ENABLED=true'
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_SINKS_LOG_FILE=./log.txt'
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_BUFFER_CAPACITY=2'
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_BUFFER_FLUSH_PERIOD=30m'
+    config_test.go:1180: flush period below 2 minutes or greater than 5 minutes
+=== RUN   TestLoad/file_not_specified_(YAML)
+    config_test.go:1132: file not specified
+=== RUN   TestLoad/file_not_specified_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_SINKS_LOG_ENABLED=true'
+    config_test.go:1180: file not specified
+=== RUN   TestLoad/url_or_template_not_specified_(YAML)
+    config_test.go:1132: url or template(s) not provided
+=== RUN   TestLoad/url_or_template_not_specified_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_AUDIT_SINKS_WEBHOOK_ENABLED=true'
+    config_test.go:1180: url or template(s) not provided
+=== RUN   TestLoad/local_config_provided_(YAML)
+=== RUN   TestLoad/local_config_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=local'
+=== RUN   TestLoad/git_config_provided_(YAML)
+=== RUN   TestLoad/git_config_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=git@github.com:foo/bar.git'
+=== RUN   TestLoad/git_config_provided_with_directory_(YAML)
+=== RUN   TestLoad/git_config_provided_with_directory_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=git@github.com:foo/bar.git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_DIRECTORY=baz'
+=== RUN   TestLoad/git_config_provided_with_ref_type_(YAML)
+=== RUN   TestLoad/git_config_provided_with_ref_type_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=git@github.com:foo/bar.git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_DIRECTORY=baz'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REF_TYPE=semver'
+=== RUN   TestLoad/git_repository_not_provided_(YAML)
+    config_test.go:1132: git repository must be specified
+=== RUN   TestLoad/git_repository_not_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1180: git repository must be specified
+=== RUN   TestLoad/git_invalid_ref_type_provided_(YAML)
+    config_test.go:1132: invalid git storage reference type
+=== RUN   TestLoad/git_invalid_ref_type_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=git@github.com:foo/bar.git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_DIRECTORY=baz'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REF_TYPE=wrong'
+    config_test.go:1180: invalid git storage reference type
+=== RUN   TestLoad/git_basic_auth_partially_provided_(YAML)
+    config_test.go:1132: both username and password need to be provided for basic auth
+=== RUN   TestLoad/git_basic_auth_partially_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=git@github.com:foo/bar.git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_BASIC_USERNAME=foo'
+    config_test.go:1180: both username and password need to be provided for basic auth
+=== RUN   TestLoad/git_ssh_auth_missing_password_(YAML)
+    config_test.go:1132: ssh authentication: password required
+=== RUN   TestLoad/git_ssh_auth_missing_password_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=git@github.com:foo/bar.git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_USER=foo'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_PRIVATE_KEY_PATH=/path/to/pem.key'
+    config_test.go:1180: ssh authentication: password required
+=== RUN   TestLoad/git_ssh_auth_missing_private_key_parts_(YAML)
+    config_test.go:1132: ssh authentication: please provide exclusively one of private_key_bytes or private_key_path
+=== RUN   TestLoad/git_ssh_auth_missing_private_key_parts_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=git@github.com:foo/bar.git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_USER=foo'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_PASSWORD=bar'
+    config_test.go:1180: ssh authentication: please provide exclusively one of private_key_bytes or private_key_path
+=== RUN   TestLoad/git_ssh_auth_provided_both_private_key_forms_(YAML)
+    config_test.go:1132: ssh authentication: please provide exclusively one of private_key_bytes or private_key_path
+=== RUN   TestLoad/git_ssh_auth_provided_both_private_key_forms_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_PASSWORD=bar'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_PRIVATE_KEY_PATH=/path/to/pem.key'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_PRIVATE_KEY_BYTES=aswellassomepemdata'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_USER=foo'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=git@github.com:foo/bar.git'
+    config_test.go:1180: ssh authentication: please provide exclusively one of private_key_bytes or private_key_path
+=== RUN   TestLoad/git_valid_with_ssh_auth_(YAML)
+=== RUN   TestLoad/git_valid_with_ssh_auth_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_REPOSITORY=git@github.com:foo/bar.git'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_PASSWORD=bar'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_GIT_AUTHENTICATION_SSH_PRIVATE_KEY_PATH=/path/to/pem.key'
+=== RUN   TestLoad/s3_config_provided_(YAML)
+=== RUN   TestLoad/s3_config_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=object'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_S3_BUCKET=testbucket'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_TYPE=s3'
+=== RUN   TestLoad/s3_full_config_provided_(YAML)
+=== RUN   TestLoad/s3_full_config_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=object'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_TYPE=s3'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_S3_BUCKET=testbucket'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_S3_PREFIX=prefix'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_S3_REGION=region'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_S3_POLL_INTERVAL=5m'
+=== RUN   TestLoad/OCI_config_provided_(YAML)
+=== RUN   TestLoad/OCI_config_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=oci'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_BUNDLES_DIRECTORY=/tmp/bundles'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_USERNAME=foo'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_PASSWORD=bar'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_POLL_INTERVAL=5m'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_REPOSITORY=some.target/repository/abundle:latest'
+=== RUN   TestLoad/OCI_config_provided_full_(YAML)
+=== RUN   TestLoad/OCI_config_provided_full_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=oci'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_BUNDLES_DIRECTORY=/tmp/bundles'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_USERNAME=foo'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_PASSWORD=bar'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_POLL_INTERVAL=5m'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_MANIFEST_VERSION=1.0'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_REPOSITORY=some.target/repository/abundle:latest'
+=== RUN   TestLoad/OCI_config_provided_AWS_ECR_(YAML)
+=== RUN   TestLoad/OCI_config_provided_AWS_ECR_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=oci'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_REPOSITORY=some.target/repository/abundle:latest'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_BUNDLES_DIRECTORY=/tmp/bundles'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_TYPE=aws-ecr'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_POLL_INTERVAL=5m'
+=== RUN   TestLoad/OCI_config_provided_with_no_authentication_(YAML)
+=== RUN   TestLoad/OCI_config_provided_with_no_authentication_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=oci'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_BUNDLES_DIRECTORY=/tmp/bundles'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_POLL_INTERVAL=5m'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_REPOSITORY=some.target/repository/abundle:latest'
+=== RUN   TestLoad/OCI_config_provided_with_invalid_authentication_type_(YAML)
+    config_test.go:1132: oci authentication type is not supported
+=== RUN   TestLoad/OCI_config_provided_with_invalid_authentication_type_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=oci'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_REPOSITORY=some.target/repository/abundle:latest'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_BUNDLES_DIRECTORY=/tmp/bundles'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_POLL_INTERVAL=5m'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_TYPE=invalid'
+    config_test.go:1180: oci authentication type is not supported
+=== RUN   TestLoad/OCI_invalid_no_repository_(YAML)
+    config_test.go:1132: oci storage repository must be specified
+=== RUN   TestLoad/OCI_invalid_no_repository_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=oci'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_USERNAME=foo'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_PASSWORD=bar'
+    config_test.go:1180: oci storage repository must be specified
+=== RUN   TestLoad/OCI_invalid_unexpected_scheme_(YAML)
+    config_test.go:1132: validating OCI configuration: unexpected repository scheme: "unknown" should be one of [http|https|flipt]
+=== RUN   TestLoad/OCI_invalid_unexpected_scheme_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=oci'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_REPOSITORY=unknown://registry/repo:tag'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_USERNAME=foo'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_PASSWORD=bar'
+    config_test.go:1180: validating OCI configuration: unexpected repository scheme: "unknown" should be one of [http|https|flipt]
+=== RUN   TestLoad/OCI_invalid_wrong_manifest_version_(YAML)
+    config_test.go:1132: wrong manifest version, it should be 1.0 or 1.1
+=== RUN   TestLoad/OCI_invalid_wrong_manifest_version_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=oci'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_BUNDLES_DIRECTORY=/tmp/bundles'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_PASSWORD=bar'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_AUTHENTICATION_USERNAME=foo'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_POLL_INTERVAL=5m'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_MANIFEST_VERSION=1.2'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OCI_REPOSITORY=some.target/repository/abundle:latest'
+    config_test.go:1180: wrong manifest version, it should be 1.0 or 1.1
+=== RUN   TestLoad/storage_readonly_config_invalid_(YAML)
+    config_test.go:1132: setting read only mode is only supported with database storage
+=== RUN   TestLoad/storage_readonly_config_invalid_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=object'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_READ_ONLY=false'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_S3_BUCKET=testbucket'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_S3_PREFIX=prefix'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_S3_REGION=region'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_S3_POLL_INTERVAL=5m'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_TYPE=s3'
+    config_test.go:1180: setting read only mode is only supported with database storage
+=== RUN   TestLoad/s3_config_invalid_(YAML)
+    config_test.go:1132: s3 bucket must be specified
+=== RUN   TestLoad/s3_config_invalid_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=object'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_TYPE=s3'
+    config_test.go:1180: s3 bucket must be specified
+=== RUN   TestLoad/object_storage_type_not_provided_(YAML)
+    config_test.go:1132: object storage type must be specified
+=== RUN   TestLoad/object_storage_type_not_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=object'
+    config_test.go:1180: object storage type must be specified
+=== RUN   TestLoad/azblob_config_invalid_(YAML)
+    config_test.go:1132: azblob container must be specified
+=== RUN   TestLoad/azblob_config_invalid_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=object'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_TYPE=azblob'
+    config_test.go:1180: azblob container must be specified
+=== RUN   TestLoad/azblob_full_config_provided_(YAML)
+=== RUN   TestLoad/azblob_full_config_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=object'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_TYPE=azblob'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_AZBLOB_CONTAINER=testdata'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_AZBLOB_ENDPOINT=https//devaccount.blob.core.windows.net'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_AZBLOB_POLL_INTERVAL=5m'
+=== RUN   TestLoad/gs_config_invalid_(YAML)
+    config_test.go:1132: googlecloud bucket must be specified
+=== RUN   TestLoad/gs_config_invalid_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_TYPE=googlecloud'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=object'
+    config_test.go:1180: googlecloud bucket must be specified
+=== RUN   TestLoad/gs_full_config_provided_(YAML)
+=== RUN   TestLoad/gs_full_config_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_TYPE=object'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_TYPE=googlecloud'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_GOOGLECLOUD_BUCKET=testdata'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_GOOGLECLOUD_PREFIX=prefix'
+    config_test.go:1166: Setting env 'FLIPT_STORAGE_OBJECT_GOOGLECLOUD_POLL_INTERVAL=5m'
+=== RUN   TestLoad/grpc_keepalive_config_provided_(YAML)
+=== RUN   TestLoad/grpc_keepalive_config_provided_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_SERVER_GRPC_CONN_MAX_AGE=30s'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_GRPC_CONN_MAX_AGE_GRACE=10s'
+    config_test.go:1166: Setting env 'FLIPT_SERVER_GRPC_CONN_MAX_IDLE_TIME=1h'
+=== RUN   TestLoad/clickhouse_enabled_but_no_URL_set_(YAML)
+    config_test.go:1132: clickhouse url not provided
+=== RUN   TestLoad/clickhouse_enabled_but_no_URL_set_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_ANALYTICS_STORAGE_CLICKHOUSE_ENABLED=true'
+    config_test.go:1180: clickhouse url not provided
+=== RUN   TestLoad/analytics_flush_period_too_low_(YAML)
+    config_test.go:1132: flush period below 10 seconds
+=== RUN   TestLoad/analytics_flush_period_too_low_(ENV)
+    config_test.go:1166: Setting env 'FLIPT_ANALYTICS_BUFFER_FLUSH_PERIOD=5s'
+    config_test.go:1180: flush period below 10 seconds
+--- PASS: TestLoad (0.20s)
+    --- PASS: TestLoad/defaults_(YAML) (0.00s)
+    --- PASS: TestLoad/defaults_(ENV) (0.00s)
+    --- PASS: TestLoad/defaults_with_env_overrides_(YAML) (0.00s)
+    --- PASS: TestLoad/defaults_with_env_overrides_(ENV) (0.00s)
+    --- PASS: TestLoad/deprecated_tracing_jaeger_(YAML) (0.00s)
+    --- PASS: TestLoad/deprecated_tracing_jaeger_(ENV) (0.00s)
+    --- PASS: TestLoad/deprecated_autentication_excluding_metadata_(YAML) (0.00s)
+    --- PASS: TestLoad/deprecated_autentication_excluding_metadata_(ENV) (0.00s)
+    --- PASS: TestLoad/cache_no_backend_set_(YAML) (0.00s)
+    --- PASS: TestLoad/cache_no_backend_set_(ENV) (0.00s)
+    --- PASS: TestLoad/cache_memory_(YAML) (0.00s)
+    --- PASS: TestLoad/cache_memory_(ENV) (0.00s)
+    --- PASS: TestLoad/cache_redis_(YAML) (0.00s)
+    --- PASS: TestLoad/cache_redis_(ENV) (0.00s)
+    --- PASS: TestLoad/cache_redis_with_username_(YAML) (0.00s)
+    --- PASS: TestLoad/cache_redis_with_username_(ENV) (0.00s)
+    --- PASS: TestLoad/metrics_disabled_(YAML) (0.00s)
+    --- PASS: TestLoad/metrics_disabled_(ENV) (0.00s)
+    --- PASS: TestLoad/metrics_OTLP_(YAML) (0.00s)
+    --- PASS: TestLoad/metrics_OTLP_(ENV) (0.00s)
+    --- PASS: TestLoad/tracing_zipkin_(YAML) (0.00s)
+    --- PASS: TestLoad/tracing_zipkin_(ENV) (0.00s)
+    --- PASS: TestLoad/tracing_with_wrong_sampling_ration_(YAML) (0.00s)
+    --- PASS: TestLoad/tracing_with_wrong_sampling_ration_(ENV) (0.00s)
+    --- PASS: TestLoad/tracing_with_wrong_propagator_(YAML) (0.00s)
+    --- PASS: TestLoad/tracing_with_wrong_propagator_(ENV) (0.00s)
+    --- PASS: TestLoad/tracing_OTLP_(YAML) (0.00s)
+    --- PASS: TestLoad/tracing_OTLP_(ENV) (0.00s)
+    --- PASS: TestLoad/database_key/value_(YAML) (0.00s)
+    --- PASS: TestLoad/database_key/value_(ENV) (0.00s)
+    --- PASS: TestLoad/server_https_missing_cert_file_(YAML) (0.00s)
+    --- PASS: TestLoad/server_https_missing_cert_file_(ENV) (0.00s)
+    --- PASS: TestLoad/server_https_missing_cert_key_(YAML) (0.00s)
+    --- PASS: TestLoad/server_https_missing_cert_key_(ENV) (0.00s)
+    --- PASS: TestLoad/server_https_defined_but_not_found_cert_file_(YAML) (0.00s)
+    --- PASS: TestLoad/server_https_defined_but_not_found_cert_file_(ENV) (0.00s)
+    --- PASS: TestLoad/server_https_defined_but_not_found_cert_key_(YAML) (0.00s)
+    --- PASS: TestLoad/server_https_defined_but_not_found_cert_key_(ENV) (0.00s)
+    --- PASS: TestLoad/database_protocol_required_(YAML) (0.00s)
+    --- PASS: TestLoad/database_protocol_required_(ENV) (0.00s)
+    --- PASS: TestLoad/database_host_required_(YAML) (0.00s)
+    --- PASS: TestLoad/database_host_required_(ENV) (0.00s)
+    --- PASS: TestLoad/database_name_required_(YAML) (0.00s)
+    --- PASS: TestLoad/database_name_required_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_token_negative_interval_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_token_negative_interval_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_token_zero_grace_period_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_token_zero_grace_period_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_token_with_provided_bootstrap_token_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_token_with_provided_bootstrap_token_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_session_strip_domain_scheme/port_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_session_strip_domain_scheme/port_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_kubernetes_defaults_when_enabled_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_kubernetes_defaults_when_enabled_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_github_requires_read:org_scope_when_allowing_orgs_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_github_requires_read:org_scope_when_allowing_orgs_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_github_missing_client_id_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_github_missing_client_id_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_github_missing_client_secret_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_github_missing_client_secret_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_github_missing_client_id_(YAML)#01 (0.00s)
+    --- PASS: TestLoad/authentication_github_missing_client_id_(ENV)#01 (0.00s)
+    --- PASS: TestLoad/authentication_github_has_non_declared_org_in_allowed_teams_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_github_has_non_declared_org_in_allowed_teams_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_oidc_missing_client_id_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_oidc_missing_client_id_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_oidc_missing_client_secret_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_oidc_missing_client_secret_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_oidc_missing_client_id_(YAML)#01 (0.00s)
+    --- PASS: TestLoad/authentication_oidc_missing_client_id_(ENV)#01 (0.00s)
+    --- PASS: TestLoad/authentication_jwt_public_key_file_or_jwks_url_required_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_jwt_public_key_file_or_jwks_url_required_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_jwt_public_key_file_and_jwks_url_mutually_exclusive_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_jwt_public_key_file_and_jwks_url_mutually_exclusive_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_jwks_invalid_url_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_jwks_invalid_url_(ENV) (0.00s)
+    --- PASS: TestLoad/authentication_jwt_public_key_file_not_found_(YAML) (0.00s)
+    --- PASS: TestLoad/authentication_jwt_public_key_file_not_found_(ENV) (0.00s)
+    --- PASS: TestLoad/advanced_(YAML) (0.00s)
+    --- PASS: TestLoad/advanced_(ENV) (0.00s)
+    --- PASS: TestLoad/version_v1_(YAML) (0.00s)
+    --- PASS: TestLoad/version_v1_(ENV) (0.00s)
+    --- PASS: TestLoad/buffer_size_invalid_capacity_(YAML) (0.00s)
+    --- PASS: TestLoad/buffer_size_invalid_capacity_(ENV) (0.00s)
+    --- PASS: TestLoad/flush_period_invalid_(YAML) (0.00s)
+    --- PASS: TestLoad/flush_period_invalid_(ENV) (0.00s)
+    --- PASS: TestLoad/file_not_specified_(YAML) (0.00s)
+    --- PASS: TestLoad/file_not_specified_(ENV) (0.00s)
+    --- PASS: TestLoad/url_or_template_not_specified_(YAML) (0.00s)
+    --- PASS: TestLoad/url_or_template_not_specified_(ENV) (0.00s)
+    --- PASS: TestLoad/local_config_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/local_config_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/git_config_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/git_config_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/git_config_provided_with_directory_(YAML) (0.00s)
+    --- PASS: TestLoad/git_config_provided_with_directory_(ENV) (0.00s)
+    --- PASS: TestLoad/git_config_provided_with_ref_type_(YAML) (0.00s)
+    --- PASS: TestLoad/git_config_provided_with_ref_type_(ENV) (0.00s)
+    --- PASS: TestLoad/git_repository_not_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/git_repository_not_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/git_invalid_ref_type_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/git_invalid_ref_type_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/git_basic_auth_partially_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/git_basic_auth_partially_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/git_ssh_auth_missing_password_(YAML) (0.00s)
+    --- PASS: TestLoad/git_ssh_auth_missing_password_(ENV) (0.00s)
+    --- PASS: TestLoad/git_ssh_auth_missing_private_key_parts_(YAML) (0.00s)
+    --- PASS: TestLoad/git_ssh_auth_missing_private_key_parts_(ENV) (0.00s)
+    --- PASS: TestLoad/git_ssh_auth_provided_both_private_key_forms_(YAML) (0.00s)
+    --- PASS: TestLoad/git_ssh_auth_provided_both_private_key_forms_(ENV) (0.00s)
+    --- PASS: TestLoad/git_valid_with_ssh_auth_(YAML) (0.00s)
+    --- PASS: TestLoad/git_valid_with_ssh_auth_(ENV) (0.00s)
+    --- PASS: TestLoad/s3_config_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/s3_config_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/s3_full_config_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/s3_full_config_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_full_(YAML) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_full_(ENV) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_AWS_ECR_(YAML) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_AWS_ECR_(ENV) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_with_no_authentication_(YAML) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_with_no_authentication_(ENV) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_with_invalid_authentication_type_(YAML) (0.00s)
+    --- PASS: TestLoad/OCI_config_provided_with_invalid_authentication_type_(ENV) (0.00s)
+    --- PASS: TestLoad/OCI_invalid_no_repository_(YAML) (0.00s)
+    --- PASS: TestLoad/OCI_invalid_no_repository_(ENV) (0.00s)
+    --- PASS: TestLoad/OCI_invalid_unexpected_scheme_(YAML) (0.00s)
+    --- PASS: TestLoad/OCI_invalid_unexpected_scheme_(ENV) (0.00s)
+    --- PASS: TestLoad/OCI_invalid_wrong_manifest_version_(YAML) (0.00s)
+    --- PASS: TestLoad/OCI_invalid_wrong_manifest_version_(ENV) (0.00s)
+    --- PASS: TestLoad/storage_readonly_config_invalid_(YAML) (0.00s)
+    --- PASS: TestLoad/storage_readonly_config_invalid_(ENV) (0.00s)
+    --- PASS: TestLoad/s3_config_invalid_(YAML) (0.00s)
+    --- PASS: TestLoad/s3_config_invalid_(ENV) (0.00s)
+    --- PASS: TestLoad/object_storage_type_not_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/object_storage_type_not_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/azblob_config_invalid_(YAML) (0.00s)
+    --- PASS: TestLoad/azblob_config_invalid_(ENV) (0.00s)
+    --- PASS: TestLoad/azblob_full_config_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/azblob_full_config_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/gs_config_invalid_(YAML) (0.00s)
+    --- PASS: TestLoad/gs_config_invalid_(ENV) (0.00s)
+    --- PASS: TestLoad/gs_full_config_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/gs_full_config_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/grpc_keepalive_config_provided_(YAML) (0.00s)
+    --- PASS: TestLoad/grpc_keepalive_config_provided_(ENV) (0.00s)
+    --- PASS: TestLoad/clickhouse_enabled_but_no_URL_set_(YAML) (0.00s)
+    --- PASS: TestLoad/clickhouse_enabled_but_no_URL_set_(ENV) (0.00s)
+    --- PASS: TestLoad/analytics_flush_period_too_low_(YAML) (0.00s)
+    --- PASS: TestLoad/analytics_flush_period_too_low_(ENV) (0.00s)
+=== RUN   TestServeHTTP
+--- PASS: TestServeHTTP (0.00s)
+=== RUN   TestMarshalYAML
+=== RUN   TestMarshalYAML/defaults
+--- PASS: TestMarshalYAML (0.00s)
+    --- PASS: TestMarshalYAML/defaults (0.00s)
+=== RUN   Test_mustBindEnv
+=== RUN   Test_mustBindEnv/simple_struct
+=== RUN   Test_mustBindEnv/nested_structs_with_pointers
+=== RUN   Test_mustBindEnv/structs_with_maps_and_no_environment_variables
+=== RUN   Test_mustBindEnv/structs_with_maps_with_env
+=== RUN   Test_mustBindEnv/structs_with_maps_of_structs_(env_not_specific_enough)
+=== RUN   Test_mustBindEnv/structs_with_maps_of_structs
+--- PASS: Test_mustBindEnv (0.00s)
+    --- PASS: Test_mustBindEnv/simple_struct (0.00s)
+    --- PASS: Test_mustBindEnv/nested_structs_with_pointers (0.00s)
+    --- PASS: Test_mustBindEnv/structs_with_maps_and_no_environment_variables (0.00s)
+    --- PASS: Test_mustBindEnv/structs_with_maps_with_env (0.00s)
+    --- PASS: Test_mustBindEnv/structs_with_maps_of_structs_(env_not_specific_enough) (0.00s)
+    --- PASS: Test_mustBindEnv/structs_with_maps_of_structs (0.00s)
+=== RUN   TestGetConfigFile
+=== RUN   TestGetConfigFile/successful
+=== RUN   TestGetConfigFile/unknown_bucket
+=== RUN   TestGetConfigFile/unknown_scheme
+=== RUN   TestGetConfigFile/no_bucket
+=== RUN   TestGetConfigFile/no_key
+=== RUN   TestGetConfigFile/no_data
+--- PASS: TestGetConfigFile (0.00s)
+    --- PASS: TestGetConfigFile/successful (0.00s)
+    --- PASS: TestGetConfigFile/unknown_bucket (0.00s)
+    --- PASS: TestGetConfigFile/unknown_scheme (0.00s)
+    --- PASS: TestGetConfigFile/no_bucket (0.00s)
+    --- PASS: TestGetConfigFile/no_key (0.00s)
+    --- PASS: TestGetConfigFile/no_data (0.00s)
+=== RUN   TestStructTags
+--- PASS: TestStructTags (0.00s)
+=== RUN   TestLoadContextPropagation
+--- PASS: TestLoadContextPropagation (0.00s)
+=== RUN   TestDefaultDatabaseRoot
+--- PASS: TestDefaultDatabaseRoot (0.00s)
+PASS
+ok  	go.flipt.io/flipt/internal/config	0.227s

@@ -1,0 +1,8 @@
+{
+  "original_delivery_error": "ValueError('trace bundle already exists: /home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/archives/batch3-instance_ansible__ansible-bf98f031f3f5af31a2d78dc2f0a58fe92ebae0bb-v1055803c3a812189a1133297f7f5468579283f86')",
+  "original_report_preserved": true,
+  "only_offline_archiving": true,
+  "model_calls": 0,
+  "tests_repeated": false,
+  "raw_archive_written": true
+}

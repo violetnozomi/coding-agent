@@ -9,12 +9,12 @@ import subprocess
 import sys
 import tempfile
 import tarfile
-from types import SimpleNamespace
 import time
 
 import pytest
 
 from nz_coder.evaluation.model_relay import InputAccounting, RelayBinding, RelayLedger, RelayLimits
+from nz_coder.swebench.trace_budget import TraceBudget, archive_instance_diagnostics
 
 spec = importlib.util.spec_from_file_location("parallel_pro", Path(__file__).resolve().parents[2]
     / "docs/evidence/swebench-pro-20-batch2-2026-10-11/run-parallel.py")
@@ -234,8 +234,9 @@ def test_real_docker_prepare_uses_authorized_temporary_workspace(tmp_path):
             assert not (case / "result").is_symlink()
             assert (slot / "temporary-workspace.json").exists()
             (case / "result/runtime.jsonl").write_text('{"event":"run_end"}\n')
-            parallel.pro.archive_case(slot, case, {"instance_id": "offline"}, "memory-test", None,
-                lambda **kwargs: SimpleNamespace(bundle_path=tmp_path / "projection"))
+            budget = TraceBudget(tmp_path / "projection")
+            parallel.pro.archive_case(slot, case, {"instance_id": "offline"}, "memory-test", budget,
+                archive_instance_diagnostics)
             receipt = json.loads((slot / "archive-receipt.json").read_text())
             bundle = Path(receipt["bundle"])
             assert hashlib.sha256(bundle.read_bytes()).hexdigest() == receipt["sha256"]

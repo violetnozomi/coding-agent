@@ -1,0 +1,9 @@
+{
+  "parallel": [],
+  "serial_large_images": [
+    27,
+    28
+  ],
+  "half_free_bytes_at_start": 11410862080.0,
+  "order_uses_task_scores": false
+}

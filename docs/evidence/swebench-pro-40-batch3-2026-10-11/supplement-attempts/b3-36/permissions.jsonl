@@ -1,0 +1,16 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -n \"type Packages\" /workspace/models/*.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./... && go test ./scan/... 2>&1 | tail -40", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "go vet ./scan/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build ./scan/ 2>&1 | tail -20; echo \"BUILD_EXIT=$?\"", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -run 'Test_detectScanDest|Test_updatePortStatus|Test_findPortScanSuccessOn' ./scan/ 2>&1 | tail -30", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git diff --stat; git diff scan/base.go | head -60", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -l scan/base.go scan/base_test.go; git diff scan/base_test.go", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git diff scan/base_test.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -l scan/base.go scan/base_test.go && echo \"GOFMT_CLEAN\"", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "gofmt -d scan/base.go scan/base_test.go | head -30; echo \"EXIT=$?\"", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "gofmt -l scan/base.go scan/base_test.go", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 -run 'Test_detectScanDest|Test_updatePortStatus|Test_findPortScanSuccessOn|Test_execPortsScan' -v ./scan/ 2>&1 | grep -E \"^(=== RUN|--- (PASS|FAIL)|ok|FAIL|PASS)\" | head -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -l scan", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test -p 1 -count=1 ./scan/ 2>&1 | tail -5", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"^func Test\" scan/base_test.go", "workdir": "/workspace"}, "allowed": true}

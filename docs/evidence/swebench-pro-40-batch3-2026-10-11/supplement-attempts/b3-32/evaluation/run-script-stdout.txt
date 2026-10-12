@@ -1,0 +1,65 @@
+Running selected tests: test/units/module_utils/basic/test_sanitize_keys.py test/units/module_utils/basic/test_no_log.py
+Running unit test: test/units/module_utils/basic/test_sanitize_keys.py
+Run command: /usr/local/bin/python /app/test/lib/ansible_test/_data/yamlcheck.py
+Unit test with Python 3.9
+Injecting "/tmp/python-xhfsn8wg-ansible/python" as a symlink to the "/usr/local/bin/python" interpreter.
+Run command: pytest --boxed -r a -n 4 --color no -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest.ini --junit-xml /app/test/results/junit/python3.9-units.xml --durations=25 --strict-markers -v test/units/module_utils/basic/test_sanitize_keys.py
+============================= test session starts ==============================
+platform linux -- Python 3.9.23, pytest-5.4.3, py-1.9.0, pluggy-0.13.1 -- /tmp/python-xhfsn8wg-ansible/python
+rootdir: /app/test/units/module_utils/basic, inifile: /app/test/lib/ansible_test/_data/pytest.ini
+plugins: mock-3.2.0, cov-2.10.0, xdist-1.33.0, rerunfailures-9.0, forked-1.2.0
+gw0 I / gw1 I / gw2 I / gw3 I
+[gw0] linux Python 3.9.23 cwd: /app
+[gw1] linux Python 3.9.23 cwd: /app
+[gw2] linux Python 3.9.23 cwd: /app
+[gw3] linux Python 3.9.23 cwd: /app
+[gw0] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw1] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw2] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw3] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+gw0 [3] / gw1 [3] / gw2 [3] / gw3 [3]
+
+scheduling tests via LoadScheduling
+[gw2] [ 33%] PASSED test/units/module_utils/basic/test_sanitize_keys.py::test_sanitize_keys_with_ignores 
+[gw1] [ 66%] PASSED test/units/module_utils/basic/test_sanitize_keys.py::test_sanitize_keys_dict 
+[gw0] [100%] PASSED test/units/module_utils/basic/test_sanitize_keys.py::test_sanitize_keys_non_dict_types 
+
+------- generated xml file: /app/test/results/junit/python3.9-units.xml --------
+========================== slowest 25 test durations ===========================
+
+(0.00 durations hidden.  Use -vv to show these durations.)
+============================== 3 passed in 0.61s ===============================
+Running unit test: test/units/module_utils/basic/test_no_log.py
+Run command: /usr/local/bin/python /app/test/lib/ansible_test/_data/yamlcheck.py
+Unit test with Python 3.9
+Injecting "/tmp/python-m1ydaczl-ansible/python" as a symlink to the "/usr/local/bin/python" interpreter.
+Run command: pytest --boxed -r a -n 4 --color no -p no:cacheprovider -c /app/test/lib/ansible_test/_data/pytest.ini --junit-xml /app/test/results/junit/python3.9-units.xml --durations=25 --strict-markers -v test/units/module_utils/basic/test_no_log.py
+============================= test session starts ==============================
+platform linux -- Python 3.9.23, pytest-5.4.3, py-1.9.0, pluggy-0.13.1 -- /tmp/python-m1ydaczl-ansible/python
+rootdir: /app/test/units/module_utils/basic, inifile: /app/test/lib/ansible_test/_data/pytest.ini
+plugins: mock-3.2.0, cov-2.10.0, xdist-1.33.0, rerunfailures-9.0, forked-1.2.0
+gw0 I / gw1 I / gw2 I / gw3 I
+[gw0] linux Python 3.9.23 cwd: /app
+[gw1] linux Python 3.9.23 cwd: /app
+[gw2] linux Python 3.9.23 cwd: /app
+[gw3] linux Python 3.9.23 cwd: /app
+[gw0] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw1] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw2] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+[gw3] Python 3.9.23 (main, Jun  4 2025, 17:10:07)  -- [GCC 12.2.0]
+gw0 [6] / gw1 [6] / gw2 [6] / gw3 [6]
+
+scheduling tests via LoadScheduling
+[gw3] [ 16%] PASSED test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_no_removal 
+[gw1] [ 33%] PASSED test/units/module_utils/basic/test_no_log.py::TestReturnValues::test_unknown_type 
+[gw0] [ 50%] PASSED test/units/module_utils/basic/test_no_log.py::TestReturnValues::test_return_datastructure_name 
+[gw1] [ 66%] PASSED test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_unknown_type 
+[gw0] [ 83%] PASSED test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_strings_to_remove 
+[gw2] [100%] PASSED test/units/module_utils/basic/test_no_log.py::TestRemoveValues::test_hit_recursion_limit 
+
+------- generated xml file: /app/test/results/junit/python3.9-units.xml --------
+========================== slowest 25 test durations ===========================
+0.05s call     test_no_log.py::TestRemoveValues::test_hit_recursion_limit
+
+(0.00 durations hidden.  Use -vv to show these durations.)
+============================== 6 passed in 0.68s ===============================

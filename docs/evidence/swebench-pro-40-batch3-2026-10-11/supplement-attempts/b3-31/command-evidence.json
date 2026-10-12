@@ -1,0 +1,207 @@
+[
+  {
+    "tool_call_id": "call_00_1WaqigQY0XdqplpL4itS7588",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /workspace/internal/config 2>/dev/null"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "Brewfile\nCHANGELOG.md\nCHANGELOG.template.md\nCODE_OF_CONDUCT.md\nDEPRECATIONS.md\nDEVELOPMENT.md\nDockerfile\nLICENSE\nREADME.md\nTaskfile.yml\n_tools\nbin\nbuf.gen.yaml\nbuf.public.gen.yaml\nbuf.work.yaml\nbuild\ncmd\ncodecov.yml\nconfig\ncosign.pub\ndemo.gif\ndocker-compose.yml\nerrors\nexamples\nflipt.png\ngo.mod\ngo.sum\ninternal\nlogo.svg\nlogos\nrpc\nscript\nswagger\ntest\nui\n---\nauthentication.go\ncache.go\nconfig.go\nconfig_test.go\ncors.go\ndatabase.go\ndeprecate.go\nerrors.go\nlog.go\nmeta.go\nserver.go\ntestdata\ntracing.go\nui.go"
+  },
+  {
+    "tool_call_id": "call_00_WUqUhClgGoXn6INH5uXT7066",
+    "input": {
+      "command": "ls /workspace/internal/config/testdata && echo \"---\" && grep -n \"allowed_origins\\|StringToSlice\\|SliceTo\" -r /workspace/internal/config /workspace/internal/config/testdata 2>/dev/null"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "advanced.yml\ncache\ndatabase\ndatabase.yml\ndefault.yml\ndeprecated\nserver\nssl_cert.pem\nssl_key.pem\n---\n/workspace/internal/config/config.go:17:\tmapstructure.StringToSliceHookFunc(\",\"),\n/workspace/internal/config/cors.go:12:\tAllowedOrigins []string `json:\"allowedOrigins,omitempty\" mapstructure:\"allowed_origins\"`\n/workspace/internal/config/cors.go:18:\t\t\"allowed_origins\": \"*\",\n/workspace/internal/config/testdata/server/https_not_found_cert_file.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/server/https_missing_cert_file.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/server/https_not_found_cert_key.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/server/https_missing_cert_key.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/database/missing_name.yml:9:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/database/missing_host.yml:9:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/database/missing_protocol.yml:9:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/default.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/database.yml:9:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/advanced.yml:11:  allowed_origins: \"foo.com,bar.com\"\n/workspace/internal/config/testdata/server/https_not_found_cert_file.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/server/https_missing_cert_file.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/server/https_not_found_cert_key.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/server/https_missing_cert_key.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/database/missing_name.yml:9:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/database/missing_host.yml:9:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/database/missing_protocol.yml:9:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/default.yml:10:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/database.yml:9:#   allowed_origins: \"*\"\n/workspace/internal/config/testdata/advanced.yml:11:  allowed_origins: \"foo.com,bar.com\""
+  },
+  {
+    "tool_call_id": "call_01_NHYAxnebrKb3YUFeivzD9575",
+    "input": {
+      "command": "grep -rn \"StringToSliceHookFunc\\|decodeHooks\" /workspace --include=*.go | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ZQ9SOUgHd7WEo0s47i3E1535",
+    "input": {
+      "command": "grep -rn \"\\[\\]string\" /workspace/internal/config --include=*.go | grep -v _test"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_IB7ASA3TdsVhYaXyK1ih1145",
+    "input": {
+      "command": "cd /workspace && sed -n '1,40p' internal/config/testdata/advanced.yml && echo \"=== mapstructure version ===\" && grep mapstructure go.mod"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Xm4uX5kYGEVxW51M6LSh9460",
+    "input": {
+      "command": "cd /workspace && grep -n \"mapstructure\" go.mod && ls $(go env GOMODCACHE)/github.com/mitchellh/ 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_qEuOyvsCqO1AzpCjl5Zs6149",
+    "input": {
+      "command": "cd /workspace && f=$(find \"$(go env GOMODCACHE)/github.com/mitchellh/mapstructure@v1.5.0\" -name 'decode_hooks.go' 2>/dev/null); echo \"$f\"; sed -n '1,60p' \"$f\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_deBii6CgwOvA3X49aPGB8002",
+    "input": {
+      "command": "cd /workspace && go build ./internal/config/ && go test ./internal/config/ 2>&1 | tail -40",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_YS6qU0rZwcY52fVcNzuc4131",
+    "input": {
+      "command": "go build ./internal/config/ && go test ./internal/config/ 2>&1 | tail -40",
+      "workdir": "/workspace",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_9MzkPLojVxjwXqb2h6BT7350",
+    "input": {
+      "command": "go test ./internal/config/ -run 'TestLoad' -count=1 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/config\t0.018s"
+  },
+  {
+    "tool_call_id": "call_00_8r8SKtCjKVIsT1aCdfZH7562",
+    "input": {
+      "command": "git diff --stat && go test ./internal/config/ -run 'TestStringToSliceHookFunc|TestLoadCorsAllowedOriginsWhitespace|TestLoad|TestServeHTTP' -count=1 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_D7pq1KpWzVXYgHZC2dmO3920",
+    "input": {
+      "command": "go test ./internal/config/ -run 'TestStringToSliceHookFunc|TestLoadCorsAllowedOriginsWhitespace|TestLoad|TestServeHTTP' -count=1 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_UkgaZ6hjVg8muFffXtjl4109",
+    "input": {
+      "command": "go test ./internal/config/ -run 'TestStringToSliceHookFunc|TestLoadCorsAllowedOriginsWhitespace|TestLoad|TestServeHTTP' -count=1 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/config\t0.018s"
+  },
+  {
+    "tool_call_id": "call_00_Br1FAByj4Mm1WkXsigxS7153",
+    "input": {
+      "command": "go test ./internal/config/ -run 'Test' -count=1 2>&1 | tail -40",
+      "timeout": 180,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_P9G9CC5TsEO3qAttk8NU8665",
+    "input": {
+      "command": "go test ./internal/config/ -count=1 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_WRvEMA4FdWfzC250rPPP0924",
+    "input": {
+      "command": "go test ./internal/config/ -run 'TestLoad|TestStringToSliceHookFunc|TestLoadCorsAllowedOriginsWhitespace|TestServeHTTP|TestDefault|TestAdvanced|TestCors' -count=1 -v 2>&1 | tail -60",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "--- PASS: TestLoad/deprecated_-_database_migrations_path_(YAML) (0.00s)\n    --- PASS: TestLoad/deprecated_-_database_migrations_path_(ENV) (0.00s)\n    --- PASS: TestLoad/deprecated_-_database_migrations_path_legacy_(YAML) (0.00s)\n    --- PASS: TestLoad/deprecated_-_database_migrations_path_legacy_(ENV) (0.00s)\n    --- PASS: TestLoad/cache_-_no_backend_set_(YAML) (0.00s)\n    --- PASS: TestLoad/cache_-_no_backend_set_(ENV) (0.00s)\n    --- PASS: TestLoad/cache_-_memory_(YAML) (0.00s)\n    --- PASS: TestLoad/cache_-_memory_(ENV) (0.00s)\n    --- PASS: TestLoad/cache_-_redis_(YAML) (0.00s)\n    --- PASS: TestLoad/cache_-_redis_(ENV) (0.00s)\n    --- PASS: TestLoad/database_key/value_(YAML) (0.00s)\n    --- PASS: TestLoad/database_key/value_(ENV) (0.00s)\n    --- PASS: TestLoad/server_-_https_missing_cert_file_(YAML) (0.00s)\n    --- PASS: TestLoad/server_-_https_missing_cert_file_(ENV) (0.00s)\n    --- PASS: TestLoad/server_-_https_missing_cert_key_(YAML) (0.00s)\n    --- PASS: TestLoad/server_-_https_missing_cert_key_(ENV) (0.00s)\n    --- PASS: TestLoad/server_-_https_defined_but_not_found_cert_file_(YAML) (0.00s)\n    --- PASS: TestLoad/server_-_https_defined_but_not_found_cert_file_(ENV) (0.00s)\n    --- PASS: TestLoad/server_-_https_defined_but_not_found_cert_key_(YAML) (0.00s)\n    --- PASS: TestLoad/server_-_https_defined_but_not_found_cert_key_(ENV) (0.00s)\n    --- PASS: TestLoad/database_-_protocol_required_(YAML) (0.00s)\n    --- PASS: TestLoad/database_-_protocol_required_(ENV) (0.00s)\n    --- PASS: TestLoad/database_-_host_required_(YAML) (0.00s)\n    --- PASS: TestLoad/database_-_host_required_(ENV) (0.00s)\n    --- PASS: TestLoad/database_-_name_required_(YAML) (0.00s)\n    --- PASS: TestLoad/database_-_name_required_(ENV) (0.00s)\n    --- PASS: TestLoad/advanced_(YAML) (0.00s)\n    --- PASS: TestLoad/advanced_(ENV) (0.00s)\n=== RUN   TestStringToSliceHookFunc\n=== RUN   TestStringToSliceHookFunc/single_value\n=== RUN   TestStringToSliceHookFunc/space_separated\n=== RUN   TestStringToSliceHookFunc/consecutive_whitespace_collapses\n=== RUN   TestStringToSliceHookFunc/leading_and_trailing_whitespace_ignored\n=== RUN   TestStringToSliceHookFunc/commas_preserved\n=== RUN   TestStringToSliceHookFunc/empty_string_yields_empty_non-nil_slice\n=== RUN   TestStringToSliceHookFunc/whitespace_only_yields_empty_non-nil_slice\n=== RUN   TestStringToSliceHookFunc/non_string_source_unchanged\n=== RUN   TestStringToSliceHookFunc/non_[]string_target_unchanged\n=== RUN   TestStringToSliceHookFunc/slice_source_unchanged\n--- PASS: TestStringToSliceHookFunc (0.00s)\n    --- PASS: TestStringToSliceHookFunc/single_value (0.00s)\n    --- PASS: TestStringToSliceHookFunc/space_separated (0.00s)\n    --- PASS: TestStringToSliceHookFunc/consecutive_whitespace_collapses (0.00s)\n    --- PASS: TestStringToSliceHookFunc/leading_and_trailing_whitespace_ignored (0.00s)\n    --- PASS: TestStringToSliceHookFunc/commas_preserved (0.00s)\n    --- PASS: TestStringToSliceHookFunc/empty_string_yields_empty_non-nil_slice (0.00s)\n    --- PASS: TestStringToSliceHookFunc/whitespace_only_yields_empty_non-nil_slice (0.00s)\n    --- PASS: TestStringToSliceHookFunc/non_string_source_unchanged (0.00s)\n    --- PASS: TestStringToSliceHookFunc/non_[]string_target_unchanged (0.00s)\n    --- PASS: TestStringToSliceHookFunc/slice_source_unchanged (0.00s)\n=== RUN   TestLoadCorsAllowedOriginsWhitespace\n=== RUN   TestLoadCorsAllowedOriginsWhitespace/YAML\n=== RUN   TestLoadCorsAllowedOriginsWhitespace/ENV\n--- PASS: TestLoadCorsAllowedOriginsWhitespace (0.00s)\n    --- PASS: TestLoadCorsAllowedOriginsWhitespace/YAML (0.00s)\n    --- PASS: TestLoadCorsAllowedOriginsWhitespace/ENV (0.00s)\n=== RUN   TestServeHTTP\n--- PASS: TestServeHTTP (0.00s)\nPASS\nok  \tgo.flipt.io/flipt/internal/config\t0.017s"
+  },
+  {
+    "tool_call_id": "call_00_sZBC89aVzOXo2XIdVJEx2560",
+    "input": {
+      "command": "git diff --stat && git diff -- internal/config/config.go internal/config/testdata/advanced.yml",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "internal/config/config.go             |  33 +++++++-\n internal/config/config_test.go        | 142 ++++++++++++++++++++++++++++++++++\n internal/config/testdata/advanced.yml |   2 +-\n 3 files changed, 175 insertions(+), 2 deletions(-)\ndiff --git a/internal/config/config.go b/internal/config/config.go\nindex 1333704..2153393 100644\n--- a/internal/config/config.go\n+++ b/internal/config/config.go\n@@ -14,7 +14,7 @@ import (\n \n var decodeHooks = mapstructure.ComposeDecodeHookFunc(\n \tmapstructure.StringToTimeDurationHookFunc(),\n-\tmapstructure.StringToSliceHookFunc(\",\"),\n+\tstringToSliceHookFunc(),\n \tstringToEnumHookFunc(stringToLogEncoding),\n \tstringToEnumHookFunc(stringToCacheBackend),\n \tstringToEnumHookFunc(stringToScheme),\n@@ -170,6 +170,37 @@ func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) {\n \t}\n }\n \n+// stringToSliceHookFunc returns a DecodeHookFunc that converts a string\n+// sourced from configuration into a slice of strings.\n+//\n+// The string is split on unicode whitespace only (spaces, tabs and newlines),\n+// with any run of consecutive whitespace treated as a single separator and any\n+// leading or trailing whitespace ignored. Commas carry no special meaning and\n+// are preserved as part of the surrounding token.\n+// An empty (or whitespace-only) string decodes to an empty, non-nil slice.\n+//\n+// The hook only applies when the source value is a string and the target type\n+// is []string. Any other source or target type is returned unchanged.\n+func stringToSliceHookFunc() mapstructure.DecodeHookFuncType {\n+\treturn func(\n+\t\tf reflect.Type,\n+\t\tt reflect.Type,\n+\t\tdata interface{}) (interface{}, error) {\n+\t\tif f.Kind() != reflect.String {\n+\t\t\treturn data, nil\n+\t\t}\n+\n+\t\tif t != reflect.TypeOf([]string{}) {\n+\t\t\treturn data, nil\n+\t\t}\n+\n+\t\t// strings.Fields splits on unicode whitespace, collapsing runs of\n+\t\t// whitespace and ignoring leading/trailing whitespace. It returns a\n+\t\t// non-nil empty slice when there are no fields.\n+\t\treturn strings.Fields(data.(string)), nil\n+\t}\n+}\n+\n // stringToEnumHookFunc returns a DecodeHookFunc that converts strings to a target enum\n func stringToEnumHookFunc[T constraints.Integer](mappings map[string]T) mapstructure.DecodeHookFunc {\n \treturn func(\ndiff --git a/internal/config/testdata/advanced.yml b/internal/config/testdata/advanced.yml\nindex a07acc6..24eb5f5 100644\n--- a/internal/config/testdata/advanced.yml\n+++ b/internal/config/testdata/advanced.yml\n@@ -8,7 +8,7 @@ ui:\n \n cors:\n   enabled: true\n-  allowed_origins: \"foo.com,bar.com\"\n+  allowed_origins: \"foo.com bar.com\"\n \n cache:\n   enabled: true"
+  }
+]

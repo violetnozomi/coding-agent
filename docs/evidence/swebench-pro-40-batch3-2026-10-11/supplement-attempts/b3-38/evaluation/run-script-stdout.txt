@@ -1,0 +1,31 @@
+Running selected tests: TestContextReader/simple_read TestContextReader/close_underlying_reader TestContextReader/cancelled_read TestContextReader/close_unblocks_reads TestContextReader TestStdin
+{"Time":"2026-10-12T02:37:31.554953045Z","Action":"start","Package":"github.com/gravitational/teleport/lib/utils/prompt"}
+{"Time":"2026-10-12T02:37:31.56412159Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Output":"-test.shuffle 1791772651564064539\n"}
+{"Time":"2026-10-12T02:37:31.564459332Z","Action":"run","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestStdin"}
+{"Time":"2026-10-12T02:37:31.564464125Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestStdin","Output":"=== RUN   TestStdin\n"}
+{"Time":"2026-10-12T02:37:31.564549442Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestStdin","Output":"--- PASS: TestStdin (0.00s)\n"}
+{"Time":"2026-10-12T02:37:31.564560457Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestStdin","Elapsed":0}
+{"Time":"2026-10-12T02:37:31.564581911Z","Action":"run","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader"}
+{"Time":"2026-10-12T02:37:31.564584674Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader","Output":"=== RUN   TestContextReader\n"}
+{"Time":"2026-10-12T02:37:31.564622665Z","Action":"run","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/simple_read"}
+{"Time":"2026-10-12T02:37:31.564625376Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/simple_read","Output":"=== RUN   TestContextReader/simple_read\n"}
+{"Time":"2026-10-12T02:37:31.564744011Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/simple_read","Output":"--- PASS: TestContextReader/simple_read (0.00s)\n"}
+{"Time":"2026-10-12T02:37:31.564756Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/simple_read","Elapsed":0}
+{"Time":"2026-10-12T02:37:31.564781984Z","Action":"run","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/cancelled_read"}
+{"Time":"2026-10-12T02:37:31.564784771Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/cancelled_read","Output":"=== RUN   TestContextReader/cancelled_read\n"}
+{"Time":"2026-10-12T02:37:31.564933372Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/cancelled_read","Output":"--- PASS: TestContextReader/cancelled_read (0.00s)\n"}
+{"Time":"2026-10-12T02:37:31.56495201Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/cancelled_read","Elapsed":0}
+{"Time":"2026-10-12T02:37:31.565051493Z","Action":"run","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/close_underlying_reader"}
+{"Time":"2026-10-12T02:37:31.565054293Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/close_underlying_reader","Output":"=== RUN   TestContextReader/close_underlying_reader\n"}
+{"Time":"2026-10-12T02:37:31.565192484Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/close_underlying_reader","Output":"--- PASS: TestContextReader/close_underlying_reader (0.00s)\n"}
+{"Time":"2026-10-12T02:37:31.565209571Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/close_underlying_reader","Elapsed":0}
+{"Time":"2026-10-12T02:37:31.565233205Z","Action":"run","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/close_unblocks_reads"}
+{"Time":"2026-10-12T02:37:31.565235811Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/close_unblocks_reads","Output":"=== RUN   TestContextReader/close_unblocks_reads\n"}
+{"Time":"2026-10-12T02:37:31.615732329Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/close_unblocks_reads","Output":"--- PASS: TestContextReader/close_unblocks_reads (0.05s)\n"}
+{"Time":"2026-10-12T02:37:31.615778812Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader/close_unblocks_reads","Elapsed":0.05}
+{"Time":"2026-10-12T02:37:31.615795511Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader","Output":"--- PASS: TestContextReader (0.05s)\n"}
+{"Time":"2026-10-12T02:37:31.615800866Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/utils/prompt","Test":"TestContextReader","Elapsed":0.05}
+{"Time":"2026-10-12T02:37:31.615803925Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Output":"PASS\n"}
+{"Time":"2026-10-12T02:37:31.616973559Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Output":"coverage: 58.2% of statements\n"}
+{"Time":"2026-10-12T02:37:32.619074591Z","Action":"output","Package":"github.com/gravitational/teleport/lib/utils/prompt","Output":"ok  \tgithub.com/gravitational/teleport/lib/utils/prompt\t1.064s\tcoverage: 58.2% of statements\n"}
+{"Time":"2026-10-12T02:37:32.619112351Z","Action":"pass","Package":"github.com/gravitational/teleport/lib/utils/prompt","Elapsed":1.064}

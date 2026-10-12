@@ -1,0 +1,15 @@
+PASS containers/offers/operations/summer2023/eligibility.test.ts (116 MB heap size)
+  summer-2023 offer
+    ✓ should not be available in Proton VPN settings (1 ms)
+    ✓ should be available in Proton Mail (1 ms)
+    ✓ should be available in Proton Calendar (1 ms)
+    ✓ should be available for Mail Plus Trial users
+    ✓ should not be available for subscription managed externaly (2 ms)
+    ✓ should not be available for delinquent users
+    ✓ should not be available for users who have a subscription since less than one month
+
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        52.009 s
+Ran all test suites matching /packages\/components\/containers\/offers\/operations\/summer2023\/eligibility.test.ts/i.

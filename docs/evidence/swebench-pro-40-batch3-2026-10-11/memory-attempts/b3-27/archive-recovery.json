@@ -1,0 +1,10 @@
+{
+  "original_report_preserved": true,
+  "original_delivery_error": "ValueError('refusing archive outside a direct child of run root: /dev/shm/nz-pro-batch3-supplement-20261012/b3-27')",
+  "approved_memory_root_used_for_existing_direct_child_boundary": true,
+  "archive_security_validator_unchanged": true,
+  "only_offline_archiving": true,
+  "model_calls": 0,
+  "tests_repeated": false,
+  "workspace_removed_only_after_archive_receipt": true
+}

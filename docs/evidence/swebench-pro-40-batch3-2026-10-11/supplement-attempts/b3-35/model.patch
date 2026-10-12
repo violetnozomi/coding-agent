@@ -1,0 +1,184 @@
+diff --git a/src/components/views/dialogs/spotlight/RoomResultContextMenus.tsx b/src/components/views/dialogs/spotlight/RoomResultContextMenus.tsx
+index 096138e056..41aa41ca53 100644
+--- a/src/components/views/dialogs/spotlight/RoomResultContextMenus.tsx
++++ b/src/components/views/dialogs/spotlight/RoomResultContextMenus.tsx
+@@ -19,9 +19,11 @@ import { Room } from "matrix-js-sdk/src/matrix";
+ import React, { Fragment, useState } from "react";
+ 
+ import { ContextMenuTooltipButton } from "../../../../accessibility/context_menu/ContextMenuTooltipButton";
++import { shouldShowComponent } from "../../../../customisations/helpers/UIComponents";
+ import { useNotificationState } from "../../../../hooks/useRoomNotificationState";
+ import { _t } from "../../../../languageHandler";
+ import { RoomNotifState } from "../../../../RoomNotifs";
++import { UIComponent } from "../../../../settings/UIFeature";
+ import { RoomGeneralContextMenu } from "../../context_menus/RoomGeneralContextMenu";
+ import { RoomNotificationContextMenu } from "../../context_menus/RoomNotificationContextMenu";
+ import SpaceContextMenu from "../../context_menus/SpaceContextMenu";
+@@ -80,18 +82,20 @@ export function RoomResultContextMenus({ room }: Props): JSX.Element {
+ 
+     return (
+         <Fragment>
+-            <ContextMenuTooltipButton
+-                className="mx_SpotlightDialog_option--menu"
+-                onClick={(ev: ButtonEvent) => {
+-                    ev.preventDefault();
+-                    ev.stopPropagation();
++            {shouldShowComponent(UIComponent.RoomOptionsMenu) && (
++                <ContextMenuTooltipButton
++                    className="mx_SpotlightDialog_option--menu"
++                    onClick={(ev: ButtonEvent) => {
++                        ev.preventDefault();
++                        ev.stopPropagation();
+ 
+-                    const target = ev.target as HTMLElement;
+-                    setGeneralMenuPosition(target.getBoundingClientRect());
+-                }}
+-                title={room.isSpaceRoom() ? _t("Space options") : _t("Room options")}
+-                isExpanded={generalMenuPosition !== null}
+-            />
++                        const target = ev.target as HTMLElement;
++                        setGeneralMenuPosition(target.getBoundingClientRect());
++                    }}
++                    title={room.isSpaceRoom() ? _t("Space options") : _t("Room options")}
++                    isExpanded={generalMenuPosition !== null}
++                />
++            )}
+             {!room.isSpaceRoom() && (
+                 <ContextMenuTooltipButton
+                     className={notificationMenuClasses}
+diff --git a/src/components/views/rooms/RoomHeader.tsx b/src/components/views/rooms/RoomHeader.tsx
+index 1e1f0ce772..c0032a8936 100644
+--- a/src/components/views/rooms/RoomHeader.tsx
++++ b/src/components/views/rooms/RoomHeader.tsx
+@@ -69,6 +69,8 @@ import { ViewRoomPayload } from "../../../dispatcher/payloads/ViewRoomPayload";
+ import { GroupCallDuration } from "../voip/CallDuration";
+ import { Alignment } from "../elements/Tooltip";
+ import RoomCallBanner from "../beacon/RoomCallBanner";
++import { shouldShowComponent } from "../../../customisations/helpers/UIComponents";
++import { UIComponent } from "../../../settings/UIFeature";
+ 
+ class DisabledWithReason {
+     public constructor(public readonly reason: string) {}
+@@ -697,7 +699,7 @@ export default class RoomHeader extends React.Component<IProps, IState> {
+             </RoomName>
+         );
+ 
+-        if (this.props.enableRoomOptionsMenu) {
++        if (this.props.enableRoomOptionsMenu && shouldShowComponent(UIComponent.RoomOptionsMenu)) {
+             return (
+                 <ContextMenuTooltipButton
+                     className="mx_RoomHeader_name"
+diff --git a/src/components/views/rooms/RoomTile.tsx b/src/components/views/rooms/RoomTile.tsx
+index af25a5c458..885179db44 100644
+--- a/src/components/views/rooms/RoomTile.tsx
++++ b/src/components/views/rooms/RoomTile.tsx
+@@ -49,6 +49,8 @@ import { CallStore, CallStoreEvent } from "../../../stores/CallStore";
+ import { SdkContextClass } from "../../../contexts/SDKContext";
+ import { useHasRoomLiveVoiceBroadcast } from "../../../voice-broadcast";
+ import { RoomTileSubtitle } from "./RoomTileSubtitle";
++import { shouldShowComponent } from "../../../customisations/helpers/UIComponents";
++import { UIComponent } from "../../../settings/UIFeature";
+ 
+ interface Props {
+     room: Room;
+@@ -327,7 +329,9 @@ export class RoomTile extends React.PureComponent<ClassProps, State> {
+     }
+ 
+     private renderGeneralMenu(): React.ReactElement | null {
+-        if (!this.showContextMenu) return null; // no menu to show
++        if (!this.showContextMenu || !shouldShowComponent(UIComponent.RoomOptionsMenu)) {
++            return null; // no menu to show
++        }
+         return (
+             <React.Fragment>
+                 <ContextMenuTooltipButton
+diff --git a/src/settings/UIFeature.ts b/src/settings/UIFeature.ts
+index b9e290ffec..08160b5253 100644
+--- a/src/settings/UIFeature.ts
++++ b/src/settings/UIFeature.ts
+@@ -70,4 +70,10 @@ export enum UIComponent {
+      * Component that lead to the user being able to search, dial, explore rooms
+      */
+     FilterContainer = "UIComponent.filterContainer",
++
++    /**
++     * Components that lead to the room options menu being displayed, such as
++     * from the room tile, the room header and the spotlight search results.
++     */
++    RoomOptionsMenu = "UIComponent.roomOptionsMenu",
+ }
+diff --git a/test/components/views/rooms/RoomHeader-test.tsx b/test/components/views/rooms/RoomHeader-test.tsx
+index 3b8aa0d2d0..55ebde12aa 100644
+--- a/test/components/views/rooms/RoomHeader-test.tsx
++++ b/test/components/views/rooms/RoomHeader-test.tsx
+@@ -57,6 +57,12 @@ import { WidgetMessagingStore } from "../../../../src/stores/widgets/WidgetMessa
+ import WidgetUtils from "../../../../src/utils/WidgetUtils";
+ import { ElementWidgetActions } from "../../../../src/stores/widgets/ElementWidgetActions";
+ import MediaDeviceHandler, { MediaDeviceKindEnum } from "../../../../src/MediaDeviceHandler";
++import { shouldShowComponent } from "../../../../src/customisations/helpers/UIComponents";
++import { UIComponent } from "../../../../src/settings/UIFeature";
++
++jest.mock("../../../../src/customisations/helpers/UIComponents", () => ({
++    shouldShowComponent: jest.fn(),
++}));
+ 
+ describe("RoomHeader", () => {
+     let client: Mocked<MatrixClient>;
+@@ -114,6 +120,8 @@ describe("RoomHeader", () => {
+ 
+         DMRoomMap.makeShared(client);
+         jest.spyOn(DMRoomMap.shared(), "getUserIdForRoomId").mockReturnValue(carol.userId);
++
++        mocked(shouldShowComponent).mockReturnValue(true);
+     });
+ 
+     afterEach(async () => {
+@@ -740,6 +748,22 @@ describe("RoomHeader", () => {
+         const wrapper = mountHeader(room, { enableRoomOptionsMenu: false });
+         expect(wrapper.container.querySelector(".mx_RoomHeader_name.mx_AccessibleButton")).toBeFalsy();
+     });
++
++    it("should not render the room options context menu if the component is disabled by customisation", () => {
++        mocked(shouldShowComponent).mockReturnValue(false);
++        const room = createRoom({ name: "Room", isDm: false, userIds: [] });
++        const wrapper = mountHeader(room, { enableRoomOptionsMenu: true });
++        expect(shouldShowComponent).toHaveBeenCalledWith(UIComponent.RoomOptionsMenu);
++        expect(wrapper.container.querySelector(".mx_RoomHeader_name.mx_AccessibleButton")).toBeFalsy();
++    });
++
++    it("should render the room options context menu if the component is enabled by customisation", () => {
++        mocked(shouldShowComponent).mockReturnValue(true);
++        const room = createRoom({ name: "Room", isDm: false, userIds: [] });
++        mountHeader(room, { enableRoomOptionsMenu: true });
++        expect(shouldShowComponent).toHaveBeenCalledWith(UIComponent.RoomOptionsMenu);
++        expect(screen.getByRole("button", { name: "Room options" })).toBeInTheDocument();
++    });
+ });
+ 
+ interface IRoomCreationInfo {
+diff --git a/test/components/views/rooms/RoomTile-test.tsx b/test/components/views/rooms/RoomTile-test.tsx
+index 11df23f97f..2c1e785e5b 100644
+--- a/test/components/views/rooms/RoomTile-test.tsx
++++ b/test/components/views/rooms/RoomTile-test.tsx
+@@ -48,6 +48,12 @@ import { mkVoiceBroadcastInfoStateEvent } from "../../../voice-broadcast/utils/t
+ import { TestSdkContext } from "../../../TestSdkContext";
+ import { SDKContext } from "../../../../src/contexts/SDKContext";
+ import { MessagePreviewStore } from "../../../../src/stores/room-list/MessagePreviewStore";
++import { shouldShowComponent } from "../../../../src/customisations/helpers/UIComponents";
++import { UIComponent } from "../../../../src/settings/UIFeature";
++
++jest.mock("../../../../src/customisations/helpers/UIComponents", () => ({
++    shouldShowComponent: jest.fn(),
++}));
+ 
+ describe("RoomTile", () => {
+     jest.spyOn(PlatformPeg, "get").mockReturnValue({
+@@ -132,6 +138,8 @@ describe("RoomTile", () => {
+         sdkContext.client = client;
+         DMRoomMap.makeShared(client);
+ 
++        mocked(shouldShowComponent).mockReturnValue(true);
++
+         room = new Room("!1:example.org", client, "@alice:example.org", {
+             pendingEventOrdering: PendingEventOrdering.Detached,
+         });

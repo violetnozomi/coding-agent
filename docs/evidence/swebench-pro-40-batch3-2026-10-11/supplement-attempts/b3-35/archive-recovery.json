@@ -1,0 +1,8 @@
+{
+  "original_delivery_error": "ValueError('trace bundle already exists: /home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/archives/batch3-instance_element-hq__element-web-53b42e321777a598aaf2bb3eab22d710569f83a8-vnan')",
+  "original_report_preserved": true,
+  "only_offline_archiving": true,
+  "model_calls": 0,
+  "tests_repeated": false,
+  "raw_archive_written": true
+}

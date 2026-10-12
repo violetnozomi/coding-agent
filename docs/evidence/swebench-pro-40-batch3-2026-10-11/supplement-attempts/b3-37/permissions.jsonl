@@ -1,0 +1,14 @@
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest tests/unit/utils/test_version.py -q -k \"WebEngine\" 2>&1 | tail -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/utils/test_version.py -q -k \"WebEngine\" 2>&1 | tail -30", "workdir": "/workspace", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "QT_QPA_PLATFORM=offscreen python -m pytest tests/unit/utils/test_version.py -q -k \"TestWebEngineVersions\" -p no:cacheprovider 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/utils/test_version.py -q -k \"TestWebEngineVersions\" 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/utils/test_version.py -q -k \"test_from_pyqt or test_from_qt or test_from_ua or test_from_elf or test_str\" 2>&1 | tail -20; echo \"EXIT=$?\"", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/browser/webengine/test_darkmode.py tests/unit/config/test_qtargs.py -q 2>&1 | tail -8; echo \"EXIT=$?\"", "timeout": 180, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/browser/webengine/test_darkmode.py tests/unit/config/test_qtargs.py -q 2>&1 | tail -8; echo \"EXIT=$?\"", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile qutebrowser/utils/version.py tests/unit/utils/test_version.py && echo OK", "timeout": 60, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m mypy qutebrowser/utils/version.py 2>&1 | tail -15", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "which xvfb-run Xvfb 2>/dev/null; echo \"---\"; python -m pytest tests/unit/utils/test_version.py -q 2>&1 | tail -6", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/utils/test_version.py -q 2>&1 | tail -6", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/utils/test_version.py::test_pastebin_version -q 2>&1 | head -40", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace diff --stat; echo '---'; git -C /workspace diff qutebrowser/utils/version.py", "timeout": 60, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/config/test_configfiles.py -q 2>&1 | tail -4", "timeout": 120, "workdir": "/workspace"}, "allowed": true}

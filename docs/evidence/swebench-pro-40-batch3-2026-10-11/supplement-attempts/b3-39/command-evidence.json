@@ -1,0 +1,176 @@
+[
+  {
+    "tool_call_id": "call_00_5sqWHPmXp3L4xrmvNDUv0792",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /app 2>/dev/null || echo \"no /app\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_dDoJlrbpe6dTra0eUUB07067",
+    "input": {
+      "command": "ls -la /workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_fSLAuMJP4auet8pqbjbB4944",
+    "input": {
+      "command": "sed -n '1,30p' internal/config/config.go; echo ---; sed -n '1,30p' internal/config/config_test.go"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "package config\n\nimport (\n\t\"context\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"io/fs\"\n\t\"net/http\"\n\t\"net/url\"\n\t\"os\"\n\t\"path/filepath\"\n\t\"reflect\"\n\t\"slices\"\n\t\"strings\"\n\t\"time\"\n\n\t\"github.com/mitchellh/mapstructure\"\n\t\"github.com/spf13/viper\"\n\t\"go.flipt.io/flipt/internal/storage/fs/object\"\n\t\"gocloud.dev/blob\"\n\t\"golang.org/x/exp/constraints\"\n)\n\nconst Version = \"1.0\"\nconst EnvPrefix = \"FLIPT\"\n\nvar DecodeHooks = []mapstructure.DecodeHookFunc{\n\tmapstructure.StringToTimeDurationHookFunc(),\n\tstringToSliceHookFunc(),\n\tstringToEnumHookFunc(stringToLogEncoding),\n---\npackage config\n\nimport (\n\t\"context\"\n\t\"errors\"\n\t\"fmt\"\n\t\"io\"\n\t\"io/fs\"\n\t\"net/http\"\n\t\"net/http/httptest\"\n\t\"net/url\"\n\t\"os\"\n\t\"reflect\"\n\t\"strings\"\n\t\"testing\"\n\t\"time\"\n\n\t\"github.com/iancoleman/strcase\"\n\t\"github.com/santhosh-tekuri/jsonschema/v5\"\n\t\"github.com/stretchr/testify/assert\"\n\t\"github.com/stretchr/testify/require\"\n\t\"go.flipt.io/flipt/internal/oci\"\n\t\"gocloud.dev/blob\"\n\t\"gocloud.dev/blob/memblob\"\n\t\"gopkg.in/yaml.v2\"\n)\n\nfunc TestJSONSchema(t *testing.T) {\n\t_, err := jsonschema.Compile(\"../../config/flipt.schema.json\")\n\trequire.NoError(t, err)"
+  },
+  {
+    "tool_call_id": "call_00_ZJy48VlcgPMtWYsFV6VY9726",
+    "input": {
+      "command": "grep -n \"buildConfig\\|func Load\\|getConfigFile(\" cmd/flipt/*.go internal/config/config.go | head -40"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "cmd/flipt/bundle.go:152:\tlogger, cfg, err := buildConfig()\ncmd/flipt/export.go:121:\tlogger, cfg, err := buildConfig()\ncmd/flipt/import.go:105:\tlogger, cfg, err := buildConfig()\ncmd/flipt/main.go:102:\t\t\t\tlogger, cfg, err := buildConfig()\ncmd/flipt/main.go:195:func buildConfig() (*zap.Logger, *config.Config, error) {\ncmd/flipt/migrate.go:51:\t\t\tlogger, cfg, err := buildConfig()\ncmd/flipt/validate.go:63:\tlogger, _, err := buildConfig()\ninternal/config/config.go:84:func Load(ctx context.Context, path string) (*Result, error) {\ninternal/config/config.go:96:\t\tfile, err := getConfigFile(ctx, path)\ninternal/config/config.go:212:func getConfigFile(ctx context.Context, path string) (fs.File, error) {"
+  },
+  {
+    "tool_call_id": "call_00_pgDlr2MK3seEVPYKtL8s8891",
+    "input": {
+      "command": "for f in cmd/flipt/main.go cmd/flipt/bundle.go cmd/flipt/export.go cmd/flipt/import.go cmd/flipt/migrate.go cmd/flipt/validate.go; do echo \"== $f\"; sed -n '1,20p' $f; done"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_9IYZHQ67MOvpExvZpX586363",
+    "input": {
+      "command": "grep -rn \"buildConfig()\\|getStore()\\|Load(path)\" --include=*.go . ; echo \"== done\"; grep -n \"context\" cmd/flipt/bundle.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-10",
+    "input": {
+      "command": "go test ./cmd/flipt -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_WE7Yg1R43KI1Fz9swFBy0047",
+    "input": {
+      "command": "gofmt -l internal/config/config.go internal/config/config_test.go cmd/flipt/*.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_CUmzJlvmx9pRK69fzJcB1728",
+    "input": {
+      "command": "go vet ./internal/config/ 2>&1 | head -20",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "(go completed with no output)"
+  },
+  {
+    "tool_call_id": "call_00_f7Y0f1kmQe6EpOpXIv5S6579",
+    "input": {
+      "command": "go build -p 2 ./cmd/flipt/ 2>&1 | head -30",
+      "timeout": 120
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-11",
+    "input": {
+      "command": "go test ./cmd/flipt -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "?   \tgo.flipt.io/flipt/cmd/flipt\t[no test files]"
+  },
+  {
+    "tool_call_id": "call_00_ET_VWojYeh5fT3bgXVQGcSd5091",
+    "input": {
+      "_nz_runtime_verification_stage": "behavioral",
+      "command": "go test ./internal/config/ -run 'TestLoad|Config' -count=1 2>&1 | tail -30",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "ok  \tgo.flipt.io/flipt/internal/config\t0.194s"
+  },
+  {
+    "tool_call_id": "call_00_yxZsETkZJkr47pBxMMwu9513",
+    "input": {
+      "_nz_runtime_verification_stage": "behavioral",
+      "command": "go test ./internal/config/... -count=1 2>&1 | tail -20",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_2pOlkb5sLbNchzmz2bJt7268",
+    "input": {
+      "command": "grep -n \"context.Background()\\|Load(\" internal/config/config_test.go"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "218:func TestLoad(t *testing.T) {\n1129:\t\t\tres, err := Load(context.Background(), path)\n1177:\t\t\tres, err := Load(context.Background(), \"./testdata/default.yml\")\n1441:\tctx := context.Background()"
+  },
+  {
+    "tool_call_id": "call_00_6ThwQnRlEjT1W6jKiMiK5235",
+    "input": {
+      "command": "go test ./internal/config/ -run 'TestLoad$' -count=1 -v 2>&1 | tail -15",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "--- PASS: TestLoad/azblob_config_invalid_(ENV) (0.00s)\n    --- PASS: TestLoad/azblob_full_config_provided_(YAML) (0.00s)\n    --- PASS: TestLoad/azblob_full_config_provided_(ENV) (0.00s)\n    --- PASS: TestLoad/gs_config_invalid_(YAML) (0.00s)\n    --- PASS: TestLoad/gs_config_invalid_(ENV) (0.00s)\n    --- PASS: TestLoad/gs_full_config_provided_(YAML) (0.00s)\n    --- PASS: TestLoad/gs_full_config_provided_(ENV) (0.00s)\n    --- PASS: TestLoad/grpc_keepalive_config_provided_(YAML) (0.00s)\n    --- PASS: TestLoad/grpc_keepalive_config_provided_(ENV) (0.00s)\n    --- PASS: TestLoad/clickhouse_enabled_but_no_URL_set_(YAML) (0.00s)\n    --- PASS: TestLoad/clickhouse_enabled_but_no_URL_set_(ENV) (0.00s)\n    --- PASS: TestLoad/analytics_flush_period_too_low_(YAML) (0.00s)\n    --- PASS: TestLoad/analytics_flush_period_too_low_(ENV) (0.00s)\nPASS\nok  \tgo.flipt.io/flipt/internal/config\t0.184s"
+  }
+]

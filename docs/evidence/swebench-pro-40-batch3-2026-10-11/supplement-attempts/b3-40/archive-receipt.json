@@ -1,0 +1,7 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/supplement/b3-40/container-evidence.tar.gz",
+  "sha256": "bb8102fbd6eab54a23f00a9ec10a3870e4f1831ad9b6dcdbaf2cf8faa6db4041",
+  "bytes": 4750704,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11/archives/batch3-supplement-instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4",
+  "retains_raw_container_session_and_artifacts": true
+}

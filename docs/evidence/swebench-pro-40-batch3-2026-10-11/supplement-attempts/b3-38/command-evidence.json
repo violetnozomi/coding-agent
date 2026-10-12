@@ -1,0 +1,114 @@
+[
+  {
+    "tool_call_id": "call_00_GLvicPgapsDDyiSa5Jun5571",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /app 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_bTKwc4b3t6fYJ0hnJnox4234",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /workspace/lib/utils/prompt/"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "CHANGELOG.md\nCODE_OF_CONDUCT.md\nCONTRIBUTING.md\nLICENSE\nMakefile\nREADME.md\nSECURITY.md\napi\nassets\nbuild.assets\nconstants.go\ndoc.go\ndocker\ndocs\ndronegen\ne\nexamples\nfixtures\ngo.mod\ngo.sum\ngravitational.asc\nintegration\nlib\nmetrics.go\nrfd\nroles.go\nroles_test.go\ntool\nvagrant\nvendor\nversion.go\nversion.mk\nwebassets\n---\nconfirmation.go"
+  },
+  {
+    "tool_call_id": "call_00_vSa2fCS1KxLwC8zbPVqq2852",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3 && git status --short | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_0PWrxKqTU7FiofnQQnRg4355",
+    "input": {
+      "command": "cd /workspace && go version && head -5 go.mod"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_lr0iH2iwiocgjSzw8cuW8462",
+    "input": {
+      "command": "go version"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go version go1.23.1 linux/amd64"
+  },
+  {
+    "tool_call_id": "call_00_XXqAXyyaifM2BgBsH3DK1862",
+    "input": {
+      "command": "cd /workspace && ls lib/utils/prompt/ && git log --oneline -5 2>&1 | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_02_herwx3DNsdHV3Nhmv1dQ7498",
+    "input": {
+      "command": "cd /workspace && sed -n '1,60p' lib/auth/grpcserver_test.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_fm1iClJLbgDchewQWFTo5952",
+    "input": {
+      "command": "cd /workspace && ls vendor/github.com/stretchr/testify/ && ls vendor/github.com/gravitational/trace/ | head -30"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-1",
+    "input": {
+      "command": "go test ./lib/utils/prompt -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "?   \tgithub.com/gravitational/teleport/lib/utils/prompt\t[no test files]"
+  },
+  {
+    "tool_call_id": "verification-stage-static-2",
+    "input": {
+      "command": "go test ./lib/utils/prompt -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "?   \tgithub.com/gravitational/teleport/lib/utils/prompt\t[no test files]"
+  }
+]

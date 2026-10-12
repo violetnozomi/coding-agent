@@ -1,0 +1,9 @@
+Resetting test-space to base state (full test-code surface)...
+Applying test patch...
+Checking patch packages/components/containers/offers/operations/summer2023/eligibility.test.ts...
+Applied patch packages/components/containers/offers/operations/summer2023/eligibility.test.ts cleanly.
+Required tests: 7
+Passed tests: 7
+Required tests that passed: 7
+
+RESULT: PASSED

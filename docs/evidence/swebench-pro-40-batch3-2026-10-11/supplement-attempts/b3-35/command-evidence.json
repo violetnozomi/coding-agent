@@ -1,0 +1,132 @@
+[
+  {
+    "tool_call_id": "call_00_MPvmaP1tzFTlBa5m7KTr8086",
+    "input": {
+      "command": "ls /workspace 2>/dev/null && echo \"---APP---\" && ls /app 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_o8O7Ix41DbrM90wgzDqG1163",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3 && git status --short | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_hoXgr86QO85xoA8PFpwP5768",
+    "input": {
+      "command": "cd /workspace && ls test/components/views/dialogs/spotlight/ | head -40 && echo \"---\" && ls test/components/views/rooms/ | head -60"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_qsIvEvXXErv4r6OwkIEU1601",
+    "input": {
+      "command": "cd /workspace && sed -n '1,40p' test/components/views/dialogs/spotlight/PublicRoomResultDetails-test.tsx"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_aVZqnWvV7gDSsexxUhuB2488",
+    "input": {
+      "command": "cd /workspace && ls docs/features && grep -rn \"UIComponent\" docs res src/i18n 2>/dev/null | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Rd81ayWGIKooSlseEN996498",
+    "input": {
+      "command": "cd /workspace && ls docs && ls docs/features 2>/dev/null; grep -rln \"UIComponent\" docs 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ZEc3DdFQwIARLKCqBd5g5752",
+    "input": {
+      "command": "cd /workspace && npx tsc --noEmit -p tsconfig.json 2>&1 | head -30",
+      "timeout": 300
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_xeJq6p1uQz82cwmo00747262",
+    "input": {
+      "command": "yarn jest test/components/views/rooms/RoomHeader-test.tsx 2>&1 | tail -30",
+      "timeout": 300,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_1ca2PCYdDK5cGhJCn95c6612",
+    "input": {
+      "command": "yarn jest test/components/views/rooms/RoomHeader-test.tsx 2>&1 | tail -30",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "✓ disables call buttons if there's an ongoing legacy 1:1 call (28 ms)\n    ✓ disables call buttons if there's an existing Jitsi widget (32 ms)\n    ✓ disables call buttons if there's no other members (27 ms)\n    ✓ starts a legacy 1:1 call when call buttons are pressed if there's 1 other member (31 ms)\n    ✓ creates a Jitsi widget when call buttons are pressed (32 ms)\n    ✓ disables call buttons if the user lacks permission (24 ms)\n    ✓ shows a close button when viewing a call lobby that returns to the timeline when pressed (67 ms)\n    ✓ shows a reduce button when viewing a call that returns to the timeline when pressed (70 ms)\n    ✓ shows a layout button when viewing a call that shows a menu when pressed (79 ms)\n    ✓ shows an invite button in video rooms (15 ms)\n    ✓ hides the invite button in non-video rooms when viewing a call (13 ms)\n    ✓ shows the room avatar in a room with only ourselves (15 ms)\n    ✓ shows the room avatar in a room with 2 people (13 ms)\n    ✓ shows the room avatar in a room with >2 people (20 ms)\n    ✓ shows the room avatar in a DM with only ourselves (14 ms)\n    ✓ shows the user avatar in a DM with 2 people (11 ms)\n    ✓ shows the room avatar in a DM with >2 people (18 ms)\n    ✓ renders call buttons normally (13 ms)\n    ✓ hides call buttons when the room is tombstoned (11 ms)\n    ✓ should render buttons if not passing showButtons (default true) (18 ms)\n    ✓ should not render buttons if passing showButtons = false (9 ms)\n    ✓ should render the room options context menu if not passing enableRoomOptionsMenu (default true) (13 ms)\n    ✓ should not render the room options context menu if passing enableRoomOptionsMenu = false (18 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       37 passed, 37 total\nSnapshots:   0 total\nTime:        19.322 s\nRan all test suites matching /test\\/components\\/views\\/rooms\\/RoomHeader-test.tsx/i.\nDone in 21.93s."
+  },
+  {
+    "tool_call_id": "call_00_poWNWtFHDB3zAQ9sgkGb8322",
+    "input": {
+      "command": "yarn jest test/components/views/rooms/RoomHeader-test.tsx 2>&1 | tail -15",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "✓ renders call buttons normally (18 ms)\n    ✓ hides call buttons when the room is tombstoned (10 ms)\n    ✓ should render buttons if not passing showButtons (default true) (11 ms)\n    ✓ should not render buttons if passing showButtons = false (8 ms)\n    ✓ should render the room options context menu if not passing enableRoomOptionsMenu (default true) (16 ms)\n    ✓ should not render the room options context menu if passing enableRoomOptionsMenu = false (10 ms)\n    ✓ should not render the room options context menu if the component is disabled by customisation (29 ms)\n    ✓ should render the room options context menu if the component is enabled by customisation (18 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       39 passed, 39 total\nSnapshots:   0 total\nTime:        3.39 s, estimated 20 s\nRan all test suites matching /test\\/components\\/views\\/rooms\\/RoomHeader-test.tsx/i.\nDone in 5.75s."
+  },
+  {
+    "tool_call_id": "call_00_ZGkQURISRkk0BNArya1z0378",
+    "input": {
+      "command": "yarn jest test/components/views/rooms/RoomTile-test.tsx 2>&1 | tail -20",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "✓ should still render the call subtitle (23 ms)\n      when a live voice broadcast starts\n        ✓ should render the »Live« subtitle (9 ms)\n        and the broadcast stops\n          ✓ should not render the »Live« subtitle (9 ms)\n    when message previews are enabled\n      ✓ should render a room without a message as expected (14 ms)\n      and there is a message in the room\n        ✓ should render as expected (18 ms)\n      and there is a message in a thread\n        ✓ should render as expected (14 ms)\n      and there is a message and a thread without a reply\n        ✓ should render the message preview (10 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       10 passed, 10 total\nSnapshots:   4 passed, 4 total\nTime:        2.214 s\nRan all test suites matching /test\\/components\\/views\\/rooms\\/RoomTile-test.tsx/i.\nDone in 4.58s."
+  }
+]

@@ -1,0 +1,15 @@
+Running selected tests: TestWhitespaceCorsAllowedOrigins
+=== RUN   TestWhitespaceCorsAllowedOrigins
+=== RUN   TestWhitespaceCorsAllowedOrigins/yaml_whitespace_splits_and_collapses
+=== RUN   TestWhitespaceCorsAllowedOrigins/env_whitespace_parity_with_yaml
+=== RUN   TestWhitespaceCorsAllowedOrigins/empty_scalar_decodes_to_empty_slice_not_nil
+=== RUN   TestWhitespaceCorsAllowedOrigins/comma_in_scalar_is_preserved_as_single_token
+=== RUN   TestWhitespaceCorsAllowedOrigins/yaml_sequence_source_passes_through_unchanged
+--- PASS: TestWhitespaceCorsAllowedOrigins (0.00s)
+    --- PASS: TestWhitespaceCorsAllowedOrigins/yaml_whitespace_splits_and_collapses (0.00s)
+    --- PASS: TestWhitespaceCorsAllowedOrigins/env_whitespace_parity_with_yaml (0.00s)
+    --- PASS: TestWhitespaceCorsAllowedOrigins/empty_scalar_decodes_to_empty_slice_not_nil (0.00s)
+    --- PASS: TestWhitespaceCorsAllowedOrigins/comma_in_scalar_is_preserved_as_single_token (0.00s)
+    --- PASS: TestWhitespaceCorsAllowedOrigins/yaml_sequence_source_passes_through_unchanged (0.00s)
+PASS
+ok  	go.flipt.io/flipt/internal/config	0.005s

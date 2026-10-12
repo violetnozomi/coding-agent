@@ -1,0 +1,39 @@
+{
+  "purpose": "swebench-pro-v2",
+  "model": "deepseek-flash",
+  "scope": [
+    "instance_protonmail__webclients-708ed4a299711f0fa79a907cc5847cfd39c0fc71",
+    "instance_protonmail__webclients-01b519cd49e6a24d9a05d2eb97f54e420740072e",
+    "instance_flipt-io__flipt-518ec324b66a07fdd95464a5e9ca5fe7681ad8f9",
+    "instance_ansible__ansible-bf98f031f3f5af31a2d78dc2f0a58fe92ebae0bb-v1055803c3a812189a1133297f7f5468579283f86",
+    "instance_qutebrowser__qutebrowser-ebfe9b7aa0c4ba9d451f993e08955004aaec4345-v059c6fdc75567943479b23ebca7c07b5e9a7f34c",
+    "instance_element-hq__element-web-53b42e321777a598aaf2bb3eab22d710569f83a8-vnan",
+    "instance_future-architect__vuls-edb324c3d9ec3b107bf947f00e38af99d05b3e16",
+    "instance_qutebrowser__qutebrowser-44e64199ed38003253f0296badd4a447645067b6-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+    "instance_gravitational__teleport-b8fbb2d1e90ffcde88ed5fe9920015c1be075788-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+    "instance_flipt-io__flipt-d966559200183b713cdf3ea5007a7e0ba86a5afb",
+    "instance_future-architect__vuls-17ae386d1e185ba742eea4668ca77642e22b54c4"
+  ],
+  "instance_manifest_sha256": "a7f4e1750c24d430c7fcff55733b78151b7ad6eb845978f4082e397d16d79560",
+  "account": "project-env:DeepSeek",
+  "input_mode": "empirical",
+  "empirical_risk_accepted": true,
+  "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+  "cost_limit": 50,
+  "cost_currency": "CNY",
+  "authorization_text": "追加人民币50元，补齐原名单；仅首次调用尚未调用模型的题，已付费任务不重跑。复用此前接受的经验计量与止损口径。",
+  "valid_from": 1791768487.5524788,
+  "valid_until": 1791941288.5524795,
+  "prices_cny_per_million": {
+    "input": 2,
+    "cached_input": 0.04,
+    "output": 8
+  },
+  "provider_output_reservation_tokens": 393216,
+  "original_total_authorization_cny": 50,
+  "previous_used_cny": 46.8420044,
+  "predecessor_ledger_sha256": "863e584a2e448e3c13ac02482845b8c0ad81d7395d336828392d8497aad922e3",
+  "preparation_retry_not_paid_agent_retry": true,
+  "new_authorization_cny": 50,
+  "closed_original_unused_not_carried": true
+}

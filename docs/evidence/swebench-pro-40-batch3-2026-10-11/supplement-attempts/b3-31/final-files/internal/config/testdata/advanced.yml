@@ -1,0 +1,41 @@
+log:
+  level: WARN
+  file: "testLogFile.txt"
+  encoding: "json"
+
+ui:
+  enabled: false
+
+cors:
+  enabled: true
+  allowed_origins: "foo.com bar.com"
+
+cache:
+  enabled: true
+  backend: memory
+  ttl: 60s
+  memory:
+    eviction_interval: 5m # Evict Expired Items Every 5m
+
+server:
+  protocol: https
+  host: 127.0.0.1
+  http_port: 8081
+  https_port: 8080
+  grpc_port: 9001
+  cert_file: "./testdata/ssl_cert.pem"
+  cert_key: "./testdata/ssl_key.pem"
+
+tracing:
+  jaeger:
+    enabled: true
+
+db:
+  url: postgres://postgres@localhost:5432/flipt?sslmode=disable
+  max_idle_conn: 10
+  max_open_conn: 50
+  conn_max_lifetime: 30m
+
+meta:
+  check_for_updates: false
+  telemetry_enabled: false

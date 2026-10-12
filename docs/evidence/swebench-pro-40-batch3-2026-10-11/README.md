@@ -14,6 +14,8 @@ Agent 复用真实 NativeSDKRunner、隔离容器和原生工具；网络仅可�
 
 详情见 [最终报告](final-report.md)、[逐题记录](current-outcomes.json)、[账目与完整性核验](final-accounting-and-integrity.json)及 [预算影响与阻断](closure-notes.json)。部分已调用任务受共享财务准入影响；未执行项同时包含环境阻断，不能将全部未通过或未执行归因于 Agent 能力。
 
-## 新增授权补做（执行中）
+## 新增授权补做（已闭账）
 
 用户追加人民币50元，只首次运行原名单零模型调用的11题。新增费用使用独立账本，不携带原授权余款；原29题不重跑。授权范围见 [补充授权](supplement-authorization.json)。[原闭账报告](original-final-report.md) 与 [原逐题口径](original-current-outcomes.json)保留。
+
+原名单40题已全部实际调用模型并独立验收：30题通过、10题未通过。最新完整逐题结果见 [补齐后的最终报告](supplement-report.md)。新增授权估算18.19948592元，余款不沿用，真实账单未知。原授权与原29题记录保持不变。

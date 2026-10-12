@@ -1,0 +1,36 @@
+{
+  "tasks": [
+    {
+      "number": 27,
+      "instance_id": "instance_protonmail__webclients-708ed4a299711f0fa79a907cc5847cfd39c0fc71",
+      "attempt": 1,
+      "agent_status": "max_turns",
+      "resolved": true,
+      "agent_started_epoch": 1791773293.3838494,
+      "agent_finished_epoch": 1791773772.3952837,
+      "status": "attempt_or_delivery_error",
+      "patch_sha256": "1ea4e9740da34b6cb6e4a4beda1c089b2187ab04e32b0d98c0613c94a61022ae",
+      "eval_status": "graded",
+      "error": "ValueError('refusing archive outside a direct child of run root: /dev/shm/nz-pro-batch3-supplement-20261012/b3-27')",
+      "physical_requests": 40
+    },
+    {
+      "number": 28,
+      "instance_id": "instance_protonmail__webclients-01b519cd49e6a24d9a05d2eb97f54e420740072e",
+      "attempt": 1,
+      "agent_status": "max_turns",
+      "resolved": true,
+      "agent_started_epoch": 1791774543.5479002,
+      "agent_finished_epoch": 1791775177.1998932,
+      "status": "attempt_or_delivery_error",
+      "patch_sha256": "86a7b3e9ed3899acd020b460fb6602da4be7bf12cf5fe04e59e7548cff92ba8c",
+      "eval_status": "graded",
+      "error": "ValueError('refusing archive outside a direct child of run root: /dev/shm/nz-pro-batch3-supplement-20261012/b3-28')",
+      "physical_requests": 40
+    }
+  ],
+  "physical_requests": 80,
+  "estimated_cost_occupied_cny": 2.393217760000001,
+  "accounting_failures": {},
+  "old_batch_balance_used": false
+}
