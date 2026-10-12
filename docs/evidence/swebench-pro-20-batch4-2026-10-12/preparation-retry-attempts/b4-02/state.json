@@ -1,0 +1,492 @@
+{
+  "turn_count": 21,
+  "max_turns": 40,
+  "started_at": 1791781884.5726354,
+  "timeout_seconds": 0.0,
+  "last_edit_turn": 12,
+  "edits_this_run": 3,
+  "has_diff": true,
+  "diff_chars": 3665,
+  "changed_files": [
+    "scripts/providers/__init__.py",
+    "scripts/providers/isbndb.py",
+    "scripts/tests/test_isbndb.py"
+  ],
+  "tests_modified": true,
+  "source_only": false,
+  "acceptance_criteria": [
+    "A new module `scripts/providers/isbndb.py` must be added providing ISBNdb line-parsing and non-book-detection helpers for Open Library.",
+    "The `get_line` function must accept a single raw line from an ISBNdb data dump (`bytes`), where each line is one JSON record, and return that line decoded as JSON into the correspo",
+    "The `is_nonbook` function must accept a binding description string and a list of non-book binding terms, split the binding string on the space character (\" \") into individual words",
+    "The `NONBOOK` list must enumerate, in lowercase, the binding terms treated as non-book formats and excluded during import. At minimum it must include `'dvd'`, `'cassette'`, and `'a",
+    "Path: `scripts/providers/isbndb.py`"
+  ],
+  "requested_paths": [],
+  "task_mode": "project_creation",
+  "wants_tests": false,
+  "forbids_test_changes": false,
+  "plan_generated": false,
+  "plan_text": "",
+  "replan_count": 0,
+  "open_todo_items": 0,
+  "task_reference_evidence": [],
+  "task_references_bound": true,
+  "task_authority_epoch": 0,
+  "task_authority_message_id": "",
+  "task_reference_omitted_count": 0,
+  "task_contract": {},
+  "requirement_ledger": {},
+  "completion_gate_prompts": 0,
+  "completion_gate_signature": "",
+  "initial_task_text": "A code repository is available in the `/app` directory. Your task is to implement the changes necessary to satisfy the following Pull Request (PR) description:\n\n<pr_description>\n### Title\n\nAdd ISBNdb line parsing and non-book format detection for Open Library imports\n\n### Description\n\nOpen Library lacks the basic building blocks needed to consume ISBNdb records as a source of bibliographic metadata. There is no module that can turn a raw ISBNdb data-dump line into a usable Python record, and there is no reliable way to recognize and exclude non-book formats (such as DVDs or audiobooks) based on a record's binding.\n\n### Actual Behavior\n\n- No module exists to read a single ISBNdb dump line and convert it into a Python dictionary.\n\n- Non-book formats such as DVDs, CDs, cassettes, and audio are not identified, so they cannot be excluded from import.\n\n### Expected Behavior\n\n- A single ISBNdb dump line can be converted into a Python dictionary, with malformed lines handled gracefully rather than crashing the caller.\n\n- A record's binding can be inspected to determine whether it represents a non-book format, using a maintained list of known non-book binding terms.\n\n## Requirements\n- A new module `scripts/providers/isbndb.py` must be added providing ISBNdb line-parsing and non-book-detection helpers for Open Library.\n\n- The `get_line` function must accept a single raw line from an ISBNdb data dump (`bytes`), where each line is one JSON record, and return that line decoded as JSON into the corresponding Python dictionary. The returned dictionary must preserve every key/value pair exactly as present in the JSON, including nested lists and non-ASCII string values. When the line cannot be decoded as JSON the function must not raise; it must skip the line and return `None`.\n\n- The `is_nonbook` function must accept a binding description string and a list of non-book binding terms, split the binding string on the space character (\" \") into individual words, and return `True` when any resulting word appears in the supplied list. Word comparison must be case-insensitive, so a binding such as \"DVD\" or \"dvd\" both match a list entry \"dvd\", and a multi-word binding such as \"audio cassette\" matches when any of its words is in the list; otherwise it must return `False`.\n\n- The `NONBOOK` list must enumerate, in lowercase, the binding terms treated as non-book formats and excluded during import. At minimum it must include `'dvd'`, `'cassette'`, and `'audio'` (stored lowercase so that case-insensitive matching succeeds), and it must not include common book binding terms such as `'paperback'`.\n\n## New Interfaces\n- Path: `scripts/providers/isbndb.py`\n- Name: isbndb.py\n- Type: file\n- Input: N/A\n- Output: N/A\n- Description: New module providing ISBNdb line-parsing and non-book-detection helpers for Open Library.\n\n- Path: `scripts/providers/isbndb.py`\n- Name: get_line\n- Type: function\n- Input: line (bytes)\n- Output: dict | None\n- Description: Decodes a single ISBNdb dump line as JSON into a dictionary, returning None when the line is not valid JSON.\n\n- Path: `scripts/providers/isbndb.py`\n- Name: is_nonbook\n- Type: function\n- Input: binding (str), nonbooks (list[str])\n- Output: bool\n- Description: Returns True when any space-split word of the binding string is present in the given list, compared case-insensitively.\n</pr_description>\n\nConstraints:\n* Do not reference, look up, or copy existing solutions, external PRs, or online workarounds. The implementation must be entirely your own independent work.\n\n\nExecution environment: repository is /workspace. Network is unavailable during this attempt. Use the installed project toolchain and cached dependencies. Implement the requested change and verify it with relevant local tests.",
+  "current_round_instruction_text": "",
+  "initial_plan_complexity": "",
+  "patch_risk": {
+    "risk": "medium",
+    "fingerprint": "bc4f85160c99f24e",
+    "requires_replan": false,
+    "risk_signals": [],
+    "reasons": [
+      "2 source files changed",
+      "public-looking API surface file changed"
+    ],
+    "affected_files": [
+      "scripts/providers/__init__.py",
+      "scripts/providers/isbndb.py",
+      "scripts/tests/test_isbndb.py"
+    ],
+    "likely_tests": [],
+    "suggested_verification": [
+      "python -m py_compile scripts/providers/__init__.py",
+      "python -m py_compile scripts/providers/isbndb.py",
+      "pytest tests/integration/__init__.py",
+      "pytest openlibrary/catalog/add_book/tests/__init__.py",
+      "pytest openlibrary/coverstore/tests/__init__.py",
+      "pytest openlibrary/mocks/tests/__init__.py"
+    ],
+    "review_notes": [
+      "Confirm test changes match the user request and are not masking failures."
+    ],
+    "structural_impact": {
+      "changed_symbols": [],
+      "impacted_callers": [],
+      "direct_callers": [],
+      "transitive_callers": [],
+      "dependent_modules": [],
+      "related_tests": [],
+      "public_api_exposure": [],
+      "truncated": false,
+      "budget": {},
+      "related": [],
+      "source": "unavailable"
+    }
+  },
+  "risk_feedback_fingerprint": "",
+  "risk_replan_fingerprint": "",
+  "verification_attempts": 2,
+  "py_compile_ok": true,
+  "changed_files_verified": true,
+  "broad_test_attempts": 0,
+  "exact_test_attempts": 1,
+  "verification_contract": {},
+  "verification_failures": 0,
+  "last_verification_failure": "",
+  "completion_review_rejections": 0,
+  "last_completion_review_rejection": "",
+  "completion_review_generation": -1,
+  "needs_broad_exploration": false,
+  "scheduled_verification_generations": {},
+  "primary_recovery_classification": "",
+  "supporting_recovery_classifications": [],
+  "recovery_repair_targets": [],
+  "searched_patterns": [
+    "isbndb|ISBNdb|NONBOOK",
+    "isbndb|ISBNdb",
+    "NONBOOK",
+    "def get_line|json.loads\\(line",
+    "json.loads"
+  ],
+  "read_files": [
+    "scripts/partner_batch_imports.py",
+    "scripts/tests/test_partner_batch_imports.py",
+    "scripts/sitemaps/sitemap.py",
+    "pyproject.toml",
+    "scripts/providers/isbndb.py"
+  ],
+  "investigation_calls_since_edit": 1,
+  "mutation_generation": 3,
+  "source_mutation_generation": 2,
+  "acceptance_mutation_generation": 3,
+  "diff_generation": -1,
+  "verification_generation": 3,
+  "strict_progress_nudges": 0,
+  "strict_progress_blocks": 0,
+  "budget_zones_emitted": [],
+  "budget_pressure_zone": "green",
+  "work_phase": "normal",
+  "workspace_git_available": true,
+  "package_install_attempts": 0,
+  "emergency_broad_exploration": 0,
+  "provider_calls": 22,
+  "provider_attempts": 23,
+  "provider_calls_by_purpose": {
+    "coding": 21,
+    "verifier": 1
+  },
+  "provider_calls_by_model": {
+    "openai-compatible/deepseek-flash": 22
+  },
+  "provider_usage": {
+    "input": 171545,
+    "output": 3149,
+    "total": 316359,
+    "reasoning": 4321,
+    "cache_read": 137344,
+    "cache_write": 0
+  },
+  "provider_usage_by_purpose": {
+    "coding": {
+      "input": 171545,
+      "output": 3149,
+      "total": 316359,
+      "reasoning": 4321,
+      "cache_read": 137344,
+      "cache_write": 0
+    },
+    "verifier": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "reasoning": 0,
+      "cache_read": 0,
+      "cache_write": 0
+    }
+  },
+  "provider_usage_by_model": {
+    "openai-compatible/deepseek-flash": {
+      "input": 171545,
+      "output": 3149,
+      "total": 316359,
+      "reasoning": 4321,
+      "cache_read": 137344,
+      "cache_write": 0
+    }
+  },
+  "provider_duration_ms_by_purpose": {
+    "coding": 51269.779,
+    "verifier": 2012.338
+  },
+  "provider_duration_ms_by_model": {
+    "openai-compatible/deepseek-flash": 53282.117
+  },
+  "provider_cost_usd": 0.0,
+  "provider_cost_usd_by_purpose": {},
+  "provider_cost_usd_by_model": {},
+  "provider_cost_unknown_calls": 22,
+  "provider_cost_sources": {
+    "unknown": 22
+  },
+  "provider_turn_records": [
+    {
+      "turn": 1,
+      "reason": "initial_investigation",
+      "outcome": "mixed_tool_batch",
+      "tool_names": [
+        "bash",
+        "list_directory"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 2,
+      "reason": "investigation",
+      "outcome": "mixed_tool_batch",
+      "tool_names": [
+        "bash",
+        "glob_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 3,
+      "reason": "investigation",
+      "outcome": "mixed_tool_batch",
+      "tool_names": [
+        "bash",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 4,
+      "reason": "investigation",
+      "outcome": "mixed_tool_batch",
+      "tool_names": [
+        "bash",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 5,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "list_directory",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 6,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 7,
+      "reason": "investigation",
+      "outcome": "mixed_tool_batch",
+      "tool_names": [
+        "read_file",
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 8,
+      "reason": "investigation",
+      "outcome": "mixed_tool_batch",
+      "tool_names": [
+        "bash",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 9,
+      "reason": "investigation",
+      "outcome": "mixed_tool_batch",
+      "tool_names": [
+        "read_file",
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 10,
+      "reason": "investigation",
+      "outcome": "mixed_tool_batch",
+      "tool_names": [
+        "read_file",
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 11,
+      "reason": "investigation",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "write_file",
+        "write_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 2,
+      "mutation_delta": 2,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 12,
+      "reason": "verification",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "write_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 2,
+      "mutation_generation_after": 3,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 13,
+      "reason": "verification",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 14,
+      "reason": "verification",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 15,
+      "reason": "verification",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 16,
+      "reason": "verification",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash",
+        "diff_status"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 17,
+      "reason": "verification",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 18,
+      "reason": "verification",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "verify_changed_files"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": 3
+    },
+    {
+      "turn": 19,
+      "reason": "implementation",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": 3
+    },
+    {
+      "turn": 20,
+      "reason": "implementation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": 3
+    },
+    {
+      "turn": 21,
+      "reason": "implementation",
+      "outcome": "final_answer",
+      "tool_names": [],
+      "finish_reason": "stop",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": 3
+    }
+  ],
+  "provider_turns_by_reason": {
+    "initial_investigation": 1,
+    "investigation": 10,
+    "verification": 7,
+    "implementation": 3
+  },
+  "provider_turns_by_outcome": {
+    "mixed_tool_batch": 8,
+    "investigation_batch": 3,
+    "mutation_batch": 2,
+    "verification_batch": 7,
+    "final_answer": 1
+  },
+  "transition": "read",
+  "_state_block_emitted": false,
+  "_diff_seen_from_tool": true,
+  "active": true,
+  "saved_at": 1791781959.8872771
+}

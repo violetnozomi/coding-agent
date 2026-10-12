@@ -1,0 +1,8 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cat package.json"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"cannot be found\\|does not exist\\|not permitted\" packages/shared/lib/api/drive/ 2>/dev/null | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"getApiError\\|apiError.code\\|\\.code ===\" applications/drive/src/app | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && git status --short | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git status", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git log --oneline -3 && echo \"---\" && git log --oneline -3 -- applications/drive/src/app/store/_links/useLink.ts", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -la .nz-coder/ 2>/dev/null && find .nz-coder -maxdepth 2 -type f | head -20", "workdir": "/workspace"}, "allowed": false}

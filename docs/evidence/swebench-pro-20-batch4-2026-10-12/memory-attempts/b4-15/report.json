@@ -1,0 +1,13 @@
+{
+  "number": 15,
+  "instance_id": "instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": false,
+  "agent_started_epoch": 1791787147.1605163,
+  "agent_finished_epoch": 1791787735.8539696,
+  "status": "attempted",
+  "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

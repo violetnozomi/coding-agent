@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "TestCreateTable/table_creation_succeeds",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestCreateTable/read/write_capacity_units_are_ignored_if_on_demand_is_on",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestCreateTable/bad_parameter_when_provisioned_throughput_is_set",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestCreateTable/bad_parameter_when_the_incorrect_billing_mode_is_set",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestCreateTable/create_table_succeeds",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestCreateTable",
+      "status": "PASSED"
+    }
+  ]
+}

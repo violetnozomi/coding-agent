@@ -1,0 +1,31 @@
+{
+  "purpose": "swebench-pro-v2",
+  "model": "deepseek-flash",
+  "scope": [
+    "instance_internetarchive__openlibrary-3f7db6bbbcc7c418b3db72d157c6aed1d45b2ccf-v430f20c722405e462d9ef44dee7d34c41e76fe7a",
+    "instance_gravitational__teleport-007235446f85b1cbaef92664c3b3867517250f21",
+    "instance_gravitational__teleport-2bb3bbbd8aff1164a2353381cb79e1dc93b90d28-vee9b09fb20c43af7e520f57e9239bbcf46b7113d"
+  ],
+  "instance_manifest_sha256": "eb85858fce1b82e7fd428df24e6935cd6676e1a8f4f28b22a1de221d2c3fb331",
+  "account": "project-env:DeepSeek",
+  "input_mode": "empirical",
+  "empirical_risk_accepted": true,
+  "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+  "cost_limit": 19.28562208,
+  "cost_currency": "CNY",
+  "authorization_text": "本批总人民币50元，只首次运行零模型调用题；扣除已结算占用，不增加授权，不携带前三批余款。9/15另按已批准内存工作区串行执行。",
+  "valid_from": 1791781505.643748,
+  "valid_until": 1791954306.6437485,
+  "prices_cny_per_million": {
+    "input": 2,
+    "cached_input": 0.04,
+    "output": 8
+  },
+  "provider_output_reservation_tokens": 393216,
+  "original_total_authorization_cny": 50,
+  "previous_used_cny": 30.71437792,
+  "predecessor_ledger_sha256": "e11388fd8ed0b41176bc3bb5734cec6124b8c8f85c5b28b6f31172ed89d49030",
+  "preparation_retry_not_paid_agent_retry": true,
+  "new_authorization_cny": 50,
+  "closed_original_unused_not_carried": true
+}

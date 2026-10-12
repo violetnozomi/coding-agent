@@ -1,0 +1,20 @@
+Running selected tests: scripts/tests/test_isbndb.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.2, pytest-7.4.3, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pyproject.toml
+plugins: anyio-4.10.0, asyncio-0.21.1, rerunfailures-15.1, cov-4.1.0
+asyncio: mode=Mode.STRICT
+collecting ... collected 8 items
+
+scripts/tests/test_isbndb.py::test_isbndb_to_ol_item PASSED              [ 12%]
+scripts/tests/test_isbndb.py::test_is_nonbook[DVD-True] PASSED           [ 25%]
+scripts/tests/test_isbndb.py::test_is_nonbook[dvd-True] PASSED           [ 37%]
+scripts/tests/test_isbndb.py::test_is_nonbook[audio cassette-True] PASSED [ 50%]
+scripts/tests/test_isbndb.py::test_is_nonbook[audio-True] PASSED         [ 62%]
+scripts/tests/test_isbndb.py::test_is_nonbook[cassette-True] PASSED      [ 75%]
+scripts/tests/test_isbndb.py::test_is_nonbook[paperback-False] PASSED    [ 87%]
+scripts/tests/test_isbndb.py::test_get_line_returns_none_on_invalid_json PASSED [100%]
+
+============================== 8 passed in 0.01s ===============================

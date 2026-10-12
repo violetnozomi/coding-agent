@@ -1,0 +1,10 @@
+{
+  "pid": 1690399,
+  "command": [
+    "python",
+    "/home/pyh/nzcoder/docs/evidence/swebench-pro-20-batch4-2026-10-12/environment-recovery/measure-image.py"
+  ],
+  "started_epoch": 1791787875.3003943,
+  "model_calls": 0,
+  "reason": "measure official compressed and uncompressed layers without lowering existing estimate or modifying agent"
+}

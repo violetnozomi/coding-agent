@@ -1,0 +1,13 @@
+{"tool": "bash", "input": {"command": "ls /workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls /workspace/scripts; echo \"---providers---\"; find /workspace -type d -name providers -not -path '*/node_modules/*' 2>/dev/null; echo \"---tests dir---\"; ls /workspace/scripts/tests"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -la /workspace/scripts"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python --version && sed -n '1,40p' pyproject.toml"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls openlibrary/plugins/openlibrary 2>/dev/null | head; echo ---; python -c \"print('ok')\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls scripts/tests && python -V"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '31,80p' scripts/tests/test_partner_batch_imports.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest scripts/tests/test_isbndb.py -q 2>&1 | tail -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest scripts/tests/test_isbndb.py -q", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest scripts/tests/test_isbndb.py -q"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m ruff check scripts/providers scripts/tests/test_isbndb.py 2>&1 | tail -20; echo \"exit=$?\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m ruff check scripts/providers scripts/tests/test_isbndb.py", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest scripts/tests -q 2>&1 | tail -15", "workdir": "/workspace"}, "allowed": true}

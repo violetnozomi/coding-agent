@@ -1,0 +1,8 @@
+{
+  "tests": [
+    {
+      "name": "TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage",
+      "status": "PASSED"
+    }
+  ]
+}

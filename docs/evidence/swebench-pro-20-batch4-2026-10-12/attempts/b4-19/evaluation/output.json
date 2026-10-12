@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "name": "TestFilterAWSRoles",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestChConn",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestNewCircularBuffer",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestCircularBuffer_Data",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestConsolefLongComponent",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestEscapeControl",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestAllowNewlines",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSlice",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestUtils",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestReadAtMost",
+      "status": "PASSED"
+    }
+  ]
+}

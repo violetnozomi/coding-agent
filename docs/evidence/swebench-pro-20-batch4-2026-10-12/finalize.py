@@ -17,7 +17,7 @@ def sha(path):
 def save(path,value):path.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
 assert sha(out/'task-manifest.json')==(doc/'task-manifest.sha256').read_text().strip()
 metrics=json.loads((doc/'current-outcomes.json').read_text());assert [r['instance_id'] for r in metrics]==ids
-stages=[name for name in ('live','p2','p3','supplement-memory') if (out/name).exists()]
+stages=[name for name in ('live','p2','supplement-memory','p3') if (out/name).exists()]
 phase_summary=[];allad=[];allsettled=[];allrejections=[];wire=Counter();models=Counter();raw=0;responses_present=0;responses_json=0;attempts={};canonical={r['instance_id']:r for r in metrics}
 for stage in stages:
  p=out/stage
@@ -129,7 +129,7 @@ lines += ['',f"实际主/辅助请求{account['main_physical_requests']}/{accoun
  '实际出站max_tokens/max_completion_tokens、thinking、reasoning_effort及stream见[逐笔核验](final-accounting-and-integrity.json)。393216为费用预留，非输出限制；未设置不写成medium/false。估算不是供应商账单，缺失usage或缺失字段保留unknown/null和观测数。', '',
  '容器独立工作区、HOME及Session，无网络、非root；密钥仅在宿主Relay。Agent不接触官方隐藏验收，停止后冻结实际补丁，在新鲜原始镜像执行未改的官方验收。公开协议和工具记录脱敏，原始Session/Artifact及Provider原件保留本机并提供SHA256。宿主没有提供正确补丁或向模型泄露验收结果。', '',
  '第13题官方验收停在补丁应用阶段：三个Redis appendonlydir文件already exists，退出97，没有启动官方测试。初态hash只覆盖tracked文件，不能证明冲突文件与初态相同；原补丁保持不变。该项记unknown，不将验收阻断当作测试断言失败或通过。细节见[原始阻断事实](attempts/b4-13/acceptance-blocker.json)。', '',
- '本轮未修改Core、验证器或评分函数，未运行全仓或Windows，不重跑已通过且未变的离线回归。历史compaction fake失败test_context_overflow_stops_after_three_compaction_attempts、test_pre_send_and_reactive_compactions_share_one_three_attempt_owner保留，不删除或弱化。', '',
+ '本轮未修改Core、验证器或评分函数。导出阶段排序反例修复：python -m pytest -q tests/evaluation/test_batch4_evidence_chronology.py，2 passed；仍禁止覆盖已付费尝试。未运行全仓或Windows，不重跑未变的检查。历史compaction fake失败test_context_overflow_stops_after_three_compaction_attempts、test_pre_send_and_reactive_compactions_share_one_three_attempt_owner保留，不删除或弱化。', '',
  '每题README与learning.md提供请求→工具事实→补丁→独立验收的面试复盘入口。冻结验收通过只证明其覆盖范围，不追认Agent未运行的测试。本批结果不能证明整体SWE成功率、Core效果提高或并行提速倍数。']
 (doc/'final-report.md').write_text('\n'.join(lines)+'\n')
 save(doc/'authorization-closed.json',{'authorized_cny':50,'occupied_cny':allfee,'unused_cny':50-allfee,

@@ -1,0 +1,369 @@
+[
+  {
+    "tool_call_id": "call_00_S64JVH7mtzlDhmSokLku5999",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 && git status --short | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_gd5febhf5q3MW12z0UC01327",
+    "input": {
+      "command": "cd /workspace && go version && go test ./lib/sshutils/scp/... 2>&1 | tail -40",
+      "timeout": 300
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_qug9fxVXp2IWZPw3FjkT6076",
+    "input": {
+      "command": "go version"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go version go1.16.15 linux/amd64"
+  },
+  {
+    "tool_call_id": "call_00_72G0y7zrooqJ18drqlij4854",
+    "input": {
+      "command": "go test ./lib/sshutils/scp/... 2>&1 | tail -40",
+      "timeout": 300,
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_MnmdZO0fsE69xGBsU1b61933",
+    "input": {
+      "command": "go test ./lib/sshutils/scp/... 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ZDNB2PCw38i0koY8WCnP0369",
+    "input": {
+      "command": "go test -vet=off ./lib/sshutils/scp/... 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_MB9NRpgQnjQrMVjWH5CD8548",
+    "input": {
+      "command": "which scp; scp -V 2>&1 | head -3; ls -la $(which scp) 2>&1"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_nh2DNBaeIErHJzehDItC8395",
+    "input": {
+      "command": "command -v scp || echo \"no scp\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_r4PsKPyzuzNipn9BhIoZ9050",
+    "input": {
+      "command": "command -v scp; echo \"---\"; scp -V 2>&1 | head -2"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_GEJUum4w9vBJ0z0GRcna5114",
+    "input": {
+      "command": "ls /usr/bin/scp"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_J5FU1zQis1eMIrX1d3jT9153",
+    "input": {
+      "command": "git log --oneline -5",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "2e7b253d5 Update CHANGELOG.md\n5e0178d3f Fix db server test data race (#5832)\n5b87e74a0 Updated CHANGELOG.md.\n4588a7951 mfa: delete user MFA devices on account reset (#5805)\nf7a2eb4ed Include CA cert file path in the error message"
+  },
+  {
+    "tool_call_id": "call_00_yOkmRNHYVmtjiskfPE9M0104",
+    "input": {
+      "command": "git log --oneline --all -- lib/sshutils/scp/scp.go | head -20; echo ---; git branch -a; echo ---; git tag | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "e65eac59b tsh scp to use target directory correctly (#5501)\n43d142085 Wait on scp process at the end of the test. Service the stderr pipe to (#5418)\n72630d1df Implement support for preserving file times for 'tsh scp' (#4764)\n92ed2db38 Fixing golint warnings, batch 1\n19d482dad Allow user with at sign in name (#4002)\ndba7f8e56 Remove ineffectual assignments\nd40013f33 Send SCP error messages to receiver when upload fails\nf8661edea Clean up dead code across the codebase\n9a237b732 Print scp status without quotes.\n1479dfc25 Always emit exec command and exit code.\nba1fcf5d7 Fix teleport parsing to support IPV6\n27f5ef8f8 Added support for directory mode to scp.\n599b8b73c Fix scp client vulnerabilities.\n8b299e9c2 spelling cleanup\n9dbbefe31 Emit secure copy specific events instead of generic exec events when using scp. Fix exec events to strip /bin/bash -c prefix when using regular Teleport nodes.\n7553f1325 fix handling of exitCodes during SCP\n57b2789a4 http file transfer\nb58cb051e Correct various typos\n8b81a0c38 Migrate to golang/dep for dependency management\ncdfb15fd8 scp compatibility improvements\n---\n* main\n---"
+  },
+  {
+    "tool_call_id": "call_00_82uDFgNPXZ7r2y7OgIjS3326",
+    "input": {
+      "command": "git show e65eac59b --stat; echo =====; git show e65eac59b -- lib/sshutils/scp/scp.go",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "commit e65eac59b0e5cb882556b015508ca14c64718792\nAuthor: a-palchikov <deemok@gmail.com>\nDate:   Thu Feb 11 19:35:40 2021 +0100\n\n    tsh scp to use target directory correctly (#5501)\n    \n    * Fixes the scp logic to take target directory into account in sink mode.\n    Also expose channel error in scp client so the error is more visible to\n    the user. Old behavior will only output the 'exit code n' if anything\n    breaks.\n    \n    Fixes https://github.com/gravitational/teleport/issues/5497.\n    \n    * Silence 'wait: remote command exited without exit status or exit signal' error when interrupting the scp session. Leave a TODO to fix properly in a future PR\n    \n    * Address review comments\n\n lib/client/api.go            | 169 ++++++++++++++++++++++++-------------------\n lib/client/client.go         |  46 ++++++++++--\n lib/srv/ctx.go               |   4 +-\n lib/srv/exec.go              |  19 ++---\n lib/sshutils/scp/scp.go      | 103 ++++++++++++++------------\n lib/sshutils/scp/scp_test.go | 138 +++++++++++++++++++++++++++--------\n lib/utils/fs.go              |  13 +++-\n tool/tsh/tsh.go              |  19 +++--\n 8 files changed, 327 insertions(+), 184 deletions(-)\n=====\ncommit e65eac59b0e5cb882556b015508ca14c64718792\nAuthor: a-palchikov <deemok@gmail.com>\nDate:   Thu Feb 11 19:35:40 2021 +0100\n\n    tsh scp to use target directory correctly (#5501)\n    \n    * Fixes the scp logic to take target directory into account in sink mode.\n    Also expose channel error in scp client so the error is more visible to\n    the user. Old behavior will only output the 'exit code n' if anything\n    breaks.\n    \n    Fixes https://github.com/gravitational/teleport/issues/5497.\n    \n    * Silence 'wait: remote command exited without exit status or exit signal' error when interrupting the scp session. Leave a TODO to fix properly in a future PR\n    \n    * Address review comments\n\ndiff --git a/lib/sshutils/scp/scp.go b/lib/sshutils/scp/scp.go\nindex 46ed5a914..3e91bff5c 100644\n--- a/lib/sshutils/scp/scp.go\n+++ b/lib/sshutils/scp/scp.go\n@@ -90,6 +90,8 @@ type Config struct {\n \t// RunOnServer is low level API flag that indicates that\n \t// this command will be run on the server\n \tRunOnServer bool\n+\t// Log optionally specifies the logger\n+\tLog log.FieldLogger\n }\n \n // Command is an API that describes command operations\n@@ -167,10 +169,25 @@ func CreateUploadCommand(cfg Config) (Command, error) {\n \n // CheckAndSetDefaults checks and sets default values\n func (c *Config) CheckAndSetDefaults() error {\n+\tlogger := c.Log\n+\tif logger == nil {\n+\t\tlogger = log.StandardLogger()\n+\t}\n+\tc.Log = logger.WithFields(log.Fields{\n+\t\ttrace.Component: \"SCP\",\n+\t\ttrace.ComponentFields: log.Fields{\n+\t\t\t\"LocalAddr\":      c.Flags.LocalAddr,\n+\t\t\t\"RemoteAddr\":     c.Flags.RemoteAddr,\n+\t\t\t\"Target\":         c.Flags.Target,\n+\t\t\t\"PreserveAttrs\":  c.Flags.PreserveAttrs,\n+\t\t\t\"User\":           c.User,\n+\t\t\t\"RunOnServer\":    c.RunOnServer,\n+\t\t\t\"RemoteLocation\": c.RemoteLocation,\n+\t\t},\n+\t})\n \tif c.FileSystem == nil {\n \t\tc.FileSystem = &localFileSystem{}\n \t}\n-\n \tif c.User == \"\" {\n \t\treturn trace.BadParameter(\"missing User parameter\")\n \t}\n@@ -186,31 +203,17 @@ func CreateCommand(cfg Config) (Command, error) {\n \t\treturn nil, trace.Wrap(err)\n \t}\n \n-\tcmd := command{\n+\treturn &command{\n \t\tConfig: cfg,\n-\t}\n-\n-\tcmd.log = log.WithFields(log.Fields{\n-\t\ttrace.Component: \"SCP\",\n-\t\ttrace.ComponentFields: log.Fields{\n-\t\t\t\"LocalAddr\":      cfg.Flags.LocalAddr,\n-\t\t\t\"RemoteAddr\":     cfg.Flags.RemoteAddr,\n-\t\t\t\"Target\":         cfg.Flags.Target,\n-\t\t\t\"PreserveAttrs\":  cfg.Flags.PreserveAttrs,\n-\t\t\t\"User\":           cfg.User,\n-\t\t\t\"RunOnServer\":    cfg.RunOnServer,\n-\t\t\t\"RemoteLocation\": cfg.RemoteLocation,\n-\t\t},\n-\t})\n-\n-\treturn &cmd, nil\n+\t\tlog:    cfg.Log,\n+\t}, nil\n }\n \n // Command mimics behavior of SCP command line tool\n // to teleport can pretend it launches real SCP behind the scenes\n type command struct {\n \tConfig\n-\tlog *log.Entry\n+\tlog log.FieldLogger\n }\n \n // Execute implements SSH file copy (SCP). It is ... (truncated)"
+  },
+  {
+    "tool_call_id": "call_00_vdgi5I6rN6u9fQqF2cSD4586",
+    "input": {
+      "command": "scp -V 2>&1 | head -3; echo \"rc=$?\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_yzLdSbB9O9xEASnxb75s1537",
+    "input": {
+      "command": "ls -l /usr/bin/ | head -5; echo ---; type scp"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_YUdvEas1Pw08QPmGT8tq3908",
+    "input": {
+      "command": "go env GOFLAGS; echo \"---PATH---\"; echo $PATH"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_sRPJhS0XO9eJ5oHSwZYT5378",
+    "input": {
+      "command": "git diff --stat; echo \"=== last commit touching test ===\"; git log -1 --format='%h %s' -- lib/sshutils/scp/scp_test.go; echo \"=== last commit touching scp.go ===\"; git log -1 --format='%h %s' -- lib/sshutils/scp/scp.go",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "=== last commit touching test ===\nfc1c1dbd1 Move all utils.InitLoggerForTests calls to TestMain\n=== last commit touching scp.go ===\ne65eac59b tsh scp to use target directory correctly (#5501)"
+  },
+  {
+    "tool_call_id": "call_00_0ifJ3bFomFByQxZ21cLo8114",
+    "input": {
+      "command": "sed -n '1,140p' vendor/github.com/gravitational/trace/trace.go",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/*\nCopyright 2015-2019 Gravitational, Inc.\n\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n*/\n\n// Package trace implements utility functions for capturing debugging\n// information about file and line in error reports and logs.\npackage trace\n\nimport (\n\t\"bytes\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"html/template\"\n\t\"path/filepath\"\n\t\"runtime\"\n\t\"strings\"\n\t\"sync/atomic\"\n\n\t\"golang.org/x/net/context\"\n)\n\nvar debug int32\n\n// SetDebug turns on/off debugging mode, that causes Fatalf to panic\nfunc SetDebug(enabled bool) {\n\tif enabled {\n\t\tatomic.StoreInt32(&debug, 1)\n\t} else {\n\t\tatomic.StoreInt32(&debug, 0)\n\t}\n}\n\n// IsDebug returns true if debug mode is on\nfunc IsDebug() bool {\n\treturn atomic.LoadInt32(&debug) == 1\n}\n\n// Wrap takes the original error and wraps it into the Trace struct\n// memorizing the context of the error.\nfunc Wrap(err error, args ...interface{}) Error {\n\tif err == nil {\n\t\treturn nil\n\t}\n\tif len(args) > 0 {\n\t\tformat := args[0]\n\t\targs = args[1:]\n\t\treturn WrapWithMessage(err, format, args...)\n\t}\n\tif traceErr, ok := err.(Error); ok {\n\t\treturn traceErr\n\t}\n\treturn newTrace(err, 2)\n}\n\n// Unwrap returns the original error the given error wraps\nfunc Unwrap(err error) error {\n\tif err, ok := err.(ErrorWrapper); ok {\n\t\treturn err.OrigError()\n\t}\n\treturn err\n}\n\n// UserMessager returns a user message associated with the error\ntype UserMessager interface {\n\t// UserMessage returns the user message associated with the error if any\n\tUserMessage() string\n}\n\n// ErrorWrapper wraps another error\ntype ErrorWrapper interface {\n\t// OrigError returns the wrapped error\n\tOrigError() error\n}\n\n// DebugReporter formats an error for display\ntype DebugReporter interface {\n\t// DebugReport formats an error for display\n\tDebugReport() string\n}\n\n// UserMessage returns user-friendly part of the error\nfunc UserMessage(err error) string {\n\tif err == nil {\n\t\treturn \"\"\n\t}\n\tif wrap, ok := err.(UserMessager); ok {\n\t\treturn wrap.UserMessage()\n\t}\n\treturn err.Error()\n}\n\n// UserMessageWithFields returns user-friendly error with key-pairs as part of the message\nfunc UserMessageWithFields(err error) string {\n\tif err == nil {\n\t\treturn \"\"\n\t}\n\tif wrap, ok := err.(Error); ok {\n\t\tif len(wrap.GetFields()) == 0 {\n\t\t\treturn wrap.UserMessage()\n\t\t}\n\n\t\tvar kvps []string\n\t\tfor k, v := range wrap.GetFields() {\n\t\t\tkvps = append(kvps, fmt.Sprintf(\"%v=%q\", k, v))\n\t\t}\n\t\treturn fmt.Sprintf(\"%v %v\", strings.Join(kvps, \" \"), wrap.UserMessage())\n\t}\n\treturn err.Error()\n}\n\n// DebugReport returns debug report with all known information\n// about the error including stack trace if it was captured\nfunc DebugReport(err error) string {\n\tif err == nil {\n\t\treturn \"\"\n\t}\n\tif reporter, ok := err.(DebugReporter); ok {\n\t\treturn reporter.DebugReport()\n\t}\n\treturn err.Error()\n}\n\n// GetFields returns any fields that have been added to the error message\nfunc GetFields(err error) map[string]interface{} {\n\tif err == nil {\n\t\treturn map[string]interface{}{}\n\t}\n\tif wrap, ok := err.(Error); ok {"
+  },
+  {
+    "tool_call_id": "call_01_KNjOI7WdnvhogAvQKfyw5014",
+    "input": {
+      "command": "sed -n '1,60p' vendor/github.com/gravitational/trace/errors.go; echo '=== NotFound ==='; grep -n \"func NotFound\" vendor/github.com/gravitational/trace/*.go",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/*\nCopyright 2015 Gravitational, Inc.\n\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n*/\n\npackage trace\n\nimport (\n\t\"crypto/x509\"\n\t\"fmt\"\n\t\"io\"\n\t\"net\"\n\t\"net/url\"\n\t\"os\"\n)\n\n// NotFound returns new instance of not found error\nfunc NotFound(message string, args ...interface{}) Error {\n\treturn newTrace(&NotFoundError{\n\t\tMessage: fmt.Sprintf(message, args...),\n\t}, 2)\n}\n\n// NotFoundError indicates that object has not been found\ntype NotFoundError struct {\n\tMessage string `json:\"message\"`\n}\n\n// IsNotFoundError returns true to indicate that is NotFoundError\nfunc (e *NotFoundError) IsNotFoundError() bool {\n\treturn true\n}\n\n// Error returns log friendly description of an error\nfunc (e *NotFoundError) Error() string {\n\tif e.Message != \"\" {\n\t\treturn e.Message\n\t}\n\treturn \"object not found\"\n}\n\n// OrigError returns original error (in this case this is the error itself)\nfunc (e *NotFoundError) OrigError() error {\n\treturn e\n}\n\n// IsNotFound returns whether this error is of NotFoundError type\nfunc IsNotFound(err error) bool {\n\terr = Unwrap(err)\n=== NotFound ===\nvendor/github.com/gravitational/trace/errors.go:29:func NotFound(message string, args ...interface{}) Error {"
+  },
+  {
+    "tool_call_id": "call_00_tc4abfdoFYd9uzOCHWqf4411",
+    "input": {
+      "command": "git log --all --oneline | head -3; echo \"--- refs ---\"; git show-ref | head; echo \"--- dangling ---\"; git fsck --no-reflogs 2>/dev/null | head; echo \"--- patch files ---\"; find . -maxdepth 2 -name '*.patch' -o -maxdepth 2 -name '*.diff' 2>/dev/null | head",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "2e7b253d5 Update CHANGELOG.md\n5e0178d3f Fix db server test data race (#5832)\n5b87e74a0 Updated CHANGELOG.md.\n--- refs ---\n2e7b253d55a1b6da5673ea5846503c43fa53cf37 refs/heads/main\n--- dangling ---\n--- patch files ---"
+  },
+  {
+    "tool_call_id": "call_01_IlrBFT1QZkTd7ZoLd5FN6787",
+    "input": {
+      "command": "sed -n '170,280p' vendor/github.com/gravitational/trace/trace.go",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "panic(fmt.Sprintf(format, args...))\n\t} else {\n\t\treturn Errorf(format, args...)\n\t}\n}\n\nfunc newTrace(err error, depth int) *TraceErr {\n\tvar buf [32]uintptr\n\tn := runtime.Callers(depth+1, buf[:])\n\tpcs := buf[:n]\n\tframes := runtime.CallersFrames(pcs)\n\tcursor := frameCursor{\n\t\trest: frames,\n\t\tn:    n,\n\t}\n\treturn newTraceFromFrames(cursor, err)\n}\n\nfunc newTraceFromFrames(cursor frameCursor, err error) *TraceErr {\n\ttraces := make(Traces, 0, cursor.n)\n\tif cursor.current != nil {\n\t\ttraces = append(traces, frameToTrace(*cursor.current))\n\t}\n\tfor {\n\t\tframe, more := cursor.rest.Next()\n\t\ttraces = append(traces, frameToTrace(frame))\n\t\tif !more {\n\t\t\tbreak\n\t\t}\n\t}\n\treturn &TraceErr{\n\t\tErr:    err,\n\t\tTraces: traces,\n\t}\n}\n\nfunc frameToTrace(frame runtime.Frame) Trace {\n\treturn Trace{\n\t\tFunc: frame.Function,\n\t\tPath: frame.File,\n\t\tLine: frame.Line,\n\t}\n}\n\ntype frameCursor struct {\n\t// current specifies the current stack frame.\n\t// if omitted, rest contains the complete stack\n\tcurrent *runtime.Frame\n\t// rest specifies the rest of stack frames to explore\n\trest *runtime.Frames\n\t// n specifies the total number of stack frames\n\tn int\n}\n\n// Traces is a list of trace entries\ntype Traces []Trace\n\n// SetTraces adds new traces to the list\nfunc (s Traces) SetTraces(traces ...Trace) {\n\ts = append(s, traces...)\n}\n\n// Func returns first function in trace list\nfunc (s Traces) Func() string {\n\tif len(s) == 0 {\n\t\treturn \"\"\n\t}\n\treturn s[0].Func\n}\n\n// Func returns just function name\nfunc (s Traces) FuncName() string {\n\tif len(s) == 0 {\n\t\treturn \"\"\n\t}\n\tfn := filepath.ToSlash(s[0].Func)\n\tidx := strings.LastIndex(fn, \"/\")\n\tif idx == -1 || idx == len(fn)-1 {\n\t\treturn fn\n\t}\n\treturn fn[idx+1:]\n}\n\n// Loc points to file/line location in the code\nfunc (s Traces) Loc() string {\n\tif len(s) == 0 {\n\t\treturn \"\"\n\t}\n\treturn s[0].String()\n}\n\n// String returns debug-friendly representaton of trace stack\nfunc (s Traces) String() string {\n\tif len(s) == 0 {\n\t\treturn \"\"\n\t}\n\tout := make([]string, len(s))\n\tfor i, t := range s {\n\t\tout[i] = fmt.Sprintf(\"\\t%v:%v %v\", t.Path, t.Line, t.Func)\n\t}\n\treturn strings.Join(out, \"\\n\")\n}\n\n// Trace stores structured trace entry, including file line and path\ntype Trace struct {\n\t// Path is a full file path\n\tPath string `json:\"path\"`\n\t// Func is a function name\n\tFunc string `json:\"func\"`\n\t// Line is a code line number\n\tLine int `json:\"line\"`"
+  },
+  {
+    "tool_call_id": "call_00_LBA1iwO6o6kDL1mWzPLr5189",
+    "input": {
+      "command": "go test -vet=off -run 'TestReceiveIntoExistingDirectory|TestVerifyDir|TestHTTPSendFile|TestHTTPReceiveFile' -v ./lib/sshutils/scp/ 2>&1 | tail -40",
+      "timeout": 120,
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_5ZY4QD4EzhULvAL3zFrW3389",
+    "input": {
+      "command": "grep -n -i \"scp\" CHANGELOG.md | head -40",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "93:* Added the ability to preserve timestamps when using `tsh scp` in [#2889](https://github.com/gravitational/teleport/issues/2889).\n1198:* Fixed issue where multiple file upload with `scp` did not work correctly. [#2094](https://github.com/gravitational/teleport/issues/2094)\n1200:* Mitigated scp issues when connected to malicious server [#2539](https://github.com/gravitational/teleport/issues/2539)\n1260:* Fixes issues with `scp` when using the Web UI. [#2300](https://github.com/gravitational/teleport/issues/2300)\n1331:* `scp` implementation in \"recording proxy\" mode did not work correctly. [#2176](https://github.com/gravitational/teleport/issues/2176)\n1425:* The Web UI now includes `scp` (secure copy) functionality. This allows Windows users and other users of the Web UI to upload/download files into SSH nodes using a web browser.\n1949:  * Improvements to `scp` implementation to fix incompatibility issues. [#1048](https://github.com/gravitational/teleport/issues/1048)\n1974:* Patch for TLP-01-009: Command injection in scp.\n2077:* `tsh scp -r` does not handle directory upload properly #606"
+  },
+  {
+    "tool_call_id": "call_01_6QR06SRNtgKw3DgGlrZQ3542",
+    "input": {
+      "command": "grep -rn \"no such file or directory\" --include=*.go lib/ | head -20",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_7MIVa5drrWSUNvh93MEu0105",
+    "input": {
+      "command": "grep -n \"func (e \\*TraceErr) Error\\|func (e \\*TraceErr) OrigError\\|type TraceErr\\|func (e \\*TraceErr) Message\" vendor/github.com/gravitational/trace/trace.go | head; echo ---; sed -n '300,420p' vendor/github.com/gravitational/trace/trace.go",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "306:type TraceErr struct {\n410:func (e *TraceErr) Error() string {\n426:func (e *TraceErr) OrigError() error {\n---\n\terr.Err = &RawTrace{Message: r.Err.Error()}\n\treturn json.Marshal(err)\n}\n\n// TraceErr contains error message and some additional\n// information about the error origin\ntype TraceErr struct {\n\t// Err is the underlying error that TraceErr wraps\n\tErr error `json:\"error\"`\n\t// Traces is a slice of stack trace entries for the error\n\tTraces `json:\"traces,omitempty\"`\n\t// Message is an optional message that can be wrapped with the original error.\n\t//\n\t// This field is obsolete, replaced by messages list below.\n\tMessage string `json:\"message,omitempty\"`\n\t// Messages is a list of user messages added to this error.\n\tMessages []string `json:\"messages,omitempty\"`\n\t// Fields is a list of key-value-pairs that can be wrapped with the error to give additional context\n\tFields map[string]interface{} `json:\"fields,omitempty\"`\n}\n\n// Fields maps arbitrary keys to values inside an error\ntype Fields map[string]interface{}\n\n// Error returns the error message this trace describes.\n// Implements error\nfunc (r *RawTrace) Error() string {\n\treturn r.Message\n}\n\n// RawTrace describes the error trace on the wire\ntype RawTrace struct {\n\t// Err specifies the original error\n\tErr json.RawMessage `json:\"error,omitempty\"`\n\t// Traces lists the stack traces at the moment the error was recorded\n\tTraces `json:\"traces,omitempty\"`\n\t// Message specifies the optional user-facing message\n\tMessage string `json:\"message,omitempty\"`\n\t// Messages is a list of user messages added to this error.\n\tMessages []string `json:\"messages,omitempty\"`\n\t// Fields is a list of key-value-pairs that can be wrapped with the error to give additional context\n\tFields map[string]interface{} `json:\"fields,omitempty\"`\n}\n\n// AddUserMessage adds user-friendly message describing the error nature\nfunc (e *TraceErr) AddUserMessage(formatArg interface{}, rest ...interface{}) *TraceErr {\n\tnewMessage := fmt.Sprintf(fmt.Sprintf(\"%v\", formatArg), rest...)\n\te.Messages = append(e.Messages, newMessage)\n\treturn e\n}\n\n// AddFields adds the given map of fields to the error being reported\nfunc (e *TraceErr) AddFields(fields map[string]interface{}) *TraceErr {\n\tif e.Fields == nil {\n\t\te.Fields = make(map[string]interface{}, len(fields))\n\t}\n\tfor k, v := range fields {\n\t\te.Fields[k] = v\n\t}\n\treturn e\n}\n\n// AddField adds a single field to the error wrapper as context for the error\nfunc (e *TraceErr) AddField(k string, v interface{}) *TraceErr {\n\tif e.Fields == nil {\n\t\te.Fields = make(map[string]interface{}, 1)\n\t}\n\te.Fields[k] = v\n\treturn e\n}\n\n// UserMessage returns user-friendly error message\nfunc (e *TraceErr) UserMessage() string {\n\tif len(e.Messages) > 0 {\n\t\t// Format all collected messages in the reverse order, with each error\n\t\t// on its own line with appropriate indentation so they form a tree and\n\t\t// it's easy to see the cause and effect.\n\t\tvar buf bytes.Buffer\n\t\tfmt.Fprintln(&buf, e.Messages[len(e.Messages)-1])\n\t\tindex, indent := len(e.Messages)-1, 1\n\t\tfor ; index > 0; index, indent = index-1, indent+1 {\n\t\t\tfmt.Fprintf(&buf, \"%v%v\\n\", strings.Repeat(\"\\t\", indent), e.Messages[index-1])\n\t\t}\n\t\tfmt.Fprintf(&buf, \"%v%v\", strings.Repeat(\"\\t\", indent), UserMessage(e.Err))\n\t\treturn buf.String()\n\t}\n\tif e.Message != \"\" {\n\t\t// For backwards compatibility return the old user message if it's present.\n\t\treturn e.Message\n\t}\n\treturn UserMessage(e.Err)\n}\n\n// DebugReport returns developer-friendly error report\nfunc (e *TraceErr) DebugReport() string {\n\tvar buf bytes.Buffer\n\terr := reportTemplate.Execute(&buf, errorReport{\n\t\tOrigErrType:    fmt.Sprintf(\"%T\", e.Err),\n\t\tOrigErrMessage: e.Err.Error(),\n\t\tFields:         e.Fields,\n\t\tStackTrace:     e.Traces.String(),\n\t\tUserMessage:    e.UserMessage(),\n\t})\n\tif err != nil {\n\t\treturn fmt.Sprint(\"error generating debug report: \", err.Error())\n\t}\n\treturn buf.String()\n}\n\n// Error returns user-friendly error message when not in debug mode\nfunc (e *TraceErr) Error() string {\n\treturn e.U... (truncated)"
+  },
+  {
+    "tool_call_id": "call_01_A4udbmDPuhFt6yS9IMft2932",
+    "input": {
+      "command": "cat lib/utils/fs.go",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/*\nCopyright 2015 Gravitational, Inc.\n\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n*/\n\npackage utils\n\nimport (\n\t\"os\"\n\t\"path/filepath\"\n\t\"runtime\"\n\n\t\"github.com/gravitational/teleport\"\n\t\"github.com/gravitational/trace\"\n)\n\n// EnsureLocalPath makes sure the path exists, or, if omitted results in the subpath in\n// default gravity config directory, e.g.\n//\n// EnsureLocalPath(\"/custom/myconfig\", \".gravity\", \"config\") -> /custom/myconfig\n// EnsureLocalPath(\"\", \".gravity\", \"config\") -> ${HOME}/.gravity/config\n//\n// It also makes sure that base dir exists\nfunc EnsureLocalPath(customPath string, defaultLocalDir, defaultLocalPath string) (string, error) {\n\tif customPath == \"\" {\n\t\thomeDir := getHomeDir()\n\t\tif homeDir == \"\" {\n\t\t\treturn \"\", trace.BadParameter(\"no path provided and environment variable %v is not not set\", teleport.EnvHome)\n\t\t}\n\t\tcustomPath = filepath.Join(homeDir, defaultLocalDir, defaultLocalPath)\n\t}\n\tbaseDir := filepath.Dir(customPath)\n\t_, err := StatDir(baseDir)\n\tif err != nil {\n\t\tif trace.IsNotFound(err) {\n\t\t\tif err := MkdirAll(baseDir, teleport.PrivateDirMode); err != nil {\n\t\t\t\treturn \"\", trace.Wrap(err)\n\t\t\t}\n\t\t} else {\n\t\t\treturn \"\", trace.Wrap(err)\n\t\t}\n\t}\n\treturn customPath, nil\n}\n\n// MkdirAll creates directory and subdirectories\nfunc MkdirAll(targetDirectory string, mode os.FileMode) error {\n\terr := os.MkdirAll(targetDirectory, mode)\n\tif err != nil {\n\t\treturn trace.ConvertSystemError(err)\n\t}\n\treturn nil\n}\n\n// RemoveDirCloser removes directory and all it's contents\n// when Close is called\ntype RemoveDirCloser struct {\n\tPath string\n}\n\n// Close removes directory and all it's contents\nfunc (r *RemoveDirCloser) Close() error {\n\treturn trace.ConvertSystemError(os.RemoveAll(r.Path))\n}\n\n// IsDir is a helper function to quickly check if a given path is a valid directory\nfunc IsDir(path string) bool {\n\tfi, err := os.Stat(path)\n\tif err == nil {\n\t\treturn fi.IsDir()\n\t}\n\treturn false\n}\n\n// IsFile is a convenience helper to check if the given path is a regular file\nfunc IsFile(path string) bool {\n\tfi, err := os.Stat(path)\n\tif err == nil {\n\t\treturn fi.Mode().IsRegular()\n\t}\n\treturn false\n}\n\n// NormalizePath normalises path, evaluating symlinks and converting local\n// paths to absolute\nfunc NormalizePath(path string) (string, error) {\n\ts, err := filepath.Abs(path)\n\tif err != nil {\n\t\treturn \"\", trace.ConvertSystemError(err)\n\t}\n\tabs, err := filepath.EvalSymlinks(s)\n\tif err != nil {\n\t\treturn \"\", trace.ConvertSystemError(err)\n\t}\n\treturn abs, nil\n}\n\n// OpenFile opens  file and returns file handle\nfunc OpenFile(path string) (*os.File, error) {\n\tnewPath, err := NormalizePath(path)\n\tif err != nil {\n\t\treturn nil, trace.Wrap(err)\n\t}\n\tfi, err := os.Stat(newPath)\n\tif err != nil {\n\t\treturn nil, trace.ConvertSystemError(err)\n\t}\n\tif fi.IsDir() {\n\t\treturn nil, trace.BadParameter(\"%v is not a file\", path)\n\t}\n\tf, err := os.Open(newPath)\n\tif err != nil {\n\t\treturn nil, trace.ConvertSystemError(err)\n\t}\n\treturn f, nil\n}\n\n// StatFile stats path, returns error if it exists but a directory.\nfunc StatFile(path string) (os.FileInfo, error) {\n\tnewPath, err := NormalizePath(path)\n\tif err != nil {\n\t\treturn nil, trace.Wrap(err)\n\t}\n\tfi, err := os.Stat(newPath)\n\tif err != nil {\n\t\treturn nil, trace.ConvertSystemError(err)\n\t}\n\tif fi.IsDir() {\n\t\treturn nil, trace.BadParameter(\"%v is not a file\", path)\n\t}\n\treturn fi, nil\n}\n\n// StatDir stats directory, returns error if file exists, but not a directory\nfunc StatDir(path string) (os.FileInfo, error) {\n\tfi, err := os.Stat(path)\n\tif err != nil {\n\t\treturn ni... (truncated)"
+  },
+  {
+    "tool_call_id": "call_00_0kqfxLw6mCxxwF6Oy1rE5197",
+    "input": {
+      "command": "grep -rn \"no such file or directory\" --include='*.go' lib/ tool/ integration/ 2>/dev/null | head -20; echo \"=== fs.go helpers ===\"; grep -n \"func IsDir\\|func IsFile\" lib/utils/fs.go",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_r5fUgvCFHAfH0t6oDQJr9904",
+    "input": {
+      "command": "grep -rn \"trace.NotFound\\|trace.Errorf\" --include='*.go' lib/sshutils/ lib/client/ | head -20",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_O8dPJb9i0oiqdkA0Rol46871",
+    "input": {
+      "command": "grep -rn \"scp\" --include='*.go' lib/srv/ | head -40",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_pEeJY8SgwoaY5vqmWhCB7330",
+    "input": {
+      "command": "grep -rn \"Sink\\|Flags{\" --include='*.go' lib/srv/ tool/ lib/sshutils/ | grep -v _test | head -40",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-targeted-1",
+    "input": {
+      "command": "go test -vet=off -run 'TestReceiveIntoExistingDirectory|TestVerifyDir|TestHTTPSendFile|TestHTTPReceiveFile' -v ./lib/sshutils/scp/ '2>' '&' 1",
+      "_nz_runtime_verification_stage": "targeted"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "number": 12,
+  "instance_id": "instance_gravitational__teleport-2bb3bbbd8aff1164a2353381cb79e1dc93b90d28-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": true,
+  "agent_started_epoch": 1791784191.3257687,
+  "agent_finished_epoch": 1791786478.522642,
+  "status": "attempted",
+  "patch_sha256": "3803e00957cd5b3de574d5921a75ffd94fe1f1c84a6443d7c612cfebbf86789a",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

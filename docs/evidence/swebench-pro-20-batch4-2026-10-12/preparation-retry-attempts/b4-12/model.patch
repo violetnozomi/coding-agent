@@ -1,0 +1,84 @@
+diff --git a/lib/backend/dynamo/dynamodbbk.go b/lib/backend/dynamo/dynamodbbk.go
+index 506994b59..5ea62a0a0 100644
+--- a/lib/backend/dynamo/dynamodbbk.go
++++ b/lib/backend/dynamo/dynamodbbk.go
+@@ -46,6 +46,20 @@ import (
+ 	dynamometrics "github.com/gravitational/teleport/lib/observability/metrics/dynamo"
+ )
+ 
++// billingMode is the billing mode of the DynamoDB table. It determines how the
++// table's capacity is managed (provisioned capacity vs. on-demand).
++type billingMode string
++
++const (
++	// billingModeProvisioned is the default billing mode. The table's capacity
++	// is provisioned through the configured read/write capacity units.
++	billingModeProvisioned billingMode = "PROVISIONED"
++	// billingModePayPerRequest is the on-demand billing mode. The table's
++	// capacity is automatically managed by DynamoDB and no provisioned
++	// throughput must be specified.
++	billingModePayPerRequest billingMode = "PAY_PER_REQUEST"
++)
++
+ // Config structure represents DynamoDB configuration as appears in `storage` section
+ // of Teleport YAML
+ type Config struct {
+@@ -61,6 +75,9 @@ type Config struct {
+ 	ReadCapacityUnits int64 `json:"read_capacity_units"`
+ 	// WriteCapacityUnits is Dynamodb write capacity units
+ 	WriteCapacityUnits int64 `json:"write_capacity_units"`
++	// BillingMode is the billing mode of the DynamoDB table. It can be either
++	// "PROVISIONED" (the default) or "PAY_PER_REQUEST".
++	BillingMode billingMode `json:"billing_mode,omitempty"`
+ 	// BufferSize is a default buffer size
+ 	// used to pull events
+ 	BufferSize int `json:"buffer_size,omitempty"`
+@@ -108,6 +125,11 @@ func (cfg *Config) CheckAndSetDefaults() error {
+ 	if cfg.WriteCapacityUnits == 0 {
+ 		cfg.WriteCapacityUnits = DefaultWriteCapacityUnits
+ 	}
++	// Default to the provisioned billing mode to preserve the previous
++	// behavior when the billing mode is not explicitly configured.
++	if cfg.BillingMode == "" {
++		cfg.BillingMode = billingModeProvisioned
++	}
+ 	if cfg.BufferSize == 0 {
+ 		cfg.BufferSize = backend.DefaultBufferCapacity
+ 	}
+@@ -655,10 +677,6 @@ func (b *Backend) getTableStatus(ctx context.Context, tableName string) (tableSt
+ // following docs partial:
+ // docs/pages/includes/dynamodb-iam-policy.mdx
+ func (b *Backend) createTable(ctx context.Context, tableName string, rangeKey string) error {
+-	pThroughput := dynamodb.ProvisionedThroughput{
+-		ReadCapacityUnits:  aws.Int64(b.ReadCapacityUnits),
+-		WriteCapacityUnits: aws.Int64(b.WriteCapacityUnits),
+-	}
+ 	def := []*dynamodb.AttributeDefinition{
+ 		{
+ 			AttributeName: aws.String(hashKeyKey),
+@@ -680,10 +698,21 @@ func (b *Backend) createTable(ctx context.Context, tableName string, rangeKey st
+ 		},
+ 	}
+ 	c := dynamodb.CreateTableInput{
+-		TableName:             aws.String(tableName),
+-		AttributeDefinitions:  def,
+-		KeySchema:             elems,
+-		ProvisionedThroughput: &pThroughput,
++		TableName:            aws.String(tableName),
++		AttributeDefinitions: def,
++		KeySchema:            elems,
++	}
++	switch b.BillingMode {
++	case billingModePayPerRequest:
++		// On-demand tables must not specify a provisioned throughput.
++		c.BillingMode = aws.String(dynamodb.BillingModePayPerRequest)
++		c.ProvisionedThroughput = nil
++	default:
++		c.BillingMode = aws.String(dynamodb.BillingModeProvisioned)
++		c.ProvisionedThroughput = &dynamodb.ProvisionedThroughput{
++			ReadCapacityUnits:  aws.Int64(b.ReadCapacityUnits),
++			WriteCapacityUnits: aws.Int64(b.WriteCapacityUnits),
++		}
+ 	}
+ 	_, err := b.svc.CreateTableWithContext(ctx, &c)
+ 	if err != nil {

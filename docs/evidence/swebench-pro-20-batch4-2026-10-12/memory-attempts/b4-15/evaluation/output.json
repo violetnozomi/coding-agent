@@ -1,0 +1,52 @@
+{
+  "tests": [
+    {
+      "name": "src/app/store/_links/useLink.test.ts | useLink returns decrypted version from the cache",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | useLink decrypts when missing decrypted version in the cache",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | useLink decrypts link with parent link",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | useLink fetches link from API and decrypts when missing in the cache",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | \u2715 skips failing fetch if already attempted before (3 ms) skips load of already cached thumbnail",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | \u2715 skips failing fetch if already attempted before (3 ms) loads link thumbnail using cached link thumbnail info",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | \u2715 skips failing fetch if already attempted before (3 ms) loads link thumbnail with expired cached link thumbnail info",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | \u2715 skips failing fetch if already attempted before (3 ms) loads link thumbnail with its url on API",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | \u2715 skips failing fetch if already attempted before (3 ms) decrypts badly signed thumbnail block",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | decrypts link meta data with signature issues decrypts badly signed passphrase",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | decrypts link meta data with signature issues decrypts badly signed hash",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_links/useLink.test.ts | decrypts link meta data with signature issues decrypts badly signed name",
+      "status": "PASSED"
+    }
+  ]
+}

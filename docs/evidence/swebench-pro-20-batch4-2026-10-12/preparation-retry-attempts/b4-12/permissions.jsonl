@@ -1,0 +1,21 @@
+{"tool": "bash", "input": {"command": "ls /workspace | head -50; echo \"---\"; ls -d /workspace/*/ 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls /workspace/lib/backend/dynamo 2>/dev/null; echo \"---\"; ls /workspace/lib/backend 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "wc -l /workspace/lib/backend/dynamo/dynamodbbk.go /workspace/lib/backend/dynamo/configure.go /workspace/lib/backend/dynamo/dynamodbbk_test.go /workspace/lib/backend/dynamo/configure_test.go"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"createTable\\|CreateTableWithContext\\|ProvisionedThroughput\\|BillingMode\" /workspace/lib/backend/dynamo/dynamodbbk.go"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"billing_mode\\|BillingMode\\|billingMode\" --include=*.go --include=*.yaml --include=*.mdx . | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"BillingModeProvisioned\\|BillingModePayPerRequest\" $(go env GOMODCACHE 2>/dev/null)/github.com/aws/aws-sdk-go*/service/dynamodb/api.go 2>/dev/null | head; echo \"---GOMODCACHE---\"; go env GOMODCACHE"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go env GOMODCACHE"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"aws-sdk-go\" go.mod"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"aws/aws-sdk-go \" go.mod"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"EnableAutoScaling\\|ReadCapacityUnits\" --include=*.go lib/ | grep -v _test | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go doc github.com/aws/aws-sdk-go/service/dynamodb.BillingMode 2>&1 | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./lib/backend/dynamo -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && go vet -vettool= 2>/dev/null; GOFLAGS=-p=1 go build -vet=off ./lib/backend/dynamo/... 2>&1 | tail -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && GOFLAGS=-p=1 go build -vet=off ./lib/backend/dynamo/... 2>&1 | tail -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build -vet=off ./lib/backend/dynamo/", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go version; cd /workspace && go build ./lib/backend/dynamo/ 2>&1 | tail -5", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && GOFLAGS=-p=1 go test -vet=off -count=1 ./lib/backend/dynamo/ 2>&1 | tail -20", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "GOFLAGS=-p=1 go test -vet=off -count=1 ./lib/backend/dynamo/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && sed -n '180,300p' lib/backend/dynamo/dynamodbbk.go"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && gofmt -l lib/backend/dynamo/ && echo \"FMT_OK\" && go build ./lib/backend/dynamo/ ./lib/events/dynamoevents/ && echo BUILD_OK", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && gofmt -l lib/backend/dynamo/ ; go build ./lib/backend/dynamo/ ./lib/events/dynamoevents/ && echo BUILD_OK", "timeout": 120}, "allowed": false}

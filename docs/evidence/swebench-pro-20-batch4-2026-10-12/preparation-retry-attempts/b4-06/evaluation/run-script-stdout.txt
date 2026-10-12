@@ -1,0 +1,11 @@
+Running selected tests: TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage
+=== RUN   TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage
+2026-10-12T05:44:38Z INFO             OpenFile. path:file test:TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage scp/scp_test.go:704
+2026-10-12T05:44:38Z INFO             IsDir. path:/tmp/TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage1349033606/001/dir test:TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage scp/scp_test.go:673
+2026-10-12T05:44:38Z DEBU [SCP]       <- C 0644 13 file LocalAddr: PreserveAttrs:true RemoteAddr: RemoteLocation: RunOnServer:false Target:[/tmp/TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage1349033606/001/dir] User:test-user scp/scp.go:451
+2026-10-12T05:44:38Z DEBU [SCP]       scp.receiveFile([/tmp/TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage1349033606/001/dir]): file LocalAddr: PreserveAttrs:true RemoteAddr: RemoteLocation: RunOnServer:false Target:[/tmp/TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage1349033606/001/dir] User:test-user scp/scp.go:491
+2026-10-12T05:44:38Z INFO             IsDir. path:/tmp/TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage1349033606/001/dir test:TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage scp/scp_test.go:673
+2026-10-12T05:44:38Z INFO             IsDir. path:/tmp/TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage1349033606/001 test:TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage scp/scp_test.go:673
+--- PASS: TestReceiveIntoNonExistingDirectoryFailsWithCorrectMessage (0.00s)
+PASS
+ok  	github.com/gravitational/teleport/lib/sshutils/scp	0.007s

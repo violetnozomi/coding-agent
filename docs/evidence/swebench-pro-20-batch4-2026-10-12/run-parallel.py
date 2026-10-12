@@ -52,9 +52,32 @@ def memory():
     driver.execute(additional_plan=plan)
 
 
+def finish_memory_unattempted():
+    """镜像已核验并准备好后，用同一剩额首次运行第9题。"""
+    authorization = json.loads((DOC / "memory-workspace-authorization.json").read_text())
+    if not authorization["authorized"] or authorization["numbers"] != [9, 15]:
+        raise RuntimeError("memory_workspace_authorization_mismatch")
+    identity = json.loads((driver.OUT / "cached-image-9-identity.json").read_text())
+    if not identity["same_official_manifest_bytes"] or not identity["all_cached_layers_full_sha256_verified"]:
+        raise RuntimeError("official_image_identity_unverified")
+    manifest = json.loads((driver.OUT / "task-manifest.json").read_text())
+    sources = [driver.OUT / name for name in ("live", "p2", "supplement-memory")]
+    plan = driver.combine_closed_sources(sources, manifest, driver.OUT / "last-source", include_unbilled_sdk=True)
+    if [number for number, _ in plan["tasks"]] != [9]:
+        raise RuntimeError("unexpected_unattempted_task_scope")
+    temporary_root = Path(authorization["temporary_root"])
+    if driver.shutil.disk_usage(temporary_root).free < 32 * 1024 ** 3:
+        raise RuntimeError("authorized_memory_workspace_capacity_insufficient")
+    plan.update(execution_stage="p3", temporary_workspace_root=str(temporary_root),
+        new_authorization_cny=50, original_same_authorization=True,
+        authorization_text="本批50元扣除全部前序占用后，只首次执行零模型第9题；使用已批准的临时内存工作区，证据归档成功后清理，不重跑付费任务。")
+    driver.WORKERS = 1
+    driver.execute(additional_plan=plan)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare", "execute", "resume-preparation", "continue-small", "memory"])
+    parser.add_argument("action", choices=["prepare", "execute", "resume-preparation", "continue-small", "memory", "finish-memory-unattempted"])
     args = parser.parse_args()
     grant = json.loads((DOC / "authorization-record.json").read_text())
     if grant["cost_limit_cny"] != 50 or grant["model"] != driver.pro.MODEL or not grant["authorized"]:
@@ -65,5 +88,7 @@ if __name__ == "__main__":
         continue_small()
     elif args.action == "memory":
         memory()
+    elif args.action == "finish-memory-unattempted":
+        finish_memory_unattempted()
     else:
         driver.execute(args.action == "resume-preparation")

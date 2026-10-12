@@ -12,4 +12,10 @@ for previous, current in (
     if previous not in source:
         raise RuntimeError("existing_exporter_batch_parameter_changed")
     source = source.replace(previous, current)
+# 本批最后零调用题的 p3 位于内存阶段之后，保留原件并按真实先后取终态。
+previous_order = "('attempts','preparation-blocked','preparation-retry-attempts','final-unattempted','supplement-attempts','memory-attempts')"
+current_order = "('attempts','preparation-blocked','preparation-retry-attempts','supplement-attempts','memory-attempts','final-unattempted')"
+if source.count(previous_order) != 1:
+    raise RuntimeError("existing_exporter_stage_order_changed")
+source = source.replace(previous_order, current_order)
 exec(compile(source, str(source_path), "exec"), {"__name__": "__main__"})

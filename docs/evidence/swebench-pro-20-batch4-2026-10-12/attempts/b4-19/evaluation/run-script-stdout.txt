@@ -1,0 +1,58 @@
+Running selected tests: TestChConn TestReadAtMost TestNewCircularBuffer TestEscapeControl TestSlice TestCircularBuffer_Data TestUtils TestFilterAWSRoles TestConsolefLongComponent TestAllowNewlines
+=== RUN   TestFilterAWSRoles
+--- PASS: TestFilterAWSRoles (0.00s)
+=== RUN   TestChConn
+--- PASS: TestChConn (0.05s)
+=== RUN   TestNewCircularBuffer
+--- PASS: TestNewCircularBuffer (0.00s)
+=== RUN   TestCircularBuffer_Data
+--- PASS: TestCircularBuffer_Data (0.00s)
+=== RUN   TestConsolefLongComponent
+time="2026-10-12T05:03:59Z" level=info msg="test message"
+--- PASS: TestConsolefLongComponent (0.00s)
+=== RUN   TestEscapeControl
+--- PASS: TestEscapeControl (0.00s)
+=== RUN   TestAllowNewlines
+--- PASS: TestAllowNewlines (0.00s)
+=== RUN   TestSlice
+--- PASS: TestSlice (0.00s)
+=== RUN   TestUtils
+2026-10-12T05:03:59Z DEBU             Bad line 6 while reading /tmp/teleport-environment-288258061: key without name utils/environment.go:71
+2026-10-12T05:03:59Z DEBU             Bad line 9 while reading /tmp/teleport-environment-288258061: key without name utils/environment.go:71
+2026-10-12T05:03:59Z DEBU [LOADBALAN] created listening socket listen:127.0.0.1:0 utils/loadbalancer.go:169
+2026-10-12T05:03:59Z DEBU [LOADBALAN] forward dest:127.0.0.1:33649 source:127.0.0.1:58514 listen:127.0.0.1:0 utils/loadbalancer.go:242
+2026-10-12T05:03:59Z WARN [LOADBALAN] connection problem: readfrom tcp 127.0.0.1:46071->127.0.0.1:58514: use of closed network connection *net.OpError dest:127.0.0.1:33649 source:127.0.0.1:58514 listen:127.0.0.1:0 utils/loadbalancer.go:265
+2026-10-12T05:03:59Z WARN [LOADBALAN] Failed to forward connection: readfrom tcp 127.0.0.1:46071->127.0.0.1:58514: use of closed network connection. listen:127.0.0.1:0 utils/loadbalancer.go:208
+2026-10-12T05:03:59Z DEBU [LOADBALAN] created listening socket listen:127.0.0.1:0 utils/loadbalancer.go:169
+2026-10-12T05:03:59Z DEBU [LOADBALAN] forward dest:127.0.0.1:36105 source:127.0.0.1:59206 listen:127.0.0.1:0 utils/loadbalancer.go:242
+2026-10-12T05:03:59Z WARN [LOADBALAN] connection problem: readfrom tcp 127.0.0.1:33488->127.0.0.1:36105: use of closed network connection *net.OpError dest:127.0.0.1:36105 source:127.0.0.1:59206 listen:127.0.0.1:0 utils/loadbalancer.go:265
+2026-10-12T05:03:59Z WARN [LOADBALAN] connection problem: readfrom tcp 127.0.0.1:34229->127.0.0.1:59206: use of closed network connection *net.OpError dest:127.0.0.1:36105 source:127.0.0.1:59206 listen:127.0.0.1:0 utils/loadbalancer.go:265
+2026-10-12T05:03:59Z WARN [LOADBALAN] Failed to forward connection: readfrom tcp 127.0.0.1:34229->127.0.0.1:59206: use of closed network connection. listen:127.0.0.1:0 utils/loadbalancer.go:208
+2026-10-12T05:03:59Z DEBU [LOADBALAN] created listening socket listen:127.0.0.1:0 utils/loadbalancer.go:169
+2026-10-12T05:03:59Z DEBU [LOADBALAN] Backends [{127.0.0.1:38137 tcp }]. listen:127.0.0.1:0 utils/loadbalancer.go:110
+2026-10-12T05:03:59Z DEBU [LOADBALAN] Backends [{127.0.0.1:38137 tcp } {127.0.0.1:42781 tcp }]. listen:127.0.0.1:0 utils/loadbalancer.go:110
+2026-10-12T05:03:59Z DEBU [LOADBALAN] forward dest:127.0.0.1:38137 source:127.0.0.1:49930 listen:127.0.0.1:0 utils/loadbalancer.go:242
+2026-10-12T05:03:59Z WARN [LOADBALAN] connection problem: readfrom tcp 127.0.0.1:39653->127.0.0.1:49930: use of closed network connection *net.OpError dest:127.0.0.1:38137 source:127.0.0.1:49930 listen:127.0.0.1:0 utils/loadbalancer.go:265
+2026-10-12T05:03:59Z WARN [LOADBALAN] Failed to forward connection: readfrom tcp 127.0.0.1:39653->127.0.0.1:49930: use of closed network connection. listen:127.0.0.1:0 utils/loadbalancer.go:208
+2026-10-12T05:03:59Z WARN [LOADBALAN] Failed to forward connection: dial tcp 127.0.0.1:42781: connect: connection refused. listen:127.0.0.1:0 utils/loadbalancer.go:208
+2026-10-12T05:03:59Z DEBU [LOADBALAN] forward dest:127.0.0.1:38137 source:127.0.0.1:49950 listen:127.0.0.1:0 utils/loadbalancer.go:242
+2026-10-12T05:03:59Z WARN [LOADBALAN] connection problem: readfrom tcp 127.0.0.1:39653->127.0.0.1:49950: use of closed network connection *net.OpError dest:127.0.0.1:38137 source:127.0.0.1:49950 listen:127.0.0.1:0 utils/loadbalancer.go:265
+2026-10-12T05:03:59Z WARN [LOADBALAN] Failed to forward connection: readfrom tcp 127.0.0.1:39653->127.0.0.1:49950: use of closed network connection. listen:127.0.0.1:0 utils/loadbalancer.go:208
+2026-10-12T05:03:59Z DEBU [LOADBALAN] created listening socket listen:127.0.0.1:0 utils/loadbalancer.go:169
+2026-10-12T05:03:59Z DEBU [LOADBALAN] forward dest:127.0.0.1:34443 source:127.0.0.1:48214 listen:127.0.0.1:0 utils/loadbalancer.go:242
+2026-10-12T05:03:59Z WARN [LOADBALAN] connection problem: readfrom tcp 127.0.0.1:43857->127.0.0.1:48214: use of closed network connection *net.OpError dest:127.0.0.1:34443 source:127.0.0.1:48214 listen:127.0.0.1:0 utils/loadbalancer.go:265
+2026-10-12T05:03:59Z WARN [LOADBALAN] Failed to forward connection: readfrom tcp 127.0.0.1:43857->127.0.0.1:48214: use of closed network connection. listen:127.0.0.1:0 utils/loadbalancer.go:208
+2026-10-12T05:03:59Z DEBU [LOADBALAN] created listening socket listen:127.0.0.1:0 utils/loadbalancer.go:169
+2026-10-12T05:03:59Z WARN [LOADBALAN] Failed to forward connection: no backends. listen:127.0.0.1:0 utils/loadbalancer.go:208
+2026-10-12T05:03:59Z DEBU [LOADBALAN] Backends [{127.0.0.1:46865 tcp }]. listen:127.0.0.1:0 utils/loadbalancer.go:110
+2026-10-12T05:03:59Z DEBU [LOADBALAN] forward dest:127.0.0.1:46865 source:127.0.0.1:44970 listen:127.0.0.1:0 utils/loadbalancer.go:242
+2026-10-12T05:03:59Z DEBU [LOADBALAN] Backends [{127.0.0.1:46865 tcp } {127.0.0.1:38127 tcp }]. listen:127.0.0.1:0 utils/loadbalancer.go:110
+2026-10-12T05:03:59Z WARN [LOADBALAN] connection problem: readfrom tcp 127.0.0.1:46133->127.0.0.1:44970: use of closed network connection *net.OpError dest:127.0.0.1:46865 source:127.0.0.1:44970 listen:127.0.0.1:0 utils/loadbalancer.go:265
+2026-10-12T05:03:59Z WARN [LOADBALAN] Failed to forward connection: readfrom tcp 127.0.0.1:46133->127.0.0.1:44970: use of closed network connection. listen:127.0.0.1:0 utils/loadbalancer.go:208
+2026-10-12T05:03:59Z DEBU [LOADBALAN] forward dest:127.0.0.1:38127 source:127.0.0.1:44984 listen:127.0.0.1:0 utils/loadbalancer.go:242
+OK: 48 passed
+--- PASS: TestUtils (0.09s)
+=== RUN   TestReadAtMost
+--- PASS: TestReadAtMost (0.00s)
+PASS
+ok  	github.com/gravitational/teleport/lib/utils	0.149s

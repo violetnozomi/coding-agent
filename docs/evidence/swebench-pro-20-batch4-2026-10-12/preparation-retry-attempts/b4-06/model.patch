@@ -1,0 +1,67 @@
+diff --git a/lib/sshutils/scp/scp.go b/lib/sshutils/scp/scp.go
+index 3e91bff5c..ee6b0c486 100644
+--- a/lib/sshutils/scp/scp.go
++++ b/lib/sshutils/scp/scp.go
+@@ -397,9 +397,16 @@ func (cmd *command) serveSink(ch io.ReadWriter) error {
+ 		}
+ 	}
+ 
++	// In sink mode the destination target is always provided and is used for
++	// sink-side path resolution. If the target names an existing directory,
++	// incoming paths are resolved relative to it. Otherwise the target is
++	// treated as the path to write to and the base directory is taken from
++	// its parent instead of a default location.
+ 	rootDir := localDir
+ 	if cmd.hasTargetDir() {
+ 		rootDir = newPathFromDir(cmd.Flags.Target[0])
++	} else if len(cmd.Flags.Target) != 0 {
++		rootDir = newPathFromDir(filepath.Dir(cmd.Flags.Target[0]))
+ 	}
+ 
+ 	if err := sendOK(ch); err != nil {
+@@ -483,13 +490,19 @@ func (cmd *command) processCommand(ch io.ReadWriter, st *state, b byte, line str
+ func (cmd *command) receiveFile(st *state, fc newFileCmd, ch io.ReadWriter) error {
+ 	cmd.log.Debugf("scp.receiveFile(%v): %v", cmd.Flags.Target, fc.Name)
+ 
+-	// Unless target specifies a file, use the file name from the command
++	// Unless target specifies an existing directory, the target names the path
++	// to write the incoming file to, so use its base name and resolve it
++	// relative to the target's parent directory.
+ 	filename := fc.Name
+ 	if !cmd.Flags.Recursive && !cmd.FileSystem.IsDir(cmd.Flags.Target[0]) {
+-		filename = cmd.Flags.Target[0]
++		filename = filepath.Base(cmd.Flags.Target[0])
+ 	}
+ 
+ 	path := st.makePath(filename)
++	if err := cmd.checkParentDir(path); err != nil {
++		return trace.Wrap(err)
++	}
++
+ 	writer, err := cmd.FileSystem.CreateFile(path, fc.Length)
+ 	if err != nil {
+ 		return trace.Wrap(err)
+@@ -600,6 +613,23 @@ func (cmd *command) hasTargetDir() bool {
+ 	return len(cmd.Flags.Target) != 0 && cmd.FileSystem.IsDir(cmd.Flags.Target[0])
+ }
+ 
++// checkParentDir ensures that the parent directory of the given path exists.
++//
++// The sink intentionally does not create missing parent directories implicitly:
++// if the parent directory is missing, a deterministic and path-qualified error
++// that names the missing directory is returned instead.
++func (cmd *command) checkParentDir(path string) error {
++	parentDir := filepath.Dir(path)
++	if parentDir == "." {
++		// The current working directory always exists.
++		return nil
++	}
++	if !cmd.FileSystem.IsDir(parentDir) {
++		return trace.NotFound("no such file or directory %v", parentDir)
++	}
++	return nil
++}
++
+ func (r newFileCmd) String() string {
+ 	return fmt.Sprintf("newFileCmd(mode=%o,len=%d,name=%v)", r.Mode, r.Length, r.Name)
+ }

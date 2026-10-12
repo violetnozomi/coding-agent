@@ -1,0 +1,27 @@
+{"tool": "bash", "input": {"command": "ls /workspace && echo \"---\" && ls /workspace/lib/utils 2>/dev/null && echo \"---\" && ls /workspace/lib 2>/dev/null"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cat /workspace/go.mod 2>/dev/null; echo \"---\"; find /workspace -name \"*.go\" -path \"*utils*\" 2>/dev/null | head -50"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n 1,40p /workspace/lib/utils/slice.go; echo \"====\"; sed -n 1,30p /workspace/lib/utils/buf.go"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls /workspace/lib/utils/*.go | head; echo \"====\"; grep -rn \"trace.BadParameter\\|trace.Errorf\" /workspace/lib/utils/*.go | head -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "head -20 /workspace/lib/utils/kernel.go; echo \"====\"; head -20 /workspace/lib/utils/workpool/*.go 2>/dev/null | head -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git status --short && echo \"====\" && git diff --stat HEAD"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"CircularBuffer\\|NewCircularBuffer\" --include=*.go lib api tool integration 2>/dev/null | grep -v circular_buffer | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go vet ./lib/utils/ 2>&1 | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./lib/utils/ -run 'Circular|Buffer' -count=1", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "GOMAXPROCS=2 GOFLAGS=-mod=vendor go test -p 1 -vet=off -count=1 -run TestCircularBufferVerify ./lib/utils/ 2>&1 | tail -20", "workdir": "/workspace", "timeout": 300}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test -p 1 -vet=off -count=1 -run TestCircularBufferVerify ./lib/utils/ 2>&1 | tail -20", "timeout": 300, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "GOMAXPROCS=1 go test -p 1 -vet=off -count=1 -run TestCircularBufferVerify ./lib/utils/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hello"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -vet=off -count=1 -run TestCircularBufferVerify ./lib/utils/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -p 1 -vet=off -count=1 -run TestCircularBufferVerify ./lib/utils/ 2>&1 | tail -20", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"CircularBuffer\" --include=*.go lib api tool integration dronegen 2>/dev/null | grep -v \"circular_buffer\" | head", "timeout": 60, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "gofmt -l lib/utils/circular_buffer.go lib/utils/circular_buffer_verify_test.go; echo \"gofmt-exit=$?\"", "timeout": 60, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "gofmt -l lib/utils/circular_buffer.go; echo \"exit=$?\"; GOMAXPROCS=2 go test -p 1 -vet=off -count=1 -run TestCircularBufferVerify ./lib/utils/ 2>&1 | tail -5", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test -p 1 -vet=off -count=1 -run TestCircularBufferVerify ./lib/utils/ 2>&1 | tail -5", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -la lib/utils/circular_buffer*.go; git status --porcelain 2>/dev/null | head", "timeout": 60, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./lib/utils/ 2>&1 | tail -10; echo \"build_exit=$?\"", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "GOMAXPROCS=2 go test -p 1 -vet=off -count=1 -run 'CircularBuffer' ./lib/utils/ 2>&1 | tail -5", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "GOMAXPROCS=1 go test -p 1 -vet=off -count=1 -run TestCircularBufferVerify ./lib/utils/ 2>&1 | tail -5; echo \"exit=$?\"", "timeout": 120, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test -p 1 -vet=off -count=1 -run TestCircularBufferVerify ./lib/utils/ 2>&1 | tail -5", "timeout": 120, "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -l lib/utils/circular_buffer.go lib/utils/circular_buffer_verify_test.go", "timeout": 60, "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./lib/utils -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "gofmt -d lib/utils/circular_buffer.go | head -20; echo \"gofmt_clean_done\"", "timeout": 60, "workdir": "/workspace"}, "allowed": false}

@@ -1,0 +1,9 @@
+{
+  "host": "127.0.0.1",
+  "port": 41639,
+  "fixed_manifest_digest": "sha256:ae0c12c8f1fe93d4529c3fbf8dadeb70920ba743daf9a424e3e641533d0534a6",
+  "tag": "instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+  "only_verified_official_objects": true,
+  "outbound_requests": 0,
+  "model_calls": 0
+}

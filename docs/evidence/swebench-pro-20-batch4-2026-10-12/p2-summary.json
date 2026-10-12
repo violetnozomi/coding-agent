@@ -1,0 +1,47 @@
+{
+  "tasks": [
+    {
+      "number": 2,
+      "instance_id": "instance_internetarchive__openlibrary-3f7db6bbbcc7c418b3db72d157c6aed1d45b2ccf-v430f20c722405e462d9ef44dee7d34c41e76fe7a",
+      "attempt": 1,
+      "agent_status": "completed",
+      "resolved": true,
+      "agent_started_epoch": 1791781883.3778975,
+      "agent_finished_epoch": 1791781960.8081756,
+      "status": "attempted",
+      "patch_sha256": "568501f406c13f261d0bbd30724436739f6423ddc0ddc06dca7f20ab67f5cf5b",
+      "eval_status": "graded",
+      "physical_requests": 21
+    },
+    {
+      "number": 6,
+      "instance_id": "instance_gravitational__teleport-007235446f85b1cbaef92664c3b3867517250f21",
+      "attempt": 1,
+      "agent_status": "max_turns",
+      "resolved": true,
+      "agent_started_epoch": 1791781763.2459862,
+      "agent_finished_epoch": 1791783787.9414856,
+      "status": "attempted",
+      "patch_sha256": "4168e752fc4aab7cabb45d15e1a72e4ff2d21e21ca008d7a571f72ae293895cd",
+      "eval_status": "graded",
+      "physical_requests": 40
+    },
+    {
+      "number": 12,
+      "instance_id": "instance_gravitational__teleport-2bb3bbbd8aff1164a2353381cb79e1dc93b90d28-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+      "attempt": 1,
+      "agent_status": "max_turns",
+      "resolved": true,
+      "agent_started_epoch": 1791784191.3257687,
+      "agent_finished_epoch": 1791786478.522642,
+      "status": "attempted",
+      "patch_sha256": "3803e00957cd5b3de574d5921a75ffd94fe1f1c84a6443d7c612cfebbf86789a",
+      "eval_status": "graded",
+      "physical_requests": 40
+    }
+  ],
+  "physical_requests": 101,
+  "estimated_cost_occupied_cny": 6.2288806400000025,
+  "accounting_failures": {},
+  "old_batch_balance_used": false
+}

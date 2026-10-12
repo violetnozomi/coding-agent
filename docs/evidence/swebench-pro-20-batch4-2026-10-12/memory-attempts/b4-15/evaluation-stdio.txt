@@ -1,0 +1,10 @@
+Resetting test-space to base state (full test-code surface)...
+Applying test patch...
+Checking patch applications/drive/src/app/store/_links/useLink.test.ts...
+Applied patch applications/drive/src/app/store/_links/useLink.test.ts cleanly.
+Required tests: 13
+Passed tests: 12
+Required tests that passed: 7
+
+RESULT: FAILED
+Missing tests: ['src/app/store/_links/useLink.test.ts | useLink skips failing fetch if already attempted before', 'src/app/store/_links/useLink.test.ts | useLink skips load of already cached thumbnail', 'src/app/store/_links/useLink.test.ts | useLink loads link thumbnail with its url on API', 'src/app/store/_links/useLink.test.ts | useLink decrypts badly signed thumbnail block', 'src/app/store/_links/useLink.test.ts | useLink loads link thumbnail using cached link thumbnail info', 'src/app/store/_links/useLink.test.ts | useLink loads link thumbnail with expired cached link thumbnail info']

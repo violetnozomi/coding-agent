@@ -1,0 +1,9 @@
+{
+  "required_image_preparation_bytes": 17981342052,
+  "free_bytes": 18294800384,
+  "compressed_layer_temporary_bytes_included": true,
+  "all_tar_bytes_and_4096_bytes_per_entry_included": true,
+  "emergency_slack_bytes": 536870912,
+  "task_and_evidence_start_after_pull": true,
+  "model_calls": 0
+}

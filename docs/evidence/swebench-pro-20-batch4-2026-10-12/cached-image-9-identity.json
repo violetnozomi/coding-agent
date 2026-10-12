@@ -1,0 +1,20 @@
+{
+  "requested_official_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+  "temporary_cache_reference": "127.0.0.1:41639/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+  "expected_official_manifest_digest": "sha256:ae0c12c8f1fe93d4529c3fbf8dadeb70920ba743daf9a424e3e641533d0534a6",
+  "loaded_repo_digests": [
+    "127.0.0.1:41639/scaleapi/swe-bench_pro-v2@sha256:ae0c12c8f1fe93d4529c3fbf8dadeb70920ba743daf9a424e3e641533d0534a6"
+  ],
+  "loaded_image_id": "sha256:02e854a70840f4552ee717019c3013933fc372a9df89cb7e2901dd29a9927420",
+  "actual_image_size_bytes": 10067780286,
+  "actual_pull_command": [
+    "docker",
+    "pull",
+    "127.0.0.1:41639/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e"
+  ],
+  "same_official_manifest_bytes": true,
+  "all_cached_layers_full_sha256_verified": true,
+  "original_project_and_verifier_unchanged": true,
+  "model_calls": 0,
+  "global_docker_configuration_changed": false
+}

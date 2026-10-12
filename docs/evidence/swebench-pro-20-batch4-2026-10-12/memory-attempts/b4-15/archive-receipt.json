@@ -1,0 +1,7 @@
+{
+  "bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch4-2026-10-12/supplement-memory/b4-15/container-evidence.tar.gz",
+  "sha256": "2e4850d7ad2a0f404962c9dc3db52ff76043950f38f4fee08fe8a144b4a38638",
+  "bytes": 233269423,
+  "projected_trace_bundle": "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-20-batch4-2026-10-12/archives/batch4-supplement-memory-instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c",
+  "retains_raw_container_session_and_artifacts": true
+}

@@ -1,0 +1,134 @@
+diff --git a/scripts/providers/__init__.py b/scripts/providers/__init__.py
+new file mode 100644
+index 000000000..e69de29bb
+diff --git a/scripts/providers/isbndb.py b/scripts/providers/isbndb.py
+new file mode 100644
+index 000000000..876220efb
+--- /dev/null
++++ b/scripts/providers/isbndb.py
+@@ -0,0 +1,60 @@
++"""Helpers for consuming ISBNdb data dumps as an Open Library import source.
++
++The ISBNdb data dumps are newline delimited: each line holds a single JSON
++record.  This module provides the small building blocks needed to turn one of
++those lines into a Python dictionary and to recognise binding descriptions
++that describe non-book formats (which should be excluded from the import).
++"""
++
++import json
++
++# Binding terms (kept lowercase so matching can be case-insensitive) that
++# describe a non-book format and are therefore excluded during import.
++NONBOOK = [
++    'audio',
++    'audiobook',
++    'blu-ray',
++    'bluray',
++    'cassette',
++    'cd',
++    'cd-rom',
++    'cdrom',
++    'dvd',
++    'dvd-rom',
++    'dvdrom',
++    'mp3',
++    'mp4',
++    'vhs',
++    'video',
++    'vinyl',
++]
++
++
++def get_line(line: bytes) -> dict | None:
++    """Decode a single ISBNdb dump line into a dictionary.
++
++    :param line: a single raw line from an ISBNdb data dump, encoded as bytes
++        and containing one JSON record.
++    :return: the parsed JSON record, or ``None`` if the line could not be
++        decoded as JSON. Malformed lines are skipped rather than raising.
++    """
++    try:
++        return json.loads(line)
++    except ValueError:
++        # json.JSONDecodeError and UnicodeDecodeError both subclass ValueError.
++        return None
++
++
++def is_nonbook(binding: str, nonbooks: list[str]) -> bool:
++    """Return whether a binding description denotes a non-book format.
++
++    The binding string is split on spaces and every resulting word is checked
++    (case-insensitively) against the supplied list of non-book terms.
++
++    :param binding: e.g. ``"DVD"`` or ``"audio cassette"``.
++    :param nonbooks: e.g. :data:`NONBOOK`.
++    :return: ``True`` when any word of the binding is in ``nonbooks``.
++    """
++    words = binding.split(' ')
++    terms = {term.casefold() for term in nonbooks}
++    return any(word.casefold() in terms for word in words)
+diff --git a/scripts/tests/test_isbndb.py b/scripts/tests/test_isbndb.py
+new file mode 100644
+index 000000000..7aae6e0ea
+--- /dev/null
++++ b/scripts/tests/test_isbndb.py
+@@ -0,0 +1,59 @@
++import json
++
++import pytest
++
++from ..providers.isbndb import NONBOOK, get_line, is_nonbook
++
++
++class TestGetLine:
++    def test_decodes_single_json_record(self):
++        line = b'{"isbn13": "9780962561856", "title": "Sutra on Upasaka Precepts"}'
++        assert get_line(line) == {
++            "isbn13": "9780962561856",
++            "title": "Sutra on Upasaka Precepts",
++        }
++
++    def test_preserves_nested_lists_and_non_ascii(self):
++        record = {
++            "title": "Café Été",
++            "authors": [{"name": "José"}],
++            "subjects": ["a", "b"],
++        }
++        line = json.dumps(record).encode()
++        assert get_line(line) == record
++
++    @pytest.mark.parametrize(
++        "line",
++        [
++            b"",
++            b"not json",
++            b'{"title": "unterminated',
++            b"\xff\xfe invalid utf-8",
++        ],
++    )
++    def test_malformed_lines_return_none(self, line):
++        assert get_line(line) is None
++
++
++class TestIsNonbook:
++    @pytest.mark.parametrize(
++        "binding", ["dvd", "DVD", "Dvd", "audio cassette", "Audio Cassette"]
++    )
++    def test_nonbook_bindings(self, binding):
++        assert is_nonbook(binding, NONBOOK) is True
++
++    @pytest.mark.parametrize("binding", ["paperback", "Hardcover", "", "PAPERBACK"])
++    def test_book_bindings(self, binding):
++        assert is_nonbook(binding, NONBOOK) is False
++
++    def test_respects_supplied_list(self):
++        assert is_nonbook("Paperback", ["paperback"]) is True
++        assert is_nonbook("Paperback", NONBOOK) is False
++
++
++def test_nonbook_list_contents():
++    assert 'dvd' in NONBOOK
++    assert 'cassette' in NONBOOK
++    assert 'audio' in NONBOOK
++    assert 'paperback' not in NONBOOK
++    assert all(term == term.lower() for term in NONBOOK)

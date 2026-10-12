@@ -1,0 +1,9 @@
+{
+  "pid": 1694742,
+  "command": [
+    "python",
+    "/home/pyh/nzcoder/docs/evidence/swebench-pro-20-batch4-2026-10-12/environment-recovery/serve-image.py"
+  ],
+  "started_epoch": 1791788442.3388278,
+  "model_calls": 0
+}

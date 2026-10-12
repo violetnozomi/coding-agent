@@ -811,6 +811,12 @@ review_run_evidence is available as a read-only tool to summarize whether curren
 
 ## Evaluation
 
+SWE-bench Pro V2 task records: [fourth batch and the fixed 100-task set](docs/evidence/swebench-pro-20-batch4-2026-10-12/README.md).
+Each task keeps sanitized model requests and responses, tool facts, the frozen
+patch, independent official acceptance, and a study index. Agent termination,
+acceptance, and billing estimates are recorded separately; the four batches do
+not constitute a single experiment with matched resource budgets.
+
 Dry-run eval for repository repair tasks:
 
 ```bash
