@@ -115,7 +115,7 @@ def prepare(resume=False):
     print(json.dumps({"prepared": TASK_COUNT, "overlap": len(set(selected) & excluded), "manifest_sha256": digest}))
 
 
-def preparation_remainder(source, manifest):
+def preparation_remainder(source, manifest, *, include_unbilled_sdk=False):
     """旧阶段完全结算后，只补准备失败且从未调用模型的题目。"""
     raw = (source / "ledger.jsonl").read_bytes()
     events = [json.loads(line) for line in raw.splitlines()]
@@ -137,7 +137,7 @@ def preparation_remainder(source, manifest):
         if report["instance_id"] != task["instance_id"]:
             raise RuntimeError("previous_instance_identity_mismatch")
         calls = [row for row in admitted.values() if row["unit"] == task["instance_id"]]
-        if report["attempt"] == 0 and not calls:
+        if (report["attempt"] == 0 or include_unbilled_sdk) and not calls:
             tasks.append((number, task))
     return {"used_cny": used, "remaining_cny": manifest.get("cost_limit", 50) - used, "remaining_requests": manifest.get("request_limit", 920) - len(admitted),
             "source_ledger_sha256": hashlib.sha256(raw).hexdigest(), "tasks": tasks}
@@ -153,7 +153,7 @@ def run_case_with_short_path(slot, case, *args, **kwargs):
         return pro.run_case(slot, alias, *args, **kwargs)
 
 
-def combine_closed_sources(sources, manifest, target):
+def combine_closed_sources(sources, manifest, target, *, include_unbilled_sdk=False):
     """合并只读阶段证据供既有准入函数核算，不清零费用或重试已运行题。"""
     raw_parts, reports, chain = [], {}, []
     for source in sources:
@@ -186,10 +186,10 @@ def combine_closed_sources(sources, manifest, target):
     pro.save(target / "summary.json", {"tasks": [reports[n] for n in sorted(reports)],
         "estimated_cost_occupied_cny": sum(r["used_cny"] for r in chain), "accounting_failures": {}})
     pro.save(target / "source-chain.json", chain)
-    return preparation_remainder(target, manifest)
+    return preparation_remainder(target, manifest, include_unbilled_sdk=include_unbilled_sdk)
 
 
-def execute(retry_preparation=False):
+def execute(retry_preparation=False, *, additional_plan=None):
     from dotenv import dotenv_values
     from nz_coder.evaluation.deepseek_counting import DeepSeekV41Counter
     from nz_coder.evaluation.model_relay import RelayLedger, RelayLimits
@@ -205,7 +205,7 @@ def execute(retry_preparation=False):
     if not key:
         raise RuntimeError("authorized_host_key_unavailable")
     source = OUT / "fee-handoff" if (OUT / "fee-handoff").exists() else OUT / "live"
-    plan = preparation_remainder(source, manifest) if retry_preparation else None
+    plan = additional_plan if additional_plan is not None else preparation_remainder(source, manifest) if retry_preparation else None
     if retry_preparation and Path("/proc/3135016").exists():
         raise RuntimeError("original_coordinator_still_running")
     tasks = plan["tasks"] if plan else list(enumerate(manifest["tasks"], 1))
@@ -220,7 +220,7 @@ def execute(retry_preparation=False):
         marker = json.loads((interrupted / "preparation-interruption.json").read_text())
         if not marker["no_sdk_launch_in_any_slot"] or marker["paid_requests"] != 0:
             raise RuntimeError("interrupted_preparation_not_proven_unstarted")
-    live = OUT / (("p3" if source.name == "fee-handoff" else "p2") if retry_preparation else "live")
+    live = OUT / (additional_plan.get("execution_stage", "supplement") if additional_plan is not None else (("p3" if source.name == "fee-handoff" else "p2") if retry_preparation else "live"))
     live.mkdir(exist_ok=False)
     grant = {"purpose": "swebench-pro-v2", "model": pro.MODEL,
         "scope": [task["instance_id"] for _, task in tasks], "instance_manifest_sha256": digest,
@@ -239,6 +239,9 @@ def execute(retry_preparation=False):
         if source.name == "fee-handoff":
             grant["source_ledger_chain"] = json.loads((source / "source-chain.json").read_text())
         pro.save(live / "continuation-plan.json", plan)
+    if additional_plan is not None:
+        grant.update(authorization_text=additional_plan["authorization_text"],
+                     new_authorization_cny=additional_plan.get("new_authorization_cny", cost_limit), closed_original_unused_not_carried=True)
     limits = RelayLimits(requests=plan["remaining_requests"] if plan else manifest.get("request_limit", TASK_COUNT * 46), input_per_request=1000000,
         input_total=math.ceil(cost_limit / .04 * 1000000), output_total=math.ceil(cost_limit / 8 * 1000000), request_seconds=600)
     pro.save(live / "authorization-used.json", grant)
@@ -262,7 +265,8 @@ def execute(retry_preparation=False):
         half_free = shutil.disk_usage(OUT).free / 2
         parallel_tasks = []
         for number, task in tasks:
-            preflight = OUT / "live" / f"b{BATCH}-{number:02}" / "image-preflight.json"
+            candidates = [OUT / stage / f"b{BATCH}-{number:02}" / "image-preflight.json" for stage in ("p2", "live")]
+            preflight = next((path for path in candidates if path.exists()), candidates[-1])
             estimate = json.loads(preflight.read_text())["estimated_required_bytes"] if preflight.exists() else 0
             (serial_tasks if estimate > half_free else parallel_tasks).append((number, task))
         tasks = parallel_tasks
@@ -293,7 +297,8 @@ def execute(retry_preparation=False):
                 if shutil.disk_usage(OUT).free < 2 * 1024 ** 3:
                     raise RuntimeError("storage_stop")
                 base, tag, executable = continuation.isolated_image(task, slot)
-                case = pro.prepare_case(slot, tag, task, False)
+                temporary_root = Path(plan["temporary_workspace_root"]) if plan and plan.get("temporary_workspace_root") else None
+                case = pro.prepare_case(slot, tag, task, False, temporary_workspace_root=temporary_root)
                 config = json.loads((case / "input/run.json").read_text())
                 config["provider_default_output"] = True
                 pro.save(case / "input/run.json", config)
@@ -308,7 +313,8 @@ def execute(retry_preparation=False):
             verdict = pro.grade(slot, base, task, manifest, checksums)
             report.update(resolved=verdict["resolved"], eval_status=verdict["status"])
             with archive_lock:
-                pro.archive_case(slot, case, task, f"batch{BATCH}", budget, archive_instance_diagnostics)
+                archive_mode = f"batch{BATCH}-{live.name}" if additional_plan is not None else f"batch{BATCH}"
+                pro.archive_case(slot, case, task, archive_mode, budget, archive_instance_diagnostics)
         except Exception as exc:
             report.update(status="blocked" if case is None else "attempt_or_delivery_error", error=repr(exc))
         finally:

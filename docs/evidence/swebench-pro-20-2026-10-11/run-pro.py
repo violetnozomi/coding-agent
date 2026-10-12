@@ -141,10 +141,20 @@ def runtime_image(row, slot):
     return base, tag
 
 
-def prepare_case(slot, image, row, smoke):
+def prepare_case(slot, image, row, smoke, *, temporary_workspace_root=None):
     case = slot / "case"
     for name in ("workspace", "home", "tmp", "input", "sockets", "result", "control", "driver"):
-        (case / name).mkdir(parents=True)
+        if name == "workspace" and temporary_workspace_root is not None:
+            # 仅把用户批准的可重建工作区移入内存，结果和请求仍落在持久目录。
+            target = temporary_workspace_root / slot.name
+            target.mkdir(parents=True)
+            case.mkdir(parents=True, exist_ok=True)
+            (case / name).symlink_to(target, target_is_directory=True)
+            save(slot / "temporary-workspace.json", {"path": str(target.resolve()),
+                "root": str(temporary_workspace_root.resolve()), "user_authorized": True,
+                "persistent_results": str(case / "result")})
+        else:
+            (case / name).mkdir(parents=True)
     exporter = "nz-pro20-export-" + slot.name
     command(["docker", "create", "--name", exporter, "--entrypoint", "/bin/sh", image])
     try:
@@ -340,7 +350,16 @@ def archive_case(slot, case, task, mode, budget, archive):
         "retains_raw_container_session_and_artifacts": True})
     # 补丁/改变文件已冻结，Session/Artifact 已成功归档，才能删除可重建工作区和缓存。
     for name in ("workspace", "tmp", "home"):
-        shutil.rmtree(case / name)
+        path = case / name
+        if name == "workspace" and path.is_symlink():
+            receipt = json.loads((slot / "temporary-workspace.json").read_text())
+            target = path.resolve()
+            if target != Path(receipt["path"]) or not target.is_relative_to(Path(receipt["root"])):
+                raise RuntimeError("temporary_workspace_identity_changed; source retained")
+            shutil.rmtree(target)
+            path.unlink()
+        else:
+            shutil.rmtree(path)
 
 
 def smoke_handler():

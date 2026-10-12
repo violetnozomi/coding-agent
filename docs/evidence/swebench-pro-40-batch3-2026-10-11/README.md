@@ -13,3 +13,7 @@ Agent 复用真实 NativeSDKRunner、隔离容器和原生工具；网络仅可�
 本批原人民币 50 元授权已闭账：29 题实际调用主模型，官方独立验收 19 题通过、10 题未通过；11 题尚未调用模型。819 次真实主请求全部结算，无真实辅助模型请求。按配置费率估算占用 46.84200440 元，供应商实际账单未知；未用额度不自动转为后续授权。
 
 详情见 [最终报告](final-report.md)、[逐题记录](current-outcomes.json)、[账目与完整性核验](final-accounting-and-integrity.json)及 [预算影响与阻断](closure-notes.json)。部分已调用任务受共享财务准入影响；未执行项同时包含环境阻断，不能将全部未通过或未执行归因于 Agent 能力。
+
+## 新增授权补做（执行中）
+
+用户追加人民币50元，只首次运行原名单零模型调用的11题。新增费用使用独立账本，不携带原授权余款；原29题不重跑。授权范围见 [补充授权](supplement-authorization.json)。[原闭账报告](original-final-report.md) 与 [原逐题口径](original-current-outcomes.json)保留。

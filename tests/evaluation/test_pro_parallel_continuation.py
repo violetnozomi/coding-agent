@@ -5,6 +5,11 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import tarfile
+from types import SimpleNamespace
 import time
 
 import pytest
@@ -157,6 +162,91 @@ def test_forty_task_continuation_uses_current_authorized_request_limit(tmp_path)
     plan = parallel.preparation_remainder(tmp_path, manifest)
     assert plan["remaining_requests"] == 1838
     assert plan["remaining_cny"] == pytest.approx(50-summary["estimated_cost_occupied_cny"])
+
+
+def test_additional_grant_can_include_sdk_launch_without_paid_request(tmp_path):
+    manifest, summary = closed_source(tmp_path)
+    # 第三题虽启动 SDK，但所有请求在本地被拒绝；第二题有真实付费请求。
+    summary["tasks"][2]["attempt"] = 1
+    (tmp_path / "summary.json").write_text(json.dumps(summary))
+    assert parallel.preparation_remainder(tmp_path, manifest)["tasks"] == []
+    plan = parallel.preparation_remainder(tmp_path, manifest, include_unbilled_sdk=True)
+    assert [number for number, _ in plan["tasks"]] == [3]
+    assert plan["used_cny"] == pytest.approx(summary["estimated_cost_occupied_cny"])
+
+
+@pytest.mark.parametrize("previous_paid", [False, True])
+def test_supplement_export_replaces_only_zero_model_records(tmp_path, previous_paid):
+    root = tmp_path / "repo"
+    out = tmp_path / "private"
+    doc = root / "docs/evidence/swebench-pro-40-batch3-2026-10-11"
+    old = doc / "preparation-retry-attempts/b3-31"
+    old.mkdir(parents=True)
+    instance = "instance_example__project-" + "a" * 40
+    (old / "task-outcome.json").write_text(json.dumps({"instance_id": instance,
+        "actual_agent_attempt": 1, "main_model_was_called": previous_paid}))
+    (doc / "task-manifest.json").write_text(json.dumps({"tasks": [{"instance_id": instance}]}))
+    stage = out / "supplement"
+    slot = stage / "b3-31"
+    slot.mkdir(parents=True)
+    (stage / "ledger.jsonl").write_text("")
+    (slot / "report.json").write_text(json.dumps({"instance_id": instance,
+        "attempt": 0, "status": "blocked"}))
+    source = Path(__file__).resolve().parents[2] / "docs/evidence/swebench-pro-40-batch3-2026-10-11/publish.py"
+    script = source.read_text().replace("/home/pyh/nzcoder", str(root)).replace(
+        "/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11", str(out))
+    exporter = tmp_path / "publish.py"
+    exporter.write_text(script)
+    result = subprocess.run([sys.executable, str(exporter), "supplement"], capture_output=True, text=True)
+    if previous_paid:
+        assert result.returncode != 0
+        assert "refuse_to_replace_paid_attempt" in result.stderr
+    else:
+        assert result.returncode == 0, result.stderr
+        current = json.loads((doc / "current-outcomes.json").read_text())
+        assert current[0]["record_root"] == str(slot)
+        assert current[0]["main_model_was_called"] is False
+
+
+def test_real_docker_prepare_uses_authorized_temporary_workspace(tmp_path):
+    if subprocess.run(["docker", "image", "inspect", "python:3.12-slim"], capture_output=True).returncode:
+        pytest.skip("local Python image unavailable; test never downloads an image")
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "example.txt").write_text("initial bytes\n")
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(source), "-c", "user.name=offline", "-c",
+                    "user.email=offline@example.invalid", "commit", "-qm", "initial"], check=True)
+    name = "nz-pro-prepare-test-" + str(time.time_ns())
+    image = name + ":local"
+    subprocess.run(["docker", "create", "--name", name, "python:3.12-slim"], check=True, capture_output=True)
+    try:
+        subprocess.run(["docker", "cp", str(source), name + ":/app"], check=True)
+        subprocess.run(["docker", "commit", name, image], check=True, capture_output=True)
+        slot = tmp_path / "slot"
+        slot.mkdir()
+        with tempfile.TemporaryDirectory(prefix="nz-pro-test-", dir="/dev/shm") as memory:
+            case = parallel.pro.prepare_case(slot, image, {}, True, temporary_workspace_root=Path(memory))
+            assert (case / "workspace").is_symlink()
+            assert (case / "workspace/example.txt").read_text() == "initial bytes\n"
+            assert (case / "workspace").resolve().is_relative_to(Path(memory))
+            assert not (case / "result").is_symlink()
+            assert (slot / "temporary-workspace.json").exists()
+            (case / "result/runtime.jsonl").write_text('{"event":"run_end"}\n')
+            parallel.pro.archive_case(slot, case, {"instance_id": "offline"}, "memory-test", None,
+                lambda **kwargs: SimpleNamespace(bundle_path=tmp_path / "projection"))
+            receipt = json.loads((slot / "archive-receipt.json").read_text())
+            bundle = Path(receipt["bundle"])
+            assert hashlib.sha256(bundle.read_bytes()).hexdigest() == receipt["sha256"]
+            with tarfile.open(bundle) as archive:
+                assert archive.extractfile("result/runtime.jsonl").read() == b'{"event":"run_end"}\n'
+            assert not (case / "workspace").exists()
+            assert list(Path(memory).iterdir()) == []
+            assert (case / "result/runtime.jsonl").exists()
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)
+        subprocess.run(["docker", "image", "rm", image], check=False, capture_output=True)
 
 
 def test_next_forty_selection_excludes_both_closed_batches():

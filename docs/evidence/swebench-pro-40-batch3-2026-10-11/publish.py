@@ -4,7 +4,7 @@ import collections, hashlib, json, shutil, sys, os
 from dotenv import dotenv_values
 ROOT=Path('/home/pyh/nzcoder');OUT=Path('/home/pyh/.codex/artifacts/nz-swebench-pro-v2-40-batch3-2026-10-11')
 STAGE=sys.argv[1] if len(sys.argv)>1 else 'live'
-PUBLIC={'live':'attempts','preparation-retry':'preparation-blocked','p2':'preparation-retry-attempts','p3':'final-unattempted'}[STAGE]
+PUBLIC={'live':'attempts','preparation-retry':'preparation-blocked','p2':'preparation-retry-attempts','p3':'final-unattempted','supplement':'supplement-attempts','supplement-memory':'memory-attempts'}[STAGE]
 LIVE=OUT/STAGE;DOC=ROOT/'docs/evidence/swebench-pro-40-batch3-2026-10-11';KEYS=[k for k in (dotenv_values(ROOT/'.env').get('API_KEY'),os.environ.get('NZ_REVIEW_DEEPSEEK_API_KEY')) if k]
 def clean(x):
  if isinstance(x,dict):return {k:clean(v) for k,v in x.items() if k not in {'reasoning_content','api_key','Authorization'}}
@@ -39,7 +39,7 @@ for s in sorted(LIVE.glob('b3-[0-9][0-9]')):
  for n,v in [('provider-requests.jsonl',requests),('provider-responses.jsonl',responses)]:
   (dst/n).write_text(''.join(json.dumps(x,ensure_ascii=False)+'\n' for x in v))
  dump(dst/'raw-identity.json',rawindex)
- for name in ['report.json','identity.json','environment.json','image-pull.txt','image-build.txt','initial-files.json','model.patch','patch-identity.json','agent-exit.json','agent-stdio.txt','evaluation-result.json','evaluation-command.json','evaluation-stdio.txt','archive-receipt.json','launch.json','image-preflight.json','evaluation-corrected-result.json','evaluation-corrected-command.json','evaluation-corrected-stdio.txt','delivery-recovery.json','permission-classification-audit.json','case-path-alias.json','partial-preparation-cleanup.json']:
+ for name in ['report.json','identity.json','environment.json','image-pull.txt','image-build.txt','initial-files.json','model.patch','patch-identity.json','agent-exit.json','agent-stdio.txt','evaluation-result.json','evaluation-command.json','evaluation-stdio.txt','archive-receipt.json','launch.json','image-preflight.json','evaluation-corrected-result.json','evaluation-corrected-command.json','evaluation-corrected-stdio.txt','delivery-recovery.json','permission-classification-audit.json','case-path-alias.json','partial-preparation-cleanup.json','archive-recovery.json','temporary-workspace.json']:
   source=s/name
   if source.exists():shutil.copy2(source,dst/name)
  if (s/'case/input/run.json').exists():shutil.copy2(s/'case/input/run.json',dst/'model-config.json')
@@ -93,11 +93,11 @@ for s in sorted(LIVE.glob('b3-[0-9][0-9]')):
 dump(DOC/(STAGE+'-outcomes.json'),summary)
 # 同一实例仅准备失败可被后续实际尝试替代；每一阶段的原件仍独立保留。
 canonical={}
-for folder in ('attempts','preparation-blocked','preparation-retry-attempts','final-unattempted'):
+for folder in ('attempts','preparation-blocked','preparation-retry-attempts','final-unattempted','supplement-attempts','memory-attempts'):
  for p in sorted((DOC/folder).glob('b3-*/task-outcome.json')):
   item=json.loads(p.read_text());old=canonical.get(item['instance_id'])
   if old is not None:
-   assert old['actual_agent_attempt']==0, 'refuse_to_replace_paid_attempt'
+   assert not old['main_model_was_called'], 'refuse_to_replace_paid_attempt'
   canonical[item['instance_id']]=item
 order={task['instance_id']:i for i,task in enumerate(json.loads((DOC/'task-manifest.json').read_text())['tasks'])}
 summary=sorted(canonical.values(),key=lambda row:order[row['instance_id']])

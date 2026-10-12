@@ -1,0 +1,12 @@
+python -m pytest -q tests/evaluation/test_pro_parallel_continuation.py -k additional_grant
+Before: 1 failed, 8 deselected; unexpected keyword include_unbilled_sdk
+python -m pytest -q tests/evaluation/test_pro_parallel_continuation.py
+After: 9 passed in 0.68s
+python -m pytest -q tests/evaluation/test_pro_parallel_continuation.py -k supplement_export
+Before: 2 failed, 9 deselected; KeyError supplement
+python -m pytest -q tests/evaluation/test_pro_parallel_continuation.py
+After: 11 passed in 1.26s
+python -m pytest -q tests/evaluation/test_pro_parallel_continuation.py -k real_docker_prepare
+Before: 1 failed, 11 deselected; TypeError temporary_workspace_root
+python -m pytest -q tests/evaluation/test_pro_parallel_continuation.py
+After: 12 passed in 1.84s; actual local Docker copy, tar archive and workspace cleanup; no image downloads or model calls.
