@@ -1,0 +1,8 @@
+{
+  "status": "graded",
+  "returncode": 1,
+  "reward": "0",
+  "resolved": false,
+  "fresh_original_image": "127.0.0.1:41639/scaleapi/swe-bench_pro-v2@sha256:ae0c12c8f1fe93d4529c3fbf8dadeb70920ba743daf9a424e3e641533d0534a6",
+  "unchanged_official_verifier": true
+}

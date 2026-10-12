@@ -1,0 +1,10 @@
+{
+  "authorized_cny": 50,
+  "occupied_cny": 41.6331908,
+  "unused_cny": 8.366809199999999,
+  "authorization_closed": true,
+  "unused_not_authorized_for_future_tasks": true,
+  "all_admissions_settled": true,
+  "actual_provider_bill_cny": null,
+  "unknown_usage_request_ids": []
+}

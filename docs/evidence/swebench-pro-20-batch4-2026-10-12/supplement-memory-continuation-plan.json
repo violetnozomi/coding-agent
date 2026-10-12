@@ -1,0 +1,120 @@
+{
+  "used_cny": 36.943258560000004,
+  "remaining_cny": 13.056741439999996,
+  "remaining_requests": 229,
+  "source_ledger_sha256": "328127a3b8849da5a79656112c957c28ad66bf0ec5c25d333d1dda7f4e3e66be",
+  "tasks": [
+    [
+      9,
+      {
+        "instance_id": "instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+        "instruction_sha256": "a1c89826ac62f6c2ac6aadfa7d0b2db998fdc5322d65c09bf98a5392722337f7",
+        "task_config_sha256": "905b2a1159bf08b6ea4ec64570061707f9d381dfb9c092299e3f2b8ee3534b43",
+        "configuration": {
+          "schema_version": "1.4",
+          "artifacts": [],
+          "task": {
+            "name": "swebench-pro/instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+            "version": "1.0.0",
+            "description": "",
+            "authors": [],
+            "keywords": []
+          },
+          "metadata": {
+            "author_name": "ScaleAI",
+            "author_email": "unknown",
+            "difficulty": "medium",
+            "category": "debugging",
+            "tags": [
+              "debugging",
+              "swe-bench-pro"
+            ]
+          },
+          "verifier": {
+            "network_mode": "public",
+            "timeout_sec": 3000.0,
+            "collect": [],
+            "env": {}
+          },
+          "agent": {
+            "network_mode": "no-network",
+            "timeout_sec": 3000.0
+          },
+          "environment": {
+            "network_mode": "public",
+            "build_timeout_sec": 1800.0,
+            "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+            "os": "linux",
+            "cpus": 1,
+            "memory_mb": 4096,
+            "storage_mb": 10240,
+            "mcp_servers": [],
+            "env": {}
+          },
+          "solution": {
+            "env": {}
+          }
+        }
+      }
+    ],
+    [
+      15,
+      {
+        "instance_id": "instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c",
+        "instruction_sha256": "957a448fb0dffe83353b87828761add8e97e13dcaeb5b9e70eddf1d4f522cb34",
+        "task_config_sha256": "c53ddf0db5a442aabd2a561e6e7375fb40183968457a7524286d29ff92c3cb24",
+        "configuration": {
+          "schema_version": "1.4",
+          "artifacts": [],
+          "task": {
+            "name": "swebench-pro/instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c",
+            "version": "1.0.0",
+            "description": "",
+            "authors": [],
+            "keywords": []
+          },
+          "metadata": {
+            "author_name": "ScaleAI",
+            "author_email": "unknown",
+            "difficulty": "medium",
+            "category": "debugging",
+            "tags": [
+              "debugging",
+              "swe-bench-pro"
+            ]
+          },
+          "verifier": {
+            "network_mode": "public",
+            "timeout_sec": 3000.0,
+            "collect": [],
+            "env": {}
+          },
+          "agent": {
+            "network_mode": "no-network",
+            "timeout_sec": 3000.0
+          },
+          "environment": {
+            "network_mode": "public",
+            "build_timeout_sec": 1800.0,
+            "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c",
+            "os": "linux",
+            "cpus": 1,
+            "memory_mb": 4096,
+            "storage_mb": 10240,
+            "mcp_servers": [],
+            "env": {}
+          },
+          "solution": {
+            "env": {}
+          }
+        }
+      }
+    ]
+  ],
+  "deferred_other_zero_model_tasks": [],
+  "execution_stage": "supplement-memory",
+  "temporary_workspace_root": "/dev/shm/nz-pro-batch4-20261012",
+  "new_authorization_cny": 50,
+  "original_same_authorization": true,
+  "authorization_text": "本批人民币50元总预算不变，扣除前序全部占用，仅首次运行9/15；用户已批准两题临时内存工作区，持久证据落盘，归档成功后清理，前三批余款不携带。"
+}

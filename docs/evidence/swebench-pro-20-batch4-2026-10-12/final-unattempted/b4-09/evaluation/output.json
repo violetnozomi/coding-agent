@@ -1,0 +1,40 @@
+{
+  "tests": [
+    {
+      "name": "src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts | getErrorCategory should return server_error for unreachable error",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts | getErrorCategory should return server_error for timeout error",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts | getErrorCategory should return network_error for offline error",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts | getErrorCategory should return network_error for network error",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts | getErrorCategory should return network_error for NetworkError state",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts | getErrorCategory should return rate_limited for rate limited error",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts | getErrorCategory should return 4xx for 4xx error",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts | getErrorCategory should return 5xx for 5xx error",
+      "status": "PASSED"
+    },
+    {
+      "name": "src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts | getErrorCategory should return unknown for unknown error",
+      "status": "PASSED"
+    }
+  ]
+}

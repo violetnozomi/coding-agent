@@ -1,0 +1,29 @@
+{
+  "reviewer": "/root/batch4_final_review",
+  "review_type": "one fresh whole-branch read-only review with chronological incremental completion",
+  "completed_epoch": 1791789756.1145897,
+  "important_or_critical_findings": [],
+  "minor_findings": [],
+  "scope": "branch increment from 28f2ec31679ceee410218c6371202ff7caed8ce9, new20 evidence and narrow export/environment plumbing",
+  "confirmed_actual_model_tasks": 20,
+  "confirmed_official_results": {
+    "passed": 16,
+    "not_passed": 3,
+    "unknown": 1
+  },
+  "confirmed_unique_main_requests_settled": 771,
+  "confirmed_actual_auxiliary_requests": 0,
+  "confirmed_local_auxiliary_rejections": 12,
+  "confirmed_estimated_cny": 41.6331908,
+  "confirmed_cumulative_unique_actual_model_tasks": 100,
+  "confirmed_cumulative_official_results": {
+    "passed": 80,
+    "not_passed": 19,
+    "unknown": 1
+  },
+  "paid_model_calls_by_reviewer": 0,
+  "network_calls_by_reviewer": 0,
+  "reviewer_edited_files": false,
+  "exact_actual_key_scan_performed_by_owner_not_independently_repeated_by_reviewer": true,
+  "no_windows_or_whole_repository_claim": true
+}

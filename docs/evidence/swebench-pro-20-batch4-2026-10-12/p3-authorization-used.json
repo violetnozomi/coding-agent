@@ -1,0 +1,29 @@
+{
+  "purpose": "swebench-pro-v2",
+  "model": "deepseek-flash",
+  "scope": [
+    "instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e"
+  ],
+  "instance_manifest_sha256": "eb85858fce1b82e7fd428df24e6935cd6676e1a8f4f28b22a1de221d2c3fb331",
+  "account": "project-env:DeepSeek",
+  "input_mode": "empirical",
+  "empirical_risk_accepted": true,
+  "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+  "cost_limit": 11.56947496,
+  "cost_currency": "CNY",
+  "authorization_text": "本批50元扣除全部前序占用后，只首次执行零模型第9题；使用已批准的临时内存工作区，证据归档成功后清理，不重跑付费任务。",
+  "valid_from": 1791788596.3380516,
+  "valid_until": 1791961397.3380523,
+  "prices_cny_per_million": {
+    "input": 2,
+    "cached_input": 0.04,
+    "output": 8
+  },
+  "provider_output_reservation_tokens": 393216,
+  "original_total_authorization_cny": 50,
+  "previous_used_cny": 38.43052504,
+  "predecessor_ledger_sha256": "347aecda6eb98ff4ca53704813f5e486200b3d52cbb7930d9f043c422f595dcc",
+  "preparation_retry_not_paid_agent_retry": true,
+  "new_authorization_cny": 50,
+  "closed_original_unused_not_carried": true
+}

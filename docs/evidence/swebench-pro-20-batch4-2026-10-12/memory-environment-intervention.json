@@ -1,0 +1,20 @@
+{
+  "scope_numbers": [
+    9,
+    15
+  ],
+  "model_calls": 0,
+  "original_workspace_permission": "memory-workspace-authorization.json",
+  "reason": "Original all-layer estimate refused task9 before any model; measure original official layer tar bytes and hashes for separate preparation phase, retaining original refusal records.",
+  "official9_manifest_sha256": "sha256:ae0c12c8f1fe93d4529c3fbf8dadeb70920ba743daf9a424e3e641533d0534a6",
+  "original_preflight_records": [
+    "attempts/b4-09/image-preflight.json",
+    "memory-attempts/b4-09/image-preflight.json"
+  ],
+  "measured_preparation_admission": "image-9-measured-admission.json",
+  "loaded_image_identity": "cached-image-9-identity.json",
+  "default_preflight_unchanged": true,
+  "docker_global_settings_unchanged": true,
+  "no_task_patch_or_test_hint": true,
+  "temporary_cache_removed_only_after_evidence_archive": true
+}

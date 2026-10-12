@@ -1,0 +1,66 @@
+{
+  "used_cny": 38.43052504,
+  "remaining_cny": 11.56947496,
+  "remaining_requests": 189,
+  "source_ledger_sha256": "347aecda6eb98ff4ca53704813f5e486200b3d52cbb7930d9f043c422f595dcc",
+  "tasks": [
+    [
+      9,
+      {
+        "instance_id": "instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+        "instruction_sha256": "a1c89826ac62f6c2ac6aadfa7d0b2db998fdc5322d65c09bf98a5392722337f7",
+        "task_config_sha256": "905b2a1159bf08b6ea4ec64570061707f9d381dfb9c092299e3f2b8ee3534b43",
+        "configuration": {
+          "schema_version": "1.4",
+          "artifacts": [],
+          "task": {
+            "name": "swebench-pro/instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+            "version": "1.0.0",
+            "description": "",
+            "authors": [],
+            "keywords": []
+          },
+          "metadata": {
+            "author_name": "ScaleAI",
+            "author_email": "unknown",
+            "difficulty": "medium",
+            "category": "debugging",
+            "tags": [
+              "debugging",
+              "swe-bench-pro"
+            ]
+          },
+          "verifier": {
+            "network_mode": "public",
+            "timeout_sec": 3000.0,
+            "collect": [],
+            "env": {}
+          },
+          "agent": {
+            "network_mode": "no-network",
+            "timeout_sec": 3000.0
+          },
+          "environment": {
+            "network_mode": "public",
+            "build_timeout_sec": 1800.0,
+            "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+            "os": "linux",
+            "cpus": 1,
+            "memory_mb": 4096,
+            "storage_mb": 10240,
+            "mcp_servers": [],
+            "env": {}
+          },
+          "solution": {
+            "env": {}
+          }
+        }
+      }
+    ]
+  ],
+  "execution_stage": "p3",
+  "temporary_workspace_root": "/dev/shm/nz-pro-batch4-20261012",
+  "new_authorization_cny": 50,
+  "original_same_authorization": true,
+  "authorization_text": "本批50元扣除全部前序占用后，只首次执行零模型第9题；使用已批准的临时内存工作区，证据归档成功后清理，不重跑付费任务。"
+}

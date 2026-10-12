@@ -1,0 +1,30 @@
+{
+  "purpose": "swebench-pro-v2",
+  "model": "deepseek-flash",
+  "scope": [
+    "instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+    "instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c"
+  ],
+  "instance_manifest_sha256": "eb85858fce1b82e7fd428df24e6935cd6676e1a8f4f28b22a1de221d2c3fb331",
+  "account": "project-env:DeepSeek",
+  "input_mode": "empirical",
+  "empirical_risk_accepted": true,
+  "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+  "cost_limit": 13.056741439999996,
+  "cost_currency": "CNY",
+  "authorization_text": "本批人民币50元总预算不变，扣除前序全部占用，仅首次运行9/15；用户已批准两题临时内存工作区，持久证据落盘，归档成功后清理，前三批余款不携带。",
+  "valid_from": 1791786727.6207905,
+  "valid_until": 1791959528.620791,
+  "prices_cny_per_million": {
+    "input": 2,
+    "cached_input": 0.04,
+    "output": 8
+  },
+  "provider_output_reservation_tokens": 393216,
+  "original_total_authorization_cny": 50,
+  "previous_used_cny": 36.943258560000004,
+  "predecessor_ledger_sha256": "328127a3b8849da5a79656112c957c28ad66bf0ec5c25d333d1dda7f4e3e66be",
+  "preparation_retry_not_paid_agent_retry": true,
+  "new_authorization_cny": 50,
+  "closed_original_unused_not_carried": true
+}

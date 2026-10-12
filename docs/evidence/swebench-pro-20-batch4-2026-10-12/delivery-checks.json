@@ -1,0 +1,115 @@
+{
+  "checked_epoch": 1791789497.4693592,
+  "phase_exporter_regression_command": "python -m pytest -q tests/evaluation/test_batch4_evidence_chronology.py",
+  "phase_exporter_regression": "2 passed in 0.03s",
+  "public_key_and_forbidden_json_scan_files_at_snapshot": 983,
+  "owned_evidence_navigation_links_checked": 249,
+  "frozen_current_core_files_verified": 360,
+  "actual_agent_overlap_peak": 4,
+  "agent_run_windows": [
+    {
+      "number": 1,
+      "start": 1791778382.6863227,
+      "end": 1791779508.3036728
+    },
+    {
+      "number": 3,
+      "start": 1791778564.9771063,
+      "end": 1791778758.1648061
+    },
+    {
+      "number": 4,
+      "start": 1791778709.9273565,
+      "end": 1791778850.3881848
+    },
+    {
+      "number": 5,
+      "start": 1791778810.5081651,
+      "end": 1791779068.118319
+    },
+    {
+      "number": 7,
+      "start": 1791778992.6421638,
+      "end": 1791779504.1807895
+    },
+    {
+      "number": 8,
+      "start": 1791779072.2325253,
+      "end": 1791779202.8573372
+    },
+    {
+      "number": 10,
+      "start": 1791779196.8113122,
+      "end": 1791779907.5537493
+    },
+    {
+      "number": 11,
+      "start": 1791779310.126879,
+      "end": 1791779559.8737116
+    },
+    {
+      "number": 13,
+      "start": 1791779691.1938965,
+      "end": 1791779818.8419154
+    },
+    {
+      "number": 14,
+      "start": 1791779830.0812545,
+      "end": 1791780066.8168252
+    },
+    {
+      "number": 16,
+      "start": 1791780013.9292586,
+      "end": 1791780140.5545688
+    },
+    {
+      "number": 17,
+      "start": 1791780149.2165413,
+      "end": 1791780351.4533072
+    },
+    {
+      "number": 18,
+      "start": 1791780175.7606297,
+      "end": 1791780463.5451682
+    },
+    {
+      "number": 19,
+      "start": 1791780453.164205,
+      "end": 1791781349.704123
+    },
+    {
+      "number": 20,
+      "start": 1791780563.5847542,
+      "end": 1791780878.9552908
+    },
+    {
+      "number": 2,
+      "start": 1791781883.3778975,
+      "end": 1791781960.8081756
+    },
+    {
+      "number": 6,
+      "start": 1791781763.2459862,
+      "end": 1791783787.9414856
+    },
+    {
+      "number": 12,
+      "start": 1791784191.3257687,
+      "end": 1791786478.522642
+    },
+    {
+      "number": 15,
+      "start": 1791787147.1605163,
+      "end": 1791787735.8539696
+    },
+    {
+      "number": 9,
+      "start": 1791788615.3711536,
+      "end": 1791788959.2573917
+    }
+  ],
+  "whole_repository_tests_run": false,
+  "windows_run": false,
+  "no_extra_model_calls_during_checks": true,
+  "cost_reference": "final-accounting-and-integrity.json"
+}

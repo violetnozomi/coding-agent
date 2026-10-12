@@ -128,7 +128,9 @@ lines += ['',f"实际主/辅助请求{account['main_physical_requests']}/{accoun
  '复用现有原生Agent、4路有界并行执行器和共享费用账本；镜像准备串行，大环境依空间准入处理。付费失败题不重跑；前序请求完全结算后，只首次运行零模型调用题。所有阶段Core和原生入口冻结一致，模型、40主请求/6辅助请求及3000秒口径不变。', '',
  '实际出站max_tokens/max_completion_tokens、thinking、reasoning_effort及stream见[逐笔核验](final-accounting-and-integrity.json)。393216为费用预留，非输出限制；未设置不写成medium/false。估算不是供应商账单，缺失usage或缺失字段保留unknown/null和观测数。', '',
  '容器独立工作区、HOME及Session，无网络、非root；密钥仅在宿主Relay。Agent不接触官方隐藏验收，停止后冻结实际补丁，在新鲜原始镜像执行未改的官方验收。公开协议和工具记录脱敏，原始Session/Artifact及Provider原件保留本机并提供SHA256。宿主没有提供正确补丁或向模型泄露验收结果。', '',
+ '第9/15题仅按[单独存储授权](memory-workspace-authorization.json)使用内存源码工作区，归档成功后清理。第9题原镜像空间估计拒绝保留；在已授权内存目录核验官方压缩层及解压diff_ids并量取尺寸，独立准备峰值含压缩临时层、全部tar、逐entry分配余量及原512MiB止损。镜像准备完成后再走原2GiB任务准入；官方manifest/config/全部diff_ids保持一致，不改变Agent或验收器。[环境干预记录](memory-environment-intervention.json)不计为编码进展。', '',
  '第13题官方验收停在补丁应用阶段：三个Redis appendonlydir文件already exists，退出97，没有启动官方测试。初态hash只覆盖tracked文件，不能证明冲突文件与初态相同；原补丁保持不变。该项记unknown，不将验收阻断当作测试断言失败或通过。细节见[原始阻断事实](attempts/b4-13/acceptance-blocker.json)。', '',
+ f"本批Agent终态{statuses['completed']}个completed、{statuses['max_turns']}个max_turns，不能用正常结束替代功能验收。{len(allrejections)}次辅助尝试在本地以input_token_bound_unknown拒绝，实际辅助出站为0；原始本地拒绝仍保留。", '',
  '本轮未修改Core、验证器或评分函数。导出阶段排序反例修复：python -m pytest -q tests/evaluation/test_batch4_evidence_chronology.py，2 passed；仍禁止覆盖已付费尝试。未运行全仓或Windows，不重跑未变的检查。历史compaction fake失败test_context_overflow_stops_after_three_compaction_attempts、test_pre_send_and_reactive_compactions_share_one_three_attempt_owner保留，不删除或弱化。', '',
  '每题README与learning.md提供请求→工具事实→补丁→独立验收的面试复盘入口。冻结验收通过只证明其覆盖范围，不追认Agent未运行的测试。本批结果不能证明整体SWE成功率、Core效果提高或并行提速倍数。']
 (doc/'final-report.md').write_text('\n'.join(lines)+'\n')

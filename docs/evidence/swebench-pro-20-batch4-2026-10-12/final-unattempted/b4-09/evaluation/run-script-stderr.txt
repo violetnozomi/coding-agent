@@ -1,0 +1,187 @@
+FAIL src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts (58.977 s)
+  getErrorCategory
+    ✓ should return server_error for unreachable error (2 ms)
+    ✓ should return server_error for timeout error
+    ✓ should return network_error for offline error
+    ✓ should return network_error for network error (1 ms)
+    ✓ should return network_error for NetworkError state
+    ✓ should return rate_limited for rate limited error
+    ✓ should return 4xx for 4xx error
+    ✓ should return 5xx for 5xx error
+    ✓ should return unknown for unknown error (9 ms)
+  useDownloadMetrics
+    ✕ should observe downloads and update metrics for successful downloads (6 ms)
+    ✕ should observe downloads and update metrics for failed downloads (4 ms)
+    ✕ should observe downloads and update metrics correctly for retried downloads (1 ms)
+    ✕ should not process the same download twice (1 ms)
+    ✕ should not handle multiple LinkDownload in a download (1 ms)
+    ✕ should handle different error states (1 ms)
+    ✕ should only report failed users every 5min (2 ms)
+    ✕ should record sw mechanism when size is large and service worker is supported
+    ✕ should record memory_fallback mechanism when size is undefined and service worker is unsupported (1 ms)
+
+  ● useDownloadMetrics › should observe downloads and update metrics for successful downloads
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: {"mechanism": "memory", "retry": "false", "status": "success"}
+
+    Number of calls: 0
+
+      112 |         });
+      113 |
+    > 114 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledWith({
+          |                                                                               ^
+      115 |             status: 'success',
+      116 |             retry: 'false',
+      117 |             mechanism: 'memory',
+
+      at Object.toHaveBeenCalledWith (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:114:79)
+
+  ● useDownloadMetrics › should observe downloads and update metrics for failed downloads
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: {"mechanism": "memory", "retry": "false", "status": "failure"}
+
+    Number of calls: 0
+
+      152 |         });
+      153 |
+    > 154 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledWith({
+          |                                                                               ^
+      155 |             status: 'failure',
+      156 |             retry: 'false',
+      157 |             mechanism: 'memory',
+
+      at Object.toHaveBeenCalledWith (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:154:79)
+
+  ● useDownloadMetrics › should observe downloads and update metrics correctly for retried downloads
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: {"mechanism": "memory", "retry": "false", "status": "failure"}
+
+    Number of calls: 0
+
+      214 |         });
+      215 |
+    > 216 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledWith({
+          |                                                                               ^
+      217 |             status: 'failure',
+      218 |             retry: 'false',
+      219 |             mechanism: 'memory',
+
+      at Object.toHaveBeenCalledWith (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:216:79)
+
+  ● useDownloadMetrics › should not process the same download twice
+
+    expect(jest.fn()).toHaveBeenCalledTimes(expected)
+
+    Expected number of calls: 1
+    Received number of calls: 0
+
+      250 |
+      251 |         expect(metrics.drive_download_success_rate_total.increment).toHaveBeenCalledTimes(1);
+    > 252 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledTimes(1);
+          |                                                                               ^
+      253 |     });
+      254 |
+      255 |     it('should not handle multiple LinkDownload in a download', () => {
+
+      at Object.toHaveBeenCalledTimes (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:252:79)
+
+  ● useDownloadMetrics › should not handle multiple LinkDownload in a download
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: {"mechanism": "memory", "retry": "false", "status": "success"}
+
+    Number of calls: 0
+
+      278 |             shareType: 'main',
+      279 |         });
+    > 280 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledWith({
+          |                                                                               ^
+      281 |             status: 'success',
+      282 |             retry: 'false',
+      283 |             mechanism: 'memory',
+
+      at Object.toHaveBeenCalledWith (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:280:79)
+
+  ● useDownloadMetrics › should handle different error states
+
+    expect(jest.fn()).toHaveBeenCalledTimes(expected)
+
+    Expected number of calls: 2
+    Received number of calls: 0
+
+      326 |             shareType: 'main',
+      327 |         });
+    > 328 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledTimes(2);
+          |                                                                               ^
+      329 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledWith({
+      330 |             status: 'failure',
+      331 |             retry: 'false',
+
+      at Object.toHaveBeenCalledTimes (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:328:79)
+
+  ● useDownloadMetrics › should only report failed users every 5min
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: {"mechanism": "memory", "retry": "false", "status": "failure"}
+
+    Number of calls: 0
+
+      390 |         });
+      391 |         expect(metrics.drive_download_erroring_users_total.increment).toHaveBeenCalledTimes(2);
+    > 392 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledWith({
+          |                                                                               ^
+      393 |             status: 'failure',
+      394 |             retry: 'false',
+      395 |             mechanism: 'memory',
+
+      at Object.toHaveBeenCalledWith (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:392:79)
+
+  ● useDownloadMetrics › should record sw mechanism when size is large and service worker is supported
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: {"mechanism": "sw", "retry": "false", "status": "success"}
+
+    Number of calls: 0
+
+      413 |             ] as unknown as Download[]);
+      414 |         });
+    > 415 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledWith({
+          |                                                                               ^
+      416 |             status: 'success',
+      417 |             retry: 'false',
+      418 |             mechanism: 'sw',
+
+      at Object.toHaveBeenCalledWith (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:415:79)
+
+  ● useDownloadMetrics › should record memory_fallback mechanism when size is undefined and service worker is unsupported
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: {"mechanism": "memory_fallback", "retry": "false", "status": "failure"}
+
+    Number of calls: 0
+
+      436 |             ] as unknown as Download[]);
+      437 |         });
+    > 438 |         expect(metrics.drive_download_mechanism_success_rate_total.increment).toHaveBeenCalledWith({
+          |                                                                               ^
+      439 |             status: 'failure',
+      440 |             retry: 'false',
+      441 |             mechanism: 'memory_fallback',
+
+      at Object.toHaveBeenCalledWith (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:438:79)
+
+Test Suites: 1 failed, 1 total
+Tests:       9 failed, 9 passed, 18 total
+Snapshots:   0 total
+Time:        69.665 s
+Ran all test suites matching /applications\/drive\/src\/app\/store\/_downloads\/DownloadProvider\/useDownloadMetrics.test.ts/i.

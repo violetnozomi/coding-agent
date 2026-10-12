@@ -1,0 +1,21 @@
+{
+  "tasks": [
+    {
+      "number": 9,
+      "instance_id": "instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+      "attempt": 1,
+      "agent_status": "max_turns",
+      "resolved": false,
+      "agent_started_epoch": 1791788615.3711536,
+      "agent_finished_epoch": 1791788959.2573917,
+      "status": "attempted",
+      "patch_sha256": "dbdf197dab31679e0a694b82fc53af698cbd890dd19d7365d58a2596f1ab3c4f",
+      "eval_status": "graded",
+      "physical_requests": 40
+    }
+  ],
+  "physical_requests": 40,
+  "estimated_cost_occupied_cny": 3.202665759999997,
+  "accounting_failures": {},
+  "old_batch_balance_used": false
+}

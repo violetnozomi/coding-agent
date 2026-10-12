@@ -1,0 +1,24 @@
+Running selected tests: applications/drive/src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts
+Running test file in proton-drive workspace: applications/drive/src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts
+  console.warn
+    {} { tags: { label: 'download-unknown-error' } }
+
+      72 |     }
+      73 |
+    > 74 |     console.warn(error, context);
+         |             ^
+      75 |     traceError(errorForReporting, context);
+      76 | }
+      77 |
+
+      at warn (src/app/utils/errorHandling/index.ts:74:13)
+      at getErrorCategory (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.ts:43:20)
+      at Object.<anonymous> (src/app/store/_downloads/DownloadProvider/useDownloadMetrics.test.ts:74:36)
+
+
+=============================== Coverage summary ===============================
+Statements   : 2.23% ( 315/14071 )
+Branches     : 1.05% ( 70/6612 )
+Functions    : 0.63% ( 25/3910 )
+Lines        : 2.28% ( 311/13619 )
+================================================================================

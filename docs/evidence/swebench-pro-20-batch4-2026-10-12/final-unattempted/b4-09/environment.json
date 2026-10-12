@@ -1,0 +1,12 @@
+{
+  "source_image": "127.0.0.1:41639/scaleapi/swe-bench_pro-v2@sha256:ae0c12c8f1fe93d4529c3fbf8dadeb70920ba743daf9a424e3e641533d0534a6",
+  "source_image_id": "sha256:02e854a70840f4552ee717019c3013933fc372a9df89cb7e2901dd29a9927420",
+  "source_size_bytes": 10067780286,
+  "project_python": "3.8.10",
+  "agent_python": "3.13",
+  "agent_executable": "/opt/nz-agent/bin/python3.13",
+  "agent_image": "nz-pro20-b4-09:isolated-agent",
+  "agent_image_id": "sha256:d0ce119cecdef7adf19ce6a4d0e206288d0bb1b8d8a0da918daff4966ed94792",
+  "user_authorized_isolation": "补隔离 Agent Python（建议）",
+  "original_project_toolchain_unchanged": true
+}
