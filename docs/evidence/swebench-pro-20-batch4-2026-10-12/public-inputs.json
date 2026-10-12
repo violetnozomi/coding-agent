@@ -1,0 +1,1028 @@
+{
+  "official_source_commit": "66f92766bba642462d4bbe5479e83f91f9211862",
+  "paid_authorization_status": "pending",
+  "paid_requests": 0,
+  "prepared_count": 20,
+  "tasks": [
+    {
+      "number": 1,
+      "instance_id": "instance_gravitational__teleport-f432a71a13e698b6e1c4672a2e9e9c1f32d35c12",
+      "instruction_sha256": "e0cdc2d251246d012f5c835931cf1b87e7bfd65ec3b617907146a596ee2784fb",
+      "task_config_sha256": "a2b81f078a069e806d309d1ae979bdead8b1c0c5e9723def8992d61384e11813",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_gravitational__teleport-f432a71a13e698b6e1c4672a2e9e9c1f32d35c12",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_gravitational__teleport-f432a71a13e698b6e1c4672a2e9e9c1f32d35c12",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 2,
+      "instance_id": "instance_internetarchive__openlibrary-3f7db6bbbcc7c418b3db72d157c6aed1d45b2ccf-v430f20c722405e462d9ef44dee7d34c41e76fe7a",
+      "instruction_sha256": "89640f3e0765dd56d208f1386bc9cae4268e794cd1613f29b2ccefa101ee5f3f",
+      "task_config_sha256": "3d4f989e1306f60e8e6b7b95e7084168f3701f8b93414ff3c3b9a41d6812284e",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_internetarchive__openlibrary-3f7db6bbbcc7c418b3db72d157c6aed1d45b2ccf-v430f20c722405e462d9ef44dee7d34c41e76fe7a",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_internetarchive__openlibrary-3f7db6bbbcc7c418b3db72d157c6aed1d45b2ccf-v430f20c722405e462d9ef44dee7d34c41e76fe7a",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 3,
+      "instance_id": "instance_future-architect__vuls-e049df50fa1eecdccc5348e27845b5c783ed7c76-v73dc95f6b90883d8a87e01e5e9bb6d3cc32add6d",
+      "instruction_sha256": "bfdff67ff76e615c84ed13614519969c78ebca433323fd457068cfa2ceddfa08",
+      "task_config_sha256": "8121c8bb33b8f90131a6bfe7aff22aa35f2aefabb50fc963e1a9dcb835de6d38",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_future-architect__vuls-e049df50fa1eecdccc5348e27845b5c783ed7c76-v73dc95f6b90883d8a87e01e5e9bb6d3cc32add6d",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_future-architect__vuls-e049df50fa1eecdccc5348e27845b5c783ed7c76-v73dc95f6b90883d8a87e01e5e9bb6d3cc32add6d",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 4,
+      "instance_id": "instance_element-hq__element-web-f3534b42df3dcfe36dc48bddbf14034085af6d30-vnan",
+      "instruction_sha256": "3285e8e8f09b1022d7b948102e0af9b9d50c8ee52e629841fe3b60ea4025f111",
+      "task_config_sha256": "830e099479530ac15b94f8f0cda933e0e825dda2636d9d6f8e88327b177b0ade",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_element-hq__element-web-f3534b42df3dcfe36dc48bddbf14034085af6d30-vnan",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_element-hq__element-web-f3534b42df3dcfe36dc48bddbf14034085af6d30-vnan",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 5,
+      "instance_id": "instance_internetarchive__openlibrary-d109cc7e6e161170391f98f9a6fa1d02534c18e4-ve8c8d62a2b60610a3c4631f5f23ed866bada9818",
+      "instruction_sha256": "c01f487e2faa39317d290712b70e0b6b5df5a9e1fa26cf848bbf8fa2c8502556",
+      "task_config_sha256": "758b04ea8ad7473842c3f9258b96d8cee03c722d265f24a45d41d88fdea737a9",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_internetarchive__openlibrary-d109cc7e6e161170391f98f9a6fa1d02534c18e4-ve8c8d62a2b60610a3c4631f5f23ed866bada9818",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_internetarchive__openlibrary-d109cc7e6e161170391f98f9a6fa1d02534c18e4-ve8c8d62a2b60610a3c4631f5f23ed866bada9818",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 6,
+      "instance_id": "instance_gravitational__teleport-007235446f85b1cbaef92664c3b3867517250f21",
+      "instruction_sha256": "d7a8562f81b53c7b83baed5ba400050d83c30ab3b214fdce6aa4f3afb6fc6634",
+      "task_config_sha256": "6979768c9f115985aa611844e73288891f2848bb6adbfea16de7ce47fa627f2d",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_gravitational__teleport-007235446f85b1cbaef92664c3b3867517250f21",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_gravitational__teleport-007235446f85b1cbaef92664c3b3867517250f21",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 7,
+      "instance_id": "instance_future-architect__vuls-4c04acbd9ea5b073efe999e33381fa9f399d6f27",
+      "instruction_sha256": "2d84d2d45aea6a4a8b8a3112461b147d4c8a54c39da5b01fe8465c348b328235",
+      "task_config_sha256": "af4900dc7aff9675633b0fd14493a488e64840f4610d97410a7780de99aa6634",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_future-architect__vuls-4c04acbd9ea5b073efe999e33381fa9f399d6f27",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_future-architect__vuls-4c04acbd9ea5b073efe999e33381fa9f399d6f27",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 8,
+      "instance_id": "instance_qutebrowser__qutebrowser-99029144b5109bb1b2a53964a7c129e009980cd9-va0fd88aac89cde702ec1ba84877234da33adce8a",
+      "instruction_sha256": "22c9cba903eaadacc49d089a40b735cea0dbef50e81aabf6a2f92ffc296677d3",
+      "task_config_sha256": "035e6d0143558f26e6f231967fd1fbccb4d4f5ecbe2f718a48af962ba0b31293",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_qutebrowser__qutebrowser-99029144b5109bb1b2a53964a7c129e009980cd9-va0fd88aac89cde702ec1ba84877234da33adce8a",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_qutebrowser__qutebrowser-99029144b5109bb1b2a53964a7c129e009980cd9-va0fd88aac89cde702ec1ba84877234da33adce8a",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 9,
+      "instance_id": "instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+      "instruction_sha256": "a1c89826ac62f6c2ac6aadfa7d0b2db998fdc5322d65c09bf98a5392722337f7",
+      "task_config_sha256": "905b2a1159bf08b6ea4ec64570061707f9d381dfb9c092299e3f2b8ee3534b43",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 10,
+      "instance_id": "instance_qutebrowser__qutebrowser-3e21c8214a998cb1058defd15aabb24617a76402-v5fc38aaf22415ab0b70567368332beee7955b367",
+      "instruction_sha256": "03a6962f4beefca85fec7e9a2eca9b377f267ff8ea1a1cf6b9c31f90947eb5b6",
+      "task_config_sha256": "fe89eb6adffe5106b942bf7842f73c8349cf97367a065751b87e2866e45bd175",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_qutebrowser__qutebrowser-3e21c8214a998cb1058defd15aabb24617a76402-v5fc38aaf22415ab0b70567368332beee7955b367",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_qutebrowser__qutebrowser-3e21c8214a998cb1058defd15aabb24617a76402-v5fc38aaf22415ab0b70567368332beee7955b367",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 11,
+      "instance_id": "instance_qutebrowser__qutebrowser-0fc6d1109d041c69a68a896db87cf1b8c194cef7-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "instruction_sha256": "2b6404790b98a54e4f7dfa2e0ac0c4e368ef5aff8d4880ba7794716fa5952887",
+      "task_config_sha256": "787449a53fa8670e567a857beda8ede1cd6f847828ef4d755ea60da77debd23b",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_qutebrowser__qutebrowser-0fc6d1109d041c69a68a896db87cf1b8c194cef7-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_qutebrowser__qutebrowser-0fc6d1109d041c69a68a896db87cf1b8c194cef7-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 12,
+      "instance_id": "instance_gravitational__teleport-2bb3bbbd8aff1164a2353381cb79e1dc93b90d28-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+      "instruction_sha256": "70bdf4bde0dc2b069a9a20c87a784cbba5381800810f6c56b0123aec2e024ad5",
+      "task_config_sha256": "8007275cd227ca9062040e9b57aabd269d254f228646e7ee860e314d89363ca8",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_gravitational__teleport-2bb3bbbd8aff1164a2353381cb79e1dc93b90d28-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_gravitational__teleport-2bb3bbbd8aff1164a2353381cb79e1dc93b90d28-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 13,
+      "instance_id": "instance_NodeBB__NodeBB-70b4a0e2aebebe8f2f559de6680093d96a697b2f-vnan",
+      "instruction_sha256": "09428076ae7834288cd502bac7effc67234af5a2d5e27be2b9e5d2d7ad53ed8a",
+      "task_config_sha256": "43b0257090cbefa0b076fb2a44dbc089469004176d4e05824fd9143c4c7551da",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_NodeBB__NodeBB-70b4a0e2aebebe8f2f559de6680093d96a697b2f-vnan",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_NodeBB__NodeBB-70b4a0e2aebebe8f2f559de6680093d96a697b2f-vnan",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 14,
+      "instance_id": "instance_navidrome__navidrome-eebfbc5381a1e506ff17b5f1371d1ad83d5fd642",
+      "instruction_sha256": "e2c3153429d7038624ea0cb91dcb57daab633f311ced2985cf62b37eeccd7ce9",
+      "task_config_sha256": "dcc579c1cdff9ff9317c9df7af1427895153fae26b536c56b443f32c13a14a83",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_navidrome__navidrome-eebfbc5381a1e506ff17b5f1371d1ad83d5fd642",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-eebfbc5381a1e506ff17b5f1371d1ad83d5fd642",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 15,
+      "instance_id": "instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c",
+      "instruction_sha256": "957a448fb0dffe83353b87828761add8e97e13dcaeb5b9e70eddf1d4f522cb34",
+      "task_config_sha256": "c53ddf0db5a442aabd2a561e6e7375fb40183968457a7524286d29ff92c3cb24",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 16,
+      "instance_id": "instance_flipt-io__flipt-c1728053367c753688f114ec26e703c8fdeda125",
+      "instruction_sha256": "8687ad7f16f047248d98bc08ba4f0839bfafda05d9dcb99a9c7821a2dbdc882e",
+      "task_config_sha256": "ddc6954d14e8fcdcfec8215f677acd33b755ea9d880ce883c2c71a4d4a5acada",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_flipt-io__flipt-c1728053367c753688f114ec26e703c8fdeda125",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-c1728053367c753688f114ec26e703c8fdeda125",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 17,
+      "instance_id": "instance_future-architect__vuls-878c25bf5a9c9fd88ac32eb843f5636834d5712d",
+      "instruction_sha256": "cd2a0da2ad3c648f1c99c1e92f979e588070972d7104cee9f171cd64360c7bc5",
+      "task_config_sha256": "dc5dcba27305e6795585d76dab662abd13a3930b82392518a8fa001ef4163796",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_future-architect__vuls-878c25bf5a9c9fd88ac32eb843f5636834d5712d",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_future-architect__vuls-878c25bf5a9c9fd88ac32eb843f5636834d5712d",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 18,
+      "instance_id": "instance_flipt-io__flipt-406f9396ad65696d58865b3a6283109cd4eaf40e",
+      "instruction_sha256": "328e8bb1d610911e447b26525e9d719996db2a6ecb84ddafc5e0887fee4458eb",
+      "task_config_sha256": "90ae5e1760679ec87e544c390e4dac5041317c3d8ec92ed1c1d979931a0ffbf1",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_flipt-io__flipt-406f9396ad65696d58865b3a6283109cd4eaf40e",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-406f9396ad65696d58865b3a6283109cd4eaf40e",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 19,
+      "instance_id": "instance_gravitational__teleport-fb0ab2b9b771377a689fd0d0374777c251e58bbf",
+      "instruction_sha256": "1f9205924add405401da707f5fe7aa1293570a4d3380de3eb69173e946f48a5b",
+      "task_config_sha256": "f3b29c2b1227e8fb7701bcb2001fe96df6acb45a321e240156d6d0030dab4321",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_gravitational__teleport-fb0ab2b9b771377a689fd0d0374777c251e58bbf",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_gravitational__teleport-fb0ab2b9b771377a689fd0d0374777c251e58bbf",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    },
+    {
+      "number": 20,
+      "instance_id": "instance_NodeBB__NodeBB-84dfda59e6a0e8a77240f939a7cb8757e6eaf945-v2c59007b1005cd5cd14cbb523ca5229db1fd2dd8",
+      "instruction_sha256": "b55ae28fc7dda80a5b96a958256207b0c7ecaec7784ec2137cf8df8fa28edd2a",
+      "task_config_sha256": "5846a8e99e396a75adc65234d053897a3ab1b1124ec681d34cc5b6e362f3fc75",
+      "configuration": {
+        "schema_version": "1.4",
+        "artifacts": [],
+        "task": {
+          "name": "swebench-pro/instance_NodeBB__NodeBB-84dfda59e6a0e8a77240f939a7cb8757e6eaf945-v2c59007b1005cd5cd14cbb523ca5229db1fd2dd8",
+          "version": "1.0.0",
+          "description": "",
+          "authors": [],
+          "keywords": []
+        },
+        "metadata": {
+          "author_name": "ScaleAI",
+          "author_email": "unknown",
+          "difficulty": "medium",
+          "category": "debugging",
+          "tags": [
+            "debugging",
+            "swe-bench-pro"
+          ]
+        },
+        "verifier": {
+          "network_mode": "public",
+          "timeout_sec": 3000.0,
+          "collect": [],
+          "env": {}
+        },
+        "agent": {
+          "network_mode": "no-network",
+          "timeout_sec": 3000.0
+        },
+        "environment": {
+          "network_mode": "public",
+          "build_timeout_sec": 1800.0,
+          "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_NodeBB__NodeBB-84dfda59e6a0e8a77240f939a7cb8757e6eaf945-v2c59007b1005cd5cd14cbb523ca5229db1fd2dd8",
+          "os": "linux",
+          "cpus": 1,
+          "memory_mb": 4096,
+          "storage_mb": 10240,
+          "mcp_servers": [],
+          "env": {}
+        },
+        "solution": {
+          "env": {}
+        }
+      }
+    }
+  ]
+}
