@@ -1,0 +1,5 @@
+Running selected tests: TestParse
+=== RUN   TestParse
+--- PASS: TestParse (0.00s)
+PASS
+ok  	github.com/future-architect/vuls/contrib/trivy/parser/v2	0.007s

@@ -1,0 +1,13 @@
+{
+  "number": 17,
+  "instance_id": "instance_future-architect__vuls-878c25bf5a9c9fd88ac32eb843f5636834d5712d",
+  "attempt": 1,
+  "agent_status": "max_turns",
+  "resolved": true,
+  "agent_started_epoch": 1791780149.2165413,
+  "agent_finished_epoch": 1791780351.4533072,
+  "status": "attempted",
+  "patch_sha256": "919e55e0cc0c37a9df1b89ff1d5624948c43f49101bbc909ec6c5d15aa7f9757",
+  "eval_status": "graded",
+  "physical_requests": 40
+}

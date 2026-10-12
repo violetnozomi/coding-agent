@@ -1,0 +1,17 @@
+{"tool": "bash", "input": {"command": "pwd; ls -la"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"DiffPlus\\|DiffMinus\\|DiffOnly\\|Conf.Diff\\b\" --include=*.go /workspace | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -n \"type VulnInfo struct\" -A 40 /workspace/models/vulninfos.go"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"diff(\" /workspace/report/ ; echo \"---\"; grep -rn \"getDiffCves\\|loadPrevious\\|overwriteJSONFile\" /workspace/report/"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"type Package struct\\|type Packages \" /workspace/models/*.go | head; echo ---; grep -rn \"type ScanResult struct\" -A 30 /workspace/models/scanresults.go | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 && git status --short | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"diff\" /workspace/README.md | head -20; echo \"=== CHANGELOG head ===\"; head -40 /workspace/CHANGELOG.md"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"FormatServerName\" /workspace/models/*.go | head; echo ---; grep -rn \"FormatServerName\" -A 8 /workspace/models/vulninfos.go | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go version"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./models -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./config -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"c.Conf.Diff\" report/localfile.go subcmds/report.go subcmds/tui.go"}, "allowed": false}

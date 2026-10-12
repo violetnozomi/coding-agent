@@ -1,0 +1,28 @@
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 2>/dev/null; git status 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git status --short | head -30; echo \"---LOG---\"; git log --oneline -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git status --short; echo \"---\"; git log --oneline -3", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace/scanner/tests/fixtures && ls -la"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3 -- scanner/walk_dir_tree_windows_test.go; echo \"---\"; git show --stat HEAD -- scanner/ | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && find . -type d -name fixtures 2>/dev/null | head; echo \"===\"; ls scanner/ ; echo \"===\"; cat .gitignore | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls -la scanner/ && echo \"---tests---\" && ls -la tests/fixtures | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pwd"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls", "workdir": "/workspace/scanner"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -la; echo \"=== find tests ===\"; find . -maxdepth 2 -name 'tests' -o -maxdepth 2 -name 'fixtures' 2>/dev/null", "workdir": "/workspace/scanner"}, "allowed": false}
+{"tool": "bash", "input": {"command": "git ls-files scanner | head -40; echo \"===\"; git ls-files | grep -i \"scanner/tests\" | head", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git status --porcelain; echo \"=== ignore ===\"; cat .gitignore", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -la tests/fixtures/empty_folder tests/fixtures/ignored_folder tests/fixtures/artist tests/fixtures/playlists", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -la scanner/ 2>&1 | head -40", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go env GOFLAGS GOVERSION; go test ./scanner/... 2>&1 | tail -40", "workdir": "/workspace", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -la scanner", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -la scanner/", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "stat -c '%F %N' scanner/tests; echo \"exit=$?\"", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -a tests/fixtures", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./scanner -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./scanner -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./scanner -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -a tests/fixtures", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./scanner -run '^$' 2>&1 | tail -20"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -la tests/fixtures | head -40; echo \"=== symlinks ===\"; find tests/fixtures -maxdepth 1 -type l", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./scanner 2>&1 | tail -60", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./scanner -run TestScanner -count=1 2>&1 | tail -60", "timeout": 180}, "allowed": true}

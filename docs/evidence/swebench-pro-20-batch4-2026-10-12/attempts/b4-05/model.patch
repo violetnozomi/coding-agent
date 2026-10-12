@@ -1,0 +1,143 @@
+diff --git a/openlibrary/core/lists/model.py b/openlibrary/core/lists/model.py
+index 55310da14..93e4f519b 100644
+--- a/openlibrary/core/lists/model.py
++++ b/openlibrary/core/lists/model.py
+@@ -22,7 +22,9 @@ import contextlib
+ logger = logging.getLogger("openlibrary.lists.model")
+ 
+ 
+-class SeedDict(TypedDict):
++class ThingReferenceDict(TypedDict):
++    """A JSON reference to a `Thing`, identified by its `key`."""
++
+     key: ThingKey
+ 
+ 
+@@ -75,7 +77,7 @@ class List(Thing):
+         """
+         return [web.storage(name=t, url=self.key + "/tags/" + t) for t in self.tags]
+ 
+-    def add_seed(self, seed: Thing | SeedDict | SeedSubjectString):
++    def add_seed(self, seed: Thing | ThingReferenceDict | SeedSubjectString):
+         """
+         Adds a new seed to this list.
+ 
+@@ -94,7 +96,7 @@ class List(Thing):
+             self.seeds.append(seed)
+             return True
+ 
+-    def remove_seed(self, seed: Thing | SeedDict | SeedSubjectString):
++    def remove_seed(self, seed: Thing | ThingReferenceDict | SeedSubjectString):
+         """Removes a seed for the list."""
+         if isinstance(seed, dict):
+             seed = Thing(self._site, seed['key'], None)
+@@ -364,7 +366,7 @@ class List(Thing):
+ 
+         return seeds
+ 
+-    def has_seed(self, seed: SeedDict | SeedSubjectString) -> bool:
++    def has_seed(self, seed: ThingReferenceDict | SeedSubjectString) -> bool:
+         if isinstance(seed, dict):
+             seed = seed['key']
+         return seed in self._get_seed_strings()
+@@ -413,6 +415,22 @@ class Seed:
+         else:
+             self.key = value.key
+ 
++    @staticmethod
++    def from_json(
++        list: List, seed_json: SeedSubjectString | ThingReferenceDict
++    ) -> 'Seed':
++        """Construct a Seed from a JSON-compatible seed representation.
++
++        A subject is represented by a string, while a reference to a `Thing`
++        is represented by a mapping containing the thing's ``key``.
++        """
++        if isinstance(seed_json, str):
++            return Seed(list, seed_json)
++        elif isinstance(seed_json, dict):
++            return Seed(list, web.storage(seed_json))
++        else:
++            return Seed(list, seed_json)
++
+     @cached_property
+     def document(self) -> Subject | Thing:
+         if isinstance(self.value, str):
+diff --git a/openlibrary/plugins/openlibrary/lists.py b/openlibrary/plugins/openlibrary/lists.py
+index 5ff5390c2..bb09666b1 100644
+--- a/openlibrary/plugins/openlibrary/lists.py
++++ b/openlibrary/plugins/openlibrary/lists.py
+@@ -14,7 +14,7 @@ from infogami.infobase import client, common
+ from openlibrary.accounts import get_current_user
+ from openlibrary.core import formats, cache
+ from openlibrary.core.models import ThingKey
+-from openlibrary.core.lists.model import List, SeedDict, SeedSubjectString
++from openlibrary.core.lists.model import List, SeedSubjectString, ThingReferenceDict
+ import openlibrary.core.helpers as h
+ from openlibrary.i18n import gettext as _
+ from openlibrary.plugins.upstream.addbook import safe_seeother
+@@ -43,12 +43,12 @@ class ListRecord:
+     key: str | None = None
+     name: str = ''
+     description: str = ''
+-    seeds: list[SeedDict | SeedSubjectString] = field(default_factory=list)
++    seeds: list[ThingReferenceDict | SeedSubjectString] = field(default_factory=list)
+ 
+     @staticmethod
+     def normalize_input_seed(
+-        seed: SeedDict | subjects.SubjectPseudoKey,
+-    ) -> SeedDict | SeedSubjectString:
++        seed: ThingReferenceDict | subjects.SubjectPseudoKey,
++    ) -> ThingReferenceDict | SeedSubjectString:
+         if isinstance(seed, str):
+             if seed.startswith('/subjects/'):
+                 return subject_key_to_seed(seed)
+@@ -462,8 +462,8 @@ class lists_json(delegate.page):
+         return delegate.RawText(self.dumps(result))
+ 
+     def process_seeds(
+-        self, seeds: SeedDict | subjects.SubjectPseudoKey | ThingKey
+-    ) -> list[SeedDict | SeedSubjectString]:
++        self, seeds: ThingReferenceDict | subjects.SubjectPseudoKey | ThingKey
++    ) -> list[ThingReferenceDict | SeedSubjectString]:
+         return [ListRecord.normalize_input_seed(seed) for seed in seeds]
+ 
+     def get_content_type(self):
+diff --git a/openlibrary/tests/core/test_lists_model.py b/openlibrary/tests/core/test_lists_model.py
+index 85d07f49a..c93d15d0e 100644
+--- a/openlibrary/tests/core/test_lists_model.py
++++ b/openlibrary/tests/core/test_lists_model.py
+@@ -1,6 +1,11 @@
+ import web
+ 
+-from openlibrary.core.lists.model import Seed
++from openlibrary.core.lists.model import Seed, ThingReferenceDict
++
++
++def test_thing_reference_dict_is_importable():
++    ref = ThingReferenceDict(key="/works/OL1W")
++    assert ref["key"] == "/works/OL1W"
+ 
+ 
+ def test_seed_with_string():
+@@ -19,3 +24,20 @@ def test_seed_with_nonstring():
+     assert hasattr(seed, "key")
+     assert hasattr(seed, "type") is False
+     assert seed.document == not_a_string
++
++
++def test_seed_from_json_with_thing_reference():
++    the_list = [1, 2, 3]
++    seed = Seed.from_json(the_list, {"key": "/works/OL1W"})
++    assert seed._list == the_list
++    assert seed.key == "/works/OL1W"
++    assert hasattr(seed, "type") is False
++
++
++def test_seed_from_json_with_subject_string():
++    the_list = [1, 2, 3]
++    seed = Seed.from_json(the_list, "subject/Politics and government")
++    assert seed._list == the_list
++    assert seed.value == "subject/Politics and government"
++    assert seed.key == "subject/Politics and government"
++    assert seed.type == "subject"

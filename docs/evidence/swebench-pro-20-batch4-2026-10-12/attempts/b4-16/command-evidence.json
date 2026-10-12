@@ -1,0 +1,471 @@
+[
+  {
+    "tool_call_id": "call_00_NW4yU0kGXq4yL2w09p2r4862",
+    "input": {
+      "command": "pwd && ls -la && echo \"---APP---\" && ls -la /app 2>/dev/null | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_AliQDWAUqpzGYbhTCxhn2898",
+    "input": {
+      "command": "pwd && ls -la"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_P85wsm3bNCnAEg1nEqs16729",
+    "input": {
+      "command": "cat go.mod | head -60 && echo \"---WORK---\" && cat go.work"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "module go.flipt.io/flipt\n\ngo 1.20\n\nrequire (\n\tgithub.com/Masterminds/squirrel v1.5.4\n\tgithub.com/XSAM/otelsql v0.22.0\n\tgithub.com/blang/semver/v4 v4.0.0\n\tgithub.com/coreos/go-oidc/v3 v3.6.0\n\tgithub.com/docker/go-connections v0.4.0\n\tgithub.com/fatih/color v1.15.0\n\tgithub.com/go-chi/chi/v5 v5.0.8\n\tgithub.com/go-chi/cors v1.2.1\n\tgithub.com/go-redis/cache/v9 v9.0.0\n\tgithub.com/go-sql-driver/mysql v1.7.1\n\tgithub.com/gofrs/uuid v4.4.0+incompatible\n\tgithub.com/golang-migrate/migrate/v4 v4.15.2\n\tgithub.com/google/go-cmp v0.5.9\n\tgithub.com/google/go-github/v32 v32.1.0\n\tgithub.com/gorilla/csrf v1.7.1\n\tgithub.com/grpc-ecosystem/go-grpc-middleware v1.4.0\n\tgithub.com/grpc-ecosystem/go-grpc-prometheus v1.2.0\n\tgithub.com/grpc-ecosystem/grpc-gateway/v2 v2.15.2\n\tgithub.com/hashicorp/cap v0.3.0\n\tgithub.com/hashicorp/go-multierror v1.1.1\n\tgithub.com/lib/pq v1.10.9\n\tgithub.com/magefile/mage v1.14.0\n\tgithub.com/mattn/go-sqlite3 v1.14.16\n\tgithub.com/mitchellh/mapstructure v1.5.0\n\tgithub.com/patrickmn/go-cache v2.1.0+incompatible\n\tgithub.com/prometheus/client_golang v1.15.1\n\tgithub.com/redis/go-redis/v9 v9.0.3\n\tgithub.com/santhosh-tekuri/jsonschema/v5 v5.3.0\n\tgithub.com/spf13/cobra v1.7.0\n\tgithub.com/spf13/viper v1.15.0\n\tgithub.com/stretchr/testify v1.8.2\n\tgithub.com/testcontainers/testcontainers-go v0.20.0\n\tgithub.com/uber/jaeger-client-go v2.30.0+incompatible\n\tgithub.com/xo/dburl v0.14.2\n\tgo.flipt.io/flipt/errors v1.19.3\n\tgo.flipt.io/flipt/rpc/flipt v1.22.0\n\tgo.flipt.io/flipt/sdk/go v0.3.0\n\tgo.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.41.1\n\tgo.opentelemetry.io/otel v1.15.1\n\tgo.opentelemetry.io/otel/exporters/jaeger v1.15.1\n\tgo.opentelemetry.io/otel/exporters/otlp/otlptrace v1.15.1\n\tgo.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.15.1\n\tgo.opentelemetry.io/otel/exporters/prometheus v0.38.1\n\tgo.opentelemetry.io/otel/exporters/zipkin v1.14.0\n\tgo.opentelemetry.io/otel/metric v0.38.1\n\tgo.opentelemetry.io/otel/sdk v1.15.1\n\tgo.opentelemetry.io/otel/sdk/metric v0.38.1\n\tgo.opentelemetry.io/otel/trace v1.15.1\n\tgo.uber.org/zap v1.24.0\n\tgolang.org/x/exp v0.0.0-20221012211006-4de253d81b95\n\tgolang.org/x/net v0.10.0\n\tgolang.org/x/sync v0.2.0\n\tgoogle.golang.org/genproto v0.0.0-20230410155749-daa745c078e1\n\tgoogle.golang.org/grpc v1.55.0\n\tgoogle.golang.org/protobuf v1.30.0\n---WORK---\ngo 1.20\n\nuse (\n\t.\n\t./_tools\n\t./build\n\t./errors\n\t./internal/cmd/protoc-gen-go-flipt-sdk\n\t./rpc/flipt\n\t./sdk/go\n)"
+  },
+  {
+    "tool_call_id": "call_00_ET_51oiMeTwQTqczZV5X7Ao8778",
+    "input": {
+      "command": "grep -n \"cuelang\" go.mod go.sum | head -20; echo \"---\"; ls $(go env GOMODCACHE)/cuelang.org 2>/dev/null; echo \"---vendor---\"; ls vendor 2>/dev/null | head"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_WejIAgM5v2qixwNmw2xL0731",
+    "input": {
+      "command": "grep -n \"cuelang\" go.mod go.sum | head -20; echo \"GREP_DONE\"; go env GOMODCACHE; ls $(go env GOMODCACHE) 2>/dev/null | head -40"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "GREP_DONE\n/go/pkg/mod\n4d63.com\nbazil.org\ncache\ncloud.google.com\ndagger.io\ndmitri.shuralyov.com\ngioui.org@v0.0.0-20210308172011-57750fc8a0a6\ngithub.com\ngitlab.com\ngo.etcd.io\ngo.mongodb.org\ngo.mozilla.org\ngo.opencensus.io@v0.24.0\ngo.opentelemetry.io\ngo.uber.org\ngolang.org\ngonum.org\ngoogle.golang.org\ngopkg.in\ngorm.io\ngotest.tools\ngotest.tools@v2.2.0+incompatible\nhonnef.co\nk8s.io\nmodernc.org\nmvdan.cc\nrsc.io\nsigs.k8s.io"
+  },
+  {
+    "tool_call_id": "call_00_LwtRneIUuRaE9xZvXOLF9758",
+    "input": {
+      "command": "ls /go/pkg/mod/cache/download/ 2>/dev/null | head -60; echo \"---\"; ls /go/pkg/mod/cache/download/cuelang.org 2>/dev/null; echo \"---\"; find /go/pkg/mod/cache/download -maxdepth 2 -iname \"*cue*\" 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_0ueuvw0DsVZmENhpYmpw4813",
+    "input": {
+      "command": "find \"$(go env GOMODCACHE)/cache/download\" -maxdepth 2 -iname \"*cue*\" 2>/dev/null | head; echo \"---\"; ls \"$(go env GOMODCACHE)/cache/download\" | head -60"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "---\n4d63.com\nbazil.org\ncloud.google.com\ndagger.io\ndmitri.shuralyov.com\ngioui.org\ngithub.com\ngitlab.com\ngo.etcd.io\ngo.flipt.io\ngo.mongodb.org\ngo.mozilla.org\ngo.opencensus.io\ngo.opentelemetry.io\ngo.uber.org\ngolang.org\ngonum.org\ngoogle.golang.org\ngopkg.in\ngorm.io\ngotest.tools\nhonnef.co\nk8s.io\nmodernc.org\nmvdan.cc\nrsc.io\nsigs.k8s.io\nsumdb"
+  },
+  {
+    "tool_call_id": "call_00_JWHkItaP6ZZZz3BJf2uJ3400",
+    "input": {
+      "command": "ls \"$(go env GOMODCACHE)\" | grep -i cue; echo \"exit=$?\"; ls \"$(go env GOMODCACHE)/cache/download\" | grep -i cue; echo \"exit2=$?\"; find / -maxdepth 6 -type d -iname \"cuelang.org\" 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_S5xHHynWLdmBcXEi8jPi0034",
+    "input": {
+      "command": "go env GOFLAGS GOPATH GOMODCACHE GOPROXY GONOSUMDB GONOSUMCHECK GOSUMDB 2>&1; echo \"---\"; ls \"$(go env GOMODCACHE)/cache/download/github.com\" | grep -i -E \"cue|cue-lang\" ; echo \"exit=$?\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/go\n/go/pkg/mod\noff\n\n\nsum.golang.org\n---\nexit=1"
+  },
+  {
+    "tool_call_id": "call_00_EykT8Wt2wWIhn7XEoiKE4991",
+    "input": {
+      "command": "cd /workspace && ls -a; echo \"---\"; find . -maxdepth 3 -iname \"*cue*\" 2>/dev/null | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_efDp88vGbYZxZHotDOJo0218",
+    "input": {
+      "command": "ls -a; echo \"---\"; find . -maxdepth 3 -iname \"*cue*\" 2>/dev/null | head -20",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_jDBsC0cIkZIBh2r9CBw28125",
+    "input": {
+      "command": "ls -a"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_v3dKlqczjxNV30n8Hk397334",
+    "input": {
+      "command": "go env GOMODCACHE"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/go/pkg/mod"
+  },
+  {
+    "tool_call_id": "call_00_W3ZvjS0uoRlu7mEahF718391",
+    "input": {
+      "command": "ls /go/pkg/mod/cache/download/github.com/ | grep -i cue; echo \"===\"; ls /go/pkg/mod/ | grep -i cue; echo \"===\"; ls /go/pkg/mod/cache/download/golang.org/x/ | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_tjhzh453G6GGbIRcrOly6379",
+    "input": {
+      "command": "go list -m all 2>/dev/null | grep -i cue; echo \"exit=$?\"; echo \"---\"; grep -rn \"cuelang\" go.sum | head; echo \"---modcache cuelang---\"; ls /go/pkg/mod/cuelang.org 2>/dev/null; ls /go/pkg/mod/cache/download/cuelang.org 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_NJv5AWpjTKxxAIfSEOvv2840",
+    "input": {
+      "command": "go list -m all 2>/dev/null | grep -i cue; echo \"exit=$?\"; echo \"---\"; grep -rn \"cuelang\" go.sum | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Y1mM0TKrwrT6XGho4q1u2279",
+    "input": {
+      "command": "go list -m all 2>/dev/null | grep -i cue; echo \"exit=$?\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "exit=1"
+  },
+  {
+    "tool_call_id": "call_00_K5aL10p1Ec1cmeoXCmJg2264",
+    "input": {
+      "command": "wc -l go.sum; grep -c \"cue\" go.sum; grep -n \"cue\" go.sum | head -30"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_6sfbl5YhNHJNNxex6wyo6642",
+    "input": {
+      "command": "cat _tools/go.mod; echo \"===BUILD===\"; cat build/go.mod 2>/dev/null; echo \"===grep cue in magefile===\"; grep -n \"cue\" magefile.go _tools/*.go 2>/dev/null | head -30"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_WWfisO1ZPq3sw2cypNON4426",
+    "input": {
+      "command": "mc=$(go env GOMODCACHE); ls \"$mc\" | grep -i cue; echo \"root_exit=$?\"; ls \"$mc/cache/download\" | grep -i cue; echo \"dl_exit=$?\"; ls \"$mc/cache/download/cuelang.org\" 2>/dev/null; echo \"cueorg_exit=$?\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_8LxgrhPAG1yf3v8Vd3q44623",
+    "input": {
+      "command": "ls sdk/go/ rpc/flipt/ errors/ 2>/dev/null; echo \"=== git ===\"; git -C . status --short 2>&1 | head; git -C . log --oneline -5 2>&1"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "errors/:\nerrors.go\ngo.mod\ngo.sum\n\nrpc/flipt/:\nLICENSE\nauth\nbuf.lock\nbuf.md\nbuf.yaml\nflipt.go\nflipt.pb.go\nflipt.pb.gw.go\nflipt.proto\nflipt.yaml\nflipt_grpc.pb.go\ngo.mod\ngo.sum\nmarshaller.go\nmeta\nopenapiv2.yaml\noperators.go\nvalidation.go\nvalidation_fuzz_test.go\nvalidation_test.go\n\nsdk/go/:\nCHANGELOG.md\nCHANGELOG.template.md\nREADME.md\nauth.sdk.gen.go\ndefaults.go\ndoc.go\nexample_test.go\nflipt.sdk.gen.go\ngo.mod\ngo.sum\ngrpc\nhttp\nmeta.sdk.gen.go\nsdk.gen.go\n=== git ===\n?? .nz-coder/\n775da4fe chore(deps-dev): bump @playwright/test from 1.34.0 to 1.34.2 in /ui (#1651)\nc6a7b1fd feat: add namespace to export, check for match on import (#1645)\ndc07fbbd chore: update SDK changelog\n4ec09c6b chore: update CHANGELOG\n309c73da Merge branch 'main' into release/1.22"
+  },
+  {
+    "tool_call_id": "call_00_Cj9CTzFVqFYqLncKipET6535",
+    "input": {
+      "command": "cd \"$(go env GOMODCACHE)/cache/download\" && ls | head -50 && echo \"=== cuelang ===\" && ls -d cuelang.org 2>&1"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_KrXf1rdpA9UO2cTENcac5719",
+    "input": {
+      "command": "go env | grep -i -E \"proxy|flags|mod|sumdb|private|nosum|work|path\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "CGO_CFLAGS='-O2 -g'\nCGO_CPPFLAGS=''\nCGO_CXXFLAGS='-O2 -g'\nCGO_FFLAGS='-O2 -g'\nCGO_LDFLAGS='-O2 -g'\nGO111MODULE=''\nGOFLAGS=''\nGOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build2575831569=/tmp/go-build -gno-record-gcc-switches'\nGOMOD='/workspace/go.mod'\nGOMODCACHE='/go/pkg/mod'\nGONOPROXY=''\nGONOSUMDB=''\nGOPATH='/go'\nGOPRIVATE=''\nGOPROXY='off'\nGOSUMDB='sum.golang.org'\nGOWORK='/workspace/go.work'"
+  },
+  {
+    "tool_call_id": "call_01_rgLxZzd9ycGhxyiC2Nqa1062",
+    "input": {
+      "command": "cat /go/env 2>/dev/null; echo \"---\"; ls -d /go/pkg/mod/cache/download/cuelang.org 2>&1; echo \"---try find shallow---\"; find /go/pkg/mod -maxdepth 1 -iname \"*cue*\" 2>&1"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_jSE7s5qlspgdWMCXVxZi3262",
+    "input": {
+      "command": "grep -n -i \"schema\" magefile.go | head -40; echo \"=== config dir ===\"; ls config/"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "=== config dir ===\ndefault.yml\nflipt.schema.cue\nflipt.schema.json\nlocal.yml\nmigrations\nproduction.yml"
+  },
+  {
+    "tool_call_id": "call_01_i0dKMYeYRFTKQRdsIh0A1374",
+    "input": {
+      "command": "cd /tmp 2>/dev/null; go mod download -x cuelang.org/go@v0.6.0 2>&1 | head -5; echo \"exit=$?\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_hv1PMtxwrXH3PSZsRz9B9666",
+    "input": {
+      "command": "go mod download cuelang.org/go 2>&1 | head -5; echo \"exit=$?\"",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go: module cuelang.org/go: not a known dependency\nexit=1"
+  },
+  {
+    "tool_call_id": "call_00_lLD9hyP2aDeDDXETxm156750",
+    "input": {
+      "command": "mc=$(go env GOMODCACHE); ls \"$mc/cache/download\" | grep -i cue; echo \"d=$?\"; ls \"$mc\" | grep -i cue; echo \"r=$?\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ig9SvpDoCOfskfbz1glj1250",
+    "input": {
+      "command": "grep -rn \"cuelang\" --include=go.sum . | head -20; echo \"SUMDONE\"; grep -rln \"cuelang\" . --include=*.go --include=go.mod --include=go.sum --include=*.cue 2>/dev/null | head; echo \"ALLDONE\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_6A2qRhskKp9fmx904Ulm6971",
+    "input": {
+      "command": "mkdir -p internal/cue && cat > /workspace/internal/cue/probe.go <<'EOF'\npackage cue\n\nimport \"cuelang.org/go/cue\"\n\nvar _ = cue.Context{}\nEOF\ngo mod edit -require=cuelang.org/go@v0.6.0\nGOFLAGS=-mod=mod GOPROXY=off go build ./internal/cue/ 2>&1 | head -20; echo \"BUILD_EXIT=$?\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-5",
+    "input": {
+      "command": "go test ./internal/cue -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_dE6q8JLz7EYrYkaQVa4V9316",
+    "input": {
+      "command": "go mod edit -require=cuelang.org/go@v0.6.0 && GOFLAGS=-mod=mod GOPROXY=off go mod download cuelang.org/go 2>&1 | head -5; echo \"EXIT=$?\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go: module lookup disabled by GOPROXY=off\nEXIT=1"
+  },
+  {
+    "tool_call_id": "call_00_joy1wQuXYJST2aDiZCMK9155",
+    "input": {
+      "command": "GOPROXY=off go list -m -f '{{.Dir}}' github.com/spf13/cobra 2>&1 | head -3; echo \"COBRA_EXIT=$?\"; GOPROXY=off go mod download -x cuelang.org/go@v0.5.0 2>&1 | head -3; echo \"CUE_EXIT=$?\"; echo \"HOME=$HOME\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_tfAaumdlNdzP919xibpR2224",
+    "input": {
+      "command": "GOPROXY=off go list -m -f '{{.Dir}}' github.com/spf13/cobra 2>&1 | head -3; echo \"COBRA_EXIT=$?\"; GOPROXY=off go mod download -x cuelang.org/go@v0.5.0 2>&1 | head -3; echo \"CUE_EXIT=$?\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_TPucaj4ZhFnwfNMCgMFB8633",
+    "input": {
+      "command": "tail -20 go.mod"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "golang.org/x/oauth2 v0.7.0 // indirect\n\tgolang.org/x/sys v0.8.0 // indirect\n\tgolang.org/x/text v0.9.0 // indirect\n\tgolang.org/x/time v0.3.0 // indirect\n\tgolang.org/x/tools v0.8.0 // indirect\n\tgoogle.golang.org/appengine v1.6.7 // indirect\n\tgopkg.in/ini.v1 v1.67.0 // indirect\n\tgopkg.in/yaml.v3 v3.0.1 // indirect\n)\n\nreplace (\n\tgithub.com/codahale/hdrhistogram => github.com/HdrHistogram/hdrhistogram-go v0.9.0\n\tgithub.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt/jwt/v4 v4.2.0\n)\n\nreplace (\n\tgo.flipt.io/flipt/errors => ./errors/\n\tgo.flipt.io/flipt/rpc/flipt => ./rpc/flipt/\n\tgo.flipt.io/flipt/sdk/go => ./sdk/go/\n)"
+  },
+  {
+    "tool_call_id": "verification-stage-static-6",
+    "input": {
+      "command": "go test ./_probe -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "?   \tgo.flipt.io/flipt/_probe\t[no test files]"
+  },
+  {
+    "tool_call_id": "call_00_Ip3bMTvmmJYpiHKKrohU4458",
+    "input": {
+      "command": "go run ./_probe /go/pkg/mod 2>&1 | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_C1PK2h9GKxKJdk9KTGnf9359",
+    "input": {
+      "command": "go run ./_probe \"$(go env GOPATH)/pkg/mod\" 2>&1 | head -40"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "TOP: 4d63.com\nTOP: bazil.org\nTOP: cache\nTOP: cloud.google.com\nTOP: dagger.io\nTOP: dmitri.shuralyov.com\nTOP: gioui.org@v0.0.0-20210308172011-57750fc8a0a6\nTOP: github.com\nTOP: gitlab.com\nTOP: go.etcd.io\nTOP: go.mongodb.org\nTOP: go.mozilla.org\nTOP: go.opencensus.io@v0.24.0\nTOP: go.opentelemetry.io\nTOP: go.uber.org\nTOP: golang.org\nTOP: gonum.org\nTOP: google.golang.org\nTOP: gopkg.in\nTOP: gorm.io\nTOP: gotest.tools\nTOP: gotest.tools@v2.2.0+incompatible\nTOP: honnef.co\nTOP: k8s.io\nTOP: modernc.org\nTOP: mvdan.cc\nTOP: rsc.io\nTOP: sigs.k8s.io"
+  },
+  {
+    "tool_call_id": "verification-stage-static-7",
+    "input": {
+      "command": "go test ./internal/cue -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-8",
+    "input": {
+      "command": "go test ./_probe -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "?   \tgo.flipt.io/flipt/_probe\t[no test files]"
+  },
+  {
+    "tool_call_id": "call_00_99uCSyvNaD3U2mNpfrEj4030",
+    "input": {
+      "command": "go run ./_probe \"$(go env GOMODCACHE)/cache/download\" cuelang 2>&1 | head -20; echo \"DONE\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "DONE"
+  },
+  {
+    "tool_call_id": "verification-stage-static-9",
+    "input": {
+      "command": "go test ./internal/cue -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  }
+]

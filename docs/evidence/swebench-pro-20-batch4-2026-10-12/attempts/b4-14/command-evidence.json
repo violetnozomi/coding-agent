@@ -1,0 +1,341 @@
+[
+  {
+    "tool_call_id": "call_00_6dVgMWNAu6CIkq93t4kd1510",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /app 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_24rb45YVR2Gou6E3Lnkr7147",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 2>/dev/null; git status 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_N5m1rzcALlpCJ7NCNpV22662",
+    "input": {
+      "command": "ls -la /workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_wrPBKA1s45mrqIbzU9nw7185",
+    "input": {
+      "command": "cd /workspace && git status --short | head -30; echo \"---LOG---\"; git log --oneline -5"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_mQV3LmD6XQDJnxmrxjMF9965",
+    "input": {
+      "command": "git status --short; echo \"---\"; git log --oneline -3",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "?? .nz-coder/\n---\na5dfd2d4 Format subsonic response snapshots\n77735228 Expose OpenSubsonic fields Genres, MusicBrainzId, Bpm, Comment (#2597)\n53607fe1 Publish all new images to Docker Registry"
+  },
+  {
+    "tool_call_id": "call_00_TqBMIBBU1Xc7nvRxFJf89239",
+    "input": {
+      "command": "cd /workspace/scanner/tests/fixtures && ls -la"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_55L02UZIlxsN0v1sQIDU1731",
+    "input": {
+      "command": "cd /workspace && git log --oneline -3 -- scanner/walk_dir_tree_windows_test.go; echo \"---\"; git show --stat HEAD -- scanner/ | head -30"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_gmlZJqT1jwkXR0N6J04C6923",
+    "input": {
+      "command": "cd /workspace && find . -type d -name fixtures 2>/dev/null | head; echo \"===\"; ls scanner/ ; echo \"===\"; cat .gitignore | head -30"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_SArvAZ89WnmgYQQnuVN62157",
+    "input": {
+      "command": "cd /workspace && ls -la scanner/ && echo \"---tests---\" && ls -la tests/fixtures | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_jxU0nFvwKo19l16nvJq28664",
+    "input": {
+      "command": "pwd"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/workspace"
+  },
+  {
+    "tool_call_id": "call_00_GKYHysl7NcGm9Ty2z1US0028",
+    "input": {
+      "command": "ls",
+      "workdir": "/workspace/scanner"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "cached_genre_repository.go\nmapping.go\nmapping_internal_test.go\nmetadata\nplaylist_importer.go\nplaylist_importer_test.go\nrefresher.go\nscanner.go\nscanner_suite_test.go\ntag_scanner.go\ntag_scanner_test.go\nwalk_dir_tree.go\nwalk_dir_tree_test.go\nwalk_dir_tree_windows_test.go"
+  },
+  {
+    "tool_call_id": "call_00_JcV9wtgiAoEogYYh49Yp8678",
+    "input": {
+      "command": "ls -la; echo \"=== find tests ===\"; find . -maxdepth 2 -name 'tests' -o -maxdepth 2 -name 'fixtures' 2>/dev/null",
+      "workdir": "/workspace/scanner"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_bG5V7IHjlGWSyUKGEfyF3968",
+    "input": {
+      "command": "git ls-files scanner | head -40; echo \"===\"; git ls-files | grep -i \"scanner/tests\" | head",
+      "workdir": "/workspace"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_8Nk23LojWlaawi1NlMBk5323",
+    "input": {
+      "command": "git status --porcelain; echo \"=== ignore ===\"; cat .gitignore",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_sLIWkbJP0wrVASgyUtRx6830",
+    "input": {
+      "command": "ls -la tests/fixtures/empty_folder tests/fixtures/ignored_folder tests/fixtures/artist tests/fixtures/playlists",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_KnB0HOmZreawlCqQgMqm9255",
+    "input": {
+      "command": "ls -la scanner/ 2>&1 | head -40",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_IDl9xk57KGTOgpXnop877149",
+    "input": {
+      "command": "go env GOFLAGS GOVERSION; go test ./scanner/... 2>&1 | tail -40",
+      "workdir": "/workspace",
+      "timeout": 120
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_UJv0WACIJ7ncLzu9FLQ71780",
+    "input": {
+      "command": "ls -la scanner",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_bhRTyUgNZEkZDN3862Jz5141",
+    "input": {
+      "command": "ls -la scanner/",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_xgXg3beraW2iaiqYS6bF7027",
+    "input": {
+      "command": "stat -c '%F %N' scanner/tests; echo \"exit=$?\"",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_H0pDD63gHaAJCKh9IRQP9517",
+    "input": {
+      "command": "ls -a tests/fixtures",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-1",
+    "input": {
+      "command": "go test ./scanner -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-2",
+    "input": {
+      "command": "go test ./scanner -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-3",
+    "input": {
+      "command": "go test ./scanner -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_I0Mvt8VM4Ic2593Pdi372565",
+    "input": {
+      "command": "ls -a tests/fixtures",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_GpaMZpbgkEKMa447TPXL1563",
+    "input": {
+      "command": "go test ./scanner -run '^$' 2>&1 | tail -20"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "# github.com/navidrome/navidrome/scanner/metadata/taglib\ntaglib_wrapper.cpp: In function ‘int taglib_read(const char*, long unsigned int)’:\ntaglib_wrapper.cpp:40:55: warning: ‘virtual int TagLib::AudioProperties::length() const’ is deprecated [-Wdeprecated-declarations]\n   40 |   go_map_put_int(id, (char *)\"duration\", props->length());\n      |                                          ~~~~~~~~~~~~~^~\nIn file included from /usr/local/include/taglib/asfproperties.h:31,\n                 from /usr/local/include/taglib/asffile.h:32,\n                 from taglib_wrapper.cpp:6:\n/usr/local/include/taglib/audioproperties.h:82:17: note: declared here\n   82 |     virtual int length() const;\n      |                 ^~~~~~\nok  \tgithub.com/navidrome/navidrome/scanner\t0.009s [no tests to run]"
+  },
+  {
+    "tool_call_id": "call_00_i0Nl2t5JYbQYY2QdHQ8e4852",
+    "input": {
+      "command": "ls -la tests/fixtures | head -40; echo \"=== symlinks ===\"; find tests/fixtures -maxdepth 1 -type l",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_hq52NiOucIDDh44MlwdK3386",
+    "input": {
+      "command": "go test ./scanner 2>&1 | tail -60",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_cy1I6RWv68d0dfiiMdmM5763",
+    "input": {
+      "command": "go test ./scanner -run TestScanner -count=1 2>&1 | tail -60",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

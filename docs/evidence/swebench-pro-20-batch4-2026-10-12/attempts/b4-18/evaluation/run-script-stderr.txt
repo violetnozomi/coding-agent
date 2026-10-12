@@ -1,0 +1,8 @@
+# github.com/mattn/go-sqlite3
+sqlite3-binding.c: In function 'sqlite3SelectNew':
+sqlite3-binding.c:125322:10: warning: function may return address of local variable [-Wreturn-local-addr]
+125322 |   return pNew;
+       |          ^~~~
+sqlite3-binding.c:125282:10: note: declared here
+125282 |   Select standin;
+       |          ^~~~~~~

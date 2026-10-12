@@ -1,0 +1,59 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  13.23MB
+Step 1/4 : FROM ghcr.io/scaleapi/swe-bench_pro-v2@sha256:8a49c20b54d8db349c265977d39a91949c1985125353de8cfb0f018fbb122d92
+ ---> 2e2a920e16ca
+Step 2/4 : COPY wheels /nz-wheels
+ ---> a143ab53a50e
+Step 3/4 : COPY requirements.txt /nz-requirements.txt
+ ---> 480c42cec513
+Step 4/4 : RUN python3 -m pip install --no-index --no-deps --require-hashes --target=/opt/nz-site --find-links=/nz-wheels -r /nz-requirements.txt && rm -rf /nz-wheels
+ ---> Running in 062103abbcdb
+Looking in links: /nz-wheels
+Processing /nz-wheels/annotated_types-0.8.0-py3-none-any.whl (from -r /nz-requirements.txt (line 1))
+Processing /nz-wheels/anyio-4.15.1-py3-none-any.whl (from -r /nz-requirements.txt (line 2))
+Processing /nz-wheels/certifi-2026.7.22-py3-none-any.whl (from -r /nz-requirements.txt (line 3))
+Processing /nz-wheels/charset_normalizer-3.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /nz-requirements.txt (line 4))
+Processing /nz-wheels/distro-1.9.0-py3-none-any.whl (from -r /nz-requirements.txt (line 5))
+Processing /nz-wheels/h11-0.16.0-py3-none-any.whl (from -r /nz-requirements.txt (line 6))
+Processing /nz-wheels/httpcore-1.0.9-py3-none-any.whl (from -r /nz-requirements.txt (line 7))
+Processing /nz-wheels/httpx-0.28.1-py3-none-any.whl (from -r /nz-requirements.txt (line 8))
+Processing /nz-wheels/idna-3.20-py3-none-any.whl (from -r /nz-requirements.txt (line 9))
+Processing /nz-wheels/iniconfig-2.3.1-py3-none-any.whl (from -r /nz-requirements.txt (line 10))
+Processing /nz-wheels/jiter-0.17.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /nz-requirements.txt (line 11))
+Processing /nz-wheels/markdown_it_py-4.2.0-py3-none-any.whl (from -r /nz-requirements.txt (line 12))
+Processing /nz-wheels/mdurl-0.1.2-py3-none-any.whl (from -r /nz-requirements.txt (line 13))
+Processing /nz-wheels/openai-2.36.0-py3-none-any.whl (from -r /nz-requirements.txt (line 14))
+Processing /nz-wheels/packaging-26.3-py3-none-any.whl (from -r /nz-requirements.txt (line 15))
+Processing /nz-wheels/pluggy-1.6.0-py3-none-any.whl (from -r /nz-requirements.txt (line 16))
+Processing /nz-wheels/prompt_toolkit-3.0.52-py3-none-any.whl (from -r /nz-requirements.txt (line 17))
+Processing /nz-wheels/pydantic-2.14.0-py3-none-any.whl (from -r /nz-requirements.txt (line 18))
+Processing /nz-wheels/pydantic_core-2.50.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /nz-requirements.txt (line 19))
+Processing /nz-wheels/pygments-2.21.0-py3-none-any.whl (from -r /nz-requirements.txt (line 20))
+Processing /nz-wheels/pytest-9.0.3-py3-none-any.whl (from -r /nz-requirements.txt (line 21))
+Processing /nz-wheels/python_dotenv-1.2.1-py3-none-any.whl (from -r /nz-requirements.txt (line 22))
+Processing /nz-wheels/pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /nz-requirements.txt (line 23))
+Processing /nz-wheels/regex-2026.9.29-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /nz-requirements.txt (line 24))
+Processing /nz-wheels/requests-2.34.2-py3-none-any.whl (from -r /nz-requirements.txt (line 25))
+Processing /nz-wheels/rich-14.2.0-py3-none-any.whl (from -r /nz-requirements.txt (line 26))
+Processing /nz-wheels/sniffio-1.3.1-py3-none-any.whl (from -r /nz-requirements.txt (line 27))
+Processing /nz-wheels/tiktoken-0.12.0-cp311-cp311-manylinux_2_28_x86_64.whl (from -r /nz-requirements.txt (line 28))
+Processing /nz-wheels/tqdm-4.70.1-py3-none-any.whl (from -r /nz-requirements.txt (line 29))
+Processing /nz-wheels/tree_sitter-0.26.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /nz-requirements.txt (line 30))
+Processing /nz-wheels/tree_sitter_go-0.25.0-cp310-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /nz-requirements.txt (line 31))
+Processing /nz-wheels/tree_sitter_javascript-0.25.0-cp310-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /nz-requirements.txt (line 32))
+Processing /nz-wheels/tree_sitter_typescript-0.23.2-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /nz-requirements.txt (line 33))
+Processing /nz-wheels/typing_extensions-4.16.0-py3-none-any.whl (from -r /nz-requirements.txt (line 34))
+Processing /nz-wheels/typing_inspection-0.4.4-py3-none-any.whl (from -r /nz-requirements.txt (line 35))
+Processing /nz-wheels/urllib3-2.8.0-py3-none-any.whl (from -r /nz-requirements.txt (line 36))
+Processing /nz-wheels/watchfiles-1.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /nz-requirements.txt (line 37))
+Processing /nz-wheels/wcwidth-0.9.2-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /nz-requirements.txt (line 38))
+Installing collected packages: wcwidth, watchfiles, urllib3, typing-inspection, typing_extensions, tree-sitter-typescript, tree-sitter-javascript, tree-sitter-go, tree-sitter, tqdm, tiktoken, sniffio, rich, requests, regex, PyYAML, python-dotenv, pytest, Pygments, pydantic_core, pydantic, prompt_toolkit, pluggy, packaging, openai, mdurl, markdown-it-py, jiter, iniconfig, idna, httpx, httpcore, h11, distro, charset-normalizer, certifi, anyio, annotated-types
+Successfully installed PyYAML-6.0.3 Pygments-2.21.0 annotated-types-0.8.0 anyio-4.15.1 certifi-2026.7.22 charset-normalizer-3.5.2 distro-1.9.0 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 idna-3.20 iniconfig-2.3.1 jiter-0.17.0 markdown-it-py-4.2.0 mdurl-0.1.2 openai-2.36.0 packaging-26.3 pluggy-1.6.0 prompt_toolkit-3.0.52 pydantic-2.14.0 pydantic_core-2.50.0 pytest-9.0.3 python-dotenv-1.2.1 regex-2026.9.29 requests-2.34.2 rich-14.2.0 sniffio-1.3.1 tiktoken-0.12.0 tqdm-4.70.1 tree-sitter-0.26.0 tree-sitter-go-0.25.0 tree-sitter-javascript-0.25.0 tree-sitter-typescript-0.23.2 typing-inspection-0.4.4 typing_extensions-4.16.0 urllib3-2.8.0 watchfiles-1.1.1 wcwidth-0.9.2
+[91mWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+[0m ---> Removed intermediate container 062103abbcdb
+ ---> 196977fb308b
+Successfully built 196977fb308b
+Successfully tagged nz-pro20-b4-05:20261011

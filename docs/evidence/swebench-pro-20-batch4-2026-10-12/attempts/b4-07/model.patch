@@ -1,0 +1,217 @@
+diff --git a/config/config.go b/config/config.go
+index c3fd300..4a3e07a 100644
+--- a/config/config.go
++++ b/config/config.go
+@@ -84,6 +84,13 @@ type Config struct {
+ 	FormatCsvList     bool `json:"formatCsvList,omitempty"`
+ 	GZIP              bool `json:"gzip,omitempty"`
+ 	Diff              bool `json:"diff,omitempty"`
++	DiffPlus          bool `json:"diffPlus,omitempty"`
++	DiffMinus         bool `json:"diffMinus,omitempty"`
++}
++
++// IsDiff returns true if any diff mode is enabled
++func (c Config) IsDiff() bool {
++	return c.Diff || c.DiffPlus || c.DiffMinus
+ }
+ 
+ // ValidateOnConfigtest validates
+diff --git a/models/vulninfos.go b/models/vulninfos.go
+index 79d6878..f9accb6 100644
+--- a/models/vulninfos.go
++++ b/models/vulninfos.go
+@@ -144,9 +144,21 @@ type PackageFixStatus struct {
+ 	FixedIn     string `json:"fixedIn,omitempty"`
+ }
+ 
++// DiffStatus is the status of each vulnerability in diff output
++// It represents whether a CVE is newly detected or changed ("+") or resolved ("-")
++type DiffStatus string
++
++const (
++	// DiffPlus represents a newly detected or changed vulnerability in diff output
++	DiffPlus DiffStatus = "+"
++	// DiffMinus represents a resolved vulnerability in diff output
++	DiffMinus DiffStatus = "-"
++)
++
+ // VulnInfo has a vulnerability information and unsecure packages
+ type VulnInfo struct {
+ 	CveID                string               `json:"cveID,omitempty"`
++	DiffStatus           DiffStatus           `json:"diffStatus,omitempty"`
+ 	Confidences          Confidences          `json:"confidences,omitempty"`
+ 	AffectedPackages     PackageFixStatuses   `json:"affectedPackages,omitempty"`
+ 	DistroAdvisories     DistroAdvisories     `json:"distroAdvisories,omitempty"` // for Amazon, RHEL, FreeBSD
+diff --git a/report/report.go b/report/report.go
+index aa6d751..fb27c8b 100644
+--- a/report/report.go
++++ b/report/report.go
+@@ -121,16 +121,18 @@ func FillCveInfos(dbclient DBClient, rs []models.ScanResult, dir string) ([]mode
+ 		}
+ 	}
+ 
+-	if c.Conf.Diff {
++	if c.Conf.IsDiff() {
+ 		prevs, err := loadPrevious(rs)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+ 
+-		rs, err = diff(rs, prevs)
+-		if err != nil {
+-			return nil, err
++		plus, minus := c.Conf.DiffPlus, c.Conf.DiffMinus
++		if !plus && !minus {
++			plus, minus = true, true
+ 		}
++
++		rs = diff(rs, prevs, plus, minus)
+ 	}
+ 
+ 	for i, r := range rs {
+diff --git a/report/util.go b/report/util.go
+index 5f14fa7..3224a0a 100644
+--- a/report/util.go
++++ b/report/util.go
+@@ -478,14 +478,20 @@ func needToRefreshCve(r models.ScanResult) bool {
+ func overwriteJSONFile(dir string, r models.ScanResult) error {
+ 	before := config.Conf.FormatJSON
+ 	beforeDiff := config.Conf.Diff
++	beforeDiffPlus := config.Conf.DiffPlus
++	beforeDiffMinus := config.Conf.DiffMinus
+ 	config.Conf.FormatJSON = true
+ 	config.Conf.Diff = false
++	config.Conf.DiffPlus = false
++	config.Conf.DiffMinus = false
+ 	w := LocalFileWriter{CurrentDir: dir}
+ 	if err := w.Write(r); err != nil {
+ 		return xerrors.Errorf("Failed to write summary report: %w", err)
+ 	}
+ 	config.Conf.FormatJSON = before
+ 	config.Conf.Diff = beforeDiff
++	config.Conf.DiffPlus = beforeDiffPlus
++	config.Conf.DiffMinus = beforeDiffMinus
+ 	return nil
+ }
+ 
+@@ -520,7 +526,7 @@ func loadPrevious(currs models.ScanResults) (prevs models.ScanResults, err error
+ 	return prevs, nil
+ }
+ 
+-func diff(curResults, preResults models.ScanResults) (diffed models.ScanResults, err error) {
++func diff(curResults, preResults models.ScanResults, plus, minus bool) (diffed models.ScanResults) {
+ 	for _, current := range curResults {
+ 		found := false
+ 		var previous models.ScanResult
+@@ -533,12 +539,16 @@ func diff(curResults, preResults models.ScanResults) (diffed models.ScanResults,
+ 		}
+ 
+ 		if found {
+-			current.ScannedCves = getDiffCves(previous, current)
++			current.ScannedCves = getDiffCves(previous, current, plus, minus)
+ 			packages := models.Packages{}
+ 			for _, s := range current.ScannedCves {
+ 				for _, affected := range s.AffectedPackages {
+-					p := current.Packages[affected.Name]
+-					packages[affected.Name] = p
++					switch s.DiffStatus {
++					case models.DiffPlus:
++						packages[affected.Name] = current.Packages[affected.Name]
++					case models.DiffMinus:
++						packages[affected.Name] = previous.Packages[affected.Name]
++					}
+ 				}
+ 			}
+ 			current.Packages = packages
+@@ -546,47 +556,63 @@ func diff(curResults, preResults models.ScanResults) (diffed models.ScanResults,
+ 
+ 		diffed = append(diffed, current)
+ 	}
+-	return diffed, err
++	return diffed
+ }
+ 
+-func getDiffCves(previous, current models.ScanResult) models.VulnInfos {
+-	previousCveIDsSet := map[string]bool{}
+-	for _, previousVulnInfo := range previous.ScannedCves {
+-		previousCveIDsSet[previousVulnInfo.CveID] = true
+-	}
++func getDiffCves(previous, current models.ScanResult, plus, minus bool) models.VulnInfos {
++	diffed := models.VulnInfos{}
++
++	if plus {
++		previousCveIDsSet := map[string]bool{}
++		for _, previousVulnInfo := range previous.ScannedCves {
++			previousCveIDsSet[previousVulnInfo.CveID] = true
++		}
+ 
+-	new := models.VulnInfos{}
+-	updated := models.VulnInfos{}
+-	for _, v := range current.ScannedCves {
+-		if previousCveIDsSet[v.CveID] {
+-			if isCveInfoUpdated(v.CveID, previous, current) {
+-				updated[v.CveID] = v
+-				util.Log.Debugf("updated: %s", v.CveID)
++		for _, v := range current.ScannedCves {
++			if previousCveIDsSet[v.CveID] {
++				if isCveInfoUpdated(v.CveID, previous, current) {
++					v.DiffStatus = models.DiffPlus
++					diffed[v.CveID] = v
++					util.Log.Debugf("updated: %s", v.CveID)
+ 
+-				// TODO commented out because  a bug of diff logic when multiple oval defs found for a certain CVE-ID and same updated_at
+-				// if these OVAL defs have different affected packages, this logic detects as updated.
+-				// This logic will be uncomented after integration with gost https://github.com/knqyf263/gost
+-				// } else if isCveFixed(v, previous) {
+-				// updated[v.CveID] = v
+-				// util.Log.Debugf("fixed: %s", v.CveID)
++					// TODO commented out because  a bug of diff logic when multiple oval defs found for a certain CVE-ID and same updated_at
++					// if these OVAL defs have different affected packages, this logic detects as updated.
++					// This logic will be uncomented after integration with gost https://github.com/knqyf263/gost
++					// } else if isCveFixed(v, previous) {
++					// updated[v.CveID] = v
++					// util.Log.Debugf("fixed: %s", v.CveID)
+ 
++				} else {
++					util.Log.Debugf("same: %s", v.CveID)
++				}
+ 			} else {
+-				util.Log.Debugf("same: %s", v.CveID)
++				v.DiffStatus = models.DiffPlus
++				diffed[v.CveID] = v
++				util.Log.Debugf("new: %s", v.CveID)
+ 			}
+-		} else {
+-			util.Log.Debugf("new: %s", v.CveID)
+-			new[v.CveID] = v
+ 		}
+ 	}
+ 
+-	if len(updated) == 0 {
+-		util.Log.Infof("%s: There are %d vulnerabilities, but no difference between current result and previous one.", current.FormatServerName(), len(current.ScannedCves))
++	if minus {
++		currentCveIDsSet := map[string]bool{}
++		for _, currentVulnInfo := range current.ScannedCves {
++			currentCveIDsSet[currentVulnInfo.CveID] = true
++		}
++
++		for _, v := range previous.ScannedCves {
++			if !currentCveIDsSet[v.CveID] {
++				v.DiffStatus = models.DiffMinus
++				diffed[v.CveID] = v
++				util.Log.Debugf("resolved: %s", v.CveID)
++			}
++		}
+ 	}
+ 
+-	for cveID, vuln := range new {
+-		updated[cveID] = vuln
++	if plus && len(diffed) == 0 {
++		util.Log.Infof("%s: There are %d vulnerabilities, but no difference between current result and previous one.", current.FormatServerName(), len(current.ScannedCves))
+ 	}
+-	return updated
++
++	return diffed
+ }
+ 
+ func isCveFixed(current models.VulnInfo, previous models.ScanResult) bool {

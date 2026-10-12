@@ -1,0 +1,8 @@
+{
+  "status": "unknown",
+  "returncode": 97,
+  "reward": null,
+  "resolved": null,
+  "fresh_original_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:7d991f3a4c9a07c28b038928989be02f9476985fe472f7eb6539854dbd29a2be",
+  "unchanged_official_verifier": true
+}

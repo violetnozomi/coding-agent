@@ -1,0 +1,3 @@
+Running selected tests: TestValidate_Failure TestValidate_Success
+FAIL	go.flipt.io/flipt/internal/cue [setup failed]
+FAIL

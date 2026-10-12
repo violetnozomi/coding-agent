@@ -1,0 +1,19 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace/cmd/flipt/ && echo \"---test dirs---\" && find /workspace/test -type f | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -la cmd/flipt/ && echo \"---\" && find test -type f | head -50 && echo \"--- go version ---\" && go version", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go version", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go env GOFLAGS GOPATH GOMODCACHE 2>&1; ls $(go env GOMODCACHE)/github.com/spf13 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git log --oneline -5; echo \"---status---\"; git status; echo \"---branches---\"; git branch -a", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "head -60 CHANGELOG.md", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git stash list; echo \"---\"; git diff --stat; echo \"--- original config.go from HEAD ---\"; git show HEAD:cmd/flipt/config.go", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go build ./... 2>&1 | head -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls test/cli test/integration; echo \"---\"; ls internal/fs; echo \"---\"; grep -rn \"configure(\" --include=*.go . | head", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "find /workspace -name \"*_test.go\" -path \"*flipt*\" -not -path \"*/ui/*\" -not -path \"*/node_modules/*\" | head -30; echo \"---cli---\"; ls -la /workspace/test/cli /workspace/test/integration 2>&1 | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./cmd/flipt -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -la test/ ; echo \"---\"; file test/cli test/integration", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -la cmd/flipt/; echo \"--- testdata?\"; find . -name testdata -type d -not -path \"*/node_modules/*\" 2>/dev/null | head", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test -vet=off -count=1 ./cmd/flipt/ 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -count=1 -run 'TestHttps|TestScheme' ./cmd/flipt 2>&1 | tail -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -count=1 ./cmd/flipt 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -count=1 -run 'TestHttps|TestScheme' ./cmd/flipt 2>&1 | tail -20; echo \"=== vet-less build ===\"; go build ./cmd/... 2>&1 | tail -5", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./cmd/flipt -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test -vet=off -count=1 -run 'TestHttps|TestScheme' ./cmd/flipt 2>&1 | tail -5", "workdir": "/workspace"}, "allowed": true}

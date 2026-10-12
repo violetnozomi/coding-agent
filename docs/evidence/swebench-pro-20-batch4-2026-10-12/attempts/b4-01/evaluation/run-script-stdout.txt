@@ -1,0 +1,9 @@
+Running selected tests: TestKeyStore/raw_keystore TestKeyStore
+=== RUN   TestKeyStore
+=== RUN   TestKeyStore/raw_keystore
+=== PAUSE TestKeyStore/raw_keystore
+=== CONT  TestKeyStore/raw_keystore
+--- PASS: TestKeyStore (0.00s)
+    --- PASS: TestKeyStore/raw_keystore (0.11s)
+PASS
+ok  	github.com/gravitational/teleport/lib/auth/keystore	0.116s

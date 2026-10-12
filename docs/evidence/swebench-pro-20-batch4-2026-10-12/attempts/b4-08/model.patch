@@ -1,0 +1,164 @@
+diff --git a/qutebrowser/browser/webengine/darkmode.py b/qutebrowser/browser/webengine/darkmode.py
+index b1b81c61e..d621bdf4f 100644
+--- a/qutebrowser/browser/webengine/darkmode.py
++++ b/qutebrowser/browser/webengine/darkmode.py
+@@ -113,6 +113,13 @@ Qt 6.6
+ 
+ - New alternative image classifier:
+   https://chromium-review.googlesource.com/c/chromium/src/+/3987823
++
++Qt 6.7
++------
++
++- "forceDarkModeEnabled" is no longer needed as a Chromium blink setting, as the
++  equivalent capability is exposed via QWebEngineSettings.WebAttribute.ForceDarkMode:
++  https://codereview.qt-project.org/c/qt/qtwebengine/+/523235
+ """
+ 
+ import os
+@@ -124,6 +131,7 @@ from typing import (Any, Iterator, Mapping, MutableMapping, Optional, Set, Tuple
+                     Sequence, List)
+ 
+ from qutebrowser.config import config
++from qutebrowser.qt.webenginecore import QWebEngineSettings
+ from qutebrowser.utils import usertypes, utils, log, version
+ 
+ 
+@@ -138,6 +146,7 @@ class Variant(enum.Enum):
+     qt_515_3 = enum.auto()
+     qt_64 = enum.auto()
+     qt_66 = enum.auto()
++    qt_67 = enum.auto()
+ 
+ 
+ # Mapping from a colors.webpage.darkmode.algorithm setting value to
+@@ -290,6 +299,25 @@ class _Definition:
+ 
+         raise ValueError(f"Setting {option} not found in {self}")
+ 
++    def copy_remove_setting(self, name: str) -> '_Definition':
++        """Get a new _Definition object with the given setting removed.
++
++        The setting whose option equals `name` is dropped, while the original
++        _Definition is left unchanged. If no such setting exists, a ValueError is
++        raised.
++        """
++        new = copy.copy(self)
++
++        settings = tuple(
++            setting for setting in self._settings  # pylint: disable=protected-access
++            if setting.option != name
++        )
++        if len(settings) == len(self._settings):  # pylint: disable=protected-access
++            raise ValueError(f"Setting {name} not found in {self}")
++
++        new._settings = settings  # pylint: disable=protected-access
++        return new
++
+ 
+ # Our defaults for policy.images are different from Chromium's, so we mark it as
+ # mandatory setting.
+@@ -332,6 +360,7 @@ _DEFINITIONS[Variant.qt_64] = _DEFINITIONS[Variant.qt_515_3].copy_replace_settin
+ _DEFINITIONS[Variant.qt_66] = _DEFINITIONS[Variant.qt_64].copy_add_setting(
+     _Setting('policy.images', 'ImageClassifierPolicy', _IMAGE_CLASSIFIERS),
+ )
++_DEFINITIONS[Variant.qt_67] = _DEFINITIONS[Variant.qt_66].copy_remove_setting('enabled')
+ 
+ 
+ _SettingValType = Union[str, usertypes.Unset]
+@@ -367,7 +396,11 @@ def _variant(versions: version.WebEngineVersions) -> Variant:
+         except KeyError:
+             log.init.warning(f"Ignoring invalid QUTE_DARKMODE_VARIANT={env_var}")
+ 
+-    if versions.webengine >= utils.VersionNumber(6, 6):
++    if versions.webengine >= utils.VersionNumber(6, 7):
++        if hasattr(QWebEngineSettings.WebAttribute, 'ForceDarkMode'):
++            return Variant.qt_67
++        return Variant.qt_66
++    elif versions.webengine >= utils.VersionNumber(6, 6):
+         return Variant.qt_66
+     elif versions.webengine >= utils.VersionNumber(6, 4):
+         return Variant.qt_64
+diff --git a/tests/unit/browser/webengine/test_darkmode.py b/tests/unit/browser/webengine/test_darkmode.py
+index bda05feb8..2eaf949ce 100644
+--- a/tests/unit/browser/webengine/test_darkmode.py
++++ b/tests/unit/browser/webengine/test_darkmode.py
+@@ -127,10 +127,31 @@ QT_64_SETTINGS = {
+ }
+ 
+ 
++QT_66_SETTINGS = {
++    'blink-settings': [('forceDarkModeEnabled', 'true')],
++    'dark-mode-settings': [
++        ('InversionAlgorithm', '1'),
++        ('ImagePolicy', '2'),
++        ('ForegroundBrightnessThreshold', '100'),
++        ('ImageClassifierPolicy', '0'),
++    ],
++}
++
++QT_67_SETTINGS = {
++    'dark-mode-settings': [
++        ('InversionAlgorithm', '1'),
++        ('ImagePolicy', '2'),
++        ('ForegroundBrightnessThreshold', '100'),
++        ('ImageClassifierPolicy', '0'),
++    ],
++}
++
++
+ @pytest.mark.parametrize('qversion, expected', [
+     ('5.15.2', QT_515_2_SETTINGS),
+     ('5.15.3', QT_515_3_SETTINGS),
+     ('6.4', QT_64_SETTINGS),
++    ('6.7', QT_67_SETTINGS),
+ ])
+ def test_qt_version_differences(config_stub, qversion, expected):
+     settings = {
+@@ -207,12 +228,46 @@ def test_image_policy(config_stub, qtwe_version: str, setting: str, value: str,
+     ('6.4.0', darkmode.Variant.qt_64),
+     ('6.5.0', darkmode.Variant.qt_64),
+     ('6.6.0', darkmode.Variant.qt_66),
++    ('6.7.0', darkmode.Variant.qt_67),
+ ])
+ def test_variant(webengine_version, expected):
+     versions = version.WebEngineVersions.from_pyqt(webengine_version)
+     assert darkmode._variant(versions) == expected
+ 
+ 
++def test_variant_without_force_dark_mode(monkeypatch):
++    class FakeWebAttribute:
++        pass
++
++    class FakeSettings:
++        WebAttribute = FakeWebAttribute
++
++    monkeypatch.setattr(darkmode, 'QWebEngineSettings', FakeSettings)
++    versions = version.WebEngineVersions.from_pyqt('6.7.0')
++    assert darkmode._variant(versions) == darkmode.Variant.qt_66
++
++
++def test_copy_remove_setting():
++    definition = darkmode._DEFINITIONS[darkmode.Variant.qt_66]
++    new = definition.copy_remove_setting('enabled')
++
++    assert new is not definition
++    assert 'enabled' not in [setting.option for _, setting in new.prefixed_settings()]
++    # The original is left unchanged.
++    assert 'enabled' in [setting.option for _, setting in definition.prefixed_settings()]
++
++    assert {switch for switch, _ in new.prefixed_settings()} == {'dark-mode-settings'}
++    assert 'blink-settings' in {
++        switch for switch, _ in definition.prefixed_settings()
++    }
++
++
++def test_copy_remove_setting_not_found():
++    definition = darkmode._DEFINITIONS[darkmode.Variant.qt_66]
++    with pytest.raises(ValueError, match=r'^Setting does-not-exist not found in '):
++        definition.copy_remove_setting('does-not-exist')
++
++
+ def test_variant_gentoo_workaround(gentoo_versions):
+     assert darkmode._variant(gentoo_versions) == darkmode.Variant.qt_515_3
+ 

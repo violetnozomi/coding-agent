@@ -1,0 +1,261 @@
+[
+  {
+    "tool_call_id": "call_00_4zb1PCctzzVzoV2FFvZF6906",
+    "input": {
+      "command": "ls -la /workspace && echo \"---\" && ls -la /app 2>/dev/null | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_10cVflnVwCvdTLYkWWZt7787",
+    "input": {
+      "command": "ls -la /workspace/cmd/flipt/ && echo \"---test dirs---\" && find /workspace/test -type f | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_cyf0WYQFvaX5KljSrJ4J5112",
+    "input": {
+      "command": "ls -la cmd/flipt/ && echo \"---\" && find test -type f | head -50 && echo \"--- go version ---\" && go version",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_I2SIVaGxFE5thVSsI3qf9831",
+    "input": {
+      "command": "go version",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go version go1.24.3 linux/amd64"
+  },
+  {
+    "tool_call_id": "call_01_BZVQIkHqOyhWqTTTiU4Z5490",
+    "input": {
+      "command": "go env GOFLAGS GOPATH GOMODCACHE 2>&1; ls $(go env GOMODCACHE)/github.com/spf13 2>/dev/null",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/go\n/go/pkg/mod\nafero@v1.2.0\ncast@v1.3.0\ncobra@v0.0.5\njwalterweatherman@v1.0.0\npflag@v1.0.3\nviper@v1.4.0"
+  },
+  {
+    "tool_call_id": "call_00_PuivEqX7KRlDIsUQZTWW8385",
+    "input": {
+      "command": "git log --oneline -5; echo \"---status---\"; git status; echo \"---branches---\"; git branch -a",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "0c6e9b3 Bump github.com/grpc-ecosystem/grpc-gateway from 1.11.0 to 1.11.1 (#131)\nd05c0d9 Filter files to run test workflow (#130)\n31cf642 Update README.md\n9958dbe Make linting it's own job\n6ddea7c Actions lint (#129)\n---status---\nOn branch main\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n\t.nz-coder/\n\nnothing added to commit but untracked files present (use \"git add\" to track)\n---branches---\n* main"
+  },
+  {
+    "tool_call_id": "call_00_LkwOEG0aQzmzeqvHc0z11423",
+    "input": {
+      "command": "head -60 CHANGELOG.md",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "# Changelog\n\nThis format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)\nand this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n\n## [v0.7.1](https://github.com/markphelps/flipt/releases/tag/v0.7.1) - 2019-07-25\n\n### Added\n\n* Exposed errors metrics via Prometheus\n\n### Changed\n\n* Updated JS dev dependencies\n* Updated grpc/protobuf versions\n* Updated pq version\n* Updated go-sqlite3 version\n\n## [v0.7.0](https://github.com/markphelps/flipt/releases/tag/v0.7.0) - 2019-07-07\n\n### Added\n\n* CORS support with `cors` config options\n* [Prometheus](https://prometheus.io/) metrics exposed at `/metrics`\n\n## [v0.6.1](https://github.com/markphelps/flipt/releases/tag/v0.6.1) - 2019-06-14\n\n### Fixed\n\n* missing migrations folders in release archive: [https://github.com/markphelps/flipt/issues/97](https://github.com/markphelps/flipt/issues/97)\n\n## [v0.6.0](https://github.com/markphelps/flipt/releases/tag/v0.6.0) - 2019-06-10\n\n### Added\n\n* `migrate` subcommand to run database migrations\n* 'Has Prefix' and 'Has Suffix' constraint operators\n\n### Changed\n\n* Variant keys are now only required to be unique per flag, not globally: [https://github.com/markphelps/flipt/issues/87](https://github.com/markphelps/flipt/issues/87)\n\n### Removed\n\n* `db.migrations.auto` in config. DB migrations must now be run explicitly with the `flipt migrate` command\n\n## [v0.5.0](https://github.com/markphelps/flipt/releases/tag/v0.5.0) - 2019-05-27\n\n### Added\n\n* Beta support for Postgres! :tada:\n* `/meta/info` endpoint for version/build info\n* `/meta/config` endpoint for running configuration info\n\n### Changed\n\n* `cache.enabled` config becomes `cache.memory.enabled`\n* `cache.size` config becomes `cache.memory.items`\n* `db.path` config becomes `db.url`"
+  },
+  {
+    "tool_call_id": "call_00_2urWtUqPRg9LCvsf33FU9940",
+    "input": {
+      "command": "sed -n '1,80p' /go/pkg/mod/github.com/spf13/cast@v1.3.0/caste.go | grep -n \"ToStringSliceE\" ; echo \"===\"; awk '/func ToStringSliceE/,/^}/' /go/pkg/mod/github.com/spf13/cast@v1.3.0/caste.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_UgyzMmUWmROY9CDTGqik8936",
+    "input": {
+      "command": "awk '/func \\(v \\*Viper\\) find\\(/,/^}/' /go/pkg/mod/github.com/spf13/viper@v1.4.0/viper.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_IhIKzDWnmMZO6ctU8MCx7017",
+    "input": {
+      "command": "git stash list; echo \"---\"; git diff --stat; echo \"--- original config.go from HEAD ---\"; git show HEAD:cmd/flipt/config.go",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "---\n cmd/flipt/config.go | 155 +++++++++++++++++++++++++++++++++++++++-------------\n 1 file changed, 116 insertions(+), 39 deletions(-)\n--- original config.go from HEAD ---\npackage main\n\nimport (\n\t\"encoding/json\"\n\t\"net/http\"\n\t\"strings\"\n\n\t\"github.com/pkg/errors\"\n\t\"github.com/spf13/viper\"\n)\n\ntype config struct {\n\tLogLevel string         `json:\"logLevel,omitempty\"`\n\tUI       uiConfig       `json:\"ui,omitempty\"`\n\tCors     corsConfig     `json:\"cors,omitempty\"`\n\tCache    cacheConfig    `json:\"cache,omitempty\"`\n\tServer   serverConfig   `json:\"server,omitempty\"`\n\tDatabase databaseConfig `json:\"database,omitempty\"`\n}\n\ntype uiConfig struct {\n\tEnabled bool `json:\"enabled\"`\n}\n\ntype corsConfig struct {\n\tEnabled        bool     `json:\"enabled\"`\n\tAllowedOrigins []string `json:\"allowedOrigins,omitempty\"`\n}\n\ntype memoryCacheConfig struct {\n\tEnabled bool `json:\"enabled\"`\n\tItems   int  `json:\"items,omitempty\"`\n}\n\ntype cacheConfig struct {\n\tMemory memoryCacheConfig `json:\"memory,omitempty\"`\n}\n\ntype serverConfig struct {\n\tHost     string `json:\"host,omitempty\"`\n\tHTTPPort int    `json:\"httpPort,omitempty\"`\n\tGRPCPort int    `json:\"grpcPort,omitempty\"`\n}\n\ntype databaseConfig struct {\n\tMigrationsPath string `json:\"migrationsPath,omitempty\"`\n\tURL            string `json:\"url,omitempty\"`\n}\n\nfunc defaultConfig() *config {\n\treturn &config{\n\t\tLogLevel: \"INFO\",\n\n\t\tUI: uiConfig{\n\t\t\tEnabled: true,\n\t\t},\n\n\t\tCors: corsConfig{\n\t\t\tEnabled:        false,\n\t\t\tAllowedOrigins: []string{\"*\"},\n\t\t},\n\n\t\tCache: cacheConfig{\n\t\t\tMemory: memoryCacheConfig{\n\t\t\t\tEnabled: false,\n\t\t\t\tItems:   500,\n\t\t\t},\n\t\t},\n\n\t\tServer: serverConfig{\n\t\t\tHost:     \"0.0.0.0\",\n\t\t\tHTTPPort: 8080,\n\t\t\tGRPCPort: 9000,\n\t\t},\n\n\t\tDatabase: databaseConfig{\n\t\t\tURL:            \"file:/var/opt/flipt/flipt.db\",\n\t\t\tMigrationsPath: \"/etc/flipt/config/migrations\",\n\t\t},\n\t}\n}\n\nconst (\n\t// Logging\n\tcfgLogLevel = \"log.level\"\n\n\t// UI\n\tcfgUIEnabled = \"ui.enabled\"\n\n\t// CORS\n\tcfgCorsEnabled        = \"cors.enabled\"\n\tcfgCorsAllowedOrigins = \"cors.allowed_origins\"\n\n\t// Cache\n\tcfgCacheMemoryEnabled = \"cache.memory.enabled\"\n\tcfgCacheMemoryItems   = \"cache.memory.items\"\n\n\t// Server\n\tcfgServerHost     = \"server.host\"\n\tcfgServerHTTPPort = \"server.http_port\"\n\tcfgServerGRPCPort = \"server.grpc_port\"\n\n\t// DB\n\tcfgDBURL            = \"db.url\"\n\tcfgDBMigrationsPath = \"db.migrations.path\"\n)\n\nfunc configure() (*config, error) {\n\tviper.SetEnvPrefix(\"FLIPT\")\n\tviper.SetEnvKeyReplacer(strings.NewReplacer(\".\", \"_\"))\n\tviper.AutomaticEnv()\n\n\tviper.SetConfigFile(cfgPath)\n\n\tif err := viper.ReadInConfig(); err != nil {\n\t\treturn nil, errors.Wrap(err, \"loading config\")\n\t}\n\n\tcfg := defaultConfig()\n\n\t// Logging\n\tif viper.IsSet(cfgLogLevel) {\n\t\tcfg.LogLevel = viper.GetString(cfgLogLevel)\n\t}\n\n\t// UI\n\tif viper.IsSet(cfgUIEnabled) {\n\t\tcfg.UI.Enabled = viper.GetBool(cfgUIEnabled)\n\t}\n\n\t// CORS\n\tif viper.IsSet(cfgCorsEnabled) {\n\t\tcfg.Cors.Enabled = viper.GetBool(cfgCorsEnabled)\n\n\t\tif viper.IsSet(cfgCorsAllowedOrigins) {\n\t\t\tcfg.Cors.AllowedOrigins = viper.GetStringSlice(cfgCorsAllowedOrigins)\n\t\t}\n\t}\n\n\t// Cache\n\tif viper.IsSet(cfgCacheMemoryEnabled) {\n\t\tcfg.Cache.Memory.Enabled = viper.GetBool(cfgCacheMemoryEnabled)\n\n\t\tif viper.IsSet(cfgCacheMemoryItems) {\n\t\t\tcfg.Cache.Memory.Items = viper.GetInt(cfgCacheMemoryItems)\n\t\t}\n\t}\n\n\t// Server\n\tif viper.IsSet(cfgServerHost) {\n\t\tcfg.Server.Host = viper.GetString(cfgServerHost)\n\t}\n\tif viper.IsSet(cfgServerHTTPPort) {\n\t\tcfg.Server.HTTPPort = viper.GetInt(cfgServerHTTPPort)\n\t}\n\tif viper.IsSet(cfgServerGRPCPort) {\n\t\tcfg.Server.GRPCPort = viper.GetInt(cfgServerGRPCPort)\n\t}\n\n\t// DB\n\tif viper.IsSet(cfgDBURL) {\n\t\tcfg.Database.URL = viper.GetString(cfgDBURL)\n\t}\n\tif viper.IsSet(cfgDBMigrationsPath) {\n\t\tcfg.Database.MigrationsPath = viper.GetString(cfgDBMigrationsPath)\n\t}\n\n\treturn cfg, nil\n}\n\nfunc (c *config) ServeHTTP(w http.ResponseWriter, r *http.Request) {\n\tout, err := json.Marshal(c)\n\tif err != nil {\n\t\tlogger.WithError(err).Error(\"getting config\")\n\t\tw.WriteHeader(http.StatusInternalServerError)\n\t\treturn\n\t}\n\n\tif _, err = w.Write(ou... (truncated)"
+  },
+  {
+    "tool_call_id": "call_00_khXkupKASkJGQga0JCJD8983",
+    "input": {
+      "command": "go build ./... 2>&1 | head -40",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "# github.com/mattn/go-sqlite3\nsqlite3-binding.c: In function ‘sqlite3SelectNew’:\nsqlite3-binding.c:125322:10: warning: function may return address of local variable [-Wreturn-local-addr]\n125322 |   return pNew;\n       |          ^~~~\nsqlite3-binding.c:125282:10: note: declared here\n125282 |   Select standin;\n       |          ^~~~~~~"
+  },
+  {
+    "tool_call_id": "call_00_vsb5xP09ORRkBnuqNIax8270",
+    "input": {
+      "command": "ls test/cli test/integration; echo \"---\"; ls internal/fs; echo \"---\"; grep -rn \"configure(\" --include=*.go . | head",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_1ABASdPjU95aZdOyoEwM6883",
+    "input": {
+      "command": "find /workspace -name \"*_test.go\" -path \"*flipt*\" -not -path \"*/ui/*\" -not -path \"*/node_modules/*\" | head -30; echo \"---cli---\"; ls -la /workspace/test/cli /workspace/test/integration 2>&1 | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-6",
+    "input": {
+      "command": "go test ./cmd/flipt -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_drhkOzq26WfrdyIzqFsk7841",
+    "input": {
+      "command": "ls -la test/ ; echo \"---\"; file test/cli test/integration",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_MLEz3Jkg9TyXRukrT9UF3951",
+    "input": {
+      "command": "ls -la cmd/flipt/; echo \"--- testdata?\"; find . -name testdata -type d -not -path \"*/node_modules/*\" 2>/dev/null | head",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_x3LJnNS5j9x8vZHIxgf49328",
+    "input": {
+      "command": "go test -vet=off -count=1 ./cmd/flipt/ 2>&1 | tail -30",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_6x6XBvKUGjwDVOrVhlcX2711",
+    "input": {
+      "command": "go test -vet=off -count=1 -run 'TestHttps|TestScheme' ./cmd/flipt 2>&1 | tail -40",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "# github.com/mattn/go-sqlite3\nsqlite3-binding.c: In function ‘sqlite3SelectNew’:\nsqlite3-binding.c:125322:10: warning: function may return address of local variable [-Wreturn-local-addr]\n125322 |   return pNew;\n       |          ^~~~\nsqlite3-binding.c:125282:10: note: declared here\n125282 |   Select standin;\n       |          ^~~~~~~\nok  \tgithub.com/markphelps/flipt/cmd/flipt\t0.004s"
+  },
+  {
+    "tool_call_id": "call_00_rqVc8ehVN1AupI9z3ivn2749",
+    "input": {
+      "command": "go test -vet=off -count=1 ./cmd/flipt 2>&1 | tail -20",
+      "workdir": "/workspace"
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_rwJ9epIki8lYrSQztSe98477",
+    "input": {
+      "command": "go test -vet=off -count=1 -run 'TestHttps|TestScheme' ./cmd/flipt 2>&1 | tail -20; echo \"=== vet-less build ===\"; go build ./cmd/... 2>&1 | tail -5",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "# github.com/mattn/go-sqlite3\nsqlite3-binding.c: In function ‘sqlite3SelectNew’:\nsqlite3-binding.c:125322:10: warning: function may return address of local variable [-Wreturn-local-addr]\n125322 |   return pNew;\n       |          ^~~~\nsqlite3-binding.c:125282:10: note: declared here\n125282 |   Select standin;\n       |          ^~~~~~~\nok  \tgithub.com/markphelps/flipt/cmd/flipt\t0.003s\n=== vet-less build ===\n125322 |   return pNew;\n       |          ^~~~\nsqlite3-binding.c:125282:10: note: declared here\n125282 |   Select standin;\n       |          ^~~~~~~"
+  },
+  {
+    "tool_call_id": "verification-stage-static-10",
+    "input": {
+      "command": "go test ./cmd/flipt -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "# github.com/mattn/go-sqlite3\nsqlite3-binding.c: In function ‘sqlite3SelectNew’:\nsqlite3-binding.c:125322:10: warning: function may return address of local variable [-Wreturn-local-addr]\n125322 |   return pNew;\n       |          ^~~~\nsqlite3-binding.c:125282:10: note: declared here\n125282 |   Select standin;\n       |          ^~~~~~~\nok  \tgithub.com/markphelps/flipt/cmd/flipt\t0.003s [no tests to run]"
+  },
+  {
+    "tool_call_id": "call_00_qgi4nkNAMPjjNg9HjZj11388",
+    "input": {
+      "command": "go test -vet=off -count=1 -run 'TestHttps|TestScheme' ./cmd/flipt 2>&1 | tail -5",
+      "workdir": "/workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "|          ^~~~\nsqlite3-binding.c:125282:10: note: declared here\n125282 |   Select standin;\n       |          ^~~~~~~\nok  \tgithub.com/markphelps/flipt/cmd/flipt\t0.003s"
+  }
+]

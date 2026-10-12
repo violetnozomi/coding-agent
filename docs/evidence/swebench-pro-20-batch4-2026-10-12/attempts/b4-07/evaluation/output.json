@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "TestGetNotifyUsers",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestSyslogWriterEncodeSyslog",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestIsCveInfoUpdated",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPlusMinusDiff",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestPlusDiff",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestMinusDiff",
+      "status": "PASSED"
+    },
+    {
+      "name": "TestIsCveFixed",
+      "status": "PASSED"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace/contrib/trivy/pkg 2>/dev/null; echo \"---\"; find /workspace -path '*trivy/pkg*' -maxdepth 6 2>/dev/null | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"Trivy\" --include=*.go models/ | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -rn \"trivy\" go.mod"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go env GOMODCACHE && ls $(go env GOMODCACHE)/github.com/aquasecurity/ 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls; echo \"---\"; ls contrib/trivy; echo \"---\"; cat contrib/trivy/go.mod 2>/dev/null; echo \"---\"; head -20 go.mod"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go doc github.com/aquasecurity/trivy/pkg/types.DetectedVulnerability 2>&1 | head -80"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go doc github.com/aquasecurity/trivy/pkg/types.DetectedVulnerability", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc github.com/aquasecurity/trivy/pkg/types.Vulnerability 2>&1 | grep -v \"GOPROXY\"", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go env GOMODCACHE GOFLAGS GOPROXY 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/trivy/pkg/types.VendorSeverity 2>&1 | grep -v GOPROXY | head -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc github.com/aquasecurity/trivy/pkg/types 2>/dev/null | head -120", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/trivy/pkg/types.DetectedVulnerability 2>/dev/null | head -5; echo \"=== db types ===\"; go doc github.com/aquasecurity/trivy-db/pkg/types 2>/dev/null | head -60", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc -all github.com/aquasecurity/trivy-db/pkg/types.Vulnerability 2>/dev/null; echo \"=== CVSS ===\"; go doc -all github.com/aquasecurity/trivy-db/pkg/types.CVSS 2>/dev/null; echo \"=== CVSSVector ===\"; go doc -all github.com/aquasecurity/trivy-db/pkg/types.CVSSVector 2>/dev/null; echo \"=== SourceID ===\"; go doc -all github.com/aquasecurity/trivy-db/pkg/types.SourceID 2>/dev/null; echo \"=== Severity ===\"; go doc -all github.com/aquasecurity/trivy-db/pkg/types.Severity 2>/dev/null", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && go list -m -f '{{.Dir}}' github.com/aquasecurity/trivy-db github.com/aquasecurity/trivy 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls -R contrib/trivy | head -40"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 2>/dev/null; git status --short 2>/dev/null | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./contrib/... 2>&1 | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./contrib/trivy/... 2>&1 | head -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./contrib/trivy/... 2>&1 | head -60", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./contrib/trivy/pkg -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}

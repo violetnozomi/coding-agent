@@ -1,0 +1,36 @@
+{"tool": "bash", "input": {"command": "ls /workspace && echo \"---\" && ls /workspace/qutebrowser/keyinput/"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && python --version && python -c \"import PyQt5; print('pyqt5')\" 2>&1 | head -2; python -c \"from PyQt6 import QtCore; print('pyqt6')\" 2>&1 | head -2"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -3"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"import PyQt5.QtCore as c; print(c.QT_VERSION_STR)\" 2>&1 | tail -2"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && pwd"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"import PyQt5.QtCore as c; print(c.QT_VERSION_STR)\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "echo hi"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -c \"print(1+1)\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -c \"import PyQt5.QtCore as c; print(c.QT_VERSION_STR)\"", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && git status --short 2>/dev/null | head -20; echo \"===\"; git diff --stat 2>/dev/null | tail -5"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls /workspace/tests/unit/keyinput/"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git -C /workspace log --oneline -5; echo \"---\"; git -C /workspace status --short | head"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"KeyInfo\\|KeySequence(\" /workspace/qutebrowser --include=*.py | grep -v \"keyutils.py\" | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rln \"keyutils\\|KeySequence\" /workspace/qutebrowser /workspace/tests /workspace/scripts --include=*.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/keyinput/test_keyutils.py -x -q 2>&1 | tail -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls /workspace/qutebrowser/qt/; sed -n 1,60p /workspace/qutebrowser/qt/machinery.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python - <<'EOF'\nfrom qutebrowser.qt.core import Qt\nm = Qt.KeyboardModifier.KeypadModifier\nprint(type(m), repr(m))\nr = Qt.KeyboardModifier.ControlModifier & ~m\nprint(type(r), repr(r), r == int(r))\nprint(Qt.KeyboardModifier.NoModifier == 0)\nprint(hash(Qt.KeyboardModifier.NoModifier), hash(0))\nprint(Qt.KeyboardModifier.KeyboardModifierMask)\nprint(Qt.Key.Key_unknown, int(Qt.Key.Key_unknown))\nEOF", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python - <<'EOF'\nfrom qutebrowser.qt.gui import QKeySequence\nfrom qutebrowser.qt.core import Qt\nprint(QKeySequence(0x1f468))\nprint(QKeySequence(Qt.Key.Key_unknown))\nprint(QKeySequence(-1))\nprint(list(QKeySequence(Qt.Key.Key_A | int(Qt.KeyboardModifier.ControlModifier))))\nprint([type(x) for x in QKeySequence(Qt.Key.Key_A)])\nprint(QKeySequence(Qt.Key.Key_A) < QKeySequence(Qt.Key.Key_B))\nEOF", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "sed -n 60,140p /workspace/qutebrowser/qt/machinery.py"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python - <<'EOF'\nfrom qutebrowser.qt.gui import QKeySequence\nfrom qutebrowser.qt.core import Qt\nfor v in [-1, 0, 0x1f468, 0x200d, Qt.Key.Key_unknown, 0x29df6, ord('Œ')]:\n    try:\n        q = QKeySequence(v)\n        print(hex(v) if v>=0 else v, '->', list(q), 'count', q.count())\n    except Exception as e:\n        print(v, 'ERR', type(e).__name__, e)\nEOF", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python - <<'EOF'\nfrom qutebrowser.qt.core import Qt\nprint(Qt.Key(-1))\nprint(Qt.Key(0x1f468))\nprint(int(Qt.Key(0x1f468)))\nprint(type(Qt.Key(0x1f468)))\nimport enum\nprint(isinstance(Qt.Key(0x1f468), Qt.Key))\nEOF", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python - <<'PY'\nfrom qutebrowser.qt.core import Qt\nk = Qt.Key(0x1f468)\nprint(type(k), int(k), k == 0x1f468)\nprint(Qt.Key(-1), Qt.Key(-1) == -1)\nPY"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python scratch_check.py"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python scratch_check.py", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "rm -f scratch_check.py; ls", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python - <<'PY'\nfrom qutebrowser.qt.core import Qt\nfrom qutebrowser.qt.gui import QKeySequence\n\nmask = Qt.KeyboardModifier.KeyboardModifierMask\nprint(\"mask\", mask, type(mask))\nfor v in [-1, 33554431, 0x1f468]:\n    try:\n        m = Qt.KeyboardModifier(v & mask)\n        print(\"mods ok\", v, m, int(m))\n    except Exception as e:\n        print(\"mods ERR\", v, type(e).__name__, e)\n    try:\n        k = Qt.Key(v & ~mask)\n        print(\"key ok\", v, k, int(k))\n    except Exception as e:\n        print(\"key ERR\", v, type(e).__name__, e)\n\n# equality of parsed vs int built\ndef eq(a, b):\n    qa = QKeySequence(a); qb = QKeySequence(b)\n    print(repr(a), repr(b), qa == qb, list(qa), list(qb))\neq('ctrl+alt+y', int(Qt.Key.Key_Y) | int(Qt.KeyboardModifier.ControlModifier) | int(Qt.KeyboardModifier.AltModifier))\neq('Shift+X', int(Qt.Key.Key_X) | int(Qt.KeyboardModifier.ShiftModifier))\neq('num+x', int(Qt.Key.Key_X) | int(Qt.KeyboardModifier.KeypadModifier))\neq(', '.join(['x','y','z']), None if True else 0)\nPY"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python scratch_check.py", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && rm -f scratch_check.py && echo removed"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m py_compile scratch_check.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile scratch_check.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile scratch_check.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest tests/unit/keyinput/test_keyutils.py -q 2>&1 | tail -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/keyinput/test_keyutils.py -q 2>&1 | tail -25", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/keyinput/test_keyutils.py -q '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "targeted", "command": "python -m pytest tests/unit/keyinput/test_keyutils.py -q 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m pytest tests/unit/keyinput/test_keyutils.py -q '2>' '&' 1", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}

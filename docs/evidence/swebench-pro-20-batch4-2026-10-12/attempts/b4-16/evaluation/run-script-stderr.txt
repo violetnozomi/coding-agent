@@ -1,0 +1,2 @@
+# go.flipt.io/flipt/internal/cue
+internal/cue/probe.go:3:8: cuelang.org/go@v0.6.0: Get "https://proxy.golang.org/cuelang.org/go/@v/v0.6.0.mod": dial tcp 142.250.73.81:443: i/o timeout

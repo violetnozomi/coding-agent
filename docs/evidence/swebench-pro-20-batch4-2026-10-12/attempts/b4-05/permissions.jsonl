@@ -1,0 +1,19 @@
+{"tool": "bash", "input": {"command": "find /workspace -path '*/lists/model.py' -not -path '*/node_modules/*' 2>/dev/null; echo \"---\"; ls /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "grep -rn \"SeedDict\" /workspace --include=*.py -l 2>/dev/null | head -50"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && git log --oneline -5 && echo \"--- status ---\" && git status --short | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"\nimport web\ns = web.storage({'key': 'x'})\ntry:\n    print('type attr:', s.type)\nexcept AttributeError as e:\n    print('AttributeError:', e)\nprint(hasattr(s,'type'))\n\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls openlibrary/tests/core/ 2>/dev/null && echo \"---\" && find . -path ./node_modules -prune -o -name '*.py' -print | grep -i -E 'list' | grep -i test"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -c \"\nimport web\ns = web.storage({'key':'/works/OL1W'})\nprint(type(s), s.key)\nprint(hasattr(s,'type'))\ntry:\n    s.type\nexcept Exception as e:\n    print('exc', type(e).__name__)\n\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m py_compile openlibrary/core/lists/model.py openlibrary/plugins/openlibrary/lists.py openlibrary/tests/core/test_lists_model.py && echo COMPILE_OK"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && python -m pytest openlibrary/tests/core/test_lists_model.py -q 2>&1 | tail -30", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "pytest openlibrary/tests/core/test_lists_model.py -q", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "pytest openlibrary/plugins/openlibrary/tests/test_listapi.py -q 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "git --no-pager diff", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -c \"\nimport openlibrary.core.lists.model as m\nimport openlibrary.plugins.openlibrary.lists as l\nfrom openlibrary.core.lists.model import ThingReferenceDict, Seed\nprint('ThingReferenceDict' in dir(m), hasattr(l, 'ThingReferenceDict'))\nd = ThingReferenceDict(key='k')\ns = Seed.from_json(['L'], {'key': 'k'})\nprint(s.key, s._list, hasattr(s,'type'))\nsub = Seed.from_json(['L'], 'subject/X')\nprint(sub.value, sub.key, sub.type, sub._list)\nprint(Seed(['L'], 'subject/Y').type)\n\"", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python -m py_compile openlibrary/core/lists/model.py", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "pytest openlibrary/tests/core/test_lists_model.py -q 2>&1 | tail -5", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "pytest openlibrary/tests/core/test_lists_model.py", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}
+{"tool": "bash", "input": {"command": "python check_seed.py 2>&1 | tail -20", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "rm check_seed.py && git --no-pager diff --stat", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "rm -f check_seed.py; git --no-pager diff --stat", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pytest openlibrary/tests/core/test_lists_model.py", "_nz_runtime_verification_stage": "targeted"}, "allowed": true}

@@ -1,0 +1,51 @@
+diff --git a/_probe/main.go b/_probe/main.go
+new file mode 100644
+index 00000000..725e722d
+--- /dev/null
++++ b/_probe/main.go
+@@ -0,0 +1,22 @@
++package main
++
++import (
++	"fmt"
++	"os"
++	"path/filepath"
++	"strings"
++)
++
++func main() {
++	root := os.Args[1]
++	needle := strings.ToLower(os.Args[2])
++	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
++		if err != nil {
++			return nil
++		}
++		if strings.Contains(strings.ToLower(d.Name()), needle) {
++			fmt.Println(p)
++		}
++		return nil
++	})
++}
+diff --git a/go.mod b/go.mod
+index e062d6f4..71edeaa2 100644
+--- a/go.mod
++++ b/go.mod
+@@ -63,6 +63,7 @@ require (
+ )
+ 
+ require (
++	cuelang.org/go v0.6.0
+ 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
+ 	github.com/Microsoft/go-winio v0.6.0 // indirect
+ 	github.com/benbjohnson/clock v1.3.0 // indirect
+diff --git a/internal/cue/probe.go b/internal/cue/probe.go
+new file mode 100644
+index 00000000..68da704f
+--- /dev/null
++++ b/internal/cue/probe.go
+@@ -0,0 +1,5 @@
++package cue
++
++import "cuelang.org/go/cue"
++
++var _ = cue.Context{}

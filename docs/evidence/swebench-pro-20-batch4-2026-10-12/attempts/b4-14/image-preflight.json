@@ -1,0 +1,9 @@
+{
+  "image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-eebfbc5381a1e506ff17b5f1371d1ad83d5fd642",
+  "digest": "sha256:3bf25224a8d35a3f368af8464460c063b99a9086b7b71cfec2cae00ed4749963",
+  "index_digest": "sha256:3bf25224a8d35a3f368af8464460c063b99a9086b7b71cfec2cae00ed4749963",
+  "compressed_bytes": 1128880575,
+  "estimated_required_bytes": 5024823836,
+  "free_bytes": 15705432064,
+  "estimate_is_not_exact": true
+}

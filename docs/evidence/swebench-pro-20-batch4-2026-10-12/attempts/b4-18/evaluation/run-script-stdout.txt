@@ -1,0 +1,29 @@
+Running selected tests: TestValidate TestConfigure TestConfigureEnvOverride TestConfigureCallsValidate TestSchemeString
+=== RUN   TestConfigure
+=== RUN   TestConfigure/defaults
+=== RUN   TestConfigure/configured
+--- PASS: TestConfigure (0.00s)
+    --- PASS: TestConfigure/defaults (0.00s)
+    --- PASS: TestConfigure/configured (0.00s)
+=== RUN   TestValidate
+=== RUN   TestValidate/https:_valid
+=== RUN   TestValidate/http:_valid
+=== RUN   TestValidate/https:_empty_cert_file_path
+=== RUN   TestValidate/https:_empty_key_file_path
+=== RUN   TestValidate/https:_missing_cert_file
+=== RUN   TestValidate/https:_missing_key_file
+--- PASS: TestValidate (0.00s)
+    --- PASS: TestValidate/https:_valid (0.00s)
+    --- PASS: TestValidate/http:_valid (0.00s)
+    --- PASS: TestValidate/https:_empty_cert_file_path (0.00s)
+    --- PASS: TestValidate/https:_empty_key_file_path (0.00s)
+    --- PASS: TestValidate/https:_missing_cert_file (0.00s)
+    --- PASS: TestValidate/https:_missing_key_file (0.00s)
+=== RUN   TestSchemeString
+--- PASS: TestSchemeString (0.00s)
+=== RUN   TestConfigureEnvOverride
+--- PASS: TestConfigureEnvOverride (0.00s)
+=== RUN   TestConfigureCallsValidate
+--- PASS: TestConfigureCallsValidate (0.00s)
+PASS
+ok  	github.com/markphelps/flipt/cmd/flipt	0.003s

@@ -1,0 +1,27 @@
+{
+  "instance_id": "instance_NodeBB__NodeBB-70b4a0e2aebebe8f2f559de6680093d96a697b2f-vnan",
+  "classification": "patch_application_blocked_before_official_tests",
+  "official_result": null,
+  "returncode": 97,
+  "official_tests_executed": false,
+  "conflicting_paths": [
+    "appendonlydir/appendonly.aof.1.base.rdb",
+    "appendonlydir/appendonly.aof.1.incr.aof",
+    "appendonlydir/appendonly.aof.manifest"
+  ],
+  "patch_contains_redis_runtime_files": true,
+  "initial_hash_snapshot_covers": "tracked files only",
+  "cannot_prove_conflicting_files_were_unchanged_from_initial_snapshot": true,
+  "paid_agent_retry": false,
+  "patch_modified_after_freeze": false,
+  "source_locations": [
+    "docs/evidence/swebench-pro-20-2026-10-11/run-pro.py:freeze",
+    "docs/evidence/swebench-pro-20-2026-10-11/run-pro.py:grade"
+  ],
+  "evidence": [
+    "evaluation-result.json",
+    "evaluation-stdio.txt",
+    "model.patch",
+    "initial-files.json"
+  ]
+}

@@ -1,0 +1,274 @@
+[
+  {
+    "tool_call_id": "call_00_xTy97ewH2k3eBxVgC2gQ5108",
+    "input": {
+      "command": "ls -la /workspace && echo \"---\" && ls -la /app 2>/dev/null || echo \"no /app\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_VnZaEq0Zdeec6TdJDKfH3793",
+    "input": {
+      "command": "cd /workspace && head -20 go.mod && go version && echo \"---\" && ls lib/auth/ | head -50"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_gK8Bt8jML8N4vXNwFsNX3754",
+    "input": {
+      "command": "cd /workspace && ls lib/auth/native/ 2>/dev/null && echo \"--- keystore:\" && ls lib/auth/keystore/ 2>/dev/null || echo \"no keystore\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_IXF1rxj4TEJQEfpjRRjh2210",
+    "input": {
+      "command": "cd /workspace && grep -rn \"auth/keystore\" --include=*.go . | head -30"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_SLxnMM6EWZDTPPL5xkXN4081",
+    "input": {
+      "command": "cd /workspace && ls lib/auth/keystore 2>/dev/null; echo \"===\"; find . -path ./vendor -prune -o -name '*keystore*' -print 2>/dev/null | grep -v vendor | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_GziGvencTdokupsxoqZf4908",
+    "input": {
+      "command": "cd /workspace && ls lib/auth/ && echo \"=== native_test head ===\" && sed -n '1,60p' lib/auth/native/native_test.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_JOLpK7ax2kOb6HUixC7e2215",
+    "input": {
+      "command": "go version"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "go version go1.16.15 linux/amd64"
+  },
+  {
+    "tool_call_id": "call_00_HEDx6RXBvcEvp9QbT0s59029",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 2>/dev/null && echo \"===\" && git status --short 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_PNG30IfZxmAI1qE86Pku5347",
+    "input": {
+      "command": "cd /workspace && ls lib/sshutils/ && echo \"=== imports of sshutils pkg files ===\" && grep -rn \"gravitational/teleport/lib\" lib/sshutils/*.go | grep -v _test | sort -u"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_oKsLCvVCpgeUFE6wr2wS3549",
+    "input": {
+      "command": "cd /workspace && sed -n '300,360p' api/types/types.proto"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_BSwDqdzqSUVFedmWVQ615640",
+    "input": {
+      "command": "cd /workspace && head -40 lib/utils/utils.go 2>/dev/null; echo \"=== does lib/utils import lib/auth? ===\"; grep -rn \"lib/auth\" lib/utils/*.go | head; echo \"=== sshutils imports ===\"; grep -rn \"gravitational/teleport/lib\" lib/sshutils/*.go | grep -v _test | head -20"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_8vJHdmf8Mp5KUfWU5K2i0045",
+    "input": {
+      "command": "cd /workspace && grep -rn \"ComponentKeyGen\\|ComponentAuthority\" constants.go | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_5Zhd8Mkox7G9e9unZToR1557",
+    "input": {
+      "command": "cd /workspace && ls vendor/github.com/stretchr/testify 2>/dev/null && echo \"--- has require:\" && ls vendor/github.com/stretchr/testify/require 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_f5tEL8UKEGrAiJ1iC8L98169",
+    "input": {
+      "command": "cd /workspace && grep -n \"testify\" go.mod"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_tVylC4O1lxMZuddzX28B3697",
+    "input": {
+      "command": "cd /workspace && ls vendor/github.com/stretchr/testify/ 2>/dev/null | tr '\\n' ' '; echo; head -3 vendor/modules.txt 2>/dev/null; ls lib/utils/certs.go >/dev/null && sed -n '100,125p' lib/utils/certs.go"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-1",
+    "input": {
+      "command": "go test ./lib/auth/keystore -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "verification-stage-static-2",
+    "input": {
+      "command": "go test ./lib/auth/keystore -run '^$'",
+      "_nz_runtime_verification_stage": "static"
+    },
+    "status": "nonzero",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": true,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_MC9JitLrvbv97WOkW4gT1204",
+    "input": {
+      "command": "cd /workspace && go build ./lib/auth/keystore/ 2>&1 | tail -20; echo \"EXIT=$?\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_n38OS10MU1OLd7KqO7rI7306",
+    "input": {
+      "command": "cd /workspace && ulimit -u 2>/dev/null; GOFLAGS=\"-p=1\" go build -p 1 ./lib/auth/keystore/ 2>&1 | tail -20; echo \"EXIT=${PIPESTATUS[0]}\"",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_B6EY20Zc2rVz0m9MhiIv6963",
+    "input": {
+      "command": "cd /workspace && go build -p 1 ./lib/auth/keystore/ 2>&1 | tail -20; echo \"EXIT=${PIPESTATUS[0]}\"",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_LchHWWDAx7fnRHWV9JYr6600",
+    "input": {
+      "command": "cd /workspace && GOMAXPROCS=1 go build -p 1 ./lib/auth/keystore/ 2>&1 | tail -30; echo \"EXIT=${PIPESTATUS[0]}\"",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_pkWD5II8mAs0S4jJLTIE6852",
+    "input": {
+      "command": "cd /workspace && go vet ./lib/auth/keystore/",
+      "timeout": 120
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_4eHr9XZlKW2qdGgGRlif9009",
+    "input": {
+      "command": "go build ./lib/auth/keystore/",
+      "timeout": 180
+    },
+    "status": "error",
+    "executed": true,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_KHZSkS0S0DKQswZ59lwx9004",
+    "input": {
+      "command": "go build ./lib/auth/keystore/ 2>&1 | tail -30; echo \"EXIT=${PIPESTATUS[0]}\"",
+      "timeout": 120
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "EXIT=0"
+  }
+]

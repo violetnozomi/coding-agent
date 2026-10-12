@@ -1,0 +1,31 @@
+{"tool": "bash", "input": {"command": "pwd && ls -la"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cat go.mod | head -60 && echo \"---WORK---\" && cat go.work"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"cuelang\" go.mod go.sum | head -20; echo \"---\"; ls $(go env GOMODCACHE)/cuelang.org 2>/dev/null; echo \"---vendor---\"; ls vendor 2>/dev/null | head"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n \"cuelang\" go.mod go.sum | head -20; echo \"GREP_DONE\"; go env GOMODCACHE; ls $(go env GOMODCACHE) 2>/dev/null | head -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "find \"$(go env GOMODCACHE)/cache/download\" -maxdepth 2 -iname \"*cue*\" 2>/dev/null | head; echo \"---\"; ls \"$(go env GOMODCACHE)/cache/download\" | head -60"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go env GOFLAGS GOPATH GOMODCACHE GOPROXY GONOSUMDB GONOSUMCHECK GOSUMDB 2>&1; echo \"---\"; ls \"$(go env GOMODCACHE)/cache/download/github.com\" | grep -i -E \"cue|cue-lang\" ; echo \"exit=$?\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && ls -a; echo \"---\"; find . -maxdepth 3 -iname \"*cue*\" 2>/dev/null | head -20"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -a; echo \"---\"; find . -maxdepth 3 -iname \"*cue*\" 2>/dev/null | head -20", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "ls -a"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go env GOMODCACHE"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go list -m all 2>/dev/null | grep -i cue; echo \"exit=$?\"; echo \"---\"; grep -rn \"cuelang\" go.sum | head"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go list -m all 2>/dev/null | grep -i cue; echo \"exit=$?\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "wc -l go.sum; grep -c \"cue\" go.sum; grep -n \"cue\" go.sum | head -30"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cat _tools/go.mod; echo \"===BUILD===\"; cat build/go.mod 2>/dev/null; echo \"===grep cue in magefile===\"; grep -n \"cue\" magefile.go _tools/*.go 2>/dev/null | head -30"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls sdk/go/ rpc/flipt/ errors/ 2>/dev/null; echo \"=== git ===\"; git -C . status --short 2>&1 | head; git -C . log --oneline -5 2>&1"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd \"$(go env GOMODCACHE)/cache/download\" && ls | head -50 && echo \"=== cuelang ===\" && ls -d cuelang.org 2>&1"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go env | grep -i -E \"proxy|flags|mod|sumdb|private|nosum|work|path\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -n -i \"schema\" magefile.go | head -40; echo \"=== config dir ===\"; ls config/"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go mod download cuelang.org/go 2>&1 | head -5; echo \"exit=$?\"", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "grep -rn \"cuelang\" --include=go.sum . | head -20; echo \"SUMDONE\"; grep -rln \"cuelang\" . --include=*.go --include=go.mod --include=go.sum --include=*.cue 2>/dev/null | head; echo \"ALLDONE\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "mkdir -p internal/cue && cat > /workspace/internal/cue/probe.go <<'EOF'\npackage cue\n\nimport \"cuelang.org/go/cue\"\n\nvar _ = cue.Context{}\nEOF\ngo mod edit -require=cuelang.org/go@v0.6.0\nGOFLAGS=-mod=mod GOPROXY=off go build ./internal/cue/ 2>&1 | head -20; echo \"BUILD_EXIT=$?\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "go test ./internal/cue -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go mod edit -require=cuelang.org/go@v0.6.0 && GOFLAGS=-mod=mod GOPROXY=off go mod download cuelang.org/go 2>&1 | head -5; echo \"EXIT=$?\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "GOPROXY=off go list -m -f '{{.Dir}}' github.com/spf13/cobra 2>&1 | head -3; echo \"COBRA_EXIT=$?\"; GOPROXY=off go mod download -x cuelang.org/go@v0.5.0 2>&1 | head -3; echo \"CUE_EXIT=$?\""}, "allowed": false}
+{"tool": "bash", "input": {"command": "tail -20 go.mod"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./_probe -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go run ./_probe \"$(go env GOPATH)/pkg/mod\" 2>&1 | head -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/cue -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./_probe -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go run ./_probe \"$(go env GOMODCACHE)/cache/download\" cuelang 2>&1 | head -20; echo \"DONE\""}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./internal/cue -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}

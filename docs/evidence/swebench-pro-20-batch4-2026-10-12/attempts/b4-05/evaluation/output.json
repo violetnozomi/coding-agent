@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "openlibrary/tests/core/test_lists_model.py::test_seed_with_string",
+      "status": "PASSED"
+    },
+    {
+      "name": "openlibrary/tests/core/test_lists_model.py::test_seed_with_nonstring",
+      "status": "PASSED"
+    },
+    {
+      "name": "openlibrary/tests/core/test_lists_model.py::test_from_json_with_subject_string",
+      "status": "PASSED"
+    }
+  ]
+}

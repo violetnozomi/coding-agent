@@ -1,0 +1,761 @@
+{
+  "turn_count": 40,
+  "max_turns": 40,
+  "started_at": 1791778993.387145,
+  "timeout_seconds": 0.0,
+  "last_edit_turn": 39,
+  "edits_this_run": 8,
+  "has_diff": true,
+  "diff_chars": 6959,
+  "changed_files": [
+    "config/config.go",
+    "models/vulninfos.go",
+    "report/report.go",
+    "report/util.go"
+  ],
+  "tests_modified": false,
+  "source_only": false,
+  "acceptance_criteria": [
+    "Diff reporting must support separately including newly detected or changed vulnerabilities, resolved vulnerabilities, or both.",
+    "CVEs that are present only in the current scan result must be treated as newly detected and marked with `DiffStatus` set to `\"+\"`.",
+    "CVEs that are present in both current and previous scan results but have updated vulnerability information must be treated as changed and marked with `DiffStatus` set to `\"+\"`.",
+    "CVEs that are present only in the previous scan result must be treated as resolved and marked with `DiffStatus` set to `\"-\"`.",
+    "Unchanged CVEs must be excluded from diff results."
+  ],
+  "requested_paths": [],
+  "task_mode": "feature",
+  "wants_tests": false,
+  "forbids_test_changes": false,
+  "plan_generated": false,
+  "plan_text": "",
+  "replan_count": 0,
+  "open_todo_items": 0,
+  "task_reference_evidence": [],
+  "task_references_bound": true,
+  "task_authority_epoch": 0,
+  "task_authority_message_id": "",
+  "task_reference_omitted_count": 0,
+  "task_contract": {},
+  "requirement_ledger": {},
+  "completion_gate_prompts": 0,
+  "completion_gate_signature": "",
+  "initial_task_text": "A code repository is available in the `/app` directory. Your task is to implement the changes necessary to satisfy the following Pull Request (PR) description:\n\n<pr_description>\n# Tittle \nDistinguish New, Changed, and Resolved Vulnerabilities in Diff Reports\n\n## Description\nWhen comparing current vulnerability scan results with previous results, diff reports do not clearly distinguish newly detected or changed vulnerabilities from vulnerabilities that have been resolved. This makes it difficult to understand whether the security posture is improving or degrading. Users need diff output that identifies newly detected or changed CVEs with a `+` marker and resolved CVEs with a `-` marker, with options to show only new or changed vulnerabilities, only resolved vulnerabilities, or both.\n\n## Requirements\n- Diff reporting must support separately including newly detected or changed vulnerabilities, resolved vulnerabilities, or both.\n\n- CVEs that are present only in the current scan result must be treated as newly detected and marked with `DiffStatus` set to `\"+\"`.\n\n- CVEs that are present in both current and previous scan results but have updated vulnerability information must be treated as changed and marked with `DiffStatus` set to `\"+\"`.\n\n- CVEs that are present only in the previous scan result must be treated as resolved and marked with `DiffStatus` set to `\"-\"`.\n\n- Unchanged CVEs must be excluded from diff results.\n\n- When only plus diff is requested, the result must include only newly detected or changed CVEs marked with `\"+\"`.\n\n- When only minus diff is requested, the result must include only resolved CVEs marked with `\"-\"`.\n\n- When both plus and minus diff are requested, the result must include newly detected or changed CVEs marked with `\"+\"` and resolved CVEs marked with `\"-\"` in the same result set.\n\n- The `report` package must end up with exactly one diff comparison entry point: it accepts current scan results, previous scan results, a plus-enable boolean, and a minus-enable boolean, and returns the filtered `models.ScanResults` directly with no error return.\n\n- The pre-existing two-parameter diff comparison that returns an error must be reshaped in place into that four-parameter form. It must not be preserved, wrapped, shimmed, or delegated to alongside a new comparator: no two-parameter diff comparison may remain in the `report` package once the change is complete.\n\n- For each diffed `ScanResult`, the resulting `Packages` map must contain entries only for packages referenced by retained CVEs. Packages for `\"+\"` CVEs must come from the current scan result, and packages for `\"-\"` CVEs must come from the previous scan result.\n\n- Existing full diff behavior must continue to include both plus and minus changes, while separate plus-only and minus-only options must allow users to limit the diff output to one change type.\n\n## New Interfaces\n- Path: `models/vulninfos.go`\n- Name: `DiffStatus`\n- Type: type\n- Input: NA\n- Output: NA\n- Description: Public string-based type used to represent whether a CVE in diff output is newly detected or changed (`\"+\"`) or resolved (`\"-\"`).\n</pr_description>\n\nConstraints:\n* Do not reference, look up, or copy existing solutions, external PRs, or online workarounds. The implementation must be entirely your own independent work.\n\n\nExecution environment: repository is /workspace. Network is unavailable during this attempt. Use the installed project toolchain and cached dependencies. Implement the requested change and verify it with relevant local tests.",
+  "current_round_instruction_text": "",
+  "initial_plan_complexity": "",
+  "patch_risk": {
+    "risk": "high",
+    "fingerprint": "d2d8c72b526b7bcd",
+    "requires_replan": false,
+    "risk_signals": [],
+    "reasons": [
+      "4 source files changed",
+      "large diff (6959 chars)",
+      "sensitive path touched (config/auth/security/database/schema/migration)"
+    ],
+    "affected_files": [
+      "config/config.go",
+      "models/vulninfos.go",
+      "report/report.go",
+      "report/util.go"
+    ],
+    "likely_tests": [],
+    "suggested_verification": [
+      "go test ./config -run '^$'",
+      "go test ./models -run '^$'",
+      "go test ./report -run '^$'"
+    ],
+    "review_notes": [
+      "No tests modified; ensure existing tests cover the behavior.",
+      "Review the diff manually before finalizing; impact may cross module boundaries."
+    ],
+    "structural_impact": {
+      "changed_symbols": [],
+      "impacted_callers": [],
+      "direct_callers": [],
+      "transitive_callers": [],
+      "dependent_modules": [],
+      "related_tests": [],
+      "public_api_exposure": [],
+      "truncated": false,
+      "budget": {},
+      "related": [],
+      "source": "unavailable"
+    }
+  },
+  "risk_feedback_fingerprint": "",
+  "risk_replan_fingerprint": "",
+  "verification_attempts": 0,
+  "py_compile_ok": false,
+  "changed_files_verified": false,
+  "broad_test_attempts": 0,
+  "exact_test_attempts": 0,
+  "verification_contract": {},
+  "verification_failures": 0,
+  "last_verification_failure": "",
+  "completion_review_rejections": 0,
+  "last_completion_review_rejection": "",
+  "completion_review_generation": -1,
+  "needs_broad_exploration": false,
+  "scheduled_verification_generations": {
+    "static": 8
+  },
+  "primary_recovery_classification": "",
+  "supporting_recovery_classifications": [],
+  "recovery_repair_targets": [],
+  "searched_patterns": [
+    "Diff",
+    "DiffStatus|DiffPlus|DiffMinus|diffOnly|Plus\\b|Minus\\b",
+    "Conf.Diff\\b|Diff bool|Diff  *bool",
+    "type (Package|Packages|ScanResult) ",
+    "pp\\.|^import|\\\"github",
+    "diff\\(|getDiffCves",
+    "DiffPlus|DiffMinus|diff-plus|diff-minus",
+    "ValidateOnReport|ValidateOnTui",
+    "diff",
+    "-diff",
+    "FillCveInfos",
+    "\\b(Plus|Minus|DiffPlus|DiffMinus|DiffStatus)\\b",
+    "DiffStatus|diffStatus",
+    "Conf\\.Diff",
+    "Conf\\.Diff\\b"
+  ],
+  "read_files": [
+    "report/util.go",
+    "report/util_test.go",
+    "models/vulninfos.go",
+    "report/report.go",
+    "subcmds/report.go",
+    "config/config.go",
+    "subcmds/tui.go",
+    "models/scanresults.go",
+    "models/packages.go"
+  ],
+  "investigation_calls_since_edit": 0,
+  "mutation_generation": 8,
+  "source_mutation_generation": 8,
+  "acceptance_mutation_generation": 8,
+  "diff_generation": -1,
+  "verification_generation": -1,
+  "strict_progress_nudges": 0,
+  "strict_progress_blocks": 0,
+  "budget_zones_emitted": [
+    "yellow",
+    "orange",
+    "red"
+  ],
+  "budget_pressure_zone": "red",
+  "work_phase": "closure_finalize",
+  "workspace_git_available": true,
+  "package_install_attempts": 0,
+  "emergency_broad_exploration": 0,
+  "provider_calls": 40,
+  "provider_attempts": 40,
+  "provider_calls_by_purpose": {
+    "coding": 40
+  },
+  "provider_calls_by_model": {
+    "openai-compatible/deepseek-flash": 40
+  },
+  "provider_usage": {
+    "input": 904367,
+    "output": 7271,
+    "total": 1268756,
+    "reasoning": 99838,
+    "cache_read": 257280,
+    "cache_write": 0
+  },
+  "provider_usage_by_purpose": {
+    "coding": {
+      "input": 904367,
+      "output": 7271,
+      "total": 1268756,
+      "reasoning": 99838,
+      "cache_read": 257280,
+      "cache_write": 0
+    }
+  },
+  "provider_usage_by_model": {
+    "openai-compatible/deepseek-flash": {
+      "input": 904367,
+      "output": 7271,
+      "total": 1268756,
+      "reasoning": 99838,
+      "cache_read": 257280,
+      "cache_write": 0
+    }
+  },
+  "provider_duration_ms_by_purpose": {
+    "coding": 473287.995
+  },
+  "provider_duration_ms_by_model": {
+    "openai-compatible/deepseek-flash": 473287.995
+  },
+  "provider_cost_usd": 0.0,
+  "provider_cost_usd_by_purpose": {},
+  "provider_cost_usd_by_model": {},
+  "provider_cost_unknown_calls": 40,
+  "provider_cost_sources": {
+    "unknown": 40
+  },
+  "provider_turn_records": [
+    {
+      "turn": 1,
+      "reason": "initial_investigation",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash",
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 2,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "list_directory"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 3,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "list_directory",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 4,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 5,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 6,
+      "reason": "investigation",
+      "outcome": "mixed_tool_batch",
+      "tool_names": [
+        "bash",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 7,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 8,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 9,
+      "reason": "investigation",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash",
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 10,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 11,
+      "reason": "investigation",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash",
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 12,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 13,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 14,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 15,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 16,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 17,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 18,
+      "reason": "investigation",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash",
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 19,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 20,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 21,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 22,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search",
+        "glob_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 23,
+      "reason": "investigation",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 24,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 25,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 26,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 27,
+      "reason": "investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 28,
+      "reason": "investigation",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "edit_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 1,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 29,
+      "reason": "convergence",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "edit_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 1,
+      "mutation_generation_after": 2,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 30,
+      "reason": "convergence",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "apply_patch"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 2,
+      "mutation_generation_after": 3,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 31,
+      "reason": "convergence",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "edit_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 4,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 32,
+      "reason": "convergence",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 4,
+      "mutation_generation_after": 4,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 33,
+      "reason": "convergence",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 4,
+      "mutation_generation_after": 4,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 34,
+      "reason": "convergence",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file",
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 4,
+      "mutation_generation_after": 4,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 35,
+      "reason": "convergence",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "edit_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 4,
+      "mutation_generation_after": 5,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 36,
+      "reason": "convergence",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "grep_search",
+        "grep_search"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 5,
+      "mutation_generation_after": 5,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 37,
+      "reason": "convergence",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 5,
+      "mutation_generation_after": 5,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 38,
+      "reason": "convergence",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "apply_patch",
+        "apply_patch"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 5,
+      "mutation_generation_after": 7,
+      "mutation_delta": 2,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 39,
+      "reason": "convergence",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "apply_patch"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 7,
+      "mutation_generation_after": 8,
+      "mutation_delta": 1,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 40,
+      "reason": "convergence",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 8,
+      "mutation_generation_after": 8,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    }
+  ],
+  "provider_turns_by_reason": {
+    "initial_investigation": 1,
+    "investigation": 27,
+    "convergence": 12
+  },
+  "provider_turns_by_outcome": {
+    "verification_batch": 6,
+    "investigation_batch": 26,
+    "mixed_tool_batch": 1,
+    "mutation_batch": 7
+  },
+  "transition": "edited_source",
+  "_state_block_emitted": false,
+  "_diff_seen_from_tool": false,
+  "active": true,
+  "saved_at": 1791779502.9983559
+}

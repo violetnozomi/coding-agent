@@ -1,0 +1,179 @@
+[
+  {
+    "tool_call_id": "call_00_72Qvc5sy073gyhB8fZD52174",
+    "input": {
+      "command": "ls -la /workspace 2>/dev/null && echo \"---APP---\" && ls -la /app 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_oJYBBie73bJ5KQNHkXQB9097",
+    "input": {
+      "command": "ls -la /workspace && cat /workspace/package.json 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_OeSUZ6Tt3DtrCltP6tc63663",
+    "input": {
+      "command": "cd /workspace && git log --oneline -5 && git status"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_vzsEfsiJkkVFgloRby611297",
+    "input": {
+      "command": "node -v; npm -v; pwd",
+      "workdir": "."
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "v18.20.8\n10.8.2\n/workspace"
+  },
+  {
+    "tool_call_id": "call_00_ijCD1gHa9dVLgk95Frh37014",
+    "input": {
+      "command": "cd /workspace && sed -n '1,60p' test/mocks/databasemock.js && echo \"=== config ===\" && sed -n '1,40p' config.json 2>/dev/null"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_S25EYEiUoYXORuopqVuq2009",
+    "input": {
+      "command": "cd /workspace && (redis-cli -h 127.0.0.1 -p 6379 ping 2>&1 || echo \"no redis-cli\") ; ls node_modules | head -3; ls node_modules/redis 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_wbdB7MvNcB9om5w1Fsy42344",
+    "input": {
+      "command": "redis-cli ping"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_LaSeuMwocd4apdA2cYDZ1808",
+    "input": {
+      "command": "echo hi"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "hi"
+  },
+  {
+    "tool_call_id": "call_00_zfjLhX6j8IlejwavShue9371",
+    "input": {
+      "command": "redis-cli ping; echo \"exit=$?\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_VWTe39qeBTpL7L2tnN3R0793",
+    "input": {
+      "command": "command -v redis-server; command -v redis-cli; echo done"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_m7vaDOnJdb47ioZ5M9DP6645",
+    "input": {
+      "command": "node -e \"const net=require('net');const s=net.connect(6379,'127.0.0.1');s.on('connect',()=>{console.log('redis up');s.end()});s.on('error',e=>console.log('err',e.code))\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "err ECONNREFUSED"
+  },
+  {
+    "tool_call_id": "call_00_sunJqp4ZMu0wcitFoz6U6749",
+    "input": {
+      "command": "ls /usr/bin/redis* /usr/local/bin/redis* 2>&1; echo \"---\"; which redis-server 2>&1"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_ET_t8F6GekVqVm0ocWsWEoc8825",
+    "input": {
+      "command": "which redis-server redis-cli; echo \"exit=$?\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_uDfdhWZZKE4k01CRbJHz2929",
+    "input": {
+      "command": "node -e \"const fs=require('fs');['/usr/bin/redis-server','/usr/local/bin/redis-server','/usr/bin/redis-cli','/usr/local/bin/redis-cli'].forEach(p=>console.log(p,fs.existsSync(p)))\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/usr/bin/redis-server true\n/usr/local/bin/redis-server false\n/usr/bin/redis-cli true\n/usr/local/bin/redis-cli false"
+  },
+  {
+    "tool_call_id": "call_00_sC8RF8gQqscavPMrPBvI6707",
+    "input": {
+      "command": "nohup redis-server --port 6379 --save '' --appendonly no > /workspace/logs/redis-test.log 2>&1 &\nsleep 2\nnode -e \"const net=require('net');const s=net.connect(6379,'127.0.0.1');s.on('connect',()=>{console.log('redis up');s.end()});s.on('error',e=>console.log('err',e.code))\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_3KPYLPzZyMSckHLWcEwE3130",
+    "input": {
+      "command": "redis-server --daemonize yes --port 6379 --save '' --appendonly no; sleep 1; redis-cli ping"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]
